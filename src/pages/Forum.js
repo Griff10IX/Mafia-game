@@ -446,6 +446,8 @@ export default function Forum() {
   const [designerEntries, setDesignerEntries] = useState([]);
   const [designerEntriesLoading, setDesignerEntriesLoading] = useState(false);
   const [designerVotingId, setDesignerVotingId] = useState(null);
+  const [canWithdrawVote, setCanWithdrawVote] = useState(false);
+  const [designerWithdrawingId, setDesignerWithdrawingId] = useState(null);
   const [designerCompManageOpen, setDesignerCompManageOpen] = useState(false);
   const [designerCompsList, setDesignerCompsList] = useState([]);
   const [designerCompForm, setDesignerCompForm] = useState({ title: '', description: '', start_at: '', end_at: '', reward_money: 0, reward_points: 0 });
@@ -549,8 +551,10 @@ export default function Forum() {
       const res = await api.get(`/forum/designer/competitions/${compId}/entries`);
       setDesignerEntries(res.data?.entries ?? []);
       setMyVoteEntryId(res.data?.my_vote_entry_id ?? null);
+      setCanWithdrawVote(!!res.data?.can_withdraw_vote);
     } catch {
       setDesignerEntries([]);
+      setCanWithdrawVote(false);
     } finally {
       setDesignerEntriesLoading(false);
     }
@@ -668,12 +672,29 @@ export default function Forum() {
       await api.post(`/forum/designer/competitions/${compId}/vote`, { entry_id: entryId });
       toast.success('Vote recorded! +100 points');
       setMyVoteEntryId(entryId);
+      setCanWithdrawVote(false);
       fetchDesignerEntries(compId);
       window.dispatchEvent(new CustomEvent('app:refresh-user'));
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to vote');
     } finally {
       setDesignerVotingId(null);
+    }
+  };
+
+  const handleDesignerWithdrawVote = async (compId) => {
+    setDesignerWithdrawingId(compId);
+    try {
+      await api.post(`/forum/designer/competitions/${compId}/withdraw-vote`);
+      toast.success('Vote withdrawn (-100 pts). You can vote again for 100 pts.');
+      setMyVoteEntryId(null);
+      setCanWithdrawVote(false);
+      fetchDesignerEntries(compId);
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to withdraw vote');
+    } finally {
+      setDesignerWithdrawingId(null);
     }
   };
 
@@ -813,13 +834,25 @@ export default function Forum() {
                     <> <Link to={`/forum/topic/${activeDesignerComp.competition_topic_id}`} className="text-primary font-heading font-bold underline">Open competition topic →</Link></>
                   )}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => fetchDesignerEntries(activeDesignerComp.id)}
-                  className="px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase rounded hover:bg-primary/30"
-                >
-                  View entries & vote (voters get 100 pts)
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fetchDesignerEntries(activeDesignerComp.id)}
+                    className="px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase rounded hover:bg-primary/30"
+                  >
+                    View entries & vote (voters get 100 pts)
+                  </button>
+                  {myVoteEntryId && canWithdrawVote && (
+                    <button
+                      type="button"
+                      onClick={() => handleDesignerWithdrawVote(activeDesignerComp.id)}
+                      disabled={designerWithdrawingId === activeDesignerComp.id}
+                      className="px-2 py-1 bg-amber-500/20 border border-amber-500/50 text-amber-400 text-[10px] font-heading font-bold uppercase rounded hover:bg-amber-500/30 disabled:opacity-50"
+                    >
+                      {designerWithdrawingId === activeDesignerComp.id ? '...' : 'Withdraw vote (−100 pts)'}
+                    </button>
+                  )}
+                </div>
               </div>
               {designerEntries.length > 0 && (
                 <div className="border-t border-primary/20 p-3">

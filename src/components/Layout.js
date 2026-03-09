@@ -135,53 +135,29 @@ const SIDEBAR_LAYOUT_KEY = 'sidebar_layout';
 const BOTTOM_NAV_SHOW_DIVIDERS_KEY = 'bottom_nav_show_dividers';
 
 function loadSidebarShowDividers() {
-  try {
-    const v = localStorage.getItem(SIDEBAR_SHOW_DIVIDERS_KEY);
-    if (v === 'true') return true;
-  } catch (_) {}
+  try { const v = localStorage.getItem(SIDEBAR_SHOW_DIVIDERS_KEY); if (v === 'true') return true; } catch (_) {}
   return false;
 }
-
 function loadSidebarDividerStyle() {
-  try {
-    const v = localStorage.getItem(SIDEBAR_DIVIDER_STYLE_KEY);
-    if (v === 'solid' || v === 'dotted' || v === 'dashed') return v;
-  } catch (_) {}
+  try { const v = localStorage.getItem(SIDEBAR_DIVIDER_STYLE_KEY); if (v === 'solid' || v === 'dotted' || v === 'dashed') return v; } catch (_) {}
   return 'solid';
 }
-
 function loadSidebarSpacing() {
-  try {
-    const v = localStorage.getItem(SIDEBAR_SPACING_KEY);
-    if (v === 'compact' || v === 'normal' || v === 'relaxed') return v;
-  } catch (_) {}
+  try { const v = localStorage.getItem(SIDEBAR_SPACING_KEY); if (v === 'compact' || v === 'normal' || v === 'relaxed') return v; } catch (_) {}
   return 'normal';
 }
-
 function loadSidebarLayout() {
-  try {
-    const v = localStorage.getItem(SIDEBAR_LAYOUT_KEY);
-    if (v === 'categorized' || v === 'default') return v;
-  } catch (_) {}
+  try { const v = localStorage.getItem(SIDEBAR_LAYOUT_KEY); if (v === 'categorized' || v === 'default') return v; } catch (_) {}
   return 'default';
 }
-
 function loadBottomNavShowDividers() {
-  try {
-    const v = localStorage.getItem(BOTTOM_NAV_SHOW_DIVIDERS_KEY);
-    if (v === 'true') return true;
-  } catch (_) {}
+  try { const v = localStorage.getItem(BOTTOM_NAV_SHOW_DIVIDERS_KEY); if (v === 'true') return true; } catch (_) {}
   return false;
 }
-
 function loadMobileStatsDisplay() {
-  try {
-    const v = localStorage.getItem(MOBILE_STATS_DISPLAY_KEY);
-    if (v === 'top_bar' || v === 'touch_ball' || v === 'right_sidebar') return v;
-  } catch (_) {}
+  try { const v = localStorage.getItem(MOBILE_STATS_DISPLAY_KEY); if (v === 'top_bar' || v === 'touch_ball' || v === 'right_sidebar') return v; } catch (_) {}
   return 'right_sidebar';
 }
-
 function loadNotificationBallPosition() {
   try {
     const raw = localStorage.getItem(NOTIFICATION_BALL_POSITION_KEY);
@@ -191,14 +167,12 @@ function loadNotificationBallPosition() {
   } catch (_) {}
   return null;
 }
-
 function loadStatOrder() {
   try {
     const raw = localStorage.getItem(TOPBAR_STAT_ORDER_KEY);
     if (!raw) return DEFAULT_STAT_ORDER;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || !parsed.length) return DEFAULT_STAT_ORDER;
-    // Merge in any stats from default that are missing (e.g. 'property' added later) so casino/prop profit always can show
     const seen = new Set(parsed);
     const added = DEFAULT_STAT_ORDER.filter((id) => !seen.has(id));
     if (added.length) return [...parsed, ...added];
@@ -206,34 +180,20 @@ function loadStatOrder() {
   } catch (_) {}
   return DEFAULT_STAT_ORDER;
 }
-
 function loadTopBarGap() {
-  try {
-    const v = localStorage.getItem(TOPBAR_GAP_KEY);
-    if (v === 'compact' || v === 'normal' || v === 'spread') return v;
-  } catch (_) {}
+  try { const v = localStorage.getItem(TOPBAR_GAP_KEY); if (v === 'compact' || v === 'normal' || v === 'spread') return v; } catch (_) {}
   return 'normal';
 }
-
 function loadTopBarSize() {
-  try {
-    const v = localStorage.getItem(TOPBAR_SIZE_KEY);
-    if (v === 'small' || v === 'medium' || v === 'large') return v;
-  } catch (_) {}
+  try { const v = localStorage.getItem(TOPBAR_SIZE_KEY); if (v === 'small' || v === 'medium' || v === 'large') return v; } catch (_) {}
   return 'medium';
 }
-
 const CHIP_SCALE_MIN = 20;
 const CHIP_SCALE_MAX = 100;
-
 function loadTopBarChipScale() {
-  try {
-    const v = parseInt(localStorage.getItem(TOPBAR_CHIP_SCALE_KEY), 10);
-    if (Number.isFinite(v) && v >= CHIP_SCALE_MIN && v <= CHIP_SCALE_MAX) return v;
-  } catch (_) {}
+  try { const v = parseInt(localStorage.getItem(TOPBAR_CHIP_SCALE_KEY), 10); if (Number.isFinite(v) && v >= CHIP_SCALE_MIN && v <= CHIP_SCALE_MAX) return v; } catch (_) {}
   return 50;
 }
-
 function loadTopBarChipWidthScale() {
   try {
     const v = parseInt(localStorage.getItem(TOPBAR_CHIP_WIDTH_SCALE_KEY), 10);
@@ -243,7 +203,6 @@ function loadTopBarChipWidthScale() {
   } catch (_) {}
   return 50;
 }
-
 function loadTopBarChipHeightScale() {
   try {
     const v = parseInt(localStorage.getItem(TOPBAR_CHIP_HEIGHT_SCALE_KEY), 10);
@@ -252,6 +211,17 @@ function loadTopBarChipHeightScale() {
     if (Number.isFinite(fallback) && fallback >= CHIP_SCALE_MIN && fallback <= CHIP_SCALE_MAX) return fallback;
   } catch (_) {}
   return 50;
+}
+
+// ── IMPROVEMENT 2: Ornamental category header for sidebar ──────────────────
+function SidebarCatHeader({ label }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px 3px 10px', marginTop: 3 }}>
+      <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+      <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--noir-muted)', whiteSpace: 'nowrap' }}>{label}</span>
+      <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+    </div>
+  );
 }
 
 export default function Layout({ children }) {
@@ -275,17 +245,17 @@ export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [casinoOpen, setCasinoOpen] = useState(false);
-  const [mobileBottomMenuOpen, setMobileBottomMenuOpen] = useState(null); // which bottom bar group sub-menu is open
+  const [mobileBottomMenuOpen, setMobileBottomMenuOpen] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
-  const [ocStatus, setOcStatus] = useState(null); // { cooldown_until } for right sidebar
+  const [ocStatus, setOcStatus] = useState(null);
   const [atWar, setAtWar] = useState(false);
   const [autoRankPrefs, setAutoRankPrefs] = useState({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false, auto_rank_booze: false });
   const [flashNews, setFlashNews] = useState([]);
   const [flashIndex, setFlashIndex] = useState(0);
-  const [travelStatus, setTravelStatus] = useState(null); // { traveling: bool, destination, seconds_remaining }
+  const [travelStatus, setTravelStatus] = useState(null);
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
   const [notificationList, setNotificationList] = useState([]);
   const [notificationBallPosition, setNotificationBallPosition] = useState(null);
@@ -382,7 +352,6 @@ export default function Layout({ children }) {
     }
   }, []);
 
-  // When user switches to touch ball mode, ensure we have a position so the ball appears
   useEffect(() => {
     if (typeof window === 'undefined' || mobileStatsDisplay !== 'touch_ball') return;
     const saved = loadNotificationBallPosition();
@@ -390,16 +359,12 @@ export default function Layout({ children }) {
     setNotificationBallPosition({ x: window.innerWidth - 72, y: window.innerHeight - 120 });
   }, [mobileStatsDisplay]);
 
-  useEffect(() => {
-    setMobileBottomMenuOpen(null);
-  }, [location.pathname]);
+  useEffect(() => { setMobileBottomMenuOpen(null); }, [location.pathname]);
 
   useEffect(() => {
     if (!mobileBottomMenuOpen) return;
     const handleClickOutside = (e) => {
-      if (mobileBottomNavRef.current && !mobileBottomNavRef.current.contains(e.target)) {
-        setMobileBottomMenuOpen(null);
-      }
+      if (mobileBottomNavRef.current && !mobileBottomNavRef.current.contains(e.target)) setMobileBottomMenuOpen(null);
     };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
@@ -409,9 +374,7 @@ export default function Layout({ children }) {
     if (!notificationPanelOpen) return;
     const handleClickOutside = (e) => {
       const ballEl = notificationBallRef.current;
-      if (ballEl && !ballEl.contains(e.target)) {
-        setNotificationPanelOpen(false);
-      }
+      if (ballEl && !ballEl.contains(e.target)) setNotificationPanelOpen(false);
     };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
@@ -431,17 +394,13 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     const q = (userSearchQuery || '').trim();
-    if (!q || q.length < 1) {
-      setUserSearchResults([]);
-      return;
-    }
+    if (!q || q.length < 1) { setUserSearchResults([]); return; }
     if (userSearchDebounceRef.current) clearTimeout(userSearchDebounceRef.current);
     userSearchDebounceRef.current = setTimeout(async () => {
       setUserSearchLoading(true);
-      setUserSearchResults([]); // clear previous results so we don't show stale list while loading
+      setUserSearchResults([]);
       try {
         const res = await api.get('/users/search', { params: { q, limit: 15 } });
-        // Only apply results if the query hasn't changed (avoid stale response overwriting "No users found")
         if (userSearchQueryRef.current === q) {
           const list = res.data?.users;
           setUserSearchResults(Array.isArray(list) ? list : []);
@@ -450,48 +409,26 @@ export default function Layout({ children }) {
         if (userSearchQueryRef.current === q) {
           setUserSearchResults([]);
           const msg = getApiErrorMessage(err);
-          if (err?.response?.status === 401 || err?.response?.status === 403) {
-            toast.error(msg || 'Please log in again.');
-          } else {
-            toast.error(msg || 'Search failed.');
-          }
+          if (err?.response?.status === 401 || err?.response?.status === 403) toast.error(msg || 'Please log in again.');
+          else toast.error(msg || 'Search failed.');
         }
       } finally {
-        if (userSearchQueryRef.current === q) {
-          setUserSearchLoading(false);
-        }
+        if (userSearchQueryRef.current === q) setUserSearchLoading(false);
       }
     }, 280);
-    return () => {
-      if (userSearchDebounceRef.current) clearTimeout(userSearchDebounceRef.current);
-    };
+    return () => { if (userSearchDebounceRef.current) clearTimeout(userSearchDebounceRef.current); };
   }, [userSearchQuery]);
 
-  useEffect(() => {
-    fetchData();
-    checkAdmin();
-    fetchUnreadCount();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchData(); checkAdmin(); fetchUnreadCount(); }, []); // eslint-disable-line
 
   const refreshUserDebounceRef = useRef(null);
   useEffect(() => {
     const runRefresh = async (detail) => {
-      if (detail && detail.money != null && detail.money !== undefined) {
-        setUser((prev) => (prev ? { ...prev, money: Number(detail.money) } : null));
-      }
-      fetchData();
-      fetchUnreadCount();
-      fetchHelpDeskOpenCount();
-      fetchWarStatus();
-      fetchRankingCounts();
+      if (detail && detail.money != null) setUser((prev) => (prev ? { ...prev, money: Number(detail.money) } : null));
+      fetchData(); fetchUnreadCount(); fetchHelpDeskOpenCount(); fetchWarStatus(); fetchRankingCounts();
       api.get('/oc/status').then((r) => setOcStatus(r.data)).catch(() => setOcStatus(null));
       if (notificationPanelOpenRef.current) {
-        try {
-          const response = await api.get('/notifications');
-          setNotificationList(response.data.notifications || []);
-        } catch {
-          // keep existing list
-        }
+        try { const response = await api.get('/notifications'); setNotificationList(response.data.notifications || []); } catch { }
       }
     };
     const handler = (event) => {
@@ -500,42 +437,26 @@ export default function Layout({ children }) {
       refreshUserDebounceRef.current = setTimeout(() => runRefresh(detail), 150);
     };
     window.addEventListener('app:refresh-user', handler);
-    return () => {
-      window.removeEventListener('app:refresh-user', handler);
-      if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { window.removeEventListener('app:refresh-user', handler); if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current); };
+  }, []); // eslint-disable-line
 
   useEffect(() => {
     const handler = () => checkAdmin();
     window.addEventListener('app:admin-changed', handler);
     return () => window.removeEventListener('app:admin-changed', handler);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line
 
   const fetchAutoRankPrefs = async () => {
     if (!user) return;
     try {
       const res = await api.get('/auto-rank/me');
-      setAutoRankPrefs({
-        auto_rank_enabled: !!res.data?.auto_rank_enabled,
-        auto_rank_crimes: !!res.data?.auto_rank_crimes,
-        auto_rank_gta: !!res.data?.auto_rank_gta,
-        auto_rank_oc: !!res.data?.auto_rank_oc,
-        auto_rank_bust_every_5_sec: !!res.data?.auto_rank_bust_every_5_sec,
-        auto_rank_booze: !!res.data?.auto_rank_booze,
-      });
-    } catch {
-      setAutoRankPrefs({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false, auto_rank_booze: false });
-    }
+      setAutoRankPrefs({ auto_rank_enabled: !!res.data?.auto_rank_enabled, auto_rank_crimes: !!res.data?.auto_rank_crimes, auto_rank_gta: !!res.data?.auto_rank_gta, auto_rank_oc: !!res.data?.auto_rank_oc, auto_rank_bust_every_5_sec: !!res.data?.auto_rank_bust_every_5_sec, auto_rank_booze: !!res.data?.auto_rank_booze });
+    } catch { setAutoRankPrefs({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false, auto_rank_booze: false }); }
   };
 
-  useEffect(() => {
-    if (user) fetchAutoRankPrefs();
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (user) fetchAutoRankPrefs(); }, [user]); // eslint-disable-line
 
-  // Depend on user?.id (not user) so we don't re-run when user object reference changes (e.g. after fetchCasinoProperty) and cause a request loop
   const userId = user?.id;
-  // Casino/property: only fetch once on load (for nav/header) and when opening My Properties (profit updates when they view it after gambling)
   const casinoPropertyFetchedRef = useRef(false);
   if (!userId) casinoPropertyFetchedRef.current = false;
   useEffect(() => {
@@ -545,103 +466,57 @@ export default function Layout({ children }) {
       const t = setTimeout(() => fetchCasinoProperty(), 80);
       return () => clearTimeout(t);
     }
-  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (location.pathname === '/my-properties') fetchCasinoProperty();
-  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Live casino profit when owner is viewing it (My Properties or right sidebar with stats)
-  const showCasinoProfitLive = hasCasinoOrProperty && (
-    location.pathname === '/my-properties' ||
-    (mobileStatsDisplay === 'right_sidebar' && (!isMobileViewport || rightSidebarOpen))
-  );
+  }, [userId]); // eslint-disable-line
+  useEffect(() => { if (location.pathname === '/my-properties') fetchCasinoProperty(); }, [location.pathname]); // eslint-disable-line
+  const showCasinoProfitLive = hasCasinoOrProperty && (location.pathname === '/my-properties' || (mobileStatsDisplay === 'right_sidebar' && (!isMobileViewport || rightSidebarOpen)));
   useEffect(() => {
     if (!showCasinoProfitLive || !userId) return;
     const intervalId = setInterval(fetchCasinoProperty, 10000);
     return () => clearInterval(intervalId);
-  }, [showCasinoProfitLive, userId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showCasinoProfitLive, userId]); // eslint-disable-line
   useEffect(() => {
-    // Shell: auth/me + rank-progress only (objectives deferred to avoid burst)
     fetchData();
     const path = location.pathname;
     const needRanking = ['/ranking', '/crimes', '/gta', '/jail'].includes(path) || (userId && mobileStatsDisplay === 'right_sidebar');
     const t2 = setTimeout(() => {
       if (needRanking) fetchRankingCounts();
-      if (userId && mobileStatsDisplay === 'right_sidebar') {
-        api.get('/oc/status').then((r) => setOcStatus(r.data)).catch(() => setOcStatus(null));
-      }
+      if (userId && mobileStatsDisplay === 'right_sidebar') api.get('/oc/status').then((r) => setOcStatus(r.data)).catch(() => setOcStatus(null));
     }, 200);
     return () => { clearTimeout(t2); };
-  }, [location.pathname, userId, mobileStatsDisplay]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.pathname, userId, mobileStatsDisplay]); // eslint-disable-line
 
   useEffect(() => {
     let intervalId;
-    const deferred = setTimeout(() => {
-      fetchWarStatus();
-      intervalId = setInterval(fetchWarStatus, 45000);
-    }, 150);
-    return () => {
-      clearTimeout(deferred);
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Ranking counts (crimes/gta/jail badges) are fetched on pathname change and app:refresh-user only – no 15s polling
+    const deferred = setTimeout(() => { fetchWarStatus(); intervalId = setInterval(fetchWarStatus, 45000); }, 150);
+    return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
+  }, []); // eslint-disable-line
 
   useEffect(() => {
     const pollNotifications = async () => {
       try {
         const response = await api.get('/notifications');
         setUnreadCount(response.data.unread_count ?? 0);
-        if (notificationPanelOpenRef.current) {
-          setNotificationList(response.data.notifications || []);
-        }
-      } catch {
-        // keep existing state
-      }
+        if (notificationPanelOpenRef.current) setNotificationList(response.data.notifications || []);
+      } catch { }
     };
     let intervalId;
-    const deferred = setTimeout(() => {
-      pollNotifications();
-      intervalId = setInterval(pollNotifications, 30000);
-    }, 50);
-    return () => {
-      clearTimeout(deferred);
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const deferred = setTimeout(() => { pollNotifications(); intervalId = setInterval(pollNotifications, 30000); }, 50);
+    return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
+  }, []); // eslint-disable-line
 
   useEffect(() => {
     let intervalId;
-    const deferred = setTimeout(() => {
-      fetchHelpDeskOpenCount();
-      intervalId = setInterval(fetchHelpDeskOpenCount, 60000);
-    }, 300);
-    return () => {
-      clearTimeout(deferred);
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const deferred = setTimeout(() => { fetchHelpDeskOpenCount(); intervalId = setInterval(fetchHelpDeskOpenCount, 60000); }, 300);
+    return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
+  }, []); // eslint-disable-line
 
   const fetchFlashNews = async () => {
-    try {
-      const res = await api.get('/news/flash');
-      setFlashNews(res.data?.items || []);
-    } catch {
-      setFlashNews([]);
-    }
+    try { const res = await api.get('/news/flash'); setFlashNews(res.data?.items || []); } catch { setFlashNews([]); }
   };
 
-  // Objectives: run once after a delay so backend can auto-reset daily/weekly/monthly without adding to initial request burst
-  useEffect(() => {
-    const t = setTimeout(() => { api.get('/objectives').catch(() => {}); }, 500);
-    return () => clearTimeout(t);
-  }, []);
+  useEffect(() => { const t = setTimeout(() => { api.get('/objectives').catch(() => {}); }, 500); return () => clearTimeout(t); }, []);
 
-  useEffect(() => {
-    fetchFlashNews();
-    const id = setInterval(fetchFlashNews, 60000);
-    return () => clearInterval(id);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchFlashNews(); const id = setInterval(fetchFlashNews, 60000); return () => clearInterval(id); }, []); // eslint-disable-line
 
   useEffect(() => {
     if (flashNews.length <= 1) return;
@@ -651,16 +526,8 @@ export default function Layout({ children }) {
 
   const fetchData = async () => {
     try {
-      const [userRes, progressRes] = await Promise.all([
-        api.get('/auth/me'),
-        api.get('/user/rank-progress')
-      ]);
-      // Locked (under investigation): only allow /locked page
-      if (userRes.data?.account_locked) {
-        navigate('/locked', { replace: true });
-        return;
-      }
-      // Keep previous casino/property flags so "My Properties" doesn't flicker when auth/me (which returns placeholders) overwrites
+      const [userRes, progressRes] = await Promise.all([api.get('/auth/me'), api.get('/user/rank-progress')]);
+      if (userRes.data?.account_locked) { navigate('/locked', { replace: true }); return; }
       setUser((prev) => ({
         ...userRes.data,
         casino_profit: prev?.casino_profit ?? userRes.data.casino_profit,
@@ -678,75 +545,35 @@ export default function Layout({ children }) {
   };
 
   const fetchWarStatus = async () => {
-    try {
-      const res = await api.get('/families/war');
-      setAtWar(!!(res.data?.wars?.length > 0));
-    } catch {
-      setAtWar(false);
-    }
+    try { const res = await api.get('/families/war'); setAtWar(!!(res.data?.wars?.length > 0)); } catch { setAtWar(false); }
   };
-
   const fetchUnreadCount = async () => {
-    try {
-      const response = await api.get('/notifications');
-      setUnreadCount(response.data.unread_count);
-    } catch (error) {
-      console.error('Failed to fetch notifications');
-    }
+    try { const response = await api.get('/notifications'); setUnreadCount(response.data.unread_count); } catch (error) { console.error('Failed to fetch notifications'); }
   };
-
   const fetchHelpDeskOpenCount = async () => {
-    try {
-      const res = await api.get('/help-desk/open-count');
-      setHelpDeskOpenCount(res.data?.open_tickets_count ?? 0);
-    } catch {
-      setHelpDeskOpenCount(0);
-    }
+    try { const res = await api.get('/help-desk/open-count'); setHelpDeskOpenCount(res.data?.open_tickets_count ?? 0); } catch { setHelpDeskOpenCount(0); }
   };
-
   const fetchCasinoProperty = async () => {
-    try {
-      const res = await api.get('/user/casino-property');
-      if (res.data) {
-        setUser((prev) => (prev ? { ...prev, ...res.data } : prev));
-      }
-    } catch {
-      // optional; nav and header fall back to has_casino_or_property false
-    }
+    try { const res = await api.get('/user/casino-property'); if (res.data) setUser((prev) => (prev ? { ...prev, ...res.data } : prev)); } catch { }
   };
 
   const openNotificationPanel = async () => {
     const next = !notificationPanelOpen;
     setNotificationPanelOpen(next);
     if (next) {
-      try {
-        const response = await api.get('/notifications');
-        setNotificationList(response.data.notifications || []);
-      } catch {
-        setNotificationList([]);
-      }
+      try { const response = await api.get('/notifications'); setNotificationList(response.data.notifications || []); } catch { setNotificationList([]); }
     }
   };
 
   const markAllNotificationsRead = async () => {
-    try {
-      await api.post('/notifications/read-all');
-      setUnreadCount(0);
-      setNotificationList((prev) => prev.map((n) => ({ ...n, read: true })));
-    } catch (_) {}
+    try { await api.post('/notifications/read-all'); setUnreadCount(0); setNotificationList((prev) => prev.map((n) => ({ ...n, read: true }))); } catch (_) {}
   };
 
   const checkAdmin = async () => {
     try {
       const response = await api.get('/admin/check');
-      setIsAdmin(!!response.data.is_admin);
-      setIsModerator(!!response.data.is_moderator);
-      setHasAdminEmail(!!response.data.has_admin_email);
-    } catch (error) {
-      setIsAdmin(false);
-      setIsModerator(false);
-      setHasAdminEmail(false);
-    }
+      setIsAdmin(!!response.data.is_admin); setIsModerator(!!response.data.is_moderator); setHasAdminEmail(!!response.data.has_admin_email);
+    } catch (error) { setIsAdmin(false); setIsModerator(false); setHasAdminEmail(false); }
   };
 
   useEffect(() => {
@@ -757,37 +584,18 @@ export default function Layout({ children }) {
   }, []);
 
   const promoteToAdmin = async () => {
-    try {
-      await api.post('/admin/act-as-normal', null, { params: { acting: false } });
-      await checkAdmin();
-      window.dispatchEvent(new CustomEvent('app:refresh-user'));
-    } catch (_) {}
+    try { await api.post('/admin/act-as-normal', null, { params: { acting: false } }); await checkAdmin(); window.dispatchEvent(new CustomEvent('app:refresh-user')); } catch (_) {}
   };
 
   const fetchRankingCounts = async () => {
     try {
-      const [crimesRes, gtaRes, jailPlayersRes] = await Promise.all([
-        api.get('/crimes'),
-        api.get('/gta/options'),
-        api.get('/jail/players')
-      ]);
-
+      const [crimesRes, gtaRes, jailPlayersRes] = await Promise.all([api.get('/crimes'), api.get('/gta/options'), api.get('/jail/players')]);
       const now = new Date();
       const crimesAvailable = Array.isArray(crimesRes.data) ? crimesRes.data.filter((c) => c?.can_commit).length : 0;
-      const gtaAvailable = Array.isArray(gtaRes.data)
-        ? gtaRes.data.filter((o) => {
-            if (!o?.unlocked) return false;
-            if (!o?.cooldown_until) return true;
-            const t = new Date(o.cooldown_until);
-            return !Number.isNaN(t.getTime()) && t <= now;
-          }).length
-        : 0;
+      const gtaAvailable = Array.isArray(gtaRes.data) ? gtaRes.data.filter((o) => { if (!o?.unlocked) return false; if (!o?.cooldown_until) return true; const t = new Date(o.cooldown_until); return !Number.isNaN(t.getTime()) && t <= now; }).length : 0;
       const jailCount = Array.isArray(jailPlayersRes.data?.players) ? jailPlayersRes.data.players.length : 0;
-
       setRankingCounts({ crimes: crimesAvailable, gta: gtaAvailable, jail: jailCount });
-    } catch (error) {
-      // silent failure; badges are optional
-    }
+    } catch (error) { }
   };
 
   const fetchTravelStatus = useCallback(async () => {
@@ -795,53 +603,26 @@ export default function Layout({ children }) {
       const res = await api.get('/travel/status');
       const data = res.data || {};
       if (data.traveling && data.seconds_remaining > 0) {
-        setTravelStatus({
-          traveling: true,
-          destination: data.destination || data.current_state || '?',
-          seconds_remaining: data.seconds_remaining
-        });
-      } else {
-        setTravelStatus(null);
-      }
-    } catch {
-      setTravelStatus(null);
-    }
+        setTravelStatus({ traveling: true, destination: data.destination || data.current_state || '?', seconds_remaining: data.seconds_remaining });
+      } else { setTravelStatus(null); }
+    } catch { setTravelStatus(null); }
   }, []);
 
-  // Only poll travel status when on Travel page or when already travelling (so top-bar countdown updates)
   useEffect(() => {
-    const path = location.pathname;
-    const isTravelPage = path === '/travel';
+    const isTravelPage = location.pathname === '/travel';
     const isTraveling = travelStatus?.traveling === true;
-    if (!isTravelPage && !isTraveling) {
-      fetchTravelStatus(); // one-time check so we show icon if they're already travelling (e.g. refreshed)
-      return () => {};
-    }
+    if (!isTravelPage && !isTraveling) { fetchTravelStatus(); return () => {}; }
     fetchTravelStatus();
     const intervalId = setInterval(fetchTravelStatus, 3000);
     return () => clearInterval(intervalId);
   }, [location.pathname, travelStatus?.traveling, fetchTravelStatus]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    window.location.href = '/';
-  };
+  const handleLogout = () => { localStorage.removeItem('token'); window.location.href = '/'; };
 
-  const formatInt = (n) => {
-    const num = Number(n ?? 0);
-    if (Number.isNaN(num)) return '0';
-    return Math.trunc(num).toLocaleString();
-  };
-
-  const formatMoney = (n) => {
-    const num = Number(n ?? 0);
-    if (Number.isNaN(num)) return '$0';
-    return `$${Math.trunc(num).toLocaleString()}`;
-  };
-
+  const formatInt = (n) => { const num = Number(n ?? 0); if (Number.isNaN(num)) return '0'; return Math.trunc(num).toLocaleString(); };
+  const formatMoney = (n) => { const num = Number(n ?? 0); if (Number.isNaN(num)) return '$0'; return `$${Math.trunc(num).toLocaleString()}`; };
   const formatCompact = (n) => {
-    const num = Number(n ?? 0);
-    if (Number.isNaN(num)) return '0';
+    const num = Number(n ?? 0); if (Number.isNaN(num)) return '0';
     const abs = Math.abs(num);
     if (abs >= 1e12) return (num / 1e12).toFixed(1).replace(/\.0$/, '') + 'T';
     if (abs >= 1e9) return (num / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
@@ -849,12 +630,9 @@ export default function Layout({ children }) {
     if (abs >= 1e3) return (num / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
     return Math.trunc(num).toLocaleString();
   };
-
   const formatMoneyCompact = (n) => {
-    const num = Number(n ?? 0);
-    if (Number.isNaN(num)) return '$0';
-    const abs = Math.abs(num);
-    const sign = num < 0 ? '-' : '';
+    const num = Number(n ?? 0); if (Number.isNaN(num)) return '$0';
+    const abs = Math.abs(num); const sign = num < 0 ? '-' : '';
     if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(1).replace(/\.0$/, '')}T`;
     if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(1).replace(/\.0$/, '')}B`;
     if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
@@ -863,24 +641,24 @@ export default function Layout({ children }) {
   };
 
   const needsEmailVerification = user && user.email_verified === false;
-  /** Path → category for categorized sidebar layout */
+
   const PATH_TO_CATEGORY = {
     '/dashboard': 'information', '/verify-email': 'information', '/objectives': 'information', '/missions': 'information',
-    '/profile': 'information', '/ip-rules': 'information', '/stats': 'information',
-    '/users-online': 'information', '/properties': 'information', '/help-desk': 'information', '/leaderboard': 'information',
+    '/loot-box': 'information', '/profile': 'information', '/ip-rules': 'information', '/stats': 'information',
+    '/users-online': 'information', '/properties': 'information', '/help-desk': 'information',
     '/ranking': 'ranking', '/prestige': 'ranking',
     '/attack': 'combat', '/attempts': 'combat', '/hitlist': 'combat', '/bodyguards': 'combat', '/armour-weapons': 'combat',
     '/travel': 'travel', '/states': 'travel', '/my-properties': 'travel', '/booze-run': 'travel',
     '/forum': 'messaging', '/inbox': 'messaging',
     '/bank': 'money', '/stock-market': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money',
-    '/garage': 'money', '/sell-cars': 'money', '/buy-cars': 'money', '/crack-safe': 'money', '/casino': 'money', '/loot-box': 'money',
+    '/garage': 'money', '/sell-cars': 'money', '/buy-cars': 'money', '/crack-safe': 'money', '/casino': 'money', '/leaderboard': 'money',
     '/families': 'other', '/dead-alive': 'other', '/auto-rank': 'other',
   };
   const SIDEBAR_CATEGORIES = [
-    { id: 'information', label: 'INFORMATION' }, { id: 'ranking', label: 'RANKING' }, { id: 'combat', label: 'COMBAT' },
-    { id: 'travel', label: 'TRAVEL' }, { id: 'messaging', label: 'MESSAGING' }, { id: 'money', label: 'MONEY' }, { id: 'other', label: 'OTHER' },
+    { id: 'information', label: 'You' }, { id: 'ranking', label: 'Ranking' }, { id: 'combat', label: 'Combat' },
+    { id: 'travel', label: 'Travel' }, { id: 'messaging', label: 'Messages' }, { id: 'money', label: 'Money' }, { id: 'other', label: 'Other' },
   ];
-  // Order: Home → Verify email (if unverified) → You → Money → Combat → … My Properties only if user has casino or property.
+
   const navItems = [
     { path: '/dashboard', icon: Home, label: 'Dashboard' },
     ...(needsEmailVerification ? [{ path: '/verify-email', icon: Mail, label: 'Verify email' }] : []),
@@ -931,7 +709,6 @@ export default function Layout({ children }) {
     { path: '/admin/users-online', icon: Users, label: 'Users online (live)' },
   ] : [];
 
-  /* Inline theme styles – same noir variables as other pages */
   const sidebarBgStyle = { backgroundColor: 'var(--noir-content)' };
   const sidebarActiveStyle = { background: 'var(--noir-raised)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
   const sidebarActiveGroupStyle = { background: 'var(--noir-surface)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
@@ -939,25 +716,22 @@ export default function Layout({ children }) {
   const dividerStyle = sidebarDividerStyle === 'solid'
     ? { height: '1px', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }
     : { height: 0, borderTop: `1px ${sidebarDividerStyle} rgba(var(--noir-primary-rgb), 0.35)` };
-
   const categoryHeaderStyle = { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.12)', color: 'var(--noir-primary)' };
   const navDividerEl = (key) => showSidebarDividers ? <div key={key} className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" /> : null;
 
-  /* Reusable nav blocks to avoid duplication between default and categorized layout */
   const rankingNavBlock = (
     <div className="space-y-0.5">
-      <button
-        type="button"
-        data-testid="nav-ranking-group"
-        onClick={() => setRankingOpen((v) => !v)}
-        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${
-          (location.pathname === '/ranking' || location.pathname === '/crimes' || location.pathname === '/gta' || location.pathname === '/jail' || location.pathname === '/organised-crime' || location.pathname === '/prestige')
-            ? styles.navItemActive : styles.sidebarNavLink
-        }`}
-        style={(location.pathname === '/ranking' || location.pathname === '/crimes' || location.pathname === '/gta' || location.pathname === '/jail' || location.pathname === '/organised-crime' || location.pathname === '/prestige') ? sidebarActiveGroupStyle : undefined}
-      >
+      <button type="button" data-testid="nav-ranking-group" onClick={() => setRankingOpen((v) => !v)}
+        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/ranking' || location.pathname === '/crimes' || location.pathname === '/gta' || location.pathname === '/jail' || location.pathname === '/organised-crime' || location.pathname === '/prestige') ? styles.navItemActive : styles.sidebarNavLink}`}
+        style={(location.pathname === '/ranking' || location.pathname === '/crimes' || location.pathname === '/gta' || location.pathname === '/jail' || location.pathname === '/organised-crime' || location.pathname === '/prestige') ? sidebarActiveGroupStyle : undefined}>
         <Target size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
         <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Ranking</span>
+        {/* Roll up badge: show total available if collapsed */}
+        {!rankingOpen && (rankingCounts.crimes > 0 || rankingCounts.gta > 0) && (
+          <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30 shrink-0">
+            {rankingCounts.crimes + rankingCounts.gta}
+          </span>
+        )}
         {rankingOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
       </button>
       {rankingOpen && (
@@ -966,17 +740,17 @@ export default function Layout({ children }) {
             className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crimes' ? styles.navItemActivePage : styles.sidebarNavLink}`}
             style={location.pathname === '/crimes' ? sidebarActiveStyle : undefined} data-testid="nav-crimes">
             <span className="uppercase tracking-widest font-heading flex-1">Crimes</span>
-            {rankingCounts.crimes > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30" data-testid="badge-crimes-available" title="Crimes available">{rankingCounts.crimes}</span>}
+            {rankingCounts.crimes > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30">{rankingCounts.crimes}</span>}
           </Link>
           {showSidebarDividers && navDividerEl('rd1')}
           <Link to="/gta" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/gta' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/gta' ? sidebarActiveStyle : undefined} data-testid="nav-gta">
             <span className="uppercase tracking-widest font-heading flex-1">GTA</span>
-            {rankingCounts.gta > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30" data-testid="badge-gta-available" title="GTA options available">{rankingCounts.gta}</span>}
+            {rankingCounts.gta > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30">{rankingCounts.gta}</span>}
           </Link>
           {showSidebarDividers && navDividerEl('rd2')}
           <Link to="/jail" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/jail' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/jail' ? sidebarActiveStyle : undefined} data-testid="nav-jail">
             <span className="uppercase tracking-widest font-heading flex-1">Jail</span>
-            {rankingCounts.jail > 0 && <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30" data-testid="badge-jail-count" title="Players in jail">{rankingCounts.jail}</span>}
+            {rankingCounts.jail > 0 && <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30">{rankingCounts.jail}</span>}
           </Link>
           {showSidebarDividers && navDividerEl('rd3')}
           <Link to="/organised-crime" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/organised-crime' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/organised-crime' ? sidebarActiveStyle : undefined} data-testid="nav-organised-crime">
@@ -990,33 +764,36 @@ export default function Layout({ children }) {
   const casinoNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-casino-group" onClick={() => setCasinoOpen((v) => !v)}
-        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/casino' || location.pathname === '/casino/dice' || location.pathname === '/casino/rlt' || location.pathname === '/casino/blackjack' || location.pathname === '/casino/horseracing' || location.pathname === '/casino/slots' || location.pathname === '/casino/videopoker' || location.pathname === '/casino/mdg' || location.pathname === '/casino/mp-blackjack' || location.pathname.startsWith('/casino/mp-blackjack/') || location.pathname === '/casino/mp-poker' || location.pathname.startsWith('/casino/mp-poker/') || location.pathname === '/sports-betting') ? styles.navItemActive : styles.sidebarNavLink}`}
-        style={(location.pathname === '/casino' || location.pathname === '/casino/dice' || location.pathname === '/casino/rlt' || location.pathname === '/casino/blackjack' || location.pathname === '/casino/horseracing' || location.pathname === '/casino/slots' || location.pathname === '/casino/videopoker' || location.pathname === '/casino/mdg' || location.pathname === '/casino/mp-blackjack' || location.pathname.startsWith('/casino/mp-blackjack/') || location.pathname === '/casino/mp-poker' || location.pathname.startsWith('/casino/mp-poker/') || location.pathname === '/sports-betting') ? sidebarActiveGroupStyle : undefined}>
+        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/casino' || location.pathname.startsWith('/casino/') || location.pathname === '/sports-betting') ? styles.navItemActive : styles.sidebarNavLink}`}
+        style={(location.pathname === '/casino' || location.pathname.startsWith('/casino/') || location.pathname === '/sports-betting') ? sidebarActiveGroupStyle : undefined}>
         <Dice5 size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
         <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Casino</span>
         {casinoOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
       </button>
       {casinoOpen && (
         <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
-          <Link to="/casino/dice" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/dice' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/dice' ? sidebarActiveStyle : undefined} data-testid="nav-dice"><span className="uppercase tracking-widest font-heading flex-1">Dice</span></Link>
-          {showSidebarDividers && navDividerEl('cd1')}
-          <Link to="/casino/rlt" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/rlt' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/rlt' ? sidebarActiveStyle : undefined} data-testid="nav-roulette"><span className="uppercase tracking-widest font-heading flex-1">Roulette</span></Link>
-          {showSidebarDividers && navDividerEl('cd2')}
-          <Link to="/casino/blackjack" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/blackjack' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/blackjack' ? sidebarActiveStyle : undefined} data-testid="nav-blackjack"><span className="uppercase tracking-widest font-heading flex-1">Blackjack</span></Link>
-          {showSidebarDividers && navDividerEl('cd3')}
-          <Link to="/casino/horseracing" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/horseracing' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/horseracing' ? sidebarActiveStyle : undefined} data-testid="nav-horseracing"><span className="uppercase tracking-widest font-heading flex-1">Horse Racing</span></Link>
-          {showSidebarDividers && navDividerEl('cd4')}
-          <Link to="/casino/slots" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/slots' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/slots' ? sidebarActiveStyle : undefined} data-testid="nav-slots"><span className="uppercase tracking-widest font-heading flex-1">Slots</span></Link>
-          {showSidebarDividers && navDividerEl('cd5')}
-          <Link to="/casino/videopoker" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/videopoker' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/videopoker' ? sidebarActiveStyle : undefined} data-testid="nav-videopoker"><span className="uppercase tracking-widest font-heading flex-1">Video Poker</span></Link>
-          {showSidebarDividers && navDividerEl('cd6')}
-          <Link to="/casino/mdg" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/mdg' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/mdg' ? sidebarActiveStyle : undefined} data-testid="nav-mdg"><span className="uppercase tracking-widest font-heading flex-1">MDG</span></Link>
-          {showSidebarDividers && navDividerEl('cd7')}
-          <Link to="/casino/mp-blackjack" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/mp-blackjack' || location.pathname.startsWith('/casino/mp-blackjack/') ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/mp-blackjack' || location.pathname.startsWith('/casino/mp-blackjack/') ? sidebarActiveStyle : undefined} data-testid="nav-mp-blackjack"><span className="uppercase tracking-widest font-heading flex-1">MP Blackjack</span></Link>
-          {showSidebarDividers && navDividerEl('cd8')}
-          <Link to="/casino/mp-poker" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/mp-poker' || location.pathname.startsWith('/casino/mp-poker/') ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/mp-poker' || location.pathname.startsWith('/casino/mp-poker/') ? sidebarActiveStyle : undefined} data-testid="nav-mp-poker"><span className="uppercase tracking-widest font-heading flex-1">Poker</span></Link>
-          {showSidebarDividers && navDividerEl('cd9')}
-          <Link to="/sports-betting" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/sports-betting' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/sports-betting' ? sidebarActiveStyle : undefined} data-testid="nav-sports-betting"><span className="uppercase tracking-widest font-heading flex-1">Sports Betting</span></Link>
+          {[
+            { to: '/casino/dice', label: 'Dice', testId: 'nav-dice' },
+            { to: '/casino/rlt', label: 'Roulette', testId: 'nav-roulette' },
+            { to: '/casino/blackjack', label: 'Blackjack', testId: 'nav-blackjack' },
+            { to: '/casino/horseracing', label: 'Horse Racing', testId: 'nav-horseracing' },
+            { to: '/casino/slots', label: 'Slots', testId: 'nav-slots' },
+            { to: '/casino/videopoker', label: 'Video Poker', testId: 'nav-videopoker' },
+            { to: '/casino/mdg', label: 'MDG', testId: 'nav-mdg' },
+            { to: '/casino/mp-blackjack', label: 'MP Blackjack', testId: 'nav-mp-blackjack', matchPrefix: true },
+            { to: '/casino/mp-poker', label: 'Poker', testId: 'nav-mp-poker', matchPrefix: true },
+            { to: '/sports-betting', label: 'Sports Betting', testId: 'nav-sports-betting' },
+          ].map((item, idx) => {
+            const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;
+            return (
+              <Fragment key={item.to}>
+                {showSidebarDividers && idx > 0 && navDividerEl(`cd${idx}`)}
+                <Link to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
+                  <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
+                </Link>
+              </Fragment>
+            );
+          })}
         </div>
       )}
     </div>
@@ -1033,10 +810,7 @@ export default function Layout({ children }) {
       <Fragment key={item.path}>
         {navDivider}
         <Link to={item.path} data-testid={`nav-${item.label.toLowerCase()}`} data-at-war={atWar && item.path === '/families' ? 'true' : undefined}
-          className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${
-            isFamiliesAtWar ? (isActive ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10')
-              : (isActive ? styles.navItemActivePage : styles.sidebarNavLink)
-          }`}
+          className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${isFamiliesAtWar ? (isActive ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10') : (isActive ? styles.navItemActivePage : styles.sidebarNavLink)}`}
           style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
           onClick={() => setSidebarOpen(false)}
         >
@@ -1049,17 +823,148 @@ export default function Layout({ children }) {
     );
   };
 
+  // ── IMPROVEMENT 1: Top bar stat renderers ──────────────────────────────────
+  const renderTopBarStat = (statId, { topBarChipStyle, topBarChipMinHeight, topBarIconSizeEffectiveMobile, topBarTextClass, rankBarWidthPx, rankColMinWidthPx, chipWidthScale, chipHeightScale, isMobileViewport: isMobile }) => {
+    const casinoProfit = user?.casino_profit ?? 0;
+    const propertyProfit = user?.property_profit ?? 0;
+    const chipBase = `flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm shrink-0 cursor-grab active:cursor-grabbing touch-manipulation transition-all duration-150 hover:border-primary/40`;
+
+    if (statId === 'rank') {
+      const pct = rankProgress ? Number(rankProgress.rank_points_progress) : 0;
+      const current = rankProgress ? (Number(rankProgress.rank_points_current) || 0) : 0;
+      const needed = rankProgress ? (Number(rankProgress.rank_points_needed) || 0) : 0;
+      const total = current + needed;
+      const progress = rankProgress
+        ? ((typeof pct === 'number' && !Number.isNaN(pct) && pct > 0) ? Math.min(100, Math.max(0, pct)) : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0))
+        : 0;
+      const hasPremiumBar = !!user?.premium_rank_bar;
+      const progressLabel = rankProgress ? (hasPremiumBar ? progress.toFixed(2) : progress.toFixed(0)) : '—';
+      const rankName = rankProgress?.current_rank_name ?? 'Rank';
+      return (
+        <div className={`${chipBase} gap-1 sm:gap-1.5 min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={rankProgress ? `${rankName}: ${progressLabel}%` : 'Rank progress'}>
+          <TrendingUp size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
+          {/* IMPROVEMENT 1: rank bar always visible (not just md+) */}
+          <div className="flex flex-col flex-1 shrink-0 min-w-0" style={{ minWidth: isMobile ? 28 : rankColMinWidthPx }}>
+            <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading truncate">{rankName}</span>
+            <div className="shrink-0" style={{ width: isMobile ? Math.max(20, rankBarWidthPx) : rankBarWidthPx, position: 'relative', height: Math.max(4, Math.round(6 * chipHeightScale)), backgroundColor: '#2a2a2a', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 2 : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
+            </div>
+          </div>
+          <span className={`${topBarTextClass} text-primary font-heading shrink-0 tabular-nums text-right`} style={{ minWidth: Math.round(24 * chipWidthScale) }}>{progressLabel}{rankProgress ? '%' : ''}</span>
+        </div>
+      );
+    }
+
+    if (statId === 'health') {
+      const healthVal = Number(user.health);
+      const healthStr = Number.isFinite(healthVal) ? Math.max(0, Math.min(100, Math.round(healthVal))).toString() : '100';
+      const healthNum = parseInt(healthStr, 10) || 100;
+      // IMPROVEMENT 1: colour-coded health
+      const healthColor = healthNum > 50 ? 'text-emerald-400' : healthNum > 25 ? 'text-amber-400' : 'text-red-400';
+      const heartColor = healthNum > 50 ? '#34d399' : healthNum > 25 ? '#fbbf24' : '#f87171';
+      return (
+        <div className={`${chipBase} flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight, borderColor: healthNum <= 25 ? 'rgba(248,113,113,0.3)' : healthNum <= 50 ? 'rgba(251,191,36,0.25)' : undefined }} title={`Health: ${healthStr}%`}>
+          <Heart size={topBarIconSizeEffectiveMobile} style={{ color: heartColor, flexShrink: 0 }} aria-hidden />
+          <span className={`font-heading ${topBarTextClass} ${healthColor} tabular-nums truncate max-w-[4rem]`} data-testid="topbar-health">{healthStr}%</span>
+        </div>
+      );
+    }
+
+    if (statId === 'bullets') {
+      const bulletsStr = formatInt(user.bullets);
+      return (
+        <div className={`${chipBase} flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Bullets: ${bulletsStr}`}>
+          <Crosshair size={topBarIconSizeEffectiveMobile} className="text-red-400 shrink-0" aria-hidden />
+          <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums truncate max-w-[6rem]`} data-testid="topbar-bullets">{bulletsStr}</span>
+        </div>
+      );
+    }
+
+    if (statId === 'kills') {
+      const killsStr = formatInt(user.total_kills);
+      return (
+        <div className={`${chipBase} flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Kills: ${killsStr}`}>
+          <Skull size={topBarIconSizeEffectiveMobile} className="text-red-400 shrink-0" aria-hidden />
+          <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums min-w-[1.5rem] text-right`} data-testid="topbar-kills">{killsStr}</span>
+        </div>
+      );
+    }
+
+    if (statId === 'money') {
+      const moneyFull = formatMoney(user.money);
+      const moneyLabel = Math.trunc(Number(user.money ?? 0)).toLocaleString();
+      return (
+        <div className={`${chipBase} min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Cash: ${moneyFull}`}>
+          <DollarSign size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
+          <span className={`font-heading ${topBarTextClass} text-primary tabular-nums truncate max-w-[12rem]`} data-testid="topbar-money">{moneyLabel}</span>
+        </div>
+      );
+    }
+
+    if (statId === 'points') {
+      const pointsFull = formatInt(user.points);
+      const pointsCompact = formatCompact(user.points);
+      const useCompactDesktop = pointsFull.length > 12;
+      return (
+        <div className={`${chipBase} min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Premium Points: ${pointsFull}`}>
+          <Zap size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
+          <span className={`font-heading ${topBarTextClass} text-foreground md:hidden tabular-nums`} data-testid="topbar-points">{pointsFull}</span>
+          <span className={`font-heading text-xs text-foreground hidden md:inline tabular-nums ${useCompactDesktop ? '' : 'truncate max-w-[6rem]'}`} data-testid="topbar-points-full">{useCompactDesktop ? `${pointsCompact} pts` : pointsFull}</span>
+        </div>
+      );
+    }
+
+    if (statId === 'respect_points') {
+      const respectFull = formatInt(user.respect_points ?? 0);
+      const respectCompact = formatCompact(user.respect_points ?? 0);
+      const useCompactDesktop = respectFull.length > 12;
+      return (
+        <div className={`${chipBase} min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Respect: ${respectFull}`}>
+          <Trophy size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
+          <span className={`font-heading ${topBarTextClass} text-foreground md:hidden tabular-nums`} data-testid="topbar-respect">{respectFull}</span>
+          <span className={`font-heading text-xs text-foreground hidden md:inline tabular-nums ${useCompactDesktop ? '' : 'truncate max-w-[6rem]'}`} data-testid="topbar-respect-full">{useCompactDesktop ? `${respectCompact} resp` : respectFull}</span>
+        </div>
+      );
+    }
+
+    if (statId === 'property') {
+      const casinoNum = Number(casinoProfit);
+      const propertyNum = Number(propertyProfit);
+      const casinoStr = `$${(Number.isFinite(casinoNum) ? casinoNum : 0).toLocaleString()}`;
+      const propertyStr = `${(Number.isFinite(propertyNum) ? propertyNum : 0).toLocaleString()} pts`;
+      const casinoShort = formatMoneyCompact(casinoProfit);
+      const propertyShort = formatCompact(propertyProfit) + ' pts';
+      const casinoColor = (Number.isFinite(casinoNum) ? casinoNum : 0) >= 0 ? 'text-emerald-500' : 'text-red-400';
+      const propertyColor = (Number.isFinite(propertyNum) ? propertyNum : 0) >= 0 ? 'text-emerald-500' : 'text-red-400';
+      const useCompactOnDesktop = casinoStr.length > 11 || propertyStr.length > 14;
+      return (
+        <div className={`${chipBase} min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Casino ${casinoStr} · Property ${propertyStr}`}>
+          <Building2 size={topBarIconSizeEffectiveMobile} className="text-emerald-400 shrink-0" aria-hidden />
+          <span className={`font-heading ${topBarTextClass} text-foreground whitespace-nowrap tabular-nums min-w-0 flex items-center gap-0.5`}>
+            <span className="text-mutedForeground md:inline hidden shrink-0">Casino</span>
+            <span className="text-mutedForeground md:hidden shrink-0">C</span>
+            <span className={`${casinoColor} tabular-nums`}><span className="md:hidden">{casinoShort}</span><span className="hidden md:inline">{useCompactOnDesktop ? casinoShort : casinoStr}</span></span>
+            <span className="text-mutedForeground shrink-0">·</span>
+            <span className="text-mutedForeground md:inline hidden shrink-0">Property</span>
+            <span className="text-mutedForeground md:hidden shrink-0">P</span>
+            <span className={`${propertyColor} tabular-nums`}><span className="md:hidden">{propertyShort}</span><span className="hidden md:inline">{useCompactOnDesktop ? propertyShort : propertyStr}</span></span>
+          </span>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <div className={`min-h-screen ${styles.page} ${styles.themeGangsterModern}`}>
-      {/* Sidebar: hidden on mobile when bottom bar is selected; otherwise slide-out on mobile, always on md */}
+      {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
       <div
-        className={`fixed left-0 top-0 h-full w-48 ${styles.sidebar} z-50 transform transition-transform duration-300 ${
-          mobileNavStyle === 'bottom' ? 'hidden md:translate-x-0 md:block' : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`
-        }`}
+        className={`fixed left-0 top-0 h-full w-48 ${styles.sidebar} z-50 transform transition-transform duration-300 ${mobileNavStyle === 'bottom' ? 'hidden md:translate-x-0 md:block' : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}`}
         style={sidebarBgStyle}
       >
         <div className="flex flex-col h-full">
-          {/* Logo – compact header (h-12 so top line aligns with center bar and right Stats) */}
+          {/* Logo */}
           <div className={`h-12 flex items-center px-2.5 border-b ${styles.borderGoldLight} shrink-0`}>
             <div className="flex items-center gap-1.5 w-full">
               <div className="w-4 h-px shrink-0" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
@@ -1082,7 +987,7 @@ export default function Layout({ children }) {
             </div>
           </div>
 
-          {/* Navigation – compact list */}
+          {/* Navigation */}
           <nav className={`flex-1 overflow-y-auto px-2 py-1 ${styles.sidebarNav} min-h-0`}>
             <div className="space-y-0">
               {sidebarLayout === 'categorized' ? (
@@ -1092,25 +997,19 @@ export default function Layout({ children }) {
                     if (!items.length) return null;
                     return (
                       <Fragment key={cat.id}>
-                        <div className="px-2 py-1.5 mt-1 first:mt-0 rounded-sm flex items-center justify-center" style={categoryHeaderStyle}>
-                          <span className="text-[9px] font-heading font-bold uppercase tracking-widest">{cat.label}</span>
-                        </div>
+                        {/* IMPROVEMENT 2: ornamental category header */}
+                        <SidebarCatHeader label={cat.label} />
                         {items.map((item, idx) => renderNavItem(item, idx > 0))}
                         {cat.id === 'ranking' && (
                           <>
                             {navDividerEl('prestige-div')}
-                            <Link
-                              to="/prestige"
-                              data-testid="nav-prestige"
+                            <Link to="/prestige" data-testid="nav-prestige"
                               className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname === '/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
                               style={location.pathname === '/prestige' ? sidebarActiveStyle : undefined}
-                              onClick={() => setSidebarOpen(false)}
-                            >
+                              onClick={() => setSidebarOpen(false)}>
                               <Trophy size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
                               <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">Prestige</span>
-                              {rankProgress?.current_rank >= 11 && (user?.prestige_level ?? 0) < 5 && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" title="You can prestige!" />
-                              )}
+                              {rankProgress?.current_rank >= 11 && (user?.prestige_level ?? 0) < 5 && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" title="You can prestige!" />}
                             </Link>
                           </>
                         )}
@@ -1121,584 +1020,330 @@ export default function Layout({ children }) {
               ) : (
                 <>
                   {navItems.map((item, index) => renderNavItem(item, index > 0))}
-
-              {/* Prestige — always visible */}
-              {navDividerEl('prestige-div')}
-              <Link
-                to="/prestige"
-                data-testid="nav-prestige"
-                className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname === '/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
-                style={location.pathname === '/prestige' ? sidebarActiveStyle : undefined}
-                onClick={() => setSidebarOpen(false)}
-              >
-                <Trophy size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
-                <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">Prestige</span>
-                {rankProgress?.current_rank >= 11 && (user?.prestige_level ?? 0) < 5 && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" title="You can prestige!" />
-                )}
-              </Link>
+                  {navDividerEl('prestige-div')}
+                  <Link to="/prestige" data-testid="nav-prestige"
+                    className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname === '/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
+                    style={location.pathname === '/prestige' ? sidebarActiveStyle : undefined}
+                    onClick={() => setSidebarOpen(false)}>
+                    <Trophy size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
+                    <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">Prestige</span>
+                    {rankProgress?.current_rank >= 11 && (user?.prestige_level ?? 0) < 5 && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" title="You can prestige!" />}
+                  </Link>
                 </>
               )}
 
-              {/* Admin Section */}
+              {/* Admin */}
               {adminNavItems.length > 0 && (
                 <>
                   {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
                   {adminNavItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location.pathname === item.path;
+                    const Icon = item.icon; const isActive = location.pathname === item.path;
                     return (
-                      <Link
-                        key={item.path}
-                        to={item.path}
-                        data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
-                        className={`flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 ${
-                          isActive
-                            ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500'
-                            : 'text-red-400 hover:bg-red-500/10'
-                        }`}
-                        onClick={() => setSidebarOpen(false)}
-                      >
-                        <Icon size={14} />
-                        <span className="uppercase tracking-widest text-xs font-heading">{item.label}</span>
+                      <Link key={item.path} to={item.path} data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 ${isActive ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10'}`}
+                        onClick={() => setSidebarOpen(false)}>
+                        <Icon size={14} /><span className="uppercase tracking-widest text-xs font-heading">{item.label}</span>
                       </Link>
                     );
                   })}
                 </>
               )}
-              {/* Moderator Section (when not admin) */}
+              {/* Moderator */}
               {moderatorNavItems.length > 0 && (
                 <>
                   {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
                   {moderatorNavItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location.pathname === item.path;
+                    const Icon = item.icon; const isActive = location.pathname === item.path;
                     return (
-                      <Link
-                        key={item.path}
-                        to={item.path}
-                        data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
-                        className={`flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 ${
-                          isActive
-                            ? 'bg-primary/20 border-l-2 border-primary text-primary'
-                            : 'text-primary hover:bg-primary/10'
-                        }`}
-                        onClick={() => setSidebarOpen(false)}
-                      >
-                        <Icon size={14} />
-                        <span className="uppercase tracking-widest text-xs font-heading">{item.label}</span>
+                      <Link key={item.path} to={item.path} data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 ${isActive ? 'bg-primary/20 border-l-2 border-primary text-primary' : 'text-primary hover:bg-primary/10'}`}
+                        onClick={() => setSidebarOpen(false)}>
+                        <Icon size={14} /><span className="uppercase tracking-widest text-xs font-heading">{item.label}</span>
                       </Link>
                     );
                   })}
                 </>
               )}
               {hasAdminEmail && !isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => { promoteToAdmin(); setSidebarOpen(false); }}
-                  className="flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 w-full text-left text-amber-400 hover:bg-amber-500/10 text-[10px]"
-                >
-                  <Shield size={14} />
-                  <span className="uppercase tracking-widest text-xs font-heading">Use admin powers</span>
+                <button type="button" onClick={() => { promoteToAdmin(); setSidebarOpen(false); }} className="flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 w-full text-left text-amber-400 hover:bg-amber-500/10 text-[10px]">
+                  <Shield size={14} /><span className="uppercase tracking-widest text-xs font-heading">Use admin powers</span>
                 </button>
               )}
             </div>
           </nav>
 
-          {/* Theme & Logout – compact */}
+          {/* Theme & Logout */}
           {user && (
             <div className={`px-2 py-1 border-t ${styles.borderGoldLight} shrink-0 space-y-0.5`}>
-              <button
-                type="button"
-                onClick={() => setThemePickerOpen(true)}
+              <button type="button" onClick={() => setThemePickerOpen(true)}
                 className="w-full flex items-center justify-center gap-1 px-2 py-1 rounded-sm transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
-                data-testid="theme-picker-button"
-              >
-                <Palette size={12} />
-                Theme
+                data-testid="theme-picker-button">
+                <Palette size={12} />Theme
               </button>
-              <button
-                onClick={handleLogout}
-                data-testid="logout-button"
-                className="w-full flex items-center justify-center gap-1 px-2 py-1 bg-gradient-to-r from-red-700 to-red-900 text-white border border-red-600/50 rounded-sm hover:opacity-90 transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold"
-              >
-                <LogOut size={12} />
-                Logout
+              <button onClick={handleLogout} data-testid="logout-button"
+                className="w-full flex items-center justify-center gap-1 px-2 py-1 bg-gradient-to-r from-red-700 to-red-900 text-white border border-red-600/50 rounded-sm hover:opacity-90 transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold">
+                <LogOut size={12} />Logout
               </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Mobile overlay (only when sidebar mode and menu open) */}
+      {/* Mobile overlay */}
       {sidebarOpen && mobileNavStyle !== 'bottom' && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Top bar — on mobile use tighter padding so chips + scroll fit; on desktop when right sidebar shown, keep bar in middle only */}
+      {/* ── TOP BAR ─────────────────────────────────────────────────────────── */}
       <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[40px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-1.5 py-1 md:px-3 md:py-0 gap-1 md:gap-2 ${mobileStatsDisplay === 'right_sidebar' ? 'md:right-52' : ''}`}>
         <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0 overflow-hidden md:justify-end">
-        {mobileNavStyle !== 'bottom' && (
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            data-testid="mobile-menu-toggle"
-            className="md:hidden shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center -m-1.5 order-last"
-            style={{ color: 'var(--noir-primary)' }}
-            aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
-          >
-            {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
-        )}
+          {mobileNavStyle !== 'bottom' && (
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} data-testid="mobile-menu-toggle"
+              className="md:hidden shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center -m-1.5 order-last"
+              style={{ color: 'var(--noir-primary)' }} aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}>
+              {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          )}
 
-        {/* Flash news ticker */}
-        <div className="flex-1 min-w-0 overflow-hidden hidden sm:flex items-center gap-2">
-          {flashNews.length > 0 ? (
-            <div className="flex items-center gap-2 min-w-0">
-              <Newspaper size={14} className="shrink-0 text-primary/70" aria-hidden />
-              <span className="text-xs text-mutedForeground truncate font-heading" title={flashNews[flashIndex]?.message}>
-                {flashNews[flashIndex]?.message}
-              </span>
-              {flashNews.length > 1 && (
-                <span className="text-[10px] text-primary/50 shrink-0 font-heading">
-                  {flashIndex + 1}/{flashNews.length}
-                </span>
-              )}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Travel Countdown Indicator */}
-        {travelStatus && travelStatus.traveling && travelStatus.seconds_remaining > 0 && (
-          <div 
-            className="flex items-center gap-1.5 bg-amber-900/40 border border-amber-500/40 px-2 py-1 rounded-sm animate-pulse cursor-pointer shrink-0"
-            onClick={() => navigate('/travel')}
-            title={`Traveling to ${travelStatus.destination}`}
-          >
-            <span className="text-base">🚗</span>
-            <span className="font-heading text-xs text-amber-400 font-bold">
-              {travelStatus.seconds_remaining}s
-            </span>
-            <span className="hidden sm:inline font-heading text-[10px] text-amber-300/80 truncate max-w-[80px]">
-              → {travelStatus.destination}
-            </span>
+          {/* Flash news */}
+          <div className="flex-1 min-w-0 overflow-hidden hidden sm:flex items-center gap-2">
+            {flashNews.length > 0 && (
+              <div className="flex items-center gap-2 min-w-0">
+                <Newspaper size={14} className="shrink-0 text-primary/70" aria-hidden />
+                <span className="text-xs text-mutedForeground truncate font-heading" title={flashNews[flashIndex]?.message}>{flashNews[flashIndex]?.message}</span>
+                {flashNews.length > 1 && <span className="text-[10px] text-primary/50 shrink-0 font-heading">{flashIndex + 1}/{flashNews.length}</span>}
+              </div>
+            )}
           </div>
-        )}
 
-        {user && (() => {
-          const handleDragStart = (e, statId) => {
-            e.dataTransfer.setData('text/plain', statId);
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.dropEffect = 'move';
-            setDraggingStatId(statId);
-          };
-          const handleDragEnd = () => {
-            setDraggingStatId(null);
-          };
-          const handleDragOver = (e) => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-          };
-          const handleDrop = (e, targetId) => {
-            e.preventDefault();
-            const draggedId = e.dataTransfer.getData('text/plain');
-            if (!draggedId || draggedId === targetId) return;
-            setStatOrder((prev) => {
-              const next = prev.filter((id) => id !== draggedId);
-              const idx = next.indexOf(targetId);
-              next.splice(idx < 0 ? next.length : idx, 0, draggedId);
-              try { localStorage.setItem(TOPBAR_STAT_ORDER_KEY, JSON.stringify(next)); } catch (_) {}
-              return next;
-            });
-            setDraggingStatId(null);
-          };
-          const moveStat = (fromIndex, direction) => {
-            const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
-            if (toIndex < 0 || toIndex >= statOrder.length) return;
-            setStatOrder((prev) => {
-              const next = [...prev];
-              [next[fromIndex], next[toIndex]] = [next[toIndex], next[fromIndex]];
-              try { localStorage.setItem(TOPBAR_STAT_ORDER_KEY, JSON.stringify(next)); } catch (_) {}
-              return next;
-            });
-          };
-          const setTopBarGapPersist = (v) => {
-            try { localStorage.setItem(TOPBAR_GAP_KEY, v); } catch (_) {}
-            window.dispatchEvent(new Event('topbar-prefs-changed'));
-          };
-          const setTopBarSizePersist = (v) => {
-            try { localStorage.setItem(TOPBAR_SIZE_KEY, v); } catch (_) {}
-            window.dispatchEvent(new Event('topbar-prefs-changed'));
-          };
-          const setTopBarChipScalePersist = (v) => {
-            const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v)));
-            try {
-              localStorage.setItem(TOPBAR_CHIP_SCALE_KEY, String(n));
-              localStorage.setItem(TOPBAR_CHIP_WIDTH_SCALE_KEY, String(n));
-              localStorage.setItem(TOPBAR_CHIP_HEIGHT_SCALE_KEY, String(n));
-            } catch (_) {}
-            setTopBarChipScale(n);
-            setTopBarChipWidthScale(n);
-            setTopBarChipHeightScale(n);
-            window.dispatchEvent(new Event('topbar-prefs-changed'));
-          };
-          const setTopBarChipWidthScalePersist = (v) => {
-            const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v)));
-            try { localStorage.setItem(TOPBAR_CHIP_WIDTH_SCALE_KEY, String(n)); } catch (_) {}
-            setTopBarChipWidthScale(n);
-            window.dispatchEvent(new Event('topbar-prefs-changed'));
-          };
-          const setTopBarChipHeightScalePersist = (v) => {
-            const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v)));
-            try { localStorage.setItem(TOPBAR_CHIP_HEIGHT_SCALE_KEY, String(n)); } catch (_) {}
-            setTopBarChipHeightScale(n);
-            window.dispatchEvent(new Event('topbar-prefs-changed'));
-          };
-          const casinoProfit = user.casino_profit ?? 0;
-          const propertyProfit = user.property_profit ?? 0;
-          const topBarGapClass = topBarGap === 'compact' ? 'gap-0.5 md:gap-2' : topBarGap === 'spread' ? 'gap-2 md:gap-4' : 'gap-0.5 md:gap-2';
-          const topBarIconSize = topBarSize === 'small' ? 12 : topBarSize === 'large' ? 20 : 16;
-          const chipWidthScale = topBarChipWidthScale / 100;
-          const chipHeightScale = topBarChipHeightScale / 100;
-          const chipScaleAvg = (chipWidthScale + chipHeightScale) / 2;
-          const topBarIconSizeEffective = Math.max(8, Math.min(20, Math.round(topBarIconSize * chipScaleAvg)));
-          const topBarIconSizeEffectiveMobile = isMobileViewport ? Math.min(14, topBarIconSizeEffective) : topBarIconSizeEffective;
-          const topBarChipStyle = {
-            paddingTop: isMobileViewport ? Math.round(4 * chipHeightScale) : Math.round(6 * chipHeightScale),
-            paddingBottom: isMobileViewport ? Math.round(4 * chipHeightScale) : Math.round(6 * chipHeightScale),
-            paddingLeft: isMobileViewport ? Math.round(5 * chipWidthScale) : Math.round(8 * chipWidthScale),
-            paddingRight: isMobileViewport ? Math.round(5 * chipWidthScale) : Math.round(8 * chipWidthScale),
-          };
-          const topBarChipMinHeight = isMobileViewport ? Math.max(20, Math.round(34 * chipHeightScale)) : undefined;
-          const rankBarWidthPx = Math.max(isMobileViewport ? 16 : 20, Math.round((isMobileViewport ? 24 : 44) * chipWidthScale));
-          const rankColMinWidthPx = Math.max(isMobileViewport ? 28 : 36, Math.round((isMobileViewport ? 44 : 52) * chipWidthScale));
-          const topBarTextClass = topBarSize === 'small' ? 'text-xs md:text-[10px]' : topBarSize === 'large' ? 'text-sm' : 'text-xs';
-          const renderStat = (statId) => {
-            const chipClass = `flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm shrink-0 cursor-grab active:cursor-grabbing touch-manipulation`;
-            if (statId === 'rank') {
-              const pct = rankProgress ? Number(rankProgress.rank_points_progress) : 0;
-              const current = rankProgress ? (Number(rankProgress.rank_points_current) || 0) : 0;
-              const needed = rankProgress ? (Number(rankProgress.rank_points_needed) || 0) : 0;
-              const total = current + needed;
-              const progress = rankProgress
-                ? ((typeof pct === 'number' && !Number.isNaN(pct) && pct > 0)
-                  ? Math.min(100, Math.max(0, pct))
-                  : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0))
-                : 0;
-              const hasPremiumBar = !!user?.premium_rank_bar;
-              const progressLabel = rankProgress ? (hasPremiumBar ? progress.toFixed(2) : progress.toFixed(0)) : '—';
-              const rankName = rankProgress?.current_rank_name ?? 'Rank';
-              return (
-                <div className={`${chipClass} gap-1 sm:gap-1.5 min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={rankProgress ? `${rankName}: ${progressLabel}%` : 'Rank progress'}>
-                  <TrendingUp size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
-                  <div className="hidden md:flex flex-col flex-1 sm:flex-initial shrink-0 min-w-0" style={{ minWidth: rankColMinWidthPx }}>
-                    <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading truncate">{rankName}</span>
-                    <div className="shrink-0" style={{ width: rankBarWidthPx, position: 'relative', height: Math.max(4, Math.round(6 * chipHeightScale)), backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
-                      <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 2 : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
-                    </div>
-                  </div>
-                  <span className={`${topBarTextClass} text-primary font-heading shrink-0 tabular-nums text-right`} style={{ minWidth: Math.round(24 * chipWidthScale) }}>{progressLabel}{rankProgress ? '%' : ''}</span>
-                </div>
-              );
-            }
-            if (statId === 'health') {
-              const healthVal = Number(user.health);
-              const healthStr = Number.isFinite(healthVal) ? Math.max(0, Math.min(100, Math.round(healthVal))).toString() : '100';
-              const healthNum = parseInt(healthStr, 10) || 100;
-              const healthColor = healthNum > 50 ? 'text-emerald-400' : healthNum > 25 ? 'text-amber-400' : 'text-red-400';
-              return (
-                <div className={`${chipClass} flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Health: ${healthStr}%`}>
-                  <Heart size={topBarIconSizeEffectiveMobile} className={`${healthColor} shrink-0`} aria-hidden />
-                  <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums truncate max-w-[4rem]`} data-testid="topbar-health">{healthStr}%</span>
-                </div>
-              );
-            }
-            if (statId === 'bullets') {
-              const bulletsStr = formatInt(user.bullets);
-              return (
-                <div className={`${chipClass} flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Bullets: ${bulletsStr}`}>
-                  <Crosshair size={topBarIconSizeEffectiveMobile} className="text-red-400 shrink-0" aria-hidden />
-                  <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums truncate max-w-[6rem]`} data-testid="topbar-bullets">{bulletsStr}</span>
-                </div>
-              );
-            }
-            if (statId === 'kills') {
-              const killsStr = formatInt(user.total_kills);
-              return (
-                <div className={`${chipClass} flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Kills: ${killsStr}`}>
-                  <Skull size={topBarIconSizeEffectiveMobile} className="text-red-400 shrink-0" aria-hidden />
-                  <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums min-w-[1.5rem] text-right`} data-testid="topbar-kills">{killsStr}</span>
-                </div>
-              );
-            }
-            if (statId === 'money') {
-              const moneyFull = formatMoney(user.money);
-              const moneyLabel = Math.trunc(Number(user.money ?? 0)).toLocaleString();
-              return (
-                <div className={`${chipClass} min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Cash: ${moneyFull}`}>
-                  <DollarSign size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
-                  <span className={`font-heading ${topBarTextClass} text-primary tabular-nums truncate max-w-[12rem]`} data-testid="topbar-money">{moneyLabel}</span>
-                </div>
-              );
-            }
-            if (statId === 'points') {
-              const pointsFull = formatInt(user.points);
-              const pointsCompact = formatCompact(user.points);
-              const useCompactDesktop = pointsFull.length > 12;
-              return (
-                <div className={`${chipClass} min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Premium Points: ${pointsFull}`}>
-                  <Zap size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
-                  <span className={`font-heading ${topBarTextClass} text-foreground md:hidden tabular-nums`} data-testid="topbar-points">{pointsFull}</span>
-                  <span className={`font-heading text-xs text-foreground hidden md:inline tabular-nums ${useCompactDesktop ? '' : 'truncate max-w-[6rem]'}`} data-testid="topbar-points-full">{useCompactDesktop ? `${pointsCompact} pts` : pointsFull}</span>
-                </div>
-              );
-            }
-            if (statId === 'respect_points') {
-              const respectFull = formatInt(user.respect_points ?? 0);
-              const respectCompact = formatCompact(user.respect_points ?? 0);
-              const useCompactDesktop = respectFull.length > 12;
-              return (
-                <div className={`${chipClass} min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Respect: ${respectFull}`}>
-                  <Trophy size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
-                  <span className={`font-heading ${topBarTextClass} text-foreground md:hidden tabular-nums`} data-testid="topbar-respect">{respectFull}</span>
-                  <span className={`font-heading text-xs text-foreground hidden md:inline tabular-nums ${useCompactDesktop ? '' : 'truncate max-w-[6rem]'}`} data-testid="topbar-respect-full">{useCompactDesktop ? `${respectCompact} resp` : respectFull}</span>
-                </div>
-              );
-            }
-            if (statId === 'property') {
-              const casinoNum = Number(casinoProfit);
-              const propertyNum = Number(propertyProfit);
-              const casinoStr = `$${(Number.isFinite(casinoNum) ? casinoNum : 0).toLocaleString()}`;
-              const propertyStr = `${(Number.isFinite(propertyNum) ? propertyNum : 0).toLocaleString()} pts`;
-              const casinoShort = formatMoneyCompact(casinoProfit);
-              const propertyShort = formatCompact(propertyProfit) + ' pts';
-              const casinoColor = (Number.isFinite(casinoNum) ? casinoNum : 0) >= 0 ? 'text-emerald-500' : 'text-red-400';
-              const propertyColor = (Number.isFinite(propertyNum) ? propertyNum : 0) >= 0 ? 'text-emerald-500' : 'text-red-400';
-              const useCompactOnDesktop = casinoStr.length > 11 || propertyStr.length > 14;
-              return (
-                <div className={`${chipClass} min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Casino ${casinoStr} · Property ${propertyStr}`}>
-                  <Building2 size={topBarIconSizeEffectiveMobile} className="text-emerald-400 shrink-0" aria-hidden />
-                  <span className={`font-heading ${topBarTextClass} text-foreground whitespace-nowrap tabular-nums min-w-0 flex items-center gap-0.5`}>
-                    <span className="text-mutedForeground md:inline hidden shrink-0">Casino</span>
-                    <span className="text-mutedForeground md:hidden shrink-0">C</span>
-                    <span className={`${casinoColor} tabular-nums`}><span className="md:hidden">{casinoShort}</span><span className="hidden md:inline">{useCompactOnDesktop ? casinoShort : casinoStr}</span></span>
-                    <span className="text-mutedForeground shrink-0">·</span>
-                    <span className="text-mutedForeground md:inline hidden shrink-0">Property</span>
-                    <span className="text-mutedForeground md:hidden shrink-0">P</span>
-                    <span className={`${propertyColor} tabular-nums`}><span className="md:hidden">{propertyShort}</span><span className="hidden md:inline">{useCompactOnDesktop ? propertyShort : propertyStr}</span></span>
-                  </span>
-                </div>
-              );
-            }
-            if (statId === 'notifications') {
-              return null;
-            }
-            return null;
-          };
-          return (
-            <>
-            {/* On mobile: one scrollable row for all chips so everything fits by scrolling */}
-            <div className={`${(isMobileViewport && mobileStatsDisplay === 'touch_ball') || mobileStatsDisplay === 'right_sidebar' ? 'hidden' : 'flex'} md:flex items-center ${topBarGapClass} flex-1 min-w-0 py-0.5 md:py-0 md:mx-0 md:px-0 overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth touch-pan-x min-h-0`}>
-              {/* Single row: search + all stats in order (mobile scrolls; desktop same) */}
-              {(!isMobileViewport || mobileStatsDisplay === 'top_bar') && mobileStatsDisplay !== 'right_sidebar' && (
-              <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
-                <div className="relative shrink-0 z-10" ref={userSearchRef}>
-                  {!userSearchExpanded ? (
-                    <button
-                      type="button"
-                      draggable={false}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setUserSearchExpanded(true);
-                        setUserSearchOpen(true);
-                        setTimeout(() => userSearchInputRef.current?.focus(), 0);
-                      }}
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                      }}
-                      className="flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm text-primary hover:bg-noir-raised/90 active:scale-95 transition-colors cursor-pointer touch-manipulation"
-                      style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }}
-                      aria-label="Search user"
-                      title="Search user"
-                    >
-                      <Search size={topBarIconSizeEffectiveMobile} strokeWidth={2} />
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm px-2 py-1.5 min-w-[140px] max-w-[180px] md:min-w-[120px] md:py-0.5 md:px-1.5">
-                      <Search size={14} className="text-primary/50 shrink-0 md:w-3 md:h-3" aria-hidden />
-                      <input
-                        ref={userSearchInputRef}
-                        type="text"
-                        value={userSearchQuery}
-                        onChange={(e) => { setUserSearchQuery(e.target.value); setUserSearchOpen(true); }}
-                        onFocus={() => setUserSearchOpen(true)}
-                        placeholder="Search user..."
-                        className="flex-1 min-w-0 py-0.5 bg-transparent font-heading text-foreground placeholder:text-mutedForeground focus:outline-none border-0 text-[16px] md:text-[11px]"
-                        data-testid="topbar-user-search"
-                        autoComplete="off"
-                      />
-                    </div>
-                  )}
-                  {userSearchExpanded && userSearchOpen && (
-                    <div
-                      className="absolute top-full left-0 mt-1 w-[min(calc(100vw-2rem),260px)] max-w-[260px] max-h-[min(60vh,280px)] overflow-y-auto rounded border shadow-xl z-[100] flex flex-col"
-                      style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
-                    >
-                      <div className="p-2.5 border-b shrink-0 md:p-2" style={{ borderColor: 'var(--noir-border)' }}>
-                        <p className="text-xs font-heading text-mutedForeground md:text-[10px]">Find any user — online, offline, or dead</p>
-                      </div>
-                      <div className="flex-1 min-h-0">
-                        {userSearchLoading ? (
-                          <div className="p-4 text-center text-sm font-heading text-mutedForeground md:p-3 md:text-[11px]">Searching...</div>
-                        ) : userSearchResults.length === 0 ? (
-                          <div className="p-4 text-center text-sm font-heading text-mutedForeground md:p-3 md:text-[11px]">
-                            {userSearchQuery.trim().length < 1 ? 'Type to search' : 'No users found'}
-                          </div>
+          {/* IMPROVEMENT 1: Improved travel indicator — 2-line compact card */}
+          {travelStatus && travelStatus.traveling && travelStatus.seconds_remaining > 0 && (
+            <div
+              className="flex items-center gap-1.5 border border-primary/35 px-2 py-1 rounded-sm cursor-pointer shrink-0"
+              style={{ background: 'rgba(var(--noir-primary-rgb), 0.07)', animation: 'pulse 2s ease-in-out infinite' }}
+              onClick={() => navigate('/travel')}
+              title={`Traveling to ${travelStatus.destination}`}
+            >
+              <span className="text-base leading-none">🚗</span>
+              <div className="flex flex-col leading-none gap-0.5">
+                <span className="font-heading text-[9px] text-primary/75 tracking-wider truncate max-w-[72px]">→ {travelStatus.destination}</span>
+                <span className="font-heading text-[11px] font-bold" style={{ color: 'var(--noir-primary)' }}>{travelStatus.seconds_remaining}s</span>
+              </div>
+            </div>
+          )}
+
+          {user && (() => {
+            const handleDragStart = (e, statId) => { e.dataTransfer.setData('text/plain', statId); e.dataTransfer.effectAllowed = 'move'; setDraggingStatId(statId); };
+            const handleDragEnd = () => setDraggingStatId(null);
+            const handleDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
+            const handleDrop = (e, targetId) => {
+              e.preventDefault();
+              const draggedId = e.dataTransfer.getData('text/plain');
+              if (!draggedId || draggedId === targetId) return;
+              setStatOrder((prev) => {
+                const next = prev.filter((id) => id !== draggedId);
+                const idx = next.indexOf(targetId);
+                next.splice(idx < 0 ? next.length : idx, 0, draggedId);
+                try { localStorage.setItem(TOPBAR_STAT_ORDER_KEY, JSON.stringify(next)); } catch (_) {}
+                return next;
+              });
+              setDraggingStatId(null);
+            };
+            const moveStat = (fromIndex, direction) => {
+              const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
+              if (toIndex < 0 || toIndex >= statOrder.length) return;
+              setStatOrder((prev) => {
+                const next = [...prev];
+                [next[fromIndex], next[toIndex]] = [next[toIndex], next[fromIndex]];
+                try { localStorage.setItem(TOPBAR_STAT_ORDER_KEY, JSON.stringify(next)); } catch (_) {}
+                return next;
+              });
+            };
+            const setTopBarGapPersist = (v) => { try { localStorage.setItem(TOPBAR_GAP_KEY, v); } catch (_) {} window.dispatchEvent(new Event('topbar-prefs-changed')); };
+            const setTopBarSizePersist = (v) => { try { localStorage.setItem(TOPBAR_SIZE_KEY, v); } catch (_) {} window.dispatchEvent(new Event('topbar-prefs-changed')); };
+            const setTopBarChipWidthScalePersist = (v) => { const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v))); try { localStorage.setItem(TOPBAR_CHIP_WIDTH_SCALE_KEY, String(n)); } catch (_) {} setTopBarChipWidthScale(n); window.dispatchEvent(new Event('topbar-prefs-changed')); };
+            const setTopBarChipHeightScalePersist = (v) => { const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v))); try { localStorage.setItem(TOPBAR_CHIP_HEIGHT_SCALE_KEY, String(n)); } catch (_) {} setTopBarChipHeightScale(n); window.dispatchEvent(new Event('topbar-prefs-changed')); };
+
+            const topBarGapClass = topBarGap === 'compact' ? 'gap-0.5 md:gap-2' : topBarGap === 'spread' ? 'gap-2 md:gap-4' : 'gap-0.5 md:gap-2';
+            const topBarIconSize = topBarSize === 'small' ? 12 : topBarSize === 'large' ? 20 : 16;
+            const chipWidthScale = topBarChipWidthScale / 100;
+            const chipHeightScale = topBarChipHeightScale / 100;
+            const chipScaleAvg = (chipWidthScale + chipHeightScale) / 2;
+            const topBarIconSizeEffective = Math.max(8, Math.min(20, Math.round(topBarIconSize * chipScaleAvg)));
+            const topBarIconSizeEffectiveMobile = isMobileViewport ? Math.min(14, topBarIconSizeEffective) : topBarIconSizeEffective;
+            const topBarChipStyle = {
+              paddingTop: isMobileViewport ? Math.round(4 * chipHeightScale) : Math.round(6 * chipHeightScale),
+              paddingBottom: isMobileViewport ? Math.round(4 * chipHeightScale) : Math.round(6 * chipHeightScale),
+              paddingLeft: isMobileViewport ? Math.round(5 * chipWidthScale) : Math.round(8 * chipWidthScale),
+              paddingRight: isMobileViewport ? Math.round(5 * chipWidthScale) : Math.round(8 * chipWidthScale),
+            };
+            // IMPROVEMENT 6: min 36px touch height on mobile
+            const topBarChipMinHeight = isMobileViewport ? Math.max(36, Math.round(34 * chipHeightScale)) : undefined;
+            const rankBarWidthPx = Math.max(isMobileViewport ? 20 : 20, Math.round((isMobileViewport ? 28 : 44) * chipWidthScale));
+            const rankColMinWidthPx = Math.max(isMobileViewport ? 28 : 36, Math.round((isMobileViewport ? 44 : 52) * chipWidthScale));
+            const topBarTextClass = topBarSize === 'small' ? 'text-xs md:text-[10px]' : topBarSize === 'large' ? 'text-sm' : 'text-xs';
+
+            const statRenderProps = { topBarChipStyle, topBarChipMinHeight, topBarIconSizeEffectiveMobile, topBarTextClass, rankBarWidthPx, rankColMinWidthPx, chipWidthScale, chipHeightScale, isMobileViewport };
+
+            return (
+              <>
+                {/* IMPROVEMENT 6: scroll fade mask on mobile */}
+                <div
+                  className={`${(isMobileViewport && mobileStatsDisplay === 'touch_ball') || mobileStatsDisplay === 'right_sidebar' ? 'hidden' : 'flex'} md:flex items-center ${topBarGapClass} flex-1 min-w-0 py-0.5 md:py-0 md:mx-0 md:px-0 overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth touch-pan-x min-h-0`}
+                  style={isMobileViewport ? { WebkitMaskImage: 'linear-gradient(to right, transparent 0, black 8px, black 90%, transparent 100%)', maskImage: 'linear-gradient(to right, transparent 0, black 8px, black 90%, transparent 100%)' } : undefined}
+                >
+                  {(!isMobileViewport || mobileStatsDisplay === 'top_bar') && mobileStatsDisplay !== 'right_sidebar' && (
+                    <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
+                      {/* Search — IMPROVEMENT 1: always-visible compact search on mobile too */}
+                      <div className="relative shrink-0 z-10" ref={userSearchRef}>
+                        {!userSearchExpanded ? (
+                          <button type="button" draggable={false}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setUserSearchExpanded(true); setUserSearchOpen(true); setTimeout(() => userSearchInputRef.current?.focus(), 0); }}
+                            className="flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm text-primary hover:bg-noir-raised/90 hover:border-primary/40 active:scale-95 transition-all cursor-pointer touch-manipulation"
+                            style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }}
+                            aria-label="Search user" title="Find any made man">
+                            <Search size={topBarIconSizeEffectiveMobile} strokeWidth={2} />
+                          </button>
                         ) : (
-                          userSearchResults.map((u) => (
-                            <Link
-                              key={u.username}
-                              to={`/profile/${encodeURIComponent(u.username)}`}
-                              onClick={() => { setUserSearchOpen(false); setUserSearchExpanded(false); setUserSearchQuery(''); setUserSearchResults([]); }}
-                              className="flex items-center justify-between gap-2 w-full text-left px-3 py-3 min-h-[44px] border-b font-heading text-sm hover:bg-noir-raised/80 active:bg-noir-raised/90 transition-colors touch-manipulation md:py-2 md:min-h-0"
-                              style={{ borderColor: 'var(--noir-border)', color: 'var(--noir-foreground)' }}
-                            >
-                              <span className="truncate font-semibold">{u.username}</span>
-                              <div className="flex gap-1 shrink-0">
-                                {u.is_dead && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 md:text-[9px] md:px-1">Dead</span>}
-                                {u.in_jail && !u.is_dead && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 md:text-[9px] md:px-1">Jail</span>}
-                                {u.is_bodyguard && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 md:text-[9px] md:px-1">Robot</span>}
-                              </div>
-                            </Link>
-                          ))
+                          <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/30 rounded-sm px-2 py-1.5 min-w-[140px] max-w-[180px] md:min-w-[120px] md:py-0.5 md:px-1.5" style={{ boxShadow: '0 0 0 2px rgba(var(--noir-primary-rgb), 0.08)' }}>
+                            <Search size={14} className="text-primary/50 shrink-0 md:w-3 md:h-3" aria-hidden />
+                            <input ref={userSearchInputRef} type="text" value={userSearchQuery}
+                              onChange={(e) => { setUserSearchQuery(e.target.value); setUserSearchOpen(true); }}
+                              onFocus={() => setUserSearchOpen(true)}
+                              placeholder="Find made man..."
+                              className="flex-1 min-w-0 py-0.5 bg-transparent font-heading text-foreground placeholder:text-mutedForeground focus:outline-none border-0 text-[16px] md:text-[11px]"
+                              data-testid="topbar-user-search" autoComplete="off" />
+                          </div>
+                        )}
+                        {userSearchExpanded && userSearchOpen && (
+                          <div className="absolute top-full left-0 mt-1 w-[min(calc(100vw-2rem),260px)] max-w-[260px] max-h-[min(60vh,280px)] overflow-y-auto rounded border shadow-xl z-[100] flex flex-col"
+                            style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}>
+                            <div className="p-2.5 border-b shrink-0 md:p-2" style={{ borderColor: 'var(--noir-border)' }}>
+                              <p className="text-xs font-heading text-mutedForeground md:text-[10px]">Find any user — online, offline, or dead</p>
+                            </div>
+                            <div className="flex-1 min-h-0">
+                              {userSearchLoading ? (
+                                <div className="p-4 text-center text-sm font-heading text-mutedForeground md:p-3 md:text-[11px]">Searching...</div>
+                              ) : userSearchResults.length === 0 ? (
+                                <div className="p-4 text-center text-sm font-heading text-mutedForeground md:p-3 md:text-[11px]">{userSearchQuery.trim().length < 1 ? 'Type to search' : 'No users found'}</div>
+                              ) : (
+                                userSearchResults.map((u) => (
+                                  <Link key={u.username} to={`/profile/${encodeURIComponent(u.username)}`}
+                                    onClick={() => { setUserSearchOpen(false); setUserSearchExpanded(false); setUserSearchQuery(''); setUserSearchResults([]); }}
+                                    className="flex items-center justify-between gap-2 w-full text-left px-3 py-3 min-h-[44px] border-b font-heading text-sm hover:bg-noir-raised/80 active:bg-noir-raised/90 transition-colors touch-manipulation md:py-2 md:min-h-0"
+                                    style={{ borderColor: 'var(--noir-border)', color: 'var(--noir-foreground)' }}>
+                                    <span className="truncate font-semibold">{u.username}</span>
+                                    <div className="flex gap-1 shrink-0">
+                                      {u.is_dead && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 md:text-[9px] md:px-1">Dead</span>}
+                                      {u.in_jail && !u.is_dead && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 md:text-[9px] md:px-1">Jail</span>}
+                                      {u.is_bodyguard && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 md:text-[9px] md:px-1">Robot</span>}
+                                    </div>
+                                  </Link>
+                                ))
+                              )}
+                            </div>
+                          </div>
                         )}
                       </div>
+
+                      {statOrder.filter((statId) => statId !== 'notifications' && statId !== 'property').map((statId) => {
+                        const content = renderTopBarStat(statId, statRenderProps);
+                        if (!content) return null;
+                        return (
+                          <div key={statId} draggable={!isMobileViewport} onDragStart={(e) => handleDragStart(e, statId)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, statId)} onDragEnd={handleDragEnd}
+                            className={`shrink-0 snap-start transition-all duration-150 ease-out ${isMobileViewport ? '' : 'cursor-grab active:cursor-grabbing'} ${draggingStatId === statId ? 'opacity-50 scale-95' : ''}`}>
+                            {content}
+                          </div>
+                        );
+                      })}
+
+                      {isMobileViewport && (
+                        <button type="button" onClick={() => setTopBarCustomizeOpen(true)}
+                          className="shrink-0 flex items-center justify-center gap-1 rounded-sm bg-noir-surface/90 border border-primary/20 text-primary hover:bg-noir-raised/90 transition-colors touch-manipulation"
+                          style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }}
+                          aria-label="Customize top bar" title="Reorder, size & spacing">
+                          <Settings size={topBarIconSizeEffectiveMobile} strokeWidth={2} />
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
-                {statOrder.filter((statId) => statId !== 'notifications' && statId !== 'property').map((statId) => {
-                  const content = renderStat(statId);
-                  if (!content) return null;
-                  return (
-                    <div key={statId} draggable={!isMobileViewport} onDragStart={(e) => handleDragStart(e, statId)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, statId)} onDragEnd={handleDragEnd} className={`shrink-0 snap-start transition-all duration-150 ease-out ${isMobileViewport ? '' : 'cursor-grab active:cursor-grabbing'} ${draggingStatId === statId ? 'opacity-50 scale-95' : ''}`}>
-                      {content}
+
+                {/* Mobile top bar customize sheet */}
+                {topBarCustomizeOpen && (
+                  <>
+                    <div className="fixed inset-0 z-50 bg-black/50 md:hidden" aria-hidden onClick={() => setTopBarCustomizeOpen(false)} />
+                    <div className="fixed bottom-0 left-0 right-0 z-50 max-h-[70vh] overflow-y-auto rounded-t-xl border-t shadow-2xl md:hidden safe-area-pb" style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}>
+                      <div className="sticky top-0 flex items-center justify-between px-4 py-3 border-b shrink-0" style={{ borderColor: 'var(--noir-border-mid)', backgroundColor: 'var(--noir-content)' }}>
+                        <h3 className="font-heading font-semibold text-sm" style={{ color: 'var(--noir-primary)' }}>Customize top bar</h3>
+                        <button type="button" onClick={() => setTopBarCustomizeOpen(false)} className="p-2 rounded-lg font-heading text-xs border transition-colors" style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}>Done</button>
+                      </div>
+                      <div className="p-4 space-y-4">
+                        <div>
+                          <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Order</p>
+                          <ul className="space-y-1">
+                            {statOrder.map((statId, idx) => (
+                              <li key={statId} className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
+                                <span className="font-heading text-sm truncate" style={{ color: 'var(--noir-foreground)' }}>{TOPBAR_STAT_LABELS[statId] ?? statId}</span>
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  <button type="button" onClick={() => moveStat(idx, 'up')} disabled={idx === 0} className="p-2 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation" style={{ borderColor: 'var(--noir-border-mid)' }} aria-label="Move up"><ChevronUp size={18} strokeWidth={2} style={{ color: 'var(--noir-foreground)' }} /></button>
+                                  <button type="button" onClick={() => moveStat(idx, 'down')} disabled={idx === statOrder.length - 1} className="p-2 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation" style={{ borderColor: 'var(--noir-border-mid)' }} aria-label="Move down"><ChevronDown size={18} strokeWidth={2} style={{ color: 'var(--noir-foreground)' }} /></button>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Chip width</p>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <input type="range" min={CHIP_SCALE_MIN} max={CHIP_SCALE_MAX} value={topBarChipWidthScale} onChange={(e) => setTopBarChipWidthScalePersist(Number(e.target.value))} className="flex-1 min-w-[120px] h-2 rounded-full accent-primary" aria-label="Chip width" />
+                            <span className="text-xs font-heading tabular-nums shrink-0" style={{ color: 'var(--noir-foreground)' }}>{topBarChipWidthScale}%</span>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Chip height</p>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <input type="range" min={CHIP_SCALE_MIN} max={CHIP_SCALE_MAX} value={topBarChipHeightScale} onChange={(e) => setTopBarChipHeightScalePersist(Number(e.target.value))} className="flex-1 min-w-[120px] h-2 rounded-full accent-primary" aria-label="Chip height" />
+                            <span className="text-xs font-heading tabular-nums shrink-0" style={{ color: 'var(--noir-foreground)' }}>{topBarChipHeightScale}%</span>
+                          </div>
+                        </div>
+                        <p className="text-[9px] font-heading" style={{ color: 'var(--noir-muted)' }}>Lower = more compact. Rank bar shortens with width.</p>
+                        <div>
+                          <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Base size</p>
+                          <div className="flex flex-wrap gap-2">
+                            {['small', 'medium', 'large'].map((v) => (
+                              <button key={v} type="button" onClick={() => setTopBarSizePersist(v)} className={`px-4 py-2.5 rounded-lg border-2 text-sm font-heading uppercase tracking-wider transition-colors touch-manipulation ${topBarSize === v ? 'border-primary' : ''}`} style={topBarSize === v ? { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.2)', color: 'var(--noir-primary)' } : { borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}>
+                                {v.charAt(0).toUpperCase() + v.slice(1)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Spacing</p>
+                          <div className="flex flex-wrap gap-2">
+                            {['compact', 'normal', 'spread'].map((v) => (
+                              <button key={v} type="button" onClick={() => setTopBarGapPersist(v)} className={`px-4 py-2.5 rounded-lg border-2 text-sm font-heading uppercase tracking-wider transition-colors touch-manipulation ${topBarGap === v ? 'border-primary' : ''}`} style={topBarGap === v ? { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.2)', color: 'var(--noir-primary)' } : { borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}>
+                                {v === 'compact' ? 'Close' : v === 'spread' ? 'Spread' : 'Normal'}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  );
-                })}
-                {isMobileViewport && (
-                  <button
-                    type="button"
-                    onClick={() => setTopBarCustomizeOpen(true)}
-                    className="shrink-0 flex items-center justify-center gap-1 rounded-sm bg-noir-surface/90 border border-primary/20 text-primary hover:bg-noir-raised/90 transition-colors touch-manipulation"
-                    style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }}
-                    aria-label="Customize top bar"
-                    title="Reorder, size & spacing"
-                  >
-                    <Settings size={topBarIconSizeEffectiveMobile} strokeWidth={2} />
-                  </button>
+                  </>
                 )}
-              </div>
-              )}
-            </div>
-            {topBarCustomizeOpen && (
-              <>
-                <div className="fixed inset-0 z-50 bg-black/50 md:hidden" aria-hidden onClick={() => setTopBarCustomizeOpen(false)} />
-                <div className="fixed bottom-0 left-0 right-0 z-50 max-h-[70vh] overflow-y-auto rounded-t-xl border-t shadow-2xl md:hidden safe-area-pb" style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}>
-                  <div className="sticky top-0 flex items-center justify-between px-4 py-3 border-b shrink-0" style={{ borderColor: 'var(--noir-border-mid)', backgroundColor: 'var(--noir-content)' }}>
-                    <h3 className="font-heading font-semibold text-sm" style={{ color: 'var(--noir-primary)' }}>Customize top bar</h3>
-                    <button type="button" onClick={() => setTopBarCustomizeOpen(false)} className="p-2 rounded-lg font-heading text-xs border transition-colors" style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}>Done</button>
-                  </div>
-                  <div className="p-4 space-y-4">
-                    <div>
-                      <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Order</p>
-                      <ul className="space-y-1">
-                        {statOrder.map((statId, idx) => (
-                          <li key={statId} className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
-                            <span className="font-heading text-sm truncate" style={{ color: 'var(--noir-foreground)' }}>{TOPBAR_STAT_LABELS[statId] ?? statId}</span>
-                            <div className="flex items-center gap-0.5 shrink-0">
-                              <button type="button" onClick={() => moveStat(idx, 'up')} disabled={idx === 0} className="p-2 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation" style={{ borderColor: 'var(--noir-border-mid)' }} aria-label="Move up">
-                                <ChevronUp size={18} strokeWidth={2} style={{ color: 'var(--noir-foreground)' }} />
-                              </button>
-                              <button type="button" onClick={() => moveStat(idx, 'down')} disabled={idx === statOrder.length - 1} className="p-2 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation" style={{ borderColor: 'var(--noir-border-mid)' }} aria-label="Move down">
-                                <ChevronDown size={18} strokeWidth={2} style={{ color: 'var(--noir-foreground)' }} />
-                              </button>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Chip width</p>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <input
-                          type="range"
-                          min={CHIP_SCALE_MIN}
-                          max={CHIP_SCALE_MAX}
-                          value={topBarChipWidthScale}
-                          onChange={(e) => setTopBarChipWidthScalePersist(Number(e.target.value))}
-                          className="flex-1 min-w-[120px] h-2 rounded-full accent-primary"
-                          aria-label="Chip width"
-                        />
-                        <span className="text-xs font-heading tabular-nums shrink-0" style={{ color: 'var(--noir-foreground)' }}>{topBarChipWidthScale}%</span>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Chip height</p>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <input
-                          type="range"
-                          min={CHIP_SCALE_MIN}
-                          max={CHIP_SCALE_MAX}
-                          value={topBarChipHeightScale}
-                          onChange={(e) => setTopBarChipHeightScalePersist(Number(e.target.value))}
-                          className="flex-1 min-w-[120px] h-2 rounded-full accent-primary"
-                          aria-label="Chip height"
-                        />
-                        <span className="text-xs font-heading tabular-nums shrink-0" style={{ color: 'var(--noir-foreground)' }}>{topBarChipHeightScale}%</span>
-                      </div>
-                    </div>
-                    <p className="text-[9px] font-heading" style={{ color: 'var(--noir-muted)' }}>Lower = more compact. Rank bar shortens with width.</p>
-                    <div>
-                      <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Base size</p>
-                      <div className="flex flex-wrap gap-2">
-                        {['small', 'medium', 'large'].map((v) => (
-                          <button key={v} type="button" onClick={() => setTopBarSizePersist(v)} className={`px-4 py-2.5 rounded-lg border-2 text-sm font-heading uppercase tracking-wider transition-colors touch-manipulation ${topBarSize === v ? 'border-primary' : ''}`} style={topBarSize === v ? { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.2)', color: 'var(--noir-primary)' } : { borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}>
-                            {v.charAt(0).toUpperCase() + v.slice(1)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Spacing</p>
-                      <div className="flex flex-wrap gap-2">
-                        {['compact', 'normal', 'spread'].map((v) => (
-                          <button key={v} type="button" onClick={() => setTopBarGapPersist(v)} className={`px-4 py-2.5 rounded-lg border-2 text-sm font-heading uppercase tracking-wider transition-colors touch-manipulation ${topBarGap === v ? 'border-primary' : ''}`} style={topBarGap === v ? { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.2)', color: 'var(--noir-primary)' } : { borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}>
-                            {v === 'compact' ? 'Close' : v === 'spread' ? 'Spread' : 'Normal'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </>
-            )}
-            </>
-          );
-        })()}
+            );
+          })()}
         </div>
       </div>
 
-      {/* Main content */}
+      {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
       <main className={`md:ml-48 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-24 md:pb-6' : ''} ${mobileStatsDisplay === 'right_sidebar' ? 'md:mr-52' : ''}`}>
         {needsEmailVerification && (
           <div className="mb-3 px-3 py-2 rounded-sm flex items-center gap-2 flex-wrap" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', border: '1px solid rgba(var(--noir-primary-rgb), 0.4)' }}>
             <Mail size={16} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
-            <span className="text-sm font-heading" style={{ color: 'var(--noir-foreground)' }}>
-              Verify your email to use crimes, GTA, OC, bank, gambling, dead-alive, and other features.
-            </span>
+            <span className="text-sm font-heading" style={{ color: 'var(--noir-foreground)' }}>Verify your email to use crimes, GTA, OC, bank, gambling, dead-alive, and other features.</span>
             <Link to="/verify-email" className="text-sm font-heading font-bold uppercase tracking-wider shrink-0" style={{ color: 'var(--noir-primary)' }}>Verify email</Link>
           </div>
         )}
@@ -1720,151 +1365,125 @@ export default function Layout({ children }) {
         })()}
       </main>
 
-      {/* Right sidebar (stats, links, logout) – when theme set to "Right sidebar" */}
+      {/* ── RIGHT SIDEBAR ────────────────────────────────────────────────────── */}
       {user && mobileStatsDisplay === 'right_sidebar' && (
         <>
           {isMobileViewport && rightSidebarOpen && (
-            <div
-              className="fixed inset-0 bg-black/50 z-40 md:hidden cursor-pointer touch-manipulation"
-              aria-label="Close stats"
-              role="button"
-              tabIndex={-1}
-              onClick={() => setRightSidebarOpen(false)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') setRightSidebarOpen(false); }}
-            />
+            <div className="fixed inset-0 bg-black/50 z-40 md:hidden cursor-pointer touch-manipulation" aria-label="Close stats" role="button" tabIndex={-1}
+              onClick={() => setRightSidebarOpen(false)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') setRightSidebarOpen(false); }} />
           )}
           {isMobileViewport && (
-            <button
-              type="button"
-              onClick={() => setRightSidebarOpen(true)}
+            <button type="button" onClick={() => setRightSidebarOpen(true)}
               className="fixed right-0 top-1/2 -translate-y-1/2 z-50 w-8 h-14 flex items-center justify-center rounded-l-lg border border-l-0 shadow-lg md:hidden"
               style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-primary)' }}
-              aria-label="Open stats sidebar"
-            >
+              aria-label="Open stats sidebar">
               <PanelRight size={18} style={{ color: 'var(--noir-primary)' }} />
             </button>
           )}
-          <div
-            className={`fixed right-0 w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${
-              isMobileViewport ? (rightSidebarOpen ? 'translate-x-0' : 'translate-x-full') : 'translate-x-0'
-            } ${isMobileViewport ? 'top-0 h-full' : 'md:top-0 md:h-full'}`}
-            style={sidebarBgStyle}
-          >
-            <div className={`h-12 flex items-center justify-between px-2.5 border-b ${styles.borderGoldLight} shrink-0`}>
-              <span className="text-[10px] font-heading font-bold uppercase tracking-widest" style={{ color: 'var(--noir-primary)' }}>Stats</span>
+          <div className={`fixed right-0 w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${isMobileViewport ? (rightSidebarOpen ? 'translate-x-0' : 'translate-x-full') : 'translate-x-0'} ${isMobileViewport ? 'top-0 h-full' : 'md:top-0 md:h-full'}`} style={sidebarBgStyle}>
+
+            {/* IMPROVEMENT 4: username + rank in header */}
+            <div className={`h-12 flex items-center justify-between px-2.5 border-b ${styles.borderGoldLight} shrink-0 gap-2`}>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <User size={13} style={{ color: 'var(--noir-primary)', flexShrink: 0 }} />
+                <span className="text-[11px] font-heading font-bold truncate" style={{ color: 'var(--noir-primary)' }}>{user.username || 'Profile'}</span>
+              </div>
+              <span className="text-[9px] font-heading uppercase tracking-wider shrink-0" style={{ color: 'var(--noir-muted)' }}>{user.rank_name || rankProgress?.current_rank_name || ''}</span>
               {isMobileViewport && (
-                <button
-                  type="button"
-                  onClick={() => setRightSidebarOpen(false)}
+                <button type="button" onClick={() => setRightSidebarOpen(false)}
                   className="min-w-[44px] min-h-[44px] -m-1 flex items-center justify-center rounded touch-manipulation active:scale-95 transition-transform"
-                  style={{ color: 'var(--noir-primary)' }}
-                  aria-label="Close stats panel"
-                >
-                  <X size={22} />
-                </button>
+                  style={{ color: 'var(--noir-primary)' }} aria-label="Close stats panel"><X size={22} /></button>
               )}
             </div>
-            <div className="flex-1 overflow-y-auto px-2 py-2 space-y-3 min-h-0">
-              {/* Stats */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                  <span style={{ color: 'var(--noir-muted)' }}>Money</span>
-                  <span style={{ color: 'var(--noir-foreground)' }}>{formatMoney(user.money)}</span>
-                </div>
-                <Link to="/bank" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5">
-                  <span style={{ color: 'var(--noir-muted)' }}>Bank</span>
-                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
-                </Link>
-                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                  <span style={{ color: 'var(--noir-muted)' }}>Points</span>
-                  <span style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.points)}</span>
-                </div>
-                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                  <span style={{ color: 'var(--noir-muted)' }}>Respect</span>
-                  <span style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.respect_points ?? 0)}</span>
-                </div>
-                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                  <span style={{ color: 'var(--noir-muted)' }}>Bullets</span>
-                  <span style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.bullets)}</span>
-                </div>
-                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                  <span style={{ color: 'var(--noir-muted)' }}>Weapon</span>
-                  <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.gun_name || 'None'}</span>
-                </div>
-                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                  <span style={{ color: 'var(--noir-muted)' }}>Armour</span>
-                  <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.armour_name || 'None'}</span>
-                </div>
-                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                  <span style={{ color: 'var(--noir-muted)' }}>Location</span>
-                  <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.current_state || user.location || '—'}</span>
-                </div>
-                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                  <span style={{ color: 'var(--noir-muted)' }}>Health</span>
-                  <span style={{ color: 'var(--noir-foreground)' }}>{Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%'}</span>
-                </div>
-                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                  <span style={{ color: 'var(--noir-muted)' }}>Family</span>
-                  <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.gang_name || 'None'}</span>
-                </div>
-                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                  <span style={{ color: 'var(--noir-muted)' }}>Rank</span>
-                  <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.rank_name || rankProgress?.current_rank_name || '—'}</span>
-                </div>
-                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                  <span style={{ color: 'var(--noir-muted)' }}>Bodyguards</span>
-                  <span style={{ color: 'var(--noir-foreground)' }}>{typeof user.bodyguard_count === 'number' ? `${user.bodyguard_count}/${user.bodyguard_slots ?? 1}` : '—'}</span>
-                </div>
-                {hasCasinoOrProperty && (
-                  <>
-                    <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                      <span style={{ color: 'var(--noir-muted)' }}>Casino profit</span>
-                      <span style={{ color: (user.casino_profit ?? 0) >= 0 ? 'var(--emerald-400)' : 'var(--red-400)' }}>{formatMoney(user.casino_profit ?? 0)}</span>
-                    </div>
-                    <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                      <span style={{ color: 'var(--noir-muted)' }}>Property profit</span>
-                      <span style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.property_profit ?? 0)} pts</span>
-                    </div>
-                  </>
-                )}
-                {rankProgress && (
-                  <div className="pt-1">
-                    <p className="text-[9px] font-heading uppercase tracking-wider mb-0.5" style={{ color: 'var(--noir-muted)' }}>Rank progress</p>
-                    <div className="h-1 w-full rounded-full overflow-hidden" style={{ backgroundColor: 'var(--noir-surface)' }}>
-                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
-                    </div>
-                    <p className="text-[9px] font-heading mt-0.5" style={{ color: 'var(--noir-primary)' }}>{(Number(rankProgress.rank_points_progress) || 0).toFixed(0)}%</p>
+
+            <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2 min-h-0">
+              {/* IMPROVEMENT 4: rank progress at top */}
+              {rankProgress && (
+                <div className="pt-1 pb-2 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}>
+                  <p className="text-[9px] font-heading uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-muted)' }}>Rank Progress</p>
+                  <div className="h-1.5 w-full rounded-full overflow-hidden mb-1" style={{ backgroundColor: '#2a2a2a' }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
                   </div>
-                )}
-                <button type="button" onClick={() => { setThemePickerOpen(true); isMobileViewport && setRightSidebarOpen(false); }} className="w-full flex justify-between items-center gap-1 text-[10px] font-heading py-0.5 mt-1" style={{ color: 'var(--noir-primary)' }}>
-                  <span>Theme</span>
-                  <span>Change</span>
-                </button>
+                  <p className="text-[9px] font-heading" style={{ color: 'var(--noir-primary)' }}>{(Number(rankProgress.rank_points_progress) || 0).toFixed(0)}% · {rankProgress.current_rank_name}</p>
+                </div>
+              )}
+
+              {/* Stat rows — IMPROVEMENT 4: hover highlight, colour-coded values */}
+              <div className="space-y-0">
+                {[
+                  { label: 'Cash', value: formatMoney(user.money), className: 'text-primary' },
+                  { label: 'Bank', isLink: true, to: '/bank', value: 'Go →' },
+                  { label: 'Points', value: formatInt(user.points) },
+                  { label: 'Respect', value: formatInt(user.respect_points ?? 0) },
+                  { label: 'Bullets', value: formatInt(user.bullets) },
+                  { label: 'Health', value: Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%', className: Number(user.health) > 50 ? 'text-emerald-400' : Number(user.health) > 25 ? 'text-amber-400' : 'text-red-400' },
+                  { label: 'Kills', value: formatInt(user.total_kills), className: 'text-red-400' },
+                  { label: 'Weapon', value: user.gun_name || 'None', truncate: true },
+                  { label: 'Armour', value: user.armour_name || 'None', truncate: true },
+                  { label: 'Location', value: user.current_state || user.location || '—', truncate: true },
+                  { label: 'Family', value: user.gang_name || 'None', truncate: true },
+                  { label: 'Guards', value: typeof user.bodyguard_count === 'number' ? `${user.bodyguard_count}/${user.bodyguard_slots ?? 1}` : '—' },
+                  ...(hasCasinoOrProperty ? [
+                    { label: 'Casino', value: formatMoney(user.casino_profit ?? 0), className: (user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400' },
+                    { label: 'Property', value: `${formatInt(user.property_profit ?? 0)} pts` },
+                  ] : []),
+                ].map((row, i) => {
+                  if (row.isLink) {
+                    return (
+                      <Link key={i} to={row.to} onClick={() => isMobileViewport && setRightSidebarOpen(false)}
+                        className="flex justify-between items-center gap-1 text-[10px] font-heading px-1 py-1.5 rounded-sm transition-colors"
+                        style={{ color: 'var(--noir-foreground)' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.05)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
+                        <span style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
+                        <span style={{ color: 'var(--noir-primary)' }}>{row.value}</span>
+                      </Link>
+                    );
+                  }
+                  return (
+                    <div key={i} className="flex justify-between items-center gap-1 text-[10px] font-heading px-1 py-1.5 rounded-sm transition-colors"
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.04)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
+                      <span style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
+                      <span className={`${row.truncate ? 'truncate max-w-[80px]' : ''} ${row.className || ''}`} style={!row.className ? { color: 'var(--noir-foreground)' } : undefined}>{row.value}</span>
+                    </div>
+                  );
+                })}
               </div>
+
               <div className="h-px shrink-0" style={dividerStyle} />
-              {/* Achievements & Feed */}
-              <div className="space-y-1">
-                <Link to="/leaderboard" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex items-center gap-1.5 text-[10px] font-heading font-bold py-0.5" style={{ color: 'var(--noir-primary)' }}>
+
+              <div className="space-y-1 pt-1">
+                <Link to="/leaderboard" onClick={() => isMobileViewport && setRightSidebarOpen(false)}
+                  className="flex items-center gap-1.5 text-[10px] font-heading font-bold py-0.5 px-1 rounded-sm"
+                  style={{ color: 'var(--noir-primary)' }}>
                   <Trophy size={12} /> Leaderboard
                 </Link>
-                <Link to="/inbox" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex items-center justify-between gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                <Link to="/inbox" onClick={() => isMobileViewport && setRightSidebarOpen(false)}
+                  className="flex items-center justify-between gap-1 text-[10px] font-heading py-0.5 px-1 rounded-sm"
+                  style={{ color: 'var(--noir-foreground)' }}>
                   <span className="flex items-center gap-1.5">
                     <Newspaper size={12} style={{ color: 'var(--noir-primary)' }} /> Notifications
                     {unreadCount > 0 && <span className="text-[9px] font-bold" style={{ color: 'var(--noir-primary)' }}>({unreadCount} new)</span>}
                   </span>
                 </Link>
               </div>
+
+              {/* IMPROVEMENT 4: Theme button in right sidebar too */}
+              <button type="button" onClick={() => { setThemePickerOpen(true); isMobileViewport && setRightSidebarOpen(false); }}
+                className="w-full flex justify-between items-center gap-1 text-[10px] font-heading py-1 px-1 rounded-sm mt-1"
+                style={{ color: 'var(--noir-primary)' }}>
+                <span className="flex items-center gap-1.5"><Palette size={12} /> Theme</span>
+                <span>Change</span>
+              </button>
             </div>
+
             {isMobileViewport && (
               <div className={`px-2 py-3 border-t ${styles.borderGoldLight} shrink-0`}>
-                <button
-                  type="button"
-                  onClick={() => setRightSidebarOpen(false)}
+                <button type="button" onClick={() => setRightSidebarOpen(false)}
                   className="w-full flex items-center justify-center gap-2 min-h-[44px] py-3 px-4 rounded-sm border border-primary/40 bg-primary/10 text-primary font-heading font-bold uppercase tracking-wider text-[11px] hover:bg-primary/20 active:scale-[0.98] transition-all touch-manipulation"
-                  aria-label="Close stats panel"
-                >
-                  <X size={18} />
-                  Close
+                  aria-label="Close stats panel">
+                  <X size={18} /> Close
                 </button>
               </div>
             )}
@@ -1872,57 +1491,49 @@ export default function Layout({ children }) {
         </>
       )}
 
-      {/* Mobile bottom nav (only when theme set to "Bottom bar" and on small screens) */}
+      {/* ── MOBILE BOTTOM NAV ────────────────────────────────────────────────── */}
       {mobileNavStyle === 'bottom' && (
         <div ref={mobileBottomNavRef} className="md:hidden fixed bottom-0 left-0 right-0 z-40">
-          {/* Sub-menu panel above bar when Ranking or Casino is opened */}
+          {/* IMPROVEMENT 3: 3-column grid submenu */}
           {mobileBottomMenuOpen && (() => {
             const group = mobileBottomNavItems.find((i) => i.type === 'group' && i.id === mobileBottomMenuOpen);
             if (!group || group.type !== 'group') return null;
             return (
-              <div
-                className="absolute bottom-full left-0 right-0 border-t border-primary/20 shadow-lg max-h-[60vh] overflow-y-auto"
-                style={{ backgroundColor: 'var(--noir-surface)', borderBottom: '1px solid var(--noir-border-mid)' }}
-                role="menu"
-              >
-                <div className="py-2 grid grid-cols-2 gap-px">
+              <div className="absolute bottom-full left-0 right-0 border-t border-primary/20 shadow-2xl max-h-[60vh] overflow-y-auto"
+                style={{ backgroundColor: 'rgba(16,16,16,0.98)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--noir-border-mid)' }}
+                role="menu">
+                {/* Group title */}
+                <div className="flex items-center justify-center gap-2 px-3 py-2 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.15)' }}>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.2)' }} />
+                  <span className="font-heading text-[9px] uppercase tracking-widest" style={{ color: 'var(--noir-primary)' }}>{group.label}</span>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.2)' }} />
+                </div>
+                {/* 3-col grid */}
+                <div className="p-2 grid grid-cols-3 gap-1.5">
                   {group.items.map((sub, idx) => {
                     if (sub.action === 'theme') {
                       return (
-                        <button
-                          key="theme"
-                          type="button"
-                          onClick={() => { setThemePickerOpen(true); setMobileBottomMenuOpen(null); }}
-                          role="menuitem"
-                          className="block w-full px-3 py-2.5 text-left text-xs font-heading uppercase tracking-wider transition-colors hover:bg-primary/10"
-                          style={{ color: 'var(--noir-foreground)' }}
-                        >
+                        <button key="theme" type="button" onClick={() => { setThemePickerOpen(true); setMobileBottomMenuOpen(null); }} role="menuitem"
+                          className="flex items-center justify-center px-2 py-3 rounded-md border font-heading text-[10px] uppercase tracking-wider transition-colors"
+                          style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.2)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.06)', color: 'var(--noir-primary)' }}>
                           {sub.label}
                         </button>
                       );
                     }
                     if (sub.action === 'logout') {
                       return (
-                        <button
-                          key="logout"
-                          type="button"
-                          onClick={() => { handleLogout(); setMobileBottomMenuOpen(null); }}
-                          role="menuitem"
-                          className="block w-full px-3 py-2.5 text-left text-xs font-heading uppercase tracking-wider transition-colors bg-red-900/30 text-red-300 hover:bg-red-900/50 col-span-2"
-                        >
+                        <button key="logout" type="button" onClick={() => { handleLogout(); setMobileBottomMenuOpen(null); }} role="menuitem"
+                          className="col-span-3 flex items-center justify-center px-2 py-2.5 rounded-md border font-heading text-[10px] uppercase tracking-wider transition-colors"
+                          style={{ borderColor: 'rgba(248,113,113,0.3)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#f87171' }}>
                           {sub.label}
                         </button>
                       );
                     }
                     if (sub.action === 'promoteAdmin') {
                       return (
-                        <button
-                          key="promoteAdmin"
-                          type="button"
-                          onClick={() => { promoteToAdmin(); setMobileBottomMenuOpen(null); }}
-                          role="menuitem"
-                          className="block w-full px-3 py-2.5 text-left text-xs font-heading uppercase tracking-wider transition-colors text-amber-400 hover:bg-amber-500/10 col-span-2"
-                        >
+                        <button key="promoteAdmin" type="button" onClick={() => { promoteToAdmin(); setMobileBottomMenuOpen(null); }} role="menuitem"
+                          className="col-span-3 flex items-center justify-center px-2 py-2.5 rounded-md border font-heading text-[10px] uppercase tracking-wider transition-colors"
+                          style={{ borderColor: 'rgba(251,191,36,0.3)', backgroundColor: 'rgba(251,191,36,0.06)', color: '#fbbf24' }}>
                           {sub.label}
                         </button>
                       );
@@ -1930,30 +1541,22 @@ export default function Layout({ children }) {
                     const to = sub.search ? { pathname: sub.path, search: sub.search } : sub.state ? { pathname: sub.path, state: sub.state } : sub.path;
                     const isActive = sub.search
                       ? location.pathname === sub.path && location.search === sub.search
-                      : sub.state
-                        ? location.pathname === sub.path && location.state?.category === sub.state?.category
-                        : sub.path === '/forum'
-                          ? location.pathname === '/forum' && !location.search?.includes('tab=entertainer') && !location.search?.includes('tab=designer')
-                          : location.pathname === sub.path || location.pathname.startsWith(sub.path + '/');
+                      : sub.state ? location.pathname === sub.path && location.state?.category === sub.state?.category
+                      : sub.path === '/forum' ? location.pathname === '/forum' && !location.search?.includes('tab=entertainer') && !location.search?.includes('tab=designer')
+                      : location.pathname === sub.path || location.pathname.startsWith(sub.path + '/');
                     const prefetchCrimes = sub.path === '/crimes' ? () => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); } : undefined;
                     return (
-                      <Link
-                        key={sub.path ? `${sub.path}-${sub.label}` : idx}
-                        to={to}
+                      <Link key={sub.path ? `${sub.path}-${sub.label}` : idx} to={to}
                         onClick={() => setMobileBottomMenuOpen(null)}
-                        onMouseEnter={prefetchCrimes}
-                        onFocus={prefetchCrimes}
+                        onMouseEnter={prefetchCrimes} onFocus={prefetchCrimes}
                         role="menuitem"
-                        className={`block w-full px-3 py-2.5 text-left text-xs font-heading uppercase tracking-wider transition-colors flex items-center justify-between gap-2 ${
-                          isActive ? 'bg-primary/20' : ''
-                        }`}
-                        style={isActive ? { color: 'var(--noir-primary)' } : { color: 'var(--noir-foreground)' }}
-                      >
-                        <span>{sub.label}</span>
+                        className="flex items-center justify-center text-center px-1 py-3 rounded-md border font-heading text-[9px] uppercase tracking-wider transition-all gap-1 min-h-[44px] touch-manipulation"
+                        style={isActive
+                          ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.5)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.14)', color: 'var(--noir-primary)' }
+                          : { borderColor: 'rgba(var(--noir-primary-rgb), 0.12)', backgroundColor: 'rgba(26,26,26,0.8)', color: 'var(--noir-foreground)' }}>
+                        <span className="leading-tight">{sub.label}</span>
                         {sub.badge > 0 && (
-                          <span className="shrink-0 min-w-[18px] h-[18px] rounded-full bg-red-600 text-[10px] font-bold text-white flex items-center justify-center px-1">
-                            {sub.badge > 9 ? '9+' : sub.badge}
-                          </span>
+                          <span className="shrink-0 min-w-[16px] h-[16px] rounded-full bg-red-600 text-[9px] font-bold text-white flex items-center justify-center px-0.5">{sub.badge > 9 ? '9+' : sub.badge}</span>
                         )}
                       </Link>
                     );
@@ -1962,98 +1565,60 @@ export default function Layout({ children }) {
               </div>
             );
           })()}
-          <nav
-            className="flex items-center justify-between gap-1 overflow-x-auto overflow-y-hidden py-1 px-1 safe-area-pb scrollbar-thin"
+
+          <nav className="flex items-center justify-between gap-1 overflow-x-auto overflow-y-hidden py-1 px-1 safe-area-pb scrollbar-thin"
             style={{ backgroundColor: 'var(--noir-content)', borderTop: '1px solid var(--noir-border-mid)' }}
-            aria-label="Mobile navigation"
-          >
+            aria-label="Mobile navigation">
             {hasCasinoOrProperty && typeof user?.casino_profit === 'number' && (
-              <div
-                className="shrink-0 flex items-center px-1.5 py-0.5 rounded border font-heading text-[9px] font-bold tabular-nums"
-                style={{
-                  borderColor: 'var(--noir-border-mid)',
-                  backgroundColor: 'var(--noir-surface)',
-                  color: user.casino_profit >= 0 ? 'var(--emerald-400, #34d399)' : 'var(--red-400, #f87171)',
-                }}
-                title={user.casino_profit >= 0 ? 'Casino profit (players losing)' : 'Casino loss (players winning)'}
-              >
+              <div className="shrink-0 flex items-center px-1.5 py-0.5 rounded border font-heading text-[9px] font-bold tabular-nums"
+                style={{ borderColor: 'var(--noir-border-mid)', backgroundColor: 'var(--noir-surface)', color: user.casino_profit >= 0 ? 'var(--emerald-400, #34d399)' : 'var(--red-400, #f87171)' }}
+                title={user.casino_profit >= 0 ? 'Casino profit' : 'Casino loss'}>
                 {user.casino_profit >= 0 ? '+' : ''}{formatMoney(user.casino_profit)}
               </div>
             )}
             {mobileBottomNavItems.map((item, index) => {
               const Icon = item.icon;
-              const boxBase = 'flex flex-1 flex-col items-center justify-center gap-0 min-w-0 min-h-[32px] rounded border transition-colors';
+              const boxBase = 'flex flex-1 flex-col items-center justify-center gap-0 min-w-0 min-h-[36px] rounded border transition-all touch-manipulation';
               const boxInactive = { borderColor: 'var(--noir-border-mid)', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' };
-              const boxActive = { borderColor: 'var(--noir-primary)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', color: 'var(--noir-primary)' };
-              const bottomNavDividerStyle = {
-                width: 1,
-                minWidth: 1,
-                alignSelf: 'stretch',
-                borderLeft: sidebarDividerStyle === 'solid'
-                  ? '1px solid rgba(var(--noir-primary-rgb), 0.35)'
-                  : `1px ${sidebarDividerStyle} rgba(var(--noir-primary-rgb), 0.35)`,
-              };
+              const boxActive = { borderColor: 'rgba(var(--noir-primary-rgb), 0.5)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.14)', color: 'var(--noir-primary)' };
+              const bottomNavDividerStyle = { width: 1, minWidth: 1, alignSelf: 'stretch', borderLeft: sidebarDividerStyle === 'solid' ? '1px solid rgba(var(--noir-primary-rgb), 0.35)' : `1px ${sidebarDividerStyle} rgba(var(--noir-primary-rgb), 0.35)` };
               return (
                 <Fragment key={item.path || item.id}>
-                  {index > 0 && showBottomNavDividers && (
-                    <div className="shrink-0 min-h-[24px]" style={bottomNavDividerStyle} aria-hidden="true" />
-                  )}
+                  {index > 0 && showBottomNavDividers && <div className="shrink-0 min-h-[24px]" style={bottomNavDividerStyle} aria-hidden="true" />}
                   {item.type === 'link' && (() => {
-                const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/'));
-                const isInbox = item.path === '/inbox';
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => { setSidebarOpen(false); setMobileBottomMenuOpen(null); }}
-                    className={boxBase}
-                    style={isActive ? boxActive : boxInactive}
-                    aria-current={isActive ? 'page' : undefined}
-                    title={item.label}
-                  >
-                    <span className="relative inline-flex leading-none">
-                      <Icon size={13} strokeWidth={2} />
-                      {isInbox && unreadCount > 0 && (
-                        <span className="absolute -top-0.5 -right-1 min-w-[10px] h-[10px] rounded-full bg-red-600 text-[8px] font-bold text-white flex items-center justify-center px-0.5">
-                          {unreadCount > 9 ? '9+' : unreadCount}
+                    const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/'));
+                    const isInbox = item.path === '/inbox';
+                    return (
+                      <Link key={item.path} to={item.path} onClick={() => { setSidebarOpen(false); setMobileBottomMenuOpen(null); }}
+                        className={boxBase} style={isActive ? boxActive : boxInactive} aria-current={isActive ? 'page' : undefined} title={item.label}>
+                        <span className="relative inline-flex leading-none">
+                          <Icon size={13} strokeWidth={2} />
+                          {isInbox && unreadCount > 0 && <span className="absolute -top-0.5 -right-1 min-w-[10px] h-[10px] rounded-full bg-red-600 text-[8px] font-bold text-white flex items-center justify-center px-0.5">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                         </span>
-                      )}
-                    </span>
-                    <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.label}</span>
-                  </Link>
-                );
-              })()}
-              {item.type === 'group' && (() => {
-                const isOpen = mobileBottomMenuOpen === item.id;
-                const isActive = item.items.some((sub) => {
-                  if (sub.search) return location.pathname === sub.path && location.search === sub.search;
-                  if (sub.state) return location.pathname === sub.path && location.state?.category === sub.state?.category;
-                  return location.pathname === sub.path || (sub.path !== '/casino' && sub.path !== '/forum' && location.pathname.startsWith(sub.path + '/'));
-                });
-                const showInboxBadge = item.items.some((sub) => sub.path === '/inbox') && unreadCount > 0;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setMobileBottomMenuOpen(isOpen ? null : item.id); }}
-                    className={boxBase}
-                    style={isOpen || isActive ? boxActive : boxInactive}
-                    aria-expanded={isOpen}
-                    aria-haspopup="true"
-                    title={item.label}
-                  >
-                    <span className="relative inline-flex leading-none">
-                      <Icon size={13} strokeWidth={2} />
-                      {showInboxBadge && (
-                        <span className="absolute -top-0.5 -right-1 min-w-[10px] h-[10px] rounded-full bg-red-600 text-[8px] font-bold text-white flex items-center justify-center px-0.5">
-                          {unreadCount > 9 ? '9+' : unreadCount}
+                        <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.label}</span>
+                      </Link>
+                    );
+                  })()}
+                  {item.type === 'group' && (() => {
+                    const isOpen = mobileBottomMenuOpen === item.id;
+                    const isActive = item.items.some((sub) => {
+                      if (sub.search) return location.pathname === sub.path && location.search === sub.search;
+                      if (sub.state) return location.pathname === sub.path && location.state?.category === sub.state?.category;
+                      return location.pathname === sub.path || (sub.path !== '/casino' && sub.path !== '/forum' && location.pathname.startsWith(sub.path + '/'));
+                    });
+                    const showInboxBadge = item.items.some((sub) => sub.path === '/inbox') && unreadCount > 0;
+                    return (
+                      <button key={item.id} type="button" onClick={(e) => { e.stopPropagation(); setMobileBottomMenuOpen(isOpen ? null : item.id); }}
+                        className={boxBase} style={isOpen || isActive ? boxActive : boxInactive}
+                        aria-expanded={isOpen} aria-haspopup="true" title={item.label}>
+                        <span className="relative inline-flex leading-none">
+                          <Icon size={13} strokeWidth={2} />
+                          {showInboxBadge && <span className="absolute -top-0.5 -right-1 min-w-[10px] h-[10px] rounded-full bg-red-600 text-[8px] font-bold text-white flex items-center justify-center px-0.5">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                         </span>
-                      )}
-                    </span>
-                    <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.label}</span>
-                  </button>
-                );
-              })()}
+                        <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.label}</span>
+                      </button>
+                    );
+                  })()}
                 </Fragment>
               );
             })}
@@ -2061,74 +1626,54 @@ export default function Layout({ children }) {
         </div>
       )}
 
-      {/* Floating mobile menu ball: all stats, search, notifications; draggable, position persisted */}
+      {/* ── TOUCH BALL ───────────────────────────────────────────────────────── */}
       {user && notificationBallPosition && isMobileViewport && mobileStatsDisplay === 'touch_ball' && (
-        <div
-          ref={notificationBallRef}
-          className="fixed z-50 touch-none"
-          style={{
-            left: notificationBallPosition.x,
-            top: notificationBallPosition.y,
-            width: 56,
-            height: 56,
-          }}
-        >
-          <button
-            type="button"
-            className="relative w-full h-full rounded-full flex items-center justify-center shadow-lg border-2 transition-transform active:scale-95 select-none"
+        <div ref={notificationBallRef} className="fixed z-50 touch-none" style={{ left: notificationBallPosition.x, top: notificationBallPosition.y, width: 56, height: 56 }}>
+          <button type="button"
+            className="relative w-full h-full rounded-full flex items-center justify-center shadow-xl border-2 transition-transform active:scale-95 select-none"
             style={{
               backgroundColor: 'var(--noir-content)',
               borderColor: 'var(--noir-primary)',
               color: 'var(--noir-primary)',
+              // IMPROVEMENT 5: outer glow ring
+              boxShadow: '0 4px 20px rgba(0,0,0,0.5), 0 0 0 4px rgba(var(--noir-primary-rgb), 0.1)',
             }}
             aria-label="Stats and notifications"
             onPointerDown={(e) => {
               e.preventDefault();
-              const ballX = notificationBallPosition.x;
-              const ballY = notificationBallPosition.y;
+              const ballX = notificationBallPosition.x; const ballY = notificationBallPosition.y;
               notificationDragRef.current = { isDragging: false, startX: e.clientX, startY: e.clientY, ballX, ballY, lastX: ballX, lastY: ballY };
               const onMove = (e2) => {
-                const r = notificationDragRef.current;
-                if (!r) return;
-                const dx = e2.clientX - r.startX;
-                const dy = e2.clientY - r.startY;
+                const r = notificationDragRef.current; if (!r) return;
+                const dx = e2.clientX - r.startX; const dy = e2.clientY - r.startY;
                 if (!r.isDragging && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) r.isDragging = true;
                 if (r.isDragging) {
-                  const w = window.innerWidth;
-                  const h = window.innerHeight;
-                  const size = 56;
+                  const w = window.innerWidth; const h = window.innerHeight; const size = 56;
                   const nextX = Math.max(0, Math.min(w - size, r.ballX + dx));
                   const nextY = Math.max(0, Math.min(h - size, r.ballY + dy));
-                  r.lastX = nextX;
-                  r.lastY = nextY;
+                  r.lastX = nextX; r.lastY = nextY;
                   setNotificationBallPosition({ x: nextX, y: nextY });
                 }
               };
               const onUp = () => {
-                const r = notificationDragRef.current;
-                if (!r) return;
+                const r = notificationDragRef.current; if (!r) return;
                 document.removeEventListener('pointermove', onMove);
                 document.removeEventListener('pointerup', onUp);
                 document.removeEventListener('pointercancel', onUp);
-                if (r.isDragging) {
-                  try {
-                    localStorage.setItem(NOTIFICATION_BALL_POSITION_KEY, JSON.stringify({ x: r.lastX, y: r.lastY }));
-                  } catch (_) {}
-                } else {
-                  openNotificationPanel();
-                }
+                if (r.isDragging) { try { localStorage.setItem(NOTIFICATION_BALL_POSITION_KEY, JSON.stringify({ x: r.lastX, y: r.lastY })); } catch (_) {} }
+                else { openNotificationPanel(); }
                 notificationDragRef.current = null;
               };
               document.addEventListener('pointermove', onMove);
               document.addEventListener('pointerup', onUp);
               document.addEventListener('pointercancel', onUp);
-            }}
-          >
+            }}>
             <div className="flex flex-col items-center justify-center gap-0 leading-none">
               <LayoutGrid size={22} strokeWidth={2} className="shrink-0" />
               {(() => {
                 const healthVal = Number(user?.health);
                 const healthNum = Number.isFinite(healthVal) ? Math.max(0, Math.min(100, Math.round(healthVal))) : 100;
+                // IMPROVEMENT 5: colour-coded health on ball
                 const healthColor = healthNum > 50 ? 'text-emerald-400' : healthNum > 25 ? 'text-amber-400' : 'text-red-400';
                 return (
                   <span className={`font-heading text-[10px] font-bold tabular-nums ${healthColor}`} title="Health">
@@ -2139,19 +1684,16 @@ export default function Layout({ children }) {
               })()}
             </div>
             {unreadCount > 0 && (
-              <span
-                className="absolute -top-0.5 -right-0.5 min-w-[20px] h-[20px] rounded-full flex items-center justify-center text-[11px] font-heading font-bold text-white"
-                style={{ backgroundColor: 'var(--noir-primary)' }}
-              >
+              <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-[20px] rounded-full flex items-center justify-center text-[11px] font-heading font-bold text-black"
+                style={{ backgroundColor: 'var(--noir-primary)' }}>
                 {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
           </button>
+
           {notificationPanelOpen && (
-            <div
-              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[min(340px,calc(100vw-1.5rem))] max-h-[min(85vh,520px)] flex flex-col rounded-xl border-2 shadow-xl overflow-hidden"
-              style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
-            >
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[min(340px,calc(100vw-1.5rem))] max-h-[min(85vh,520px)] flex flex-col rounded-xl border-2 shadow-xl overflow-hidden"
+              style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}>
               <div className="p-3 border-b shrink-0 flex items-center gap-2" style={{ borderColor: 'var(--noir-border)' }}>
                 <h3 className="font-heading font-semibold text-sm shrink-0" style={{ color: 'var(--noir-primary)' }}>Stats & Notifications</h3>
               </div>
@@ -2159,16 +1701,12 @@ export default function Layout({ children }) {
                 {/* User search */}
                 <div className="flex items-center gap-2">
                   <Search size={16} className="shrink-0" style={{ color: 'var(--noir-muted)' }} />
-                  <input
-                    type="text"
-                    value={userSearchQuery}
+                  <input type="text" value={userSearchQuery}
                     onChange={(e) => { setUserSearchQuery(e.target.value); setUserSearchOpen(true); }}
-                    onFocus={() => { setUserSearchOpen(true); }}
-                    placeholder="Search user..."
+                    onFocus={() => setUserSearchOpen(true)}
+                    placeholder="Find made man..."
                     className="flex-1 min-w-0 py-2 px-3 rounded-lg border font-heading text-sm bg-noir-surface border-primary/20"
-                    style={{ color: 'var(--noir-foreground)' }}
-                    autoComplete="off"
-                  />
+                    style={{ color: 'var(--noir-foreground)' }} autoComplete="off" />
                 </div>
                 {userSearchOpen && userSearchQuery.trim().length > 0 && (
                   <div className="rounded-lg border overflow-hidden max-h-40 overflow-y-auto" style={{ borderColor: 'var(--noir-border-mid)', backgroundColor: 'var(--noir-surface)' }}>
@@ -2178,27 +1716,24 @@ export default function Layout({ children }) {
                       <div className="p-3 text-center text-xs font-heading" style={{ color: 'var(--noir-muted)' }}>No users found</div>
                     ) : (
                       userSearchResults.map((u) => (
-                        <Link
-                          key={u.username}
-                          to={`/profile/${encodeURIComponent(u.username)}`}
+                        <Link key={u.username} to={`/profile/${encodeURIComponent(u.username)}`}
                           onClick={() => { setUserSearchOpen(false); setUserSearchQuery(''); setUserSearchResults([]); setNotificationPanelOpen(false); }}
                           className="block w-full text-left px-3 py-2.5 border-b font-heading text-sm"
-                          style={{ borderColor: 'var(--noir-border)', color: 'var(--noir-foreground)' }}
-                        >
+                          style={{ borderColor: 'var(--noir-border)', color: 'var(--noir-foreground)' }}>
                           {u.username}
                         </Link>
                       ))
                     )}
                   </div>
                 )}
-                {/* Stats rows */}
+                {/* Stats grid */}
                 <div className="grid grid-cols-2 gap-2">
                   {rankProgress && (
                     <div className="col-span-2 flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
                       <TrendingUp size={18} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
                       <div className="flex-1 min-w-0">
                         <p className="font-heading text-xs truncate" style={{ color: 'var(--noir-muted)' }}>{rankProgress.current_rank_name}</p>
-                        <div className="h-1.5 w-full rounded-full mt-1 overflow-hidden" style={{ backgroundColor: '#333' }}>
+                        <div className="h-1.5 w-full rounded-full mt-1 overflow-hidden" style={{ backgroundColor: '#2a2a2a' }}>
                           <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
                         </div>
                       </div>
@@ -2207,31 +1742,21 @@ export default function Layout({ children }) {
                       </span>
                     </div>
                   )}
-                  <div className="flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
-                    <DollarSign size={18} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
-                    <span className="font-heading text-sm truncate" style={{ color: 'var(--noir-foreground)' }}>{formatMoney(user.money)}</span>
-                  </div>
-                  <div className="flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
-                    <Zap size={18} className="shrink-0" style={{ color: 'var(--noir-foreground)' }} />
-                    <span className="font-heading text-sm truncate" style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.points)} pts</span>
-                  </div>
-                  <div className="flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
-                    <Trophy size={18} className="shrink-0" style={{ color: 'var(--noir-foreground)' }} />
-                    <span className="font-heading text-sm truncate" style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.respect_points ?? 0)} respect</span>
-                  </div>
-                  <div className="flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
-                    <Crosshair size={18} className="shrink-0 text-red-400" />
-                    <span className="font-heading text-sm" style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.bullets)}</span>
-                  </div>
-                  <div className="flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
-                    <Skull size={18} className="shrink-0 text-red-400" />
-                    <span className="font-heading text-sm" style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.total_kills)}</span>
-                  </div>
+                  {[
+                    { icon: <DollarSign size={18} style={{ color: 'var(--noir-primary)' }} />, value: formatMoney(user.money) },
+                    { icon: <Zap size={18} style={{ color: 'var(--noir-foreground)' }} />, value: `${formatInt(user.points)} pts` },
+                    { icon: <Trophy size={18} style={{ color: 'var(--noir-foreground)' }} />, value: `${formatInt(user.respect_points ?? 0)} resp` },
+                    { icon: <Crosshair size={18} className="text-red-400" />, value: formatInt(user.bullets) },
+                    { icon: <Skull size={18} className="text-red-400" />, value: formatInt(user.total_kills) },
+                  ].map((s, i) => (
+                    <div key={i} className="flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
+                      {s.icon}
+                      <span className="font-heading text-sm truncate" style={{ color: 'var(--noir-foreground)' }}>{s.value}</span>
+                    </div>
+                  ))}
                   <div className="col-span-2 flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
                     <Building2 size={18} className="shrink-0 text-emerald-400" />
-                    <span className="font-heading text-xs truncate" style={{ color: 'var(--noir-foreground)' }}>
-                      C {formatMoneyCompact(user.casino_profit ?? 0)} · P {formatCompact(user.property_profit ?? 0)} pts
-                    </span>
+                    <span className="font-heading text-xs truncate" style={{ color: 'var(--noir-foreground)' }}>C {formatMoneyCompact(user.casino_profit ?? 0)} · P {formatCompact(user.property_profit ?? 0)} pts</span>
                   </div>
                 </div>
                 {/* Notifications */}
@@ -2242,13 +1767,9 @@ export default function Layout({ children }) {
                   ) : (
                     <div className="space-y-0 rounded-lg overflow-hidden border" style={{ borderColor: 'var(--noir-border)' }}>
                       {notificationList.slice(0, 8).map((n) => (
-                        <button
-                          key={n.id}
-                          type="button"
-                          onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
+                        <button key={n.id} type="button" onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
                           className="w-full text-left px-3 py-2 border-b font-heading text-xs last:border-b-0"
-                          style={{ borderColor: 'var(--noir-border)', color: n.read ? 'var(--noir-muted)' : 'var(--noir-foreground)', backgroundColor: n.read ? 'transparent' : 'rgba(var(--noir-primary-rgb), 0.08)' }}
-                        >
+                          style={{ borderColor: 'var(--noir-border)', color: n.read ? 'var(--noir-muted)' : 'var(--noir-foreground)', backgroundColor: n.read ? 'transparent' : 'rgba(var(--noir-primary-rgb), 0.08)' }}>
                           <span className="font-semibold block truncate">{n.title}</span>
                           <span className="block truncate mt-0.5 opacity-90">{n.message}</span>
                         </button>
@@ -2259,7 +1780,7 @@ export default function Layout({ children }) {
               </div>
               <div className="p-2 border-t shrink-0 flex flex-wrap gap-2" style={{ borderColor: 'var(--noir-border)' }}>
                 <button type="button" onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }} className="py-1.5 px-3 rounded-lg text-xs font-heading border" style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}>View inbox</button>
-                <button type="button" onClick={() => { markAllNotificationsRead(); }} className="py-1.5 px-3 rounded-lg text-xs font-heading border" style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-foreground)' }}>Clear all</button>
+                <button type="button" onClick={() => markAllNotificationsRead()} className="py-1.5 px-3 rounded-lg text-xs font-heading border" style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-foreground)' }}>Clear all</button>
                 <button type="button" onClick={() => { setNotificationPanelOpen(false); setTopBarCustomizeOpen(true); }} className="py-1.5 px-3 rounded-lg text-xs font-heading border ml-auto" style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}>Customize bar</button>
               </div>
             </div>

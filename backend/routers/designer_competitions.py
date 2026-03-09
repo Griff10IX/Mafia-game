@@ -366,9 +366,17 @@ async def list_entries(comp_id: str, current_user: dict = Depends(get_current_us
         })
     my_vote = await db.designer_competition_votes.find_one(
         {"competition_id": comp_id, "user_id": current_user["id"]},
-        {"_id": 0, "entry_id": 1},
+        {"_id": 0, "entry_id": 1, "created_at": 1},
     )
-    return {"entries": out, "my_vote_entry_id": my_vote.get("entry_id") if my_vote else None}
+    can_withdraw_vote = False
+    if my_vote:
+        vote_created_at = my_vote.get("created_at") or ""
+        later_entry = await db.designer_competition_entries.find_one(
+            {"competition_id": comp_id, "created_at": {"$gt": vote_created_at}},
+            {"_id": 1},
+        )
+        can_withdraw_vote = later_entry is not None
+    return {"entries": out, "my_vote_entry_id": my_vote.get("entry_id") if my_vote else None, "can_withdraw_vote": can_withdraw_vote}
 
 
 async def vote(comp_id: str, body: VoteRequest, current_user: dict = Depends(get_current_user)):
@@ -404,6 +412,41 @@ async def vote(comp_id: str, body: VoteRequest, current_user: dict = Depends(get
     return {"message": "Vote recorded", "points_awarded": VOTER_REWARD_POINTS}
 
 
+async def withdraw_vote(comp_id: str, current_user: dict = Depends(get_current_user)):
+    """Withdraw your vote when new entries were added after you voted. Deducts 100 pts (the reward); you can then vote again.
+    Only allowed if: (1) you have a vote, (2) at least one entry was added after your vote, (3) you have enough points to give back."""
+    comp = await db.designer_competitions.find_one({"id": comp_id}, {"_id": 0})
+    if not comp:
+        raise HTTPException(status_code=404, detail="Competition not found")
+    if comp.get("status") != "active":
+        raise HTTPException(status_code=400, detail="Competition is not active for voting")
+    my_vote = await db.designer_competition_votes.find_one(
+        {"competition_id": comp_id, "user_id": current_user["id"]},
+        {"_id": 0, "entry_id": 1, "created_at": 1},
+    )
+    if not my_vote:
+        raise HTTPException(status_code=400, detail="You have not voted in this competition")
+    vote_created_at = my_vote.get("created_at") or ""
+    later_entry = await db.designer_competition_entries.find_one(
+        {"competition_id": comp_id, "created_at": {"$gt": vote_created_at}},
+        {"_id": 1},
+    )
+    if not later_entry:
+        raise HTTPException(status_code=400, detail="No new entries since you voted. Withdraw only allowed when more pictures are added.")
+    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "points": 1})
+    points = int((user or {}).get("points") or 0)
+    if points < VOTER_REWARD_POINTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You need {VOTER_REWARD_POINTS} points to withdraw your vote (to return the reward). You have {points:,}.",
+        )
+    await db.designer_competition_votes.delete_one(
+        {"competition_id": comp_id, "user_id": current_user["id"]},
+    )
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -VOTER_REWARD_POINTS}})
+    return {"message": "Vote withdrawn. You can vote again (and receive 100 points when you do)."}
+
+
 def _strip_mongo(doc: dict) -> dict:
     if not doc:
         return {}
@@ -420,3 +463,4 @@ def register(router):
     router.add_api_route("/forum/designer/competitions/{comp_id}/entries", add_entry, methods=["POST"])
     router.add_api_route("/forum/designer/competitions/{comp_id}/entries", list_entries, methods=["GET"])
     router.add_api_route("/forum/designer/competitions/{comp_id}/vote", vote, methods=["POST"])
+    router.add_api_route("/forum/designer/competitions/{comp_id}/withdraw-vote", withdraw_vote, methods=["POST"])
