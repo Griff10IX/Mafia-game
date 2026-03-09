@@ -1050,7 +1050,10 @@ async def get_weapons(request: Request, current_user: dict = Depends(get_current
         # price_* = production cost; sell price = production * 1.35 * event (35% margin)
         locked = False
         required_weapon_name = None
-        weapon_num = int(weapon["id"].replace("weapon", "")) if weapon["id"].startswith("weapon") else 0
+        try:
+            weapon_num = int(weapon["id"].replace("weapon", "")) if weapon["id"].startswith("weapon") and weapon["id"][6:].isdigit() else 0
+        except (ValueError, TypeError):
+            weapon_num = 0
         if weapon_num > 1:
             prev_weapon_id = f"weapon{weapon_num - 1}"
             prev_weapon = weapons_dict.get(prev_weapon_id)
