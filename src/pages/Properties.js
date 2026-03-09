@@ -210,7 +210,7 @@ export default function Properties() {
                     <span className="text-mutedForeground uppercase tracking-wider">Level</span>
                     <span className="text-foreground text-right">{property.level}/{property.max_level}</span>
                     <span className="text-mutedForeground uppercase tracking-wider">Available</span>
-                    <span className="text-primary font-bold text-right">${property.available_income.toFixed(2)}</span>
+                    <span className="text-primary font-bold text-right">${Math.floor(property.available_income).toLocaleString()}</span>
                   </>
                 )}
               </div>
