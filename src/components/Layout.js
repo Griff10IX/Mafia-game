@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 import { useTheme } from '../context/ThemeContext';
 import ThemePicker from './ThemePicker';
 import ErrorBoundary from './ErrorBoundary';
+import GameChat from './GameChat';
 import styles from '../styles/noir.module.css';
 
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
@@ -1512,6 +1513,9 @@ export default function Layout({ children }) {
                 <span className="flex items-center gap-1.5"><Palette size={12} /> Theme</span>
                 <span>Change</span>
               </button>
+
+              {/* Game Chat: whole game can talk; family-only toggle and block list in settings */}
+              <GameChat myUserId={user.id} onCloseSidebar={() => isMobileViewport && setRightSidebarOpen(false)} />
             </div>
 
             {isMobileViewport && (

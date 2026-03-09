@@ -375,9 +375,12 @@ export default function Landing({ setIsAuthenticated }) {
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
-                  placeholder={isLogin ? 'Enter your password' : 'Choose a password'}
+                  placeholder={isLogin ? 'Enter your password' : 'Choose a password (min 4 letters or numbers)'}
                   required
                 />
+                {!isLogin && (
+                  <p className="mt-1 text-[9px] text-mutedForeground font-heading">At least 4 letters or numbers.</p>
+                )}
               </div>
 
               {/* Confirm password — register only */}

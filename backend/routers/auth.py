@@ -17,6 +17,17 @@ class UserRegister(BaseModel):
     username: str
     password: str
 
+    @field_validator("password")
+    @classmethod
+    def password_min_alphanumeric(cls, v: str) -> str:
+        """New signups: password must contain at least 4 letters or numbers."""
+        if not v:
+            raise ValueError("Password is required")
+        alnum_count = sum(1 for c in v if c.isalnum())
+        if alnum_count < 4:
+            raise ValueError("Password must contain at least 4 letters or numbers")
+        return v
+
 
 class UserLogin(BaseModel):
     email: str  # email or username (login with either)

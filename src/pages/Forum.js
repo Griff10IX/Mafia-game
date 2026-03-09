@@ -414,8 +414,12 @@ const FORUM_TABS = [
 
 export default function Forum() {
   const location = useLocation();
-  const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState('general');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = searchParams.get('tab');
+    if (t === 'entertainer' || t === 'designer' || t === 'crew_oc') return t;
+    return 'general';
+  });
   const [topics, setTopics] = useState([]);
   const [forumPage, setForumPage] = useState(1);
   const [canViewPage2, setCanViewPage2] = useState(false);
@@ -423,6 +427,7 @@ export default function Forum() {
     if (searchParams.get('tab') === 'entertainer' || location.state?.category === 'entertainer') setActiveTab('entertainer');
     else if (searchParams.get('tab') === 'designer') setActiveTab('designer');
     else if (searchParams.get('tab') === 'crew_oc' || location.state?.category === 'crew_oc') setActiveTab('crew_oc');
+    else setActiveTab('general');
   }, [searchParams, location.state?.category]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -791,7 +796,7 @@ export default function Forum() {
           {FORUM_TABS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => { setActiveTab(tab.id); setForumPage(1); }}
+              onClick={() => { setActiveTab(tab.id); setForumPage(1); setSearchParams(tab.id === 'general' ? {} : { tab: tab.id }, { replace: true }); }}
               className={`shrink-0 px-3 py-1.5 text-xs font-heading font-bold uppercase rounded transition-all ${activeTab === tab.id ? 'bg-primary/30 text-primary border border-primary/50' : 'text-mutedForeground hover:text-foreground border border-transparent'}`}
             >
               {tab.label}

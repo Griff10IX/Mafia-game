@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -50,6 +50,85 @@ const LoadingSpinner = () => (
   </div>
 );
 
+const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone }) => {
+  const [loading, setLoading] = useState(null);
+  const handleLock = async () => {
+    if (!window.confirm(`Lock ${username} for investigation? They will only see the locked page.`)) return;
+    setLoading('lock');
+    try {
+      await api.post('/admin/lock-player', null, { params: { target_username: username } });
+      toast.success('Account locked');
+      onDone?.();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally { setLoading(null); }
+  };
+  const handleUnlock = async () => {
+    if (!window.confirm(`Unlock ${username}?`)) return;
+    setLoading('unlock');
+    try {
+      await api.post('/admin/unlock-account', null, { params: { target_username: username } });
+      toast.success('Account unlocked');
+      onDone?.();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally { setLoading(null); }
+  };
+  const handleKill = async () => {
+    if (!window.confirm(`Kill ${username}? They will be dead and cannot log in until revived.`)) return;
+    setLoading('kill');
+    try {
+      await api.post('/admin/kill-player', null, { params: { target_username: username } });
+      toast.success('Player killed');
+      onDone?.();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally { setLoading(null); }
+  };
+  const handleRevive = async () => {
+    if (!window.confirm(`Revive ${username}?`)) return;
+    setLoading('revive');
+    try {
+      await api.post('/admin/revive-player', null, { params: { target_username: username } });
+      toast.success('Player revived');
+      onDone?.();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally { setLoading(null); }
+  };
+  const handleUnmute = async () => {
+    if (!window.confirm(`Unmute ${username} from forum?`)) return;
+    setLoading('unmute');
+    try {
+      await api.post('/admin/forum-unmute', null, { params: { target_username: username } });
+      toast.success('Unmuted from forum');
+      onDone?.();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally { setLoading(null); }
+  };
+  const btn = 'inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-all active:scale-95 disabled:opacity-50';
+  return (
+    <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-amber-500/5 border-b border-amber-500/20 flex flex-wrap items-center gap-1 md:gap-1.5">
+      <span className="text-[8px] md:text-[9px] font-heading font-bold text-amber-500/80 uppercase tracking-wider mr-1">Staff:</span>
+      <TooltipProvider>
+        <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleLock} disabled={!!loading} className={btn} title="Lock account"><Lock size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Lock account</TooltipContent></Tooltip>
+        <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleUnlock} disabled={!!loading} className={btn} title="Unlock account"><Unlock size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Unlock account</TooltipContent></Tooltip>
+        {isAdmin && (
+          <>
+            <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleKill} disabled={!!loading || isDead} className={btn} title="Kill (modkill)"><Skull size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Kill player</TooltipContent></Tooltip>
+            <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleRevive} disabled={!!loading || !isDead} className={btn} title="Revive"><Heart size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Revive player</TooltipContent></Tooltip>
+          </>
+        )}
+        <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleUnmute} disabled={!!loading} className={btn} title="Unmute forum"><Volume2 size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Unmute from forum</TooltipContent></Tooltip>
+        <Tooltip><TooltipTrigger asChild><Link to={{ pathname: '/admin', state: { activityLogUsername: username, gamblingLogUsername: username } }} className={btn} title="Activity log"><FileText size={12} className="md:w-3.5 md:h-3.5" /></Link></TooltipTrigger><TooltipContent>Activity log</TooltipContent></Tooltip>
+        <Tooltip><TooltipTrigger asChild><Link to={{ pathname: '/admin', state: { gamblingLogUsername: username } }} className={btn} title="Gambling log"><Dices size={12} className="md:w-3.5 md:h-3.5" /></Link></TooltipTrigger><TooltipContent>Gambling log</TooltipContent></Tooltip>
+      </TooltipProvider>
+      <Link to={{ pathname: '/admin', state: { targetUsername: username } }} className="text-[9px] font-heading text-amber-500/80 hover:text-amber-400 ml-auto">Mute / more in Admin →</Link>
+    </div>
+  );
+};
+
 const WealthRankWithTooltip = ({ wealthRankName, wealthRankRange }) => {
   const value = wealthRankName ?? '—';
   const rangeStr = wealthRankRange ?? '—';
@@ -96,6 +175,9 @@ const ProfileInfoCard = ({
   showCompactHonoursAndProperties = false,
   topCars = [],
   showCarsOnProfile = true,
+  isAdmin = false,
+  isModerator = false,
+  onStaffActionDone,
 }) => {
   const isAdminProfile = profile.rank_name === 'Admin';
   const isModeratorProfile = profile.rank_name === 'Moderator';
@@ -238,6 +320,17 @@ const ProfileInfoCard = ({
           )}
         </div>
       </div>
+
+      {/* Staff actions: Lock, Unlock, Kill, Revive, Mute, Unmute, Activity log, Gambling log */}
+      {!isMe && (isAdmin || isModerator) && profile?.username && (
+        <StaffProfileActions
+          username={profile.username}
+          isDead={!!profile.is_dead}
+          isAdmin={isAdmin}
+          isModerator={isModerator}
+          onDone={onStaffActionDone}
+        />
+      )}
 
       <div className="divide-y divide-zinc-700/30">
         {profileRows.map((row) => {
@@ -1436,6 +1529,12 @@ export default function Profile() {
               showCompactHonoursAndProperties
               topCars={profile.top_cars}
               showCarsOnProfile={profile.show_cars_on_profile}
+              isAdmin={isAdmin}
+              isModerator={isModerator}
+              onStaffActionDone={async () => {
+                const res = await api.get(`/users/${encodeURIComponent(username || profile?.username)}/profile`);
+                setProfile(res.data);
+              }}
             />
 
             {!isMe && profile.admin_stats && (

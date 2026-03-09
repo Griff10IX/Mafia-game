@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -112,6 +112,7 @@ function BtnSecondary({ children, ...props }) {
 }
 
 export default function Admin() {
+  const location = useLocation();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -343,6 +344,23 @@ export default function Admin() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { checkAdmin(); }, []);
+
+  // When navigating from Profile staff buttons with state (e.g. activity log / gambling log / target user)
+  useEffect(() => {
+    const s = location.state;
+    if (!s || typeof s !== 'object') return;
+    if (s.targetUsername != null && s.targetUsername !== '') {
+      setFormData((prev) => ({ ...prev, targetUsername: String(s.targetUsername) }));
+    }
+    if (s.activityLogUsername != null && s.activityLogUsername !== '') {
+      setActivityLogUsername(String(s.activityLogUsername));
+      setCollapsed((prev) => ({ ...prev, activityLog: false }));
+    }
+    if (s.gamblingLogUsername != null && s.gamblingLogUsername !== '') {
+      setGamblingLogUsername(String(s.gamblingLogUsername));
+      setCollapsed((prev) => ({ ...prev, gamblingLog: false }));
+    }
+  }, [location.state]);
 
   const fetchEventsStatus = async () => {
     try {

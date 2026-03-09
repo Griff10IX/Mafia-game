@@ -100,13 +100,13 @@ async def get_topics(
 
 
 async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user)):
-    """Get single topic with body and comments. Increment view count."""
+    """Get single topic with body and comments. Increment view count only (do not update updated_at — that would reorder the topic list when returning from a topic)."""
     topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
     await db.forum_topics.update_one(
         {"id": topic_id},
-        {"$inc": {"views": 1}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+        {"$inc": {"views": 1}},
     )
     topic["views"] = topic.get("views", 0) + 1
     comments = await db.forum_comments.find({"topic_id": topic_id}, {"_id": 0}).sort("created_at", -1).to_list(200)

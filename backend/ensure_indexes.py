@@ -188,6 +188,11 @@ async def ensure_all_indexes(db):
         await db.forum_comments.create_index([("topic_id", 1), ("created_at", 1)])
         await db.forum_comment_likes.create_index([("comment_id", 1), ("user_id", 1)])
 
+        # --- Game chat ---
+        await db.game_chat_messages.create_index([("created_at", -1)])
+        await db.game_chat_messages.create_index("id", unique=True)
+        await db.game_chat_messages.create_index([("family_id", 1), ("created_at", -1)])
+
         # --- Security / admin ---
         await db.bans.create_index([("active", 1), ("created_at", -1)])
         await db.ip_bans.create_index([("ip", 1), ("active", 1)])
