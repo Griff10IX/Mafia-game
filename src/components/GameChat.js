@@ -33,7 +33,6 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
   const [showEmojis, setShowEmojis] = useState(false);
   const messagesEndRef = useRef(null);
   const scrollRef = useRef(null);
-  const isAtBottomRef = useRef(true);
   const shouldScrollToBottomRef = useRef(false);
 
   const fetchMessages = useCallback(async () => {
@@ -74,20 +73,8 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
   }, [fetchMessages]);
 
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = el;
-      const threshold = 60;
-      isAtBottomRef.current = scrollHeight - scrollTop - clientHeight <= threshold;
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, []);
-
-  useEffect(() => {
     if (!messages.length) return;
-    if (shouldScrollToBottomRef.current || isAtBottomRef.current) {
+    if (shouldScrollToBottomRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       shouldScrollToBottomRef.current = false;
     }
@@ -228,15 +215,14 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
           messages.map((m) => (
             <div key={m.id} className="group relative">
               <div className="text-[10px] leading-tight break-words">
-                <span className="font-heading font-bold shrink-0" style={{ color: 'var(--noir-primary)' }}>{m.username}</span>
-                <span className="text-mutedForeground mx-0.5">·</span>
+                <div className="font-heading font-bold shrink-0" style={{ color: 'var(--noir-primary)' }}>{m.username}</div>
                 {m.gif_url && (
-                  <span className="block mt-0.5">
-                    <img src={m.gif_url} alt="GIF" className="rounded max-h-20 max-w-full object-contain bg-zinc-900/50" loading="lazy" />
-                  </span>
+                  <div className="mt-0.5">
+                    <img src={m.gif_url} alt="GIF" className="rounded max-h-40 w-full object-contain bg-zinc-900/50" loading="lazy" />
+                  </div>
                 )}
                 {m.message && m.message !== '(GIF)' && (
-                  <span style={{ color: 'var(--noir-foreground)' }}>{m.message}</span>
+                  <div className="mt-0.5" style={{ color: 'var(--noir-foreground)' }}>{m.message}</div>
                 )}
               </div>
               <div className="text-[9px] text-mutedForeground mt-0.5">{formatChatTime(m.created_at)}</div>
