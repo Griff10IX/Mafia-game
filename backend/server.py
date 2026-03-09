@@ -320,6 +320,9 @@ GARAGE_BATCH_UPGRADE_INCREMENT = 10
 GARAGE_BATCH_UPGRADE_COST = 25
 GARAGE_BATCH_LIMIT_MAX = 100
 
+# Bullet storage cap: melt (and other sources) cannot push bullets above this
+BULLET_STORAGE_CAP = 250_000
+
 # Points store: GBP prices; larger packs slightly cheaper per point than 2× smaller
 POINT_PACKAGES = {
     "starter": {"points": 2500, "price_gbp": 4.99},
