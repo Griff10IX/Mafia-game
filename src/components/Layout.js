@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3 } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
 import { setCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -82,6 +82,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/dashboard', label: 'Dashboard' },
         { path: '/objectives', label: 'Objectives' },
         { path: '/missions', label: 'Missions' },
+        { path: '/inventory', label: 'My Inventory' },
         { path: '/loot-box', label: 'Loot Box' },
         { path: '/profile', label: 'Edit Profile' },
         { path: '/ip-rules', label: 'Address & device' },
@@ -662,7 +663,7 @@ export default function Layout({ children }) {
       }
     : {
         '/dashboard': 'information', '/verify-email': 'information', '/objectives': 'information', '/missions': 'information',
-        '/loot-box': 'information', '/profile': 'information', '/ip-rules': 'information', '/stats': 'information', '/my-stats': 'information',
+        '/inventory': 'information', '/loot-box': 'information', '/profile': 'information', '/ip-rules': 'information', '/stats': 'information', '/my-stats': 'information',
         '/users-online': 'information', '/properties': 'information', '/help-desk': 'information',
         '/ranking': 'ranking', '/prestige': 'ranking',
         '/attack': 'combat', '/attempts': 'combat', '/hitlist': 'combat', '/bodyguards': 'combat', '/armour-weapons': 'combat',
@@ -687,6 +688,7 @@ export default function Layout({ children }) {
     ...(needsEmailVerification ? [{ path: '/verify-email', icon: Mail, label: 'Verify email' }] : []),
     { path: '/objectives', icon: ListChecks, label: 'Objectives' },
     { path: '/missions', icon: Map, label: 'Missions' },
+    { path: '/inventory', icon: Package, label: 'My Inventory' },
     { path: '/loot-box', icon: Gift, label: 'Loot Box' },
     { path: '/profile', icon: User, label: 'Edit Profile' },
     { path: '/ip-rules', icon: Globe, label: 'Address & device' },

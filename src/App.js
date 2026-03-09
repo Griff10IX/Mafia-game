@@ -68,6 +68,7 @@ const DeadAlive = lazy(() => import("./pages/DeadAlive"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Stats = lazy(() => import("./pages/Stats"));
 const MyStats = lazy(() => import("./pages/MyStats"));
+const MyInventory = lazy(() => import("./pages/MyInventory"));
 const Objectives = lazy(() => import("./pages/Objectives"));
 const Missions = lazy(() => import("./pages/Missions"));
 const LootBox = lazy(() => import("./pages/LootBox"));
@@ -256,6 +257,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Missions />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/inventory"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <MyInventory />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

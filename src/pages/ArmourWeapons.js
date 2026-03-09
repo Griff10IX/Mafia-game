@@ -702,8 +702,9 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                             <div key={opt.level} className="flex items-center gap-0.5">
                               {opt.owned ? (
                                 <>
-                                  <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/50 text-foreground">
-                                    Lv.{opt.level}{opt.equipped ? ' ✓' : ''}
+                                  <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/50 text-foreground truncate max-w-[120px] sm:max-w-[140px]" title={opt.name}>
+                                    {opt.name}{opt.equipped ? ' ✓' : ''}
+                                    {opt.loot_exclusive && <span className="text-amber-400 ml-0.5">(excl)</span>}
                                   </span>
                                   <button
                                     type="button"
@@ -714,16 +715,21 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                                     {equipping ? '...' : opt.equipped ? 'Unequip' : 'Equip'}
                                   </button>
                                 </>
+                              ) : opt.loot_exclusive ? (
+                                <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/30 text-zinc-500" title="Obtain from loot box">
+                                  {opt.name} <span className="text-amber-400/80">(Loot exclusive)</span>
+                                </span>
                               ) : (
                                 <button
                                   type="button"
                                   disabled={buyingArmourLevel != null || !canAffordArmour}
                                   onClick={() => buyArmour(opt.level)}
-                                  className={`px-2 sm:px-2.5 py-1 sm:py-1.5 rounded text-[9px] sm:text-[10px] font-heading font-bold border transition-all ${
+                                  className={`px-2 sm:px-2.5 py-1 sm:py-1.5 rounded text-[9px] sm:text-[10px] font-heading font-bold border transition-all truncate max-w-[140px] sm:max-w-[160px] ${
                                     inStock ? 'bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 active:scale-95' : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500'
                                   } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                  title={opt.name}
                                 >
-                                  Lv.{opt.level} {isPoints ? `${Number(cost).toLocaleString()}p` : formatMoney(cost)}
+                                  {opt.name} {isPoints ? `${Number(cost).toLocaleString()}p` : formatMoney(cost)}
                                   {inStock && <span className="ml-1 text-[7px] text-emerald-400">({opt.armoury_stock})</span>}
                                 </button>
                               )}

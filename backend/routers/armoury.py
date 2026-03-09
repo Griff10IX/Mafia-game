@@ -13,7 +13,7 @@ from fastapi import Depends, HTTPException, Request, Body
 from pydantic import BaseModel
 from bson.objectid import ObjectId
 
-from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war
+from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS
 
 # 5k bullets per 24h, effectively delivered every 20 mins (72 ticks per day)
 BULLET_FACTORY_TOTAL_PER_24H = 5000
@@ -855,6 +855,22 @@ async def get_armour_options(request: Request, current_user: dict = Depends(get_
             "affordable": affordable,
             "armoury_stock": int(armour_stock.get(level_key, 0) or 0),
         })
+    # Loot-exclusive armour (level 6) — always shown: owned → equip; not owned → grayed "Loot exclusive"
+    from routers.loot_box import ARMOUR_LEVEL_6_NAME
+    rows.append({
+        "level": 6,
+        "name": ARMOUR_LEVEL_6_NAME,
+        "description": "Loot-exclusive steel plate vest — not sold anywhere.",
+        "cost_money": None,
+        "cost_points": None,
+        "effective_cost_money": None,
+        "effective_cost_points": None,
+        "owned": owned_max >= 6,
+        "equipped": equipped_level == 6,
+        "affordable": False,
+        "armoury_stock": 0,
+        "loot_exclusive": True,
+    })
     return {"current_level": equipped_level, "owned_max": owned_max, "options": rows}
 
 
@@ -920,9 +936,10 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
 
 async def equip_armour(request: ArmourBuyRequest, current_user: dict = Depends(get_current_user)):
     level = int(request.level or 0)
-    if level < 0 or level > 5:
-        raise HTTPException(status_code=400, detail="Invalid armour level")
     owned_max = int(current_user.get("armour_owned_level_max", current_user.get("armour_level", 0) or 0) or 0)
+    max_level = 6 if owned_max >= 6 else 5
+    if level < 0 or level > max_level:
+        raise HTTPException(status_code=400, detail="Invalid armour level")
     if level != 0 and level > owned_max:
         raise HTTPException(status_code=400, detail="You do not own this armour tier")
     await db.users.update_one(
@@ -1001,6 +1018,7 @@ class WeaponResponse(BaseModel):
     locked: bool = False
     required_weapon_name: Optional[str] = None
     armoury_stock: int = 0  # produced stock in state's armoury (available to buy)
+    loot_exclusive: bool = False
 
 
 class WeaponBuyRequest(BaseModel):
@@ -1080,6 +1098,7 @@ async def get_weapons(request: Request, current_user: dict = Depends(get_current
             locked=locked,
             required_weapon_name=required_weapon_name,
             armoury_stock=armoury_stock,
+            loot_exclusive=bool(weapon.get("loot_exclusive")),
         ))
     if use_cache:
         if len(_get_weapons_cache) >= _GET_WEAPONS_CACHE_MAX_ENTRIES:
@@ -1266,6 +1285,29 @@ async def _best_weapon_for_user(user_id: str, equipped_weapon_id: str | None = N
     return best_damage, best_name
 
 
+async def get_inventory(request: Request, current_user: dict = Depends(get_current_user)):
+    """Aggregate weapons, armour, and loot exclusives for the My Inventory page."""
+    weapons = await get_weapons(request, current_user)
+    armour = await get_armour_options(request, current_user)
+    uid = current_user["id"]
+    exclusive_cars = []
+    cars = await db.user_cars.find({"user_id": uid}, {"_id": 0, "car_id": 1, "id": 1}).to_list(100)
+    cars_list = CARS or []
+    for uc in cars:
+        cinfo = next((c for c in cars_list if c.get("id") == uc.get("car_id")), None)
+        if cinfo and cinfo.get("rarity") in ("loot_exclusive", "exclusive"):
+            exclusive_cars.append({"id": uc.get("id"), "name": cinfo.get("name", "?"), "car_id": uc.get("car_id"), "rarity": cinfo.get("rarity", "loot_exclusive")})
+    speakeasy = await db.exclusive_properties.find_one({"owner_id": uid, "type": "speakeasy"}, {"_id": 1})
+    return {
+        "weapons": [w.model_dump() if hasattr(w, "model_dump") else w for w in weapons],
+        "armour": armour,
+        "loot_exclusives": {
+            "exclusive_cars": exclusive_cars,
+            "has_speakeasy": speakeasy is not None,
+        },
+    }
+
+
 def register(router):
     # Bullet factory routes
     router.add_api_route("/bullet-factory", get_bullet_factory, methods=["GET"])
@@ -1294,3 +1336,4 @@ def register(router):
     router.add_api_route("/weapons/unequip", unequip_weapon, methods=["POST"])
     router.add_api_route("/weapons/{weapon_id}/buy", buy_weapon, methods=["POST"])
     router.add_api_route("/weapons/{weapon_id}/sell", sell_weapon, methods=["POST"])
+    router.add_api_route("/inventory", get_inventory, methods=["GET"])
