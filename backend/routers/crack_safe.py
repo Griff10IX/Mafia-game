@@ -71,32 +71,37 @@ def register(router):
         user_money = int(user.get("money") or 0)
         can_guess = is_admin or user_money >= SAFE_ENTRY_COST
 
-        if is_admin:
-            response = {
-                "jackpot": safe.get("jackpot", SAFE_JACKPOT_SEED),
-                "total_attempts": total_attempts,
-                "last_winner_username": safe.get("last_winner_username"),
-                "last_won_at": safe.get("last_won_at").isoformat() if safe.get("last_won_at") else None,
-                "can_guess": True,
-                "next_guess_at": None,
-                "entry_cost": SAFE_ENTRY_COST,
-                "clues": clues,
-                "is_admin": True,
-                "admin_combination": combo,
-            }
-            return response
+        limit = 25 if is_admin else 5
+        winners_cursor = db.safe_winners.find({}).sort("won_at", -1).limit(limit)
+        winners = []
+        async for w in winners_cursor:
+            winners.append({
+                "username": w.get("username", "?"),
+                "won_at": w["won_at"].isoformat() if w.get("won_at") else None,
+                "amount_won": w.get("amount_won"),
+            })
+        if not winners and safe.get("last_winner_username"):
+            winners = [{
+                "username": safe["last_winner_username"],
+                "won_at": safe["last_won_at"].isoformat() if safe.get("last_won_at") else None,
+                "amount_won": None,
+            }]
 
-        return {
+        base = {
             "jackpot": safe.get("jackpot", SAFE_JACKPOT_SEED),
             "total_attempts": total_attempts,
             "last_winner_username": safe.get("last_winner_username"),
             "last_won_at": safe.get("last_won_at").isoformat() if safe.get("last_won_at") else None,
-            "can_guess": can_guess,
+            "last_winners": winners,
+            "can_guess": can_guess if not is_admin else True,
             "next_guess_at": None,
             "entry_cost": SAFE_ENTRY_COST,
             "clues": clues,
-            "is_admin": False,
+            "is_admin": is_admin,
         }
+        if is_admin:
+            base["admin_combination"] = combo
+        return base
 
     @router.post("/crack-safe/guess")
     async def crack_safe_guess(req: SafeGuessRequest, user: dict = Depends(get_current_user_verified)):
@@ -144,6 +149,12 @@ def register(router):
                     "last_won_at": now,
                 }},
             )
+            await db.safe_winners.insert_one({
+                "username": user.get("username", "?"),
+                "user_id": user["id"],
+                "won_at": now,
+                "amount_won": jackpot_amount,
+            })
             await log_activity(
                 user["id"],
                 user.get("username") or "?",

@@ -101,7 +101,7 @@ function SafeDial({ dialAngle, won }) {
   });
 
   return (
-    <div style={{ position: 'relative', width: 180, height: 180, flexShrink: 0 }}>
+    <div style={{ position: 'relative', width: 140, height: 140, flexShrink: 0 }}>
       {/* Chrome outer ring */}
       <div style={{
         position: 'absolute', inset: 0, borderRadius: '50%',
@@ -115,7 +115,7 @@ function SafeDial({ dialAngle, won }) {
       }} />
       {/* Rotating SVG dial */}
       <svg
-        width={180} height={180}
+        width={140} height={140} viewBox="0 0 180 180"
         style={{
           position: 'absolute', inset: 0,
           transform: `rotate(${dialAngle}deg)`,
@@ -309,7 +309,7 @@ const RIVET_POSITIONS = [
 
 function SafeDoor({ dialAngle, won, shaking }) {
   return (
-    <div className={shaking ? 'cs-shake' : ''} style={{ position: 'relative', width: 280, height: 230 }}>
+    <div className={shaking ? 'cs-shake' : ''} style={{ position: 'relative', width: 220, height: 185 }}>
       <CoinRain active={won} />
 
       {/* Safe body (depth behind door) */}
@@ -490,17 +490,17 @@ export default function CrackSafe() {
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`}>
+    <div className={`space-y-3 max-w-4xl ${styles.pageContent}`}>
       <style>{CS_STYLES}</style>
 
       {/* Page header */}
       <div className="cs-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Vault</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+        <p className="text-[8px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-0.5">The Vault</p>
+        <h1 className="text-lg sm:text-xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
           <Lock size={18} className="text-primary/60" />
           Crack the Safe
         </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">
+        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">
           Enter 5 numbers between 1 and 9 to crack the safe. Each attempt costs {formatMoney(info?.entry_cost ?? 1_000_000)}.
         </p>
       </div>
@@ -511,12 +511,12 @@ export default function CrackSafe() {
         style={{ animationDelay: '0.05s' }}
       >
         <div className="h-0.5 bg-gradient-to-r from-transparent via-yellow-500/60 to-transparent" />
-        <div className="px-4 py-4 text-center">
-          <p className="text-[9px] text-yellow-600/50 font-heading uppercase tracking-[0.3em] mb-1">Current Jackpot</p>
-          <p className="cs-jackpot-pulse font-heading font-black text-3xl sm:text-4xl text-yellow-400">
+        <div className="px-3 py-2.5 text-center">
+          <p className="text-[8px] text-yellow-600/50 font-heading uppercase tracking-[0.3em] mb-0.5">Current Jackpot</p>
+          <p className="cs-jackpot-pulse font-heading font-black text-2xl sm:text-3xl text-yellow-400">
             {formatMoney(info?.jackpot ?? 0)}
           </p>
-          <p className="text-[9px] text-zinc-600 font-heading mt-1 tracking-widest">
+          <p className="text-[8px] text-zinc-600 font-heading mt-0.5 tracking-widest">
             {(info?.total_attempts ?? 0).toLocaleString()} total attempts
           </p>
         </div>
@@ -524,7 +524,7 @@ export default function CrackSafe() {
       </div>
 
       {/* Main two-column */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
 
         {/* Left: Safe visual + inputs */}
         <div
@@ -537,7 +537,7 @@ export default function CrackSafe() {
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">The Vault</h2>
           </div>
 
-          <div className="p-5 flex flex-col items-center gap-5">
+          <div className="p-3 flex flex-col items-center gap-3">
 
             {/* Safe art */}
             <SafeDoor dialAngle={dialAngle} won={won} shaking={shaking} />
@@ -613,8 +613,8 @@ export default function CrackSafe() {
           </div>
         </div>
 
-        {/* Right: Info + clues */}
-        <div className="space-y-3">
+        {/* Right: Info + clues + winners */}
+        <div className="space-y-2">
 
           {/* Rules / info */}
           <div
@@ -626,7 +626,7 @@ export default function CrackSafe() {
               <Info size={11} className="text-primary" />
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Information & How to Play</h2>
             </div>
-            <div className="p-3 space-y-1.5 text-xs font-heading" style={{ lineHeight: 1.7 }}>
+            <div className="p-2.5 space-y-1 text-xs font-heading" style={{ lineHeight: 1.6 }}>
               <p className="text-zinc-400">Enter 5 numbers between 1 and 9 to crack the safe!</p>
               <p className="text-zinc-400">Each attempt costs <span className="text-primary font-semibold">{formatMoney(info?.entry_cost ?? 1_000_000)}</span>. As many attempts as you can afford.</p>
               <p className="text-zinc-400">Current Jackpot: <span className="text-yellow-400 font-bold">{formatMoney(info?.jackpot ?? 0)}</span></p>
@@ -644,7 +644,7 @@ export default function CrackSafe() {
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Clues</h2>
             </div>
-            <div className="p-3 space-y-2">
+            <div className="p-2.5 space-y-1.5">
               {clues.length === 0 ? (
                 <p className="text-xs text-zinc-600 font-heading italic">No clues available yet.</p>
               ) : clues.map((clue, i) => (
@@ -681,7 +681,7 @@ export default function CrackSafe() {
                 <Lock size={11} className="text-red-400" />
                 <h2 className="text-[10px] font-heading font-bold text-red-400 uppercase tracking-[0.15em]">Admin — Current Combination</h2>
               </div>
-              <div className="px-3 py-3 flex items-center justify-center gap-2">
+              <div className="px-2.5 py-2 flex items-center justify-center gap-2">
                 {info.admin_combination.map((n, i) => (
                   <div key={i} style={{
                     width: 36, height: 44, borderRadius: 4,
@@ -699,24 +699,40 @@ export default function CrackSafe() {
             </div>
           )}
 
-          {info?.last_winner_username && (
+          {(info?.last_winners?.length > 0) && (
             <div
               className={`relative ${styles.panel} rounded-lg overflow-hidden border border-yellow-600/20 cs-fade-in`}
               style={{ animationDelay: '0.2s' }}
             >
               <div className="h-0.5 bg-gradient-to-r from-transparent via-yellow-500/30 to-transparent" />
-              <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
-                <Trophy size={11} className="text-yellow-500" />
-                <h2 className="text-[10px] font-heading font-bold text-yellow-500/80 uppercase tracking-[0.15em]">Last Safe Cracker</h2>
+              <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Trophy size={11} className="text-yellow-500" />
+                  <h2 className="text-[10px] font-heading font-bold text-yellow-500/80 uppercase tracking-[0.15em]">
+                    Last {info.last_winners.length} Winner{info.last_winners.length !== 1 ? 's' : ''}
+                  </h2>
+                </div>
+                {isAdmin && info.last_winners.length > 5 && (
+                  <span className="text-[8px] text-zinc-500 font-heading">Admin view</span>
+                )}
               </div>
-              <div className="px-3 py-2.5 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0" style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.2)' }}>
-                  🏆
-                </div>
-                <div>
-                  <p className="text-sm font-heading font-bold text-yellow-400">{info.last_winner_username}</p>
-                  <p className="text-[10px] text-zinc-600">{formatDate(info.last_won_at)}</p>
-                </div>
+              <div className="divide-y divide-zinc-800/50">
+                {info.last_winners.map((w, i) => (
+                  <div key={i} className="px-2.5 py-2 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0" style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.2)' }}>
+                        🏆
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-heading font-bold text-yellow-400 truncate">{w.username}</p>
+                        <p className="text-[9px] text-zinc-600">{formatDate(w.won_at)}</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-heading font-bold text-emerald-400 shrink-0 tabular-nums">
+                      {w.amount_won != null ? formatMoney(w.amount_won) : '—'}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
