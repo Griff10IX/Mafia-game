@@ -1844,15 +1844,15 @@ export default function Admin() {
           <div className="p-3 space-y-3">
             <p className="text-[10px] text-mutedForeground">When a page is locked, users see &quot;Down for maintenance&quot; (or your message) and cannot access it. Admins can still access.</p>
             <div className=" rounded-md border border-amber-500/30 bg-amber-500/5 p-2.5 space-y-2">
-              <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">Lock buying points (Quick Trade) until</p>
+              <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">Lock buying points (Store) until</p>
               <div className="flex flex-wrap items-center gap-2">
                 <input type="datetime-local" value={pageLockUnlockAt} onChange={(e) => setPageLockUnlockAt(e.target.value)} className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono" />
-                <BtnPrimary onClick={() => handlePageLockToggle('/quick-trade', true, pageLockUnlockAt ? `Points market closed until ${new Date(pageLockUnlockAt).toLocaleString()}` : 'Points market closed', pageLockUnlockAt ? new Date(pageLockUnlockAt).toISOString() : null)} disabled={pageLockSaving || !pageLockUnlockAt}>Lock until date</BtnPrimary>
-                {pageLocks['/quick-trade'] && (
-                  <BtnSecondary onClick={() => handlePageLockToggle('/quick-trade', false)} disabled={pageLockSaving}>Unlock now</BtnSecondary>
+                <BtnPrimary onClick={() => handlePageLockToggle('/store', true, pageLockUnlockAt ? `Store closed until ${new Date(pageLockUnlockAt).toLocaleString()}` : 'Store closed', pageLockUnlockAt ? new Date(pageLockUnlockAt).toISOString() : null)} disabled={pageLockSaving || !pageLockUnlockAt}>Lock until date</BtnPrimary>
+                {pageLocks['/store'] && (
+                  <BtnSecondary onClick={() => handlePageLockToggle('/store', false)} disabled={pageLockSaving}>Unlock now</BtnSecondary>
                 )}
               </div>
-              <p className="text-[9px] text-mutedForeground">Set date & time, then click Lock. Page unlocks automatically when the time passes.</p>
+              <p className="text-[9px] text-mutedForeground">Set date & time, then click Lock. Store (points, upgrades, bullets) unlocks automatically when the time passes.</p>
             </div>
             <div className="space-y-2">
               {['/dashboard', '/bank', '/casino', '/casino/dice', '/casino/mp-poker', '/forum', '/store', '/quick-trade', '/crimes', '/attack', '/jail', '/organised-crime', '/profile', '/loot-box'].map((path) => {
