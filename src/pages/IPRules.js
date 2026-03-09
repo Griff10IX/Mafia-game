@@ -51,7 +51,7 @@ export default function IPRules() {
       <div className="flex items-center gap-2 mb-4">
         <Globe size={20} style={{ color: 'var(--noir-primary)' }} />
         <h1 className="text-lg font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-foreground)' }}>
-          Address & device
+          IP & Devices
         </h1>
       </div>
 

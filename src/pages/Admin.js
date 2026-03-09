@@ -219,6 +219,7 @@ export default function Admin() {
   const [pageLocks, setPageLocks] = useState({});
   const [pageLockPath, setPageLockPath] = useState('');
   const [pageLockMessage, setPageLockMessage] = useState('Down for maintenance');
+  const [pageLockUnlockAt, setPageLockUnlockAt] = useState('');
   const [pageLockSaving, setPageLockSaving] = useState(false);
 
   const [moderatorsList, setModeratorsList] = useState([]);
@@ -389,10 +390,15 @@ export default function Admin() {
     }
   };
 
-  const handlePageLockToggle = async (path, locked, message) => {
+  const handlePageLockToggle = async (path, locked, message, unlockAt) => {
     setPageLockSaving(true);
     try {
-      await api.patch('/admin/page-locks', { path, message: message || 'Down for maintenance', locked });
+      await api.patch('/admin/page-locks', {
+        path,
+        message: message || 'Down for maintenance',
+        locked,
+        unlock_at: (unlockAt || '').trim() || null,
+      });
       await fetchPageLocks();
       toast.success(locked ? `Locked ${path}` : `Unlocked ${path}`);
     } catch (e) {
@@ -1837,14 +1843,28 @@ export default function Admin() {
         {!collapsed.pageLocks && (
           <div className="p-3 space-y-3">
             <p className="text-[10px] text-mutedForeground">When a page is locked, users see &quot;Down for maintenance&quot; (or your message) and cannot access it. Admins can still access.</p>
+            <div className=" rounded-md border border-amber-500/30 bg-amber-500/5 p-2.5 space-y-2">
+              <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">Lock buying points (Quick Trade) until</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="datetime-local" value={pageLockUnlockAt} onChange={(e) => setPageLockUnlockAt(e.target.value)} className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono" />
+                <BtnPrimary onClick={() => handlePageLockToggle('/quick-trade', true, pageLockUnlockAt ? `Points market closed until ${new Date(pageLockUnlockAt).toLocaleString()}` : 'Points market closed', pageLockUnlockAt ? new Date(pageLockUnlockAt).toISOString() : null)} disabled={pageLockSaving || !pageLockUnlockAt}>Lock until date</BtnPrimary>
+                {pageLocks['/quick-trade'] && (
+                  <BtnSecondary onClick={() => handlePageLockToggle('/quick-trade', false)} disabled={pageLockSaving}>Unlock now</BtnSecondary>
+                )}
+              </div>
+              <p className="text-[9px] text-mutedForeground">Set date & time, then click Lock. Page unlocks automatically when the time passes.</p>
+            </div>
             <div className="space-y-2">
-              {['/dashboard', '/bank', '/casino', '/casino/dice', '/casino/mp-poker', '/forum', '/store', '/crimes', '/attack', '/jail', '/organised-crime', '/profile', '/loot-box'].map((path) => {
-                const isLocked = !!pageLocks[path];
-                const msg = pageLocks[path] || '';
+              {['/dashboard', '/bank', '/casino', '/casino/dice', '/casino/mp-poker', '/forum', '/store', '/quick-trade', '/crimes', '/attack', '/jail', '/organised-crime', '/profile', '/loot-box'].map((path) => {
+                const entry = pageLocks[path];
+                const isLocked = !!entry;
+                const msg = typeof entry === 'object' ? (entry?.message ?? '') : (entry || '');
+                const unlockAt = typeof entry === 'object' ? entry?.unlock_at : null;
                 return (
                   <div key={path} className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded bg-zinc-800/30 border border-transparent hover:border-primary/20">
                     <span className="text-[11px] font-heading font-mono min-w-[140px]">{path}</span>
                     {isLocked && <span className="text-[10px] text-mutedForeground truncate max-w-[200px]" title={msg}>{msg || 'Down for maintenance'}</span>}
+                    {unlockAt && <span className="text-[9px] text-amber-400">until {new Date(unlockAt).toLocaleString()}</span>}
                     <div className="flex gap-1 ml-auto">
                       {isLocked ? (
                         <BtnSecondary onClick={() => handlePageLockToggle(path, false)} disabled={pageLockSaving}>Unlock</BtnSecondary>

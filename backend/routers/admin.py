@@ -76,6 +76,7 @@ class PageLockUpdate(BaseModel):
     path: str
     message: Optional[str] = None
     locked: bool
+    unlock_at: Optional[str] = None  # ISO datetime; lock auto-expires when past
 
 
 SEED_FAMILIES_CONFIG = [
@@ -1355,11 +1356,29 @@ def register(router):
 
     @router.get("/page-locks")
     async def get_page_locks_public():
-        """Public: return which paths are locked and their message. Used by frontend to show 'Down for maintenance'."""
+        """Public: return which paths are locked and their message. Locks with unlock_at in the past are excluded."""
+        from datetime import datetime, timezone
         doc = await db.game_settings.find_one({"key": PAGE_LOCKS_KEY}, {"_id": 0, "value": 1})
-        paths = (doc.get("value") or {}).get("paths") if doc else {}
-        if not isinstance(paths, dict):
-            paths = {}
+        raw = (doc.get("value") or {}).get("paths") if doc else {}
+        if not isinstance(raw, dict):
+            raw = {}
+        now = datetime.now(timezone.utc)
+        paths = {}
+        for p, v in raw.items():
+            if isinstance(v, dict):
+                uat = v.get("unlock_at")
+                if uat:
+                    try:
+                        until = datetime.fromisoformat(uat.replace("Z", "+00:00"))
+                        if until.tzinfo is None:
+                            until = until.replace(tzinfo=timezone.utc)
+                        if now >= until:
+                            continue
+                    except Exception:
+                        pass
+                paths[p] = v.get("message", "Down for maintenance")
+            elif isinstance(v, str):
+                paths[p] = v
         return {"paths": paths}
 
     @router.get("/landing-banner")
@@ -1374,9 +1393,15 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         doc = await db.game_settings.find_one({"key": PAGE_LOCKS_KEY}, {"_id": 0, "value": 1})
-        paths = (doc.get("value") or {}).get("paths") if doc else {}
-        if not isinstance(paths, dict):
-            paths = {}
+        raw = (doc.get("value") or {}).get("paths") if doc else {}
+        if not isinstance(raw, dict):
+            raw = {}
+        paths = {}
+        for p, v in raw.items():
+            if isinstance(v, dict):
+                paths[p] = {"message": v.get("message", "Down for maintenance"), "unlock_at": v.get("unlock_at")}
+            else:
+                paths[p] = {"message": (v or "Down for maintenance") if isinstance(v, str) else "Down for maintenance", "unlock_at": None}
         return {"paths": paths}
 
     @router.patch("/admin/page-locks")
@@ -1388,17 +1413,23 @@ def register(router):
             path = "/" + path
         doc = await db.game_settings.find_one({"key": PAGE_LOCKS_KEY}, {"_id": 0, "value": 1})
         value = (doc.get("value") or {}) if doc else {}
-        paths = dict(value.get("paths") or {}) if isinstance(value.get("paths"), dict) else {}
+        raw = dict(value.get("paths") or {}) if isinstance(value.get("paths"), dict) else {}
+        for k, v in list(raw.items()):
+            if isinstance(v, str):
+                raw[k] = {"message": v, "unlock_at": None}
         if body.locked:
-            paths[path] = (body.message or "").strip() or "Down for maintenance"
+            msg = (body.message or "").strip() or "Down for maintenance"
+            uat = (body.unlock_at or "").strip() or None
+            raw[path] = {"message": msg, "unlock_at": uat}
         else:
-            paths.pop(path, None)
+            raw.pop(path, None)
         await db.game_settings.update_one(
             {"key": PAGE_LOCKS_KEY},
-            {"$set": {"value": {"paths": paths}}},
+            {"$set": {"value": {"paths": raw}}},
             upsert=True,
         )
-        return {"paths": paths}
+        paths_out = {p: v.get("message", "Down for maintenance") if isinstance(v, dict) else v for p, v in raw.items()}
+        return {"paths": paths_out}
 
     @router.get("/admin/activity-log")
     async def admin_activity_log(
