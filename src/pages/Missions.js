@@ -29,6 +29,11 @@ const MISSIONS_STYLES = `
 
 const fmt = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 
+// Display name for city (avoid showing raw "Start")
+function cityDisplayName(city) {
+  return city === 'Start' ? 'Starting City' : (city || '—');
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -149,7 +154,7 @@ function MissionCard({ mission, onClick, delay = 0, missionIndex, missionTotal, 
 
   return (
     <div
-      className={`m-fade-in m-row relative rounded-md border px-2 py-1.5 transition-all min-w-0 ${borderCls} ${bgCls} ${unlocked && !completed ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`m-fade-in m-row relative rounded-md border px-3 py-2 transition-all min-w-0 ${borderCls} ${bgCls} ${unlocked && !completed ? 'cursor-pointer' : 'cursor-default'}`}
       style={{ animationDelay: `${delay}s` }}
       onClick={() => unlocked && onClick(mission)}
     >
@@ -170,7 +175,7 @@ function MissionCard({ mission, onClick, delay = 0, missionIndex, missionTotal, 
               {isCurrent && !completed && unlocked && (
                 <span className="shrink-0 px-1 py-0.5 rounded bg-primary/20 border border-primary/40 text-[9px] font-heading font-bold text-primary uppercase">Current</span>
               )}
-              <span className={`min-w-0 flex-1 text-[11px] font-heading font-bold truncate ${completed ? 'text-green-400' : unlocked ? 'text-foreground' : 'text-mutedForeground'}`}>
+              <span className={`min-w-0 flex-1 text-[11px] font-heading font-bold line-clamp-2 ${completed ? 'text-green-400' : unlocked ? 'text-foreground' : 'text-mutedForeground'}`} title={title}>
                 {title}
               </span>
             </div>
@@ -745,7 +750,7 @@ export default function Missions() {
       ]);
       setData(mapRes.data);
       setMissions(listRes.data?.missions || []);
-      if (!city) setCity(mapRes.data?.current_city || mapRes.data?.unlocked_cities?.[0] || 'Chicago');
+      if (!city) setCity(mapRes.data?.current_city || mapRes.data?.unlocked_cities?.[0] || 'Start');
     } catch {
       toast.error('Failed to load missions');
     } finally {
@@ -883,7 +888,7 @@ export default function Missions() {
               Completed missions ({completedMissions.length})
             </span>
           </div>
-          <div className="p-1.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-1.5 max-h-[70vh] overflow-y-auto">
+          <div className="p-2.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2.5 max-h-[70vh] overflow-y-auto">
             {completedMissions.map((m) => (
               <div
                 key={m.id}
@@ -913,7 +918,7 @@ export default function Missions() {
   }
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} style={{ padding: '12px 14px', maxWidth: 900, margin: '0 auto' }}>
+    <div className={`space-y-3 ${styles.pageContent}`} style={{ padding: '12px 14px', maxWidth: 900, margin: '0 auto' }}>
       <style>{MISSIONS_STYLES}</style>
 
       {/* Page header */}
@@ -939,7 +944,7 @@ export default function Missions() {
               </span>
             )}
             {!currentMission && completedCount === totalMissions && totalMissions > 0 && (
-              <span className="text-[10px] text-green-400 font-heading">All done in {city}</span>
+              <span className="text-[10px] text-green-400 font-heading">All done in {cityDisplayName(city)}</span>
             )}
           </div>
           <div className="m-art-line text-primary mx-2.5" />
@@ -984,7 +989,7 @@ export default function Missions() {
               onClick={() => setCity(c)}
               className={`px-2.5 py-1 rounded text-[10px] font-heading font-bold uppercase border transition-colors ${city === c ? 'bg-primary/20 border-primary text-primary' : 'bg-zinc-800/30 border-zinc-600 text-mutedForeground hover:text-primary'}`}
             >
-              {c}
+              {cityDisplayName(c)}
             </button>
           ))}
         </div>
@@ -996,13 +1001,13 @@ export default function Missions() {
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Progress</span>
         </div>
-        <div className="p-2 flex gap-2 flex-wrap">
+        <div className="p-2.5 flex gap-3 flex-wrap">
           {[
             { label: 'Done', value: `${completedCount}/${totalMissions}`, cls: 'text-green-400' },
             { label: 'Ready', value: readyCount, cls: readyCount > 0 ? 'text-primary' : 'text-mutedForeground' },
-            { label: 'City', value: city, cls: 'text-foreground' },
+            { label: 'City', value: cityDisplayName(city), cls: 'text-foreground' },
           ].map(({ label, value, cls }) => (
-            <div key={label} className="flex-1 min-w-[70px]">
+            <div key={label} className="flex-1 min-w-[80px]">
               <div className="text-[9px] font-heading text-mutedForeground uppercase">{label}</div>
               <div className={`text-sm font-heading font-bold ${cls}`}>{value}</div>
             </div>
@@ -1058,7 +1063,7 @@ export default function Missions() {
             <Skull size={12} className="text-primary" />
             <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em]">Final Jobs</span>
           </div>
-          <div className="p-1.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-1.5">
+          <div className="p-2.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2.5">
             {activeBoss.map((m, i) => {
               const info = missionIdToIndex[m.id] ?? {};
               return (
@@ -1081,7 +1086,7 @@ export default function Missions() {
       {cityMissions.length === 0 && (
         <div className="text-center py-10 text-mutedForeground">
           <BookOpen size={28} className="opacity-40 mx-auto mb-2" />
-          <p className="text-[10px] italic">No missions available in {city}.</p>
+          <p className="text-[10px] italic">No missions available in {cityDisplayName(city)}.</p>
         </div>
       )}
 

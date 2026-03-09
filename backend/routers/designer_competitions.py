@@ -378,7 +378,7 @@ async def vote(comp_id: str, body: VoteRequest, current_user: dict = Depends(get
         raise HTTPException(status_code=404, detail="Competition not found")
     if comp.get("status") != "active":
         raise HTTPException(status_code=400, detail="Competition is not active for voting")
-    entry = await db.designer_competition_entries.find_one({"id": body.entry_id, "competition_id": comp_id}, {"_id": 1})
+    entry = await db.designer_competition_entries.find_one({"id": body.entry_id, "competition_id": comp_id}, {"_id": 1, "author_username": 1})
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
     existing = await db.designer_competition_votes.find_one(
@@ -398,7 +398,7 @@ async def vote(comp_id: str, body: VoteRequest, current_user: dict = Depends(get
     await send_notification(
         current_user["id"],
         "You voted!",
-        f"You received {VOTER_REWARD_POINTS} points for voting in the Designer competition.",
+        f"You received {VOTER_REWARD_POINTS} points for voting for {entry.get('author_username') or 'an entry'} in the Designer competition.",
         "system",
     )
     return {"message": "Vote recorded", "points_awarded": VOTER_REWARD_POINTS}
