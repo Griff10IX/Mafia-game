@@ -582,38 +582,35 @@ const TravelModal = ({
               </p>
             )}
             
-            {travelInfo?.custom_car && (
-              <button
-                onClick={() => onTravel('custom')}
-                disabled={loading}
-                className="w-full flex items-center justify-between bg-secondary hover:bg-secondary/80 border border-border hover:border-primary/30 px-2 py-2 rounded transition-all disabled:opacity-50 active:scale-95 touch-manipulation"
-              >
-                <span className="flex items-center gap-1.5">
-                  <Zap size={14} className="text-primary" />
-                  <span className="text-[10px] font-heading font-bold text-foreground">{travelInfo.custom_car.name}</span>
-                </span>
-                <span className="text-[9px] text-mutedForeground font-heading">
-                  {travelInfo.custom_car.travel_time}s
-                </span>
-              </button>
-            )}
-            
-            {(travelInfo?.cars || []).slice(0, 3).map((car) => (
-              <button
-                key={car.user_car_id}
-                onClick={() => onTravel(car.user_car_id)}
-                disabled={loading}
-                className="w-full flex items-center justify-between bg-secondary hover:bg-secondary/80 border border-border hover:border-primary/30 px-2 py-2 rounded transition-all disabled:opacity-50 active:scale-95 touch-manipulation"
-              >
-                <span className="flex items-center gap-1.5 min-w-0 flex-1">
-                  <Car size={14} className="text-primary shrink-0" />
-                  <span className="text-[10px] font-heading truncate text-foreground">{car.name}</span>
-                </span>
-                <span className="text-[9px] text-mutedForeground font-heading whitespace-nowrap ml-1">
-                  {car.travel_time}s
-                </span>
-              </button>
-            ))}
+            {/* All car options (custom + regular) sorted fastest first */}
+            {(() => {
+              const custom = travelInfo?.custom_car;
+              const cars = travelInfo?.cars || [];
+              const combined = [
+                ...(custom ? [{ ...custom, travelMethod: 'custom', user_car_id: 'custom' }] : []),
+                ...cars.map(c => ({ ...c, travelMethod: c.user_car_id })),
+              ].sort((a, b) => (a.travel_time ?? 999) - (b.travel_time ?? 999));
+              return combined.slice(0, 5).map((item) => {
+                const isCustom = item.travelMethod === 'custom';
+                return (
+                  <button
+                    key={isCustom ? 'custom' : item.user_car_id}
+                    onClick={() => onTravel(item.travelMethod)}
+                    disabled={loading || item.can_travel === false}
+                    className="w-full flex items-center justify-between bg-secondary hover:bg-secondary/80 border border-border hover:border-primary/30 px-2 py-2 rounded transition-all disabled:opacity-50 active:scale-95 touch-manipulation"
+                  >
+                    <span className="flex items-center gap-1.5 min-w-0 flex-1">
+                      {isCustom ? <Zap size={14} className="text-primary shrink-0" /> : <Car size={14} className="text-primary shrink-0" />}
+                      <span className="text-[10px] font-heading truncate text-foreground">{item.name}</span>
+                    </span>
+                    <span className="text-[9px] text-mutedForeground font-heading whitespace-nowrap ml-1">
+                      {item.travel_time}s
+                      {item.damage_percent != null && ` · ${item.damage_percent}%`}
+                    </span>
+                  </button>
+                );
+              });
+            })()}
             
             {(!travelInfo?.cars || travelInfo.cars.length === 0) && !travelInfo?.custom_car && (
               <div className="text-center py-3 text-[10px] text-mutedForeground font-heading">

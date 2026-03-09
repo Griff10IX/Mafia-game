@@ -203,56 +203,42 @@ const DestinationCard = ({
           </p>
         )}
 
-        {/* Custom Car */}
-        {travelInfo?.custom_car && (
-          <button
-            onClick={() => !travelDisabled && travelInfo.custom_car?.can_travel !== false && onTravel(destination, 'custom')}
-            disabled={travelDisabled || travelInfo.custom_car?.can_travel === false}
-            className={`w-full flex items-center justify-between px-2 py-1.5 rounded transition-all touch-manipulation ${
-              !travelDisabled && travelInfo.custom_car?.can_travel !== false
-                ? 'bg-secondary text-foreground border border-border hover:border-primary/30 hover:bg-secondary/80 active:scale-95'
-                : 'bg-secondary/50 border border-border opacity-60 cursor-not-allowed'
-            }`}
-            title={travelInfo.custom_car?.can_travel === false ? 'Too damaged — repair in garage' : undefined}
-          >
-            <span className="flex items-center gap-1">
-              <Zap size={12} className="text-primary" />
-              <span className="text-[11px] font-heading font-bold">{travelInfo.custom_car.name}</span>
-            </span>
-            <span className="text-[9px] text-mutedForeground font-heading">
-              {travelInfo.custom_car.travel_time}s
-              {travelInfo.custom_car?.damage_percent != null && (
-                <span className={travelInfo.custom_car.damage_percent >= 100 ? ' text-red-400' : ''}>
-                  {' '}· {travelInfo.custom_car.damage_percent}%
+        {/* All car options (custom + regular) sorted fastest first */}
+        {(() => {
+          const custom = travelInfo?.custom_car;
+          const cars = travelInfo?.cars || [];
+          const combined = [
+            ...(custom ? [{ ...custom, travelMethod: 'custom', user_car_id: 'custom', Icon: Zap }] : []),
+            ...cars.map(c => ({ ...c, travelMethod: c.user_car_id, Icon: Car })),
+          ].sort((a, b) => (a.travel_time ?? 999) - (b.travel_time ?? 999));
+          return combined.slice(0, 5).map((item) => {
+            const isCustom = item.travelMethod === 'custom';
+            const canTravel = item.can_travel !== false;
+            const Icon = item.Icon;
+            return (
+              <button
+                key={isCustom ? 'custom' : item.user_car_id}
+                onClick={() => !travelDisabled && canTravel && onTravel(destination, item.travelMethod)}
+                disabled={travelDisabled || !canTravel}
+                className={`w-full flex items-center justify-between px-2 py-1.5 rounded transition-all touch-manipulation ${
+                  !travelDisabled && canTravel
+                    ? 'bg-secondary text-foreground border border-border hover:border-primary/30 hover:bg-secondary/80 active:scale-95'
+                    : 'bg-secondary/50 border border-border opacity-60 cursor-not-allowed'
+                }`}
+                title={!canTravel ? 'Too damaged — repair in garage' : undefined}
+              >
+                <span className="flex items-center gap-1 min-w-0 flex-1">
+                  <Icon size={12} className="text-primary shrink-0" />
+                  <span className="text-[11px] font-heading truncate">{item.name}</span>
                 </span>
-              )}
-            </span>
-          </button>
-        )}
-
-        {/* User Cars (best 4 shown, sorted fastest first so Rare/Uncommon appear) */}
-        {travelInfo?.cars?.slice(0, 4).map(car => (
-          <button
-            key={car.user_car_id}
-            onClick={() => !travelDisabled && car.can_travel !== false && onTravel(destination, car.user_car_id)}
-            disabled={travelDisabled || car.can_travel === false}
-            className={`w-full flex items-center justify-between px-2 py-1.5 rounded transition-all touch-manipulation ${
-              !travelDisabled && car.can_travel !== false
-                ? 'bg-secondary text-foreground border border-border hover:border-primary/30 hover:bg-secondary/80 active:scale-95'
-                : 'bg-secondary/50 border border-border opacity-60 cursor-not-allowed'
-            }`}
-            title={car.can_travel === false ? 'Too damaged — repair in garage' : undefined}
-          >
-            <span className="flex items-center gap-1 min-w-0 flex-1">
-              <Car size={12} className="text-primary shrink-0" />
-              <span className="text-[11px] font-heading truncate">{car.name}</span>
-            </span>
-            <span className={`text-[9px] font-heading whitespace-nowrap ml-1 ${car.can_travel === false ? 'text-red-400' : 'text-mutedForeground'}`}>
-              {car.travel_time}s
-              {car.damage_percent != null && ` · ${car.damage_percent}%`}
-            </span>
-          </button>
-        ))}
+                <span className={`text-[9px] font-heading whitespace-nowrap ml-1 ${!canTravel ? 'text-red-400' : 'text-mutedForeground'}`}>
+                  {item.travel_time}s
+                  {item.damage_percent != null && ` · ${item.damage_percent}%`}
+                </span>
+              </button>
+            );
+          });
+        })()}
 
         {/* No Cars Message */}
         {(!travelInfo?.cars || travelInfo.cars.length === 0) && !travelInfo?.custom_car && (
