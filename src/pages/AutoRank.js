@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame } from 'lucide-react';
+import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame, CircleDot } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 
@@ -593,6 +593,12 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
               )}
               <div className="text-[10px] sm:text-xs font-heading text-emerald-400/90">
                 Successful today: {stats.successful_crimes_today ?? 0} crimes, {stats.successful_gtas_today ?? 0} GTAs, {stats.successful_busts_today ?? 0} busts
+                {(stats?.bullets_from_melt_today ?? 0) > 0 && (
+                  <>, {(stats.bullets_from_melt_today).toLocaleString()} bullets</>
+                )}
+                {(stats?.cash_from_scrap_today ?? 0) > 0 && (
+                  <>, ${(stats.cash_from_scrap_today).toLocaleString()} scrap</>
+                )}
               </div>
               {(stats?.failed_crimes_today > 0 || stats?.failed_gtas_today > 0 || stats?.failed_busts_today > 0) && (
                 <div className="text-[10px] sm:text-xs font-heading text-amber-300/90">
@@ -734,10 +740,11 @@ const StatsCard = ({ stats, liveCountdown }) => {
         </p>
         
         {/* Main stats grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2">
           <StatCard label="Busts" value={totalBusts.toLocaleString()} icon={Lock} />
           <StatCard label="Crimes" value={totalCrimes.toLocaleString()} icon={Crosshair} />
           <StatCard label="GTAs" value={totalGtas.toLocaleString()} icon={Car} />
+          <StatCard label="Bullets" value={totalBulletsFromMelt.toLocaleString()} valueColor="text-amber-400" icon={CircleDot} />
           <StatCard 
             label="Cash Made" 
             value={`$${totalCash.toLocaleString()}`} 
@@ -1068,6 +1075,10 @@ export default function AutoRank() {
     successful_crimes_today: 0,
     successful_gtas_today: 0,
     successful_busts_today: 0,
+    bullets_from_melt_today: 0,
+    cars_melted_today: 0,
+    cars_scrapped_today: 0,
+    cash_from_scrap_today: 0,
   });
   const [liveCountdown, setLiveCountdown] = useState({
     jailSeconds: null,
@@ -1168,6 +1179,10 @@ export default function AutoRank() {
           successful_crimes_today: d.successful_crimes_today ?? 0,
           successful_gtas_today: d.successful_gtas_today ?? 0,
           successful_busts_today: d.successful_busts_today ?? 0,
+          bullets_from_melt_today: d.bullets_from_melt_today ?? 0,
+          cars_melted_today: d.cars_melted_today ?? 0,
+          cars_scrapped_today: d.cars_scrapped_today ?? 0,
+          cash_from_scrap_today: d.cash_from_scrap_today ?? 0,
         }));
         setLastStatsAt(Date.now());
       }).catch(() => {});
@@ -1276,6 +1291,10 @@ export default function AutoRank() {
             successful_crimes_today: statsRes.data.successful_crimes_today ?? 0,
             successful_gtas_today: statsRes.data.successful_gtas_today ?? 0,
             successful_busts_today: statsRes.data.successful_busts_today ?? 0,
+            bullets_from_melt_today: statsRes.data.bullets_from_melt_today ?? 0,
+            cars_melted_today: statsRes.data.cars_melted_today ?? 0,
+            cars_scrapped_today: statsRes.data.cars_scrapped_today ?? 0,
+            cash_from_scrap_today: statsRes.data.cash_from_scrap_today ?? 0,
             attempted_busts_today: statsRes.data.attempted_busts_today ?? 0,
           });
           setLastStatsAt(Date.now());

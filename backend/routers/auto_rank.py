@@ -183,16 +183,47 @@ async def _update_auto_rank_stats_melt(db, user_id: str, melted_count: int = 0, 
     """Record melt (bullets) and/or scrap (cash) stats from auto rank."""
     if melted_count <= 0 and scrapped_count <= 0:
         return
-    await _ensure_stats_since(db, user_id, datetime.now(timezone.utc))
+    now = datetime.now(timezone.utc)
+    today = _today_utc(now)
+    await _ensure_stats_since(db, user_id, now)
     inc = {}
+    updates = {}
     if melted_count > 0:
         inc["auto_rank_total_cars_melted"] = melted_count
         inc["auto_rank_total_bullets_from_melt"] = total_bullets
+        u = await db.users.find_one({"id": user_id}, {"_id": 0, "auto_rank_bullets_from_melt_date": 1, "auto_rank_bullets_from_melt_today": 1, "auto_rank_cars_melted_today": 1, "auto_rank_cars_melted_date": 1})
+        if (u or {}).get("auto_rank_bullets_from_melt_date") != today:
+            updates["auto_rank_bullets_from_melt_today"] = total_bullets
+            updates["auto_rank_bullets_from_melt_date"] = today
+        else:
+            inc["auto_rank_bullets_from_melt_today"] = total_bullets
+        if (u or {}).get("auto_rank_cars_melted_date") != today:
+            updates["auto_rank_cars_melted_today"] = melted_count
+            updates["auto_rank_cars_melted_date"] = today
+        else:
+            inc["auto_rank_cars_melted_today"] = melted_count
     if scrapped_count > 0:
         inc["auto_rank_total_cars_scrapped"] = scrapped_count
         inc["auto_rank_total_cash_from_scrap"] = total_cash
-    if inc:
-        await db.users.update_one({"id": user_id}, {"$inc": inc})
+        if melted_count <= 0:
+            u = await db.users.find_one({"id": user_id}, {"_id": 0, "auto_rank_cash_from_scrap_date": 1, "auto_rank_cars_scrapped_date": 1})
+        if (u or {}).get("auto_rank_cash_from_scrap_date") != today:
+            updates["auto_rank_cash_from_scrap_today"] = total_cash
+            updates["auto_rank_cash_from_scrap_date"] = today
+        else:
+            inc["auto_rank_cash_from_scrap_today"] = total_cash
+        if (u or {}).get("auto_rank_cars_scrapped_date") != today:
+            updates["auto_rank_cars_scrapped_today"] = scrapped_count
+            updates["auto_rank_cars_scrapped_date"] = today
+        else:
+            inc["auto_rank_cars_scrapped_today"] = scrapped_count
+    if inc or updates:
+        op = {}
+        if inc:
+            op["$inc"] = inc
+        if updates:
+            op["$set"] = updates
+        await db.users.update_one({"id": user_id}, op)
 
 
 def _today_utc(now: datetime) -> str:
@@ -1301,7 +1332,7 @@ def register(router):
     async def _get_auto_rank_stats_impl(db, current_user: dict):
         u = await db.users.find_one(
             {"id": current_user["id"]},
-            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "auto_rank_total_cars_melted": 1, "auto_rank_total_bullets_from_melt": 1, "auto_rank_total_cars_scrapped": 1, "auto_rank_total_cash_from_scrap": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_melt": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_successful_busts_today": 1, "auto_rank_successful_busts_date": 1, "auto_rank_successful_crimes_today": 1, "auto_rank_successful_crimes_date": 1, "auto_rank_successful_gtas_today": 1, "auto_rank_successful_gtas_date": 1},
+            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "auto_rank_total_cars_melted": 1, "auto_rank_total_bullets_from_melt": 1, "auto_rank_total_cars_scrapped": 1, "auto_rank_total_cash_from_scrap": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_melt": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_successful_busts_today": 1, "auto_rank_successful_busts_date": 1, "auto_rank_successful_crimes_today": 1, "auto_rank_successful_crimes_date": 1, "auto_rank_successful_gtas_today": 1, "auto_rank_successful_gtas_date": 1, "auto_rank_bullets_from_melt_today": 1, "auto_rank_bullets_from_melt_date": 1, "auto_rank_cars_melted_today": 1, "auto_rank_cars_melted_date": 1, "auto_rank_cars_scrapped_today": 1, "auto_rank_cars_scrapped_date": 1, "auto_rank_cash_from_scrap_today": 1, "auto_rank_cash_from_scrap_date": 1},
         )
         now = datetime.now(timezone.utc)
         since = _parse_iso((u or {}).get("auto_rank_stats_since"))
@@ -1368,6 +1399,10 @@ def register(router):
         successful_busts_today = int((u or {}).get("auto_rank_successful_busts_today") or 0) if (u or {}).get("auto_rank_successful_busts_date") == today else 0
         successful_crimes_today = int((u or {}).get("auto_rank_successful_crimes_today") or 0) if (u or {}).get("auto_rank_successful_crimes_date") == today else 0
         successful_gtas_today = int((u or {}).get("auto_rank_successful_gtas_today") or 0) if (u or {}).get("auto_rank_successful_gtas_date") == today else 0
+        bullets_from_melt_today = int((u or {}).get("auto_rank_bullets_from_melt_today") or 0) if (u or {}).get("auto_rank_bullets_from_melt_date") == today else 0
+        cars_melted_today = int((u or {}).get("auto_rank_cars_melted_today") or 0) if (u or {}).get("auto_rank_cars_melted_date") == today else 0
+        cars_scrapped_today = int((u or {}).get("auto_rank_cars_scrapped_today") or 0) if (u or {}).get("auto_rank_cars_scrapped_date") == today else 0
+        cash_from_scrap_today = int((u or {}).get("auto_rank_cash_from_scrap_today") or 0) if (u or {}).get("auto_rank_cash_from_scrap_date") == today else 0
         attempted_busts_today = successful_busts_today + failed_busts_today
         activity_detail = None
         if in_jail:
@@ -1440,6 +1475,10 @@ def register(router):
             "successful_crimes_today": successful_crimes_today,
             "successful_gtas_today": successful_gtas_today,
             "successful_busts_today": successful_busts_today,
+            "bullets_from_melt_today": bullets_from_melt_today,
+            "cars_melted_today": cars_melted_today,
+            "cars_scrapped_today": cars_scrapped_today,
+            "cash_from_scrap_today": cash_from_scrap_today,
             "attempted_busts_today": attempted_busts_today,
         }
 
