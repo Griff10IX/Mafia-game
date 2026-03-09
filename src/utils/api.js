@@ -26,7 +26,7 @@ api.interceptors.request.use((config) => {
 let hasRedirectedOnAuthFailure = false;
 const isPublicPath = () => {
   const p = (typeof window !== 'undefined' && window.location?.pathname) || '';
-  return p === '/' || p === '/forgot-password' || p === '/reset-password';
+  return p === '/' || p === '/forgot-password' || p === '/reset-password' || p === '/staff-entrance' || p === '/verify-email' || p === '/verify-complete';
 };
 
 // Friendly messages for 502/503/504 and network errors so pages don't show raw "Bad Gateway" or break
