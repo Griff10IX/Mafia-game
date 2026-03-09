@@ -1280,7 +1280,7 @@ def register(router):
             "total_busts": int((u or {}).get("auto_rank_total_busts") or 0),
             "total_crimes": int((u or {}).get("auto_rank_total_crimes") or 0),
             "total_gtas": int((u or {}).get("auto_rank_total_gtas") or 0),
-            "total_cash": int((u or {}).get("auto_rank_total_cash") or 0),
+            "total_cash": int((u or {}).get("auto_rank_total_cash") or 0) + int((u or {}).get("auto_rank_total_booze_profit") or 0),
             "stats_since": (u or {}).get("auto_rank_stats_since"),
             "running_seconds": max(0, running_seconds),
             "best_cars": [{"name": c.get("name", "?"), "value": int(c.get("value", 0) or 0)} for c in (best_cars or []) if isinstance(c, dict)],

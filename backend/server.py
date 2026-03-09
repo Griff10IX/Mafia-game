@@ -720,7 +720,7 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
     loser_rackets = (loser_family or {}).get("rackets") or {}
     loser_treasury = int((loser_family or {}).get("treasury", 0) or 0)
     ev = await get_effective_event()
-    prize_racket_cash = compute_loser_racket_cash(loser_rackets, ev, now=now_dt)
+    prize_racket_cash = compute_loser_racket_cash(loser_rackets, ev, now=now_dt, war_doc=war)
     total_cash_prize = loser_treasury + prize_racket_cash
     if total_cash_prize > 0:
         await db.families.update_one({"id": winner_id}, {"$inc": {"treasury": total_cash_prize}})
@@ -763,6 +763,36 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
     if prize_count:
         msg += f" You also took {prize_count} exclusive car(s)."
     await send_notification_to_family(winner_id, "🏆 War Won", msg, "reward")
+
+
+async def _family_war_duration_seconds(family_id: str, from_dt: datetime, to_dt: datetime) -> float:
+    """Total seconds this family was in an active/truce_offered war between from_dt and to_dt."""
+    if not family_id or from_dt >= to_dt:
+        return 0.0
+    wars = await db.family_wars.find(
+        {"$or": [{"family_a_id": family_id}, {"family_b_id": family_id}],
+         "status": {"$in": ["active", "truce_offered"]}},
+        {"_id": 0, "created_at": 1, "ended_at": 1},
+    ).to_list(20)
+    total = 0.0
+    for w in wars:
+        try:
+            start = datetime.fromisoformat(str(w.get("created_at") or "").replace("Z", "+00:00"))
+        except Exception:
+            continue
+        end_raw = w.get("ended_at")
+        if end_raw:
+            try:
+                end = datetime.fromisoformat(str(end_raw).replace("Z", "+00:00"))
+            except Exception:
+                end = to_dt
+        else:
+            end = to_dt
+        overlap_start = max(from_dt, start)
+        overlap_end = min(to_dt, end)
+        if overlap_start < overlap_end:
+            total += (overlap_end - overlap_start).total_seconds()
+    return total
 
 
 async def _family_in_active_war(family_id: str) -> bool:

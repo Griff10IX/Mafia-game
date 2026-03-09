@@ -1009,7 +1009,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                     await send_notification(uid, "Witness statement", witness_msg, "attack", category="attacks")
         killer_family_id = await resolve_family_id(killer_id) or current_user.get("family_id")
         killer_family_id = str(killer_family_id).strip() if killer_family_id else None
-        victim_family_id = target.get("family_id")
+        victim_family_id = await resolve_family_id(victim_id) or target.get("family_id")
+        victim_family_id = str(victim_family_id).strip() if victim_family_id else None
         # Bodyguard war start is done earlier in the bodyguard loop (before recording) so the triggering kill is counted
         if victim_family_id:
             try:

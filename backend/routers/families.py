@@ -35,6 +35,7 @@ from server import (
     _get_active_war_between,
     _get_active_war_for_family,
     _family_in_active_war,
+    _family_war_duration_seconds,
     _family_war_start,
     _record_war_stats_bodyguard_kill,  # kept for potential direct use
 )
@@ -170,8 +171,8 @@ WAR_WIN_RACKET_INCOME_BONUS_PERCENT = 2.5
 RACKET_INCOME_BONUS_CAP_PERCENT = 25.0
 
 
-def _racket_available_income(racket_id: str, level: int, last_collected_at: Optional[str], ev: dict, now=None):
-    """Income that would be collected now if the racket is off cooldown; 0 if on cooldown."""
+def _racket_available_income(racket_id: str, level: int, last_collected_at: Optional[str], ev: dict, now=None, war_duration_seconds: float = 0):
+    """Income that would be collected now if the racket is off cooldown; 0 if on cooldown. war_duration_seconds extends the cooldown (rackets don't produce during war)."""
     if level <= 0:
         return 0
     income, cooldown_h = _racket_income_and_cooldown(racket_id, level, ev)
@@ -183,21 +184,47 @@ def _racket_available_income(racket_id: str, level: int, last_collected_at: Opti
         last_dt = datetime.fromisoformat(str(last_collected_at).replace("Z", "+00:00"))
         if now is None:
             now = datetime.now(timezone.utc)
-        if (last_dt + timedelta(hours=cooldown_h)) <= now:
+        effective_cooldown_end = last_dt + timedelta(hours=cooldown_h) + timedelta(seconds=war_duration_seconds)
+        if effective_cooldown_end <= now:
             return income
     except Exception:
         return income
     return 0
 
 
-def compute_loser_racket_cash(rackets: dict, ev: dict, now=None):
-    """Sum of uncollected (available) income from all rackets. Used when awarding war winner."""
+def compute_loser_racket_cash(rackets: dict, ev: dict, now=None, war_doc: Optional[dict] = None):
+    """Sum of uncollected (available) income from all rackets. Used when awarding war winner. If war_doc provided, exclude war period (rackets don't produce during war)."""
+    if now is None:
+        now = datetime.now(timezone.utc)
+    if war_doc:
+        try:
+            war_start = datetime.fromisoformat(str(war_doc.get("created_at") or "").replace("Z", "+00:00"))
+        except Exception:
+            war_start = None
+        war_end_raw = war_doc.get("ended_at")
+        war_end = now
+        if war_end_raw:
+            try:
+                war_end = datetime.fromisoformat(str(war_end_raw).replace("Z", "+00:00"))
+            except Exception:
+                pass
     total = 0
     for racket_id, state in (rackets or {}).items():
         level = state.get("level", 0)
         if level <= 0:
             continue
-        total += _racket_available_income(racket_id, level, state.get("last_collected_at"), ev, now=now)
+        last_at = state.get("last_collected_at")
+        racket_war_sec = 0.0
+        if war_doc and war_start and last_at:
+            try:
+                last_dt = datetime.fromisoformat(str(last_at).replace("Z", "+00:00"))
+                overlap_start = max(last_dt, war_start)
+                overlap_end = min(now, war_end)
+                if overlap_start < overlap_end:
+                    racket_war_sec = (overlap_end - overlap_start).total_seconds()
+            except Exception:
+                pass
+        total += _racket_available_income(racket_id, level, last_at, ev, now=now, war_duration_seconds=racket_war_sec)
     return total
 
 
@@ -525,7 +552,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             if last_at and level > 0 and cooldown_h > 0:
                 try:
                     last_dt = datetime.fromisoformat(str(last_at).replace("Z", "+00:00"))
-                    next_dt = last_dt + timedelta(hours=cooldown_h)
+                    war_sec = await _family_war_duration_seconds(family_id, last_dt, now)
+                    next_dt = last_dt + timedelta(hours=cooldown_h) + timedelta(seconds=war_sec)
                     next_collect_at = next_dt.isoformat() if next_dt > now else None
                 except Exception:
                     next_collect_at = None
@@ -1031,7 +1059,9 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     if last_at:
         try:
             last_dt = datetime.fromisoformat(last_at.replace("Z", "+00:00"))
-            if (last_dt + timedelta(hours=cooldown_h)) > now:
+            war_sec = await _family_war_duration_seconds(family_id, last_dt, now)
+            effective_cooldown_end = last_dt + timedelta(hours=cooldown_h) + timedelta(seconds=war_sec)
+            if effective_cooldown_end > now:
                 raise HTTPException(status_code=400, detail="Racket on cooldown")
         except HTTPException:
             raise
