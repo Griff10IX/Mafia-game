@@ -256,9 +256,13 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
 };
 
 // Topic row for desktop with hover preview. canStickyImportant = admin/mod (sticky, important, lock). canLock = admin/mod/hdo (lock only for HDO).
-const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updating }) => {
+const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updating, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId }) => {
   const [showPreview, setShowPreview] = useState(false);
   const showFlagControls = canStickyImportant || canLock;
+  const isMyTopic = meUsername && topic.author_username === meUsername;
+  const showDesignerSubmit = designerCompId && isMyTopic;
+  const alreadySubmitted = showDesignerSubmit && (myEntryTopicIds || []).includes(topic.id);
+  const isSubmitting = submittingTopicId === topic.id;
 
   return (
     <div 
@@ -267,14 +271,32 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
       onMouseLeave={() => setShowPreview(false)}
     >
       <div className="grid grid-cols-12 gap-2 px-3 py-2 f-row transition-colors items-center text-xs">
-        <Link to={`/forum/topic/${topic.id}`} className={`flex items-center gap-1.5 min-w-0 ${showFlagControls ? 'col-span-6' : 'col-span-7'}`}>
-          {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
-          {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
-          <span className={`truncate font-heading ${topic.is_important || topic.is_sticky ? 'text-amber-400' : 'text-foreground'}`}>
-            {topic.is_important ? 'IMPORTANT: ' : ''}{topic.is_sticky && !topic.is_important ? 'STICKY: ' : ''}{topic.title}
-          </span>
-          {topic.is_locked && <Lock size={10} className="text-mutedForeground shrink-0" />}
-        </Link>
+        <div className={`flex items-center gap-1.5 min-w-0 ${showFlagControls ? 'col-span-6' : 'col-span-7'}`}>
+          <Link to={`/forum/topic/${topic.id}`} className="flex items-center gap-1.5 min-w-0 flex-1 truncate">
+            {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
+            {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
+            <span className={`truncate font-heading ${topic.is_important || topic.is_sticky ? 'text-amber-400' : 'text-foreground'}`}>
+              {topic.is_important ? 'IMPORTANT: ' : ''}{topic.is_sticky && !topic.is_important ? 'STICKY: ' : ''}{topic.title}
+            </span>
+            {topic.is_locked && <Lock size={10} className="text-mutedForeground shrink-0" />}
+          </Link>
+          {showDesignerSubmit && (
+            <span className="shrink-0" onClick={(e) => e.preventDefault()} role="presentation">
+              {alreadySubmitted ? (
+                <span className="text-[10px] text-emerald-400 font-heading font-bold">Submitted</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSubmitToComp(designerCompId, topic.id); }}
+                  disabled={isSubmitting}
+                  className="text-[10px] font-heading font-bold text-primary hover:underline disabled:opacity-50"
+                >
+                  {isSubmitting ? '...' : 'Submit to competition'}
+                </button>
+              )}
+            </span>
+          )}
+        </div>
         <div className="col-span-2 text-right text-mutedForeground truncate">{topic.author_username}</div>
         <div className="col-span-1 text-right text-foreground tabular-nums">{topic.posts}</div>
         <div className="col-span-2 text-right text-mutedForeground tabular-nums">{topic.views}</div>
@@ -315,8 +337,13 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
 };
 
 // Topic card for mobile. canStickyImportant = admin/mod, canLock = admin/mod/hdo.
-const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating }) => {
+const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId }) => {
   const showFlagControls = canStickyImportant || canLock;
+  const isMyTopic = meUsername && topic.author_username === meUsername;
+  const showDesignerSubmit = designerCompId && isMyTopic;
+  const alreadySubmitted = showDesignerSubmit && (myEntryTopicIds || []).includes(topic.id);
+  const isSubmitting = submittingTopicId === topic.id;
+
   return (
   <Link to={`/forum/topic/${topic.id}`} className="sm:hidden block px-3 py-2 f-row transition-colors active:bg-zinc-800/50">
     <div className="flex items-start justify-between gap-2">
@@ -354,6 +381,22 @@ const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating
         {canLock && (
           <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_locked: !topic.is_locked }); }} disabled={updating} className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${topic.is_locked ? 'bg-red-500/20 text-red-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
             <Lock size={10} /> {topic.is_locked ? 'Unlock' : 'Lock'}
+          </button>
+        )}
+      </div>
+    )}
+    {showDesignerSubmit && (
+      <div className="px-3 py-1.5 border-t border-zinc-700/30" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+        {alreadySubmitted ? (
+          <span className="text-[10px] text-emerald-400 font-heading font-bold">Submitted to competition</span>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSubmitToComp(designerCompId, topic.id); }}
+            disabled={isSubmitting}
+            className="px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold rounded hover:bg-primary/30 disabled:opacity-50"
+          >
+            {isSubmitting ? '...' : 'Submit to competition'}
           </button>
         )}
       </div>
@@ -409,8 +452,9 @@ export default function Forum() {
   const [designerCompSubmitting, setDesignerCompSubmitting] = useState(false);
   const [designerCompEndingId, setDesignerCompEndingId] = useState(null);
   const [designerCompStartingId, setDesignerCompStartingId] = useState(null);
-  const [designerSubmitTopicId, setDesignerSubmitTopicId] = useState('');
+  const [myEntryTopicIds, setMyEntryTopicIds] = useState([]);
   const [designerSubmittingEntry, setDesignerSubmittingEntry] = useState(false);
+  const [designerSubmittingTopicId, setDesignerSubmittingTopicId] = useState(null);
 
   const fetchTopics = useCallback(async () => {
     setLoading(true);
@@ -490,9 +534,11 @@ export default function Forum() {
       const res = await api.get('/forum/designer/competitions/active');
       setActiveDesignerComp(res.data?.competition ?? null);
       setMyVoteEntryId(res.data?.my_vote_entry_id ?? null);
+      setMyEntryTopicIds(res.data?.my_entry_topic_ids ?? []);
     } catch {
       setActiveDesignerComp(null);
       setMyVoteEntryId(null);
+      setMyEntryTopicIds([]);
     }
   }, []);
 
@@ -684,17 +730,19 @@ export default function Forum() {
   };
 
   const handleSubmitDesignerEntry = async (compId, topicId) => {
-    if (!topicId.trim()) return;
+    if (!topicId) return;
+    setDesignerSubmittingTopicId(topicId);
     setDesignerSubmittingEntry(true);
     try {
-      await api.post(`/forum/designer/competitions/${compId}/entries`, { topic_id: topicId.trim() });
+      await api.post(`/forum/designer/competitions/${compId}/entries`, { topic_id: topicId });
       toast.success('Entry submitted');
-      setDesignerSubmitTopicId('');
+      setMyEntryTopicIds((prev) => (prev.includes(topicId) ? prev : [...prev, topicId]));
       fetchDesignerEntries(compId);
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed');
     } finally {
       setDesignerSubmittingEntry(false);
+      setDesignerSubmittingTopicId(null);
     }
   };
 
@@ -776,24 +824,7 @@ export default function Forum() {
                   Winner: ${(activeDesignerComp.reward_money || 0).toLocaleString()} + {(activeDesignerComp.reward_points || 0).toLocaleString()} pts
                   {activeDesignerComp.reward_bullets ? ` + ${activeDesignerComp.reward_bullets} bullets` : ''}
                 </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Your topic ID (from topic URL)"
-                    value={designerSubmitTopicId}
-                    onChange={(e) => setDesignerSubmitTopicId(e.target.value)}
-                    className="flex-1 min-w-[120px] px-2 py-1 rounded border border-primary/30 bg-zinc-800/50 text-foreground text-[10px]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleSubmitDesignerEntry(activeDesignerComp.id, designerSubmitTopicId)}
-                    disabled={designerSubmittingEntry || !designerSubmitTopicId.trim()}
-                    className="px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase rounded hover:bg-primary/30 disabled:opacity-50"
-                  >
-                    {designerSubmittingEntry ? '...' : 'Submit entry'}
-                  </button>
-                </div>
-                <p className="text-[9px] text-mutedForeground">Create a Designer topic with your picture above, then paste its ID here (from the topic URL) to enter.</p>
+                <p className="text-[10px] text-mutedForeground">Post your picture in a topic above, then click &quot;Submit to competition&quot; on your topic in the list below.</p>
                 <button
                   type="button"
                   onClick={() => fetchDesignerEntries(activeDesignerComp.id)}
@@ -1106,8 +1137,8 @@ export default function Forum() {
               <>
                 {pinnedTopics.map((t) => (
                   <div key={t.id}>
-                    <TopicRowDesktop topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
-                    <TopicRowMobile topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
+                    <TopicRowDesktop topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={activeTab === 'designer' ? activeDesignerComp?.id : null} myEntryTopicIds={myEntryTopicIds} meUsername={user?.username} onSubmitToComp={handleSubmitDesignerEntry} submittingTopicId={designerSubmittingTopicId} />
+                    <TopicRowMobile topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={activeTab === 'designer' ? activeDesignerComp?.id : null} myEntryTopicIds={myEntryTopicIds} meUsername={user?.username} onSubmitToComp={handleSubmitDesignerEntry} submittingTopicId={designerSubmittingTopicId} />
                   </div>
                 ))}
                 {regularTopics.length > 0 && (
@@ -1119,8 +1150,8 @@ export default function Forum() {
             {/* Regular topics */}
             {regularTopics.map((t) => (
               <div key={t.id}>
-                <TopicRowDesktop topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
-                <TopicRowMobile topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
+                <TopicRowDesktop topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={activeTab === 'designer' ? activeDesignerComp?.id : null} myEntryTopicIds={myEntryTopicIds} meUsername={user?.username} onSubmitToComp={handleSubmitDesignerEntry} submittingTopicId={designerSubmittingTopicId} />
+                <TopicRowMobile topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={activeTab === 'designer' ? activeDesignerComp?.id : null} myEntryTopicIds={myEntryTopicIds} meUsername={user?.username} onSubmitToComp={handleSubmitDesignerEntry} submittingTopicId={designerSubmittingTopicId} />
               </div>
             ))}
           </div>

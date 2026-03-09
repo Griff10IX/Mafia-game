@@ -78,6 +78,9 @@ export default function ForumTopic() {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [replyToComment, setReplyToComment] = useState(null); // { id, author_username }
   const commentTextareaRef = useRef(null);
+  const [activeDesignerComp, setActiveDesignerComp] = useState(null);
+  const [myEntryTopicIds, setMyEntryTopicIds] = useState([]);
+  const [designerSubmitLoading, setDesignerSubmitLoading] = useState(false);
 
   const fetchTopic = useCallback(async () => {
     if (!topicId) return;
@@ -107,6 +110,18 @@ export default function ForumTopic() {
     }).catch(() => { setIsAdmin(false); setIsModerator(false); setIsHdo(false); });
   }, []);
   useEffect(() => { api.get('/auth/me').then((r) => setUser(r.data)).catch(() => setUser(null)); }, []);
+
+  useEffect(() => {
+    if (topic?.category === 'designer' && user) {
+      api.get('/forum/designer/competitions/active').then((r) => {
+        setActiveDesignerComp(r.data?.competition ?? null);
+        setMyEntryTopicIds(r.data?.my_entry_topic_ids ?? []);
+      }).catch(() => { setActiveDesignerComp(null); setMyEntryTopicIds([]); });
+    } else {
+      setActiveDesignerComp(null);
+      setMyEntryTopicIds([]);
+    }
+  }, [topic?.category, user]);
 
   const isAuthor = topic && user && topic.author_id === user.id;
 
@@ -163,6 +178,20 @@ export default function ForumTopic() {
       toast.error(err.response?.data?.detail || 'Failed');
     } finally {
       setAdminBusy(false);
+    }
+  };
+
+  const submitToDesignerComp = async () => {
+    if (!activeDesignerComp?.id || !topicId) return;
+    setDesignerSubmitLoading(true);
+    try {
+      await api.post(`/forum/designer/competitions/${activeDesignerComp.id}/entries`, { topic_id: topicId });
+      toast.success('Entry submitted');
+      setMyEntryTopicIds((prev) => (prev.includes(topicId) ? prev : [...prev, topicId]));
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally {
+      setDesignerSubmitLoading(false);
     }
   };
 
@@ -519,6 +548,32 @@ export default function ForumTopic() {
               >
                 {crewOCApplyLoading ? '...' : topic.crew_oc_join_fee > 0 ? `Apply — pay $${(topic.crew_oc_join_fee || 0).toLocaleString()}` : 'Apply (free)'}
               </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Designer: Submit this topic to the active competition */}
+      {topic.category === 'designer' && isAuthor && activeDesignerComp && (
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎨 Designer competition</span>
+          </div>
+          <div className="p-3">
+            {myEntryTopicIds.includes(topicId) ? (
+              <p className="text-xs text-emerald-400 font-heading font-bold">This topic is submitted to the competition.</p>
+            ) : (
+              <>
+                <p className="text-xs text-mutedForeground mb-2">Submit this topic as your entry. Voters get 100 points; winner gets the pot.</p>
+                <button
+                  type="button"
+                  onClick={submitToDesignerComp}
+                  disabled={designerSubmitLoading}
+                  className="px-4 py-2 bg-primary/20 text-primary text-xs font-heading font-bold uppercase rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                >
+                  {designerSubmitLoading ? '...' : 'Submit to competition'}
+                </button>
+              </>
             )}
           </div>
         </div>

@@ -226,9 +226,15 @@ async def get_active_competition(current_user: dict = Depends(get_current_user))
         {"competition_id": comp["id"], "user_id": current_user["id"]},
         {"_id": 0, "entry_id": 1},
     )
+    my_entries = await db.designer_competition_entries.find(
+        {"competition_id": comp["id"], "user_id": current_user["id"]},
+        {"_id": 0, "topic_id": 1},
+    ).to_list(20)
+    my_entry_topic_ids = [e["topic_id"] for e in my_entries]
     return {
         "competition": _strip_mongo(comp),
         "my_vote_entry_id": my_vote.get("entry_id") if my_vote else None,
+        "my_entry_topic_ids": my_entry_topic_ids,
     }
 
 
