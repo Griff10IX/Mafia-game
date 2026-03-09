@@ -9,7 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import {
   THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS,
   THEME_BUTTON_STYLES, THEME_BUTTON_SHAPES, THEME_DIVIDER_STYLES,
-  THEME_SIDEBAR_SPACING, THEME_SIDEBAR_LAYOUT, THEME_WRITING_COLOURS, THEME_TEXT_STYLES,
+  THEME_SIDEBAR_SPACING, THEME_SIDEBAR_LAYOUT, THEME_TOAST_POSITION, THEME_WRITING_COLOURS, THEME_TEXT_STYLES,
   THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS,
   DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID,
   DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID,
@@ -237,6 +237,8 @@ export default function ThemePicker({ open, onClose }) {
     dividerStyle: 'sidebar_divider_style',
     sidebarSpacing: 'sidebar_spacing',
     sidebarLayout: 'sidebar_layout',
+    toastPosition: 'toast_position',
+    toastCloseButton: 'toast_close_button',
   };
   const CHIP_MIN = 20, CHIP_MAX = 100;
   const ls = (k, fb = '') => (typeof window !== 'undefined' && localStorage.getItem(k)) || fb;
@@ -249,6 +251,9 @@ export default function ThemePicker({ open, onClose }) {
   const bottomNavShowDividers = ls(KEYS.bottomDividers) === 'true';
   const sidebarDividerStyle = ls(KEYS.dividerStyle, 'solid');
   const sidebarSpacing = ls(KEYS.sidebarSpacing, 'normal');
+  const sidebarLayout = ls(KEYS.sidebarLayout, 'default');
+  const toastPosition = ls(KEYS.toastPosition, 'bottom-center');
+  const toastCloseButton = ls(KEYS.toastCloseButton) !== 'false';
 
   const loadChip = (k) => {
     if (typeof window === 'undefined') return 50;
@@ -268,6 +273,8 @@ export default function ThemePicker({ open, onClose }) {
   const setDividerStyle = v => lsSet(KEYS.dividerStyle,v,'sidebar-layout-changed');
   const setSidebarSpacing = v => lsSet(KEYS.sidebarSpacing,v,'sidebar-layout-changed');
   const setSidebarLayout = v => lsSet(KEYS.sidebarLayout,v,'sidebar-layout-changed');
+  const setToastPosition = v => lsSet(KEYS.toastPosition,v,'toast-prefs-changed');
+  const setToastCloseButton = v => lsSet(KEYS.toastCloseButton,v?'true':'false','toast-prefs-changed');
   const setBottomDividers = v => lsSet(KEYS.bottomDividers,v?'true':'false','bottom-nav-dividers-changed');
 
   /* ── data ── */
@@ -811,6 +818,21 @@ export default function ThemePicker({ open, onClose }) {
                 <Pills
                   options={THEME_SIDEBAR_LAYOUT.map(s => ({ id: s.id, label: s.name }))}
                   value={sidebarLayout} onChange={setSidebarLayout}
+                />
+              </TabSection>
+
+              <TabSection title="Toast position" sub="Where notifications appear. Custom: drag the grip icon to reposition.">
+                <Pills
+                  options={THEME_TOAST_POSITION.map(s => ({ id: s.id, label: s.name }))}
+                  value={toastPosition} onChange={setToastPosition}
+                />
+              </TabSection>
+
+              <TabSection title="Toast close button" sub="Show X to dismiss each toast">
+                <Pills
+                  options={[{ id: 'on', label: 'On' }, { id: 'off', label: 'Off' }]}
+                  value={toastCloseButton ? 'on' : 'off'}
+                  onChange={v => setToastCloseButton(v === 'on')}
                 />
               </TabSection>
             </div>

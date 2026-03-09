@@ -1,6 +1,6 @@
 import { useState, useEffect, Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Toaster } from "./components/ui/sonner";
+import { ThemedToaster } from "./components/ThemedToaster";
 import Landing from "./pages/Landing";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -897,7 +897,7 @@ function App() {
         </Suspense>
         </ThemeProvider>
       </BrowserRouter>
-      <Toaster position="bottom-center" offset="max(16px, env(safe-area-inset-bottom, 16px))" />
+      <ThemedToaster />
     </div>
   );
 }
