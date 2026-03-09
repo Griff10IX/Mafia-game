@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2 } from 'lucide-react';
+import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 
@@ -222,7 +222,7 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
       
       <div className="py-1.5 px-0">
         <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">
-          <strong className="text-zinc-300">Cycle:</strong> busts → crimes → GTA. OC runs on its own timer.
+          <strong className="text-zinc-300">Cycle:</strong> busts → crimes → GTA → melt. OC runs on its own timer.
         </p>
       </div>
       
@@ -263,6 +263,15 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
       />
       
       <ToggleRow
+        icon={Flame}
+        label="Run melt"
+        description="Melt/scrap cars for bullets or cash per cycle"
+        checked={p.auto_rank_enabled ? p.auto_rank_melt : false}
+        disabled={savingPrefs || !p.auto_rank_enabled || p.auto_rank_bust_every_5_sec}
+        onToggle={() => onUpdatePref('auto_rank_melt', !p.auto_rank_melt)}
+      />
+
+      <ToggleRow
         icon={Wine}
         label="Run booze running"
         description="Buy, travel, sell on round-trip route"
@@ -295,29 +304,39 @@ const OptionCheckbox = ({ id, label, sub, checked, disabled, onChange }) => (
 const CrimesGtaSettingsCard = ({
   crimes,
   gtaOptions,
+  meltOptions,
   selectedCrimeIds,
   selectedGtaIds,
+  selectedMeltActionIds,
+  selectedMeltRarityIds,
   onToggleCrime,
   onToggleGta,
+  onToggleMeltAction,
+  onToggleMeltRarity,
   onSelectAllCrimes,
   onDeselectAllCrimes,
   onSelectAllGta,
   onDeselectAllGta,
+  onSelectAllMeltActions,
+  onDeselectAllMeltActions,
+  onSelectAllMeltRarities,
+  onDeselectAllMeltRarities,
   onSaveSettings,
   savingSettings,
   crimesDisabled,
   gtaDisabled,
+  meltDisabled,
 }) => (
   <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.2s' }}>
     <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
       <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
         <Settings2 size={14} className="sm:w-4 sm:h-4" />
-        Crimes & GTA options
+        Crimes, GTA & Melt options
       </h2>
     </div>
     <div className="p-2.5 sm:p-3 space-y-4">
       <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">
-        Choose which crimes and GTA options to run. Empty = all. Save to apply.
+        Choose which crimes and GTA options to run. Melt: select bullets and/or cash; rarities empty = all. Save to apply.
       </p>
 
       <div>
@@ -374,6 +393,58 @@ const CrimesGtaSettingsCard = ({
         </div>
       </div>
 
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="text-[10px] sm:text-xs font-heading font-bold text-zinc-300 flex items-center gap-1.5">
+            <Flame size={12} className="text-primary" />
+            Melt actions
+          </span>
+          <div className="flex gap-1">
+            <button type="button" onClick={onSelectAllMeltActions} disabled={meltDisabled} className="text-[9px] font-heading font-bold text-primary hover:underline disabled:opacity-50">All</button>
+            <span className="text-zinc-600">|</span>
+            <button type="button" onClick={onDeselectAllMeltActions} disabled={meltDisabled} className="text-[9px] font-heading font-bold text-zinc-400 hover:underline disabled:opacity-50">None</button>
+          </div>
+        </div>
+        <div className="max-h-24 overflow-y-auto rounded bg-zinc-800/40 border border-zinc-700/30 divide-y divide-zinc-700/30">
+          {((meltOptions?.actions) || []).map((a) => (
+            <OptionCheckbox
+              key={a.id}
+              id={a.id}
+              label={a.name}
+              checked={selectedMeltActionIds.includes(a.id)}
+              disabled={meltDisabled}
+              onChange={onToggleMeltAction}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="text-[10px] sm:text-xs font-heading font-bold text-zinc-300 flex items-center gap-1.5">
+            Melt rarities
+          </span>
+          <div className="flex gap-1">
+            <button type="button" onClick={onSelectAllMeltRarities} disabled={meltDisabled} className="text-[9px] font-heading font-bold text-primary hover:underline disabled:opacity-50">All</button>
+            <span className="text-zinc-600">|</span>
+            <button type="button" onClick={onDeselectAllMeltRarities} disabled={meltDisabled} className="text-[9px] font-heading font-bold text-zinc-400 hover:underline disabled:opacity-50">None</button>
+          </div>
+        </div>
+        <p className="text-[9px] text-zinc-500 font-heading mb-1">Empty = melt all rarities</p>
+        <div className="max-h-32 overflow-y-auto rounded bg-zinc-800/40 border border-zinc-700/30 divide-y divide-zinc-700/30">
+          {((meltOptions?.rarities) || []).map((r) => (
+            <OptionCheckbox
+              key={r.id}
+              id={r.id}
+              label={r.name}
+              checked={selectedMeltRarityIds.includes(r.id)}
+              disabled={meltDisabled}
+              onChange={onToggleMeltRarity}
+            />
+          ))}
+        </div>
+      </div>
+
       <button
         type="button"
         onClick={onSaveSettings}
@@ -393,6 +464,7 @@ const LAST_ACTIVITY_LABELS = {
   crimes: 'Committing crimes',
   gta: 'GTA',
   bust: 'Busting from jail',
+  melt: 'Melting cars',
   booze_sell: 'Sold booze',
   booze_travel: 'Travelling (booze)',
 };
@@ -426,13 +498,14 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
   };
   const activeCrimes = enabled && prefs?.auto_rank_crimes && !prefs?.auto_rank_bust_every_5_sec;
   const activeGta = enabled && prefs?.auto_rank_gta && !prefs?.auto_rank_bust_every_5_sec;
+  const activeMelt = enabled && prefs?.auto_rank_melt && !prefs?.auto_rank_bust_every_5_sec;
   const activeBust5 = enabled && prefs?.auto_rank_bust_every_5_sec;
   const activeOc = enabled && prefs?.auto_rank_oc;
   const activeBooze = enabled && prefs?.auto_rank_booze;
   // "Next up" = only Cycle, OC, Booze (when the server actually runs). Don't use Crimes/GTA cooldowns —
   // those are per-action; the cycle runs on next_run_at, so "Next up" must match "Next cycle" countdown.
   const items = [];
-  if (!stats?.in_jail && liveCountdown?.nextCycleSeconds != null && (activeCrimes || activeGta)) items.push({ label: 'Cycle', sec: liveCountdown.nextCycleSeconds });
+  if (!stats?.in_jail && liveCountdown?.nextCycleSeconds != null && (activeCrimes || activeGta || activeMelt)) items.push({ label: 'Cycle', sec: liveCountdown.nextCycleSeconds });
   if (activeOc && liveCountdown?.nextOcSeconds != null) items.push({ label: 'OC', sec: liveCountdown.nextOcSeconds });
   if (activeBooze && liveCountdown?.nextBoozeSeconds != null) items.push({ label: 'Booze', sec: liveCountdown.nextBoozeSeconds });
   const nextUp = items.filter((x) => x.sec !== null && x.sec >= 0).sort((a, b) => a.sec - b.sec)[0];
@@ -468,10 +541,11 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
               <span className="text-[9px] sm:text-[10px] font-heading text-zinc-500 uppercase tracking-wider">Active:</span>
               {activeCrimes && <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[9px] font-heading text-zinc-300">Crimes</span>}
               {activeGta && <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[9px] font-heading text-zinc-300">GTA</span>}
+              {activeMelt && <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[9px] font-heading text-zinc-300">Melt</span>}
               {activeBust5 && <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[9px] font-heading text-zinc-300">Bust 5s</span>}
               {activeOc && <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[9px] font-heading text-zinc-300">OC</span>}
               {activeBooze && <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[9px] font-heading text-zinc-300">Booze</span>}
-              {!activeCrimes && !activeGta && !activeBust5 && !activeOc && !activeBooze && (
+              {!activeCrimes && !activeGta && !activeMelt && !activeBust5 && !activeOc && !activeBooze && (
                 <span className="text-zinc-500 text-[9px] font-heading">None (turn on toggles below)</span>
               )}
             </div>
@@ -900,15 +974,23 @@ export default function AutoRank() {
     auto_rank_bust_every_5_sec: false,
     auto_rank_oc: false,
     auto_rank_booze: false,
+    auto_rank_melt: false,
     auto_rank_purchased: false,
     telegram_chat_id_set: false,
     auto_rank_crime_ids: [],
     auto_rank_gta_option_ids: [],
+    auto_rank_melt_action_ids: [],
+    auto_rank_melt_rarity_ids: [],
   });
   const [savingPrefs, setSavingPrefs] = useState(false);
-  const [settingsData, setSettingsData] = useState({ crimes: [], gta_options: [], auto_rank_crime_ids: [], auto_rank_gta_option_ids: [] });
+  const [settingsData, setSettingsData] = useState({
+    crimes: [], gta_options: [], melt_options: { actions: [], rarities: [] },
+    auto_rank_crime_ids: [], auto_rank_gta_option_ids: [], auto_rank_melt_action_ids: [], auto_rank_melt_rarity_ids: [],
+  });
   const [selectedCrimeIds, setSelectedCrimeIds] = useState([]);
   const [selectedGtaIds, setSelectedGtaIds] = useState([]);
+  const [selectedMeltActionIds, setSelectedMeltActionIds] = useState([]);
+  const [selectedMeltRarityIds, setSelectedMeltRarityIds] = useState([]);
   const [savingSettings, setSavingSettings] = useState(false);
   const [ocEquipment, setOcEquipment] = useState([]);
   const [selectedOcEquipmentId, setSelectedOcEquipmentId] = useState('basic');
@@ -1101,6 +1183,9 @@ export default function AutoRank() {
             telegram_chat_id_set: !!meRes.data.telegram_chat_id_set,
             auto_rank_crime_ids: meRes.data.auto_rank_crime_ids ?? [],
             auto_rank_gta_option_ids: meRes.data.auto_rank_gta_option_ids ?? [],
+            auto_rank_melt: meRes.data.auto_rank_melt === true,
+            auto_rank_melt_action_ids: meRes.data.auto_rank_melt_action_ids ?? [],
+            auto_rank_melt_rarity_ids: meRes.data.auto_rank_melt_rarity_ids ?? [],
           });
         }
         const hasFeature = meRes?.data?.auto_rank_purchased || meRes?.data?.auto_rank_enabled;
@@ -1109,11 +1194,20 @@ export default function AutoRank() {
             const d = res.data || {};
             const crimes = d.crimes || [];
             const gtaOptions = d.gta_options || [];
+            const meltOptions = d.melt_options || { actions: [], rarities: [] };
             const crimeIds = d.auto_rank_crime_ids ?? [];
             const gtaIds = d.auto_rank_gta_option_ids ?? [];
-            setSettingsData({ crimes, gta_options: gtaOptions, auto_rank_crime_ids: crimeIds, auto_rank_gta_option_ids: gtaIds });
+            const meltActionIds = d.auto_rank_melt_action_ids ?? [];
+            const meltRarityIds = d.auto_rank_melt_rarity_ids ?? [];
+            setSettingsData({
+              crimes, gta_options: gtaOptions, melt_options: meltOptions,
+              auto_rank_crime_ids: crimeIds, auto_rank_gta_option_ids: gtaIds,
+              auto_rank_melt_action_ids: meltActionIds, auto_rank_melt_rarity_ids: meltRarityIds,
+            });
             setSelectedCrimeIds(crimeIds.length === 0 ? (crimes || []).map((c) => c?.id).filter(Boolean) : crimeIds);
             setSelectedGtaIds(gtaIds.length === 0 ? (gtaOptions || []).map((o) => o?.id).filter(Boolean) : gtaIds);
+            setSelectedMeltActionIds(meltActionIds);
+            setSelectedMeltRarityIds(meltRarityIds);
           }).catch(() => {});
         }
         if (statsRes?.data) {
@@ -1183,8 +1277,11 @@ export default function AutoRank() {
         auto_rank_bust_every_5_sec: res.data?.auto_rank_bust_every_5_sec ?? p.auto_rank_bust_every_5_sec,
         auto_rank_oc: res.data?.auto_rank_oc ?? p.auto_rank_oc,
         auto_rank_booze: res.data?.auto_rank_booze ?? p.auto_rank_booze,
+        auto_rank_melt: res.data?.auto_rank_melt ?? p.auto_rank_melt,
         auto_rank_crime_ids: res.data?.auto_rank_crime_ids ?? p.auto_rank_crime_ids,
         auto_rank_gta_option_ids: res.data?.auto_rank_gta_option_ids ?? p.auto_rank_gta_option_ids,
+        auto_rank_melt_action_ids: res.data?.auto_rank_melt_action_ids ?? p.auto_rank_melt_action_ids,
+        auto_rank_melt_rarity_ids: res.data?.auto_rank_melt_rarity_ids ?? p.auto_rank_melt_rarity_ids,
       }));
       toast.success('Saved');
     } catch (e) {
@@ -1200,10 +1297,22 @@ export default function AutoRank() {
   const toggleGtaId = (id) => {
     setSelectedGtaIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   };
+  const toggleMeltActionId = (id) => {
+    setSelectedMeltActionIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+  const toggleMeltRarityId = (id) => {
+    setSelectedMeltRarityIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
   const selectAllCrimes = () => setSelectedCrimeIds((settingsData?.crimes ?? []).map((c) => c?.id).filter(Boolean));
   const deselectAllCrimes = () => setSelectedCrimeIds([]);
   const selectAllGta = () => setSelectedGtaIds((settingsData?.gta_options ?? []).map((o) => o?.id).filter(Boolean));
   const deselectAllGta = () => setSelectedGtaIds([]);
+  const meltActions = settingsData?.melt_options?.actions ?? [];
+  const meltRarities = settingsData?.melt_options?.rarities ?? [];
+  const selectAllMeltActions = () => setSelectedMeltActionIds(meltActions.map((a) => a?.id).filter(Boolean));
+  const deselectAllMeltActions = () => setSelectedMeltActionIds([]);
+  const selectAllMeltRarities = () => setSelectedMeltRarityIds(meltRarities.map((r) => r?.id).filter(Boolean));
+  const deselectAllMeltRarities = () => setSelectedMeltRarityIds([]);
   const handleSaveSettings = async () => {
     setSavingSettings(true);
     try {
@@ -1211,8 +1320,21 @@ export default function AutoRank() {
       const gtaOptions = settingsData.gta_options || [];
       const crimePayload = selectedCrimeIds.length === crimes.length ? [] : selectedCrimeIds;
       const gtaPayload = selectedGtaIds.length === gtaOptions.length ? [] : selectedGtaIds;
-      const res = await api.patch('/auto-rank/me', { auto_rank_crime_ids: crimePayload, auto_rank_gta_option_ids: gtaPayload });
-      setPrefs((p) => ({ ...p, auto_rank_crime_ids: res.data?.auto_rank_crime_ids ?? [], auto_rank_gta_option_ids: res.data?.auto_rank_gta_option_ids ?? [] }));
+      const meltActionPayload = selectedMeltActionIds;
+      const meltRarityPayload = selectedMeltRarityIds;
+      const res = await api.patch('/auto-rank/me', {
+        auto_rank_crime_ids: crimePayload,
+        auto_rank_gta_option_ids: gtaPayload,
+        auto_rank_melt_action_ids: meltActionPayload,
+        auto_rank_melt_rarity_ids: meltRarityPayload,
+      });
+      setPrefs((p) => ({
+        ...p,
+        auto_rank_crime_ids: res.data?.auto_rank_crime_ids ?? [],
+        auto_rank_gta_option_ids: res.data?.auto_rank_gta_option_ids ?? [],
+        auto_rank_melt_action_ids: res.data?.auto_rank_melt_action_ids ?? [],
+        auto_rank_melt_rarity_ids: res.data?.auto_rank_melt_rarity_ids ?? [],
+      }));
       toast.success('Options saved');
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to save options');
@@ -1406,22 +1528,32 @@ export default function AutoRank() {
         onUpdatePref={updatePref}
       />
       
-      {canEnable && (prefs?.auto_rank_crimes || prefs?.auto_rank_gta) && (
+      {canEnable && (prefs?.auto_rank_crimes || prefs?.auto_rank_gta || prefs?.auto_rank_melt) && (
         <CrimesGtaSettingsCard
           crimes={settingsData?.crimes ?? []}
           gtaOptions={settingsData?.gta_options ?? []}
+          meltOptions={settingsData?.melt_options ?? { actions: [], rarities: [] }}
           selectedCrimeIds={selectedCrimeIds}
           selectedGtaIds={selectedGtaIds}
+          selectedMeltActionIds={selectedMeltActionIds}
+          selectedMeltRarityIds={selectedMeltRarityIds}
           onToggleCrime={toggleCrimeId}
           onToggleGta={toggleGtaId}
+          onToggleMeltAction={toggleMeltActionId}
+          onToggleMeltRarity={toggleMeltRarityId}
           onSelectAllCrimes={selectAllCrimes}
           onDeselectAllCrimes={deselectAllCrimes}
           onSelectAllGta={selectAllGta}
           onDeselectAllGta={deselectAllGta}
+          onSelectAllMeltActions={selectAllMeltActions}
+          onDeselectAllMeltActions={deselectAllMeltActions}
+          onSelectAllMeltRarities={selectAllMeltRarities}
+          onDeselectAllMeltRarities={deselectAllMeltRarities}
           onSaveSettings={handleSaveSettings}
           savingSettings={savingSettings}
           crimesDisabled={savingPrefs || !prefs?.auto_rank_enabled || prefs?.auto_rank_bust_every_5_sec}
           gtaDisabled={savingPrefs || !prefs?.auto_rank_enabled || prefs?.auto_rank_bust_every_5_sec}
+          meltDisabled={savingPrefs || !prefs?.auto_rank_enabled || prefs?.auto_rank_bust_every_5_sec}
         />
       )}
 

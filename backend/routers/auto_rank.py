@@ -470,10 +470,11 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
 
 
 async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id: Optional[str] = None, bot_token: Optional[str] = None, crimes: Optional[list] = None):
-    """Commit all crimes off cooldown, then one GTA (if off cooldown), then booze if enabled. Abides all game timer rules; impls enforce cooldowns. Telegram is optional; if not set, actions still run and no notifications are sent."""
+    """Commit all crimes off cooldown, then one GTA (if off cooldown), then melt (if enabled), then booze if enabled. Abides all game timer rules; impls enforce cooldowns. Telegram is optional; if not set, actions still run and no notifications are sent."""
     import server as srv
     from routers.crimes import _commit_crime_impl
-    from routers.gta import _attempt_gta_impl, GTA_OPTIONS
+    from routers.gta import _attempt_gta_impl, _melt_cars_impl, GTA_OPTIONS
+    CARS = getattr(srv, "CARS", None) or []
     from security import send_telegram_to_chat
 
     db = srv.db
@@ -499,6 +500,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     # When bust-every-5-sec is on, only the separate bust loop runs crimes/GTA are skipped here
     run_crimes = user.get("auto_rank_crimes", True) and not bust_every_5
     run_gta = user.get("auto_rank_gta", True) and not bust_every_5
+    run_melt = user.get("auto_rank_melt", False) and not bust_every_5
 
     # --- Crimes: only those off cooldown (same rules as manual play; _commit_crime_impl also enforces) ---
     if run_crimes:
@@ -612,6 +614,72 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 except Exception as e:
                     logger.exception("Auto rank GTA for %s: %s", user_id, e)
                     await _inc_failed_today(db, user_id, "auto_rank_failed_gtas_today", "auto_rank_failed_gtas_date", now)
+
+    # --- Melt ---
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        return
+    if user.get("in_jail"):
+        return
+    if run_melt:
+        melt_action_ids = user.get("auto_rank_melt_action_ids") or []
+        melt_rarity_ids = user.get("auto_rank_melt_rarity_ids") or []
+        if isinstance(melt_action_ids, list) and len(melt_action_ids) > 0:
+            allowed_rarities = set(melt_rarity_ids) if isinstance(melt_rarity_ids, list) and len(melt_rarity_ids) > 0 else None
+            batch_limit = user.get("garage_batch_limit") or getattr(srv, "DEFAULT_GARAGE_BATCH_LIMIT", 6)
+            cars_cursor = db.user_cars.find({"user_id": user_id})
+            user_cars = await cars_cursor.to_list(1000)
+            eligible = []
+            for uc in user_cars:
+                if uc.get("listed_for_sale"):
+                    continue
+                car_id = uc.get("car_id")
+                car_info = next((c for c in (CARS or []) if c.get("id") == car_id), None)
+                if not car_info:
+                    continue
+                rarity = car_info.get("rarity") or "common"
+                if allowed_rarities is not None and rarity not in allowed_rarities:
+                    continue
+                ucid = uc.get("id") or str(uc.get("_id", ""))
+                value = int(car_info.get("value") or 0)
+                eligible.append({"user_car_id": ucid, "value": value})
+            eligible.sort(key=lambda x: x["value"])
+            car_ids = [e["user_car_id"] for e in eligible[:batch_limit]]
+            for action in melt_action_ids:
+                if action not in ("bullets", "cash"):
+                    continue
+                if not car_ids:
+                    break
+                try:
+                    result = await _melt_cars_impl(user, car_ids, action)
+                    if result.get("cooldown"):
+                        continue  # skip bullets this cycle, still try cash
+                    if result.get("success"):
+                        has_success = True
+                        await _set_last_activity(db, user_id, "melt", now)
+                        if action == "bullets":
+                            lines.append(f"**Melt** — Melted {result.get('melted_count', 0)} car(s) for {result.get('total_bullets', 0)} bullets.")
+                        else:
+                            lines.append(f"**Melt** — Scrapped {result.get('scrapped_count', 0)} car(s) for ${result.get('total_value', 0):,}.")
+                        # Re-fetch eligible cars for next action (previous were deleted)
+                        cars_cursor = db.user_cars.find({"user_id": user_id})
+                        user_cars = await cars_cursor.to_list(1000)
+                        eligible = []
+                        for uc in user_cars:
+                            if uc.get("listed_for_sale"):
+                                continue
+                            car_info = next((c for c in (CARS or []) if c.get("id") == uc.get("car_id")), None)
+                            if not car_info:
+                                continue
+                            rarity = car_info.get("rarity") or "common"
+                            if allowed_rarities is not None and rarity not in allowed_rarities:
+                                continue
+                            ucid = uc.get("id") or str(uc.get("_id", ""))
+                            eligible.append({"user_car_id": ucid, "value": int(car_info.get("value") or 0)})
+                        eligible.sort(key=lambda x: x["value"])
+                        car_ids = [e["user_car_id"] for e in eligible[:batch_limit]]
+                except Exception as e:
+                    logger.exception("Auto rank melt for %s: %s", user_id, e)
 
     # --- Booze ---
     if user.get("auto_rank_booze", False):
@@ -914,8 +982,14 @@ async def run_auto_rank_cron_cycle():
 
 # ─── API routes ───────────────────────────────────────────────────
 
-_PREFERENCE_FIELDS = ["auto_rank_enabled", "auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze"]
-_PREFERENCE_DEFAULTS = {"auto_rank_enabled": False, "auto_rank_crimes": True, "auto_rank_gta": True, "auto_rank_bust_every_5_sec": False, "auto_rank_oc": False, "auto_rank_booze": False}
+_PREFERENCE_FIELDS = ["auto_rank_enabled", "auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze", "auto_rank_melt"]
+_PREFERENCE_DEFAULTS = {"auto_rank_enabled": False, "auto_rank_crimes": True, "auto_rank_gta": True, "auto_rank_bust_every_5_sec": False, "auto_rank_oc": False, "auto_rank_booze": False, "auto_rank_melt": False}
+
+MELT_OPTIONS = [
+    {"id": "bullets", "name": "Melt for Bullets"},
+    {"id": "cash", "name": "Scrap for Cash"},
+]
+MELT_RARITIES = ["common", "uncommon", "rare", "ultra_rare", "legendary", "custom", "exclusive"]
 
 
 def _extract_preferences(user: dict) -> dict:
@@ -1033,7 +1107,7 @@ def register(router):
                     f"Auto Rank — {user.get('username', '?')}",
                     "",
                     "On" if user.get("auto_rank_enabled") else "Off",
-                    f"Crimes: {'on' if user.get('auto_rank_crimes') else 'off'} · GTA: {'on' if user.get('auto_rank_gta') else 'off'}",
+                    f"Crimes: {'on' if user.get('auto_rank_crimes') else 'off'} · GTA: {'on' if user.get('auto_rank_gta') else 'off'} · Melt: {'on' if user.get('auto_rank_melt') else 'off'}",
                     f"Bust 5s: {'on' if user.get('auto_rank_bust_every_5_sec') else 'off'} · OC: {'on' if user.get('auto_rank_oc') else 'off'} · Booze: {'on' if user.get('auto_rank_booze') else 'off'}",
                     "",
                     f"Total: {stats.get('total_crimes', 0)} crimes, {stats.get('total_gtas', 0)} GTAs, {stats.get('total_busts', 0)} busts",
@@ -1049,7 +1123,7 @@ def register(router):
                 parts = text.split()
                 cmd = (parts[0] or "").lstrip("/")
                 target = (parts[1] or "").strip() if len(parts) > 1 else ""
-                key_map = {"all": "auto_rank_enabled", "crimes": "auto_rank_crimes", "gta": "auto_rank_gta", "bust": "auto_rank_bust_every_5_sec", "oc": "auto_rank_oc", "booze": "auto_rank_booze"}
+                key_map = {"all": "auto_rank_enabled", "crimes": "auto_rank_crimes", "gta": "auto_rank_gta", "bust": "auto_rank_bust_every_5_sec", "oc": "auto_rank_oc", "booze": "auto_rank_booze", "melt": "auto_rank_melt"}
                 field = key_map.get(target) if target else None
                 if cmd == "enable" and field:
                     updates = {field: True}
@@ -1068,6 +1142,7 @@ def register(router):
                         updates["auto_rank_bust_every_5_sec"] = False
                         updates["auto_rank_oc"] = False
                         updates["auto_rank_booze"] = False
+                        updates["auto_rank_melt"] = False
                     op = {"$set": updates}
                     if field == "auto_rank_enabled":
                         op["$unset"] = {"auto_rank_stats_since": ""}
@@ -1075,7 +1150,7 @@ def register(router):
                     name = target if target != "all" else "Auto Rank"
                     reply = f"{name} disabled."
                 else:
-                    reply = "Commands: /autorank or /summary — stats. /enable or /disable plus: all, crimes, gta, bust, oc, booze. Example: /disable bust"
+                    reply = "Commands: /autorank or /summary — stats. /enable or /disable plus: all, crimes, gta, bust, oc, booze, melt. Example: /disable bust"
 
             if reply:
                 await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None)
@@ -1126,8 +1201,11 @@ def register(router):
         auto_rank_bust_every_5_sec: Optional[bool] = None
         auto_rank_oc: Optional[bool] = None
         auto_rank_booze: Optional[bool] = None
+        auto_rank_melt: Optional[bool] = None
         auto_rank_crime_ids: Optional[list] = None
         auto_rank_gta_option_ids: Optional[list] = None
+        auto_rank_melt_action_ids: Optional[list] = None
+        auto_rank_melt_rarity_ids: Optional[list] = None
 
     @router.get("/auto-rank/me")
     async def get_my_preferences(current_user: dict = Depends(get_current_user)):
@@ -1139,6 +1217,8 @@ def register(router):
             prefs["telegram_chat_id_set"] = bool(chat_id)
             prefs["auto_rank_crime_ids"] = current_user.get("auto_rank_crime_ids") or []
             prefs["auto_rank_gta_option_ids"] = current_user.get("auto_rank_gta_option_ids") or []
+            prefs["auto_rank_melt_action_ids"] = current_user.get("auto_rank_melt_action_ids") or []
+            prefs["auto_rank_melt_rarity_ids"] = current_user.get("auto_rank_melt_rarity_ids") or []
             logger.debug("Auto rank GET /me ok user_id=%s", user_id)
             return prefs
         except Exception as e:
@@ -1147,16 +1227,19 @@ def register(router):
 
     @router.get("/auto-rank/settings")
     async def get_settings_options(current_user: dict = Depends(get_current_user)):
-        """Return crimes and GTA options for the settings tab, plus current selection."""
+        """Return crimes, GTA options, and melt options for the settings tab, plus current selection."""
         try:
             from routers.gta import GTA_OPTIONS
             crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).sort("min_rank", 1).to_list(50)
             gta_options = [{"id": o.get("id", ""), "name": o.get("name", ""), "min_rank": o.get("min_rank", 0)} for o in (GTA_OPTIONS or [])]
-            u = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1})
+            melt_options = {"actions": MELT_OPTIONS, "rarities": [{"id": r, "name": r.replace("_", " ").title()} for r in MELT_RARITIES]}
+            u = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1, "auto_rank_melt_action_ids": 1, "auto_rank_melt_rarity_ids": 1})
             crime_ids = u.get("auto_rank_crime_ids") if isinstance(u.get("auto_rank_crime_ids"), list) else []
             gta_ids = u.get("auto_rank_gta_option_ids") if isinstance(u.get("auto_rank_gta_option_ids"), list) else []
+            melt_action_ids = u.get("auto_rank_melt_action_ids") if isinstance(u.get("auto_rank_melt_action_ids"), list) else []
+            melt_rarity_ids = u.get("auto_rank_melt_rarity_ids") if isinstance(u.get("auto_rank_melt_rarity_ids"), list) else []
             logger.debug("Auto rank GET /settings ok user_id=%s", current_user.get("id", "?"))
-            return {"crimes": crimes or [], "gta_options": gta_options, "auto_rank_crime_ids": crime_ids, "auto_rank_gta_option_ids": gta_ids}
+            return {"crimes": crimes or [], "gta_options": gta_options, "melt_options": melt_options, "auto_rank_crime_ids": crime_ids, "auto_rank_gta_option_ids": gta_ids, "auto_rank_melt_action_ids": melt_action_ids, "auto_rank_melt_rarity_ids": melt_rarity_ids}
         except Exception as e:
             logger.exception("Auto rank GET /settings failed: %s", e)
             raise
@@ -1174,7 +1257,7 @@ def register(router):
     async def _get_auto_rank_stats_impl(db, current_user: dict):
         u = await db.users.find_one(
             {"id": current_user["id"]},
-            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_successful_busts_today": 1, "auto_rank_successful_busts_date": 1, "auto_rank_successful_crimes_today": 1, "auto_rank_successful_crimes_date": 1, "auto_rank_successful_gtas_today": 1, "auto_rank_successful_gtas_date": 1},
+            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_melt": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_successful_busts_today": 1, "auto_rank_successful_busts_date": 1, "auto_rank_successful_crimes_today": 1, "auto_rank_successful_crimes_date": 1, "auto_rank_successful_gtas_today": 1, "auto_rank_successful_gtas_date": 1},
         )
         now = datetime.now(timezone.utc)
         since = _parse_iso((u or {}).get("auto_rank_stats_since"))
@@ -1257,7 +1340,8 @@ def register(router):
             gta = bool((u or {}).get("auto_rank_gta"))
             oc = bool((u or {}).get("auto_rank_oc"))
             booze = bool((u or {}).get("auto_rank_booze"))
-            if bust_5 and not crimes and not gta and not oc and not booze:
+            melt = bool((u or {}).get("auto_rank_melt"))
+            if bust_5 and not crimes and not gta and not oc and not booze and not melt:
                 activity_detail = "Jail busting every 5s"
             else:
                 parts = []
@@ -1267,6 +1351,8 @@ def register(router):
                     parts.append("crimes")
                 if gta:
                     parts.append("GTA")
+                if melt:
+                    parts.append("melt")
                 if oc:
                     parts.append("OC")
                 if booze:
@@ -1320,9 +1406,9 @@ def register(router):
             updates["auto_rank_enabled"] = body.auto_rank_enabled
             if body.auto_rank_enabled is False:
                 # Disabling Auto Rank also turns off all activity toggles
-                for f in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze"]:
+                for f in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze", "auto_rank_melt"]:
                     updates[f] = False
-        for field in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze"]:
+        for field in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze", "auto_rank_melt"]:
             val = getattr(body, field, None)
             if val is not None:
                 updates[field] = val
@@ -1330,6 +1416,10 @@ def register(router):
             updates["auto_rank_crime_ids"] = [str(x) for x in body.auto_rank_crime_ids] if body.auto_rank_crime_ids else []
         if body.auto_rank_gta_option_ids is not None:
             updates["auto_rank_gta_option_ids"] = [str(x) for x in body.auto_rank_gta_option_ids] if body.auto_rank_gta_option_ids else []
+        if body.auto_rank_melt_action_ids is not None:
+            updates["auto_rank_melt_action_ids"] = [str(x) for x in body.auto_rank_melt_action_ids] if body.auto_rank_melt_action_ids else []
+        if body.auto_rank_melt_rarity_ids is not None:
+            updates["auto_rank_melt_rarity_ids"] = [str(x) for x in body.auto_rank_melt_rarity_ids] if body.auto_rank_melt_rarity_ids else []
         if not updates:
             return {"message": "No changes", **_extract_preferences(current_user)}
         op = {"$set": updates}
@@ -1338,11 +1428,13 @@ def register(router):
         await db.users.update_one({"id": user_id}, op)
         updated = await db.users.find_one(
             {"id": user_id},
-            {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1},
+            {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1, "auto_rank_melt_action_ids": 1, "auto_rank_melt_rarity_ids": 1},
         )
         out = {"message": "Preferences saved", **_extract_preferences(updated)}
         out["auto_rank_crime_ids"] = updated.get("auto_rank_crime_ids") if isinstance(updated.get("auto_rank_crime_ids"), list) else []
         out["auto_rank_gta_option_ids"] = updated.get("auto_rank_gta_option_ids") if isinstance(updated.get("auto_rank_gta_option_ids"), list) else []
+        out["auto_rank_melt_action_ids"] = updated.get("auto_rank_melt_action_ids") if isinstance(updated.get("auto_rank_melt_action_ids"), list) else []
+        out["auto_rank_melt_rarity_ids"] = updated.get("auto_rank_melt_rarity_ids") if isinstance(updated.get("auto_rank_melt_rarity_ids"), list) else []
         return out
 
     @router.get("/auto-rank/interval")

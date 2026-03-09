@@ -623,56 +623,48 @@ def _parse_melt_cooldown(iso_str):
         return None
 
 
-async def melt_cars(
-    request: GTAMeltRequest, current_user: dict = Depends(get_current_user_verified)
-):
-    if not request.car_ids:
-        raise HTTPException(status_code=400, detail="No cars selected")
+async def _melt_cars_impl(user: dict, car_ids: list, action: str):
+    """Core melt logic. Returns dict with success/melted_count/etc. On bullets cooldown returns {success: False, cooldown: True, detail: ...}."""
     now = datetime.now(timezone.utc)
-    family_id = current_user.get("family_id")
+    family_id = user.get("family_id")
     in_war = family_id and await _family_in_active_war(family_id)
 
-    if request.action == "bullets":
-        # Bullets: up to garage_batch_limit cars per request; then 45s cooldown per car melted
+    if action == "bullets":
         user_doc = await db.users.find_one(
-            {"id": current_user["id"]},
+            {"id": user["id"]},
             {"_id": 0, "melt_bullets_cooldown_until": 1},
         )
         cooldown_until = _parse_melt_cooldown((user_doc or {}).get("melt_bullets_cooldown_until"))
         if cooldown_until and now < cooldown_until:
             secs = int((cooldown_until - now).total_seconds())
-            raise HTTPException(
-                status_code=400,
-                detail=f"Melt for bullets on cooldown. Next melt in {secs}s.",
-            )
-        batch_limit = current_user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
-        limit = min(batch_limit, len(request.car_ids))
+            return {"success": False, "cooldown": True, "detail": f"Melt for bullets on cooldown. Next melt in {secs}s."}
+        batch_limit = user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
+        limit = min(batch_limit, len(car_ids))
     else:
-        # Scrap (cash): no cooldown; process up to batch_limit, leave the rest
-        batch_limit = current_user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
-        limit = min(batch_limit, len(request.car_ids))
+        batch_limit = user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
+        limit = min(batch_limit, len(car_ids))
 
     total_value = 0
     total_bullets = 0
     deleted_count = 0
     uncommon_count = 0
     processed = 0
-    for car_id in request.car_ids:
+    for car_id in car_ids:
         if processed >= limit:
             break
         user_car = await db.user_cars.find_one(
-            {"user_id": current_user["id"], "id": car_id}
+            {"user_id": user["id"], "id": car_id}
         )
         if not user_car:
             try:
                 user_car = await db.user_cars.find_one(
-                    {"user_id": current_user["id"], "_id": ObjectId(car_id)}
+                    {"user_id": user["id"], "_id": ObjectId(car_id)}
                 )
             except Exception:
                 user_car = None
         if not user_car:
             user_car = await db.user_cars.find_one(
-                {"user_id": current_user["id"], "car_id": car_id}
+                {"user_id": user["id"], "car_id": car_id}
             )
         if user_car:
             if user_car.get("listed_for_sale"):
@@ -684,7 +676,7 @@ async def melt_cars(
             if car_info:
                 if car_info.get("rarity") == "uncommon":
                     uncommon_count += 1
-                if request.action == "bullets":
+                if action == "bullets":
                     total_bullets += int(car_info["value"] / 10)
                 else:
                     total_value += int(car_info["value"] * 0.5)
@@ -692,12 +684,12 @@ async def melt_cars(
                     await db.user_cars.delete_one({"_id": user_car["_id"]})
                 elif user_car.get("id") is not None:
                     await db.user_cars.delete_one(
-                        {"user_id": current_user["id"], "id": user_car["id"]}
+                        {"user_id": user["id"], "id": user_car["id"]}
                     )
                 else:
                     await db.user_cars.delete_one(
                         {
-                            "user_id": current_user["id"],
+                            "user_id": user["id"],
                             "car_id": model_id,
                             "acquired_at": user_car.get("acquired_at"),
                         }
@@ -705,18 +697,18 @@ async def melt_cars(
                 deleted_count += 1
                 processed += 1
     if deleted_count > 0:
-        if request.action == "bullets":
+        if action == "bullets":
             cooldown_seconds = MELT_BULLETS_COOLDOWN_SECONDS * deleted_count
             cooldown_until = now + timedelta(seconds=cooldown_seconds)
             await db.users.update_one(
-                {"id": current_user["id"]},
+                {"id": user["id"]},
                 {"$inc": {"bullets": total_bullets, "bullets_melted": total_bullets, "cars_melted": deleted_count, "uncommon_cars_scrapped": uncommon_count}, "$set": {"melt_bullets_cooldown_until": cooldown_until.isoformat()}},
             )
             await log_activity(
-                current_user["id"],
-                current_user.get("username") or "?",
+                user["id"],
+                user.get("username") or "?",
                 "garage_melt",
-                {"action": "bullets", "melted_count": deleted_count, "total_bullets": total_bullets, "car_ids": request.car_ids[:limit]},
+                {"action": "bullets", "melted_count": deleted_count, "total_bullets": total_bullets, "car_ids": car_ids[:limit]},
             )
             return {
                 "success": True,
@@ -726,13 +718,13 @@ async def melt_cars(
                 "melt_bullets_cooldown_until": cooldown_until.isoformat(),
             }
         await db.users.update_one(
-            {"id": current_user["id"]}, {"$inc": {"money": total_value, "cars_melted": deleted_count, "uncommon_cars_scrapped": uncommon_count}}
+            {"id": user["id"]}, {"$inc": {"money": total_value, "cars_melted": deleted_count, "uncommon_cars_scrapped": uncommon_count}}
         )
         await log_activity(
-            current_user["id"],
-            current_user.get("username") or "?",
+            user["id"],
+            user.get("username") or "?",
             "garage_scrap",
-            {"action": "cash", "scrapped_count": deleted_count, "total_value": total_value, "car_ids": request.car_ids[:limit]},
+            {"action": "cash", "scrapped_count": deleted_count, "total_value": total_value, "car_ids": car_ids[:limit]},
         )
         return {
             "success": True,
@@ -741,6 +733,17 @@ async def melt_cars(
             "message": f"Scrapped {deleted_count} car(s) for ${total_value:,}",
         }
     return {"success": False, "message": "No cars were processed"}
+
+
+async def melt_cars(
+    request: GTAMeltRequest, current_user: dict = Depends(get_current_user_verified)
+):
+    if not request.car_ids:
+        raise HTTPException(status_code=400, detail="No cars selected")
+    result = await _melt_cars_impl(current_user, request.car_ids, request.action)
+    if result.get("cooldown"):
+        raise HTTPException(status_code=400, detail=result.get("detail", "Melt on cooldown"))
+    return result
 
 
 # Dealer: buy cars for cash (price = value * multiplier). Custom and exclusive are not for sale.
