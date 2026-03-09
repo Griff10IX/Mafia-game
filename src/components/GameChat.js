@@ -30,10 +30,8 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
-  const messagesEndRef = useRef(null);
   const scrollRef = useRef(null);
-  const isAtBottomRef = useRef(true);
-  const shouldScrollToBottomRef = useRef(false);
+  const shouldScrollToTopRef = useRef(false);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -71,21 +69,10 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
   }, [fetchMessages]);
 
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = el;
-      isAtBottomRef.current = scrollHeight - scrollTop - clientHeight <= 60;
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, []);
-
-  useEffect(() => {
     if (!messages.length) return;
-    if (shouldScrollToBottomRef.current || isAtBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      shouldScrollToBottomRef.current = false;
+    if (shouldScrollToTopRef.current) {
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      shouldScrollToTopRef.current = false;
     }
   }, [messages]);
 
@@ -101,7 +88,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
     try {
       await api.post('/game-chat/send', { message: text });
       setInput('');
-      shouldScrollToBottomRef.current = true;
+      shouldScrollToTopRef.current = true;
       await fetchMessages();
     } catch (err) {
       toast.error(getApiErrorMessage(err));
@@ -116,7 +103,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
     setShowGifPicker(false);
     try {
       await api.post('/game-chat/send', { message: '(GIF)', gif_url: gifUrl });
-      shouldScrollToBottomRef.current = true;
+      shouldScrollToTopRef.current = true;
       await fetchMessages();
     } catch (err) {
       toast.error(getApiErrorMessage(err));
@@ -261,7 +248,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
             No messages yet. Say something.
           </p>
         ) : (
-          messages.map((m) => {
+          [...messages].reverse().map((m) => {
             const isOwn = m.user_id === myUserId;
             return (
               <div
@@ -283,7 +270,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
                       <img
                         src={m.gif_url}
                         alt="GIF"
-                        className="rounded max-h-24 max-w-full object-contain"
+                        className="rounded max-h-40 max-w-full object-contain"
                         style={{ border: '1px solid rgba(var(--noir-primary-rgb), 0.18)', background: 'rgba(0,0,0,0.4)' }}
                         loading="lazy"
                       />
@@ -315,13 +302,12 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
             );
           })
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* ── GIF Picker ── */}
       {showGifPicker && (
         <div className="shrink-0 px-2 pt-1">
-          <GifPicker onSelect={handleSendGif} onClose={() => setShowGifPicker(false)} />
+          <GifPicker compact onSelect={handleSendGif} onClose={() => setShowGifPicker(false)} />
         </div>
       )}
 

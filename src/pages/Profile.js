@@ -107,10 +107,10 @@ const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone })
       toast.error(e.response?.data?.detail || 'Failed');
     } finally { setLoading(null); }
   };
-  const btn = 'inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-all active:scale-95 disabled:opacity-50';
+  const btn = 'inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-all active:scale-95 disabled:opacity-50';
   return (
-    <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-amber-500/5 border-b border-amber-500/20 flex flex-wrap items-center gap-1 md:gap-1.5">
-      <span className="text-[8px] md:text-[9px] font-heading font-bold text-amber-500/80 uppercase tracking-wider mr-1">Staff:</span>
+    <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/5 border-b border-primary/20 flex flex-wrap items-center gap-1 md:gap-1.5">
+      <span className="text-[8px] md:text-[9px] font-heading font-bold text-primary/80 uppercase tracking-wider mr-1">Staff:</span>
       <TooltipProvider>
         <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleLock} disabled={!!loading} className={btn} title="Lock account"><Lock size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Lock account</TooltipContent></Tooltip>
         <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleUnlock} disabled={!!loading} className={btn} title="Unlock account"><Unlock size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Unlock account</TooltipContent></Tooltip>
@@ -124,7 +124,7 @@ const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone })
         <Tooltip><TooltipTrigger asChild><Link to={{ pathname: '/admin', state: { activityLogUsername: username, gamblingLogUsername: username } }} className={btn} title="Activity log"><FileText size={12} className="md:w-3.5 md:h-3.5" /></Link></TooltipTrigger><TooltipContent>Activity log</TooltipContent></Tooltip>
         <Tooltip><TooltipTrigger asChild><Link to={{ pathname: '/admin', state: { gamblingLogUsername: username } }} className={btn} title="Gambling log"><Dices size={12} className="md:w-3.5 md:h-3.5" /></Link></TooltipTrigger><TooltipContent>Gambling log</TooltipContent></Tooltip>
       </TooltipProvider>
-      <Link to={{ pathname: '/admin', state: { targetUsername: username } }} className="text-[9px] font-heading text-amber-500/80 hover:text-amber-400 ml-auto">Mute / more in Admin →</Link>
+      <Link to={{ pathname: '/admin', state: { targetUsername: username } }} className="text-[9px] font-heading text-primary/80 hover:text-primary ml-auto">Mute / more in Admin →</Link>
     </div>
   );
 };
@@ -192,7 +192,7 @@ const ProfileInfoCard = ({
       label: 'Username', 
       value: profile.username, 
       icon: UserIcon,
-      valueClass: 'text-foreground font-heading font-bold' 
+      valueClass: 'text-primary font-heading font-bold' 
     },
     { 
       label: 'Crew', 
@@ -1543,26 +1543,26 @@ export default function Profile() {
 
             {(isAdmin || isModerator) && !isMe && profile?.username && (
               <details
-                className={`prof-staff-details relative ${styles.panel} rounded-md overflow-hidden border border-amber-500/30 prof-fade-in`}
+                className={`prof-staff-details relative ${styles.panel} rounded-md overflow-hidden border border-primary/30 prof-fade-in`}
                 onToggle={(e) => { if (e.target.open) fetchStaffStats(); }}
               >
                 <summary className="list-none cursor-pointer">
-                  <div className="px-2.5 py-2 md:px-3 md:py-2.5 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between gap-2 hover:bg-amber-500/15 transition-colors">
+                  <div className="px-2.5 py-2 md:px-3 md:py-2.5 bg-primary/10 border-b border-primary/20 flex items-center justify-between gap-2 hover:bg-primary/15 transition-colors">
                     <div className="flex items-center gap-2">
-                      <Shield className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-500" />
-                      <span className="text-[9px] md:text-[10px] font-heading font-bold text-amber-500 uppercase tracking-[0.12em]">User info (staff)</span>
+                      <Shield className="w-3.5 h-3.5 md:w-4 md:h-4 text-primary" />
+                      <span className="text-[9px] md:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">User info (staff)</span>
                     </div>
-                    <ChevronDown className="w-4 h-4 text-amber-500/80 prof-staff-chevron transition-transform" aria-hidden />
+                    <ChevronDown className="w-4 h-4 text-primary/80 prof-staff-chevron transition-transform" aria-hidden />
                   </div>
                 </summary>
-                <div className="p-3 border-t border-amber-500/20">
+                <div className="p-3 border-t border-primary/20">
                   {staffStatsLoading && (
                     <p className="text-xs text-mutedForeground font-heading">Loading…</p>
                   )}
                   {staffStatsError && (
                     <p className="text-xs text-red-400 font-heading flex items-center gap-2 flex-wrap">
                       <span>{staffStatsError}</span>
-                      <button type="button" onClick={() => { setStaffStatsError(null); fetchStaffStats(); }} className="text-amber-400 hover:text-amber-300 font-heading underline">Retry</button>
+                      <button type="button" onClick={() => { setStaffStatsError(null); fetchStaffStats(); }} className="text-primary hover:opacity-90 font-heading underline">Retry</button>
                     </p>
                   )}
                   {staffStats && !staffStatsLoading && (
@@ -1584,9 +1584,9 @@ export default function Profile() {
                       <div><span className="text-mutedForeground">Crimes</span><br /><span className="text-foreground">{Number(staffStats.total_crimes ?? 0).toLocaleString()}</span></div>
                       <div><span className="text-mutedForeground">GTA</span><br /><span className="text-foreground">{Number(staffStats.total_gta ?? 0).toLocaleString()}</span></div>
                       <div><span className="text-mutedForeground">Jail busts</span><br /><span className="text-foreground">{Number(staffStats.jail_busts ?? 0).toLocaleString()}</span></div>
-                      <div><span className="text-mutedForeground">In jail</span><br /><span className={staffStats.in_jail ? 'text-amber-400' : 'text-foreground'}>{staffStats.in_jail ? 'Yes' : 'No'}</span></div>
+                      <div><span className="text-mutedForeground">In jail</span><br /><span className={staffStats.in_jail ? 'text-primary' : 'text-foreground'}>{staffStats.in_jail ? 'Yes' : 'No'}</span></div>
                       <div><span className="text-mutedForeground">Dead</span><br /><span className={staffStats.is_dead ? 'text-red-400' : 'text-foreground'}>{staffStats.is_dead ? 'Yes' : 'No'}</span></div>
-                      <div><span className="text-mutedForeground">Account locked</span><br /><span className={staffStats.account_locked ? 'text-amber-400' : 'text-foreground'}>{staffStats.account_locked ? 'Yes' : 'No'}</span>{staffStats.account_locked_at && <><br /><span className="text-mutedForeground text-[9px]">{formatDateTime(staffStats.account_locked_at)}</span></>}</div>
+                      <div><span className="text-mutedForeground">Account locked</span><br /><span className={staffStats.account_locked ? 'text-primary' : 'text-foreground'}>{staffStats.account_locked ? 'Yes' : 'No'}</span>{staffStats.account_locked_at && <><br /><span className="text-mutedForeground text-[9px]">{formatDateTime(staffStats.account_locked_at)}</span></>}</div>
                       <div className="col-span-2 md:col-span-3"><span className="text-mutedForeground">Registration IP</span><br /><span className="text-foreground font-mono text-[9px]">{staffStats.registration_ip ?? '—'}</span></div>
                       <div className="col-span-2 md:col-span-3"><span className="text-mutedForeground">Last login IP</span><br /><span className="text-foreground font-mono text-[9px]">{staffStats.last_login_ip ?? '—'}</span></div>
                     </div>

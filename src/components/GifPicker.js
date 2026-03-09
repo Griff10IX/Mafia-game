@@ -63,14 +63,14 @@ export default function GifPicker({ onSelect, onClose, className = '', compact =
           </button>
         )}
       </div>
-      <div className={`p-2 overflow-y-auto ${compact ? 'max-h-60' : 'max-h-52'}`}>
+      <div className={`p-2 overflow-y-auto ${compact ? 'max-h-[280px]' : 'max-h-52'}`}>
         {error && <p className="text-sm text-red-400 font-heading py-1.5">{error}</p>}
         {loading && <p className="text-sm text-mutedForeground font-heading py-1.5">Loading...</p>}
         {!loading && !error && gifs.length === 0 && debouncedQuery && (
           <p className="text-sm text-mutedForeground font-heading py-1.5">No GIFs found</p>
         )}
         {!loading && gifs.length > 0 && (
-          <div className={`grid gap-1.5 ${compact ? 'grid-cols-2' : 'grid-cols-4'}`}>
+          <div className={`grid gap-2 ${compact ? 'grid-cols-2' : 'grid-cols-4'}`}>
             {gifs.map((gif) => {
               const url = getGifUrl(gif);
               if (!url) return null;
@@ -79,7 +79,7 @@ export default function GifPicker({ onSelect, onClose, className = '', compact =
                   key={gif.id}
                   type="button"
                   onClick={() => onSelect(url)}
-                  className={`aspect-square rounded overflow-hidden border border-primary/20 hover:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/50 w-full ${compact ? 'min-h-[88px] max-h-[110px]' : 'min-h-[80px] max-h-[96px]'}`}
+                  className={`aspect-square rounded overflow-hidden border border-primary/20 hover:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/50 w-full ${compact ? 'min-h-[100px] max-h-[140px]' : 'min-h-[80px] max-h-[96px]'}`}
                 >
                   <img src={url} alt="" className="w-full h-full object-cover" />
                 </button>
