@@ -243,26 +243,6 @@ export default function Landing({ setIsAuthenticated }) {
               <div className="h-px w-10 md:w-16" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.45 }} />
             </div>
 
-            {/* Ornament */}
-            <div className="relative z-10 flex items-center gap-2 mt-3 landing-fade-up-1" style={{ width: '70%' }}>
-              <div className="flex-1 h-px" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.35 }} />
-              <div
-                className="w-1.5 h-1.5 rotate-45 flex-shrink-0"
-                style={{ border: '1px solid var(--noir-primary)', opacity: 0.7 }}
-              />
-              <div
-                className="text-[9px] font-heading uppercase tracking-[0.3em] flex-shrink-0"
-                style={{ color: 'var(--noir-primary)', opacity: 0.55 }}
-              >
-                Est. 1920
-              </div>
-              <div
-                className="w-1.5 h-1.5 rotate-45 flex-shrink-0"
-                style={{ border: '1px solid var(--noir-primary)', opacity: 0.7 }}
-              />
-              <div className="flex-1 h-px" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.35 }} />
-            </div>
-
             {/* Crest seal — overlaps hero/panel boundary */}
             <div
               className="crest-pulse relative z-20 mt-6 w-12 h-12 rounded-full flex items-center justify-center text-xl"
