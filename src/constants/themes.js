@@ -339,17 +339,6 @@ export const THEME_TOAST_POSITION = [
   { id: 'custom', name: 'Custom (drag to set)' },
 ];
 
-/** Toast notification position on screen. */
-export const THEME_TOAST_POSITION = [
-  { id: 'top-left', name: 'Top left' },
-  { id: 'top-center', name: 'Top center' },
-  { id: 'top-right', name: 'Top right' },
-  { id: 'bottom-left', name: 'Bottom left' },
-  { id: 'bottom-center', name: 'Bottom center' },
-  { id: 'bottom-right', name: 'Bottom right' },
-  { id: 'custom', name: 'Custom (draggable)' },
-];
-
 /** Writing (text) colour: main body and muted text. { id, name, foreground, muted } hex. */
 export const THEME_WRITING_COLOURS = [
   /* Default & light */
