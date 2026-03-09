@@ -22,11 +22,13 @@ const CUSTOM_POINTS_MAX = 250_000;
 const CUSTOM_PRICE_PER_POINT = 67.99 / 50_000; // same rate as platinum
 
 const BULLET_PACKS = [
-  { bullets: 5000, cost: 500 },
-  { bullets: 10000, cost: 1000 },
-  { bullets: 50000, cost: 5000 },
-  { bullets: 100000, cost: 10000 },
+  { bullets: 5000, cost: 100 },
+  { bullets: 10000, cost: 175 },
+  { bullets: 50000, cost: 775 },
+  { bullets: 100000, cost: 1525 },
 ];
+const CUSTOM_BULLETS_MAX = 250_000;
+const bulletCost = (bullets) => bullets < 5000 ? Math.max(1, Math.floor(bullets * 0.02)) : 100 + Math.floor((bullets - 5000) / 5000) * 75;
 
 const UPGRADES = [
   { id: 'health', title: 'Full Health', Icon: Heart, price: 15, path: '/store/buy-health', ownedKey: null, desc: 'Restore health to 100%', extra: (u) => ({ line: 'Health', value: `${Number(u?.health ?? 100).toFixed(0)}%` }) },
@@ -96,6 +98,7 @@ export default function Store() {
   const [sendToUsername, setSendToUsername] = useState('');
   const [sendAmount, setSendAmount] = useState('');
   const [customPoints, setCustomPoints] = useState('');
+  const [customBullets, setCustomBullets] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -189,6 +192,32 @@ export default function Store() {
       window.location.href = res.data.url;
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
+      setLoading(false);
+    }
+  };
+
+  const handleCustomBulletsPurchase = async () => {
+    const b = parseInt(String(customBullets).replace(/\D/g, ''), 10);
+    if (!Number.isFinite(b) || b < 1 || b > CUSTOM_BULLETS_MAX) {
+      toast.error(`Enter 1–${CUSTOM_BULLETS_MAX.toLocaleString()} bullets`);
+      return;
+    }
+    const cost = bulletCost(b);
+    const respectCost = cost * 5;
+    if (user && (user.points ?? 0) < cost && (user.respect_points ?? 0) < respectCost) {
+      toast.error(`Need ${cost} pts or ${respectCost} respect`);
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.post(`/store/buy-bullets?bullets=${b}`);
+      toast.success(`Bought ${b.toLocaleString()} bullets`);
+      setCustomBullets('');
+      refreshUser();
+      fetchData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
       setLoading(false);
     }
   };
@@ -523,31 +552,72 @@ export default function Store() {
       )}
 
       {activeTab === 'bullets' && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-2">
-          {BULLET_PACKS.map((pack) => {
-            const respectCost = pack.cost * 5;
-            return (
-              <div key={pack.bullets} className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
-                <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-                <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1.5">
-                  <Crosshair size={14} className="text-primary shrink-0" />
-                  <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{(pack.bullets / 1000).toFixed(0)}k bullets</span>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-2">
+            {BULLET_PACKS.map((pack) => {
+              const respectCost = pack.cost * 5;
+              return (
+                <div key={pack.bullets} className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+                  <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                  <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1.5">
+                    <Crosshair size={14} className="text-primary shrink-0" />
+                    <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{(pack.bullets / 1000).toFixed(0)}k bullets</span>
+                  </div>
+                  <div className="p-2.5 text-center">
+                    <p className="text-[10px] text-zinc-500 font-heading mb-2">{pack.cost} pts or {respectCost} resp</p>
+                    <button
+                      type="button"
+                      onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`)}
+                      disabled={!user || ((user.points ?? 0) < pack.cost && (user.respect_points ?? 0) < respectCost)}
+                      className="w-full min-h-[44px] py-2.5 sm:py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
+                    >
+                      Buy
+                    </button>
+                  </div>
+                  <div className="store-art-line text-primary mx-3" />
                 </div>
-                <div className="p-2.5 text-center">
-                  <p className="text-[10px] text-zinc-500 font-heading mb-2">{pack.cost} pts or {respectCost} resp</p>
-                  <button
-                    type="button"
-                    onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`)}
-                    disabled={!user || ((user.points ?? 0) < pack.cost && (user.respect_points ?? 0) < respectCost)}
-                    className="w-full min-h-[44px] py-2.5 sm:py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
-                  >
-                    Buy
-                  </button>
-                </div>
-                <div className="store-art-line text-primary mx-3" />
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+          <div className={`relative rounded-lg border border-primary/20 overflow-hidden bg-zinc-900/50`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="p-3 text-center">
+              <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Custom amount</p>
+              <FormattedNumberInput
+                value={customBullets}
+                onChange={setCustomBullets}
+                placeholder={`Up to ${CUSTOM_BULLETS_MAX.toLocaleString()}`}
+                className="w-full mt-1 px-3 py-2 text-lg font-heading font-bold text-primary bg-zinc-900/80 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none text-center"
+              />
+              <p className="text-[10px] text-zinc-500 font-heading italic mt-1">
+                {customBullets ? (
+                  (() => {
+                    const b = parseInt(String(customBullets).replace(/\D/g, ''), 10);
+                    if (!Number.isFinite(b) || b < 1) return null;
+                    if (b > CUSTOM_BULLETS_MAX) return '—';
+                    const c = bulletCost(b);
+                    return `${c} pts or ${c * 5} resp`;
+                  })() || '—'
+                ) : (
+                  '—'
+                )}
+              </p>
+            </div>
+            <div className="px-3 pb-3">
+              <button
+                type="button"
+                onClick={handleCustomBulletsPurchase}
+                disabled={loading || !customBullets || (() => {
+                  const b = parseInt(String(customBullets).replace(/\D/g, ''), 10);
+                  return !Number.isFinite(b) || b < 1 || b > CUSTOM_BULLETS_MAX;
+                })()}
+                className="w-full min-h-[44px] py-2.5 sm:py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
+              >
+                {loading ? '...' : 'Buy'}
+              </button>
+            </div>
+            <div className="store-art-line text-primary mx-3" />
+          </div>
         </div>
       )}
 

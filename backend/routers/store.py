@@ -43,7 +43,17 @@ ANTI_SNITCH_COST_POINTS = 120
 OC_TIMER_COST_POINTS = 300
 CREW_OC_TIMER_COST_POINTS = 350  # Family Crew OC: 6h cooldown instead of 8h
 AUTO_RANK_COST_POINTS = 200  # Auto Rank: auto-commit crimes + GTAs, results to Telegram
-BULLET_PACKS = {5000: 500, 10000: 1000, 50000: 5000, 100000: 10000}
+BULLET_PACKS = {5000: 100, 10000: 175, 50000: 775, 100000: 1525}  # 5k→100, 10k→175, +75 per 5k
+CUSTOM_BULLETS_MAX = 250_000
+
+
+def _bullet_cost(bullets: int) -> int:
+    """Cost in points for any bullets 1–CUSTOM_BULLETS_MAX. Matches BULLET_PACKS."""
+    if bullets < 1 or bullets > CUSTOM_BULLETS_MAX:
+        raise ValueError(f"Bullets must be 1–{CUSTOM_BULLETS_MAX:,}")
+    if bullets < 5000:
+        return max(1, int((bullets * 0.02)))  # same rate as 5k pack
+    return 100 + ((bullets - 5000) // 5000) * 75
 CUSTOM_CAR_COST = 500
 BUY_HEALTH_COST_POINTS = 15
 FULL_HEALTH = 100
@@ -169,12 +179,17 @@ async def buy_booze_capacity(
 
 
 async def store_buy_bullets(
-    bullets: int,
+    bullets: int = Query(..., ge=1, le=CUSTOM_BULLETS_MAX),
     current_user: dict = Depends(get_current_user),
 ):
     cost = BULLET_PACKS.get(bullets)
     if cost is None:
-        raise HTTPException(status_code=400, detail=f"Invalid bullet pack. Choose from: {', '.join(str(k) for k in BULLET_PACKS)}")
+        if bullets < 1 or bullets > CUSTOM_BULLETS_MAX:
+            raise HTTPException(status_code=400, detail=f"Bullets must be 1–{CUSTOM_BULLETS_MAX:,}")
+        try:
+            cost = _bullet_cost(bullets)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
     cost_used, inc = _store_cost_inc(current_user, cost)
     inc["bullets"] = bullets
     await db.users.update_one(

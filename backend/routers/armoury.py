@@ -34,7 +34,7 @@ ARMOURY_WEAPON_RATE_PER_HOUR = 5
 ARMOURY_MAX_STOCK_PER_ITEM = 15
 
 # Store: buy bullets with points (pack size -> points cost)
-BULLET_PACKS = {5000: 500, 10000: 1000, 50000: 5000, 100000: 10000}
+BULLET_PACKS = {5000: 100, 10000: 175, 50000: 775, 100000: 1525}  # matches store
 
 
 class StateOptionalRequest(BaseModel):
