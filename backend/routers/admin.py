@@ -76,6 +76,9 @@ class GameChatMuteRequest(BaseModel):
     target_username: str
     muted: bool  # True = mute, False = unmute
     muted_until: Optional[str] = None  # ISO datetime; if set, mute expires at this time (optional; omit for permanent)
+
+
+class PageLockUpdate(BaseModel):
     path: str
     message: Optional[str] = None
     locked: bool
