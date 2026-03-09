@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target } from 'lucide-react';
-import api from '../utils/api';
+import api, { getApiErrorMessage } from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import PrestigeBadge from '../components/PrestigeBadge';
@@ -1011,8 +1011,13 @@ export default function Profile() {
       const res = await api.get(`/users/${encodeURIComponent(targetUsername)}/staff-stats`);
       setStaffStats(res.data);
     } catch (e) {
+      const status = e.response?.status;
       const detail = e.response?.data?.detail;
-      const msg = typeof detail === 'string' ? detail : (e.response?.status === 403 ? 'Admin or moderator access required' : e.response?.status === 404 ? 'User not found' : 'Failed to load');
+      let msg = 'Failed to load';
+      if (status === 403) msg = 'Admin or moderator access required';
+      else if (status === 404) msg = 'User not found';
+      else if (typeof detail === 'string') msg = detail;
+      else msg = getApiErrorMessage(e) || msg;
       setStaffStatsError(msg);
     } finally {
       setStaffStatsLoading(false);
