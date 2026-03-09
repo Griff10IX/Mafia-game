@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ListChecks, Calendar, CalendarDays, CalendarRange, CheckCircle2, Circle, Gift } from 'lucide-react';
+import { ListChecks, Calendar, CalendarDays, CalendarRange, CheckCircle2, Circle, Gift, BarChart3, ChevronDown, ChevronUp, AlertTriangle, ThumbsUp, ThumbsDown } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -123,6 +123,26 @@ export default function Objectives() {
   const daily = data?.daily ?? {};
   const weekly = data?.weekly ?? {};
   const monthly = data?.monthly ?? {};
+  const adminStats = data?.admin_stats;
+  const [showAdminStats, setShowAdminStats] = useState(false);
+
+  const getAssessmentLabel = (a) => {
+    if (!a) return '';
+    const map = { too_easy: 'Too easy', too_hard: 'Too hard', about_right: 'About right', low_sample: 'Low sample' };
+    return map[a] || a;
+  };
+  const getAssessmentColor = (a) => {
+    if (a === 'too_easy') return 'text-amber-400';
+    if (a === 'too_hard') return 'text-red-400';
+    if (a === 'about_right') return 'text-emerald-400';
+    return 'text-zinc-500';
+  };
+  const getAssessmentIcon = (a) => {
+    if (a === 'too_easy') return <ThumbsDown className="w-3.5 h-3.5" />;
+    if (a === 'too_hard') return <AlertTriangle className="w-3.5 h-3.5" />;
+    if (a === 'about_right') return <ThumbsUp className="w-3.5 h-3.5" />;
+    return null;
+  };
 
   const formatMonthStart = (str) => {
     if (!str) return '—';
@@ -138,6 +158,48 @@ export default function Objectives() {
       <style>{OBJ_STYLES}</style>
 
       <p className="text-[11px] text-zinc-500 font-heading italic break-words">Complete daily, weekly, and monthly goals for extra rewards. New objectives each period.</p>
+
+      {adminStats && (
+        <div className={`${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+          <button
+            type="button"
+            onClick={() => setShowAdminStats(!showAdminStats)}
+            className="w-full px-3 py-2 flex items-center justify-between gap-2 bg-primary/8 border-b border-primary/20 hover:bg-primary/12"
+          >
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-primary" />
+              <span className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Admin: Completion stats</span>
+            </div>
+            {showAdminStats ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+          {showAdminStats && (
+            <div className="p-3 space-y-2 text-[11px] font-heading">
+              <p className="text-zinc-500 mb-2">Eligible = users with this period active. Claimed = completed & claimed rewards.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {['daily', 'weekly', 'monthly'].map((period) => {
+                  const s = adminStats[period] || {};
+                  const label = period === 'daily' ? 'Daily' : period === 'weekly' ? 'Weekly' : 'Monthly';
+                  return (
+                    <div key={period} className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                      <div className="font-bold text-primary mb-1">{label}</div>
+                      <div className="text-zinc-400">
+                        {s.claimed ?? 0} / {s.eligible ?? 0} claimed ({s.completion_pct ?? 0}%)
+                      </div>
+                      <div className={`mt-1 flex items-center gap-1 ${getAssessmentColor(s.assessment)}`}>
+                        {getAssessmentIcon(s.assessment)}
+                        <span>{getAssessmentLabel(s.assessment)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[9px] text-zinc-600 mt-2">
+                &gt;75% = too easy · &lt;15% = too hard · 15–75% = about right · &lt;5 eligible = low sample
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
         {/* Today */}
@@ -191,7 +253,7 @@ export default function Objectives() {
             <div className="flex items-center justify-between gap-2 min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
                 <CalendarDays className="w-4 h-4 text-primary shrink-0" />
-                <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider truncate">This week <span className="normal-case font-bold text-primary/90">×5</span></h2>
+                <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider truncate">This week</h2>
               </div>
               <span className="text-[10px] text-mutedForeground font-heading shrink-0">Week of {weekly.week_start ?? '—'}</span>
             </div>
@@ -234,7 +296,7 @@ export default function Objectives() {
             <div className="flex items-center justify-between gap-2 min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
                 <CalendarRange className="w-4 h-4 text-primary shrink-0" />
-                <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider truncate">This month <span className="normal-case font-bold text-primary/90">×15</span></h2>
+                <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider truncate">This month</h2>
               </div>
               <span className="text-[10px] text-mutedForeground font-heading shrink-0">{formatMonthStart(monthly.month_start)}</span>
             </div>
@@ -249,7 +311,7 @@ export default function Objectives() {
             )}
             {!monthly.claimed && monthly.all_complete && monthly.claim_reward && Object.keys(monthly.claim_reward).length > 0 && (
               <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded bg-primary/10 border border-primary/30 obj-fade-in min-w-0">
-                <span className="text-[11px] font-heading text-foreground break-words min-w-0">Reward: {formatReward(monthly.claim_reward)} <span className="text-primary font-bold">×15</span></span>
+                <span className="text-[11px] font-heading text-foreground break-words min-w-0">Reward: {formatReward(monthly.claim_reward)}</span>
                 <button
                   type="button"
                   onClick={() => handleClaim('monthly')}

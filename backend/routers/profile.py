@@ -460,6 +460,7 @@ def register(router):
             "toast_text_colour_id": "toastTextColourId",
             "text_style_id": "textStyleId",
             "custom_themes": "customThemes",
+            "sidebar_layout": "sidebarLayout",
         }
         stored = {key_map.get(k, k): v for k, v in updates.items()}
         new_prefs = {**(current_user.get("theme_preferences") or {}), **stored}

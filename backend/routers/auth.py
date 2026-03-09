@@ -230,6 +230,7 @@ def register(router):
                 "auto_rank_enabled": False,
                 "mission_completions": [],
                 "unlocked_maps_up_to": "Chicago",
+                "theme_preferences": {"sidebarLayout": "categorized"},
             }
 
             await db.users.insert_one(user_doc.copy())

@@ -866,14 +866,14 @@ export default function Layout({ children }) {
   /** Path → category for categorized sidebar layout */
   const PATH_TO_CATEGORY = {
     '/dashboard': 'information', '/verify-email': 'information', '/objectives': 'information', '/missions': 'information',
-    '/loot-box': 'information', '/profile': 'information', '/ip-rules': 'information', '/stats': 'information',
-    '/users-online': 'information', '/properties': 'information', '/help-desk': 'information',
+    '/profile': 'information', '/ip-rules': 'information', '/stats': 'information',
+    '/users-online': 'information', '/properties': 'information', '/help-desk': 'information', '/leaderboard': 'information',
     '/ranking': 'ranking', '/prestige': 'ranking',
     '/attack': 'combat', '/attempts': 'combat', '/hitlist': 'combat', '/bodyguards': 'combat', '/armour-weapons': 'combat',
     '/travel': 'travel', '/states': 'travel', '/my-properties': 'travel', '/booze-run': 'travel',
     '/forum': 'messaging', '/inbox': 'messaging',
     '/bank': 'money', '/stock-market': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money',
-    '/garage': 'money', '/sell-cars': 'money', '/buy-cars': 'money', '/crack-safe': 'money', '/casino': 'money', '/leaderboard': 'money',
+    '/garage': 'money', '/sell-cars': 'money', '/buy-cars': 'money', '/crack-safe': 'money', '/casino': 'money', '/loot-box': 'money',
     '/families': 'other', '/dead-alive': 'other', '/auto-rank': 'other',
   };
   const SIDEBAR_CATEGORIES = [

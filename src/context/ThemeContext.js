@@ -418,6 +418,10 @@ export function ThemeProvider({ children }) {
       }
       themeSourceRef.current = 'server';
       try {
+        if (prefs.sidebarLayout != null && (prefs.sidebarLayout === 'default' || prefs.sidebarLayout === 'categorized')) {
+          localStorage.setItem('sidebar_layout', prefs.sidebarLayout);
+          window.dispatchEvent(new Event('sidebar-layout-changed'));
+        }
         if (prefs.colourId != null) { localStorage.setItem(STORAGE_KEY_COLOUR, prefs.colourId); setColourIdState(prefs.colourId); }
         if (prefs.textureId != null) { localStorage.setItem(STORAGE_KEY_TEXTURE, prefs.textureId); setTextureIdState(prefs.textureId); }
         if (prefs.buttonColourId !== undefined) { localStorage.setItem(STORAGE_KEY_BUTTON, prefs.buttonColourId || ''); setButtonColourIdState(prefs.buttonColourId || null); }

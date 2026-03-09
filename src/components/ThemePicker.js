@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import api from '../utils/api';
 import {
   Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2,
   Type, Square, Sparkles, AlignLeft, Box, PanelLeft, PanelRight,
@@ -272,7 +273,10 @@ export default function ThemePicker({ open, onClose }) {
   const setSidebarDividers = v => lsSet(KEYS.sidebarDividers,v?'true':'false','sidebar-dividers-changed');
   const setDividerStyle = v => lsSet(KEYS.dividerStyle,v,'sidebar-layout-changed');
   const setSidebarSpacing = v => lsSet(KEYS.sidebarSpacing,v,'sidebar-layout-changed');
-  const setSidebarLayout = v => lsSet(KEYS.sidebarLayout,v,'sidebar-layout-changed');
+  const setSidebarLayout = (v) => {
+    lsSet(KEYS.sidebarLayout, v, 'sidebar-layout-changed');
+    api.patch('/profile/theme', { sidebar_layout: v }).catch(() => {});
+  };
   const setToastPosition = v => lsSet(KEYS.toastPosition,v,'toast-prefs-changed');
   const setToastCloseButton = v => lsSet(KEYS.toastCloseButton,v?'true':'false','toast-prefs-changed');
   const setBottomDividers = v => lsSet(KEYS.bottomDividers,v?'true':'false','bottom-nav-dividers-changed');

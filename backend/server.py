@@ -463,6 +463,7 @@ class ThemePreferencesRequest(BaseModel):
     toast_text_colour_id: Optional[str] = None
     text_style_id: Optional[str] = None
     custom_themes: Optional[List[Dict]] = None
+    sidebar_layout: Optional[str] = None
 
 
 class ChangePasswordRequest(BaseModel):
