@@ -42,7 +42,7 @@ SILENCER_COST_POINTS = 150
 ANTI_SNITCH_COST_POINTS = 120
 OC_TIMER_COST_POINTS = 300
 CREW_OC_TIMER_COST_POINTS = 350  # Family Crew OC: 6h cooldown instead of 8h
-AUTO_RANK_COST_POINTS = 200  # Auto Rank: auto-commit crimes + GTAs, results to Telegram
+AUTO_RANK_COST_POINTS = 2000  # Auto Rank: auto-commit crimes + GTAs, results to Telegram
 BULLET_PACKS = {5000: 100, 10000: 175, 50000: 775, 100000: 1525}  # 5k→100, 10k→175, +75 per 5k
 CUSTOM_BULLETS_MAX = 250_000
 

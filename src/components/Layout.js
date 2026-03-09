@@ -1799,6 +1799,10 @@ export default function Layout({ children }) {
                     <span className="font-heading text-xs truncate" style={{ color: 'var(--noir-foreground)' }}>C {formatMoneyCompact(user.casino_profit ?? 0)} · P {formatCompact(user.property_profit ?? 0)} pts</span>
                   </div>
                 </div>
+                {/* Game Chat — same as right sidebar, bounded height in touch ball panel */}
+                <div className="pt-2 border-t flex flex-col min-h-0 overflow-hidden" style={{ borderColor: 'var(--noir-border)', maxHeight: '320px' }}>
+                  <GameChat myUserId={user.id} onCloseSidebar={() => setNotificationPanelOpen(false)} />
+                </div>
                 {/* Notifications */}
                 <div className="pt-1 border-t" style={{ borderColor: 'var(--noir-border)' }}>
                   <p className="font-heading text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Notifications</p>

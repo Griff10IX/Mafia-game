@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -32,7 +33,7 @@ const bulletCost = (bullets) => bullets < 5000 ? Math.max(1, Math.floor(bullets 
 const UPGRADES = [
   { id: 'health', title: 'Full Health', Icon: Heart, price: 15, path: '/store/buy-health', ownedKey: null, desc: 'Restore health to 100%', extra: (u) => ({ line: 'Health', value: `${Number(u?.health ?? 100).toFixed(0)}%` }) },
   { id: 'rank-bar', title: 'Premium Rank Bar', Icon: Star, price: 50, path: '/store/buy-rank-bar', ownedKey: 'premium_rank_bar', desc: 'Exact numbers & amounts for next rank' },
-  { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: 200, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
+  { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: 2000, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
   { id: 'silencer', title: 'Silencer', Icon: VolumeX, price: 150, path: '/store/buy-silencer', ownedKey: 'has_silencer', desc: 'Fewer witness statements when you kill' },
   { id: 'anti-snitch', title: 'Anti Snitch', Icon: Shield, price: 120, path: '/store/buy-anti-snitch', ownedKey: 'anti_snitch', desc: 'Cannot be snitched on when others are in jail' },
   { id: 'oc-timer', title: 'OC Timer', Icon: Clock, price: 300, path: '/store/buy-oc-timer', ownedKey: 'oc_timer_reduced', desc: 'Heist cooldown 4h instead of 6h' },
@@ -385,7 +386,11 @@ export default function Store() {
                 <ul className="space-y-1.5">
                   {pointsTransfers.map((t) => (
                     <li key={t.id} className="text-[10px] font-heading flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-1 border-b border-zinc-800/50 last:border-0">
-                      <span className="text-mutedForeground truncate min-w-0">{t.from_username} → {t.to_username}</span>
+                      <span className="text-mutedForeground truncate min-w-0">
+                        <Link to={`/profile/${encodeURIComponent(t.from_username)}`} className="text-primary hover:underline">{t.from_username}</Link>
+                        {' → '}
+                        <Link to={`/profile/${encodeURIComponent(t.to_username)}`} className="text-primary hover:underline">{t.to_username}</Link>
+                      </span>
                       <span className="text-primary shrink-0">{Number(t.amount).toLocaleString()} pts</span>
                       {t.created_at && (
                         <span className="text-[9px] text-zinc-600 w-full shrink-0">
@@ -421,7 +426,11 @@ export default function Store() {
                     <ul className="space-y-1">
                       {adminTransfers.map((t) => (
                         <li key={t.id} className="text-[10px] font-heading flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-0.5 border-b border-zinc-800/50 last:border-0">
-                          <span className="text-mutedForeground truncate min-w-0">{t.from_username} → {t.to_username}</span>
+                          <span className="text-mutedForeground truncate min-w-0">
+                            <Link to={`/profile/${encodeURIComponent(t.from_username)}`} className="text-primary hover:underline">{t.from_username}</Link>
+                            {' → '}
+                            <Link to={`/profile/${encodeURIComponent(t.to_username)}`} className="text-primary hover:underline">{t.to_username}</Link>
+                          </span>
                           <span className="text-primary shrink-0">{Number(t.amount).toLocaleString()} pts</span>
                           {t.created_at && (
                             <span className="text-[9px] text-zinc-600 w-full shrink-0">{new Date(t.created_at).toLocaleString()}</span>

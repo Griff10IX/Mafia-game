@@ -213,6 +213,7 @@ export default function Admin() {
   const [duplicateSuspectsUsername, setDuplicateSuspectsUsername] = useState('');
 
   const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
+  const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState('#1e3a5f');
   const [requireEmailVerification, setRequireEmailVerification] = useState(false);
   const [landingBannerEnabled, setLandingBannerEnabled] = useState(false);
   const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);
@@ -389,11 +390,14 @@ export default function Admin() {
       const res = await api.get('/admin/settings');
       const hex = res.data?.admin_online_color || '#a78bfa';
       setAdminOnlineColor(hex.startsWith('#') ? hex : '#' + hex);
+      const modHex = res.data?.mod_default_online_color || '#1e3a5f';
+      setModDefaultOnlineColor(modHex.startsWith('#') ? modHex : '#' + modHex);
       setRequireEmailVerification(!!res.data?.require_email_verification);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setStockMarketMaxPoints(Math.max(1, parseInt(res.data?.stock_market_max_points, 10) || 3000));
     } catch {
       setAdminOnlineColor('#a78bfa');
+      setModDefaultOnlineColor('#1e3a5f');
       setRequireEmailVerification(false);
       setStockMarketMaxPoints(3000);
     }
@@ -431,11 +435,13 @@ export default function Admin() {
     try {
       const res = await api.patch('/admin/settings', {
         admin_online_color: adminOnlineColor,
+        mod_default_online_color: modDefaultOnlineColor,
         require_email_verification: requireEmailVerification,
         landing_banner_enabled: landingBannerEnabled,
         stock_market_max_points: Math.max(1, parseInt(stockMarketMaxPoints, 10) || 3000),
       });
       setAdminOnlineColor(res.data?.admin_online_color || adminOnlineColor);
+      setModDefaultOnlineColor(res.data?.mod_default_online_color || modDefaultOnlineColor);
       setRequireEmailVerification(!!res.data?.require_email_verification);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setStockMarketMaxPoints(Math.max(1, res.data?.stock_market_max_points ?? 3000));
@@ -1913,9 +1919,15 @@ export default function Admin() {
           icon={Palette}
           title="Admin display"
           badge={
-            <span className="text-[10px] font-heading flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-full border border-primary/30 shrink-0" style={{ backgroundColor: adminOnlineColor }} />
-              <span className="text-mutedForeground">Users Online colour</span>
+            <span className="text-[10px] font-heading flex items-center gap-2">
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full border border-primary/30 shrink-0" style={{ backgroundColor: adminOnlineColor }} />
+                <span className="text-mutedForeground">Admin</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full border border-primary/30 shrink-0" style={{ backgroundColor: modDefaultOnlineColor }} />
+                <span className="text-mutedForeground">Mod</span>
+              </span>
             </span>
           }
           isCollapsed={collapsed.adminDisplay}
@@ -1923,22 +1935,42 @@ export default function Admin() {
         />
         {!collapsed.adminDisplay && (
           <div className="p-3 space-y-2">
-            <p className="text-[10px] text-mutedForeground font-heading">Colour used for admin usernames and badge on the Users Online page.</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="color"
-                value={adminOnlineColor}
-                onChange={(e) => setAdminOnlineColor(e.target.value)}
-                className="h-9 w-12 rounded border border-input bg-transparent cursor-pointer"
-                aria-label="Admin colour"
-              />
-              <Input
-                type="text"
-                value={adminOnlineColor}
-                onChange={(e) => setAdminOnlineColor(e.target.value)}
-                placeholder="#a78bfa"
-                className="w-24 font-mono text-[11px]"
-              />
+            <p className="text-[10px] text-mutedForeground font-heading">Colours used for usernames and badges on the Users Online page. Mods can override their colour on their profile.</p>
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={adminOnlineColor}
+                  onChange={(e) => setAdminOnlineColor(e.target.value)}
+                  className="h-9 w-12 rounded border border-input bg-transparent cursor-pointer"
+                  aria-label="Admin colour"
+                />
+                <Input
+                  type="text"
+                  value={adminOnlineColor}
+                  onChange={(e) => setAdminOnlineColor(e.target.value)}
+                  placeholder="#a78bfa"
+                  className="w-24 font-mono text-[11px]"
+                />
+                <span className="text-[10px] text-mutedForeground font-heading">Admin</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={modDefaultOnlineColor}
+                  onChange={(e) => setModDefaultOnlineColor(e.target.value)}
+                  className="h-9 w-12 rounded border border-input bg-transparent cursor-pointer"
+                  aria-label="Mod default colour"
+                />
+                <Input
+                  type="text"
+                  value={modDefaultOnlineColor}
+                  onChange={(e) => setModDefaultOnlineColor(e.target.value)}
+                  placeholder="#1e3a5f"
+                  className="w-24 font-mono text-[11px]"
+                />
+                <span className="text-[10px] text-mutedForeground font-heading">Mod</span>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
               <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">

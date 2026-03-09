@@ -349,6 +349,7 @@ export default function UsersOnline() {
                     profileLoading={profileLoading}
                     ensureProfilePreview={ensureProfilePreview}
                     adminOnlineColor={adminOnlineColor}
+                    modDefaultOnlineColor={modDefaultOnlineColor}
                   />
                 ))}
               </div>

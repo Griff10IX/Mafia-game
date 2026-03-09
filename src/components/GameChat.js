@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageSquare, Send, Settings, UserX } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { MessageSquare, Send, Settings, UserX, ChevronDown, ChevronUp } from 'lucide-react';
 import api from '../utils/api';
 import { getApiErrorMessage } from '../utils/api';
 import { toast } from 'sonner';
@@ -7,6 +8,15 @@ import GifPicker from './GifPicker';
 
 const POLL_INTERVAL_MS = 5000;
 const MAX_MESSAGE_LEN = 500;
+const GAME_CHAT_MINIMIZED_KEY = 'game_chat_minimized';
+
+function getStoredMinimized() {
+  try {
+    return localStorage.getItem(GAME_CHAT_MINIMIZED_KEY) === '1';
+  } catch (_) {
+    return false;
+  }
+}
 
 const CHAT_EMOJIS = [
   '💰', '💵', '💎', '🎩', '🔫', '⚔️', '🔪', '💀', '🚬', '🥃', '🍷', '🎲', '🃏', '👔', '💼', '🕴️', '🏆', '👑', '✨', '💪', '👍', '😎', '🎭',
@@ -30,8 +40,19 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(getStoredMinimized);
   const scrollRef = useRef(null);
   const shouldScrollToTopRef = useRef(false);
+
+  const toggleMinimized = () => {
+    setIsMinimized((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(GAME_CHAT_MINIMIZED_KEY, next ? '1' : '0');
+      } catch (_) {}
+      return next;
+    });
+  };
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -148,39 +169,61 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
   };
 
   return (
-    <div className="flex flex-col min-h-0 border-t mt-2" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}>
+    <div className="flex flex-col min-h-0 border-t mt-2 w-full" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}>
 
-      {/* ── Header ── */}
+      {/* ── Header (always visible; when minimized this is the only row) ── */}
       <div
-        className="flex items-center justify-between px-3 py-2 shrink-0"
-        style={{ background: 'rgba(var(--noir-primary-rgb), 0.06)', borderBottom: '1px solid rgba(var(--noir-primary-rgb), 0.12)' }}
+        className="flex items-center justify-between px-2 sm:px-3 py-2 sm:py-2 shrink-0 min-h-[44px] cursor-pointer select-none"
+        style={{ background: 'rgba(var(--noir-primary-rgb), 0.06)', borderBottom: isMinimized ? 'none' : '1px solid rgba(var(--noir-primary-rgb), 0.12)' }}
+        onClick={isMinimized ? toggleMinimized : undefined}
+        role={isMinimized ? 'button' : undefined}
+        tabIndex={isMinimized ? 0 : undefined}
+        onKeyDown={isMinimized ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleMinimized(); } } : undefined}
+        aria-expanded={!isMinimized}
+        aria-label={isMinimized ? 'Expand game chat' : undefined}
       >
         <span
-          className="text-[9px] font-heading uppercase tracking-widest flex items-center gap-1.5"
+          className="text-[9px] sm:text-[9px] font-heading uppercase tracking-widest flex items-center gap-1.5"
           style={{ color: 'var(--noir-primary)' }}
         >
-          <MessageSquare size={9} />
+          <MessageSquare size={10} className="shrink-0" />
           Game Chat
         </span>
 
-        <div className="flex items-center gap-2">
-          {/* Settings */}
-          <div className="relative">
+        <div className="flex items-center gap-1" onClick={(e) => !isMinimized && e.stopPropagation()}>
+          {!isMinimized && (
+            <button
+              type="button"
+              onClick={toggleMinimized}
+              className="min-w-[36px] min-h-[36px] sm:min-w-[28px] sm:min-h-[28px] flex items-center justify-center rounded transition-colors hover:opacity-80 touch-manipulation active:scale-95"
+              style={{ color: 'rgba(var(--noir-primary-rgb), 0.6)' }}
+              aria-label="Minimize chat"
+            >
+              <ChevronDown size={14} className="shrink-0" />
+            </button>
+          )}
+          {isMinimized && (
+            <span className="flex items-center" style={{ color: 'rgba(var(--noir-primary-rgb), 0.6)' }} aria-hidden>
+              <ChevronUp size={14} className="shrink-0" />
+            </span>
+          )}
+          {/* Settings — touch-friendly on mobile (only when expanded) */}
+          {!isMinimized && <div className="relative">
             <button
               type="button"
               onClick={() => setSettingsOpen((o) => !o)}
-              className="p-0.5 rounded transition-colors hover:opacity-80"
+              className="min-w-[44px] min-h-[44px] -m-1 flex items-center justify-center rounded transition-colors hover:opacity-80 touch-manipulation active:scale-95 md:min-w-0 md:min-h-0 md:p-0.5"
               style={{ color: 'rgba(var(--noir-primary-rgb), 0.5)' }}
               aria-label="Chat settings"
             >
-              <Settings size={11} />
+              <Settings size={12} className="shrink-0" />
             </button>
 
             {settingsOpen && (
               <>
                 <div className="fixed inset-0 z-10" aria-hidden="true" onClick={() => setSettingsOpen(false)} />
                 <div
-                  className="absolute right-0 top-full mt-0.5 z-20 py-2 px-2 rounded border shadow-lg min-w-[160px]"
+                  className="absolute right-0 top-full mt-0.5 z-20 py-2 px-2 rounded border shadow-lg min-w-[160px] w-full max-w-[200px] sm:w-auto sm:max-w-none"
                   style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
                 >
                   {prefs.in_family && (
@@ -202,7 +245,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
                         : prefs.blocked_user_ids.map((uid) => ({ user_id: uid, username: uid }))
                       ).slice(0, 10).map((item) => (
                         <div key={item.user_id} className="flex items-center justify-between gap-1 py-0.5 px-1 text-[10px]">
-                          <span className="truncate" style={{ color: 'var(--noir-foreground)' }}>{item.username}</span>
+                          <Link to={`/profile/${encodeURIComponent(item.username)}`} className="truncate hover:underline" style={{ color: 'var(--noir-primary)' }}>{item.username}</Link>
                           <button
                             type="button"
                             onClick={() => unblockUser(item.user_id)}
@@ -223,14 +266,14 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
                 </div>
               </>
             )}
-          </div>
+          </div>}
         </div>
       </div>
 
       {/* ── Messages ── */}
       <div
         ref={scrollRef}
-        className="flex-1 min-h-[130px] max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-thin"
+        className="flex-1 min-h-[120px] max-h-[220px] sm:min-h-[130px] sm:max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-thin touch-pan-y"
         style={{ scrollbarColor: 'rgba(var(--noir-primary-rgb), 0.15) transparent' }}
       >
         {prefs.muted && (
@@ -253,24 +296,25 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
             return (
               <div
                 key={m.id}
-                className="group relative px-3 py-1"
+                className="group relative px-2 sm:px-3 py-1.5 sm:py-1"
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
               >
                 {/* Inline name + message */}
-                <div className="text-[11px] leading-snug break-words">
-                  <span
-                    className="font-heading text-[9.5px] font-bold mr-1 shrink-0"
+                <div className="text-[11px] sm:text-[11px] leading-snug break-words pr-12 sm:pr-10">
+                  <Link
+                    to={`/profile/${encodeURIComponent(m.username)}`}
+                    className="font-heading text-[9.5px] font-bold mr-1 shrink-0 hover:underline"
                     style={{ color: isOwn ? 'var(--noir-primary)' : 'rgba(var(--noir-primary-rgb), 0.75)' }}
                   >
                     {m.username}
-                  </span>
+                  </Link>
                   <span className="text-[9px] mr-1.5" style={{ color: 'rgba(255,255,255,0.18)' }}>·</span>
                   {m.gif_url && (
                     <span className="block mt-1">
                       <img
                         src={m.gif_url}
                         alt="GIF"
-                        className="rounded max-h-40 max-w-full object-contain"
+                        className="rounded max-h-32 sm:max-h-40 max-w-full object-contain"
                         style={{ border: '1px solid rgba(var(--noir-primary-rgb), 0.18)', background: 'rgba(0,0,0,0.4)' }}
                         loading="lazy"
                       />
@@ -286,16 +330,16 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
                   {formatChatTime(m.created_at)}
                 </div>
 
-                {/* Block button — hover only */}
+                {/* Block button — always visible on touch (mobile), hover on desktop */}
                 {!isOwn && (
                   <button
                     type="button"
                     onClick={() => blockUser(m.user_id, m.username)}
-                    className="absolute right-2 top-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 text-[8px] font-heading px-1.5 py-0.5 rounded"
+                    className="absolute right-1 top-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center gap-0.5 text-[8px] font-heading px-2 py-1 sm:px-1.5 sm:py-0.5 rounded min-h-[32px] min-w-[32px] items-center justify-center sm:min-h-0 sm:min-w-0 touch-manipulation active:scale-95"
                     style={{ color: 'rgba(248,113,113,0.6)', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(248,113,113,0.15)' }}
                     title={`Block ${m.username}`}
                   >
-                    <UserX size={9} /> Block
+                    <UserX size={10} /> <span className="hidden sm:inline">Block</span>
                   </button>
                 )}
               </div>
@@ -306,7 +350,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
 
       {/* ── GIF Picker ── */}
       {showGifPicker && (
-        <div className="shrink-0 px-2 pt-1">
+        <div className="shrink-0 px-2 pt-1 max-h-[45vh] sm:max-h-none overflow-y-auto">
           <GifPicker compact onSelect={handleSendGif} onClose={() => setShowGifPicker(false)} />
         </div>
       )}
@@ -316,8 +360,8 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
         className="shrink-0 px-2 pt-2 pb-2 flex flex-col gap-1.5"
         style={{ borderTop: '1px solid rgba(var(--noir-primary-rgb), 0.1)', background: 'rgba(0,0,0,0.2)' }}
       >
-        {/* Text input + action buttons */}
-        <form onSubmit={handleSend} className="flex items-stretch gap-1">
+        {/* Text input + action buttons — touch-friendly on mobile */}
+        <form onSubmit={handleSend} className="flex items-stretch gap-1 flex-wrap sm:flex-nowrap">
           <input
             type="text"
             value={input}
@@ -325,7 +369,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
             placeholder={prefs.muted ? 'Muted' : 'Say something, wise guy...'}
             maxLength={MAX_MESSAGE_LEN}
             disabled={prefs.muted}
-            className="flex-1 min-w-0 text-[11px] px-2.5 py-1.5 rounded-sm disabled:opacity-60 disabled:cursor-not-allowed outline-none transition-colors"
+            className="flex-1 min-w-0 text-[11px] px-2.5 py-2.5 sm:py-1.5 rounded-sm disabled:opacity-60 disabled:cursor-not-allowed outline-none transition-colors min-h-[44px] sm:min-h-0"
             style={{
               background: 'rgba(0,0,0,0.5)',
               border: '1px solid rgba(var(--noir-primary-rgb), 0.18)',
@@ -341,7 +385,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
             type="button"
             onClick={() => setShowGifPicker((v) => !v)}
             disabled={prefs.muted}
-            className="shrink-0 px-2 rounded-sm font-heading text-[9px] tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="shrink-0 min-w-[36px] min-h-[44px] sm:min-w-0 sm:min-h-0 px-2 rounded-sm font-heading text-[9px] tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center touch-manipulation active:scale-95"
             style={{
               background: 'rgba(var(--noir-primary-rgb), 0.07)',
               border: '1px solid rgba(var(--noir-primary-rgb), 0.2)',
@@ -357,7 +401,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
             type="button"
             onClick={() => setShowEmojis((v) => !v)}
             disabled={prefs.muted}
-            className="shrink-0 px-2 rounded-sm text-[13px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="shrink-0 min-w-[36px] min-h-[44px] sm:min-w-0 sm:min-h-0 px-2 rounded-sm text-[13px] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center touch-manipulation active:scale-95"
             style={{
               background: 'rgba(var(--noir-primary-rgb), 0.07)',
               border: '1px solid rgba(var(--noir-primary-rgb), 0.2)',
@@ -371,7 +415,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
           <button
             type="submit"
             disabled={sending || prefs.muted || !(input || '').trim()}
-            className="shrink-0 px-2.5 rounded-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="shrink-0 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 px-2.5 rounded-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center touch-manipulation active:scale-95"
             style={{
               background: 'rgba(var(--noir-primary-rgb), 0.15)',
               border: '1px solid rgba(var(--noir-primary-rgb), 0.35)',
@@ -379,14 +423,14 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
             }}
             aria-label="Send"
           >
-            <Send size={11} />
+            <Send size={12} />
           </button>
         </form>
 
-        {/* Emoji strip — horizontal scrolling, no wrap */}
+        {/* Emoji strip — horizontal scrolling, touch-friendly buttons */}
         {showEmojis && (
           <div
-            className="flex gap-0.5 overflow-x-auto"
+            className="flex gap-1 overflow-x-auto overflow-y-hidden py-0.5 -mx-0.5"
             style={{ scrollbarWidth: 'none' }}
           >
             {CHAT_EMOJIS.map((emoji) => (
@@ -394,7 +438,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
                 key={emoji}
                 type="button"
                 onClick={() => insertEmoji(emoji)}
-                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-sm text-[13px] transition-colors"
+                className="shrink-0 min-w-[36px] min-h-[36px] w-9 h-9 sm:w-6 sm:h-6 sm:min-w-[24px] sm:min-h-[24px] flex items-center justify-center rounded-sm text-[13px] transition-colors touch-manipulation active:scale-95"
                 style={{ border: '1px solid transparent' }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.1)';

@@ -373,7 +373,7 @@ export default function ForumTopic() {
               {topic.is_locked && <Lock size={14} className="text-red-400" />}
             </div>
             <div className="flex items-center gap-3 mt-1 text-[10px] text-mutedForeground">
-              <span className="text-foreground font-bold">{topic.author_username}</span>
+              <Link to={`/profile/${encodeURIComponent(topic.author_username)}`} className="text-foreground font-bold hover:text-primary hover:underline">{topic.author_username}</Link>
               <span className="flex items-center gap-0.5"><Clock size={10} /> {getTimeAgo(topic.created_at)}</span>
               <span className="flex items-center gap-0.5"><Eye size={10} /> {topic.views ?? 0}</span>
               <span className="flex items-center gap-0.5"><MessageCircle size={10} /> {commentCount}</span>
@@ -618,7 +618,7 @@ export default function ForumTopic() {
               <div key={c.id} className="p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-[10px] text-mutedForeground">
-                    <span className="text-foreground font-bold">{c.author_username}</span>
+                    <Link to={`/profile/${encodeURIComponent(c.author_username)}`} className="text-foreground font-bold hover:text-primary hover:underline">{c.author_username}</Link>
                     <span>·</span>
                     <span>{getTimeAgo(c.created_at)}</span>
                     <span className="text-zinc-600">#{idx + 1}</span>
@@ -710,7 +710,7 @@ export default function ForumTopic() {
             )}
             {replyToComment && (
               <div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded bg-primary/10 border border-primary/30 text-xs text-primary">
-                <span>Replying to <strong>{replyToComment.author_username}</strong></span>
+                <span>Replying to <Link to={`/profile/${encodeURIComponent(replyToComment.author_username)}`} className="font-bold text-primary hover:underline">{replyToComment.author_username}</Link></span>
                 <button type="button" onClick={() => setReplyToComment(null)} className="text-mutedForeground hover:text-foreground underline">Cancel</button>
               </div>
             )}

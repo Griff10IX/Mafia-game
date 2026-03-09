@@ -33,6 +33,7 @@ class AllEventsForTestingRequest(BaseModel):
 
 class AdminSettingsUpdate(BaseModel):
     admin_online_color: Optional[str] = None
+    mod_default_online_color: Optional[str] = None  # default colour for Mod on Users Online (mods can override on profile)
     require_email_verification: Optional[bool] = None
     stock_market_max_points: Optional[int] = None
     landing_banner_enabled: Optional[bool] = None
@@ -1342,10 +1343,15 @@ def register(router):
     async def admin_get_settings(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        MOD_DEFAULT = "#1e3a5f"
         doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
         admin_online_color = (doc.get("value") or "#a78bfa") if doc else "#a78bfa"
         if not isinstance(admin_online_color, str) or not admin_online_color.strip():
             admin_online_color = "#a78bfa"
+        mod_doc = await db.game_settings.find_one({"key": "mod_default_online_color"}, {"_id": 0, "value": 1})
+        mod_default_online_color = (mod_doc.get("value") or MOD_DEFAULT) if mod_doc else MOD_DEFAULT
+        if not isinstance(mod_default_online_color, str) or not mod_default_online_color.strip():
+            mod_default_online_color = MOD_DEFAULT
         req_doc = await db.game_settings.find_one({"key": "require_email_verification"}, {"_id": 0, "value": 1})
         require_email_verification = bool(req_doc.get("value") if req_doc else True)  # default True when missing
         sm_doc = await db.game_settings.find_one({"key": "stock_market_max_points"}, {"_id": 0, "value": 1})
@@ -1358,6 +1364,7 @@ def register(router):
         landing_banner_enabled = bool(banner_doc.get("value") if banner_doc else False)
         return {
             "admin_online_color": admin_online_color.strip(),
+            "mod_default_online_color": mod_default_online_color.strip(),
             "require_email_verification": require_email_verification,
             "stock_market_max_points": stock_market_max_points,
             "landing_banner_enabled": landing_banner_enabled,
@@ -1373,6 +1380,18 @@ def register(router):
                 val = "#" + val
             await db.game_settings.update_one(
                 {"key": "admin_online_color"},
+                {"$set": {"value": val}},
+                upsert=True,
+            )
+        if body.mod_default_online_color is not None:
+            mod_default = "#1e3a5f"
+            val = (body.mod_default_online_color or "").strip() or mod_default
+            if not val.startswith("#"):
+                val = "#" + val
+            if len(val) > 9:
+                val = mod_default
+            await db.game_settings.update_one(
+                {"key": "mod_default_online_color"},
                 {"$set": {"value": val}},
                 upsert=True,
             )
@@ -1395,8 +1414,13 @@ def register(router):
                 {"$set": {"value": body.landing_banner_enabled}},
                 upsert=True,
             )
+        MOD_DEFAULT = "#1e3a5f"
         doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
         admin_online_color = (doc.get("value") or "#a78bfa") if doc else "#a78bfa"
+        mod_doc = await db.game_settings.find_one({"key": "mod_default_online_color"}, {"_id": 0, "value": 1})
+        mod_default_online_color = (mod_doc.get("value") or MOD_DEFAULT) if mod_doc else MOD_DEFAULT
+        if not isinstance(mod_default_online_color, str) or not mod_default_online_color.strip():
+            mod_default_online_color = MOD_DEFAULT
         req_doc = await db.game_settings.find_one({"key": "require_email_verification"}, {"_id": 0, "value": 1})
         require_email_verification = bool(req_doc.get("value") if req_doc else True)  # default True when missing
         sm_doc = await db.game_settings.find_one({"key": "stock_market_max_points"}, {"_id": 0, "value": 1})
@@ -1406,6 +1430,7 @@ def register(router):
         landing_banner_enabled = bool(banner_doc.get("value") if banner_doc else False)
         return {
             "admin_online_color": admin_online_color,
+            "mod_default_online_color": mod_default_online_color.strip() if isinstance(mod_default_online_color, str) else MOD_DEFAULT,
             "require_email_verification": require_email_verification,
             "stock_market_max_points": stock_market_max_points,
             "landing_banner_enabled": landing_banner_enabled,

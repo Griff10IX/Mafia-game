@@ -297,7 +297,9 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
             </span>
           )}
         </div>
-        <div className="col-span-2 text-right text-mutedForeground truncate">{topic.author_username}</div>
+        <div className="col-span-2 text-right truncate">
+          <Link to={`/profile/${encodeURIComponent(topic.author_username)}`} className="text-mutedForeground hover:text-primary hover:underline">{topic.author_username}</Link>
+        </div>
         <div className="col-span-1 text-right text-foreground tabular-nums">{topic.posts}</div>
         <div className="col-span-2 text-right text-mutedForeground tabular-nums">{topic.views}</div>
         {showFlagControls && (
@@ -326,7 +328,7 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
         <div className="absolute left-4 right-4 top-full z-20 mt-1 p-3 bg-zinc-900 border border-primary/30 rounded-md shadow-xl">
           <p className="text-xs text-mutedForeground line-clamp-3">{topic.preview}</p>
           <div className="flex items-center gap-3 mt-2 pt-2 border-t border-zinc-700/30 text-[10px] text-mutedForeground">
-            <span>By <span className="text-foreground">{topic.author_username}</span></span>
+            <span>By <Link to={`/profile/${encodeURIComponent(topic.author_username)}`} className="text-foreground hover:text-primary hover:underline">{topic.author_username}</Link></span>
             {topic.created_at && <span>{getTimeAgo(topic.created_at)}</span>}
             <span className="flex items-center gap-0.5"><MessageCircle size={10} /> {topic.posts} replies</span>
           </div>
@@ -357,7 +359,7 @@ const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating
           {topic.is_locked && <Lock size={10} className="text-mutedForeground shrink-0" />}
         </div>
         <div className="flex items-center gap-3 mt-1 text-[10px] text-mutedForeground">
-          <span>{topic.author_username}</span>
+          <Link to={`/profile/${encodeURIComponent(topic.author_username)}`} onClick={(e) => e.stopPropagation()} className="hover:text-primary hover:underline">{topic.author_username}</Link>
           <span className="flex items-center gap-0.5"><MessageCircle size={10} /> {topic.posts}</span>
           <span className="flex items-center gap-0.5"><Eye size={10} /> {topic.views}</span>
         </div>
@@ -879,7 +881,7 @@ export default function Forum() {
                           ) : (
                             <p className="text-[10px] font-heading font-bold text-mutedForeground">Entry</p>
                           )}
-                          <p className="text-[10px] text-mutedForeground">by {entry.author_username}</p>
+                          <p className="text-[10px] text-mutedForeground">by <Link to={`/profile/${encodeURIComponent(entry.author_username)}`} className="text-primary hover:underline">{entry.author_username}</Link></p>
                           <p className="text-[10px] text-mutedForeground">{entry.vote_count} vote(s)</p>
                           <div className="flex gap-1 mt-1.5">
                             <Link to={`/forum/topic/${entry.topic_id || activeDesignerComp?.competition_topic_id || ''}`} className="text-[10px] text-primary hover:underline">View topic</Link>

@@ -19,6 +19,14 @@ def register(router):
     MOD_ONLINE_COLOR_DEFAULT = "#1e3a5f"
     HDO_ONLINE_COLOR = "#166534"  # dark green for Help Desk Operators
 
+    async def _get_mod_default_online_color():
+        doc = await db.game_settings.find_one({"key": "mod_default_online_color"}, {"_id": 0, "value": 1})
+        raw = (doc.get("value") or MOD_ONLINE_COLOR_DEFAULT) if doc else MOD_ONLINE_COLOR_DEFAULT
+        if not isinstance(raw, str) or not raw.strip():
+            return MOD_ONLINE_COLOR_DEFAULT
+        raw = raw.strip()
+        return raw if raw.startswith("#") and len(raw) <= 9 else MOD_ONLINE_COLOR_DEFAULT
+
     @router.get("/users/online", response_model=OnlineUsersResponse)
     async def get_online_users(current_user: dict = Depends(get_current_user)):
         """Online = last 5 min, forced-online, or Auto Rank enabled. When Auto Rank is disabled, normal rules only."""
@@ -58,8 +66,11 @@ def register(router):
             if is_admin:
                 pass  # set below from global
             elif is_mod:
-                raw = (user.get("mod_online_color") or "").strip() or MOD_ONLINE_COLOR_DEFAULT
-                online_color = raw if raw.startswith("#") and len(raw) <= 9 else MOD_ONLINE_COLOR_DEFAULT
+                raw = (user.get("mod_online_color") or "").strip()
+                if raw and raw.startswith("#") and len(raw) <= 9:
+                    online_color = raw
+                else:
+                    online_color = None  # will use mod_default from settings below
             elif is_hdo:
                 online_color = HDO_ONLINE_COLOR
             users_data.append({
@@ -111,15 +122,19 @@ def register(router):
         if not isinstance(admin_online_color, str) or not admin_online_color.strip():
             admin_online_color = "#a78bfa"
         admin_online_color = admin_online_color.strip()
+
+        mod_default_online_color = await _get_mod_default_online_color()
         for u in users_data:
             if u.get("is_admin"):
                 u["online_color"] = admin_online_color
+            elif u.get("is_moderator") and u.get("online_color") is None:
+                u["online_color"] = mod_default_online_color
 
         return OnlineUsersResponse(
             total_online=len(users_data),
             users=users_data,
             admin_online_color=admin_online_color,
-            mod_default_online_color=MOD_ONLINE_COLOR_DEFAULT,
+            mod_default_online_color=mod_default_online_color,
             hdo_online_color=HDO_ONLINE_COLOR,
         )
 
