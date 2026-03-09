@@ -418,7 +418,7 @@ export function ThemeProvider({ children }) {
       }
       themeSourceRef.current = 'server';
       try {
-        if (prefs.sidebarLayout != null && (prefs.sidebarLayout === 'default' || prefs.sidebarLayout === 'categorized')) {
+        if (prefs.sidebarLayout != null && (prefs.sidebarLayout === 'default' || prefs.sidebarLayout === 'categorized' || prefs.sidebarLayout === 'categorized_classic')) {
           localStorage.setItem('sidebar_layout', prefs.sidebarLayout);
           window.dispatchEvent(new Event('sidebar-layout-changed'));
         }

@@ -326,6 +326,7 @@ export const THEME_SIDEBAR_SPACING = [
 export const THEME_SIDEBAR_LAYOUT = [
   { id: 'default', name: 'Default' },
   { id: 'categorized', name: 'Categorized' },
+  { id: 'categorized_classic', name: 'Categorized (Classic)' },
 ];
 
 /** Toast notification position. */

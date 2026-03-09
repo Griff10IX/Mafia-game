@@ -147,7 +147,7 @@ function loadSidebarSpacing() {
   return 'normal';
 }
 function loadSidebarLayout() {
-  try { const v = localStorage.getItem(SIDEBAR_LAYOUT_KEY); if (v === 'categorized' || v === 'default') return v; } catch (_) {}
+  try { const v = localStorage.getItem(SIDEBAR_LAYOUT_KEY); if (v === 'categorized' || v === 'categorized_classic' || v === 'default') return v; } catch (_) {}
   return 'default';
 }
 function loadBottomNavShowDividers() {
@@ -642,22 +642,41 @@ export default function Layout({ children }) {
 
   const needsEmailVerification = user && user.email_verified === false;
 
-  const PATH_TO_CATEGORY = {
-    '/dashboard': 'information', '/verify-email': 'information', '/objectives': 'information', '/missions': 'information',
-    '/loot-box': 'information', '/profile': 'information', '/ip-rules': 'information', '/stats': 'information',
-    '/users-online': 'information', '/properties': 'information', '/help-desk': 'information',
-    '/ranking': 'ranking', '/prestige': 'ranking',
-    '/attack': 'combat', '/attempts': 'combat', '/hitlist': 'combat', '/bodyguards': 'combat', '/armour-weapons': 'combat',
-    '/travel': 'travel', '/states': 'travel', '/my-properties': 'travel', '/booze-run': 'travel',
-    '/forum': 'messaging', '/inbox': 'messaging',
-    '/bank': 'money', '/stock-market': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money',
-    '/garage': 'money', '/sell-cars': 'money', '/buy-cars': 'money', '/crack-safe': 'money', '/casino': 'money', '/leaderboard': 'money',
-    '/families': 'other', '/dead-alive': 'other', '/auto-rank': 'other',
-  };
-  const SIDEBAR_CATEGORIES = [
-    { id: 'information', label: 'You' }, { id: 'ranking', label: 'Ranking' }, { id: 'combat', label: 'Combat' },
-    { id: 'travel', label: 'Travel' }, { id: 'messaging', label: 'Messages' }, { id: 'money', label: 'Money' }, { id: 'other', label: 'Other' },
-  ];
+  const isCategorizedClassic = sidebarLayout === 'categorized_classic';
+  const PATH_TO_CATEGORY = isCategorizedClassic
+    ? {
+        '/dashboard': 'information', '/verify-email': 'information', '/objectives': 'information', '/missions': 'information',
+        '/profile': 'information', '/ip-rules': 'information', '/stats': 'information',
+        '/users-online': 'information', '/properties': 'information', '/help-desk': 'information', '/leaderboard': 'information',
+        '/ranking': 'ranking', '/prestige': 'ranking',
+        '/attack': 'combat', '/attempts': 'combat', '/hitlist': 'combat', '/bodyguards': 'combat', '/armour-weapons': 'combat',
+        '/travel': 'travel', '/states': 'travel', '/my-properties': 'travel', '/booze-run': 'travel',
+        '/forum': 'messaging', '/inbox': 'messaging',
+        '/bank': 'money', '/stock-market': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money',
+        '/garage': 'money', '/sell-cars': 'money', '/buy-cars': 'money', '/crack-safe': 'money', '/casino': 'money', '/loot-box': 'money',
+        '/families': 'other', '/dead-alive': 'other', '/auto-rank': 'other',
+      }
+    : {
+        '/dashboard': 'information', '/verify-email': 'information', '/objectives': 'information', '/missions': 'information',
+        '/loot-box': 'information', '/profile': 'information', '/ip-rules': 'information', '/stats': 'information',
+        '/users-online': 'information', '/properties': 'information', '/help-desk': 'information',
+        '/ranking': 'ranking', '/prestige': 'ranking',
+        '/attack': 'combat', '/attempts': 'combat', '/hitlist': 'combat', '/bodyguards': 'combat', '/armour-weapons': 'combat',
+        '/travel': 'travel', '/states': 'travel', '/my-properties': 'travel', '/booze-run': 'travel',
+        '/forum': 'messaging', '/inbox': 'messaging',
+        '/bank': 'money', '/stock-market': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money',
+        '/garage': 'money', '/sell-cars': 'money', '/buy-cars': 'money', '/crack-safe': 'money', '/casino': 'money', '/leaderboard': 'money',
+        '/families': 'other', '/dead-alive': 'other', '/auto-rank': 'other',
+      };
+  const SIDEBAR_CATEGORIES = isCategorizedClassic
+    ? [
+        { id: 'information', label: 'INFORMATION' }, { id: 'ranking', label: 'RANKING' }, { id: 'combat', label: 'COMBAT' },
+        { id: 'travel', label: 'TRAVEL' }, { id: 'messaging', label: 'MESSAGING' }, { id: 'money', label: 'MONEY' }, { id: 'other', label: 'OTHER' },
+      ]
+    : [
+        { id: 'information', label: 'You' }, { id: 'ranking', label: 'Ranking' }, { id: 'combat', label: 'Combat' },
+        { id: 'travel', label: 'Travel' }, { id: 'messaging', label: 'Messages' }, { id: 'money', label: 'Money' }, { id: 'other', label: 'Other' },
+      ];
 
   const navItems = [
     { path: '/dashboard', icon: Home, label: 'Dashboard' },
@@ -990,7 +1009,7 @@ export default function Layout({ children }) {
           {/* Navigation */}
           <nav className={`flex-1 overflow-y-auto px-2 py-1 ${styles.sidebarNav} min-h-0`}>
             <div className="space-y-0">
-              {sidebarLayout === 'categorized' ? (
+              {(sidebarLayout === 'categorized' || sidebarLayout === 'categorized_classic') ? (
                 <>
                   {SIDEBAR_CATEGORIES.map((cat) => {
                     const items = navItems.filter((i) => (PATH_TO_CATEGORY[i.path] || 'other') === cat.id);
