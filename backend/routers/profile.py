@@ -372,6 +372,19 @@ def register(router):
         except (ValueError, TypeError):
             return default
 
+    def _to_json_safe(v):
+        """Ensure value is JSON-serializable (datetime, ObjectId, etc.)."""
+        if v is None:
+            return None
+        if isinstance(v, (bool, int, float, str)):
+            return v
+        try:
+            if hasattr(v, "isoformat"):  # datetime
+                return v.isoformat() if v.tzinfo else v.replace(tzinfo=timezone.utc).isoformat()
+        except Exception:
+            pass
+        return str(v)
+
     @router.get("/users/{username}/staff-stats")
     async def get_user_staff_stats(username: str, current_user: dict = Depends(get_current_user)):
         """Extended stats for a user. Admin or moderator only. Used in profile page 'User info' dropdown."""
@@ -428,32 +441,32 @@ def register(router):
             last_login_ip = ips[-1] if ips else None
         try:
             return {
-            "id": user.get("id"),
-            "username": user.get("username"),
-            "email": user.get("email"),
-            "created_at": user.get("created_at"),
-            "last_seen": user.get("last_seen"),
-            "money": _safe_int(user.get("money")),
-            "points": _safe_int(user.get("points")),
-            "rank_points": _safe_int(user.get("rank_points")),
-            "rank_id": rank_id,
-            "rank_name": rank_name,
-            "bullets": _safe_int(user.get("bullets")),
-            "armour_level": _safe_int(user.get("armour_level")),
-            "total_kills": _safe_int(user.get("total_kills")),
-            "total_deaths": _safe_int(user.get("total_deaths")),
-            "total_crimes": _safe_int(user.get("total_crimes")),
-            "total_gta": _safe_int(user.get("total_gta")),
-            "jail_busts": _safe_int(user.get("jail_busts")),
-            "current_state": str(user.get("current_state") or "—")[:100],
-            "in_jail": bool(user.get("in_jail")),
-            "is_dead": bool(user.get("is_dead")),
-            "family_name": family_name,
-            "prestige_level": _safe_int(user.get("prestige_level")),
-            "account_locked": bool(user.get("account_locked")),
-            "account_locked_at": user.get("account_locked_at"),
-            "registration_ip": user.get("registration_ip"),
-            "last_login_ip": last_login_ip,
+                "id": _to_json_safe(user.get("id")) or str(user.get("id", "")),
+                "username": str(user.get("username") or ""),
+                "email": str(user.get("email") or ""),
+                "created_at": _to_json_safe(user.get("created_at")),
+                "last_seen": _to_json_safe(user.get("last_seen")),
+                "money": _safe_int(user.get("money")),
+                "points": _safe_int(user.get("points")),
+                "rank_points": _safe_int(user.get("rank_points")),
+                "rank_id": rank_id,
+                "rank_name": str(rank_name or ""),
+                "bullets": _safe_int(user.get("bullets")),
+                "armour_level": _safe_int(user.get("armour_level")),
+                "total_kills": _safe_int(user.get("total_kills")),
+                "total_deaths": _safe_int(user.get("total_deaths")),
+                "total_crimes": _safe_int(user.get("total_crimes")),
+                "total_gta": _safe_int(user.get("total_gta")),
+                "jail_busts": _safe_int(user.get("jail_busts")),
+                "current_state": str(user.get("current_state") or "—")[:100],
+                "in_jail": bool(user.get("in_jail")),
+                "is_dead": bool(user.get("is_dead")),
+                "family_name": str(family_name) if family_name else None,
+                "prestige_level": _safe_int(user.get("prestige_level")),
+                "account_locked": bool(user.get("account_locked")),
+                "account_locked_at": _to_json_safe(user.get("account_locked_at")),
+                "registration_ip": str(user.get("registration_ip")) if user.get("registration_ip") else None,
+                "last_login_ip": str(last_login_ip) if last_login_ip else None,
             }
         except Exception as e:
             logger.exception("staff-stats build response failed: %s", e)
