@@ -214,11 +214,13 @@ function loadTopBarChipHeightScale() {
 }
 
 // ── IMPROVEMENT 2: Ornamental category header for sidebar ──────────────────
-function SidebarCatHeader({ label }) {
+// classic: thin gold lines + gold label (original look). Default: lines + muted label.
+function SidebarCatHeader({ label, classic }) {
+  const labelColor = classic ? 'var(--noir-primary)' : 'var(--noir-muted)';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px 3px 10px', marginTop: 3 }}>
       <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
-      <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--noir-muted)', whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', color: labelColor, whiteSpace: 'nowrap' }}>{label}</span>
       <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
     </div>
   );
@@ -1017,7 +1019,7 @@ export default function Layout({ children }) {
                     return (
                       <Fragment key={cat.id}>
                         {/* IMPROVEMENT 2: ornamental category header */}
-                        <SidebarCatHeader label={cat.label} />
+                        <SidebarCatHeader label={cat.label} classic={sidebarLayout === 'categorized_classic'} />
                         {items.map((item, idx) => renderNavItem(item, idx > 0))}
                         {cat.id === 'ranking' && (
                           <>
