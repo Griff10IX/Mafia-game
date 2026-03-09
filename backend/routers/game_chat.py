@@ -63,7 +63,7 @@ async def _get_staff_user_ids():
 
 
 async def _notify_staff_game_chat_spam(spammer_user_id: str, spammer_username: str):
-    """Send inbox notification to all admins/mods and create a help desk ticket for visibility."""
+    """Send inbox notification to all admins/mods and create or update a single help desk ticket per spammer."""
     staff_ids = await _get_staff_user_ids()
     title = "Game chat spam"
     message = f"User {spammer_username} exceeded the rate limit (5 messages per 30 seconds). Consider muting them from game chat via Admin or their profile."
@@ -74,20 +74,38 @@ async def _notify_staff_game_chat_spam(spammer_user_id: str, spammer_username: s
             logger.warning("Game chat spam notify staff %s: %s", uid, e)
     try:
         now = datetime.now(timezone.utc).isoformat()
-        ticket = {
-            "id": str(uuid.uuid4()),
-            "user_id": spammer_user_id,
-            "username": spammer_username,
-            "subject": f"Game chat spam: {spammer_username}",
-            "body": "Automated report: This user exceeded the rate limit (5 messages per 30 seconds). Consider muting from game chat via Admin or profile.",
-            "status": "open",
-            "created_at": now,
-            "updated_at": now,
-            "replies": [],
-            "closed_at": None,
-            "closed_by_id": None,
-        }
-        await db.help_desk_tickets.insert_one(ticket)
+        subject = f"Game chat spam: {spammer_username}"
+        existing = await db.help_desk_tickets.find_one(
+            {"user_id": spammer_user_id, "subject": subject, "status": "open"},
+            {"_id": 1, "id": 1},
+        )
+        if existing:
+            reply = {
+                "author_id": "",
+                "author_username": "System",
+                "author_role": "system",
+                "body": f"Rate limit exceeded again at {now}. Consider muting from game chat via Admin or profile.",
+                "created_at": now,
+            }
+            await db.help_desk_tickets.update_one(
+                {"id": existing["id"]},
+                {"$push": {"replies": reply}, "$set": {"updated_at": now}},
+            )
+        else:
+            ticket = {
+                "id": str(uuid.uuid4()),
+                "user_id": spammer_user_id,
+                "username": spammer_username,
+                "subject": subject,
+                "body": "Automated report: This user exceeded the rate limit (5 messages per 30 seconds). Consider muting from game chat via Admin or profile.",
+                "status": "open",
+                "created_at": now,
+                "updated_at": now,
+                "replies": [],
+                "closed_at": None,
+                "closed_by_id": None,
+            }
+            await db.help_desk_tickets.insert_one(ticket)
     except Exception as e:
         logger.warning("Game chat spam help desk ticket: %s", e)
 

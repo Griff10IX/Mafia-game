@@ -8,7 +8,6 @@ import GifPicker from './GifPicker';
 const POLL_INTERVAL_MS = 5000;
 const MAX_MESSAGE_LEN = 500;
 
-// Same gangster/noir themed strip as InboxChat
 const CHAT_EMOJIS = [
   '💰', '💵', '💎', '🎩', '🔫', '⚔️', '🔪', '💀', '🚬', '🥃', '🍷', '🎲', '🃏', '👔', '💼', '🕴️', '🏆', '👑', '✨', '💪', '👍', '😎', '🎭',
 ];
@@ -33,6 +32,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
   const [showEmojis, setShowEmojis] = useState(false);
   const messagesEndRef = useRef(null);
   const scrollRef = useRef(null);
+  const isAtBottomRef = useRef(true);
   const shouldScrollToBottomRef = useRef(false);
 
   const fetchMessages = useCallback(async () => {
@@ -62,9 +62,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
     }
   }, []);
 
-  useEffect(() => {
-    fetchPrefs();
-  }, [fetchPrefs]);
+  useEffect(() => { fetchPrefs(); }, [fetchPrefs]);
 
   useEffect(() => {
     fetchMessages();
@@ -73,8 +71,19 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
   }, [fetchMessages]);
 
   useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      isAtBottomRef.current = scrollHeight - scrollTop - clientHeight <= 60;
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
     if (!messages.length) return;
-    if (shouldScrollToBottomRef.current) {
+    if (shouldScrollToBottomRef.current || isAtBottomRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       shouldScrollToBottomRef.current = false;
     }
@@ -152,158 +161,271 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 border-t pt-2 mt-2" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}>
-      <div className="flex items-center justify-between gap-1 shrink-0 mb-1.5">
-        <span className="text-[10px] font-heading uppercase tracking-wider flex items-center gap-1" style={{ color: 'var(--noir-primary)' }}>
-          <MessageSquare size={10} /> Game Chat
+    <div className="flex flex-col min-h-0 border-t mt-2" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}>
+
+      {/* ── Header ── */}
+      <div
+        className="flex items-center justify-between px-3 py-2 shrink-0"
+        style={{ background: 'rgba(var(--noir-primary-rgb), 0.06)', borderBottom: '1px solid rgba(var(--noir-primary-rgb), 0.12)' }}
+      >
+        <span
+          className="text-[9px] font-heading uppercase tracking-widest flex items-center gap-1.5"
+          style={{ color: 'var(--noir-primary)' }}
+        >
+          <MessageSquare size={9} />
+          Game Chat
         </span>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setSettingsOpen((o) => !o)}
-            className="p-0.5 rounded hover:bg-primary/10 transition-colors"
-            style={{ color: 'var(--noir-primary)' }}
-            aria-label="Chat settings"
-          >
-            <Settings size={12} />
-          </button>
-          {settingsOpen && (
-            <>
-              <div className="fixed inset-0 z-10" aria-hidden="true" onClick={() => setSettingsOpen(false)} />
-              <div
-                className="absolute right-0 top-full mt-0.5 z-20 py-2 px-2 rounded border shadow-lg min-w-[160px]"
-                style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
-              >
-                {prefs.in_family && (
-                  <label className="flex items-center gap-2 cursor-pointer text-[10px] font-heading py-1 px-1 rounded hover:bg-primary/5">
-                    <input
-                      type="checkbox"
-                      checked={prefs.family_only}
-                      onChange={(e) => { setFamilyOnly(e.target.checked); }}
-                      className="rounded border-primary/50"
-                    />
-                    <span style={{ color: 'var(--noir-foreground)' }}>Family only</span>
-                  </label>
-                )}
-                {prefs.blocked_user_ids.length > 0 && (
-                  <div className="mt-1 pt-1 border-t border-zinc-700/50">
-                    <p className="text-[9px] font-heading uppercase text-mutedForeground px-1 mb-0.5">Blocked</p>
-                    {(prefs.block_list_with_names?.length ? prefs.block_list_with_names : prefs.blocked_user_ids.map((uid) => ({ user_id: uid, username: uid }))).slice(0, 10).map((item) => (
-                      <div key={item.user_id} className="flex items-center justify-between gap-1 py-0.5 px-1 text-[10px]">
-                        <span className="truncate" style={{ color: 'var(--noir-foreground)' }}>{item.username}</span>
-                        <button type="button" onClick={() => unblockUser(item.user_id)} className="text-primary hover:underline shrink-0" title="Unblock">Unblock</button>
-                      </div>
-                    ))}
-                    {prefs.blocked_user_ids.length > 10 && <p className="text-[9px] text-mutedForeground px-1">+{prefs.blocked_user_ids.length - 10} more</p>}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+
+        <div className="flex items-center gap-2">
+          {/* Settings */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setSettingsOpen((o) => !o)}
+              className="p-0.5 rounded transition-colors hover:opacity-80"
+              style={{ color: 'rgba(var(--noir-primary-rgb), 0.5)' }}
+              aria-label="Chat settings"
+            >
+              <Settings size={11} />
+            </button>
+
+            {settingsOpen && (
+              <>
+                <div className="fixed inset-0 z-10" aria-hidden="true" onClick={() => setSettingsOpen(false)} />
+                <div
+                  className="absolute right-0 top-full mt-0.5 z-20 py-2 px-2 rounded border shadow-lg min-w-[160px]"
+                  style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
+                >
+                  {prefs.in_family && (
+                    <label className="flex items-center gap-2 cursor-pointer text-[10px] font-heading py-1 px-1 rounded hover:bg-primary/5">
+                      <input
+                        type="checkbox"
+                        checked={prefs.family_only}
+                        onChange={(e) => setFamilyOnly(e.target.checked)}
+                        className="rounded border-primary/50"
+                      />
+                      <span style={{ color: 'var(--noir-foreground)' }}>Family only</span>
+                    </label>
+                  )}
+                  {prefs.blocked_user_ids.length > 0 && (
+                    <div className="mt-1 pt-1 border-t border-zinc-700/50">
+                      <p className="text-[9px] font-heading uppercase px-1 mb-0.5" style={{ color: 'var(--noir-muted-foreground)' }}>Blocked</p>
+                      {(prefs.block_list_with_names?.length
+                        ? prefs.block_list_with_names
+                        : prefs.blocked_user_ids.map((uid) => ({ user_id: uid, username: uid }))
+                      ).slice(0, 10).map((item) => (
+                        <div key={item.user_id} className="flex items-center justify-between gap-1 py-0.5 px-1 text-[10px]">
+                          <span className="truncate" style={{ color: 'var(--noir-foreground)' }}>{item.username}</span>
+                          <button
+                            type="button"
+                            onClick={() => unblockUser(item.user_id)}
+                            className="shrink-0 hover:underline"
+                            style={{ color: 'var(--noir-primary)' }}
+                          >
+                            Unblock
+                          </button>
+                        </div>
+                      ))}
+                      {prefs.blocked_user_ids.length > 10 && (
+                        <p className="text-[9px] px-1" style={{ color: 'var(--noir-muted-foreground)' }}>
+                          +{prefs.blocked_user_ids.length - 10} more
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 min-h-[120px] max-h-[200px] overflow-y-auto overflow-x-hidden space-y-1 pr-0.5 scrollbar-thin">
+      {/* ── Messages ── */}
+      <div
+        ref={scrollRef}
+        className="flex-1 min-h-[130px] max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-thin"
+        style={{ scrollbarColor: 'rgba(var(--noir-primary-rgb), 0.15) transparent' }}
+      >
         {prefs.muted && (
-          <p className="text-[10px] text-amber-400 font-heading py-1">You are muted from game chat. Contact staff if you think this is a mistake.</p>
+          <p className="text-[9px] font-heading px-3 py-2 text-amber-400">
+            You are muted. Contact staff if this is a mistake.
+          </p>
         )}
+
         {loading ? (
-          <p className="text-[10px] text-mutedForeground font-heading">Loading...</p>
+          <p className="text-[9px] font-heading px-3 py-2" style={{ color: 'var(--noir-muted-foreground)' }}>
+            Loading...
+          </p>
         ) : messages.length === 0 ? (
-          <p className="text-[10px] text-mutedForeground font-heading">No messages yet. Say something.</p>
+          <p className="text-[9px] font-heading px-3 py-2 italic" style={{ color: 'var(--noir-muted-foreground)' }}>
+            No messages yet. Say something.
+          </p>
         ) : (
-          messages.map((m) => (
-            <div key={m.id} className="group relative">
-              <div className="text-[10px] leading-tight break-words">
-                <div className="font-heading font-bold shrink-0" style={{ color: 'var(--noir-primary)' }}>{m.username}</div>
-                {m.gif_url && (
-                  <div className="mt-0.5">
-                    <img src={m.gif_url} alt="GIF" className="rounded max-h-40 w-full object-contain bg-zinc-900/50" loading="lazy" />
-                  </div>
-                )}
-                {m.message && m.message !== '(GIF)' && (
-                  <div className="mt-0.5" style={{ color: 'var(--noir-foreground)' }}>{m.message}</div>
+          messages.map((m) => {
+            const isOwn = m.user_id === myUserId;
+            return (
+              <div
+                key={m.id}
+                className="group relative px-3 py-1"
+                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
+              >
+                {/* Inline name + message */}
+                <div className="text-[11px] leading-snug break-words">
+                  <span
+                    className="font-heading text-[9.5px] font-bold mr-1 shrink-0"
+                    style={{ color: isOwn ? 'var(--noir-primary)' : 'rgba(var(--noir-primary-rgb), 0.75)' }}
+                  >
+                    {m.username}
+                  </span>
+                  <span className="text-[9px] mr-1.5" style={{ color: 'rgba(255,255,255,0.18)' }}>·</span>
+                  {m.gif_url && (
+                    <span className="block mt-1">
+                      <img
+                        src={m.gif_url}
+                        alt="GIF"
+                        className="rounded max-h-24 max-w-full object-contain"
+                        style={{ border: '1px solid rgba(var(--noir-primary-rgb), 0.18)', background: 'rgba(0,0,0,0.4)' }}
+                        loading="lazy"
+                      />
+                    </span>
+                  )}
+                  {m.message && m.message !== '(GIF)' && (
+                    <span style={{ color: 'rgba(255,255,255,0.68)' }}>{m.message}</span>
+                  )}
+                </div>
+
+                {/* Timestamp */}
+                <div className="text-[8.5px] font-heading mt-0.5" style={{ color: 'rgba(255,255,255,0.2)', letterSpacing: '0.04em' }}>
+                  {formatChatTime(m.created_at)}
+                </div>
+
+                {/* Block button — hover only */}
+                {!isOwn && (
+                  <button
+                    type="button"
+                    onClick={() => blockUser(m.user_id, m.username)}
+                    className="absolute right-2 top-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 text-[8px] font-heading px-1.5 py-0.5 rounded"
+                    style={{ color: 'rgba(248,113,113,0.6)', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(248,113,113,0.15)' }}
+                    title={`Block ${m.username}`}
+                  >
+                    <UserX size={9} /> Block
+                  </button>
                 )}
               </div>
-              <div className="text-[9px] text-mutedForeground mt-0.5">{formatChatTime(m.created_at)}</div>
-              {m.user_id !== myUserId && (
-                <button
-                  type="button"
-                  onClick={() => blockUser(m.user_id, m.username)}
-                  className="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-red-400 hover:bg-red-400/10 flex items-center gap-0.5 text-[9px] font-heading"
-                  title={`Block ${m.username}`}
-                >
-                  <UserX size={10} /> Block
-                </button>
-              )}
-            </div>
-          ))
+            );
+          })
         )}
         <div ref={messagesEndRef} />
       </div>
 
+      {/* ── GIF Picker ── */}
       {showGifPicker && (
-        <div className="shrink-0 mt-1">
+        <div className="shrink-0 px-2 pt-1">
           <GifPicker onSelect={handleSendGif} onClose={() => setShowGifPicker(false)} />
         </div>
       )}
 
-      <form onSubmit={handleSend} className="shrink-0 flex gap-1 mt-1.5">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={prefs.muted ? 'Muted' : 'Message...'}
-          maxLength={MAX_MESSAGE_LEN}
-          disabled={prefs.muted}
-          className="flex-1 min-w-0 text-[10px] font-heading px-2 py-1.5 rounded border bg-zinc-900/80 placeholder:text-mutedForeground disabled:opacity-60 disabled:cursor-not-allowed"
-          style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-foreground)' }}
-        />
-        <button
-          type="button"
-          onClick={() => setShowGifPicker((v) => !v)}
-          disabled={prefs.muted}
-          className="shrink-0 p-1.5 rounded border border-primary/30 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title="GIF"
-          aria-label="Pick GIF"
-        >
-          <span className="text-[10px] font-heading">GIF</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowEmojis((e) => !e)}
-          disabled={prefs.muted}
-          className="shrink-0 p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground text-[10px] font-heading transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title={showEmojis ? 'Hide emoji' : 'Emoji'}
-          aria-label="Toggle emoji"
-        >
-          😀
-        </button>
-        <button
-          type="submit"
-          disabled={sending || prefs.muted || !(input || '').trim()}
-          className="shrink-0 p-1.5 rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          aria-label="Send"
-        >
-          <Send size={12} />
-        </button>
-      </form>
-      {showEmojis && (
-        <div className="flex flex-wrap gap-0.5 mt-1">
-          {CHAT_EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => insertEmoji(emoji)}
-              className="w-7 h-7 flex items-center justify-center rounded border border-transparent hover:bg-primary/10 hover:border-primary/20 text-sm"
-              title="Insert emoji"
-              aria-label="Insert emoji"
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* ── Input area ── */}
+      <div
+        className="shrink-0 px-2 pt-2 pb-2 flex flex-col gap-1.5"
+        style={{ borderTop: '1px solid rgba(var(--noir-primary-rgb), 0.1)', background: 'rgba(0,0,0,0.2)' }}
+      >
+        {/* Text input + action buttons */}
+        <form onSubmit={handleSend} className="flex items-stretch gap-1">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={prefs.muted ? 'Muted' : 'Say something, wise guy...'}
+            maxLength={MAX_MESSAGE_LEN}
+            disabled={prefs.muted}
+            className="flex-1 min-w-0 text-[11px] px-2.5 py-1.5 rounded-sm disabled:opacity-60 disabled:cursor-not-allowed outline-none transition-colors"
+            style={{
+              background: 'rgba(0,0,0,0.5)',
+              border: '1px solid rgba(var(--noir-primary-rgb), 0.18)',
+              color: 'var(--noir-foreground)',
+              fontFamily: 'inherit',
+            }}
+            onFocus={(e) => (e.target.style.borderColor = 'rgba(var(--noir-primary-rgb), 0.45)')}
+            onBlur={(e) => (e.target.style.borderColor = 'rgba(var(--noir-primary-rgb), 0.18)')}
+          />
+
+          {/* GIF */}
+          <button
+            type="button"
+            onClick={() => setShowGifPicker((v) => !v)}
+            disabled={prefs.muted}
+            className="shrink-0 px-2 rounded-sm font-heading text-[9px] tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              background: 'rgba(var(--noir-primary-rgb), 0.07)',
+              border: '1px solid rgba(var(--noir-primary-rgb), 0.2)',
+              color: 'rgba(var(--noir-primary-rgb), 0.7)',
+            }}
+            title="GIF"
+          >
+            GIF
+          </button>
+
+          {/* Emoji toggle */}
+          <button
+            type="button"
+            onClick={() => setShowEmojis((v) => !v)}
+            disabled={prefs.muted}
+            className="shrink-0 px-2 rounded-sm text-[13px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              background: 'rgba(var(--noir-primary-rgb), 0.07)',
+              border: '1px solid rgba(var(--noir-primary-rgb), 0.2)',
+            }}
+            title={showEmojis ? 'Hide emoji' : 'Emoji'}
+          >
+            😀
+          </button>
+
+          {/* Send */}
+          <button
+            type="submit"
+            disabled={sending || prefs.muted || !(input || '').trim()}
+            className="shrink-0 px-2.5 rounded-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              background: 'rgba(var(--noir-primary-rgb), 0.15)',
+              border: '1px solid rgba(var(--noir-primary-rgb), 0.35)',
+              color: 'var(--noir-primary)',
+            }}
+            aria-label="Send"
+          >
+            <Send size={11} />
+          </button>
+        </form>
+
+        {/* Emoji strip — horizontal scrolling, no wrap */}
+        {showEmojis && (
+          <div
+            className="flex gap-0.5 overflow-x-auto"
+            style={{ scrollbarWidth: 'none' }}
+          >
+            {CHAT_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => insertEmoji(emoji)}
+                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-sm text-[13px] transition-colors"
+                style={{ border: '1px solid transparent' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.1)';
+                  e.currentTarget.style.borderColor = 'rgba(var(--noir-primary-rgb), 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.borderColor = 'transparent';
+                }}
+                title={emoji}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
