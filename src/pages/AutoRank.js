@@ -713,6 +713,10 @@ const StatsCard = ({ stats, liveCountdown }) => {
   const totalCrimes = Number(s.total_crimes) || 0;
   const totalGtas = Number(s.total_gtas) || 0;
   const totalCash = Number(s.total_cash) || 0;
+  const totalCarsMelted = Number(s.total_cars_melted) || 0;
+  const totalBulletsFromMelt = Number(s.total_bullets_from_melt) || 0;
+  const totalCarsScrapped = Number(s.total_cars_scrapped) || 0;
+  const totalCashFromScrap = Number(s.total_cash_from_scrap) || 0;
   const bestCars = (Array.isArray(s.best_cars) ? s.best_cars : []).filter((car) => car && typeof car === 'object');
 
   return (
@@ -792,6 +796,27 @@ const StatsCard = ({ stats, liveCountdown }) => {
               <span className="text-foreground font-medium">{(Number(s.total_booze_runs) || 0).toLocaleString()} runs</span>
               <span className="text-zinc-600">·</span>
               <span className="text-emerald-400 font-medium">${(Number(s.total_booze_profit) || 0).toLocaleString()}</span>
+            </div>
+          )}
+          {(totalCarsMelted > 0 || totalCarsScrapped > 0 || totalBulletsFromMelt > 0 || totalCashFromScrap > 0) && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] sm:text-xs font-heading">
+              <Flame size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
+              <span className="text-zinc-400">Melt:</span>
+              {totalCarsMelted > 0 && (
+                <span className="text-foreground font-medium">{totalCarsMelted.toLocaleString()} car{totalCarsMelted !== 1 ? 's' : ''} melted</span>
+              )}
+              {totalCarsMelted > 0 && totalBulletsFromMelt > 0 && <span className="text-zinc-600">·</span>}
+              {totalBulletsFromMelt > 0 && (
+                <span className="text-amber-400 font-medium">{totalBulletsFromMelt.toLocaleString()} bullets</span>
+              )}
+              {(totalCarsMelted > 0 || totalBulletsFromMelt > 0) && (totalCarsScrapped > 0 || totalCashFromScrap > 0) && <span className="text-zinc-600">·</span>}
+              {totalCarsScrapped > 0 && (
+                <span className="text-foreground font-medium">{totalCarsScrapped.toLocaleString()} car{totalCarsScrapped !== 1 ? 's' : ''} scrapped</span>
+              )}
+              {totalCarsScrapped > 0 && totalCashFromScrap > 0 && <span className="text-zinc-600">·</span>}
+              {totalCashFromScrap > 0 && (
+                <span className="text-emerald-400 font-medium">${totalCashFromScrap.toLocaleString()}</span>
+              )}
             </div>
           )}
         </div>
@@ -1021,6 +1046,10 @@ export default function AutoRank() {
     best_cars: [],
     total_booze_runs: 0,
     total_booze_profit: 0,
+    total_cars_melted: 0,
+    total_bullets_from_melt: 0,
+    total_cars_scrapped: 0,
+    total_cash_from_scrap: 0,
     next_oc_at: null,
     in_jail: false,
     jail_seconds_remaining: null,
@@ -1117,6 +1146,10 @@ export default function AutoRank() {
           best_cars: d.best_cars ?? prev.best_cars,
           total_booze_runs: d.total_booze_runs ?? prev.total_booze_runs,
           total_booze_profit: d.total_booze_profit ?? prev.total_booze_profit,
+          total_cars_melted: d.total_cars_melted ?? prev.total_cars_melted,
+          total_bullets_from_melt: d.total_bullets_from_melt ?? prev.total_bullets_from_melt,
+          total_cars_scrapped: d.total_cars_scrapped ?? prev.total_cars_scrapped,
+          total_cash_from_scrap: d.total_cash_from_scrap ?? prev.total_cash_from_scrap,
           next_oc_at: d.next_oc_at ?? null,
           in_jail: d.in_jail === true,
           jail_seconds_remaining: d.jail_seconds_remaining ?? null,
@@ -1221,6 +1254,10 @@ export default function AutoRank() {
             best_cars: statsRes.data.best_cars ?? [],
             total_booze_runs: statsRes.data.total_booze_runs ?? 0,
             total_booze_profit: statsRes.data.total_booze_profit ?? 0,
+            total_cars_melted: statsRes.data.total_cars_melted ?? 0,
+            total_bullets_from_melt: statsRes.data.total_bullets_from_melt ?? 0,
+            total_cars_scrapped: statsRes.data.total_cars_scrapped ?? 0,
+            total_cash_from_scrap: statsRes.data.total_cash_from_scrap ?? 0,
             next_oc_at: statsRes.data.next_oc_at ?? null,
             in_jail: statsRes.data.in_jail === true,
             jail_seconds_remaining: statsRes.data.jail_seconds_remaining ?? null,

@@ -179,6 +179,22 @@ async def _update_auto_rank_stats_booze(db, user_id: str, now: datetime, profit:
     await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": int(profit)}})
 
 
+async def _update_auto_rank_stats_melt(db, user_id: str, melted_count: int = 0, total_bullets: int = 0, scrapped_count: int = 0, total_cash: int = 0):
+    """Record melt (bullets) and/or scrap (cash) stats from auto rank."""
+    if melted_count <= 0 and scrapped_count <= 0:
+        return
+    await _ensure_stats_since(db, user_id, datetime.now(timezone.utc))
+    inc = {}
+    if melted_count > 0:
+        inc["auto_rank_total_cars_melted"] = melted_count
+        inc["auto_rank_total_bullets_from_melt"] = total_bullets
+    if scrapped_count > 0:
+        inc["auto_rank_total_cars_scrapped"] = scrapped_count
+        inc["auto_rank_total_cash_from_scrap"] = total_cash
+    if inc:
+        await db.users.update_one({"id": user_id}, {"$inc": inc})
+
+
 def _today_utc(now: datetime) -> str:
     return now.strftime("%Y-%m-%d")
 
@@ -658,9 +674,15 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                         has_success = True
                         await _set_last_activity(db, user_id, "melt", now)
                         if action == "bullets":
-                            lines.append(f"**Melt** — Melted {result.get('melted_count', 0)} car(s) for {result.get('total_bullets', 0)} bullets.")
+                            mc = result.get("melted_count", 0)
+                            tb = result.get("total_bullets", 0)
+                            lines.append(f"**Melt** — Melted {mc} car(s) for {tb} bullets.")
+                            await _update_auto_rank_stats_melt(db, user_id, melted_count=mc, total_bullets=tb)
                         else:
-                            lines.append(f"**Melt** — Scrapped {result.get('scrapped_count', 0)} car(s) for ${result.get('total_value', 0):,}.")
+                            sc = result.get("scrapped_count", 0)
+                            tv = result.get("total_value", 0)
+                            lines.append(f"**Melt** — Scrapped {sc} car(s) for ${tv:,}.")
+                            await _update_auto_rank_stats_melt(db, user_id, scrapped_count=sc, total_cash=tv)
                         # Re-fetch eligible cars for next action (previous were deleted)
                         cars_cursor = db.user_cars.find({"user_id": user_id})
                         user_cars = await cars_cursor.to_list(1000)
@@ -1112,6 +1134,24 @@ def register(router):
                     "",
                     f"Total: {stats.get('total_crimes', 0)} crimes, {stats.get('total_gtas', 0)} GTAs, {stats.get('total_busts', 0)} busts",
                     f"Cash: ${stats.get('total_cash', 0):,} · Booze: {stats.get('total_booze_runs', 0)} runs (${stats.get('total_booze_profit', 0):,})",
+                ]
+                melted = stats.get("total_cars_melted", 0) or 0
+                scrapped = stats.get("total_cars_scrapped", 0) or 0
+                bullets = stats.get("total_bullets_from_melt", 0) or 0
+                scrap_cash = stats.get("total_cash_from_scrap", 0) or 0
+                if melted or scrapped or bullets or scrap_cash:
+                    melt_parts = []
+                    if melted:
+                        melt_parts.append(f"{melted} melted")
+                    if bullets:
+                        melt_parts.append(f"{bullets} bullets")
+                    if scrapped:
+                        melt_parts.append(f"{scrapped} scrapped")
+                    if scrap_cash:
+                        melt_parts.append(f"${scrap_cash:,} scrap")
+                    lines.append("Melt: " + " · ".join(melt_parts))
+                lines.extend([
+                    "",
                     f"Running: {stats.get('running_seconds', 0) // 60} min",
                 ]
                 if stats.get("in_jail"):
@@ -1257,11 +1297,11 @@ def register(router):
     async def _get_auto_rank_stats_impl(db, current_user: dict):
         u = await db.users.find_one(
             {"id": current_user["id"]},
-            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_melt": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_successful_busts_today": 1, "auto_rank_successful_busts_date": 1, "auto_rank_successful_crimes_today": 1, "auto_rank_successful_crimes_date": 1, "auto_rank_successful_gtas_today": 1, "auto_rank_successful_gtas_date": 1},
+            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "auto_rank_total_cars_melted": 1, "auto_rank_total_bullets_from_melt": 1, "auto_rank_total_cars_scrapped": 1, "auto_rank_total_cash_from_scrap": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_melt": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_successful_busts_today": 1, "auto_rank_successful_busts_date": 1, "auto_rank_successful_crimes_today": 1, "auto_rank_successful_crimes_date": 1, "auto_rank_successful_gtas_today": 1, "auto_rank_successful_gtas_date": 1},
         )
         now = datetime.now(timezone.utc)
         since = _parse_iso((u or {}).get("auto_rank_stats_since"))
-        has_activity = bool((u or {}).get("auto_rank_total_busts") or (u or {}).get("auto_rank_total_crimes") or (u or {}).get("auto_rank_total_gtas") or (u or {}).get("auto_rank_total_booze_runs"))
+        has_activity = bool((u or {}).get("auto_rank_total_busts") or (u or {}).get("auto_rank_total_crimes") or (u or {}).get("auto_rank_total_gtas") or (u or {}).get("auto_rank_total_booze_runs") or (u or {}).get("auto_rank_total_cars_melted") or (u or {}).get("auto_rank_total_cars_scrapped"))
         if not since and has_activity:
             await db.users.update_one({"id": current_user["id"]}, {"$set": {"auto_rank_stats_since": now.isoformat()}})
             since = now
@@ -1366,12 +1406,16 @@ def register(router):
             "total_busts": int((u or {}).get("auto_rank_total_busts") or 0),
             "total_crimes": int((u or {}).get("auto_rank_total_crimes") or 0),
             "total_gtas": int((u or {}).get("auto_rank_total_gtas") or 0),
-            "total_cash": int((u or {}).get("auto_rank_total_cash") or 0) + int((u or {}).get("auto_rank_total_booze_profit") or 0),
+            "total_cash": int((u or {}).get("auto_rank_total_cash") or 0) + int((u or {}).get("auto_rank_total_booze_profit") or 0) + int((u or {}).get("auto_rank_total_cash_from_scrap") or 0),
             "stats_since": (u or {}).get("auto_rank_stats_since"),
             "running_seconds": max(0, running_seconds),
             "best_cars": [{"name": c.get("name", "?"), "value": int(c.get("value", 0) or 0)} for c in (best_cars or []) if isinstance(c, dict)],
             "total_booze_runs": int((u or {}).get("auto_rank_total_booze_runs") or 0),
             "total_booze_profit": int((u or {}).get("auto_rank_total_booze_profit") or 0),
+            "total_cars_melted": int((u or {}).get("auto_rank_total_cars_melted") or 0),
+            "total_bullets_from_melt": int((u or {}).get("auto_rank_total_bullets_from_melt") or 0),
+            "total_cars_scrapped": int((u or {}).get("auto_rank_total_cars_scrapped") or 0),
+            "total_cash_from_scrap": int((u or {}).get("auto_rank_total_cash_from_scrap") or 0),
             "next_oc_at": next_oc_at,
             "in_jail": in_jail,
             "jail_seconds_remaining": jail_seconds_remaining,

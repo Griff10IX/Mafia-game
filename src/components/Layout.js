@@ -1016,10 +1016,16 @@ export default function Layout({ children }) {
                   {SIDEBAR_CATEGORIES.map((cat) => {
                     const items = navItems.filter((i) => (PATH_TO_CATEGORY[i.path] || 'other') === cat.id);
                     if (!items.length) return null;
+                    const useClassicHeader = sidebarLayout === 'categorized_classic';
                     return (
                       <Fragment key={cat.id}>
-                        {/* IMPROVEMENT 2: ornamental category header */}
-                        <SidebarCatHeader label={cat.label} classic={sidebarLayout === 'categorized_classic'} />
+                        {useClassicHeader ? (
+                          <div className="px-2 py-1.5 mt-1 first:mt-0 rounded-sm flex items-center justify-center" style={categoryHeaderStyle}>
+                            <span className="text-[9px] font-heading font-bold uppercase tracking-widest">{cat.label}</span>
+                          </div>
+                        ) : (
+                          <SidebarCatHeader label={cat.label} classic={false} />
+                        )}
                         {items.map((item, idx) => renderNavItem(item, idx > 0))}
                         {cat.id === 'ranking' && (
                           <>
