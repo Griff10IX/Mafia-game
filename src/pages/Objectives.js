@@ -74,6 +74,7 @@ export default function Objectives() {
   const [loading, setLoading] = useState(true);
 
   const [claiming, setClaiming] = useState(null);
+  const [showAdminStats, setShowAdminStats] = useState(false);
 
   const fetchObjectives = async () => {
     setLoading(true);
@@ -124,7 +125,6 @@ export default function Objectives() {
   const weekly = data?.weekly ?? {};
   const monthly = data?.monthly ?? {};
   const adminStats = data?.admin_stats;
-  const [showAdminStats, setShowAdminStats] = useState(false);
 
   const getAssessmentLabel = (a) => {
     if (!a) return '';
