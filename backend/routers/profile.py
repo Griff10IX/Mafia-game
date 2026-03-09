@@ -356,32 +356,59 @@ def register(router):
         out["hitlist_count"] = len(hitlist_entries)
         return out
 
+    def _safe_int(v, default=0):
+        try:
+            if v is None:
+                return default
+            return int(float(v))
+        except (ValueError, TypeError):
+            return default
+
+    def _safe_float(v, default=1.0):
+        try:
+            if v is None:
+                return default
+            return float(v)
+        except (ValueError, TypeError):
+            return default
+
     @router.get("/users/{username}/staff-stats")
     async def get_user_staff_stats(username: str, current_user: dict = Depends(get_current_user)):
         """Extended stats for a user. Admin or moderator only. Used in profile page 'User info' dropdown."""
         if not _is_admin(current_user) and not _is_moderator(current_user):
             raise HTTPException(status_code=403, detail="Admin or moderator access required")
         username_pattern = _username_pattern(username)
-        user = await db.users.find_one(
-            {"username": username_pattern},
-            {
-                "_id": 0, "password_hash": 0,
-                "id": 1, "username": 1, "email": 1, "created_at": 1, "last_seen": 1,
-                "money": 1, "points": 1, "rank_points": 1, "bullets": 1, "armour_level": 1,
-                "total_kills": 1, "total_deaths": 1, "total_crimes": 1, "total_gta": 1, "jail_busts": 1,
-                "current_state": 1, "in_jail": 1, "is_dead": 1, "family_id": 1,
-                "prestige_level": 1, "prestige_rank_multiplier": 1,
-                "account_locked": 1, "account_locked_at": 1,
-                "registration_ip": 1, "last_login_ip": 1,
-            },
-        )
+        if not username_pattern:
+            raise HTTPException(status_code=400, detail="Invalid username")
+        try:
+            user = await db.users.find_one(
+                {"username": username_pattern},
+                {
+                    "_id": 0, "password_hash": 0,
+                    "id": 1, "username": 1, "email": 1, "created_at": 1, "last_seen": 1,
+                    "money": 1, "points": 1, "rank_points": 1, "bullets": 1, "armour_level": 1,
+                    "total_kills": 1, "total_deaths": 1, "total_crimes": 1, "total_gta": 1, "jail_busts": 1,
+                    "current_state": 1, "in_jail": 1, "is_dead": 1, "family_id": 1,
+                    "prestige_level": 1, "prestige_rank_multiplier": 1,
+                    "account_locked": 1, "account_locked_at": 1,
+                    "registration_ip": 1, "last_login_ip": 1, "login_ips": 1,
+                },
+            )
+        except Exception as e:
+            logger.exception("staff-stats find_one failed: %s", e)
+            raise HTTPException(status_code=500, detail="Error loading user data. Please try again.")
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        rank_id, rank_name = get_rank_info(
-            int(user.get("rank_points") or 0),
-            float(user.get("prestige_rank_multiplier") or 1.0),
-        )
-        if user.get("email") in ADMIN_EMAILS:
+        try:
+            rank_id, rank_name = get_rank_info(
+                _safe_int(user.get("rank_points")),
+                _safe_float(user.get("prestige_rank_multiplier"), 1.0),
+            )
+        except Exception as e:
+            logger.warning("staff-stats get_rank_info failed: %s", e)
+            rank_id, rank_name = 1, "Street Punk"
+        admin_emails_set = set(ADMIN_EMAILS) if ADMIN_EMAILS else set()
+        if (user.get("email") or "") in admin_emails_set:
             rank_name = "Admin"
         elif user.get("is_moderator"):
             rank_name = "Moderator"
@@ -389,37 +416,48 @@ def register(router):
             rank_name = "Help Desk Operator"
         family_name = None
         if user.get("family_id"):
-            fam = await db.families.find_one({"id": user["family_id"]}, {"_id": 0, "name": 1})
-            if fam:
-                family_name = fam.get("name")
-        return {
+            try:
+                fam = await db.families.find_one({"id": str(user["family_id"])}, {"_id": 0, "name": 1})
+                if fam:
+                    family_name = fam.get("name")
+            except Exception as e:
+                logger.warning("staff-stats family lookup failed: %s", e)
+        last_login_ip = user.get("last_login_ip")
+        if last_login_ip is None and user.get("login_ips"):
+            ips = user.get("login_ips") or []
+            last_login_ip = ips[-1] if ips else None
+        try:
+            return {
             "id": user.get("id"),
             "username": user.get("username"),
             "email": user.get("email"),
             "created_at": user.get("created_at"),
             "last_seen": user.get("last_seen"),
-            "money": int(user.get("money") or 0),
-            "points": int(user.get("points") or 0),
-            "rank_points": int(user.get("rank_points") or 0),
+            "money": _safe_int(user.get("money")),
+            "points": _safe_int(user.get("points")),
+            "rank_points": _safe_int(user.get("rank_points")),
             "rank_id": rank_id,
             "rank_name": rank_name,
-            "bullets": int(user.get("bullets") or 0),
-            "armour_level": int(user.get("armour_level") or 0),
-            "total_kills": int(user.get("total_kills") or 0),
-            "total_deaths": int(user.get("total_deaths") or 0),
-            "total_crimes": int(user.get("total_crimes") or 0),
-            "total_gta": int(user.get("total_gta") or 0),
-            "jail_busts": int(user.get("jail_busts") or 0),
-            "current_state": user.get("current_state") or "—",
+            "bullets": _safe_int(user.get("bullets")),
+            "armour_level": _safe_int(user.get("armour_level")),
+            "total_kills": _safe_int(user.get("total_kills")),
+            "total_deaths": _safe_int(user.get("total_deaths")),
+            "total_crimes": _safe_int(user.get("total_crimes")),
+            "total_gta": _safe_int(user.get("total_gta")),
+            "jail_busts": _safe_int(user.get("jail_busts")),
+            "current_state": str(user.get("current_state") or "—")[:100],
             "in_jail": bool(user.get("in_jail")),
             "is_dead": bool(user.get("is_dead")),
             "family_name": family_name,
-            "prestige_level": int(user.get("prestige_level") or 0),
+            "prestige_level": _safe_int(user.get("prestige_level")),
             "account_locked": bool(user.get("account_locked")),
             "account_locked_at": user.get("account_locked_at"),
             "registration_ip": user.get("registration_ip"),
-            "last_login_ip": user.get("last_login_ip"),
-        }
+            "last_login_ip": last_login_ip,
+            }
+        except Exception as e:
+            logger.exception("staff-stats build response failed: %s", e)
+            raise HTTPException(status_code=500, detail="Error loading user data. Please try again.")
 
     @router.post("/profile/avatar")
     async def update_avatar(request: AvatarUpdateRequest, current_user: dict = Depends(get_current_user)):
