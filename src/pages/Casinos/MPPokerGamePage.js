@@ -458,7 +458,7 @@ export default function MPPokerGamePage() {
     if (game?.phase === 'ready' && game?.all_ready_at) {
       toast.success('All players ready — game starting!', { duration: 4000 });
     }
-  }, [game?.all_ready_at]);
+  }, [game?.phase, game?.all_ready_at]);
 
   const act = async (action, amount) => {
     if (actionLoading) return;

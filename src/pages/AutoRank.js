@@ -1135,7 +1135,7 @@ export default function AutoRank() {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [stats?.jail_until, stats?.auto_rank_next_run_at, stats?.next_oc_at, stats?.next_crime_at, stats?.next_gta_at, stats?.next_booze_arrival_at]);
+  }, [stats]);
 
   // Live stats: poll every 2s whenever Auto Rank is enabled so status, bust counts, and countdowns update in near real time
   useEffect(() => {

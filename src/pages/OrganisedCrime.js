@@ -486,14 +486,13 @@ export default function OrganisedCrime() {
   // Ensure NPC slots always have a % in by default (e.g. after load or if pcts got out of sync)
   useEffect(() => {
     const npcRoles = ROLE_IDS.filter((r) => slots[r] === 'npc');
-    const selfRole = ROLE_IDS.find((r) => slots[r] === 'self');
     if (npcRoles.length === 0) return;
     const pctTotal = ROLE_IDS.reduce((s, r) => s + (pcts[r] || 0), 0);
     const anyNpcMissingPct = npcRoles.some((r) => (pcts[r] ?? 0) === 0);
     if (pctTotal !== 100 || anyNpcMissingPct) {
       setPcts(defaultPctsForSlots(slots));
     }
-  }, [slots]);
+  }, [slots, pcts]);
 
   const tick = useCooldownTicker(status?.cooldown_until, fetchData);
 

@@ -204,7 +204,7 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int) -> dict:
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
         await db.users.update_one(
             {"id": user["id"]},
-            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitch_attempted_this_term": False}, "$unset": {"booze_carrying": "", "booze_carrying_cost": ""}},
+            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitch_attempted_this_term": False}, "$inc": {"booze_jail_count": 1}, "$unset": {"booze_carrying": "", "booze_carrying_cost": ""}},
         )
         _invalidate_config_cache(user["id"])
         return {
@@ -260,7 +260,7 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
         await db.users.update_one(
             {"id": user["id"]},
-            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitch_attempted_this_term": False}, "$unset": {"booze_carrying": "", "booze_carrying_cost": ""}},
+            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitch_attempted_this_term": False}, "$inc": {"booze_jail_count": 1}, "$unset": {"booze_carrying": "", "booze_carrying_cost": ""}},
         )
         _invalidate_config_cache(user["id"])
         return {
@@ -302,6 +302,7 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
         updates["$inc"]["booze_profit_today"] = profit
         updates["$inc"]["booze_profit_total"] = profit
         updates["$inc"]["booze_runs_count"] = 1
+        updates["$inc"][f"booze_profit_by_type.{booze_id}"] = profit
         updates["$set"] = {"booze_profit_today_date": today_utc}
     if new_val == 0:
         updates.setdefault("$unset", {})[f"booze_carrying.{booze_id}"] = ""

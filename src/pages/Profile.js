@@ -781,7 +781,7 @@ export default function Profile() {
     if (me?.mod_online_color != null && (me.mod_online_color || '').trim())
       setModOnlineColor((me.mod_online_color || '').trim());
     else if (me && !me.mod_online_color) setModOnlineColor('#1e3a5f');
-  }, [me?.mod_online_color]);
+  }, [me]);
 
   useEffect(() => {
     if (!username) return;
@@ -797,20 +797,21 @@ export default function Profile() {
       }
     };
     run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch by username only; profile is the result, not a trigger
   }, [username]);
 
   useEffect(() => {
     if (profile) {
       setBannerTextEdit(profile.profile_banner_text ?? '');
     }
-  }, [profile?.profile_banner_text]);
+  }, [profile]);
 
   useEffect(() => {
     if (username && !(me && profile && me.username === profile.username)) {
       setStaffStats(null);
       setStaffStatsError(null);
     }
-  }, [username, me?.username, profile?.username]);
+  }, [username, me, profile]);
 
   const fetchPrefs = async () => {
     try {

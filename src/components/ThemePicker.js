@@ -263,7 +263,7 @@ export default function ThemePicker({ open, onClose }) {
   };
   const [chipW, setChipW] = useState(50);
   const [chipH, setChipH] = useState(50);
-  useEffect(() => { if (open) { setChipW(loadChip(KEYS.chipW)); setChipH(loadChip(KEYS.chipH)); } }, [open]);
+  useEffect(() => { if (open) { setChipW(loadChip(KEYS.chipW)); setChipH(loadChip(KEYS.chipH)); } }, [open, KEYS.chipW, KEYS.chipH]);
 
   const setChipWP = v => { const n = Math.max(CHIP_MIN,Math.min(CHIP_MAX,v)); setChipW(n); lsSet(KEYS.chipW,n,'topbar-prefs-changed'); };
   const setChipHP = v => { const n = Math.max(CHIP_MIN,Math.min(CHIP_MAX,v)); setChipH(n); lsSet(KEYS.chipH,n,'topbar-prefs-changed'); };

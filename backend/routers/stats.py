@@ -15,6 +15,35 @@ def _gambling_profit_from_details(game_type: str, details: dict) -> int:
     return payout - stake
 
 
+def _booze_stats(u: dict) -> dict:
+    """Build booze stats dict. Uses get_rank_info and booze_run capacity logic."""
+    from routers.booze_run import BOOZE_TYPES, BOOZE_CAPACITY_BASE_RANK1, BOOZE_CAPACITY_EXTRA_PER_RANK, BOOZE_CAPACITY_BONUS_MAX
+    from server import get_rank_info
+    profit_by_type = dict(u.get("booze_profit_by_type") or {})
+    best_id = None
+    best_profit = 0
+    for bid, p in profit_by_type.items():
+        pv = int(p or 0)
+        if pv > best_profit:
+            best_profit = pv
+            best_id = bid
+    best_name = None
+    if best_id:
+        best_name = next((b["name"] for b in BOOZE_TYPES if b.get("id") == best_id), best_id)
+    rank_id, _ = get_rank_info(int(u.get("rank_points") or 0))
+    bonus = min(int(u.get("booze_capacity_bonus") or 0), BOOZE_CAPACITY_BONUS_MAX)
+    capacity = max(1, BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK + bonus)
+    return {
+        "profit_total": int(u.get("booze_profit_total") or 0),
+        "runs_count": int(u.get("booze_runs_count") or 0),
+        "jail_count": int(u.get("booze_jail_count") or 0),
+        "capacity": capacity,
+        "best_booze_id": best_id,
+        "best_booze_name": best_name,
+        "best_booze_profit": best_profit,
+    }
+
+
 def register(router):
     """Register stats routes. Dependencies from server to avoid circular imports."""
     import server as srv
@@ -252,7 +281,7 @@ def register(router):
                 "consecutive_busts_record": 1,
                 "current_consecutive_busts": 1,
                 "prestige_level": 1,
-                "booze_profit_total": 1,
+                "booze_profit_total": 1, "booze_runs_count": 1, "booze_jail_count": 1, "booze_profit_by_type": 1, "booze_capacity_bonus": 1, "rank_points": 1,
                 "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1,
                 "auto_rank_total_cash": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1,
                 "auto_rank_total_cars_melted": 1, "auto_rank_total_bullets_from_melt": 1,
@@ -401,9 +430,7 @@ def register(router):
                 "by_game": gambling_by_game,
             },
             "sports_betting": sports_stats,
-            "booze": {
-                "profit_total": int(u.get("booze_profit_total") or 0),
-            },
+            "booze": _booze_stats(u),
             "auto_rank": {
                 "total_busts": int(u.get("auto_rank_total_busts") or 0),
                 "total_crimes": int(u.get("auto_rank_total_crimes") or 0),

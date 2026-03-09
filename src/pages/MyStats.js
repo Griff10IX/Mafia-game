@@ -170,6 +170,10 @@ export default function MyStats() {
 
   const boozeRows = [
     { label: 'Total Profit', value: formatMoney(booze.profit_total), valueColor: (booze.profit_total || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400' },
+    { label: 'Runs Made', value: formatNumber(booze.runs_count) },
+    ...(booze.best_booze_name ? [{ label: 'Best Booze (Profit)', value: `${booze.best_booze_name} (${formatMoney(booze.best_booze_profit)})`, valueColor: 'text-emerald-400' }] : []),
+    { label: 'Times Jailed (Carrying)', value: formatNumber(booze.jail_count) },
+    { label: 'Booze Limit', value: formatNumber(booze.capacity) },
   ];
 
   const autoRankRows = [
