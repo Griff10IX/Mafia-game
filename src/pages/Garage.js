@@ -12,10 +12,10 @@ const GARAGE_STYLES = `
   .gar-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
-const RARITY_ORDER = { exclusive: 6, custom: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
+const RARITY_ORDER = { exclusive: 7, loot_exclusive: 6, custom: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
 const DEFAULT_VISIBLE = 16;
 const MELT_SCRAP_RARITIES_KEY = 'garage_melt_scrap_rarities';
-const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'exclusive'];
+const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive'];
 
 function loadMeltScrapRarities() {
   try {
@@ -51,6 +51,7 @@ const RARITY_COLORS = {
   ultra_rare: 'text-purple-400',
   legendary: 'text-yellow-400',
   custom: 'text-orange-400',
+  loot_exclusive: 'text-amber-400',
   exclusive: 'text-red-400',
 };
 
@@ -110,6 +111,7 @@ const FiltersSortCard = ({ sortBy, setSortBy, filterRarity, setFilterRarity }) =
             <option value="ultra_rare">Ultra Rare</option>
             <option value="legendary">Legendary</option>
             <option value="custom">Custom</option>
+            <option value="loot_exclusive">Loot Exclusive</option>
             <option value="exclusive">Exclusive</option>
           </select>
         </div>
@@ -233,6 +235,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
     if (isCustom) onOpenCustomModal(car);
     else if (!isListed) onToggle(car.user_car_id);
   };
+  const isExclusive = car.rarity === 'exclusive' || car.rarity === 'loot_exclusive';
   return (
     <div
       onClick={handleClick}
@@ -240,7 +243,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
         isListed ? 'border-amber-500/40 opacity-90' : 'cursor-pointer'
       } ${
         !isListed && (isSelected ? 'border-primary shadow-md shadow-primary/20' : 'border-border hover:border-primary/30')
-      }`}
+      } ${isExclusive ? 'shadow-[0_0_10px_rgba(251,191,36,0.45)]' : ''}`}
     >
       <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1.5 relative">
         {car.image ? (
@@ -576,18 +579,7 @@ export default function Garage() {
     }
   };
 
-  const getRarityColor = (rarity) => {
-    const colors = {
-      common: 'text-gray-400',
-      uncommon: 'text-green-400',
-      rare: 'text-blue-400',
-      ultra_rare: 'text-purple-400',
-      legendary: 'text-yellow-400',
-      custom: 'text-orange-400',
-      exclusive: 'text-red-400'
-    };
-    return colors[rarity] || 'text-foreground';
-  };
+  const getRarityColor = (rarity) => RARITY_COLORS[rarity] || 'text-foreground';
 
   const getFilteredAndSortedCars = () => {
     let filtered = [...cars];

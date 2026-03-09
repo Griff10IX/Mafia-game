@@ -140,9 +140,6 @@ export default function MyInventory() {
                     <span className="text-[11px] sm:text-xs font-heading font-medium text-foreground truncate block">
                       {w.name}
                       {w.equipped && <span className="text-primary ml-1">✓</span>}
-                    </span>
-                    <span className="text-[9px] text-mutedForeground">
-                      {w.damage} dmg · {w.bullets_needed} bullets/use
                       {w.loot_exclusive && <span className="text-amber-400 ml-1">Loot Exclusive</span>}
                     </span>
                   </div>

@@ -999,6 +999,44 @@ def register(router):
         res = await db.attacks.delete_many({})
         return {"message": f"Cleared all searches ({res.deleted_count} deleted)"}
 
+    @router.get("/admin/exclusive-loot")
+    async def admin_exclusive_loot(current_user: dict = Depends(get_current_user)):
+        """List users who own exclusive loot (cars, weapon, armour, property). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        cars_catalog = {c["id"]: c for c in (CARS or [])}
+        # Exclusive cars: car20 (exclusive), car21 (loot_exclusive)
+        exclusive_car_ids = {c["id"] for c in (CARS or []) if c.get("rarity") in ("exclusive", "loot_exclusive")}
+        users_by_id = {}
+        async def _add_user(uid: str, category: str, item: str):
+            if uid not in users_by_id:
+                u = await db.users.find_one({"id": uid}, {"_id": 0, "id": 1, "username": 1})
+                users_by_id[uid] = {"username": (u or {}).get("username", "?"), "items": []}
+            users_by_id[uid]["items"].append({"category": category, "item": item})
+        # Cars
+        cursor = db.user_cars.find({"car_id": {"$in": list(exclusive_car_ids)}}, {"_id": 0, "user_id": 1, "car_id": 1})
+        async for uc in cursor:
+            info = cars_catalog.get(uc.get("car_id"), {})
+            name = info.get("name") or uc.get("car_id") or "?"
+            await _add_user(uc["user_id"], "car", name)
+        # Weapon (Colt Monitor / weapon_loot)
+        cursor = db.user_weapons.find({"weapon_id": "weapon_loot", "quantity": {"$gte": 1}}, {"_id": 0, "user_id": 1})
+        async for uw in cursor:
+            await _add_user(uw["user_id"], "weapon", "Colt Monitor")
+        # Armour level 6 (Steel Plate Vest 1922)
+        cursor = db.users.find({"$or": [{"armour_level": 6}, {"armour_owned_level_max": {"$gte": 6}}]}, {"_id": 0, "id": 1, "username": 1})
+        async for u in cursor:
+            uid = u["id"]
+            if uid not in users_by_id:
+                users_by_id[uid] = {"username": u.get("username", "?"), "items": []}
+            users_by_id[uid]["items"].append({"category": "armour", "item": "Steel Plate Vest 1922"})
+        # Exclusive property (Speakeasy)
+        cursor = db.exclusive_properties.find({"type": "speakeasy"}, {"_id": 0, "owner_id": 1})
+        async for ep in cursor:
+            await _add_user(ep["owner_id"], "property", "Speakeasy")
+        out = sorted(users_by_id.values(), key=lambda x: (-len(x["items"]), x["username"].lower()))
+        return {"owners": out}
+
     @router.get("/admin/check")
     async def admin_check(current_user: dict = Depends(get_current_user)):
         is_admin = _is_admin(current_user)

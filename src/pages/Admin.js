@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -175,6 +176,8 @@ export default function Admin() {
   const [sendingMessageTo, setSendingMessageTo] = useState(null);
   const [userDetailData, setUserDetailData] = useState(null);
   const [userDetailLoading, setUserDetailLoading] = useState(false);
+  const [exclusiveLootOwners, setExclusiveLootOwners] = useState(null);
+  const [exclusiveLootLoading, setExclusiveLootLoading] = useState(false);
 
   // Security state
   const [securitySummary, setSecuritySummary] = useState(null);
@@ -709,6 +712,21 @@ export default function Admin() {
       setUserInspectResult(null);
     } finally {
       setUserInspectLoading(false);
+    }
+  };
+
+  const handleFetchExclusiveLoot = async () => {
+    setExclusiveLootLoading(true);
+    setExclusiveLootOwners(null);
+    try {
+      const res = await api.get('/admin/exclusive-loot');
+      setExclusiveLootOwners(res.data?.owners ?? []);
+      toast.success(`${res.data?.owners?.length ?? 0} user(s) with exclusive loot`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load');
+      setExclusiveLootOwners(null);
+    } finally {
+      setExclusiveLootLoading(false);
     }
   };
 
@@ -1991,6 +2009,20 @@ export default function Admin() {
         />
         {!collapsed.player && (
           <div className="p-2 space-y-1">
+            <ActionRow icon={Gift} label="Who has exclusive loot" description="Cars (car20/car21), Colt Monitor, Steel Vest 1922, Speakeasy">
+              <BtnPrimary onClick={handleFetchExclusiveLoot} disabled={exclusiveLootLoading}>{exclusiveLootLoading ? '...' : 'View'}</BtnPrimary>
+            </ActionRow>
+            {exclusiveLootOwners && (
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-1 max-h-64 overflow-y-auto">
+                <div className="font-bold text-primary mb-1">Exclusive loot owners ({exclusiveLootOwners.length})</div>
+                {exclusiveLootOwners.map((o, i) => (
+                  <div key={i} className="flex items-center gap-2 py-0.5 border-b border-primary/10 last:border-0">
+                    <Link to={`/profile/${encodeURIComponent(o.username)}`} className="text-primary hover:underline font-bold">{o.username}</Link>
+                    <span className="text-mutedForeground">{o.items?.map((it) => `${it.item} (${it.category})`).join(', ') ?? '—'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <ActionRow icon={User} label="View registration info" description="Email, username, created at, IPs for target user">
               <BtnPrimary onClick={handleViewRegistration} disabled={viewRegistrationLoading}>{viewRegistrationLoading ? '...' : 'View'}</BtnPrimary>
             </ActionRow>

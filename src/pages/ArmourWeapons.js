@@ -702,7 +702,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                             <div key={opt.level} className="flex items-center gap-0.5">
                               {opt.owned ? (
                                 <>
-                                  <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/50 text-foreground truncate max-w-[120px] sm:max-w-[140px]" title={opt.name}>
+                                  <span className={`px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/50 text-foreground truncate max-w-[120px] sm:max-w-[140px] ${opt.loot_exclusive ? 'shadow-[0_0_10px_rgba(251,191,36,0.45)]' : ''}`} title={opt.name}>
                                     {opt.name}{opt.equipped ? ' ✓' : ''}
                                     {opt.loot_exclusive && <span className="text-amber-400 ml-0.5">(excl)</span>}
                                   </span>
@@ -716,7 +716,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                                   </button>
                                 </>
                               ) : opt.loot_exclusive ? (
-                                <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/30 text-zinc-500" title="Obtain from loot box">
+                                <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/30 text-zinc-500 shadow-[0_0_10px_rgba(251,191,36,0.45)]" title="Obtain from loot box">
                                   {opt.name} <span className="text-amber-400/80">(Loot exclusive)</span>
                                 </span>
                               ) : (
@@ -761,7 +761,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                             <div key={w.id} className="flex items-center gap-0.5 flex-wrap">
                               {w.owned ? (
                                 <>
-                                  <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/50 text-foreground truncate max-w-[100px] sm:max-w-[110px]" title={w.name}>
+                                  <span className={`px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/50 text-foreground truncate max-w-[100px] sm:max-w-[110px] ${w.loot_exclusive ? 'shadow-[0_0_10px_rgba(251,191,36,0.45)]' : ''}`} title={w.name}>
                                     {nameShort}{w.equipped ? ' ✓' : ''}
                                   </span>
                                   <button

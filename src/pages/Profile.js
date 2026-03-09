@@ -728,8 +728,6 @@ export default function Profile() {
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [savingTelegram, setSavingTelegram] = useState(false);
   const [carsShowOnProfile, setCarsShowOnProfile] = useState(false);
-  const [carsFeaturedId, setCarsFeaturedId] = useState('');
-  const [myCarsList, setMyCarsList] = useState([]);
   const [savingCars, setSavingCars] = useState(false);
   const [profileAutoplayVideo, setProfileAutoplayVideo] = useState(true);
   const [hideKillsOnProfile, setHideKillsOnProfile] = useState(false);
@@ -835,18 +833,8 @@ export default function Profile() {
     try {
       const res = await api.get('/profile/cars-preferences');
       setCarsShowOnProfile(res.data?.show_cars_on_profile === true);
-      setCarsFeaturedId(res.data?.featured_car_id ?? '');
     } catch (_) {
       setCarsShowOnProfile(false);
-      setCarsFeaturedId('');
-    }
-  };
-  const fetchMyCars = async () => {
-    try {
-      const res = await api.get('/profile/my-cars');
-      setMyCarsList(res.data?.cars ?? []);
-    } catch (_) {
-      setMyCarsList([]);
     }
   };
   useEffect(() => {
@@ -854,7 +842,6 @@ export default function Profile() {
       fetchPrefs();
       fetchTelegram();
       fetchCarsPrefs();
-      fetchMyCars();
       setProfileAutoplayVideo(me?.profile_autoplay_video !== false);
       setHideKillsOnProfile(profile?.hide_kills_on_profile === true);
       setHideJailbustsOnProfile(profile?.hide_jailbusts_on_profile === true);
@@ -892,7 +879,6 @@ export default function Profile() {
     try {
       await api.patch('/profile/cars-preferences', {
         show_cars_on_profile: carsShowOnProfile,
-        featured_car_id: carsFeaturedId.trim() || null,
       });
       toast.success('Profile cars preferences saved');
       const res = await api.get(`/users/${encodeURIComponent(me?.username)}/profile`);
@@ -1238,11 +1224,7 @@ export default function Profile() {
                       <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${carsShowOnProfile ? 'translate-x-5' : 'translate-x-0.5'}`} />
                     </button>
                   </div>
-                  <label className="block text-xs text-mutedForeground mt-2 mb-1">Featured car (optional)</label>
-                  <select value={carsFeaturedId} onChange={(e) => setCarsFeaturedId(e.target.value)} disabled={savingCars} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
-                    <option value="">None</option>
-                    {myCarsList.map((c) => (<option key={c.id} value={c.id}>{c.name} ({c.rarity})</option>))}
-                  </select>
+                  <p className="text-[10px] text-mutedForeground mt-1">To choose which car to feature, go to your <Link to="/garage" className="text-primary hover:underline">Garage</Link> and click &quot;Show on profile&quot; on the car.</p>
                   <button type="button" onClick={saveCarsPrefs} disabled={savingCars} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingCars ? 'Saving…' : 'Save cars'}</button>
                 </div>
                 <div>
