@@ -93,10 +93,10 @@ export default function ViewCar() {
     setProfileSaving(true);
     try {
       await api.patch('/profile/cars-preferences', {
-        show_cars_on_profile: true,
+        show_cars_on_profile: show,
         featured_car_id: show ? id : null,
       });
-      setCar((c) => (c ? { ...c, featured_on_profile: !!show, show_cars_on_profile: true } : c));
+      setCar((c) => (c ? { ...c, featured_on_profile: !!show, show_cars_on_profile: !!show } : c));
       toast.success(show ? 'Car is now shown on your profile' : 'Removed from profile');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to update profile');

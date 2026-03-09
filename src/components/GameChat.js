@@ -270,6 +270,8 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
         </div>
       </div>
 
+      {!isMinimized && (
+        <>
       {/* ── Messages ── */}
       <div
         ref={scrollRef}
@@ -456,6 +458,8 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

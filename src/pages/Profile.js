@@ -820,8 +820,6 @@ export default function Profile() {
   const [telegramChatId, setTelegramChatId] = useState('');
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [savingTelegram, setSavingTelegram] = useState(false);
-  const [carsShowOnProfile, setCarsShowOnProfile] = useState(false);
-  const [savingCars, setSavingCars] = useState(false);
   const [profileAutoplayVideo, setProfileAutoplayVideo] = useState(true);
   const [hideKillsOnProfile, setHideKillsOnProfile] = useState(false);
   const [hideJailbustsOnProfile, setHideJailbustsOnProfile] = useState(false);
@@ -922,19 +920,10 @@ export default function Profile() {
       setTelegramBotToken('');
     }
   };
-  const fetchCarsPrefs = async () => {
-    try {
-      const res = await api.get('/profile/cars-preferences');
-      setCarsShowOnProfile(res.data?.show_cars_on_profile === true);
-    } catch (_) {
-      setCarsShowOnProfile(false);
-    }
-  };
   useEffect(() => {
     if (isMe && !viewPublic && profile) {
       fetchPrefs();
       fetchTelegram();
-      fetchCarsPrefs();
       setProfileAutoplayVideo(me?.profile_autoplay_video !== false);
       setHideKillsOnProfile(profile?.hide_kills_on_profile === true);
       setHideJailbustsOnProfile(profile?.hide_jailbusts_on_profile === true);
@@ -964,22 +953,6 @@ export default function Profile() {
       toast.error(e.response?.data?.detail || 'Failed to save Telegram settings');
     } finally {
       setSavingTelegram(false);
-    }
-  };
-
-  const saveCarsPrefs = async () => {
-    setSavingCars(true);
-    try {
-      await api.patch('/profile/cars-preferences', {
-        show_cars_on_profile: carsShowOnProfile,
-      });
-      toast.success('Profile cars preferences saved');
-      const res = await api.get(`/users/${encodeURIComponent(me?.username)}/profile`);
-      setProfile(res.data);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to save');
-    } finally {
-      setSavingCars(false);
     }
   };
 
@@ -1314,17 +1287,7 @@ export default function Profile() {
                   </div>
                   <button type="button" onClick={saveVisibility} disabled={savingVisibility} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingVisibility ? 'Saving…' : 'Save'}</button>
                 </div>
-                <div>
-                  <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Show cars on profile</h3>
-                  <div className="flex items-center justify-between gap-3 py-1">
-                    <span className="text-sm text-foreground">Show cars on profile</span>
-                    <button type="button" role="switch" aria-checked={carsShowOnProfile} disabled={savingCars} onClick={() => setCarsShowOnProfile((v) => !v)} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${carsShowOnProfile ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingCars ? 'opacity-60' : ''}`}>
-                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${carsShowOnProfile ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-mutedForeground mt-1">To choose which car to feature, go to your <Link to="/garage" className="text-primary hover:underline">Garage</Link> and click &quot;Show on profile&quot; on the car.</p>
-                  <button type="button" onClick={saveCarsPrefs} disabled={savingCars} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingCars ? 'Saving…' : 'Save cars'}</button>
-                </div>
+                <p className="text-[10px] text-mutedForeground">To show a car on your profile, open it from your <Link to="/garage" className="text-primary hover:underline">Garage</Link> and use the <strong>Profile</strong> section on that page.</p>
                 <div>
                   <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Autoplay profile videos</h3>
                   <div className="flex items-center justify-between gap-3 py-1">
