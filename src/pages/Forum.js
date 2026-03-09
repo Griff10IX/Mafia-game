@@ -830,16 +830,20 @@ export default function Forum() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                       {designerEntries.map((entry) => (
                         <div key={entry.id} className="rounded border border-primary/20 bg-zinc-800/30 p-2">
-                          {entry.gif_url && (
+                          {entry.gif_url ? (
                             <a href={entry.gif_url} target="_blank" rel="noopener noreferrer" className="block mb-1.5 rounded overflow-hidden bg-zinc-900">
                               <img src={entry.gif_url} alt="" className="w-full h-24 object-contain" />
                             </a>
+                          ) : null}
+                          {entry.title && entry.title !== 'Entry' && !entry.title.startsWith('[') && !entry.title.startsWith('http') ? (
+                            <p className="text-[10px] font-heading font-bold truncate" title={entry.title}>{entry.title}</p>
+                          ) : (
+                            <p className="text-[10px] font-heading font-bold text-mutedForeground">Entry</p>
                           )}
-                          <p className="text-[10px] font-heading font-bold truncate" title={entry.title}>{entry.title}</p>
                           <p className="text-[10px] text-mutedForeground">by {entry.author_username}</p>
                           <p className="text-[10px] text-mutedForeground">{entry.vote_count} vote(s)</p>
                           <div className="flex gap-1 mt-1.5">
-                            <Link to={`/forum/topic/${entry.topic_id}`} className="text-[10px] text-primary hover:underline">View topic</Link>
+                            <Link to={`/forum/topic/${entry.topic_id || activeDesignerComp?.competition_topic_id || ''}`} className="text-[10px] text-primary hover:underline">View topic</Link>
                             {activeDesignerComp && (
                               myVoteEntryId === entry.id ? (
                                 <span className="text-[10px] text-emerald-400 font-heading font-bold">Voted</span>

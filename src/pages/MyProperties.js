@@ -479,53 +479,50 @@ export default function MyProperties() {
                   <span className="font-heading font-bold text-foreground">Armoury</span>
                   <span className="text-mutedForeground text-sm">· {data.property.state}</span>
                 </div>
-                <p className="text-[11px] text-mutedForeground mb-2">Set price per bullet and collect from the armoury.</p>
+                <p className="text-[11px] text-mutedForeground mb-1">Set price per bullet and collect from the armoury.</p>
                 {armouryDetail && (
-                  <div className="rounded border border-zinc-700/50 bg-zinc-900/40 px-2.5 py-2 mb-2 space-y-1.5">
-                    <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Profit &amp; stock</div>
-                    <div className="text-[11px] text-foreground">
+                  <>
+                    <p className="text-[11px] mb-1">
                       <span className="text-mutedForeground">Profit to collect: </span>
                       <span className="text-primary font-bold">
                         {formatMoney(armouryDetail.owner_pending_profit ?? 0)}
                         {(Number(armouryDetail.owner_pending_profit ?? 0) > 0 || Number(armouryDetail.owner_pending_profit_points ?? 0) > 0) && ', '}
                         {Number(armouryDetail.owner_pending_profit_points ?? 0) > 0 ? `${Number(armouryDetail.owner_pending_profit_points).toLocaleString()} pts` : '0 pts'}
                       </span>
-                      {(Number(armouryDetail.owner_pending_profit ?? 0) > 0 || Number(armouryDetail.owner_pending_profit_points ?? 0) > 0) ? (
-                        <span className="text-mutedForeground"> — press Collect to add to your cash/points.</span>
-                      ) : (
-                        <span className="text-mutedForeground"> — Collect when you have profit from sales.</span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-foreground">
-                      <span className="text-mutedForeground">Stock value (bullets at your price): </span>
+                    </p>
+                    <p className="text-[11px] mb-2">
+                      <span className="text-mutedForeground">Stock value (bullets × price): </span>
                       <span className="text-primary font-bold">
                         {formatMoney(Number(armouryDetail.accumulated_bullets ?? 0) * Number(armouryDetail.price_per_bullet ?? 0))}
                       </span>
-                      <span className="text-mutedForeground"> ({Number(armouryDetail.accumulated_bullets ?? 0).toLocaleString()} bullets × {formatMoney(armouryDetail.price_per_bullet ?? 0)}/ea).</span>
-                    </div>
-                    <div className="text-[11px] text-foreground">
-                      <span className="text-mutedForeground">Stock: </span>
-                      <span>Bullets {Number(armouryDetail.accumulated_bullets ?? 0).toLocaleString()}</span>
+                      <span className="text-mutedForeground"> ({Number(armouryDetail.accumulated_bullets ?? 0).toLocaleString()} bullets × {formatMoney(armouryDetail.price_per_bullet ?? 0)}/ea)</span>
+                    </p>
+                    <p className="text-[11px] text-mutedForeground mb-2">
+                      Stock: Bullets {Number(armouryDetail.accumulated_bullets ?? 0).toLocaleString()}
                       {Object.entries(armouryDetail.armour_stock || {}).filter(([, q]) => Number(q || 0) > 0).length > 0 && (
                         <span> · Armour {Object.entries(armouryDetail.armour_stock).filter(([, q]) => Number(q || 0) > 0).map(([lv, q]) => `Lv.${lv}: ${Number(q)}`).join(', ')}</span>
                       )}
                       {(Object.values(armouryDetail.weapon_stock || {}).reduce((a, b) => a + Number(b || 0), 0) || 0) > 0 && (
                         <span> · Weapons {Object.values(armouryDetail.weapon_stock || {}).reduce((a, b) => a + Number(b || 0), 0)} units</span>
                       )}
-                    </div>
-                  </div>
+                    </p>
+                  </>
                 )}
                 <div className="flex flex-wrap gap-2 items-center mb-2">
+                  <span className="text-[11px] text-mutedForeground w-16 shrink-0">Set price</span>
                   <input
                     type="text"
                     value={bulletPrice}
                     onChange={(e) => setBulletPrice(e.target.value)}
                     placeholder="Price per bullet $"
-                    className="w-28 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
+                    className="flex-1 min-w-24 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
                   />
                   <button type="button" onClick={handleBulletSetPrice} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
-                    {saving ? '...' : 'Set price'}
+                    {saving ? '...' : 'Set'}
                   </button>
+                </div>
+                <div className="flex flex-wrap gap-2 items-center mb-2">
+                  <span className="text-[11px] text-mutedForeground w-16 shrink-0">Collect</span>
                   <button type="button" onClick={handleBulletCollect} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
                     {saving ? '...' : 'Collect'}
                   </button>
@@ -544,14 +541,14 @@ export default function MyProperties() {
                     {saving ? '...' : 'List'}
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-2 items-center mb-2">
+                <div className="flex gap-2 flex-wrap pt-1 border-t border-zinc-700/30 mt-2">
+                  <Link to="/armour-weapons" className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/50 text-primary text-xs font-heading hover:bg-primary/10">
+                    <LinkIcon size={12} /> Armoury
+                  </Link>
                   <button type="button" onClick={handleArmouryRelinquish} disabled={saving} className="px-2 py-1 rounded bg-red-500/20 border border-red-500/50 text-red-400 text-xs font-heading hover:bg-red-500/30 disabled:opacity-50">
                     Relinquish
                   </button>
                 </div>
-                <Link to="/armour-weapons" className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/50 text-primary text-xs font-heading hover:bg-primary/10">
-                  <LinkIcon size={12} /> Armoury
-                </Link>
                 <div className="mp-art-line text-primary mx-3 mt-3" />
               </>
             ) : data.property?.type === 'armory' ? (

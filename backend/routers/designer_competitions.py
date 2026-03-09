@@ -1,6 +1,7 @@
 # Designer Forum competitions: admin/mod create, users submit designer topics as entries, vote (100 pts per voter), winner gets rewards.
 from datetime import datetime, timezone
 from typing import Optional
+import re
 import uuid
 import os
 import sys
@@ -12,6 +13,32 @@ from pydantic import BaseModel
 from server import db, get_current_user, send_notification, send_notification_to_all, _is_admin, _is_moderator
 
 VOTER_REWARD_POINTS = 100
+
+
+def _first_image_url_from_content(content: str) -> Optional[str]:
+    """Extract first image URL from forum BBCode [img]url[/img] or [gif]url[/gif]. Returns None if none found."""
+    if not content or not isinstance(content, str):
+        return None
+    content = content.strip()
+    for pattern in (r"\[img\](.*?)\[/img\]", r"\[gif\](.*?)\[/gif\]"):
+        m = re.search(pattern, content, re.IGNORECASE | re.DOTALL)
+        if m:
+            url = (m.group(1) or "").strip()
+            if url.startswith("http://") or url.startswith("https://"):
+                return url
+    return None
+
+
+def _content_is_just_image(content: str) -> bool:
+    """True if content is only whitespace and a single [img]...[/img] or [gif]...[/gif]."""
+    if not content:
+        return False
+    stripped = content.strip()
+    if not stripped:
+        return False
+    reduced = re.sub(r"\[img\].*?\[/img\]", "", stripped, flags=re.IGNORECASE | re.DOTALL)
+    reduced = re.sub(r"\[gif\].*?\[/gif\]", "", reduced, flags=re.IGNORECASE | re.DOTALL)
+    return not reduced.strip()
 
 
 class CompetitionCreate(BaseModel):
@@ -311,7 +338,16 @@ async def list_entries(comp_id: str, current_user: dict = Depends(get_current_us
             comment = await db.forum_comments.find_one({"id": e["comment_id"]}, {"_id": 0, "gif_url": 1, "content": 1})
             if comment:
                 gif_url = comment.get("gif_url")
-                title = (comment.get("content") or "")[:80] or "Entry"
+                raw_content = comment.get("content") or ""
+                if gif_url:
+                    title = (raw_content[:80].strip() or "Entry") if raw_content and not _content_is_just_image(raw_content) else "Entry"
+                else:
+                    extracted = _first_image_url_from_content(raw_content)
+                    if extracted:
+                        gif_url = extracted
+                        title = "Entry"
+                    else:
+                        title = (raw_content[:80] or "Entry").strip() or "Entry"
         elif e.get("topic_id"):
             topic = await db.forum_topics.find_one({"id": e["topic_id"]}, {"_id": 0, "title": 1, "gif_url": 1})
             if topic:
