@@ -452,7 +452,7 @@ export default function Forum() {
   const [designerCompSubmitting, setDesignerCompSubmitting] = useState(false);
   const [designerCompEndingId, setDesignerCompEndingId] = useState(null);
   const [designerCompStartingId, setDesignerCompStartingId] = useState(null);
-  const [myEntryTopicIds, setMyEntryTopicIds] = useState([]);
+  const [myEntryCommentId, setMyEntryCommentId] = useState(null);
   const [designerSubmittingEntry, setDesignerSubmittingEntry] = useState(false);
   const [designerSubmittingTopicId, setDesignerSubmittingTopicId] = useState(null);
 
@@ -534,11 +534,11 @@ export default function Forum() {
       const res = await api.get('/forum/designer/competitions/active');
       setActiveDesignerComp(res.data?.competition ?? null);
       setMyVoteEntryId(res.data?.my_vote_entry_id ?? null);
-      setMyEntryTopicIds(res.data?.my_entry_topic_ids ?? []);
+      setMyEntryCommentId(res.data?.my_entry_comment_id ?? null);
     } catch {
       setActiveDesignerComp(null);
       setMyVoteEntryId(null);
-      setMyEntryTopicIds([]);
+      setMyEntryCommentId(null);
     }
   }, []);
 
@@ -729,23 +729,6 @@ export default function Forum() {
     }
   };
 
-  const handleSubmitDesignerEntry = async (compId, topicId) => {
-    if (!topicId) return;
-    setDesignerSubmittingTopicId(topicId);
-    setDesignerSubmittingEntry(true);
-    try {
-      await api.post(`/forum/designer/competitions/${compId}/entries`, { topic_id: topicId });
-      toast.success('Entry submitted');
-      setMyEntryTopicIds((prev) => (prev.includes(topicId) ? prev : [...prev, topicId]));
-      fetchDesignerEntries(compId);
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed');
-    } finally {
-      setDesignerSubmittingEntry(false);
-      setDesignerSubmittingTopicId(null);
-    }
-  };
-
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="forum-page">
       <style>{FORUM_STYLES}</style>
@@ -824,7 +807,12 @@ export default function Forum() {
                   Winner: ${(activeDesignerComp.reward_money || 0).toLocaleString()} + {(activeDesignerComp.reward_points || 0).toLocaleString()} pts
                   {activeDesignerComp.reward_bullets ? ` + ${activeDesignerComp.reward_bullets} bullets` : ''}
                 </p>
-                <p className="text-[10px] text-mutedForeground">Post your picture in a topic above, then click &quot;Submit to competition&quot; on your topic in the list below.</p>
+                <p className="text-[10px] text-mutedForeground">
+                  Post your picture in the pinned competition topic below (add a reply with your image), then open that topic and click &quot;Submit as my entry&quot; on your post.
+                  {activeDesignerComp.competition_topic_id && (
+                    <> <Link to={`/forum/topic/${activeDesignerComp.competition_topic_id}`} className="text-primary font-heading font-bold underline">Open competition topic →</Link></>
+                  )}
+                </p>
                 <button
                   type="button"
                   onClick={() => fetchDesignerEntries(activeDesignerComp.id)}
@@ -878,7 +866,7 @@ export default function Forum() {
           ) : (
             <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in`}>
               <div className="p-4 text-center text-xs text-mutedForeground">
-                No active designer competition. Create a topic with your picture above; when a competition is running, you can submit it and vote (voters get 100 points).
+                No active designer competition. When one is running, a pinned topic will appear here — post your picture there and submit that post as your entry. Voters get 100 points.
               </div>
             </div>
           )}
@@ -1137,8 +1125,8 @@ export default function Forum() {
               <>
                 {pinnedTopics.map((t) => (
                   <div key={t.id}>
-                    <TopicRowDesktop topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={activeTab === 'designer' ? activeDesignerComp?.id : null} myEntryTopicIds={myEntryTopicIds} meUsername={user?.username} onSubmitToComp={handleSubmitDesignerEntry} submittingTopicId={designerSubmittingTopicId} />
-                    <TopicRowMobile topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={activeTab === 'designer' ? activeDesignerComp?.id : null} myEntryTopicIds={myEntryTopicIds} meUsername={user?.username} onSubmitToComp={handleSubmitDesignerEntry} submittingTopicId={designerSubmittingTopicId} />
+                    <TopicRowDesktop topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={null} myEntryTopicIds={[]} meUsername={user?.username} onSubmitToComp={() => {}} submittingTopicId={null} />
+                    <TopicRowMobile topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={null} myEntryTopicIds={[]} meUsername={user?.username} onSubmitToComp={() => {}} submittingTopicId={null} />
                   </div>
                 ))}
                 {regularTopics.length > 0 && (
@@ -1150,8 +1138,8 @@ export default function Forum() {
             {/* Regular topics */}
             {regularTopics.map((t) => (
               <div key={t.id}>
-                <TopicRowDesktop topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={activeTab === 'designer' ? activeDesignerComp?.id : null} myEntryTopicIds={myEntryTopicIds} meUsername={user?.username} onSubmitToComp={handleSubmitDesignerEntry} submittingTopicId={designerSubmittingTopicId} />
-                <TopicRowMobile topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={activeTab === 'designer' ? activeDesignerComp?.id : null} myEntryTopicIds={myEntryTopicIds} meUsername={user?.username} onSubmitToComp={handleSubmitDesignerEntry} submittingTopicId={designerSubmittingTopicId} />
+                <TopicRowDesktop topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={null} myEntryTopicIds={[]} meUsername={user?.username} onSubmitToComp={() => {}} submittingTopicId={null} />
+                <TopicRowMobile topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={null} myEntryTopicIds={[]} meUsername={user?.username} onSubmitToComp={() => {}} submittingTopicId={null} />
               </div>
             ))}
           </div>

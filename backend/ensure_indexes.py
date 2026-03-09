@@ -215,6 +215,7 @@ async def ensure_all_indexes(db):
         await db.designer_competitions.create_index("end_at")
         await db.designer_competition_entries.create_index("competition_id")
         await db.designer_competition_entries.create_index("topic_id")
+        await db.designer_competition_entries.create_index("comment_id")
         await db.designer_competition_entries.create_index("user_id")
         await db.designer_competition_entries.create_index("id", unique=True)
         await db.designer_competition_votes.create_index([("competition_id", 1), ("user_id", 1)], unique=True)

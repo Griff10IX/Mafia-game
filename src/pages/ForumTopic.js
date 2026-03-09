@@ -79,8 +79,9 @@ export default function ForumTopic() {
   const [replyToComment, setReplyToComment] = useState(null); // { id, author_username }
   const commentTextareaRef = useRef(null);
   const [activeDesignerComp, setActiveDesignerComp] = useState(null);
-  const [myEntryTopicIds, setMyEntryTopicIds] = useState([]);
+  const [myEntryCommentId, setMyEntryCommentId] = useState(null);
   const [designerSubmitLoading, setDesignerSubmitLoading] = useState(false);
+  const [designerSubmittingCommentId, setDesignerSubmittingCommentId] = useState(null);
 
   const fetchTopic = useCallback(async () => {
     if (!topicId) return;
@@ -115,11 +116,11 @@ export default function ForumTopic() {
     if (topic?.category === 'designer' && user) {
       api.get('/forum/designer/competitions/active').then((r) => {
         setActiveDesignerComp(r.data?.competition ?? null);
-        setMyEntryTopicIds(r.data?.my_entry_topic_ids ?? []);
-      }).catch(() => { setActiveDesignerComp(null); setMyEntryTopicIds([]); });
+        setMyEntryCommentId(r.data?.my_entry_comment_id ?? null);
+      }).catch(() => { setActiveDesignerComp(null); setMyEntryCommentId(null); });
     } else {
       setActiveDesignerComp(null);
-      setMyEntryTopicIds([]);
+      setMyEntryCommentId(null);
     }
   }, [topic?.category, user]);
 
@@ -181,17 +182,17 @@ export default function ForumTopic() {
     }
   };
 
-  const submitToDesignerComp = async () => {
-    if (!activeDesignerComp?.id || !topicId) return;
-    setDesignerSubmitLoading(true);
+  const submitToDesignerComp = async (commentId) => {
+    if (!activeDesignerComp?.id || !commentId) return;
+    setDesignerSubmittingCommentId(commentId);
     try {
-      await api.post(`/forum/designer/competitions/${activeDesignerComp.id}/entries`, { topic_id: topicId });
+      await api.post(`/forum/designer/competitions/${activeDesignerComp.id}/entries`, { comment_id: commentId });
       toast.success('Entry submitted');
-      setMyEntryTopicIds((prev) => (prev.includes(topicId) ? prev : [...prev, topicId]));
+      setMyEntryCommentId(commentId);
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed');
     } finally {
-      setDesignerSubmitLoading(false);
+      setDesignerSubmittingCommentId(null);
     }
   };
 
@@ -553,32 +554,6 @@ export default function ForumTopic() {
         </div>
       )}
 
-      {/* Designer: Submit this topic to the active competition */}
-      {topic.category === 'designer' && isAuthor && activeDesignerComp && (
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎨 Designer competition</span>
-          </div>
-          <div className="p-3">
-            {myEntryTopicIds.includes(topicId) ? (
-              <p className="text-xs text-emerald-400 font-heading font-bold">This topic is submitted to the competition.</p>
-            ) : (
-              <>
-                <p className="text-xs text-mutedForeground mb-2">Submit this topic as your entry. Voters get 100 points; winner gets the pot.</p>
-                <button
-                  type="button"
-                  onClick={submitToDesignerComp}
-                  disabled={designerSubmitLoading}
-                  className="px-4 py-2 bg-primary/20 text-primary text-xs font-heading font-bold uppercase rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
-                >
-                  {designerSubmitLoading ? '...' : 'Submit to competition'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Entertainer: Create dice / gbox game (manual roll when ready) */}
       {topic.category === 'entertainer' && !topic.is_locked && (
         <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
@@ -668,7 +643,7 @@ export default function ForumTopic() {
                 )}
                 
                 {/* Like + Reply */}
-                <div className="mt-2 flex items-center gap-2">
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => likeComment(c.id)}
                     disabled={likingId === c.id}
@@ -690,6 +665,21 @@ export default function ForumTopic() {
                   >
                     <MessageCircle size={10} /> Reply
                   </button>
+                  {/* Designer competition: submit this post as my entry (only on competition topic, only my comments) */}
+                  {topicId === activeDesignerComp?.competition_topic_id && user && c.author_id === user.id && activeDesignerComp && (
+                    myEntryCommentId === c.id ? (
+                      <span className="text-[10px] font-heading font-bold text-emerald-400 px-2 py-1">Submitted to competition</span>
+                    ) : !myEntryCommentId ? (
+                      <button
+                        type="button"
+                        onClick={() => submitToDesignerComp(c.id)}
+                        disabled={!!designerSubmittingCommentId}
+                        className="flex items-center gap-1 text-[10px] font-heading px-2 py-1 rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                      >
+                        {designerSubmittingCommentId === c.id ? '...' : 'Submit as my entry'}
+                      </button>
+                    ) : null
+                  )}
                 </div>
               </div>
             ))}

@@ -35,7 +35,7 @@ class CompetitionUpdate(BaseModel):
 
 
 class EntryCreate(BaseModel):
-    topic_id: str
+    comment_id: str  # post (comment) in the competition topic
 
 
 class VoteRequest(BaseModel):
@@ -104,7 +104,7 @@ async def update_competition(comp_id: str, body: CompetitionUpdate, current_user
 
 
 async def start_competition(comp_id: str, current_user: dict = Depends(get_current_user)):
-    """Admin or mod: set competition to active and notify all users."""
+    """Admin or mod: set competition to active, create one stickied topic for entries, notify all users."""
     if not _admin_or_mod(current_user):
         raise HTTPException(status_code=403, detail="Admin or moderator access required")
     comp = await db.designer_competitions.find_one({"id": comp_id}, {"_id": 0})
@@ -113,21 +113,40 @@ async def start_competition(comp_id: str, current_user: dict = Depends(get_curre
     if comp.get("status") != "draft":
         raise HTTPException(status_code=400, detail="Only draft competitions can be started")
     now = datetime.now(timezone.utc).isoformat()
+    title = (comp.get("title") or "Designer competition").strip()
+    topic_title = f"Designer Competition: {title}"
+    topic_content = (comp.get("description") or "").strip() or "Post your picture in a reply below to enter. Then use \"Submit as my entry\" on your post."
+    topic_id = str(uuid.uuid4())
+    topic_doc = {
+        "id": topic_id,
+        "title": topic_title,
+        "content": topic_content,
+        "category": "designer",
+        "author_id": current_user["id"],
+        "author_username": current_user.get("username") or "?",
+        "created_at": now,
+        "updated_at": now,
+        "views": 0,
+        "is_sticky": True,
+        "is_important": False,
+        "is_locked": False,
+    }
+    await db.forum_topics.insert_one(topic_doc)
     await db.designer_competitions.update_one(
         {"id": comp_id},
-        {"$set": {"status": "active", "notified_at": now}}
+        {"$set": {"status": "active", "notified_at": now, "competition_topic_id": topic_id}}
     )
     try:
         await send_notification_to_all(
             "🎨 Designer competition started",
-            f'"{comp.get("title", "Designer competition")}" is now open. Submit your picture in the Designer Forum and vote for your favourite! Rewards: winner gets prizes; every voter gets 100 points.',
+            f'"{title}" is now open. Post your picture in the pinned competition topic in the Designer Forum and vote for your favourite! Rewards: winner gets prizes; every voter gets 100 points.',
             "system",
             category="designer_comp",
         )
     except Exception:
         pass
     comp = await db.designer_competitions.find_one({"id": comp_id}, {"_id": 0})
-    return {"message": "Competition started; all users notified", "competition": _strip_mongo(comp)}
+    return {"message": "Competition started; topic created and pinned; all users notified", "competition": _strip_mongo(comp)}
 
 
 async def end_competition(comp_id: str, current_user: dict = Depends(get_current_user)):
@@ -226,46 +245,52 @@ async def get_active_competition(current_user: dict = Depends(get_current_user))
         {"competition_id": comp["id"], "user_id": current_user["id"]},
         {"_id": 0, "entry_id": 1},
     )
-    my_entries = await db.designer_competition_entries.find(
+    my_entry = await db.designer_competition_entries.find_one(
         {"competition_id": comp["id"], "user_id": current_user["id"]},
-        {"_id": 0, "topic_id": 1},
-    ).to_list(20)
-    my_entry_topic_ids = [e["topic_id"] for e in my_entries]
+        {"_id": 0, "comment_id": 1},
+    )
+    my_entry_comment_id = my_entry.get("comment_id") if my_entry else None
     return {
         "competition": _strip_mongo(comp),
         "my_vote_entry_id": my_vote.get("entry_id") if my_vote else None,
-        "my_entry_topic_ids": my_entry_topic_ids,
+        "my_entry_comment_id": my_entry_comment_id,
     }
 
 
 async def add_entry(comp_id: str, body: EntryCreate, current_user: dict = Depends(get_current_user)):
-    """Submit a designer forum topic as an entry. Topic must be designer category and authored by current user."""
+    """Submit a post (comment) in the competition topic as your entry. One entry per user."""
     comp = await db.designer_competitions.find_one({"id": comp_id}, {"_id": 0})
     if not comp:
         raise HTTPException(status_code=404, detail="Competition not found")
+    comp_topic_id = comp.get("competition_topic_id")
+    if not comp_topic_id:
+        raise HTTPException(status_code=400, detail="This competition has no entry topic")
     if comp.get("status") != "active":
         raise HTTPException(status_code=400, detail="Competition is not active")
-    topic = await db.forum_topics.find_one({"id": body.topic_id}, {"_id": 0, "category": 1, "author_id": 1, "author_username": 1})
-    if not topic:
-        raise HTTPException(status_code=404, detail="Topic not found")
-    if topic.get("category") != "designer":
-        raise HTTPException(status_code=400, detail="Topic must be in the Designer Forum category")
-    if topic.get("author_id") != current_user["id"]:
-        raise HTTPException(status_code=403, detail="You can only submit your own topic")
+    comment = await db.forum_comments.find_one(
+        {"id": body.comment_id},
+        {"_id": 0, "topic_id": 1, "author_id": 1, "author_username": 1, "gif_url": 1, "content": 1},
+    )
+    if not comment:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if comment.get("topic_id") != comp_topic_id:
+        raise HTTPException(status_code=400, detail="Post must be in the competition topic")
+    if comment.get("author_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You can only submit your own post")
     existing = await db.designer_competition_entries.find_one(
-        {"competition_id": comp_id, "topic_id": body.topic_id},
+        {"competition_id": comp_id, "user_id": current_user["id"]},
         {"_id": 1},
     )
     if existing:
-        raise HTTPException(status_code=400, detail="This topic is already entered")
+        raise HTTPException(status_code=400, detail="You already have an entry in this competition")
     entry_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     doc = {
         "id": entry_id,
         "competition_id": comp_id,
-        "topic_id": body.topic_id,
+        "comment_id": body.comment_id,
         "user_id": current_user["id"],
-        "author_username": current_user.get("username") or topic.get("author_username", "?"),
+        "author_username": current_user.get("username") or comment.get("author_username", "?"),
         "created_at": now,
     }
     await db.designer_competition_entries.insert_one(doc)
@@ -273,21 +298,33 @@ async def add_entry(comp_id: str, body: EntryCreate, current_user: dict = Depend
 
 
 async def list_entries(comp_id: str, current_user: dict = Depends(get_current_user)):
-    """List entries for a competition with topic image (gif_url) for display."""
+    """List entries for a competition. Entries are posts (comments) in the competition topic; show gif_url/content from comment."""
     comp = await db.designer_competitions.find_one({"id": comp_id}, {"_id": 0})
     if not comp:
         raise HTTPException(status_code=404, detail="Competition not found")
     entries = await db.designer_competition_entries.find({"competition_id": comp_id}, {"_id": 0}).sort("created_at", 1).to_list(100)
     out = []
     for e in entries:
-        topic = await db.forum_topics.find_one({"id": e["topic_id"]}, {"_id": 0, "title": 1, "gif_url": 1, "content": 1})
+        gif_url = None
+        title = "Entry"
+        if e.get("comment_id"):
+            comment = await db.forum_comments.find_one({"id": e["comment_id"]}, {"_id": 0, "gif_url": 1, "content": 1})
+            if comment:
+                gif_url = comment.get("gif_url")
+                title = (comment.get("content") or "")[:80] or "Entry"
+        elif e.get("topic_id"):
+            topic = await db.forum_topics.find_one({"id": e["topic_id"]}, {"_id": 0, "title": 1, "gif_url": 1})
+            if topic:
+                gif_url = topic.get("gif_url")
+                title = topic.get("title") or "Entry"
         vote_count = await db.designer_competition_votes.count_documents({"entry_id": e["id"]})
         out.append({
             "id": e["id"],
-            "topic_id": e["topic_id"],
+            "comment_id": e.get("comment_id"),
+            "topic_id": e.get("topic_id"),
             "author_username": e.get("author_username", "?"),
-            "title": topic.get("title") if topic else "?",
-            "gif_url": topic.get("gif_url") if topic else None,
+            "title": title,
+            "gif_url": gif_url,
             "vote_count": vote_count,
             "created_at": e.get("created_at"),
         })
