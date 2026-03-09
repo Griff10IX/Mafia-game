@@ -7,7 +7,7 @@ import styles from '../styles/noir.module.css';
 export default function Landing({ setIsAuthenticated }) {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
-  const [verifySentForEmail, setVerifySentForEmail] = useState(null); // show "Resend verification" after register or login 403
+  const [verifySentForEmail, setVerifySentForEmail] = useState(null);
 
   useEffect(() => {
     const msg = sessionStorage.getItem(AUTH_ERROR_KEY);
@@ -16,19 +16,22 @@ export default function Landing({ setIsAuthenticated }) {
       toast.error(msg);
     }
   }, []);
+
   const [formData, setFormData] = useState({
     email: '',
     username: '',
     password: '',
     confirmPassword: '',
   });
-  const [loading, setLoading] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
+  const [loading, setLoading]                       = useState(false);
+  const [resendLoading, setResendLoading]           = useState(false);
   const [resendCooldownSeconds, setResendCooldownSeconds] = useState(0);
-  const [bannerEnabled, setBannerEnabled] = useState(false);
+  const [bannerEnabled, setBannerEnabled]           = useState(false);
 
   useEffect(() => {
-    api.get('/landing-banner').then((r) => setBannerEnabled(!!r.data?.enabled)).catch(() => setBannerEnabled(false));
+    api.get('/landing-banner')
+      .then((r) => setBannerEnabled(!!r.data?.enabled))
+      .catch(() => setBannerEnabled(false));
   }, []);
 
   useEffect(() => {
@@ -67,11 +70,12 @@ export default function Landing({ setIsAuthenticated }) {
 
     try {
       const endpoint = isLogin ? '/auth/login' : '/auth/register';
-      const payload = isLogin
+      const payload  = isLogin
         ? { email: formData.email, password: formData.password }
         : { email: formData.email, username: formData.username, password: formData.password };
 
       const response = await api.post(endpoint, payload);
+
       if (response.data.verify_required) {
         if (response.data.token) {
           localStorage.setItem('token', response.data.token);
@@ -83,11 +87,10 @@ export default function Landing({ setIsAuthenticated }) {
       }
       localStorage.setItem('token', response.data.token);
       setIsAuthenticated(true);
-      toast.success(isLogin ? 'Welcome back!' : 'Account created successfully!');
+      toast.success(isLogin ? 'Welcome back.' : 'Account created successfully.');
     } catch (error) {
       let msg;
       const prefix = isLogin ? 'Cannot log in: ' : 'Registration failed: ';
-      // Fallback reasons by status when backend doesn't return detail
       const loginReasonByStatus = {
         400: 'Invalid request. Check email and password.',
         401: 'Invalid email or password. Use Forgot password to reset.',
@@ -99,7 +102,7 @@ export default function Landing({ setIsAuthenticated }) {
       };
       if (error.code === 'ERR_NETWORK' || !error.response) {
         const base = error.config?.baseURL || getBaseURL();
-        msg = `Cannot reach server. Backend URL: ${base} — Set REACT_APP_BACKEND_URL in Vercel (production) or leave unset for same-origin /api.`;
+        msg = `Cannot reach server. Backend URL: ${base}`;
       } else if (error.response?.data?.detail != null) {
         const d = error.response.data.detail;
         if (typeof d === 'string') {
@@ -111,20 +114,24 @@ export default function Landing({ setIsAuthenticated }) {
         } else {
           msg = String(d);
         }
-        // Use backend message as-is for login (e.g. "No account found...", "Wrong password..."); only add prefix for generic/tech messages
-        const skipPrefix = isLogin && (msg.startsWith('Cannot log in') || msg.startsWith('Login failed') || msg.startsWith('No account found') || msg.startsWith('Wrong password') || msg.startsWith('Too many failed') || msg.startsWith('Please verify your email') || msg.startsWith('This account is dead'));
-        if (!skipPrefix && !msg.startsWith('Registration failed')) {
-          msg = `${prefix}${msg}`;
-        }
+        const skipPrefix = isLogin && (
+          msg.startsWith('Cannot log in') || msg.startsWith('Login failed') ||
+          msg.startsWith('No account found') || msg.startsWith('Wrong password') ||
+          msg.startsWith('Too many failed') || msg.startsWith('Please verify your email') ||
+          msg.startsWith('This account is dead')
+        );
+        if (!skipPrefix && !msg.startsWith('Registration failed')) msg = `${prefix}${msg}`;
       } else if (error.response?.status === 404) {
-        msg = `Login endpoint not found (404). Backend may be wrong or not running. URL: ${error.config?.baseURL || '?'}`;
+        msg = `Login endpoint not found (404). URL: ${error.config?.baseURL || '?'}`;
       } else if (error.response?.status) {
-        const status = error.response.status;
+        const status       = error.response.status;
         const statusDetail = error.response?.data?.detail;
         const reason = typeof statusDetail === 'string'
           ? statusDetail
           : (isLogin ? loginReasonByStatus[status] : null) || error.response?.statusText || `Error ${status}`;
-        msg = reason.startsWith('Cannot log in') || reason.startsWith('Registration failed') ? reason : `${prefix}${reason}`.trim();
+        msg = reason.startsWith('Cannot log in') || reason.startsWith('Registration failed')
+          ? reason
+          : `${prefix}${reason}`.trim();
       } else {
         msg = isLogin ? 'Cannot log in. Please try again.' : 'Registration failed. Please try again.';
       }
@@ -149,56 +156,175 @@ export default function Landing({ setIsAuthenticated }) {
         backgroundAttachment: 'fixed',
       }}
     >
-      {/* Dark overlay for readability */}
-      <div className="absolute inset-0 bg-black/60 pointer-events-none" aria-hidden />
-      <div className="relative min-h-screen flex items-center justify-center px-4 py-8">
-        <div className="w-full max-w-md">
-          {/* Beta testing banner – shown when enabled in Admin */}
-          {bannerEnabled && (
-            <div className="text-center mb-4 px-4 py-2 rounded-sm font-heading font-bold uppercase tracking-wider text-sm" style={{ backgroundColor: 'var(--noir-primary)', color: 'var(--noir-background)', opacity: 0.95 }}>
-              Beta Testing Round:
-            </div>
-          )}
-          {/* Logo – same style as sidebar header */}
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-3 mb-2">
-              <div className="h-px flex-1 max-w-[60px] md:max-w-[100px]" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
-              <h1 className="text-4xl md:text-5xl font-heading font-bold uppercase tracking-[0.2em] md:tracking-[0.25em]" style={{ color: 'var(--noir-foreground)' }} data-testid="landing-title">
+      <style>{`
+        @keyframes landing-fade-up {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes crest-pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(var(--noir-primary-rgb, 201,168,76), 0.0), 0 4px 20px rgba(0,0,0,.7); }
+          50%       { box-shadow: 0 0 0 6px rgba(var(--noir-primary-rgb, 201,168,76), 0.08), 0 4px 20px rgba(0,0,0,.7); }
+        }
+        @keyframes shaft-drift {
+          0%   { opacity: 0.4; }
+          50%  { opacity: 0.7; }
+          100% { opacity: 0.4; }
+        }
+        .landing-fade-up    { animation: landing-fade-up 0.5s ease both; }
+        .landing-fade-up-1  { animation: landing-fade-up 0.5s 0.08s ease both; }
+        .landing-fade-up-2  { animation: landing-fade-up 0.5s 0.16s ease both; }
+        .landing-fade-up-3  { animation: landing-fade-up 0.5s 0.24s ease both; }
+        .crest-pulse        { animation: crest-pulse 3s ease-in-out infinite; }
+      `}</style>
+
+      {/* Dark overlay */}
+      <div className="absolute inset-0 bg-black/65 pointer-events-none" aria-hidden />
+
+      <div className="relative min-h-screen flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-md flex flex-col gap-0">
+
+          {/* ── HERO HEADER ─────────────────────────────────────── */}
+          {/*   Gold radial glow + vertical shaft lines, no image   */}
+          <div
+            className="relative rounded-t-xl overflow-hidden flex flex-col items-center justify-center pt-10 pb-10"
+            style={{
+              background: 'linear-gradient(180deg, rgba(var(--noir-primary-rgb,201,168,76),0.10) 0%, var(--noir-background, #0d0d0d) 100%)',
+              borderTop:    '1px solid rgba(var(--noir-primary-rgb,201,168,76),0.22)',
+              borderLeft:   '1px solid rgba(var(--noir-primary-rgb,201,168,76),0.22)',
+              borderRight:  '1px solid rgba(var(--noir-primary-rgb,201,168,76),0.22)',
+            }}
+          >
+            {/* Light shaft lines */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: 'repeating-linear-gradient(90deg, transparent 0, transparent 52px, rgba(var(--noir-primary-rgb,201,168,76),0.025) 52px, rgba(var(--noir-primary-rgb,201,168,76),0.025) 54px)',
+              }}
+            />
+            {/* Top-centre glow */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: 'radial-gradient(ellipse 90% 60% at 50% -10%, rgba(var(--noir-primary-rgb,201,168,76),0.18) 0%, transparent 65%)',
+              }}
+            />
+
+            {/* Beta banner */}
+            {bannerEnabled && (
+              <div
+                className="relative z-10 mb-4 px-5 py-1.5 rounded font-heading font-bold uppercase tracking-wider text-xs"
+                style={{ backgroundColor: 'var(--noir-primary)', color: 'var(--noir-background)' }}
+              >
+                Beta Testing Round
+              </div>
+            )}
+
+            {/* Eyebrow */}
+            <p
+              className="relative z-10 text-[8px] font-heading uppercase tracking-[0.5em] mb-2 landing-fade-up"
+              style={{ color: 'var(--noir-primary)', opacity: 0.6 }}
+            >
+              La Cosa Nostra
+            </p>
+
+            {/* Title */}
+            <div className="relative z-10 flex items-center gap-3 landing-fade-up-1">
+              <div className="h-px w-10 md:w-16" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.45 }} />
+              <h1
+                className="text-4xl md:text-5xl font-heading font-black uppercase tracking-[0.2em]"
+                style={{
+                  color: 'var(--noir-foreground)',
+                  textShadow: '0 0 48px rgba(var(--noir-primary-rgb,201,168,76),0.22)',
+                }}
+                data-testid="landing-title"
+              >
                 MAFIA WARS
               </h1>
-              <div className="h-px flex-1 max-w-[60px] md:max-w-[100px]" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
+              <div className="h-px w-10 md:w-16" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.45 }} />
+            </div>
+
+            {/* Ornament */}
+            <div className="relative z-10 flex items-center gap-2 mt-3 landing-fade-up-1" style={{ width: '70%' }}>
+              <div className="flex-1 h-px" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.35 }} />
+              <div
+                className="w-1.5 h-1.5 rotate-45 flex-shrink-0"
+                style={{ border: '1px solid var(--noir-primary)', opacity: 0.7 }}
+              />
+              <div
+                className="text-[9px] font-heading uppercase tracking-[0.3em] flex-shrink-0"
+                style={{ color: 'var(--noir-primary)', opacity: 0.55 }}
+              >
+                Est. 1920
+              </div>
+              <div
+                className="w-1.5 h-1.5 rotate-45 flex-shrink-0"
+                style={{ border: '1px solid var(--noir-primary)', opacity: 0.7 }}
+              />
+              <div className="flex-1 h-px" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.35 }} />
+            </div>
+
+            {/* Crest seal — overlaps hero/panel boundary */}
+            <div
+              className="crest-pulse relative z-20 mt-6 w-12 h-12 rounded-full flex items-center justify-center text-xl"
+              style={{
+                background: 'var(--noir-background, #0d0d0d)',
+                border: '2px solid var(--noir-primary)',
+                marginBottom: '-24px',
+              }}
+            >
+              🤝
             </div>
           </div>
 
-          {/* Auth Form – same panel/inputs as other pages */}
-          <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-            <div className={`px-4 py-2 ${styles.panelHeader} flex gap-1`}>
+          {/* ── AUTH PANEL ──────────────────────────────────────── */}
+          <div
+            className={`${styles.panel} rounded-b-xl overflow-hidden landing-fade-up-2`}
+            style={{
+              borderTop: 'none',
+              borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.18)',
+            }}
+          >
+            {/* Tabs */}
+            <div
+              className={`px-4 pt-8 pb-0 flex gap-1.5 ${styles.panelHeader}`}
+              style={{ borderBottom: '1px solid rgba(var(--noir-primary-rgb,201,168,76),0.12)' }}
+            >
               <button
                 onClick={() => setIsLogin(true)}
                 data-testid="login-tab"
-                className={`flex-1 py-2.5 rounded-sm uppercase tracking-wider text-xs font-heading font-bold transition-smooth border ${
-                  isLogin ? `${styles.tabActive}` : 'bg-transparent border-transparent hover:opacity-90'
+                className={`flex-1 py-2.5 rounded-t-md uppercase tracking-wider text-[10px] font-heading font-bold transition-all border-b-2 ${
+                  isLogin
+                    ? `${styles.tabActive}`
+                    : 'bg-transparent border-transparent'
                 }`}
-                style={!isLogin ? { color: 'var(--noir-muted)' } : undefined}
+                style={!isLogin ? { color: 'var(--noir-muted)', borderBottom: '2px solid transparent' } : undefined}
               >
                 Login
               </button>
               <button
                 onClick={() => setIsLogin(false)}
                 data-testid="register-tab"
-                className={`flex-1 py-2.5 rounded-sm uppercase tracking-wider text-xs font-heading font-bold transition-smooth border ${
-                  !isLogin ? `${styles.tabActive}` : 'bg-transparent border-transparent hover:opacity-90'
+                className={`flex-1 py-2.5 rounded-t-md uppercase tracking-wider text-[10px] font-heading font-bold transition-all ${
+                  !isLogin
+                    ? `${styles.tabActive}`
+                    : 'bg-transparent border-transparent'
                 }`}
-                style={isLogin ? { color: 'var(--noir-muted)' } : undefined}
+                style={isLogin ? { color: 'var(--noir-muted)', borderBottom: '2px solid transparent' } : undefined}
               >
                 Register
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4" autoComplete="on">
+
+              {/* Email / username */}
               <div>
-                <label htmlFor="landing-email" className="block text-xs font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>
-                  {isLogin ? 'Email or username' : 'Email'}
+                <label
+                  htmlFor="landing-email"
+                  className="block text-[10px] font-heading font-bold uppercase tracking-wider mb-1.5"
+                  style={{ color: 'var(--noir-primary)' }}
+                >
+                  {isLogin ? 'Email or Username' : 'Email'}
                 </label>
                 <input
                   id="landing-email"
@@ -214,9 +340,16 @@ export default function Landing({ setIsAuthenticated }) {
                 />
               </div>
 
+              {/* Username — register only */}
               {!isLogin && (
                 <div>
-                  <label htmlFor="landing-username" className="block text-xs font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>Username</label>
+                  <label
+                    htmlFor="landing-username"
+                    className="block text-[10px] font-heading font-bold uppercase tracking-wider mb-1.5"
+                    style={{ color: 'var(--noir-primary)' }}
+                  >
+                    Username
+                  </label>
                   <input
                     id="landing-username"
                     name="username"
@@ -232,14 +365,21 @@ export default function Landing({ setIsAuthenticated }) {
                 </div>
               )}
 
+              {/* Password */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor="landing-password" className="block text-xs font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Password</label>
+                  <label
+                    htmlFor="landing-password"
+                    className="block text-[10px] font-heading font-bold uppercase tracking-wider"
+                    style={{ color: 'var(--noir-primary)' }}
+                  >
+                    Password
+                  </label>
                   {isLogin && (
                     <button
                       type="button"
                       onClick={() => navigate('/forgot-password')}
-                      className="text-[10px] font-heading uppercase tracking-wider opacity-80 hover:opacity-100 transition-opacity"
+                      className="text-[9px] font-heading uppercase tracking-wider opacity-60 hover:opacity-100 transition-opacity"
                       style={{ color: 'var(--noir-primary)' }}
                     >
                       Forgot?
@@ -260,9 +400,16 @@ export default function Landing({ setIsAuthenticated }) {
                 />
               </div>
 
+              {/* Confirm password — register only */}
               {!isLogin && (
                 <div>
-                  <label htmlFor="landing-confirm-password" className="block text-xs font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>Confirm Password</label>
+                  <label
+                    htmlFor="landing-confirm-password"
+                    className="block text-[10px] font-heading font-bold uppercase tracking-wider mb-1.5"
+                    style={{ color: 'var(--noir-primary)' }}
+                  >
+                    Confirm Password
+                  </label>
                   <input
                     id="landing-confirm-password"
                     name="confirmPassword"
@@ -278,48 +425,85 @@ export default function Landing({ setIsAuthenticated }) {
                 </div>
               )}
 
+              {/* Submit */}
               <button
                 type="submit"
                 data-testid="submit-button"
                 disabled={loading}
-                className={`w-full ${styles.btnPrimary} hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 transition-smooth disabled:opacity-50`}
+                className={`w-full ${styles.btnPrimary} hover:opacity-90 active:scale-[0.98] rounded-sm font-heading font-bold uppercase tracking-wider py-3.5 transition-all disabled:opacity-50 touch-manipulation`}
               >
-                {loading ? 'Processing...' : isLogin ? 'Enter the Family' : 'Join the Family'}
+                {loading ? 'Processing…' : isLogin ? 'Enter the Family' : 'Join the Family'}
               </button>
 
+              {/* Resend verification */}
               {verifySentForEmail && (
-                <div className="pt-2 border-t mt-2" style={{ borderColor: 'var(--noir-muted)', opacity: 0.8 }}>
-                  <p className="text-xs mb-2" style={{ color: 'var(--noir-muted)' }}>
-                    Didn&apos;t get the email? Send another verification link.
+                <div
+                  className="pt-3 border-t space-y-2"
+                  style={{ borderColor: 'var(--noir-muted)', opacity: 0.85 }}
+                >
+                  <p className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                    Didn&apos;t receive the email? Send another verification link.
                   </p>
                   <button
                     type="button"
                     disabled={resendLoading || resendCooldownSeconds > 0}
                     onClick={handleResendVerification}
-                    className={`w-full ${styles.btnPrimary} opacity-80 hover:opacity-100 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth disabled:opacity-50`}
+                    className={`w-full ${styles.btnPrimary} opacity-75 hover:opacity-100 rounded-sm font-heading font-bold uppercase tracking-wider py-2.5 text-xs transition-all disabled:opacity-40 touch-manipulation`}
                   >
                     {resendLoading
-                      ? 'Sending...'
+                      ? 'Sending…'
                       : resendCooldownSeconds > 0
-                        ? `Request another in ${Math.floor(resendCooldownSeconds / 60)}:${String(resendCooldownSeconds % 60).padStart(2, '0')}`
-                        : 'Resend verification email'}
+                        ? `Resend in ${Math.floor(resendCooldownSeconds / 60)}:${String(resendCooldownSeconds % 60).padStart(2, '0')}`
+                        : 'Resend Verification Email'}
                   </button>
                 </div>
               )}
             </form>
+
+            {/* ── STAT STRIP ─────────────────────────────────── */}
+            {/*   4-column grid, same panel style as rest of app  */}
+            <div
+              className="grid grid-cols-4 border-t"
+              style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.1)' }}
+            >
+              {[
+                { val: '11',  lbl: 'Ranks'    },
+                { val: '5',   lbl: 'Prestige' },
+                { val: '7+',  lbl: 'Casinos'  },
+                { val: '∞',   lbl: 'Ops'      },
+              ].map(({ val, lbl }, i) => (
+                <div
+                  key={lbl}
+                  className="flex flex-col items-center justify-center py-3 gap-0.5"
+                  style={{
+                    borderRight: i < 3 ? '1px solid rgba(var(--noir-primary-rgb,201,168,76),0.08)' : undefined,
+                  }}
+                >
+                  <span
+                    className="text-lg font-heading font-bold leading-none"
+                    style={{ color: 'var(--noir-primary)' }}
+                  >
+                    {val}
+                  </span>
+                  <span
+                    className="text-[7px] font-heading uppercase tracking-[0.18em]"
+                    style={{ color: 'var(--noir-muted)' }}
+                  >
+                    {lbl}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Features – same panel style as other pages */}
-          <div className="mt-8 grid grid-cols-2 gap-4 text-center">
-            <div className={`${styles.panel} rounded-sm p-4`}>
-              <div className="text-2xl font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>11</div>
-              <div className={`text-xs font-heading uppercase tracking-widest mt-0.5 ${styles.textMuted}`}>Ranks</div>
-            </div>
-            <div className={`${styles.panel} rounded-sm p-4`}>
-              <div className="text-2xl font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>∞</div>
-              <div className={`text-xs font-heading uppercase tracking-widest mt-0.5 ${styles.textMuted}`}>Opportunities</div>
-            </div>
-          </div>
+          {/* ── TAGLINE ─────────────────────────────────────── */}
+          <p
+            className="text-center font-heading text-[10px] uppercase tracking-[0.25em] mt-5 landing-fade-up-3"
+            style={{ color: 'var(--noir-primary)', opacity: 0.35 }}
+          >
+            Omertà — silence is the first rule
+          </p>
+
         </div>
       </div>
     </div>
