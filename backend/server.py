@@ -327,10 +327,8 @@ POINT_PACKAGES = {
     "silver": {"points": 10000, "price_gbp": 15.99},
     "gold": {"points": 25000, "price_gbp": 36.99},
     "platinum": {"points": 50000, "price_gbp": 67.99},
+    "diamond": {"points": 100000, "price_gbp": 135.98},
 }
-# Per-point rate for custom amount (same as platinum pack); custom max 250k
-CUSTOM_POINTS_MAX = 250_000
-CUSTOM_POINTS_PRICE_PER_POINT = 67.99 / 50_000  # ~0.00136 £/point
 
 # Travel times based on car rarity (in seconds)
 TRAVEL_TIMES = {

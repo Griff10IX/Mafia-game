@@ -4,6 +4,7 @@ import uuid
 
 from fastapi import Depends, HTTPException
 
+from typing import Optional
 from pydantic import BaseModel
 
 
@@ -14,6 +15,12 @@ class TicketCreate(BaseModel):
 
 class TicketReply(BaseModel):
     body: str
+
+
+class FamilyChangeNameRequest(BaseModel):
+    family_tag: str  # current tag to identify the crew (case-insensitive)
+    new_name: str
+    new_tag: Optional[str] = None  # optional; if provided, also change tag
 
 
 def register(router):
@@ -169,3 +176,40 @@ def register(router):
             query = {"user_id": current_user["id"], "status": "open"}
         count = await db.help_desk_tickets.count_documents(query)
         return {"open_tickets_count": count}
+
+    @router.post("/help-desk/change-family-name")
+    async def change_family_name(body: FamilyChangeNameRequest, current_user: dict = Depends(get_current_user)):
+        """Staff (admin, mod, or HDO) change a crew's name and optionally tag. Use family tag to identify the crew."""
+        if not _can_manage_tickets(current_user):
+            raise HTTPException(status_code=403, detail="Only staff can change crew names")
+        tag = (body.family_tag or "").strip().upper().replace(" ", "")
+        if len(tag) < 2:
+            raise HTTPException(status_code=400, detail="Enter the crew's current tag (2+ chars)")
+        fam = await db.families.find_one({"tag": tag}, {"_id": 0, "id": 1, "name": 1, "tag": 1})
+        if not fam:
+            raise HTTPException(status_code=404, detail=f"Crew with tag [{tag}] not found")
+        new_name = (body.new_name or "").strip()[:30]
+        if len(new_name) < 2:
+            raise HTTPException(status_code=400, detail="New name must be 2–30 characters")
+        updates = {"name": new_name}
+        if body.new_tag is not None and (body.new_tag or "").strip():
+            new_tag = (body.new_tag or "").strip().upper().replace(" ", "")[:4]
+            if len(new_tag) < 2:
+                raise HTTPException(status_code=400, detail="New tag must be 2–4 characters")
+            if await db.families.find_one({"tag": new_tag, "id": {"$ne": fam["id"]}}):
+                raise HTTPException(status_code=400, detail=f"Tag [{new_tag}] is already taken")
+            updates["tag"] = new_tag
+        if await db.families.find_one({"name": new_name, "id": {"$ne": fam["id"]}}):
+            raise HTTPException(status_code=400, detail=f"Name '{new_name}' is already taken")
+        await db.families.update_one({"id": fam["id"]}, {"$set": updates})
+        from routers.families import _invalidate_list_cache, _invalidate_my_cache
+        _invalidate_list_cache()
+        members = await db.family_members.find({"family_id": fam["id"]}, {"_id": 0, "user_id": 1}).to_list(100)
+        for m in members:
+            _invalidate_my_cache(m["user_id"])
+        return {
+            "message": f"Crew renamed to {new_name}" + (f" [{updates.get('tag', fam['tag'])}]" if "tag" in updates else f" [{fam['tag']}]"),
+            "family_id": fam["id"],
+            "name": new_name,
+            "tag": updates.get("tag", fam["tag"]),
+        }

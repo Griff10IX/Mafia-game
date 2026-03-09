@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { HelpCircle, Send, MessageSquare, X, ChevronRight, VolumeX } from 'lucide-react';
+import { HelpCircle, Send, MessageSquare, X, ChevronRight, VolumeX, Building2 } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -47,6 +47,10 @@ export default function HelpDesk() {
   const [muteLogOpen, setMuteLogOpen] = useState(false);
   const [muteLog, setMuteLog] = useState([]);
   const [muteLogLoading, setMuteLogLoading] = useState(false);
+  const [familyTag, setFamilyTag] = useState('');
+  const [newFamilyName, setNewFamilyName] = useState('');
+  const [newFamilyTag, setNewFamilyTag] = useState('');
+  const [changingFamily, setChangingFamily] = useState(false);
 
   const fetchCheck = useCallback(async () => {
     try {
@@ -233,6 +237,36 @@ export default function HelpDesk() {
   const openMuteLog = () => {
     setMuteLogOpen(true);
     fetchMuteLog();
+  };
+
+  const handleChangeFamilyName = async (e) => {
+    e.preventDefault();
+    const tag = (familyTag || '').trim().toUpperCase();
+    const name = (newFamilyName || '').trim();
+    if (!tag) { toast.error('Enter the crew\'s current tag'); return; }
+    if (name.length < 2 || name.length > 30) { toast.error('New name must be 2–30 characters'); return; }
+    const tagVal = (newFamilyTag || '').trim();
+    if (tagVal && (tagVal.length < 2 || tagVal.length > 4)) {
+      toast.error('New tag (if set) must be 2–4 characters');
+      return;
+    }
+    if (!window.confirm(`Change crew [${tag}] to "${name}"${tagVal ? ` with new tag [${tagVal.toUpperCase()}]` : ''}?`)) return;
+    setChangingFamily(true);
+    try {
+      await api.post('/help-desk/change-family-name', {
+        family_tag: tag,
+        new_name: name,
+        new_tag: tagVal || undefined,
+      });
+      toast.success('Crew renamed');
+      setFamilyTag('');
+      setNewFamilyName('');
+      setNewFamilyTag('');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to change crew name');
+    } finally {
+      setChangingFamily(false);
+    }
   };
 
   return (
@@ -524,6 +558,51 @@ export default function HelpDesk() {
               )}
             </div>
           )}
+          <div className="hd-art-line text-primary mx-2.5" />
+        </div>
+      )}
+
+      {canManage && (
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hd-fade-in`}>
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
+            <Building2 size={14} className="text-primary" />
+            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Crew name change</span>
+          </div>
+          <p className="px-2.5 py-1.5 text-[9px] text-mutedForeground font-heading">
+            Change a crew&apos;s name and optionally tag. Use the crew&apos;s current tag to identify them.
+          </p>
+          <form onSubmit={handleChangeFamilyName} className="px-2.5 py-2 space-y-2 border-t border-primary/10">
+            <div className="flex flex-wrap gap-2 items-end">
+              <input
+                type="text"
+                value={familyTag}
+                onChange={(e) => setFamilyTag(e.target.value)}
+                placeholder="Current tag (e.g. CORL)"
+                maxLength={4}
+                className="w-24 px-2 py-1 bg-secondary border border-primary/20 rounded text-[11px] font-heading uppercase"
+              />
+              <input
+                type="text"
+                value={newFamilyName}
+                onChange={(e) => setNewFamilyName(e.target.value)}
+                placeholder="New name"
+                maxLength={30}
+                className="flex-1 min-w-[120px] px-2 py-1 bg-secondary border border-primary/20 rounded text-[11px] font-heading"
+              />
+              <input
+                type="text"
+                value={newFamilyTag}
+                onChange={(e) => setNewFamilyTag(e.target.value)}
+                placeholder="New tag (optional)"
+                maxLength={4}
+                className="w-20 px-2 py-1 bg-secondary border border-primary/20 rounded text-[11px] font-heading uppercase"
+              />
+              <button type="submit" disabled={changingFamily} className="px-2.5 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/50 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50">
+                {changingFamily ? 'Changing…' : 'Change'}
+              </button>
+            </div>
+          </form>
           <div className="hd-art-line text-primary mx-2.5" />
         </div>
       )}

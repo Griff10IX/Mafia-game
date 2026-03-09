@@ -6,14 +6,12 @@ from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
 class CheckoutRequest(BaseModel):
-    package_id: Optional[str] = None
-    points_custom: Optional[int] = None  # 1–250000; when set, price is auto-calculated
+    package_id: str
     origin_url: str
 
 
@@ -29,8 +27,6 @@ def register(router):
     db = srv.db
     get_current_user = srv.get_current_user
     POINT_PACKAGES = srv.POINT_PACKAGES
-    CUSTOM_POINTS_MAX = getattr(srv, "CUSTOM_POINTS_MAX", 250_000)
-    CUSTOM_POINTS_PRICE_PER_POINT = getattr(srv, "CUSTOM_POINTS_PRICE_PER_POINT", 67.99 / 50_000)
 
     @router.post("/payments/checkout")
     async def create_checkout(request: CheckoutRequest, current_user: dict = Depends(get_current_user)):
@@ -38,23 +34,13 @@ def register(router):
         if not api_key:
             raise HTTPException(status_code=503, detail="Payments not configured (set STRIPE_SECRET_KEY)")
 
-        points = None
-        price_gbp = None
-        package_id = "custom"
+        if request.package_id not in POINT_PACKAGES:
+            raise HTTPException(status_code=400, detail="Invalid package")
 
-        if request.points_custom is not None:
-            pts = int(request.points_custom)
-            if pts < 1 or pts > CUSTOM_POINTS_MAX:
-                raise HTTPException(status_code=400, detail=f"Custom points must be 1–{CUSTOM_POINTS_MAX:,}")
-            points = pts
-            price_gbp = round(pts * CUSTOM_POINTS_PRICE_PER_POINT, 2)
-        elif request.package_id and request.package_id in POINT_PACKAGES:
-            pkg = POINT_PACKAGES[request.package_id]
-            points = pkg["points"]
-            price_gbp = pkg["price_gbp"]
-            package_id = request.package_id
-        else:
-            raise HTTPException(status_code=400, detail="Provide package_id or points_custom")
+        package = POINT_PACKAGES[request.package_id]
+        points = package["points"]
+        price_gbp = package["price_gbp"]
+        package_id = request.package_id
         # success_url: frontend sends origin_url like http://localhost:3000/store
         origin = (request.origin_url or "").rstrip("/")
         success_url = f"{origin}?session_id={{CHECKOUT_SESSION_ID}}"

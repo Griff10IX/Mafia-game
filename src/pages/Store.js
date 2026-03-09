@@ -17,9 +17,8 @@ const PACKAGES = [
   { id: 'silver', name: '10,000 pts', points: 10000, price: 15.99, popular: true },
   { id: 'gold', name: '25,000 pts', points: 25000, price: 36.99, popular: false },
   { id: 'platinum', name: '50,000 pts', points: 50000, price: 67.99, popular: false },
+  { id: 'diamond', name: '100,000 pts', points: 100000, price: 135.98, popular: false },
 ];
-const CUSTOM_POINTS_MAX = 250_000;
-const CUSTOM_PRICE_PER_POINT = 67.99 / 50_000; // same rate as platinum
 
 const BULLET_PACKS = [
   { bullets: 5000, cost: 100 },
@@ -97,7 +96,6 @@ export default function Store() {
   const [adminTransfersOpen, setAdminTransfersOpen] = useState(false);
   const [sendToUsername, setSendToUsername] = useState('');
   const [sendAmount, setSendAmount] = useState('');
-  const [customPoints, setCustomPoints] = useState('');
   const [customBullets, setCustomBullets] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -222,22 +220,6 @@ export default function Store() {
     }
   };
 
-  const handleCustomPurchase = async () => {
-    const pts = parseInt(String(customPoints).replace(/\D/g, ''), 10);
-    if (!Number.isFinite(pts) || pts < 1 || pts > CUSTOM_POINTS_MAX) {
-      toast.error(`Enter 1–${CUSTOM_POINTS_MAX.toLocaleString()} points`);
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await api.post('/payments/checkout', { points_custom: pts, origin_url: window.location.origin + '/store' });
-      window.location.href = res.data.url;
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-      setLoading(false);
-    }
-  };
-
   if (checkingPayment) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
@@ -284,7 +266,7 @@ export default function Store() {
 
       {activeTab === 'points' && (
         <div className="space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
             {PACKAGES.map((pkg) => (
               <div
                 key={pkg.id}
@@ -313,42 +295,6 @@ export default function Store() {
                 <div className="store-art-line text-primary mx-3" />
               </div>
             ))}
-          </div>
-          <div className={`relative rounded-lg border border-primary/20 overflow-hidden bg-zinc-900/50`}>
-            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-            <div className="p-3 text-center">
-              <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Custom amount</p>
-              <FormattedNumberInput
-                value={customPoints}
-                onChange={setCustomPoints}
-                placeholder={`Up to ${CUSTOM_POINTS_MAX.toLocaleString()}`}
-                className="w-full mt-1 px-3 py-2 text-lg font-heading font-bold text-primary bg-zinc-900/80 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none text-center"
-              />
-              <p className="text-[10px] text-zinc-500 font-heading italic mt-1">
-                {customPoints ? (
-                  <>£{(() => {
-                    const pts = parseInt(String(customPoints).replace(/\D/g, ''), 10);
-                    if (!Number.isFinite(pts) || pts < 1) return '0.00';
-                    if (pts > CUSTOM_POINTS_MAX) return '—';
-                    return (pts * CUSTOM_PRICE_PER_POINT).toFixed(2);
-                  })()}</>
-                ) : (
-                  '—'
-                )}
-              </p>
-            </div>
-            <div className="px-3 pb-3">
-              <button
-                type="button"
-                onClick={handleCustomPurchase}
-                data-testid="buy-package-custom"
-                disabled={loading || !customPoints || parseInt(String(customPoints).replace(/\D/g, ''), 10) < 1 || parseInt(String(customPoints).replace(/\D/g, ''), 10) > CUSTOM_POINTS_MAX}
-                className="w-full min-h-[44px] py-2.5 sm:py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
-              >
-                {loading ? '...' : 'Buy'}
-              </button>
-            </div>
-            <div className="store-art-line text-primary mx-3" />
           </div>
         </div>
       )}
