@@ -6,12 +6,14 @@ from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
 class CheckoutRequest(BaseModel):
-    package_id: str
+    package_id: Optional[str] = None
+    points_custom: Optional[int] = None  # 1–250000; when set, price is auto-calculated
     origin_url: str
 
 
@@ -27,6 +29,8 @@ def register(router):
     db = srv.db
     get_current_user = srv.get_current_user
     POINT_PACKAGES = srv.POINT_PACKAGES
+    CUSTOM_POINTS_MAX = getattr(srv, "CUSTOM_POINTS_MAX", 250_000)
+    CUSTOM_POINTS_PRICE_PER_POINT = getattr(srv, "CUSTOM_POINTS_PRICE_PER_POINT", 67.99 / 50_000)
 
     @router.post("/payments/checkout")
     async def create_checkout(request: CheckoutRequest, current_user: dict = Depends(get_current_user)):
@@ -34,12 +38,23 @@ def register(router):
         if not api_key:
             raise HTTPException(status_code=503, detail="Payments not configured (set STRIPE_SECRET_KEY)")
 
-        if request.package_id not in POINT_PACKAGES:
-            raise HTTPException(status_code=400, detail="Invalid package")
+        points = None
+        price_gbp = None
+        package_id = "custom"
 
-        package = POINT_PACKAGES[request.package_id]
-        points = package["points"]
-        price_gbp = package["price_gbp"]
+        if request.points_custom is not None:
+            pts = int(request.points_custom)
+            if pts < 1 or pts > CUSTOM_POINTS_MAX:
+                raise HTTPException(status_code=400, detail=f"Custom points must be 1–{CUSTOM_POINTS_MAX:,}")
+            points = pts
+            price_gbp = round(pts * CUSTOM_POINTS_PRICE_PER_POINT, 2)
+        elif request.package_id and request.package_id in POINT_PACKAGES:
+            pkg = POINT_PACKAGES[request.package_id]
+            points = pkg["points"]
+            price_gbp = pkg["price_gbp"]
+            package_id = request.package_id
+        else:
+            raise HTTPException(status_code=400, detail="Provide package_id or points_custom")
         # success_url: frontend sends origin_url like http://localhost:3000/store
         origin = (request.origin_url or "").rstrip("/")
         success_url = f"{origin}?session_id={{CHECKOUT_SESSION_ID}}"
@@ -56,7 +71,7 @@ def register(router):
                         "unit_amount": int(round(price_gbp * 100)),
                         "product_data": {
                             "name": f"{points} points",
-                            "metadata": {"package_id": request.package_id},
+                            "metadata": {"package_id": package_id},
                         },
                     },
                     "quantity": 1,
@@ -66,7 +81,8 @@ def register(router):
                 cancel_url=cancel_url,
                 metadata={
                     "user_id": current_user["id"],
-                    "package_id": request.package_id,
+                    "package_id": package_id,
+                    "points": str(points),
                 },
             )
             return session
@@ -81,7 +97,7 @@ def register(router):
         await db.payment_transactions.insert_one({
             "session_id": session.id,
             "user_id": current_user["id"],
-            "package_id": request.package_id,
+            "package_id": package_id,
             "points": points,
             "payment_status": "pending",
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -119,7 +135,14 @@ def register(router):
                 package_id = session.metadata.get("package_id")
                 if user_id != current_user["id"]:
                     raise HTTPException(status_code=403, detail="Unauthorized")
-                points = POINT_PACKAGES.get(package_id, {}).get("points", 0) if package_id else (transaction or {}).get("points", 0)
+                points_val = session.metadata.get("points")
+                if points_val is not None:
+                    try:
+                        points = int(points_val)
+                    except (TypeError, ValueError):
+                        points = POINT_PACKAGES.get(package_id, {}).get("points", 0) if package_id else (transaction or {}).get("points", 0)
+                else:
+                    points = POINT_PACKAGES.get(package_id, {}).get("points", 0) if package_id else (transaction or {}).get("points", 0)
 
                 if transaction and transaction.get("payment_status") != "completed":
                     await db.payment_transactions.update_one(
@@ -176,7 +199,14 @@ def register(router):
             if session.payment_status == "paid" and session.metadata:
                 user_id = session.metadata.get("user_id")
                 package_id = session.metadata.get("package_id")
-                points = POINT_PACKAGES.get(package_id, {}).get("points", 0)
+                points_val = session.metadata.get("points")
+                if points_val is not None:
+                    try:
+                        points = int(points_val)
+                    except (TypeError, ValueError):
+                        points = POINT_PACKAGES.get(package_id, {}).get("points", 0)
+                else:
+                    points = POINT_PACKAGES.get(package_id, {}).get("points", 0)
                 await db.payment_transactions.update_one(
                     {"session_id": session.id},
                     {"$set": {"payment_status": "completed"}},

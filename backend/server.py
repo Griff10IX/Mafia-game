@@ -322,12 +322,15 @@ GARAGE_BATCH_LIMIT_MAX = 100
 
 # Points store: GBP prices; larger packs slightly cheaper per point than 2× smaller
 POINT_PACKAGES = {
-    "starter": {"points": 2500, "price_gbp": 3.99},
-    "bronze": {"points": 5000, "price_gbp": 6.99},
-    "silver": {"points": 10000, "price_gbp": 12.99},
-    "gold": {"points": 25000, "price_gbp": 29.99},
-    "platinum": {"points": 50000, "price_gbp": 55.99},
+    "starter": {"points": 2500, "price_gbp": 4.99},
+    "bronze": {"points": 5000, "price_gbp": 8.99},
+    "silver": {"points": 10000, "price_gbp": 15.99},
+    "gold": {"points": 25000, "price_gbp": 36.99},
+    "platinum": {"points": 50000, "price_gbp": 67.99},
 }
+# Per-point rate for custom amount (same as platinum pack); custom max 250k
+CUSTOM_POINTS_MAX = 250_000
+CUSTOM_POINTS_PRICE_PER_POINT = 67.99 / 50_000  # ~0.00136 £/point
 
 # Travel times based on car rarity (in seconds)
 TRAVEL_TIMES = {
