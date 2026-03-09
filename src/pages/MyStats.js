@@ -44,14 +44,17 @@ const GAME_LABELS = {
   dice: 'Dice',
   roulette: 'Roulette',
   blackjack: 'Blackjack',
-  slots: 'Slots',
-  videopoker: 'Video Poker',
   horseracing: 'Horse Racing',
-  sports_bet: 'Sports',
+  videopoker: 'Video Poker',
+  slots: 'Slots',
   mdg: 'MDG',
   mp_blackjack: 'MP Blackjack',
   mp_poker: 'Poker',
+  sports_bet: 'Sports',
 };
+
+/** All casino games in display order (for Gambling section to show every casino). */
+const ALL_CASINO_GAMES = ['dice', 'roulette', 'blackjack', 'horseracing', 'videopoker', 'slots', 'mdg', 'mp_blackjack', 'mp_poker'];
 
 const LoadingSpinner = () => (
   <div className={`space-y-2 ${styles.pageContent}`}>
@@ -128,6 +131,9 @@ export default function MyStats() {
   const combatRows = [
     { label: 'Kills', value: formatNumber(combat.total_kills) },
     { label: 'Deaths', value: formatNumber(combat.total_deaths) },
+    { label: 'Hitlist NPC Kills', value: formatNumber(combat.hitlist_npc_kills) },
+    { label: 'Robot Bodyguard Kills', value: formatNumber(combat.robot_bodyguard_kills) },
+    { label: 'Player Kills', value: formatNumber(combat.user_kills) },
   ];
 
   const rankRows = [
@@ -153,7 +159,11 @@ export default function MyStats() {
       : []),
   ];
 
+  const casinoTypeLabel = (t) => ({ dice: 'Dice', roulette: 'Roulette', blackjack: 'Blackjack', horseracing: 'Horse Racing', videopoker: 'Video Poker', slots: 'Slots' }[t] || t);
+  const propertyTypeLabel = (t) => ({ airport: 'Airport', bullet_factory: 'Armoury' }[t] || t);
   const casinoRows = [
+    { label: 'Casino Owned', value: casinos.owned_casino ? `${casinoTypeLabel(casinos.owned_casino.type)} (${casinos.owned_casino.location})` : '—', valueColor: casinos.owned_casino ? 'text-emerald-400' : 'text-mutedForeground' },
+    { label: 'Property Owned', value: casinos.owned_property ? `${propertyTypeLabel(casinos.owned_property.type)} (${casinos.owned_property.location})` : '—', valueColor: casinos.owned_property ? 'text-emerald-400' : 'text-mutedForeground' },
     { label: 'Profit from Owning Casino', value: formatMoney(casinos.casino_profit), valueColor: casinos.casino_profit > 0 ? 'text-emerald-400' : 'text-foreground' },
     { label: 'Profit from Property', value: formatNumber(casinos.property_profit), valueColor: casinos.property_profit > 0 ? 'text-emerald-400' : 'text-foreground' },
   ];
@@ -185,18 +195,22 @@ export default function MyStats() {
   ];
 
   const gamblingByGame = gambling.by_game || {};
-  const gamblingRows = Object.entries(gamblingByGame).map(([gt, profit]) => ({
-    label: GAME_LABELS[gt] || gt,
-    value: formatMoney(profit),
-    valueColor: profit >= 0 ? 'text-emerald-400' : 'text-rose-400',
-  }));
-  if (gambling.total_profit != null && gambling.total_profit !== 0) {
-    gamblingRows.unshift({
+  const totalProfit = gambling.total_profit ?? 0;
+  const gamblingRows = [
+    {
       label: 'Total',
-      value: formatMoney(gambling.total_profit),
-      valueColor: (gambling.total_profit >= 0 ? 'text-emerald-400' : 'text-rose-400'),
-    });
-  }
+      value: formatMoney(totalProfit),
+      valueColor: (totalProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'),
+    },
+    ...ALL_CASINO_GAMES.map((gt) => {
+      const profit = gamblingByGame[gt] ?? 0;
+      return {
+        label: GAME_LABELS[gt] || gt,
+        value: formatMoney(profit),
+        valueColor: profit >= 0 ? 'text-emerald-400' : 'text-rose-400',
+      };
+    }),
+  ];
 
   const sportsRows = [
     { label: 'Bets Won', value: formatNumber(sports.total_bets_won) },

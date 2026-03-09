@@ -946,6 +946,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                     await db.bodyguards.update_one(update_criteria, {"$set": {"slot_number": i}})
         is_victim_bodyguard = bool(target.get("is_bodyguard"))
         attempt_base["is_bodyguard_kill"] = is_victim_bodyguard
+        attempt_base["target_is_npc"] = bool(target.get("is_npc"))  # robot bodyguard vs human
         if is_victim_bodyguard and bodyguard_owner_username:
             attempt_base["bodyguard_owner_username"] = bodyguard_owner_username
         success_message = f"You killed {target_name}! You got ${cash_loot:,}"

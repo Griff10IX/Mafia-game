@@ -238,7 +238,7 @@ def register(router):
             {"id": uid},
             {
                 "_id": 0,
-                "total_kills": 1, "total_deaths": 1,
+                "total_kills": 1, "total_deaths": 1, "hitlist_npc_kills": 1,
                 "total_crimes": 1, "crime_profit": 1,
                 "total_gta": 1,
                 "jail_busts": 1, "jail_bust_attempts": 1, "jail_busts_npc": 1,
@@ -284,6 +284,9 @@ def register(router):
         casino_cash, property_pts, has_casino, has_property = await _get_casino_property_profit(uid)
         casino_profit = int(casino_cash or 0)
         property_profit = int(property_pts or 0)
+        from server import _user_owns_any_casino, _user_owns_any_property
+        owned_casino = await _user_owns_any_casino(uid)
+        owned_property = await _user_owns_any_property(uid)
 
         bodyguard_stats = {}
         crime_stats = {}
@@ -311,6 +314,26 @@ def register(router):
         except Exception:
             pass
 
+        hitlist_npc_kills = int(u.get("hitlist_npc_kills") or 0)
+        robot_bodyguard_kills = 0
+        user_kills = 0
+        try:
+            robot_bodyguard_kills = await db.attack_attempts.count_documents({
+                "attacker_id": uid,
+                "outcome": "killed",
+                "is_bodyguard_kill": True,
+                "target_is_npc": True,
+            })
+            robot_bodyguard_kills = int(robot_bodyguard_kills or 0)
+            player_kills_total = await db.attack_attempts.count_documents({
+                "attacker_id": uid,
+                "outcome": "killed",
+                "is_npc_kill": {"$ne": True},
+            })
+            user_kills = max(0, int(player_kills_total or 0) - robot_bodyguard_kills)
+        except Exception:
+            pass
+
         gambling_by_game = {}
         gambling_total_profit = 0
         cursor = db.gambling_log.find(
@@ -331,6 +354,9 @@ def register(router):
             "combat": {
                 "total_kills": int(u.get("total_kills") or 0),
                 "total_deaths": int(u.get("total_deaths") or 0),
+                "hitlist_npc_kills": hitlist_npc_kills,
+                "robot_bodyguard_kills": robot_bodyguard_kills,
+                "user_kills": user_kills,
             },
             "rank": {
                 "total_crimes": int(u.get("total_crimes") or 0),
@@ -367,6 +393,8 @@ def register(router):
                 "property_profit": property_profit,
                 "has_casino": has_casino,
                 "has_property": has_property,
+                "owned_casino": {"type": owned_casino.get("type"), "location": owned_casino.get("city") or owned_casino.get("state")} if owned_casino else None,
+                "owned_property": {"type": owned_property.get("type"), "location": owned_property.get("state")} if owned_property else None,
             },
             "gambling": {
                 "total_profit": gambling_total_profit,
