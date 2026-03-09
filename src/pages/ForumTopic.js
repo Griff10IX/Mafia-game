@@ -357,7 +357,10 @@ export default function ForumTopic() {
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Link to="/forum" className="text-mutedForeground hover:text-primary transition-colors">
+          <Link
+            to={topic?.category === 'designer' ? '/forum?tab=designer' : topic?.category === 'entertainer' ? '/forum?tab=entertainer' : topic?.category === 'crew_oc' ? '/forum?tab=crew_oc' : '/forum'}
+            className="text-mutedForeground hover:text-primary transition-colors"
+          >
             <ArrowLeft size={20} />
           </Link>
           <div>

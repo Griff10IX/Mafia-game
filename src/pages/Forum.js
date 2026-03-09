@@ -422,6 +422,7 @@ export default function Forum() {
   useEffect(() => {
     if (searchParams.get('tab') === 'entertainer' || location.state?.category === 'entertainer') setActiveTab('entertainer');
     else if (searchParams.get('tab') === 'designer') setActiveTab('designer');
+    else if (searchParams.get('tab') === 'crew_oc' || location.state?.category === 'crew_oc') setActiveTab('crew_oc');
   }, [searchParams, location.state?.category]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
