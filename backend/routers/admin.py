@@ -72,7 +72,10 @@ class ForumMuteRequest(BaseModel):
     reason: Optional[str] = None
 
 
-class PageLockUpdate(BaseModel):
+class GameChatMuteRequest(BaseModel):
+    target_username: str
+    muted: bool  # True = mute, False = unmute
+    muted_until: Optional[str] = None  # ISO datetime; if set, mute expires at this time (optional; omit for permanent)
     path: str
     message: Optional[str] = None
     locked: bool
@@ -1278,6 +1281,59 @@ def register(router):
         ).sort("created_at", -1).limit(500)
         entries = await cursor.to_list(500)
         return {"log": entries}
+
+    @router.post("/admin/game-chat-mute")
+    async def admin_game_chat_mute(body: GameChatMuteRequest, current_user: dict = Depends(get_current_user)):
+        """Mute or unmute a user from game chat. Admin or mod only. Muted users cannot send messages."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator required")
+        username_pattern = _username_pattern(body.target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "email": 1, "is_moderator": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        if target.get("email") in ADMIN_EMAILS:
+            raise HTTPException(status_code=400, detail="Cannot mute admins")
+        if _is_moderator(target):
+            raise HTTPException(status_code=400, detail="Cannot mute moderators")
+        if body.muted:
+            set_payload = {"game_chat_muted": True}
+            unset_payload = {}
+            if (body.muted_until or "").strip():
+                set_payload["game_chat_muted_until"] = body.muted_until.strip()
+            else:
+                unset_payload["game_chat_muted_until"] = ""
+            await db.users.update_one(
+                {"id": target["id"]},
+                {"$set": set_payload, **({"$unset": unset_payload} if unset_payload else {})},
+            )
+            try:
+                until_msg = f" until {body.muted_until}" if (body.muted_until or "").strip() else ". Contact staff if you think this is a mistake."
+                await send_notification(
+                    target["id"],
+                    "Game chat mute",
+                    f"You have been muted from game chat{until_msg}",
+                    "system",
+                    category="system",
+                )
+            except Exception as e:
+                logging.exception("Game chat mute notification: %s", e)
+            return {"message": f"Muted {target.get('username')} from game chat"}
+        else:
+            await db.users.update_one(
+                {"id": target["id"]},
+                {"$set": {"game_chat_muted": False}, "$unset": {"game_chat_muted_until": ""}},
+            )
+            try:
+                await send_notification(
+                    target["id"],
+                    "Game chat unmute",
+                    "You can post in game chat again.",
+                    "system",
+                    category="system",
+                )
+            except Exception as e:
+                logging.exception("Game chat unmute notification: %s", e)
+            return {"message": f"Unmuted {target.get('username')} from game chat"}
 
     @router.get("/admin/settings")
     async def admin_get_settings(current_user: dict = Depends(get_current_user)):

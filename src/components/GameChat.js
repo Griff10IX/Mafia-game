@@ -24,7 +24,7 @@ function formatChatTime(iso) {
 
 export default function GameChat({ myUserId, onCloseSidebar }) {
   const [messages, setMessages] = useState([]);
-  const [prefs, setPrefs] = useState({ family_only: false, blocked_user_ids: [], block_list_with_names: [], in_family: false });
+  const [prefs, setPrefs] = useState({ family_only: false, blocked_user_ids: [], block_list_with_names: [], in_family: false, muted: false, muted_until: null });
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -33,6 +33,8 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
   const [showEmojis, setShowEmojis] = useState(false);
   const messagesEndRef = useRef(null);
   const scrollRef = useRef(null);
+  const isAtBottomRef = useRef(true);
+  const shouldScrollToBottomRef = useRef(false);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -53,9 +55,11 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
         blocked_user_ids: res.data.blocked_user_ids || [],
         block_list_with_names: res.data.block_list_with_names || [],
         in_family: res.data.in_family === true,
+        muted: res.data.muted === true,
+        muted_until: res.data.muted_until || null,
       });
     } catch (_) {
-      setPrefs({ family_only: false, blocked_user_ids: [], block_list_with_names: [], in_family: false });
+      setPrefs({ family_only: false, blocked_user_ids: [], block_list_with_names: [], in_family: false, muted: false, muted_until: null });
     }
   }, []);
 
@@ -70,7 +74,23 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
   }, [fetchMessages]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      const threshold = 60;
+      isAtBottomRef.current = scrollHeight - scrollTop - clientHeight <= threshold;
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (!messages.length) return;
+    if (shouldScrollToBottomRef.current || isAtBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      shouldScrollToBottomRef.current = false;
+    }
   }, [messages]);
 
   const handleSend = async (e) => {
@@ -85,6 +105,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
     try {
       await api.post('/game-chat/send', { message: text });
       setInput('');
+      shouldScrollToBottomRef.current = true;
       await fetchMessages();
     } catch (err) {
       toast.error(getApiErrorMessage(err));
@@ -99,6 +120,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
     setShowGifPicker(false);
     try {
       await api.post('/game-chat/send', { message: '(GIF)', gif_url: gifUrl });
+      shouldScrollToBottomRef.current = true;
       await fetchMessages();
     } catch (err) {
       toast.error(getApiErrorMessage(err));
@@ -195,6 +217,9 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
       </div>
 
       <div ref={scrollRef} className="flex-1 min-h-[120px] max-h-[200px] overflow-y-auto overflow-x-hidden space-y-1 pr-0.5 scrollbar-thin">
+        {prefs.muted && (
+          <p className="text-[10px] text-amber-400 font-heading py-1">You are muted from game chat. Contact staff if you think this is a mistake.</p>
+        )}
         {loading ? (
           <p className="text-[10px] text-mutedForeground font-heading">Loading...</p>
         ) : messages.length === 0 ? (
@@ -242,15 +267,17 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Message..."
+          placeholder={prefs.muted ? 'Muted' : 'Message...'}
           maxLength={MAX_MESSAGE_LEN}
-          className="flex-1 min-w-0 text-[10px] font-heading px-2 py-1.5 rounded border bg-zinc-900/80 placeholder:text-mutedForeground"
+          disabled={prefs.muted}
+          className="flex-1 min-w-0 text-[10px] font-heading px-2 py-1.5 rounded border bg-zinc-900/80 placeholder:text-mutedForeground disabled:opacity-60 disabled:cursor-not-allowed"
           style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-foreground)' }}
         />
         <button
           type="button"
           onClick={() => setShowGifPicker((v) => !v)}
-          className="shrink-0 p-1.5 rounded border border-primary/30 text-primary hover:bg-primary/10 transition-colors"
+          disabled={prefs.muted}
+          className="shrink-0 p-1.5 rounded border border-primary/30 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title="GIF"
           aria-label="Pick GIF"
         >
@@ -259,7 +286,8 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
         <button
           type="button"
           onClick={() => setShowEmojis((e) => !e)}
-          className="shrink-0 p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground text-[10px] font-heading transition-colors"
+          disabled={prefs.muted}
+          className="shrink-0 p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground text-[10px] font-heading transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title={showEmojis ? 'Hide emoji' : 'Emoji'}
           aria-label="Toggle emoji"
         >
@@ -267,7 +295,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
         </button>
         <button
           type="submit"
-          disabled={sending || !(input || '').trim()}
+          disabled={sending || prefs.muted || !(input || '').trim()}
           className="shrink-0 p-1.5 rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           aria-label="Send"
         >

@@ -1,12 +1,15 @@
 # Game chat: whole-game chat with family-only toggle and block list
 from datetime import datetime, timezone, timedelta
 import uuid
+import logging
 from typing import Optional, List
 
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
-from server import db, get_current_user
+from server import db, get_current_user, send_notification, ADMIN_EMAILS
+
+logger = logging.getLogger(__name__)
 
 # ----- Constants -----
 GAME_CHAT_MAX_MESSAGE_LEN = 500
@@ -14,6 +17,8 @@ GAME_CHAT_RETENTION_DAYS = 7
 GAME_CHAT_DEFAULT_LIMIT = 50
 GAME_CHAT_MAX_LIMIT = 100
 GAME_CHAT_BLOCKED_MAX = 200
+GAME_CHAT_RATE_LIMIT_COUNT = 5
+GAME_CHAT_RATE_LIMIT_WINDOW_SEC = 30
 
 
 # ----- Models -----
@@ -45,6 +50,62 @@ class SendMessageRequest(BaseModel):
 class GameChatPrefsRequest(BaseModel):
     family_only: Optional[bool] = None
     blocked_user_ids: Optional[List[str]] = None
+
+
+async def _get_staff_user_ids():
+    """User IDs of admins and moderators (for spam alerts)."""
+    admin_emails = set(ADMIN_EMAILS or [])
+    cursor = db.users.find(
+        {"$or": [{"email": {"$in": list(admin_emails)}}, {"is_moderator": True}]},
+        {"_id": 0, "id": 1},
+    )
+    return [u["id"] for u in await cursor.to_list(500)]
+
+
+async def _notify_staff_game_chat_spam(spammer_user_id: str, spammer_username: str):
+    """Send inbox notification to all admins/mods and create a help desk ticket for visibility."""
+    staff_ids = await _get_staff_user_ids()
+    title = "Game chat spam"
+    message = f"User {spammer_username} exceeded the rate limit (5 messages per 30 seconds). Consider muting them from game chat via Admin or their profile."
+    for uid in staff_ids:
+        try:
+            await send_notification(uid, title, message, "system", category="system")
+        except Exception as e:
+            logger.warning("Game chat spam notify staff %s: %s", uid, e)
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        ticket = {
+            "id": str(uuid.uuid4()),
+            "user_id": spammer_user_id,
+            "username": spammer_username,
+            "subject": f"Game chat spam: {spammer_username}",
+            "body": "Automated report: This user exceeded the rate limit (5 messages per 30 seconds). Consider muting from game chat via Admin or profile.",
+            "status": "open",
+            "created_at": now,
+            "updated_at": now,
+            "replies": [],
+            "closed_at": None,
+            "closed_by_id": None,
+        }
+        await db.help_desk_tickets.insert_one(ticket)
+    except Exception as e:
+        logger.warning("Game chat spam help desk ticket: %s", e)
+
+
+def _is_user_muted_from_game_chat(user: dict) -> bool:
+    """True if user is muted from game chat (permanent or until a future time)."""
+    if user.get("game_chat_muted") is True:
+        return True
+    until = user.get("game_chat_muted_until")
+    if not until:
+        return False
+    try:
+        dt = datetime.fromisoformat(str(until).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) < dt
+    except Exception:
+        return False
 
 
 def register(router):
@@ -86,12 +147,31 @@ def register(router):
         body: SendMessageRequest,
         current_user: dict = Depends(get_current_user),
     ):
-        """Post a message to game chat. Send message (text), gif_url, or both. At least one required."""
+        """Post a message to game chat. Send message (text), gif_url, or both. At least one required. Rate limit: 5 per 30s. Muted users cannot post."""
         if not body.gif_url and not (body.message or "").strip():
             raise HTTPException(status_code=400, detail="Message or GIF required")
+
         user_id = current_user["id"]
         username = (current_user.get("username") or "").strip() or "Unknown"
         family_id = (current_user.get("family_id") or "").strip() or None
+
+        if _is_user_muted_from_game_chat(current_user):
+            raise HTTPException(
+                status_code=403,
+                detail="You are muted from game chat. Contact staff if you think this is a mistake.",
+            )
+
+        # Rate limit: 5 messages per 30 seconds
+        window_start = (datetime.now(timezone.utc) - timedelta(seconds=GAME_CHAT_RATE_LIMIT_WINDOW_SEC)).isoformat()
+        recent_count = await db.game_chat_messages.count_documents(
+            {"user_id": user_id, "created_at": {"$gte": window_start}}
+        )
+        if recent_count >= GAME_CHAT_RATE_LIMIT_COUNT:
+            await _notify_staff_game_chat_spam(user_id, username)
+            raise HTTPException(
+                status_code=429,
+                detail="Slow down — you can send 5 messages per 30 seconds. Staff have been notified.",
+            )
 
         display_message = (body.message or "").strip() or ("(GIF)" if body.gif_url else "")
         doc = {
@@ -125,6 +205,8 @@ def register(router):
             "blocked_user_ids": blocked_ids,
             "block_list_with_names": block_list_with_names,
             "in_family": bool((current_user.get("family_id") or "").strip()),
+            "muted": _is_user_muted_from_game_chat(current_user),
+            "muted_until": current_user.get("game_chat_muted_until"),
         }
 
     @router.patch("/game-chat/prefs")
