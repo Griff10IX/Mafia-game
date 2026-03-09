@@ -234,7 +234,8 @@ export default function Dice() {
   const sidesNum = Math.max(config.sides_min || 2, Math.min(config.sides_max || 5000, parseInt(String(sides || ''), 10) || 100));
   const chosenNum = Math.max(1, Math.min(sidesNum, parseInt(String(chosenNumber || ''), 10) || 1));
   const returnsAmount = stakeNum > 0 && sidesNum >= 2 ? Math.floor(stakeNum * sidesNum * (1 - DICE_HOUSE_EDGE)) : 0;
-  const canBet = stakeNum > 0 && stakeNum <= (config.max_bet || 0) && sidesNum >= 2 && chosenNum >= 1 && chosenNum <= sidesNum;
+  const effectiveMaxBet = ownership?.max_bet ?? config.max_bet ?? 5_000_000;
+  const canBet = stakeNum > 0 && stakeNum <= effectiveMaxBet && sidesNum >= 2 && chosenNum >= 1 && chosenNum <= sidesNum;
 
   useEffect(() => {
     const n = parseInt(String(chosenNumber || ''), 10);
@@ -294,7 +295,7 @@ export default function Dice() {
   const placeDiceBet = async () => {
     if (!canBet || playing) {
       if (stakeNum <= 0) toast.error('Enter a stake amount');
-      else if (stakeNum > (config.max_bet || 0)) toast.error(`Max bet is ${formatMoney(config.max_bet)}`);
+      else if (stakeNum > effectiveMaxBet) toast.error(`Max bet is ${formatMoney(effectiveMaxBet)}`);
       else if (chosenNum < 1 || chosenNum > sidesNum) toast.error(`Pick 1-${sidesNum}`);
       return;
     }
@@ -424,7 +425,7 @@ export default function Dice() {
   const isOwner = !!ownership?.is_owner;
   const canClaim = ownership?.current_city && !ownership?.owner;
   const currentCity = ownership?.current_city || '—';
-  const maxBet = ownership?.max_bet ?? config.max_bet ?? 5_000_000;
+  const maxBet = effectiveMaxBet;
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="dice-page">
