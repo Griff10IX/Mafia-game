@@ -41,15 +41,16 @@ const UPGRADES = [
   { id: 'booze', title: 'Booze Capacity', Icon: ShoppingBag, price: 30, path: '/store/buy-booze-capacity', ownedKey: null, desc: '+100 capacity (max 1000)', extra: (u, cfg) => cfg && ({ line: 'Capacity', value: cfg.capacity ?? '—' }) },
 ];
 
-const Tab = ({ active, onClick, children }) => (
+const Tab = ({ active, onClick, children, disabled, className = '' }) => (
   <button
     type="button"
-    onClick={onClick}
+    onClick={disabled ? undefined : onClick}
+    disabled={disabled}
     className={`flex-1 min-w-0 min-h-[44px] py-2.5 px-3 rounded-md text-[10px] sm:text-[9px] font-heading font-bold uppercase tracking-wider transition-all border touch-manipulation ${
       active
         ? 'text-primary bg-primary/10 border-primary/20'
         : 'text-zinc-500 hover:text-zinc-300 border-transparent'
-    }`}
+    } ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`.trim()}
   >
     {children}
   </button>
@@ -98,20 +99,26 @@ export default function Store() {
   const [sendAmount, setSendAmount] = useState('');
   const [customBullets, setCustomBullets] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [pointsTabLocked, setPointsTabLocked] = useState(false);
+  const [pointsTabLockMessage, setPointsTabLockMessage] = useState('');
 
   const fetchData = useCallback(async () => {
     try {
-      const [userRes, boozeRes, eventsRes, adminRes] = await Promise.all([
+      const [userRes, boozeRes, eventsRes, adminRes, locksRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/booze-run/config').catch(() => ({ data: null })),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/admin/check').catch(() => ({ data: { is_admin: false } })),
+        api.get('/page-locks').catch(() => ({ data: { paths: {} } })),
       ]);
       setUser(userRes.data);
       setBoozeConfig(boozeRes?.data || null);
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
       setIsAdmin(!!adminRes.data?.is_admin);
+      const paths = locksRes?.data?.paths ?? {};
+      setPointsTabLocked(!!paths['/store/points']);
+      setPointsTabLockMessage(paths['/store/points'] || 'Points purchase temporarily unavailable');
     } catch {
       toast.error('Failed to load data');
     }
@@ -258,7 +265,11 @@ export default function Store() {
 
       <div className="relative flex gap-1 p-1.5 sm:p-1 rounded-lg overflow-x-auto store-fade-in border border-primary/20 bg-primary/5 scrollbar-thin">
         <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent rounded-t-lg pointer-events-none" aria-hidden />
-        <Tab active={activeTab === 'points'} onClick={() => setActiveTab('points')}>Points</Tab>
+        <Tab
+          active={activeTab === 'points'}
+          onClick={() => setActiveTab('points')}
+          disabled={pointsTabLocked && !isAdmin}
+        >Points</Tab>
         <Tab active={activeTab === 'sendpts'} onClick={() => setActiveTab('sendpts')}>Send pts</Tab>
         <Tab active={activeTab === 'upgrades'} onClick={() => setActiveTab('upgrades')}>Upgrades</Tab>
         <Tab active={activeTab === 'bullets'} onClick={() => setActiveTab('bullets')}>Bullets</Tab>
@@ -266,6 +277,12 @@ export default function Store() {
 
       {activeTab === 'points' && (
         <div className="space-y-3">
+          {pointsTabLocked && !isAdmin ? (
+            <div className={`${styles.panel} rounded-lg border border-primary/20 p-6 text-center`}>
+              <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">{pointsTabLockMessage}</p>
+              <p className="text-[9px] text-mutedForeground mt-1">Points purchase is temporarily unavailable. Upgrades, bullets, and send pts remain available.</p>
+            </div>
+          ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
             {PACKAGES.map((pkg) => (
               <div
@@ -296,6 +313,7 @@ export default function Store() {
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
 

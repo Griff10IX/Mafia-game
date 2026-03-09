@@ -2,6 +2,7 @@ import { useState, useEffect, Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemedToaster } from "./components/ThemedToaster";
 import Landing from "./pages/Landing";
+import StaffLogin from "./pages/StaffLogin";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
@@ -132,6 +133,16 @@ function App() {
           <Route
             path="/verify-complete"
             element={<VerifyComplete />}
+          />
+          <Route
+            path="/staff-entrance"
+            element={
+              isAuthenticated ? (
+                <Navigate to="/dashboard" replace />
+              ) : (
+                <StaffLogin setIsAuthenticated={setIsAuthenticated} />
+              )
+            }
           />
           <Route
             path="/locked"

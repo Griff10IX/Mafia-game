@@ -332,7 +332,7 @@ def register(router):
         login_input = (user_data.email or "").strip()
         now = datetime.now(timezone.utc)
         try:
-            return await _do_login(user_data, request, login_input, now)
+            return await _do_login(user_data, request, login_input, now, staff_route=False)
         except HTTPException:
             raise
         except Exception as e:
@@ -344,7 +344,20 @@ def register(router):
             )
             raise HTTPException(status_code=500, detail="Login failed. Please try again or contact support.")
 
-    async def _do_login(user_data: UserLogin, request: Request, login_input: str, now: datetime):
+    @router.post("/auth/login-staff")
+    async def login_staff(user_data: UserLogin, request: Request):
+        """Secret staff-only login. Admins and mods must use this; they get 'Wrong password' on normal /auth/login."""
+        login_input = (user_data.email or "").strip()
+        now = datetime.now(timezone.utc)
+        try:
+            return await _do_login(user_data, request, login_input, now, staff_route=True)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.exception("Login-staff 500 for login=%s: %s", login_input or "(empty)", e)
+            raise HTTPException(status_code=500, detail="Login failed. Please try again.")
+
+    async def _do_login(user_data: UserLogin, request: Request, login_input: str, now: datetime, staff_route: bool = False):
         # Require non-empty email/username and password
         if not login_input:
             raise HTTPException(status_code=422, detail="Email or username is required.")
@@ -392,6 +405,12 @@ def register(router):
                 {"$set": {"email": email_clean, "failed_count": count, "locked_until": locked_until.isoformat() if locked_until else None, "updated_at": now.isoformat()}},
                 upsert=True,
             )
+            raise HTTPException(
+                status_code=401,
+                detail="Wrong password. Use Forgot password to reset it. After 3 failed attempts this account is locked for 5 minutes.",
+            )
+        # On normal login, block admin/mod — they must use the secret staff login page
+        if not staff_route and ((user.get("email") or "") in (ADMIN_EMAILS or set()) or bool(user.get("is_moderator"))):
             raise HTTPException(
                 status_code=401,
                 detail="Wrong password. Use Forgot password to reset it. After 3 failed attempts this account is locked for 5 minutes.",
