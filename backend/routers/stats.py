@@ -1,8 +1,18 @@
 # Stats: overview (game capital, user stats, vehicles, ranks, recent kills, top dead)
+# My Stats: per-user aggregated lifetime stats (combat, rank, bodyguards, gambling, casinos)
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import Depends
+
+
+def _gambling_profit_from_details(game_type: str, details: dict) -> int:
+    """Compute profit from gambling_log details. Positive = won, negative = lost."""
+    stake = int(details.get("stake") or details.get("bet") or 0)
+    payout = int(details.get("payout") or 0)
+    if game_type in ("sports_bet", "mdg", "mp_blackjack"):
+        return 0  # sports uses sports_bets; mdg/mp complex
+    return payout - stake
 
 
 def register(router):
@@ -210,4 +220,182 @@ def register(router):
             "rank_stats": rank_stats,
             "recent_kills": recent_kills,
             "wiped_families": wiped_families,
+        }
+
+    @router.get("/stats/me")
+    async def get_my_stats(current_user: dict = Depends(get_current_user)):
+        """Aggregate per-user lifetime stats: combat, rank, bodyguards, gambling, casinos, etc."""
+        import asyncio
+        from routers.bodyguards import get_bodyguards_stats
+        from routers.gta import get_gta_stats
+        from routers.crimes import get_crime_stats
+        from routers.jail import get_jail_stats
+        from routers.sports_betting import sports_betting_stats
+        from server import _get_casino_property_profit
+
+        uid = current_user["id"]
+        u = await db.users.find_one(
+            {"id": uid},
+            {
+                "_id": 0,
+                "total_kills": 1, "total_deaths": 1,
+                "total_crimes": 1, "crime_profit": 1,
+                "total_gta": 1,
+                "jail_busts": 1, "jail_bust_attempts": 1, "jail_busts_npc": 1,
+                "total_oc_heists": 1,
+                "bullets_melted": 1, "rank_points": 1,
+                "lifetime_points_spent": 1,
+                "bodyguard_slots": 1,
+                "bodyguard_lifetime_hires": 1,
+                "bodyguard_lifetime_spent_hires": 1,
+                "bodyguard_lifetime_spent_upgrades": 1,
+                "consecutive_busts_record": 1,
+                "current_consecutive_busts": 1,
+                "prestige_level": 1,
+                "booze_profit_total": 1,
+                "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1,
+                "auto_rank_total_cash": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1,
+                "auto_rank_total_cars_melted": 1, "auto_rank_total_bullets_from_melt": 1,
+                "auto_rank_total_cars_scrapped": 1, "auto_rank_total_cash_from_scrap": 1,
+            },
+        )
+        u = u or {}
+
+        stock_trades = 0
+        stock_profit = 0
+        try:
+            stock_cursor = db.stock_transactions.find({"user_id": uid}, {"_id": 0, "profit_points": 1})
+            stock_items = await stock_cursor.to_list(1000)
+            stock_trades = len(stock_items)
+            stock_profit = sum(int(t.get("profit_points") or 0) for t in stock_items)
+        except Exception:
+            pass
+
+        bank_interest_earned = 0
+        try:
+            bank_agg = await db.bank_deposits.aggregate([
+                {"$match": {"user_id": uid, "claimed_at": {"$ne": None}}},
+                {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$interest_amount", 0]}}}}
+            ]).to_list(1)
+            bank_interest_earned = int(bank_agg[0].get("total", 0) or 0) if bank_agg else 0
+        except Exception:
+            pass
+
+        casino_cash, property_pts, has_casino, has_property = await _get_casino_property_profit(uid)
+        casino_profit = int(casino_cash or 0)
+        property_profit = int(property_pts or 0)
+
+        bodyguard_stats = {}
+        crime_stats = {}
+        gta_stats = {}
+        jail_stats = {}
+        sports_stats = {}
+        try:
+            bodyguard_stats = await get_bodyguards_stats(current_user)
+        except Exception:
+            pass
+        try:
+            crime_stats = await get_crime_stats(current_user)
+        except Exception:
+            pass
+        try:
+            gta_stats = await get_gta_stats(current_user)
+        except Exception:
+            pass
+        try:
+            jail_stats = await get_jail_stats(current_user)
+        except Exception:
+            pass
+        try:
+            sports_stats = await sports_betting_stats(current_user)
+        except Exception:
+            pass
+
+        gambling_by_game = {}
+        gambling_total_profit = 0
+        cursor = db.gambling_log.find(
+            {"user_id": uid},
+            {"_id": 0, "game_type": 1, "details": 1},
+        )
+        async for entry in cursor:
+            gt = (entry.get("game_type") or "").strip()
+            if not gt:
+                continue
+            details = entry.get("details") or {}
+            profit = _gambling_profit_from_details(gt, details)
+            if profit != 0:
+                gambling_by_game[gt] = gambling_by_game.get(gt, 0) + profit
+                gambling_total_profit += profit
+
+        return {
+            "combat": {
+                "total_kills": int(u.get("total_kills") or 0),
+                "total_deaths": int(u.get("total_deaths") or 0),
+            },
+            "rank": {
+                "total_crimes": int(u.get("total_crimes") or 0),
+                "crime_profit": int(u.get("crime_profit") or 0),
+                "total_gta": int(u.get("total_gta") or 0),
+                "jail_busts": int(u.get("jail_busts") or 0),
+                "jail_bust_attempts": int(u.get("jail_bust_attempts") or 0),
+                "jail_busts_npc": int(u.get("jail_busts_npc") or 0),
+                "total_oc_heists": int(u.get("total_oc_heists") or 0),
+                "bullets_melted": int(u.get("bullets_melted") or 0),
+                "rank_points": int(u.get("rank_points") or 0),
+                "consecutive_busts_record": int(u.get("consecutive_busts_record") or 0),
+                "current_consecutive_busts": int(u.get("current_consecutive_busts") or 0),
+            },
+            "rank_period": {
+                "crimes": crime_stats,
+                "gta": gta_stats,
+                "jail": jail_stats,
+            },
+            "bodyguards": {
+                "slots_purchased": int(u.get("bodyguard_slots") or 0),
+                "total_hired": bodyguard_stats.get("total_hired", 0),
+                "human_hired": bodyguard_stats.get("human_hired", 0),
+                "total_spent_hires": bodyguard_stats.get("total_spent_hires", 0),
+                "total_spent_upgrades": bodyguard_stats.get("total_spent_upgrades", 0),
+                "longest_surviving_seconds": bodyguard_stats.get("longest_surviving_seconds"),
+                "longest_surviving_name": bodyguard_stats.get("longest_surviving_name"),
+            },
+            "points": {
+                "lifetime_spent": int(u.get("lifetime_points_spent") or 0),
+            },
+            "casinos": {
+                "casino_profit": casino_profit,
+                "property_profit": property_profit,
+                "has_casino": has_casino,
+                "has_property": has_property,
+            },
+            "gambling": {
+                "total_profit": gambling_total_profit,
+                "by_game": gambling_by_game,
+            },
+            "sports_betting": sports_stats,
+            "booze": {
+                "profit_total": int(u.get("booze_profit_total") or 0),
+            },
+            "auto_rank": {
+                "total_busts": int(u.get("auto_rank_total_busts") or 0),
+                "total_crimes": int(u.get("auto_rank_total_crimes") or 0),
+                "total_gtas": int(u.get("auto_rank_total_gtas") or 0),
+                "total_cash": int(u.get("auto_rank_total_cash") or 0),
+                "total_booze_runs": int(u.get("auto_rank_total_booze_runs") or 0),
+                "total_booze_profit": int(u.get("auto_rank_total_booze_profit") or 0),
+                "total_cars_melted": int(u.get("auto_rank_total_cars_melted") or 0),
+                "total_bullets_from_melt": int(u.get("auto_rank_total_bullets_from_melt") or 0),
+                "total_cars_scrapped": int(u.get("auto_rank_total_cars_scrapped") or 0),
+                "total_cash_from_scrap": int(u.get("auto_rank_total_cash_from_scrap") or 0),
+            },
+            "stock_market": {
+                "total_trades": stock_trades,
+                "total_profit_points": stock_profit,
+            },
+            "bank": {
+                "interest_earned": bank_interest_earned,
+            },
+            "prestige": {
+                "level": int(u.get("prestige_level") or 0),
+            },
         }

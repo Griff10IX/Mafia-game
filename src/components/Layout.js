@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
 import { setCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -86,6 +86,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/profile', label: 'Edit Profile' },
         { path: '/ip-rules', label: 'Address & device' },
         { path: '/stats', label: 'Stats' },
+        { path: '/my-stats', label: 'My Stats' },
         { path: '/dead-alive', label: 'Dead > Alive' },
         { path: '/bank', label: 'Bank' },
         { path: '/stock-market', label: 'Stock Market' },
@@ -649,7 +650,7 @@ export default function Layout({ children }) {
   const PATH_TO_CATEGORY = isCategorizedClassic
     ? {
         '/dashboard': 'information', '/verify-email': 'information', '/objectives': 'information', '/missions': 'information',
-        '/profile': 'information', '/ip-rules': 'information', '/stats': 'information',
+        '/profile': 'information', '/ip-rules': 'information', '/stats': 'information', '/my-stats': 'information',
         '/users-online': 'information', '/properties': 'information', '/help-desk': 'information', '/leaderboard': 'information',
         '/ranking': 'ranking', '/prestige': 'ranking',
         '/attack': 'combat', '/attempts': 'combat', '/hitlist': 'combat', '/bodyguards': 'combat', '/armour-weapons': 'combat',
@@ -661,7 +662,7 @@ export default function Layout({ children }) {
       }
     : {
         '/dashboard': 'information', '/verify-email': 'information', '/objectives': 'information', '/missions': 'information',
-        '/loot-box': 'information', '/profile': 'information', '/ip-rules': 'information', '/stats': 'information',
+        '/loot-box': 'information', '/profile': 'information', '/ip-rules': 'information', '/stats': 'information', '/my-stats': 'information',
         '/users-online': 'information', '/properties': 'information', '/help-desk': 'information',
         '/ranking': 'ranking', '/prestige': 'ranking',
         '/attack': 'combat', '/attempts': 'combat', '/hitlist': 'combat', '/bodyguards': 'combat', '/armour-weapons': 'combat',
@@ -690,6 +691,7 @@ export default function Layout({ children }) {
     { path: '/profile', icon: User, label: 'Edit Profile' },
     { path: '/ip-rules', icon: Globe, label: 'Address & device' },
     { path: '/stats', icon: TrendingUp, label: 'Stats' },
+    { path: '/my-stats', icon: BarChart3, label: 'My Stats' },
     { path: '/bank', icon: Landmark, label: 'Bank' },
     { path: '/stock-market', icon: TrendingUp, label: 'Stock Market' },
     { path: '/attack', icon: Sword, label: 'Attack' },

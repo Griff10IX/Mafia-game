@@ -200,6 +200,7 @@ async def ensure_all_indexes(db):
         await db.activity_log.create_index([("created_at", -1)])
         await db.activity_log.create_index([("username", 1), ("created_at", -1)])
         await db.gambling_log.create_index([("created_at", -1)])
+        await db.gambling_log.create_index([("user_id", 1), ("created_at", -1)])
         await db.gambling_log.create_index([("username", 1), ("created_at", -1)])
         await db.gambling_log.create_index([("game_type", 1), ("created_at", -1)])
 
