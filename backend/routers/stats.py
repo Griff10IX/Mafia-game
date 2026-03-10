@@ -344,24 +344,9 @@ def register(router):
             pass
 
         hitlist_npc_kills = int(u.get("hitlist_npc_kills") or 0)
-        robot_bodyguard_kills = 0
-        user_kills = 0
-        try:
-            robot_bodyguard_kills = await db.attack_attempts.count_documents({
-                "attacker_id": uid,
-                "outcome": "killed",
-                "is_bodyguard_kill": True,
-                "target_is_npc": True,
-            })
-            robot_bodyguard_kills = int(robot_bodyguard_kills or 0)
-            player_kills_total = await db.attack_attempts.count_documents({
-                "attacker_id": uid,
-                "outcome": "killed",
-                "is_npc_kill": {"$ne": True},
-            })
-            user_kills = max(0, int(player_kills_total or 0) - robot_bodyguard_kills)
-        except Exception:
-            pass
+        robot_bodyguard_kills = int(u.get("robot_bodyguard_kills") or 0)
+        total_kills = int(u.get("total_kills") or 0)
+        user_kills = max(0, total_kills - hitlist_npc_kills - robot_bodyguard_kills)
 
         gambling_by_game = {}
         gambling_total_profit = 0
@@ -381,7 +366,7 @@ def register(router):
 
         return {
             "combat": {
-                "total_kills": int(u.get("total_kills") or 0),
+                "total_kills": total_kills,
                 "total_deaths": int(u.get("total_deaths") or 0),
                 "hitlist_npc_kills": hitlist_npc_kills,
                 "robot_bodyguard_kills": robot_bodyguard_kills,

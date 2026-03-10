@@ -690,6 +690,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                     )
                 except Exception:
                     pass
+                _is_npc_bodyguard = bool(target.get("is_bodyguard"))
                 try:
                     await db.attack_attempts.insert_one({
                         **attempt_base,
@@ -700,11 +701,13 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                         "target_health_before": target_health,
                         "target_health_after": 0.0,
                         "is_npc_kill": True,
-                        "is_bodyguard_kill": bool(target.get("is_bodyguard")),
+                        "is_bodyguard_kill": _is_npc_bodyguard,
                         "target_is_npc": True,
                     })
                 except Exception:
                     pass
+                if _is_npc_bodyguard:
+                    await db.users.update_one({"id": killer_id}, {"$inc": {"robot_bodyguard_kills": 1}})
                 await send_notification(killer_id, "Hitlist NPC kill", success_message, "attack", category="attacks")
                 # If this NPC was a bodyguard (e.g. robot), do bodyguard cleanup and record vendetta war stats
                 if target.get("is_bodyguard"):
@@ -947,10 +950,13 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                     update_criteria = {"id": b["id"]} if b.get("id") else {"user_id": owner_id, "slot_number": b["slot_number"]}
                     await db.bodyguards.update_one(update_criteria, {"$set": {"slot_number": i}})
         is_victim_bodyguard = bool(target.get("is_bodyguard"))
+        is_victim_npc = bool(target.get("is_npc"))
         attempt_base["is_bodyguard_kill"] = is_victim_bodyguard
-        attempt_base["target_is_npc"] = bool(target.get("is_npc"))  # robot bodyguard vs human
+        attempt_base["target_is_npc"] = is_victim_npc
         if is_victim_bodyguard and bodyguard_owner_username:
             attempt_base["bodyguard_owner_username"] = bodyguard_owner_username
+        if is_victim_bodyguard and is_victim_npc:
+            await db.users.update_one({"id": killer_id}, {"$inc": {"robot_bodyguard_kills": 1}})
         success_message = f"You killed {target_name}! You got ${cash_loot:,}"
         extras = []
         if victim_props_count:

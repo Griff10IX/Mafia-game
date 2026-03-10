@@ -1090,11 +1090,12 @@ async def get_car(car_id: str, current_user: dict = Depends(get_current_user)):
 
 
 async def _is_car_on_owner_profile(db, owner_id: str, user_car_id: str) -> bool:
-    """Return True only if this specific car is the one the owner has explicitly set as their featured profile car."""
-    owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "profile_show_cars": 1, "profile_featured_car_id": 1})
-    if not owner or not owner.get("profile_show_cars") or not owner.get("profile_featured_car_id"):
+    """Return True only if this specific car is in the owner's explicitly selected profile cars list."""
+    owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "profile_show_cars": 1, "profile_car_ids": 1, "profile_featured_car_id": 1})
+    if not owner or not owner.get("profile_show_cars"):
         return False
-    return owner.get("profile_featured_car_id") == user_car_id
+    car_ids = owner.get("profile_car_ids") or ([owner["profile_featured_car_id"]] if owner.get("profile_featured_car_id") else [])
+    return user_car_id in car_ids
 
 
 async def update_custom_car_image(

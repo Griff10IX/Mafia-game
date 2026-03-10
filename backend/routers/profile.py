@@ -60,23 +60,33 @@ def register(router):
     ChangePasswordRequest = srv.ChangePasswordRequest
     CARS = srv.CARS
 
-    async def _top_cars_for_profile(user_id: str, limit: int = 5, show_cars: bool = False, featured_car_id: Optional[str] = None):
-        """Return only the explicitly featured car for the profile. Other cars are never shown automatically."""
-        if not show_cars or not featured_car_id:
+    async def _top_cars_for_profile(user_id: str, limit: int = 5, show_cars: bool = False, profile_car_ids: Optional[list] = None):
+        """Return only the explicitly chosen cars for the profile (up to 5). Preserves selection order."""
+        if not show_cars or not profile_car_ids:
             return []
-        uc = await db.user_cars.find_one({"user_id": user_id, "id": featured_car_id}, {"_id": 0, "id": 1, "car_id": 1})
-        if not uc:
+        car_ids = [cid for cid in (profile_car_ids or []) if cid][:limit]
+        if not car_ids:
             return []
         cars_catalog = {c["id"]: c for c in (CARS or [])}
-        info = cars_catalog.get(uc.get("car_id")) if uc.get("car_id") else None
-        if not info:
-            return []
-        return [{
-            "id": uc.get("id"),
-            "name": info.get("name") or "?",
-            "value": int(info.get("value") or 0),
-            "rarity": info.get("rarity") or "common",
-        }]
+        owned_map = {}
+        cursor = db.user_cars.find({"user_id": user_id, "id": {"$in": car_ids}}, {"_id": 0, "id": 1, "car_id": 1})
+        async for uc in cursor:
+            owned_map[uc["id"]] = uc
+        result = []
+        for cid in car_ids:
+            uc = owned_map.get(cid)
+            if not uc:
+                continue
+            info = cars_catalog.get(uc.get("car_id")) if uc.get("car_id") else None
+            if not info:
+                continue
+            result.append({
+                "id": uc.get("id"),
+                "name": info.get("name") or "?",
+                "value": int(info.get("value") or 0),
+                "rarity": info.get("rarity") or "common",
+            })
+        return result
 
     @router.get("/users/{username}/profile-preview")
     async def get_user_profile_preview(username: str, current_user: dict = Depends(get_current_user)):
@@ -217,7 +227,7 @@ def register(router):
             _casinos_for_type("videopoker", db.videopoker_ownership),
             _user_owns_any_property(user_id),
             db.notifications.count_documents({"user_id": user_id}),
-            _top_cars_for_profile(user_id, 5, user.get("profile_show_cars", False), user.get("profile_featured_car_id")),
+            _top_cars_for_profile(user_id, 5, user.get("profile_show_cars", False), user.get("profile_car_ids") or ([user.get("profile_featured_car_id")] if user.get("profile_featured_car_id") else [])),
         )
 
         family_name, family_tag = family_name_tag or (None, None)
@@ -659,36 +669,62 @@ def register(router):
 
     @router.get("/profile/cars-preferences")
     async def get_profile_cars_preferences(current_user: dict = Depends(get_current_user)):
-        """Get profile cars preferences: show on profile and featured car id."""
+        """Get profile cars preferences: show on profile and selected car ids (up to 5)."""
+        # Migrate legacy single featured_car_id to list if needed
+        car_ids = current_user.get("profile_car_ids") or []
+        if not car_ids and current_user.get("profile_featured_car_id"):
+            car_ids = [current_user["profile_featured_car_id"]]
         return {
             "show_cars_on_profile": current_user.get("profile_show_cars", False),
-            "featured_car_id": current_user.get("profile_featured_car_id"),
+            "profile_car_ids": car_ids,
         }
 
     @router.patch("/profile/cars-preferences")
     async def update_profile_cars_preferences(
         current_user: dict = Depends(get_current_user),
         show_cars_on_profile: Optional[bool] = Body(None, embed=True),
-        featured_car_id: Optional[str] = Body(None, embed=True),
+        profile_car_ids: Optional[list] = Body(None, embed=True),
+        featured_car_id: Optional[str] = Body(None, embed=True),  # legacy single-car support
     ):
-        """Update profile cars: show/hide cars on profile, set featured car (one to highlight). Max 5 cars shown; featured is first if set."""
+        """Update profile cars: show/hide, set up to 5 car ids. featured_car_id is legacy (adds to list)."""
         uid = current_user["id"]
         updates = {}
         if show_cars_on_profile is not None:
             updates["profile_show_cars"] = show_cars_on_profile
-        if featured_car_id is not None:
+        if profile_car_ids is not None:
+            # Validate ownership and cap at 5
+            valid_ids = []
+            for cid in profile_car_ids[:5]:
+                cid = (cid or "").strip()
+                if not cid:
+                    continue
+                owned = await db.user_cars.find_one({"id": cid, "user_id": uid}, {"_id": 0, "id": 1})
+                if owned:
+                    valid_ids.append(cid)
+            updates["profile_car_ids"] = valid_ids
+            updates["profile_show_cars"] = bool(valid_ids)
+        elif featured_car_id is not None:
+            # Legacy: single car add/remove
             fid = (featured_car_id or "").strip() or None
+            existing = current_user.get("profile_car_ids") or ([current_user["profile_featured_car_id"]] if current_user.get("profile_featured_car_id") else [])
             if fid:
                 owned = await db.user_cars.find_one({"id": fid, "user_id": uid}, {"_id": 0, "id": 1})
                 if not owned:
                     raise HTTPException(status_code=400, detail="You do not own that car")
-            updates["profile_featured_car_id"] = fid
+                if fid not in existing:
+                    existing = (existing + [fid])[:5]
+                new_ids = existing
+            else:
+                new_ids = []
+            updates["profile_car_ids"] = new_ids
+            updates["profile_show_cars"] = bool(new_ids)
         if not updates:
-            return {"message": "No changes", "show_cars_on_profile": current_user.get("profile_show_cars", False), "featured_car_id": current_user.get("profile_featured_car_id")}
+            car_ids = current_user.get("profile_car_ids") or ([current_user["profile_featured_car_id"]] if current_user.get("profile_featured_car_id") else [])
+            return {"message": "No changes", "show_cars_on_profile": current_user.get("profile_show_cars", False), "profile_car_ids": car_ids}
         await db.users.update_one({"id": uid}, {"$set": updates})
-        new_show = updates.get("profile_show_cars") if "profile_show_cars" in updates else current_user.get("profile_show_cars", False)
-        new_featured = updates.get("profile_featured_car_id") if "profile_featured_car_id" in updates else current_user.get("profile_featured_car_id")
-        return {"message": "Profile cars preferences updated", "show_cars_on_profile": new_show, "featured_car_id": new_featured}
+        new_show = updates.get("profile_show_cars", current_user.get("profile_show_cars", False))
+        new_ids = updates.get("profile_car_ids", current_user.get("profile_car_ids") or [])
+        return {"message": "Profile cars preferences updated", "show_cars_on_profile": new_show, "profile_car_ids": new_ids}
 
     @router.get("/profile/my-cars")
     async def get_profile_my_cars(current_user: dict = Depends(get_current_user)):

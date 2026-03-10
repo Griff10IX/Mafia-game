@@ -21,6 +21,7 @@ export default function ViewCar() {
   const [car, setCar] = useState(null);
   const [loading, setLoading] = useState(true);
   const [profileSaving, setProfileSaving] = useState(false);
+  const [profileCarIds, setProfileCarIds] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,8 +31,14 @@ export default function ViewCar() {
     }
     const fetchCar = async () => {
       try {
-        const res = await api.get('/gta/view-car', { params: { id } });
-        if (!cancelled) setCar(res.data);
+        const [carRes, prefsRes] = await Promise.all([
+          api.get('/gta/view-car', { params: { id } }),
+          api.get('/profile/cars-preferences'),
+        ]);
+        if (!cancelled) {
+          setCar(carRes.data);
+          setProfileCarIds(prefsRes.data?.profile_car_ids || []);
+        }
       } catch (e) {
         if (!cancelled) {
           toast.error(e.response?.status === 404 ? 'Car not found' : 'Failed to load car');
@@ -88,16 +95,26 @@ export default function ViewCar() {
   const fromProfile = car.owner === 'profile';
   const backTo = isOwner ? '/garage' : (fromProfile ? undefined : '/buy-cars');
 
-  const setShowOnProfile = async (show) => {
+  const isOnProfile = profileCarIds.includes(id);
+  const profileFull = profileCarIds.length >= 5 && !isOnProfile;
+
+  const toggleProfileCar = async () => {
     if (!id || !isOwner) return;
     setProfileSaving(true);
     try {
-      await api.patch('/profile/cars-preferences', {
-        show_cars_on_profile: show,
-        featured_car_id: show ? id : null,
-      });
-      setCar((c) => (c ? { ...c, featured_on_profile: !!show, show_cars_on_profile: !!show } : c));
-      toast.success(show ? 'Car is now shown on your profile' : 'Removed from profile');
+      let newIds;
+      if (isOnProfile) {
+        newIds = profileCarIds.filter((cid) => cid !== id);
+      } else {
+        if (profileCarIds.length >= 5) {
+          toast.error('You already have 5 cars on your profile. Remove one first.');
+          return;
+        }
+        newIds = [...profileCarIds, id];
+      }
+      await api.patch('/profile/cars-preferences', { profile_car_ids: newIds });
+      setProfileCarIds(newIds);
+      toast.success(isOnProfile ? 'Removed from profile' : 'Car added to your profile');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to update profile');
     } finally {
@@ -199,17 +216,20 @@ export default function ViewCar() {
               )}
               {isOwner && (
                 <div className="col-span-2 bg-primary/10 rounded-md p-3 border border-primary/30">
-                  <div className="flex items-center gap-2 mb-2">
-                    <UserCircle size={14} className="text-primary" />
-                    <span className="text-[10px] uppercase tracking-wider text-primary font-heading">Profile</span>
+                  <div className="flex items-center justify-between mb-2 gap-2">
+                    <div className="flex items-center gap-2">
+                      <UserCircle size={14} className="text-primary" />
+                      <span className="text-[10px] uppercase tracking-wider text-primary font-heading">Profile</span>
+                    </div>
+                    <span className="text-[9px] text-mutedForeground font-heading">{profileCarIds.length}/5 shown</span>
                   </div>
-                  {car.featured_on_profile ? (
+                  {isOnProfile ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-foreground font-heading text-sm">Shown on profile</span>
                       <button
                         type="button"
                         disabled={profileSaving}
-                        onClick={() => setShowOnProfile(false)}
+                        onClick={toggleProfileCar}
                         className="px-2.5 py-1 rounded border border-zinc-500 text-mutedForeground text-[10px] font-heading hover:bg-zinc-800 disabled:opacity-50"
                       >
                         {profileSaving ? '…' : 'Remove from profile'}
@@ -218,11 +238,11 @@ export default function ViewCar() {
                   ) : (
                     <button
                       type="button"
-                      disabled={profileSaving}
-                      onClick={() => setShowOnProfile(true)}
+                      disabled={profileSaving || profileFull}
+                      onClick={toggleProfileCar}
                       className="px-3 py-1.5 rounded border border-primary/50 bg-primary/20 text-primary text-[10px] font-heading font-bold uppercase hover:bg-primary/30 disabled:opacity-50"
                     >
-                      {profileSaving ? '…' : 'Show on profile'}
+                      {profileSaving ? '…' : profileFull ? 'Profile full (5/5)' : 'Show on profile'}
                     </button>
                   )}
                 </div>
