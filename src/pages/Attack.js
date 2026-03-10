@@ -791,9 +791,46 @@ export default function Attack() {
       if (value != null) sessionStorage.setItem('attack-kill-username', String(value));
     } catch (_) {}
   };
-  const [deathMessage, setDeathMessage] = useState('');
-  const [makePublic, setMakePublic] = useState(false);
-  const [useMolotovs, setUseMolotovs] = useState(true);
+  const [deathMessage, setDeathMessageState] = useState(() => {
+    try {
+      return sessionStorage.getItem('attack-death-message') || '';
+    } catch {
+      return '';
+    }
+  });
+  const setDeathMessage = (value) => {
+    setDeathMessageState(value);
+    try {
+      if (value != null) sessionStorage.setItem('attack-death-message', String(value));
+    } catch (_) {}
+  };
+  const [makePublic, setMakePublicState] = useState(() => {
+    try {
+      return sessionStorage.getItem('attack-make-public') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const setMakePublic = (value) => {
+    setMakePublicState(value);
+    try {
+      sessionStorage.setItem('attack-make-public', value ? '1' : '0');
+    } catch (_) {}
+  };
+  const [useMolotovs, setUseMolotovsState] = useState(() => {
+    try {
+      const v = sessionStorage.getItem('attack-use-molotovs');
+      return v === null || v === '' ? true : v === '1';
+    } catch {
+      return true;
+    }
+  });
+  const setUseMolotovs = (value) => {
+    setUseMolotovsState(value);
+    try {
+      sessionStorage.setItem('attack-use-molotovs', value ? '1' : '0');
+    } catch (_) {}
+  };
   const [inflationPct, setInflationPct] = useState(0);
   const [bulletsToUse, setBulletsToUseState] = useState(() => {
     try {
