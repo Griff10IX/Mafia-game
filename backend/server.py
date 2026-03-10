@@ -423,6 +423,7 @@ class UserResponse(BaseModel):
     bodyguard_slots: int
     bodyguard_count: int = 0  # current number of hired bodyguards (filled slots)
     bullets: int
+    molotovs: int = 0
     health: int
     armour_level: int
     current_state: str

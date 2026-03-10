@@ -190,6 +190,7 @@ class AttackExecuteRequest(BaseModel):
     death_message: Optional[str] = None
     make_public: bool = False
     bullets_to_use: Optional[int] = None
+    use_molotovs: Optional[bool] = False
 
     @field_validator("bullets_to_use", mode="before")
     @classmethod
@@ -568,6 +569,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
     attacker_rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
     target_rank_id, _ = get_rank_info(target.get("rank_points", 0))
     attacker_bullets = current_user.get("bullets", 0)
+    attacker_molotovs = int(current_user.get("molotovs") or 0)
+    MOLOTOV_BULLET_EQUIV = 5000
     best_damage, best_weapon_name = await _best_weapon_for_user(current_user["id"], current_user.get("equipped_weapon_id"))
     inflation = await _apply_kill_inflation_decay(current_user["id"])
     bullets_base = _bullets_to_kill(target_armour, target_rank_id, best_damage, attacker_rank_id)
@@ -605,10 +608,30 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
     target_health = float(target.get("health", DEFAULT_HEALTH))
     if not request.bullets_to_use or request.bullets_to_use < 1:
         raise HTTPException(status_code=400, detail="You must enter how many bullets to use (at least 1).")
-    bullets_used = min(request.bullets_to_use, attacker_bullets)
-    health_dealt_pct = min(100.0, (bullets_used / bullets_required) * 100.0)
+
+    requested_effective = int(request.bullets_to_use)
+    molotovs_used = 0
+    bullets_used = 0
+    effective_bullets = 0
+
+    if request.use_molotovs and attacker_molotovs > 0:
+        # Use molotovs first, up to the requested effective amount (5,000 bullets each),
+        # then fill the remainder with real bullets.
+        max_molotovs_for_request = requested_effective // MOLOTOV_BULLET_EQUIV
+        molotovs_used = min(attacker_molotovs, max_molotovs_for_request)
+        effective_bullets = molotovs_used * MOLOTOV_BULLET_EQUIV
+        remaining_effective_needed = max(0, requested_effective - effective_bullets)
+        bullets_used = min(remaining_effective_needed, attacker_bullets)
+        effective_bullets += bullets_used
+    else:
+        bullets_used = min(requested_effective, attacker_bullets)
+        effective_bullets = bullets_used
+    health_dealt_pct = min(100.0, (effective_bullets / bullets_required) * 100.0)
     killed = health_dealt_pct >= target_health
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"bullets": -bullets_used}})
+    inc_shooter = {"bullets": -bullets_used}
+    if molotovs_used > 0:
+        inc_shooter["molotovs"] = -molotovs_used
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": inc_shooter})
     attempt_base = {
         "id": str(uuid.uuid4()),
         "attacker_id": current_user["id"],
@@ -618,6 +641,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         "attack_id": attack["id"],
         "location_state": attack.get("location_state"),
         "bullets_used": int(bullets_used),
+        "molotovs_used": int(molotovs_used),
+        "molotovs_available": int(attacker_molotovs),
         "bullets_required": int(bullets_required),
         "bullets_base": int(bullets_base),
         "inflation_pct": int(round(inflation * 100)),

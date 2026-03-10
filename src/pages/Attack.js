@@ -87,8 +87,11 @@ const KillUserCard = ({
   setDeathMessage,
   makePublic,
   setMakePublic,
+  useMolotovs,
+  setUseMolotovs,
   inflationPct,
   userBullets,
+  userMolotovs,
   foundAndReady,
   loading,
   onKill,
@@ -159,20 +162,39 @@ const KillUserCard = ({
         />
       </div>
       
-      <div className="flex items-center justify-between bg-secondary/50 border border-border rounded px-2 py-1.5">
-        <div className="text-[10px] text-mutedForeground font-heading">
-          Inflation: <span className="text-foreground font-bold">{inflationPct}%</span>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between bg-secondary/50 border border-border rounded px-2 py-1.5">
+          <div className="text-[10px] text-mutedForeground font-heading">
+            Inflation: <span className="text-foreground font-bold">{inflationPct}%</span>
+          </div>
+          <label className="inline-flex items-center gap-1.5 text-[10px] text-foreground font-heading cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={makePublic} 
+              onChange={(e) => setMakePublic(e.target.checked)} 
+              className="w-3 h-3 accent-primary cursor-pointer" 
+              data-testid="kill-make-public-inline" 
+            />
+            <span>Make Public</span>
+          </label>
         </div>
-        <label className="inline-flex items-center gap-1.5 text-[10px] text-foreground font-heading cursor-pointer">
-          <input 
-            type="checkbox" 
-            checked={makePublic} 
-            onChange={(e) => setMakePublic(e.target.checked)} 
-            className="w-3 h-3 accent-primary cursor-pointer" 
-            data-testid="kill-make-public-inline" 
-          />
-          <span>Make Public</span>
-        </label>
+        <div className="flex items-center justify-between bg-secondary/40 border border-border rounded px-2 py-1.5">
+          <div className="text-[10px] text-mutedForeground font-heading">
+            Molotovs:{' '}
+            <span className="text-foreground font-bold">
+              {Number(userMolotovs || 0).toLocaleString()} <span className="text-xs text-mutedForeground">(5,000 bullets each)</span>
+            </span>
+          </div>
+          <label className="inline-flex items-center gap-1.5 text-[10px] text-foreground font-heading cursor-pointer">
+            <input
+              type="checkbox"
+              checked={useMolotovs}
+              onChange={(e) => setUseMolotovs(e.target.checked)}
+              className="w-3 h-3 accent-primary cursor-pointer"
+            />
+            <span>Use molotovs</span>
+          </label>
+        </div>
       </div>
       
       <button
@@ -771,6 +793,7 @@ export default function Attack() {
   };
   const [deathMessage, setDeathMessage] = useState('');
   const [makePublic, setMakePublic] = useState(false);
+  const [useMolotovs, setUseMolotovs] = useState(true);
   const [inflationPct, setInflationPct] = useState(0);
   const [bulletsToUse, setBulletsToUseState] = useState(() => {
     try {
@@ -792,6 +815,7 @@ export default function Attack() {
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [userBullets, setUserBullets] = useState(0);
+  const [userMolotovs, setUserMolotovs] = useState(0);
   const [travelModalDestination, setTravelModalDestination] = useState(null);
   const [travelInfo, setTravelInfo] = useState(null);
   const [travelSubmitLoading, setTravelSubmitLoading] = useState(false);
@@ -831,6 +855,7 @@ export default function Attack() {
         setAttacks(attacksRes.data?.attacks ?? []);
         setInflationPct(Number(inflationRes.data?.inflation_pct ?? 0));
         setUserBullets(meRes.data?.bullets ?? 0);
+        setUserMolotovs(meRes.data?.molotovs ?? 0);
         setEvent(eventsRes.data?.event ?? null);
         setEventsEnabled(!!eventsRes.data?.events_enabled);
       } catch (_) {}
@@ -861,6 +886,7 @@ export default function Attack() {
     try {
       const res = await api.get('/auth/me');
       setUserBullets(res.data?.bullets ?? 0);
+      setUserMolotovs(res.data?.molotovs ?? 0);
     } catch (e) {}
   };
 
@@ -1041,7 +1067,7 @@ export default function Attack() {
       toast.error('Enter how many bullets to use (at least 1).');
       return;
     }
-    const extra = { death_message: deathMessage, make_public: makePublic, bullets_to_use: bulletNum };
+    const extra = { death_message: deathMessage, make_public: makePublic, bullets_to_use: bulletNum, use_molotovs: useMolotovs };
     await executeAttack(best.attack_id, extra);
     await fetchInflation();
   };
@@ -1105,8 +1131,11 @@ export default function Attack() {
             setDeathMessage={setDeathMessage}
             makePublic={makePublic}
             setMakePublic={setMakePublic}
+          useMolotovs={useMolotovs}
+          setUseMolotovs={setUseMolotovs}
             inflationPct={inflationPct}
             userBullets={userBullets}
+          userMolotovs={userMolotovs}
             foundAndReady={foundAndReady}
             loading={loading}
             onKill={killByUsername}
