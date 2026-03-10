@@ -210,8 +210,8 @@ def register(router):
             videopoker_casinos,
             property_,
             messages_received,
-            top_cars,
             messages_sent_count,
+            top_cars,
         ) = await asyncio.gather(
             _family_name_and_tag(),
             _rank_for_field("total_kills", int(user.get("total_kills") or 0)),
@@ -227,9 +227,21 @@ def register(router):
             _casinos_for_type("slots", db.slots_ownership, "state"),
             _casinos_for_type("videopoker", db.videopoker_ownership),
             _user_owns_any_property(user_id),
+            # Messages received: direct messages delivered to this user's inbox
             db.notifications.count_documents({"user_id": user_id, "notification_type": "user_message"}),
-            db.notifications.count_documents({"user_id": user_id, "notification_type": "user_message_sent"}),
-            _top_cars_for_profile(user_id, 5, user.get("profile_show_cars", False), user.get("profile_car_ids") or ([user.get("profile_featured_car_id")] if user.get("profile_featured_car_id") else [])),
+            # Messages sent: any notification where this user is the sender (covers both inbox copies and sent copies)
+            db.notifications.count_documents({
+                "sender_id": user_id,
+                "notification_type": {"$in": ["user_message", "user_message_sent"]},
+            }),
+            _top_cars_for_profile(
+                user_id,
+                5,
+                user.get("profile_show_cars", False),
+                user.get("profile_car_ids") or (
+                    [user.get("profile_featured_car_id")] if user.get("profile_featured_car_id") else []
+                ),
+            ),
         )
 
         family_name, family_tag = family_name_tag or (None, None)
