@@ -16,7 +16,7 @@ AUTO_CREATE_INTERVAL_SECONDS = 3 * 3600   # 3 hours between batches
 ROLL_BEFORE_NEXT_CREATE_SECONDS = 20 * 60  # roll current games 20 mins before next batch
 ENTERTAINER_CONFIG_KEY = "entertainer_config"
 # DB-backed cap: never create more open games than this (stops spam from restarts or double-runs)
-MAX_OPEN_ENTERTAINER_GAMES = 10
+MAX_OPEN_ENTERTAINER_GAMES = 5
 
 # Cars that can be won (common/uncommon/rare; exclude custom and exclusive)
 E_GAME_CAR_IDS = [c["id"] for c in CARS if c.get("id") not in ("car_custom", "car20") and c.get("rarity") in ("common", "uncommon", "rare")]

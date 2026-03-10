@@ -1120,9 +1120,17 @@ export default function Forum() {
       )}
 
       {/* Stats */}
-      <div className="flex items-center gap-4 text-xs text-mutedForeground">
-        <span>{topics.length} topics</span>
-        <span>{pinnedTopics.length} pinned</span>
+      <div className="flex items-center justify-between gap-4 text-xs text-mutedForeground">
+        <div className="flex items-center gap-4">
+          <span>{topics.length} topics</span>
+          <span>{pinnedTopics.length} pinned</span>
+        </div>
+        {canViewPage2 && (
+          <div className="hidden sm:flex gap-1">
+            <button type="button" onClick={() => setForumPage(1)} className={`px-2 py-1 rounded text-[10px] font-heading font-bold ${forumPage === 1 ? 'bg-primary/30 text-primary' : 'text-mutedForeground hover:text-foreground'}`}>Page 1</button>
+            <button type="button" onClick={() => setForumPage(2)} className={`px-2 py-1 rounded text-[10px] font-heading font-bold ${forumPage === 2 ? 'bg-primary/30 text-primary' : 'text-mutedForeground hover:text-foreground'}`}>Page 2</button>
+          </div>
+        )}
       </div>
 
       {/* Topics List */}
@@ -1136,7 +1144,7 @@ export default function Forum() {
           <div className="col-span-2 text-right">Views</div>
           {isAdmin && <div className="col-span-1 text-right">Admin</div>}
         </div>
-        
+
         {/* Mobile Header */}
         <div className="sm:hidden px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">📋 Topics</span>
@@ -1147,13 +1155,6 @@ export default function Forum() {
             </div>
           )}
         </div>
-        {/* Desktop: page 2 for mods/admins */}
-        {canViewPage2 && (
-          <div className="hidden sm:flex px-3 py-1.5 bg-zinc-800/30 border-b border-primary/10 items-center justify-end gap-1">
-            <button type="button" onClick={() => setForumPage(1)} className={`px-2 py-1 rounded text-[10px] font-heading font-bold ${forumPage === 1 ? 'bg-primary/30 text-primary' : 'text-mutedForeground hover:text-foreground'}`}>Page 1</button>
-            <button type="button" onClick={() => setForumPage(2)} className={`px-2 py-1 rounded text-[10px] font-heading font-bold ${forumPage === 2 ? 'bg-primary/30 text-primary' : 'text-mutedForeground hover:text-foreground'}`}>Page 2</button>
-          </div>
-        )}
 
         {loading ? (
           <div className="p-6 flex flex-col items-center justify-center gap-3">
