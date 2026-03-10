@@ -1123,7 +1123,7 @@ export default function Admin() {
   const handleFetchAttackUserProfile = async () => {
     const id = (attackUserId || '').trim();
     if (!id) {
-      toast.error('Enter a user ID');
+      toast.error('Enter a username or user ID');
       return;
     }
     setAttackUserLoading(true);
@@ -2514,7 +2514,7 @@ export default function Admin() {
                     type="text"
                     value={attackUserId}
                     onChange={(e) => setAttackUserId(e.target.value)}
-                    placeholder="User ID"
+                    placeholder="Username or user ID"
                     className="w-48 text-[11px]"
                   />
                   <BtnSecondary onClick={handleFetchAttackUserProfile} disabled={attackUserLoading}>

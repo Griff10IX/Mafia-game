@@ -438,6 +438,7 @@ export default function Crimes() {
 
   const [autoRankCrimesDisabled, setAutoRankCrimesDisabled] = useState(false);
   const [activeLootPerks, setActiveLootPerks] = useState([]);
+  const [crimeLogs, setCrimeLogs] = useState([]);
 
   const fetchCrimes = async () => {
     try {
@@ -472,7 +473,8 @@ export default function Crimes() {
         api.get('/crimes/stats').catch(() => ({ data: {} })),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
         api.get('/loot-box/status').catch(() => ({ data: {} })),
-      ]).then(([eventsRes, statsRes, autoRankRes, lootStatusRes]) => {
+        api.get('/crimes/logs').catch(() => ({ data: { events: [] } })),
+      ]).then(([eventsRes, statsRes, autoRankRes, lootStatusRes, logsRes]) => {
         setEvent(eventsRes.data?.event ?? null);
         setEventsEnabled(!!eventsRes.data?.events_enabled);
         setCrimeStats(statsRes.data || {});
@@ -484,6 +486,7 @@ export default function Crimes() {
         } else {
           setActiveLootPerks([]);
         }
+        setCrimeLogs(Array.isArray(logsRes?.data?.events) ? logsRes.data.events : []);
       }).catch(() => {});
     } catch (error) {
       toast.error('Failed to load crimes');
@@ -701,6 +704,43 @@ export default function Crimes() {
         </div>
         <div className="cr-art-line text-primary mx-2.5" />
       </div>
+
+      {/* Recent crime log */}
+      {crimeLogs.length > 0 && (
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 cr-fade-in`} style={{ animationDelay: '0.04s' }}>
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+              Crime log
+            </span>
+            <span className="text-[9px] text-mutedForeground font-heading">
+              Last {crimeLogs.length} attempt{crimeLogs.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="p-2 space-y-1 max-h-56 overflow-y-auto">
+            {crimeLogs.map((ev, idx) => {
+              const dt = ev.at ? new Date(ev.at).toLocaleString() : '';
+              const profit = typeof ev.profit === 'number' ? ev.profit : 0;
+              return (
+                <div key={idx} className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-zinc-800/30 border border-zinc-700/40">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-heading text-foreground truncate">
+                      {ev.crime_name || ev.crime_id || 'Unknown crime'}
+                    </div>
+                    <div className="text-[9px] text-mutedForeground font-heading">
+                      {ev.success ? 'Success' : 'Failed'}{profit ? ` · $${profit.toLocaleString()}` : ''}{ev.city ? ` · ${ev.city}` : ''}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right text-[9px] text-mutedForeground font-heading">
+                    {dt}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="cr-art-line text-primary mx-2.5" />
+        </div>
+      )}
 
       {/* Crimes list */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 cr-fade-in`} style={{ animationDelay: '0.05s' }}>

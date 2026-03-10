@@ -715,6 +715,19 @@ async def get_crime_stats(current_user: dict = Depends(get_current_user)):
     }
 
 
+async def get_crime_logs(current_user: dict = Depends(get_current_user)):
+    """Return recent crime events for the current user for use in the Crimes page log box."""
+    docs = (
+        await db.crime_events.find(
+            {"user_id": current_user["id"]},
+            {"_id": 0},
+        )
+        .sort("at", -1)
+        .to_list(50)
+    )
+    return {"events": docs}
+
+
 def register(router):
     router.add_api_route(
         "/crimes",
@@ -725,6 +738,11 @@ def register(router):
     router.add_api_route(
         "/crimes/stats",
         get_crime_stats,
+        methods=["GET"],
+    )
+    router.add_api_route(
+        "/crimes/logs",
+        get_crime_logs,
         methods=["GET"],
     )
     router.add_api_route(

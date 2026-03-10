@@ -1703,9 +1703,23 @@ def register(router):
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        user = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "current_state": 1})
+        # Allow lookup by either user id or username (case-insensitive) so admins can paste a username
+        # directly when inspecting attack logs.
+        user = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "current_state": 1},
+        )
+        if not user:
+            key = (user_id or "").strip()
+            if key:
+                pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
+                user = await db.users.find_one(
+                    {"username": pattern},
+                    {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "current_state": 1},
+                )
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
+        user_id = user["id"]
 
         # Aggregate attacker summary
         attacker_pipeline = [
