@@ -165,8 +165,6 @@ const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onRevea
       {/* Decorative elements */}
       <SmokeWisp delay={0} className="top-2 left-2" />
       <SmokeWisp delay={1.5} className="top-2 right-2" />
-      <BulletHole top="12px" right="16px" />
-      <BulletHole bottom="16px" left="20px" size="md" />
       <InkSplatter className="absolute bottom-3 right-4" />
       
       {/* Header */}
@@ -310,8 +308,6 @@ const PlaceBountyCard = ({
 }) => (
   <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 hit-fade-in`} style={{ animationDelay: '0.1s' }}>
     {/* Decorations */}
-    <BulletHole top="16px" left="16px" />
-    <BulletHole bottom="20px" right="24px" size="md" />
     <InkSplatter className="absolute top-4 right-6" />
     
     {/* Header */}
@@ -446,9 +442,6 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
   return (
     <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 hit-fade-in`} style={{ animationDelay: '0.2s' }}>
       {/* Decorations */}
-      <BulletHole top="20px" right="20px" />
-      <BulletHole bottom="24px" left="28px" size="md" />
-      
       {/* Header */}
       <div className="relative px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
         <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center justify-between">

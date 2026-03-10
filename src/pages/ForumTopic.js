@@ -613,18 +613,23 @@ export default function ForumTopic() {
         {comments.length === 0 ? (
           <div className="p-4 text-center text-xs text-mutedForeground">No comments yet. Be the first!</div>
         ) : (
-          <div className="divide-y divide-zinc-700/30">
+          <div className="divide-y divide-zinc-800/40">
             {comments.map((c, idx) => (
-              <div key={c.id} className="p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-[10px] text-mutedForeground">
-                    <Link to={`/profile/${encodeURIComponent(c.author_username)}`} className="text-foreground font-bold hover:text-primary hover:underline">{c.author_username}</Link>
-                    <span>·</span>
-                    <span>{getTimeAgo(c.created_at)}</span>
-                    <span className="text-zinc-600">#{idx + 1}</span>
+              <div key={c.id} className="p-3 sm:p-3.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2 text-[10px] text-mutedForeground">
+                      <Link to={`/profile/${encodeURIComponent(c.author_username)}`} className="text-foreground font-bold hover:text-primary hover:underline">
+                        {c.author_username}
+                      </Link>
+                      <span className="text-zinc-600">#{idx + 1}</span>
+                    </div>
+                    <div className="mt-0.5 text-[9px] text-zinc-500 font-heading">
+                      {getTimeAgo(c.created_at)}
+                    </div>
                   </div>
                   {c.likes > 0 && (
-                    <span className="text-[10px] text-emerald-400 flex items-center gap-0.5">
+                    <span className="text-[10px] text-emerald-400 flex items-center gap-0.5 whitespace-nowrap">
                       <ThumbsUp size={10} /> {c.likes}
                     </span>
                   )}
