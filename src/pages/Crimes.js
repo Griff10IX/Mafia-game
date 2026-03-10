@@ -522,6 +522,9 @@ export default function Crimes() {
           }
           if (bonus.bullets) parts.push(`${bonus.bullets} bullets`);
           if (bonus.molotovs) parts.push(`${bonus.molotovs} molotov${bonus.molotovs === 1 ? '' : 's'} (each counts as 5,000 bullets)`);
+          if (bonus.loot_box_pieces) {
+            parts.push(`${bonus.loot_box_pieces} loot piece${bonus.loot_box_pieces === 1 ? '' : 's'}`);
+          }
           if (bonus.points) parts.push(`${bonus.points} pts`);
           if (parts.length > 0) msg += ` ★ Bonus: ${parts.join(', ')}`;
         }

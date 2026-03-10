@@ -427,12 +427,8 @@ def register(router):
                 detail="Wrong password. Use Forgot password to reset it. After 3 failed attempts this account is locked for 5 minutes.",
             )
         await db.login_lockouts.delete_one({"email": email_clean})
-        # Allow login when unverified so user can browse; features are gated by require_email_verified
-        if user.get("is_dead"):
-            raise HTTPException(
-                status_code=403,
-                detail="This account is dead and cannot log in. Create a new account and use Dead > Alive to receive 95% (5% tax) of this account’s money and points.",
-            )
+        # Allow login even when dead so the frontend can render the death screen.
+        # Gameplay endpoints remain blocked by get_current_user for dead accounts.
         ip = _client_ip(request)
         ua = (request.headers.get("User-Agent") or "").strip()[:500]
         device_type = _device_type_from_user_agent(request.headers.get("User-Agent") or "")

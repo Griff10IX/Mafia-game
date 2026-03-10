@@ -534,7 +534,11 @@ def _log_auth_failure(user_id: Optional[str], status: int, reason: str):
 
 
 ACCOUNT_LOCKED_WHITELIST = {"/api/auth/me", "/api/account-locked", "/api/account-locked-reply"}
-DEAD_ACCOUNT_WHITELIST = {"/api/auth/me", "/api/death/reveal-killer"}
+DEAD_ACCOUNT_WHITELIST = {
+    "/api/auth/me",
+    "/api/death/reveal-killer",
+    "/api/user/rank-progress",
+}
 
 
 async def get_current_user(

@@ -151,6 +151,13 @@ class CommitCrimeResponse(BaseModel):
 MOLOTOV_GLOBAL_DROP_CHANCE = 0.0002
 MOLOTOV_GLOBAL_DROP_AMOUNT = 1
 
+# Extremely rare loot box piece drops from crimes
+# Normal crimes: ~0.05% (1 in 2,000) per successful crime
+# Prestige crimes: ~0.15% (1 in 667) per successful crime
+LOOT_PIECE_CHANCE_NORMAL = 0.0005
+LOOT_PIECE_CHANCE_PRESTIGE = 0.0015
+LOOT_PIECE_AMOUNT = 1
+
 
 # ---------------------------------------------------------------------------
 # Game data init (called from server on startup)
@@ -531,6 +538,14 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         if random.random() < MOLOTOV_GLOBAL_DROP_CHANCE:
             inc["molotovs"] = inc.get("molotovs", 0) + MOLOTOV_GLOBAL_DROP_AMOUNT
             prestige_bonus_earned = {"molotovs": MOLOTOV_GLOBAL_DROP_AMOUNT}
+        # Global ultra-rare loot box piece drop with slightly higher chance on prestige crimes
+        loot_piece_chance = LOOT_PIECE_CHANCE_PRESTIGE if crime.get("crime_type") == "prestige" else LOOT_PIECE_CHANCE_NORMAL
+        if random.random() < loot_piece_chance:
+            inc["loot_box_pieces"] = inc.get("loot_box_pieces", 0) + LOOT_PIECE_AMOUNT
+            if prestige_bonus_earned is None:
+                prestige_bonus_earned = {"loot_box_pieces": LOOT_PIECE_AMOUNT}
+            else:
+                prestige_bonus_earned["loot_box_pieces"] = prestige_bonus_earned.get("loot_box_pieces", 0) + LOOT_PIECE_AMOUNT
         await db.users.update_one(
             {"id": current_user["id"]},
             {"$inc": inc},
@@ -549,6 +564,8 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                     bonus_inc["bullets"] = prestige_bonus_from_prestige["bullets"]
                 if "molotovs" in prestige_bonus_from_prestige:
                     bonus_inc["molotovs"] = bonus_inc.get("molotovs", 0) + prestige_bonus_from_prestige["molotovs"]
+                if "loot_box_pieces" in prestige_bonus_from_prestige:
+                    bonus_inc["loot_box_pieces"] = bonus_inc.get("loot_box_pieces", 0) + prestige_bonus_from_prestige["loot_box_pieces"]
                 if "points" in prestige_bonus_from_prestige:
                     bonus_inc["points"] = prestige_bonus_from_prestige["points"]
                 if "booze" in prestige_bonus_from_prestige:
@@ -561,7 +578,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                     prestige_bonus_earned = dict(prestige_bonus_from_prestige)
                 else:
                     for k, v in prestige_bonus_from_prestige.items():
-                        if k in {"cash", "respect_points", "bullets", "points", "molotovs"}:
+                        if k in {"cash", "respect_points", "bullets", "points", "molotovs", "loot_box_pieces"}:
                             prestige_bonus_earned[k] = prestige_bonus_earned.get(k, 0) + v
                         elif k == "booze":
                             prestige_bonus_earned["booze"] = v
