@@ -178,6 +178,9 @@ async def ensure_all_indexes(db):
         await db.trade_buy_offers.create_index([("status", 1), ("created_at", -1)])
         await db.trade_buy_offers.create_index([("user_id", 1), ("status", 1)])
         await db.properties.create_index([("for_sale", 1), ("created_at", -1)])
+        await db.trade_events.create_index([("at", -1)])
+        await db.trade_events.create_index([("type", 1), ("at", -1)])
+        await db.trade_events.create_index([("direction", 1), ("at", -1)])
 
         # --- Forum ---
         await db.forum_topics.create_index("id", unique=True)

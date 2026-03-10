@@ -210,6 +210,14 @@ export default function Admin() {
   const [attackUserId, setAttackUserId] = useState('');
   const [attackUserProfile, setAttackUserProfile] = useState(null);
   const [attackUserLoading, setAttackUserLoading] = useState(false);
+  const [attackLogsUsername, setAttackLogsUsername] = useState('');
+  const [attackLogsLimit, setAttackLogsLimit] = useState(500);
+  const [attackLogsData, setAttackLogsData] = useState(null);
+  const [attackLogsLoading, setAttackLogsLoading] = useState(false);
+  const [crimeLogsUsername, setCrimeLogsUsername] = useState('');
+  const [crimeLogsLimit, setCrimeLogsLimit] = useState(500);
+  const [crimeLogsData, setCrimeLogsData] = useState(null);
+  const [crimeLogsLoading, setCrimeLogsLoading] = useState(false);
 
   // Activity & Gambling logs
   const [activityLog, setActivityLog] = useState({ entries: [] });
@@ -1135,6 +1143,44 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load attack profile');
     } finally {
       setAttackUserLoading(false);
+    }
+  };
+
+  const handleFetchAttackLogs = async () => {
+    const un = (attackLogsUsername || '').trim();
+    if (!un) {
+      toast.error('Enter a username');
+      return;
+    }
+    setAttackLogsLoading(true);
+    setAttackLogsData(null);
+    try {
+      const res = await api.get('/admin/attacks/logs', { params: { username: un, limit: attackLogsLimit } });
+      setAttackLogsData(res.data || null);
+      toast.success(`Loaded ${(res.data?.logs?.length ?? 0)} attack log entries`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load attack logs');
+    } finally {
+      setAttackLogsLoading(false);
+    }
+  };
+
+  const handleFetchCrimeLogs = async () => {
+    const un = (crimeLogsUsername || '').trim();
+    if (!un) {
+      toast.error('Enter a username');
+      return;
+    }
+    setCrimeLogsLoading(true);
+    setCrimeLogsData(null);
+    try {
+      const res = await api.get('/admin/crimes/logs', { params: { username: un, limit: crimeLogsLimit } });
+      setCrimeLogsData(res.data || null);
+      toast.success(`Loaded ${(res.data?.logs?.length ?? 0)} crime log entries`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load crime logs');
+    } finally {
+      setCrimeLogsLoading(false);
     }
   };
 
@@ -2600,6 +2646,148 @@ export default function Admin() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Crosshair}
+            title="Attack logs (post data)"
+            badge={attackLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{attackLogsData.logs.length} entries</span> : null}
+            isCollapsed={collapsed.attackLogs}
+            onToggle={() => toggleSection('attackLogs')}
+          />
+          {!collapsed.attackLogs && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">Search by username to load that user&apos;s attack attempts (as attacker or target). Full post data: who shot whom, outcome, bodyguard, bullets, location, etc.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={attackLogsUsername}
+                  onChange={(e) => setAttackLogsUsername(e.target.value)}
+                  placeholder="Username"
+                  className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                />
+                <span className="text-[10px] text-mutedForeground">Limit</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={attackLogsLimit}
+                  onChange={(e) => setAttackLogsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 500)))}
+                  className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                />
+                <BtnPrimary onClick={handleFetchAttackLogs} disabled={attackLogsLoading}>
+                  {attackLogsLoading ? 'Loading…' : 'Load attack logs'}
+                </BtnPrimary>
+              </div>
+              {attackLogsData && (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <p className="text-[10px] font-heading text-primary mb-1">Attack log for: <strong>{attackLogsData.username ?? '—'}</strong></p>
+                  {(!attackLogsData.logs || attackLogsData.logs.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground font-heading">No attack attempts found.</p>
+                  ) : (
+                    <table className="w-full text-left border-collapse text-[9px] font-heading">
+                      <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                        <tr className="border-b border-zinc-700/50">
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Attacker</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Target</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Outcome</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bodyguard?</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bullets</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Location</th>
+                          <th className="py-1 font-bold text-mutedForeground uppercase">Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {attackLogsData.logs.map((row, idx) => (
+                          <tr key={row.id || idx} className="border-b border-zinc-700/30">
+                            <td className="py-1 pr-1 text-foreground">{row.attacker_username ?? '—'}</td>
+                            <td className="py-1 pr-1 text-foreground">{row.target_username ?? '—'}</td>
+                            <td className="py-1 pr-1">{row.outcome === 'killed' ? <span className="text-red-400">Killed</span> : <span className="text-amber-400">Failed</span>}</td>
+                            <td className="py-1 pr-1">{row.is_bodyguard_kill ? 'Yes' : '—'}</td>
+                            <td className="py-1 pr-1">{row.bullets_used != null ? Number(row.bullets_used).toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground">{row.location_state ?? row.state ?? '—'}</td>
+                            <td className="py-1 text-mutedForeground">{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Skull}
+            title="Crime logs (post data)"
+            badge={crimeLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{crimeLogsData.logs.length} entries</span> : null}
+            isCollapsed={collapsed.crimeLogs}
+            onToggle={() => toggleSection('crimeLogs')}
+          />
+          {!collapsed.crimeLogs && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">Search by username to load that user&apos;s crime attempts. Full post data: crime name, success/fail, profit, city, time.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={crimeLogsUsername}
+                  onChange={(e) => setCrimeLogsUsername(e.target.value)}
+                  placeholder="Username"
+                  className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                />
+                <span className="text-[10px] text-mutedForeground">Limit</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={crimeLogsLimit}
+                  onChange={(e) => setCrimeLogsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 500)))}
+                  className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                />
+                <BtnPrimary onClick={handleFetchCrimeLogs} disabled={crimeLogsLoading}>
+                  {crimeLogsLoading ? 'Loading…' : 'Load crime logs'}
+                </BtnPrimary>
+              </div>
+              {crimeLogsData && (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <p className="text-[10px] font-heading text-primary mb-1">Crime log for: <strong>{crimeLogsData.username ?? '—'}</strong></p>
+                  {(!crimeLogsData.logs || crimeLogsData.logs.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground font-heading">No crime attempts found.</p>
+                  ) : (
+                    <table className="w-full text-left border-collapse text-[9px] font-heading">
+                      <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                        <tr className="border-b border-zinc-700/50">
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Crime</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Type</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Success</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Profit</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">City</th>
+                          <th className="py-1 font-bold text-mutedForeground uppercase">Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {crimeLogsData.logs.map((row, idx) => (
+                          <tr key={idx} className="border-b border-zinc-700/30">
+                            <td className="py-1 pr-1 text-foreground">{row.crime_name ?? row.crime_id ?? '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground">{row.crime_type ?? '—'}</td>
+                            <td className="py-1 pr-1">{row.success ? <span className="text-emerald-400">Yes</span> : <span className="text-amber-400">No</span>}</td>
+                            <td className="py-1 pr-1">{row.profit != null ? `$${Number(row.profit).toLocaleString()}` : '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground">{row.city ?? '—'}</td>
+                            <td className="py-1 text-mutedForeground">{row.at ? new Date(row.at).toLocaleString() : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -112,6 +112,23 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
         "created_at": datetime.now(timezone.utc)
     }
     result = await db.trade_sell_offers.insert_one(new_offer)
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(result.inserted_id),
+                "type": "sell_offer_created",
+                "user_id": user_id,
+                "username": username,
+                "points": points_after_fee,
+                "original_points": offer.points,
+                "fee": fee,
+                "money": offer.cost,
+                "direction": "sell",
+                "at": datetime.now(timezone.utc),
+            }
+        )
+    except Exception:
+        pass
     _invalidate_trade_caches()
     await log_activity(
         user_id,
@@ -146,6 +163,23 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
         "quicktrade_accept_sell",
         {"seller_id": offer["user_id"], "points_received": offer["points"], "cost_paid": offer["cost"], "offer_id": offer_id},
     )
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(offer_id),
+                "type": "sell_offer_accepted",
+                "seller_id": offer["user_id"],
+                "seller_username": offer.get("username"),
+                "buyer_id": buyer_id,
+                "buyer_username": buyer_username,
+                "points": offer["points"],
+                "money": offer["cost"],
+                "direction": "sell",
+                "at": datetime.now(timezone.utc),
+            }
+        )
+    except Exception:
+        pass
     return {"message": "Trade completed successfully", "points_received": offer["points"], "cost_paid": offer["cost"]}
 
 
@@ -162,6 +196,20 @@ async def cancel_sell_offer_delete(offer_id: str, current_user: dict = Depends(g
         {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}}
     )
     _invalidate_trade_caches()
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(offer_id),
+                "type": "sell_offer_cancelled",
+                "user_id": user_id,
+                "points": refund_amount,
+                "fee": offer.get("fee", 0),
+                "direction": "sell",
+                "at": datetime.now(timezone.utc),
+            }
+        )
+    except Exception:
+        pass
     return {"message": f"Offer cancelled. {refund_amount} points refunded (including {offer.get('fee', 0)} point fee)"}
 
 
@@ -180,6 +228,19 @@ async def cancel_sell_offer_post(offer_id: str, current_user: dict = Depends(get
         {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}}
     )
     _invalidate_trade_caches()
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(offer_id),
+                "type": "sell_offer_cancelled",
+                "user_id": user_id,
+                "points": original_points,
+                "direction": "sell",
+                "at": datetime.now(timezone.utc),
+            }
+        )
+    except Exception:
+        pass
     return {"message": f"Offer cancelled. {original_points} points refunded (including fee)"}
 
 
@@ -260,6 +321,23 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(g
         "quicktrade_buy_offer",
         {"points": points_after_fee, "original_points": offer.points, "offer": offer.offer, "fee": fee, "hide_name": offer.hide_name},
     )
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(result.inserted_id),
+                "type": "buy_offer_created",
+                "user_id": user_id,
+                "username": username,
+                "points": points_after_fee,
+                "original_points": offer.points,
+                "fee": fee,
+                "money": offer.offer,
+                "direction": "buy",
+                "at": datetime.now(timezone.utc),
+            }
+        )
+    except Exception:
+        pass
     return {"message": f"Buy offer created! ({points_after_fee} points after {fee} point fee)", "offer_id": str(result.inserted_id)}
 
 
@@ -287,6 +365,23 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
         "quicktrade_accept_buy",
         {"buyer_id": offer["user_id"], "points_sold": offer["points"], "cash_received": offer["offer"], "offer_id": offer_id},
     )
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(offer_id),
+                "type": "buy_offer_accepted",
+                "buyer_id": offer["user_id"],
+                "buyer_username": offer.get("username"),
+                "seller_id": seller_id,
+                "seller_username": seller_username,
+                "points": offer["points"],
+                "money": offer["offer"],
+                "direction": "buy",
+                "at": datetime.now(timezone.utc),
+            }
+        )
+    except Exception:
+        pass
     return {"message": "Trade completed successfully", "points_sold": offer["points"], "cash_received": offer["offer"]}
 
 
@@ -301,6 +396,20 @@ async def cancel_buy_offer_delete(offer_id: str, current_user: dict = Depends(ge
         {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}}
     )
     _invalidate_trade_caches()
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(offer_id),
+                "type": "buy_offer_cancelled",
+                "user_id": user_id,
+                "points": offer["points"],
+                "fee": offer.get("fee", 0),
+                "direction": "buy",
+                "at": datetime.now(timezone.utc),
+            }
+        )
+    except Exception:
+        pass
     return {"message": f"Offer cancelled. ${offer['offer']:,} refunded"}
 
 
@@ -317,6 +426,19 @@ async def cancel_buy_offer_post(offer_id: str, current_user: dict = Depends(get_
         {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}}
     )
     _invalidate_trade_caches()
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(offer_id),
+                "type": "buy_offer_cancelled",
+                "user_id": user_id,
+                "points": offer["points"],
+                "direction": "buy",
+                "at": datetime.now(timezone.utc),
+            }
+        )
+    except Exception:
+        pass
     return {"message": f"Offer cancelled. ${offer['offer']:,} refunded"}
 
 

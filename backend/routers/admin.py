@@ -1609,6 +1609,135 @@ def register(router):
             )
         return {"generated_at": now.isoformat(), "days": days, "items": out}
 
+    @router.get("/admin/casinos/analytics/summary")
+    async def admin_casinos_analytics_summary(
+        days: int = Query(7, ge=1, le=90),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Per-game casino analytics summary for the last N days.
+        Admin or moderator only. Uses compact gambling_log documents.
+        """
+        from routers.stats import _gambling_profit_from_details
+
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        since = now - timedelta(days=int(days))
+        since_iso = since.isoformat()
+
+        cursor = db.gambling_log.find(
+            {"created_at": {"$gte": since_iso}},
+            {"_id": 0, "game_type": 1, "details": 1},
+        )
+        stats = {}
+        async for row in cursor:
+            gt = (row.get("game_type") or "").strip() or "unknown"
+            details = row.get("details") or {}
+            profit = _gambling_profit_from_details(gt, details)
+            stake = int(details.get("stake") or details.get("bet") or 0)
+            payout = int(details.get("payout") or 0)
+            s = stats.setdefault(
+                gt,
+                {
+                    "game_type": gt,
+                    "attempts": 0,
+                    "wins": 0,
+                    "total_stake": 0,
+                    "total_payout": 0,
+                    "total_profit": 0,
+                },
+            )
+            s["attempts"] += 1
+            s["total_stake"] += stake
+            s["total_payout"] += payout
+            s["total_profit"] += profit
+            if profit > 0:
+                s["wins"] += 1
+
+        items = []
+        total_attempts = sum(v["attempts"] for v in stats.values()) or 1
+        for gt, s in sorted(stats.items(), key=lambda kv: -kv[1]["attempts"]):
+            attempts = s["attempts"]
+            wins = s["wins"]
+            total_profit = s["total_profit"]
+            avg_profit = total_profit / attempts if attempts > 0 else 0.0
+            win_rate = wins / attempts if attempts > 0 else 0.0
+            usage_share = attempts / total_attempts if total_attempts > 0 else 0.0
+            items.append(
+                {
+                    "game_type": gt,
+                    "attempts": attempts,
+                    "wins": wins,
+                    "win_rate": win_rate,
+                    "total_stake": s["total_stake"],
+                    "total_payout": s["total_payout"],
+                    "total_profit": total_profit,
+                    "avg_profit": avg_profit,
+                    "usage_share": usage_share,
+                }
+            )
+        return {"generated_at": now.isoformat(), "days": days, "items": items}
+
+    @router.get("/admin/trades/analytics/summary")
+    async def admin_trades_analytics_summary(
+        days: int = Query(7, ge=1, le=90),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Quicktrade analytics summary for the last N days.
+        Admin or moderator only. Uses compact trade_events documents.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        since = now - timedelta(days=int(days))
+        since_iso = since.isoformat()
+
+        cursor = db.trade_events.find(
+            {"at": {"$gte": since_iso}},
+            {"_id": 0},
+        )
+        stats = {}
+        async for e in cursor:
+            ev_type = (e.get("type") or "").strip() or "unknown"
+            direction = (e.get("direction") or "").strip() or "unknown"
+            key = (ev_type, direction)
+            s = stats.setdefault(
+                key,
+                {
+                    "event_type": ev_type,
+                    "direction": direction,
+                    "count": 0,
+                    "total_points": 0,
+                    "total_money": 0,
+                },
+            )
+            s["count"] += 1
+            s["total_points"] += int(e.get("points") or 0)
+            s["total_money"] += int(e.get("money") or 0)
+
+        items = []
+        total_events = sum(v["count"] for v in stats.values()) or 1
+        for (_ev, _dir), s in sorted(stats.items(), key=lambda kv: -kv[1]["count"]):
+            count = s["count"]
+            usage_share = count / total_events if total_events > 0 else 0.0
+            avg_points = s["total_points"] / count if count > 0 else 0.0
+            avg_money = s["total_money"] / count if count > 0 else 0.0
+            items.append(
+                {
+                    "event_type": s["event_type"],
+                    "direction": s["direction"],
+                    "count": count,
+                    "total_points": s["total_points"],
+                    "total_money": s["total_money"],
+                    "avg_points": avg_points,
+                    "avg_money": avg_money,
+                    "usage_share": usage_share,
+                }
+            )
+        return {"generated_at": now.isoformat(), "days": days, "items": items}
+
     @router.get("/admin/attacks/analytics/summary")
     async def admin_attacks_analytics_summary(
         days: int = Query(7, ge=1, le=90),
@@ -1848,6 +1977,77 @@ def register(router):
             "recent_as_attacker": recent_attacker,
             "recent_as_target": recent_target,
         }
+
+    @router.get("/admin/attacks/logs")
+    async def admin_attacks_logs(
+        username: str = Query(..., min_length=1),
+        limit: int = Query(500, ge=1, le=1000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin/moderator only. Return raw attack_attempts for a user (as attacker or target).
+        Full post data: who shot whom, outcome, bodyguard, bullets, location, etc.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        key = (username or "").strip()
+        user = await db.users.find_one(
+            {"id": key},
+            {"_id": 0, "id": 1, "username": 1},
+        )
+        if not user:
+            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
+            user = await db.users.find_one(
+                {"username": pattern},
+                {"_id": 0, "id": 1, "username": 1},
+            )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = user["id"]
+        docs = (
+            await db.attack_attempts.find(
+                {"$or": [{"attacker_id": uid}, {"target_id": uid}]},
+                {"_id": 0},
+            )
+            .sort("created_at", -1)
+            .to_list(limit)
+            )
+        return {"username": user.get("username"), "logs": docs}
+
+    @router.get("/admin/crimes/logs")
+    async def admin_crimes_logs(
+        username: str = Query(..., min_length=1),
+        limit: int = Query(500, ge=1, le=1000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin/moderator only. Return raw crime_events for a user (full post data).
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        key = (username or "").strip()
+        user = await db.users.find_one(
+            {"id": key},
+            {"_id": 0, "id": 1, "username": 1},
+        )
+        if not user:
+            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
+            user = await db.users.find_one(
+                {"username": pattern},
+                {"_id": 0, "id": 1, "username": 1},
+            )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = user["id"]
+        docs = (
+            await db.crime_events.find(
+                {"user_id": uid},
+                {"_id": 0},
+            )
+            .sort("at", -1)
+            .to_list(limit)
+            )
+        return {"username": user.get("username"), "logs": docs}
 
     @router.post("/admin/gambling-log/clear")
     async def admin_gambling_log_clear(
