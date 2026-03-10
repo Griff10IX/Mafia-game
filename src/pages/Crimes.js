@@ -318,7 +318,7 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
 
   return (
     <div
-      className="flex flex-col gap-1.5 px-2.5 py-2 rounded-md transition-all cr-row"
+      className="flex flex-col gap-1 px-2 py-1 rounded-md transition-all cr-row"
       style={{
         background: isLocked ? 'rgba(39,39,42,0.3)' : `${color}08`,
         border: `1px solid ${isLocked ? 'rgba(63,63,70,0.4)' : color + '25'}`,
@@ -326,7 +326,7 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
       }}
     >
       {/* Top row: badge + name + lock chip */}
-      <div className="flex items-center gap-2 min-w-0">
+      <div className="flex items-center gap-1.5 min-w-0">
         {/* Prestige badge */}
         <span
           className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-heading font-bold uppercase tracking-wider border"
@@ -340,7 +340,7 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
         </span>
 
         {/* Name */}
-        <span className="text-[11px] font-heading font-bold truncate" style={{ color: isLocked ? '#52525b' : '#e4e4e7' }}>
+        <span className="text-[10px] font-heading font-bold truncate" style={{ color: isLocked ? '#52525b' : '#e4e4e7' }} title={crime.description}>
           {crime.name}
         </span>
 
@@ -355,8 +355,8 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
         )}
       </div>
 
-      {/* Description */}
-      <div className="text-[9px] text-zinc-600 hidden sm:block leading-tight">{crime.description}</div>
+      {/* Description (now only in tooltip on the title to keep row compact) */}
+      <div className="hidden">{crime.description}</div>
 
       {/* Bottom row: drop type + reward pills + cooldown + button */}
       <div className="flex items-center gap-2 flex-wrap">

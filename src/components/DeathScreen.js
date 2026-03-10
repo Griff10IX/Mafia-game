@@ -117,8 +117,11 @@ export default function DeathScreen({ user, onLogout }) {
   const createdAt = user?.created_at;
   const username = user?.username || '—';
 
-  const handleLogout = async () => {
+  const handleNewLife = async () => {
     try { await api.post('/auth/logout'); } catch {}
+    try {
+      sessionStorage.setItem('landing_default_tab', 'register');
+    } catch (_) {}
     if (onLogout) onLogout();
   };
 
@@ -314,7 +317,7 @@ export default function DeathScreen({ user, onLogout }) {
         <div className="ds-actions" style={{ display: 'flex', gap: 12, marginTop: 32, width: '100%', maxWidth: 375 }}>
           <button
             type="button"
-            onClick={handleLogout}
+            onClick={handleNewLife}
             style={{ flex: 1, padding: 13, fontFamily: 'serif', fontSize: 8.5, letterSpacing: '.22em', textTransform: 'uppercase', cursor: 'pointer', background: 'rgba(184,145,68,.1)', border: '1px solid rgba(184,145,68,.35)', color: '#c9a84c', position: 'relative', overflow: 'hidden', transition: 'all .25s' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(184,145,68,.2)'; e.currentTarget.style.boxShadow = '0 0 24px rgba(184,145,68,.12)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(184,145,68,.1)'; e.currentTarget.style.boxShadow = 'none'; }}

@@ -15,6 +15,14 @@ export default function Landing({ setIsAuthenticated }) {
       sessionStorage.removeItem(AUTH_ERROR_KEY);
       toast.error(msg);
     }
+    // Optional override: open Register tab when coming from DeathScreen "New Life"
+    try {
+      const preferredTab = sessionStorage.getItem('landing_default_tab');
+      if (preferredTab === 'register') {
+        setIsLogin(false);
+        sessionStorage.removeItem('landing_default_tab');
+      }
+    } catch (_) {}
   }, []);
 
   const [formData, setFormData] = useState({
