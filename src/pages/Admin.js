@@ -230,6 +230,22 @@ export default function Admin() {
   const [crimeLogsLimit, setCrimeLogsLimit] = useState(500);
   const [crimeLogsData, setCrimeLogsData] = useState(null);
   const [crimeLogsLoading, setCrimeLogsLoading] = useState(false);
+  const [gtaLogsUsername, setGtaLogsUsername] = useState('');
+  const [gtaLogsLimit, setGtaLogsLimit] = useState(500);
+  const [gtaLogsData, setGtaLogsData] = useState(null);
+  const [gtaLogsLoading, setGtaLogsLoading] = useState(false);
+  const [jailLogsUsername, setJailLogsUsername] = useState('');
+  const [jailLogsLimit, setJailLogsLimit] = useState(500);
+  const [jailLogsData, setJailLogsData] = useState(null);
+  const [jailLogsLoading, setJailLogsLoading] = useState(false);
+  const [bankLogsUsername, setBankLogsUsername] = useState('');
+  const [bankLogsLimit, setBankLogsLimit] = useState(100);
+  const [bankLogsData, setBankLogsData] = useState(null);
+  const [bankLogsLoading, setBankLogsLoading] = useState(false);
+  const [stockLogsUsername, setStockLogsUsername] = useState('');
+  const [stockLogsLimit, setStockLogsLimit] = useState(500);
+  const [stockLogsData, setStockLogsData] = useState(null);
+  const [stockLogsLoading, setStockLogsLoading] = useState(false);
 
   // Activity & Gambling logs
   const [activityLog, setActivityLog] = useState({ entries: [] });
@@ -1241,6 +1257,84 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load crime logs');
     } finally {
       setCrimeLogsLoading(false);
+    }
+  };
+
+  const handleFetchGtaLogs = async () => {
+    const un = (gtaLogsUsername || '').trim();
+    if (!un) {
+      toast.error('Enter a username');
+      return;
+    }
+    setGtaLogsLoading(true);
+    setGtaLogsData(null);
+    try {
+      const res = await api.get('/admin/gta/logs', { params: { username: un, limit: gtaLogsLimit } });
+      setGtaLogsData(res.data || null);
+      toast.success(`Loaded ${(res.data?.logs?.length ?? 0)} GTA log entries`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load GTA logs');
+    } finally {
+      setGtaLogsLoading(false);
+    }
+  };
+
+  const handleFetchJailLogs = async () => {
+    const un = (jailLogsUsername || '').trim();
+    if (!un) {
+      toast.error('Enter a username');
+      return;
+    }
+    setJailLogsLoading(true);
+    setJailLogsData(null);
+    try {
+      const res = await api.get('/admin/jail/logs', { params: { username: un, limit: jailLogsLimit } });
+      setJailLogsData(res.data || null);
+      toast.success(`Loaded ${(res.data?.logs?.length ?? 0)} jail bust log entries`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load jail logs');
+    } finally {
+      setJailLogsLoading(false);
+    }
+  };
+
+  const handleFetchBankLogs = async () => {
+    const un = (bankLogsUsername || '').trim();
+    if (!un) {
+      toast.error('Enter a username');
+      return;
+    }
+    setBankLogsLoading(true);
+    setBankLogsData(null);
+    try {
+      const res = await api.get('/admin/bank/logs', { params: { username: un, limit: bankLogsLimit } });
+      setBankLogsData(res.data || null);
+      const t = (res.data?.transfers?.length ?? 0);
+      const d = (res.data?.deposits?.length ?? 0);
+      toast.success(`Loaded ${t} transfers, ${d} deposits`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load bank logs');
+    } finally {
+      setBankLogsLoading(false);
+    }
+  };
+
+  const handleFetchStockLogs = async () => {
+    const un = (stockLogsUsername || '').trim();
+    if (!un) {
+      toast.error('Enter a username');
+      return;
+    }
+    setStockLogsLoading(true);
+    setStockLogsData(null);
+    try {
+      const res = await api.get('/admin/stock/logs', { params: { username: un, limit: stockLogsLimit } });
+      setStockLogsData(res.data || null);
+      toast.success(`Loaded ${(res.data?.logs?.length ?? 0)} stock log entries`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load stock logs');
+    } finally {
+      setStockLogsLoading(false);
     }
   };
 
@@ -2957,6 +3051,116 @@ export default function Admin() {
             </div>
           )}
         </div>
+
+        {/* GTA Logs (Post Data) */}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Car}
+            title="GTA logs (post data)"
+            badge={gtaLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{gtaLogsData.logs.length} entries</span> : null}
+            isCollapsed={collapsed.gtaLogs}
+            onToggle={() => toggleSection('gtaLogs')}
+          />
+          {!collapsed.gtaLogs && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">Search by username to load that user&apos;s GTA attempts. Full post data: option, car, success, profit, jailed.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="text" value={gtaLogsUsername} onChange={(e) => setGtaLogsUsername(e.target.value)} placeholder="Username" className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading" />
+                <span className="text-[10px] text-mutedForeground">Limit</span>
+                <input type="number" min={1} max={1000} value={gtaLogsLimit} onChange={(e) => setGtaLogsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 500)))} className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
+                <BtnPrimary onClick={handleFetchGtaLogs} disabled={gtaLogsLoading}>{gtaLogsLoading ? 'Loading…' : 'Load GTA logs'}</BtnPrimary>
+              </div>
+              {gtaLogsData && (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <p className="text-[10px] font-heading text-primary mb-1">GTA log for: <strong>{gtaLogsData.username ?? '—'}</strong></p>
+                  {(!gtaLogsData.logs || gtaLogsData.logs.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground font-heading">No GTA attempts found.</p>
+                  ) : (
+                    <table className="w-full text-left border-collapse text-[9px] font-heading">
+                      <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                        <tr className="border-b border-zinc-700/50">
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Time</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Option</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Success</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Car</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Profit</th>
+                          <th className="py-1 font-bold text-mutedForeground uppercase">Jailed</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gtaLogsData.logs.map((row, idx) => (
+                          <tr key={idx} className="border-b border-zinc-700/30">
+                            <td className="py-1 pr-1 text-mutedForeground">{row.at ? new Date(row.at).toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1">{row.option_name ?? row.option_id ?? '—'}</td>
+                            <td className="py-1 pr-1">{row.success ? <span className="text-emerald-400">Yes</span> : <span className="text-amber-400">No</span>}</td>
+                            <td className="py-1 pr-1">{row.car_name ?? row.car_id ?? '—'}</td>
+                            <td className="py-1 pr-1">{row.profit != null ? `$${Number(row.profit).toLocaleString()}` : '—'}</td>
+                            <td className="py-1">{row.jailed ? `Yes (${row.jail_seconds ?? '?'}s)` : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Jail Bust Logs (Post Data) */}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Lock}
+            title="Jail bust logs (post data)"
+            badge={jailLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{jailLogsData.logs.length} entries</span> : null}
+            isCollapsed={collapsed.jailLogs}
+            onToggle={() => toggleSection('jailLogs')}
+          />
+          {!collapsed.jailLogs && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">Search by username to load that user&apos;s jail bust attempts. Full post data: target, NPC vs player, success, profit.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="text" value={jailLogsUsername} onChange={(e) => setJailLogsUsername(e.target.value)} placeholder="Username" className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading" />
+                <span className="text-[10px] text-mutedForeground">Limit</span>
+                <input type="number" min={1} max={1000} value={jailLogsLimit} onChange={(e) => setJailLogsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 500)))} className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
+                <BtnPrimary onClick={handleFetchJailLogs} disabled={jailLogsLoading}>{jailLogsLoading ? 'Loading…' : 'Load jail logs'}</BtnPrimary>
+              </div>
+              {jailLogsData && (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <p className="text-[10px] font-heading text-primary mb-1">Jail bust log for: <strong>{jailLogsData.username ?? '—'}</strong></p>
+                  {(!jailLogsData.logs || jailLogsData.logs.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground font-heading">No bust attempts found.</p>
+                  ) : (
+                    <table className="w-full text-left border-collapse text-[9px] font-heading">
+                      <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                        <tr className="border-b border-zinc-700/50">
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Time</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Target</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">NPC</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Success</th>
+                          <th className="py-1 font-bold text-mutedForeground uppercase">Profit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {jailLogsData.logs.map((row, idx) => (
+                          <tr key={idx} className="border-b border-zinc-700/30">
+                            <td className="py-1 pr-1 text-mutedForeground">{row.at ? new Date(row.at).toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1">{row.target_username ?? '—'}</td>
+                            <td className="py-1 pr-1">{row.is_npc ? 'Yes' : 'No'}</td>
+                            <td className="py-1 pr-1">{row.success ? <span className="text-emerald-400">Yes</span> : <span className="text-amber-400">No</span>}</td>
+                            <td className="py-1">{row.profit != null ? `$${Number(row.profit).toLocaleString()}` : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </section>
       )}
 
@@ -3808,6 +4012,139 @@ export default function Admin() {
                     )}
                   </div>
                 </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Bank Logs (Post Data) */}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Coins}
+            title="Bank logs (post data)"
+            badge={bankLogsData ? <span className="text-[10px] font-heading text-primary">{(bankLogsData.transfers?.length ?? 0) + (bankLogsData.deposits?.length ?? 0)} entries</span> : null}
+            isCollapsed={collapsed.bankLogs}
+            onToggle={() => toggleSection('bankLogs')}
+          />
+          {!collapsed.bankLogs && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">Search by username: money transfers (sent/received) and interest deposits.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="text" value={bankLogsUsername} onChange={(e) => setBankLogsUsername(e.target.value)} placeholder="Username" className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading" />
+                <span className="text-[10px] text-mutedForeground">Limit</span>
+                <input type="number" min={1} max={500} value={bankLogsLimit} onChange={(e) => setBankLogsLimit(Math.max(1, Math.min(500, parseInt(e.target.value, 10) || 100)))} className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
+                <BtnPrimary onClick={handleFetchBankLogs} disabled={bankLogsLoading}>{bankLogsLoading ? 'Loading…' : 'Load bank logs'}</BtnPrimary>
+              </div>
+              {bankLogsData && (
+                <div className="space-y-4">
+                  <p className="text-[10px] font-heading text-primary">Bank activity for: <strong>{bankLogsData.username ?? '—'}</strong></p>
+                  <div>
+                    <p className="text-[10px] font-heading text-mutedForeground uppercase mb-1">Transfers</p>
+                    <div className="overflow-x-auto max-h-48">
+                      {(!bankLogsData.transfers || bankLogsData.transfers.length === 0) ? <p className="text-[10px] text-mutedForeground font-heading">No transfers.</p> : (
+                        <table className="w-full text-left border-collapse text-[9px] font-heading">
+                          <thead className="sticky top-0 bg-zinc-900/95 z-10"><tr className="border-b border-zinc-700/50"><th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Time</th><th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Direction</th><th className="py-1 pr-1 font-bold text-mutedForeground uppercase">From</th><th className="py-1 pr-1 font-bold text-mutedForeground uppercase">To</th><th className="py-1 font-bold text-mutedForeground uppercase">Amount</th></tr></thead>
+                          <tbody>
+                            {bankLogsData.transfers.map((row, idx) => (
+                              <tr key={idx} className="border-b border-zinc-700/30">
+                                <td className="py-1 pr-1 text-mutedForeground">{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
+                                <td className="py-1 pr-1">{row.direction === 'sent' ? <span className="text-amber-400">Sent</span> : <span className="text-emerald-400">Received</span>}</td>
+                                <td className="py-1 pr-1">{row.from_username ?? '—'}</td>
+                                <td className="py-1 pr-1">{row.to_username ?? '—'}</td>
+                                <td className="py-1">${row.amount != null ? Number(row.amount).toLocaleString() : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-heading text-mutedForeground uppercase mb-1">Interest deposits</p>
+                    <div className="overflow-x-auto max-h-48">
+                      {(!bankLogsData.deposits || bankLogsData.deposits.length === 0) ? <p className="text-[10px] text-mutedForeground font-heading">No deposits.</p> : (
+                        <table className="w-full text-left border-collapse text-[9px] font-heading">
+                          <thead className="sticky top-0 bg-zinc-900/95 z-10"><tr className="border-b border-zinc-700/50"><th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Created</th><th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Principal</th><th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Hours</th><th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Interest</th><th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Matures</th><th className="py-1 font-bold text-mutedForeground uppercase">Claimed</th></tr></thead>
+                          <tbody>
+                            {bankLogsData.deposits.map((row, idx) => (
+                              <tr key={idx} className="border-b border-zinc-700/30">
+                                <td className="py-1 pr-1 text-mutedForeground">{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
+                                <td className="py-1 pr-1">${row.principal != null ? Number(row.principal).toLocaleString() : '—'}</td>
+                                <td className="py-1 pr-1">{row.duration_hours ?? '—'}</td>
+                                <td className="py-1 pr-1">${row.interest_amount != null ? Number(row.interest_amount).toLocaleString() : '—'}</td>
+                                <td className="py-1 pr-1">{row.matures_at ? new Date(row.matures_at).toLocaleString() : '—'}</td>
+                                <td className="py-1">{row.claimed_at ? new Date(row.claimed_at).toLocaleString() : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Stock Logs (Post Data) */}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Stock market logs (post data)"
+            badge={stockLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{stockLogsData.logs.length} entries</span> : null}
+            isCollapsed={collapsed.stockLogs}
+            onToggle={() => toggleSection('stockLogs')}
+          />
+          {!collapsed.stockLogs && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">Search by username: buy, sell, short, cover transactions.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="text" value={stockLogsUsername} onChange={(e) => setStockLogsUsername(e.target.value)} placeholder="Username" className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading" />
+                <span className="text-[10px] text-mutedForeground">Limit</span>
+                <input type="number" min={1} max={1000} value={stockLogsLimit} onChange={(e) => setStockLogsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 500)))} className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
+                <BtnPrimary onClick={handleFetchStockLogs} disabled={stockLogsLoading}>{stockLogsLoading ? 'Loading…' : 'Load stock logs'}</BtnPrimary>
+              </div>
+              {stockLogsData && (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <p className="text-[10px] font-heading text-primary mb-1">Stock log for: <strong>{stockLogsData.username ?? '—'}</strong></p>
+                  {(!stockLogsData.logs || stockLogsData.logs.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground font-heading">No stock transactions.</p>
+                  ) : (
+                    <table className="w-full text-left border-collapse text-[9px] font-heading">
+                      <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                        <tr className="border-b border-zinc-700/50">
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Time</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Type</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Stock</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Side</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Units</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Price</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Spent</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Received</th>
+                          <th className="py-1 font-bold text-mutedForeground uppercase">Profit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stockLogsData.logs.map((row, idx) => (
+                          <tr key={idx} className="border-b border-zinc-700/30">
+                            <td className="py-1 pr-1 text-mutedForeground">{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1">{row.type ?? '—'}</td>
+                            <td className="py-1 pr-1">{row.stock_name ?? row.stock_id ?? '—'}</td>
+                            <td className="py-1 pr-1">{row.side ?? '—'}</td>
+                            <td className="py-1 pr-1">{row.units != null ? row.units.toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1">{row.price != null ? row.price.toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1">{row.points_spent != null ? row.points_spent.toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1">{row.points_received != null ? row.points_received.toLocaleString() : '—'}</td>
+                            <td className="py-1">{row.profit_points != null ? row.profit_points.toLocaleString() : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               )}
             </div>
           )}

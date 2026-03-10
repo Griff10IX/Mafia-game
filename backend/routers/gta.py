@@ -490,9 +490,25 @@ async def attempt_gta(
     now = datetime.now(timezone.utc)
     success = getattr(result, "success", False)
     profit = int((result.car.get("value", 0) or 0)) if (getattr(result, "car", None) and success) else 0
-    await db.gta_events.insert_one(
-        {"user_id": current_user["id"], "at": now, "success": success, "profit": profit}
-    )
+    option = next((o for o in GTA_OPTIONS if o["id"] == request.option_id), None)
+    car = getattr(result, "car", None)
+    jailed = getattr(result, "jailed", False)
+    jail_seconds = int(option["jail_time"]) if (option and jailed) else None
+    event_doc = {
+        "user_id": current_user["id"],
+        "username": current_user.get("username") or "",
+        "at": now,
+        "success": success,
+        "profit": profit,
+        "option_id": request.option_id,
+        "option_name": (option or {}).get("name") or request.option_id,
+        "car_id": car.get("id") if car else None,
+        "car_name": car.get("name") if car else None,
+        "car_value": int(car.get("value", 0)) if car else 0,
+        "jailed": jailed,
+        "jail_seconds": jail_seconds,
+    }
+    await db.gta_events.insert_one(event_doc)
     return result
 
 

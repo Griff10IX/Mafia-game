@@ -200,14 +200,22 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
                 "bust_reward_cash": bust_reward_cash,
             }
         )
+    players_data.sort(key=lambda x: int(x.get("bust_reward_cash") or 0), reverse=True)
     return {"players": players_data}
 
 
-async def _record_bust_event(user_id: str, success: bool, profit: int):
+async def _record_bust_event(user_id: str, success: bool, profit: int, target_username: str = None, is_npc: bool = False):
     """Record a bust attempt for stats (today/week, profit). Called from _attempt_bust_impl so both manual and Auto Rank busts are counted."""
     now = datetime.now(timezone.utc)
     try:
-        await db.bust_events.insert_one({"user_id": user_id, "at": now, "success": success, "profit": profit})
+        await db.bust_events.insert_one({
+            "user_id": user_id,
+            "at": now,
+            "success": success,
+            "profit": profit,
+            "target_username": target_username or "",
+            "is_npc": is_npc,
+        })
     except Exception as e:
         logger.exception("Record bust event: %s", e)
 
@@ -278,7 +286,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 await update_objectives_progress(current_user["id"], "busts", 1)
             except Exception:
                 pass
-            await _record_bust_event(current_user["id"], True, bust_reward_cash)
+            await _record_bust_event(current_user["id"], True, bust_reward_cash, target_username=target_username, is_npc=True)
             new_total = total_successes + 1
             claimed = current_user.get("respect_points_bust_milestones_claimed") or []
             new_claimed = [m for m in BUST_MILESTONES if m <= new_total and m not in claimed]
@@ -292,7 +300,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             {"id": current_user["id"]},
             {"$set": {"jail_bust_attempts": next_attempts, "in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0, "snitch_attempted_this_term": False}},
         )
-        await _record_bust_event(current_user["id"], False, 0)
+        await _record_bust_event(current_user["id"], False, 0, target_username=target_username, is_npc=True)
         return {"success": False, "message": random.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30}
 
     target = await db.users.find_one({"username": username_ci}, {"_id": 0})
@@ -361,7 +369,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             await update_objectives_progress(current_user["id"], "busts", 1)
         except Exception:
             pass
-        await _record_bust_event(current_user["id"], True, cash_to_pay)
+        await _record_bust_event(current_user["id"], True, cash_to_pay, target_username=target.get("username") or "", is_npc=False)
         new_total = total_successes + 1
         claimed = current_user.get("respect_points_bust_milestones_claimed") or []
         new_claimed = [m for m in BUST_MILESTONES if m <= new_total and m not in claimed]
@@ -376,7 +384,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         {"id": current_user["id"]},
         {"$set": {"jail_bust_attempts": next_attempts, "in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0, "snitch_attempted_this_term": False}},
     )
-    await _record_bust_event(current_user["id"], False, 0)
+    await _record_bust_event(current_user["id"], False, 0, target_username=target.get("username") or "", is_npc=False)
     return {"success": False, "message": random.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30}
 
 

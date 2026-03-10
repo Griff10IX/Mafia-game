@@ -2157,6 +2157,118 @@ def register(router):
             )
         return {"username": user.get("username"), "logs": docs}
 
+    @router.get("/admin/gta/logs")
+    async def admin_gta_logs(
+        username: str = Query(..., min_length=1),
+        limit: int = Query(500, ge=1, le=1000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin/moderator only. Return raw gta_events for a user (full post data: option, car, success, jailed, etc.).
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        key = (username or "").strip()
+        user = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
+            user = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = user["id"]
+        cursor = db.gta_events.find({"user_id": uid}, {"_id": 0}).sort("at", -1).limit(limit)
+        docs = await cursor.to_list(limit)
+        for d in docs:
+            if isinstance(d.get("at"), datetime):
+                d["at"] = d["at"].isoformat()
+        return {"username": user.get("username"), "logs": docs}
+
+    @router.get("/admin/jail/logs")
+    async def admin_jail_logs(
+        username: str = Query(..., min_length=1),
+        limit: int = Query(500, ge=1, le=1000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin/moderator only. Return raw bust_events for a user (full post data: target, success, profit, NPC vs player).
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        key = (username or "").strip()
+        user = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
+            user = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = user["id"]
+        cursor = db.bust_events.find({"user_id": uid}, {"_id": 0}).sort("at", -1).limit(limit)
+        docs = await cursor.to_list(limit)
+        for d in docs:
+            if isinstance(d.get("at"), datetime):
+                d["at"] = d["at"].isoformat()
+        return {"username": user.get("username"), "logs": docs}
+
+    @router.get("/admin/bank/logs")
+    async def admin_bank_logs(
+        username: str = Query(..., min_length=1),
+        limit: int = Query(100, ge=1, le=500),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin/moderator only. Return bank activity for a user: money transfers (sent/received) and interest deposits.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        key = (username or "").strip()
+        user = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
+            user = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = user["id"]
+        transfers_cursor = db.money_transfers.find(
+            {"$or": [{"from_user_id": uid}, {"to_user_id": uid}]},
+            {"_id": 0},
+        ).sort("created_at", -1).limit(limit)
+        deposits_cursor = db.bank_deposits.find(
+            {"user_id": uid},
+            {"_id": 0},
+        ).sort("created_at", -1).limit(limit)
+        transfers = await transfers_cursor.to_list(limit)
+        deposits = await deposits_cursor.to_list(limit)
+        for t in transfers:
+            t["direction"] = "sent" if t.get("from_user_id") == uid else "received"
+        return {
+            "username": user.get("username"),
+            "transfers": transfers,
+            "deposits": deposits,
+        }
+
+    @router.get("/admin/stock/logs")
+    async def admin_stock_logs(
+        username: str = Query(..., min_length=1),
+        limit: int = Query(500, ge=1, le=1000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin/moderator only. Return stock_transactions for a user (buys, sells, shorts, covers).
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        key = (username or "").strip()
+        user = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
+            user = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = user["id"]
+        cursor = db.stock_transactions.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).limit(limit)
+        docs = await cursor.to_list(limit)
+        return {"username": user.get("username"), "logs": docs}
+
     @router.post("/admin/gambling-log/clear")
     async def admin_gambling_log_clear(
         days: int = 30,

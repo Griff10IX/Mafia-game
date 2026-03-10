@@ -16,6 +16,9 @@ async def ensure_all_indexes(db):
         await db.bank_deposits.create_index([("id", 1), ("user_id", 1)])
         await db.bank_deposits.create_index("id")
 
+        # --- Stock market ---
+        await db.stock_transactions.create_index([("user_id", 1), ("created_at", -1)])
+
         # --- Game config / settings ---
         await db.game_config.create_index("id", unique=True)
         # Sparse: only index docs that have "key"; docs with only "id" (main, auto_rank) have no key so avoid duplicate null
@@ -63,6 +66,7 @@ async def ensure_all_indexes(db):
         await db.user_cars.create_index([("user_id", 1), ("car_id", 1)])
         await db.gta_cooldowns.create_index("user_id", unique=True)
         await db.user_gta.create_index("user_id")
+        await db.gta_events.create_index([("user_id", 1), ("at", -1)])
         await db.dealer_stock.create_index("car_id")
 
         # --- Properties ---
@@ -122,6 +126,7 @@ async def ensure_all_indexes(db):
 
         # --- Jail ---
         await db.jail_npcs.create_index("username", unique=True)
+        await db.bust_events.create_index([("user_id", 1), ("at", -1)])
 
         # --- Bodyguards / hitlist ---
         await db.bodyguards.create_index("id", unique=True)
