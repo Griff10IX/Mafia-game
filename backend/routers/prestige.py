@@ -37,10 +37,16 @@ def register(router):
 
         all_levels = []
         for lvl, cfg in PRESTIGE_CONFIGS.items():
+            # godfather_req in the table should match the effective RP needed
+            # to unlock this prestige level (i.e. requirement from previous level).
+            if lvl == 1:
+                level_req = srv.get_prestige_requirement(0)
+            else:
+                level_req = srv.get_prestige_requirement(lvl - 1)
             all_levels.append({
                 "level": lvl,
                 "name": cfg["name"],
-                "godfather_req": cfg["godfather_req"],
+                "godfather_req": level_req,
                 "crime_mult": cfg["crime_mult"],
                 "oc_mult": cfg["oc_mult"],
                 "gta_rare_boost": cfg["gta_rare_boost"],
