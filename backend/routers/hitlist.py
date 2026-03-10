@@ -281,7 +281,8 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
 
 
 async def hitlist_list(current_user: dict = Depends(get_current_user)):
-    """List public hitlist entries (user bounties) + only this user's NPC entries. NPCs are personal per placer."""
+    """List public hitlist entries (user bounties) + only this user's NPC entries. NPCs are personal per placer.
+    Never expose placer_id or target_id in response (privacy: prevent correlating placers with other data)."""
     user_id = current_user["id"]
     query = {"$or": [
         {"target_type": {"$ne": "npc"}},
@@ -290,6 +291,7 @@ async def hitlist_list(current_user: dict = Depends(get_current_user)):
     cursor = db.hitlist.find(query, {"_id": 0}).sort("reward_amount", -1).sort("created_at", -1)
     items = []
     async for doc in cursor:
+        # Build response from allowed fields only; never include placer_id or target_id
         item = {
             "id": doc["id"],
             "target_username": doc["target_username"],
@@ -307,7 +309,8 @@ async def hitlist_list(current_user: dict = Depends(get_current_user)):
 
 
 async def hitlist_me(current_user: dict = Depends(get_current_user)):
-    """Whether current user is on the hitlist (count, total bounty); and if they paid to reveal, who placed them."""
+    """Whether current user is on the hitlist (count, total bounty); and if they paid to reveal, who placed them.
+    'who' entries never include placer_id (only placer_username or Anonymous)."""
     user_id = current_user["id"]
     entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
     count = len(entries)
@@ -318,6 +321,7 @@ async def hitlist_me(current_user: dict = Depends(get_current_user)):
     revealed = current_user.get("hitlist_revealed") is True
     who = []
     if revealed:
+        # Expose only placer_username (or Anonymous); never placer_id
         who = [
             {"placer_username": "Anonymous" if e.get("hidden") else (e.get("placer_username") or "Unknown"), "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")}
             for e in entries
@@ -451,7 +455,8 @@ async def hitlist_buy_off_user(request: HitlistBuyOffUserRequest, current_user: 
 
 
 async def hitlist_reveal(current_user: dict = Depends(get_current_user)):
-    """Pay 5000 points to see who placed bounties on you. One-time; stored on user."""
+    """Pay 5000 points to see who placed bounties on you. One-time; stored on user.
+    Returned 'who' never includes placer_id."""
     user_id = current_user["id"]
     if current_user.get("hitlist_revealed") is True:
         entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)

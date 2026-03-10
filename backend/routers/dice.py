@@ -158,7 +158,8 @@ def register(router):
             u = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "money": 1})
             if u:
                 _, wealth_rank_name = get_wealth_rank(int((u.get("money") or 0) or 0))
-                owner = {"user_id": owner_id, "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name}
+                # Public casino ownership view: expose owner username + wealth rank only, never raw user_id
+                owner = {"username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name}
         profit = int((doc.get("profit") or 0) or 0)
         active_offer = await db.dice_buy_back_offers.find_one(
             {"to_user_id": current_user["id"]},

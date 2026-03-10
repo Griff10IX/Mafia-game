@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3 } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../components/FormattedNumberInput';
@@ -197,6 +197,11 @@ export default function Admin() {
   const [ipBanIp, setIpBanIp] = useState('');
   const [ipBanReason, setIpBanReason] = useState('');
   const [ipBanHours, setIpBanHours] = useState('');
+
+  // Crime analytics
+  const [crimeAnalyticsDays, setCrimeAnalyticsDays] = useState(7);
+  const [crimeAnalytics, setCrimeAnalytics] = useState(null);
+  const [crimeAnalyticsLoading, setCrimeAnalyticsLoading] = useState(false);
 
   // Activity & Gambling logs
   const [activityLog, setActivityLog] = useState({ entries: [] });
@@ -1077,6 +1082,20 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to send system message');
     } finally {
       setBroadcastSending(false);
+    }
+  };
+
+  const handleFetchCrimeAnalytics = async () => {
+    setCrimeAnalyticsLoading(true);
+    try {
+      const res = await api.get('/admin/crimes/analytics/summary', {
+        params: { days: crimeAnalyticsDays, limit: 100 },
+      });
+      setCrimeAnalytics(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load crime analytics');
+    } finally {
+      setCrimeAnalyticsLoading(false);
     }
   };
 

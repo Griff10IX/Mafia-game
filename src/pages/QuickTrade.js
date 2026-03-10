@@ -17,7 +17,6 @@ export default function QuickTrade() {
   const [sellOffers, setSellOffers] = useState([]);
   const [buyOffers, setBuyOffers] = useState([]);
   const [properties, setProperties] = useState([]);
-  const [currentUserId, setCurrentUserId] = useState(null);
   
   // Create offer form
   const [sellPoints, setSellPoints] = useState('');
@@ -28,18 +27,8 @@ export default function QuickTrade() {
   const [hideNameBuy, setHideNameBuy] = useState(false);
 
   useEffect(() => {
-    fetchCurrentUser();
     fetchTrades();
   }, []);
-
-  const fetchCurrentUser = async () => {
-    try {
-      const res = await api.get('/auth/me');
-      setCurrentUserId(res.data.id);
-    } catch (e) {
-      console.error('Failed to fetch user');
-    }
-  };
 
   const fetchTrades = async () => {
     setLoading(true);
@@ -339,7 +328,7 @@ export default function QuickTrade() {
             ) : (
               (() => {
                 const groupedOffers = sellOffers.reduce((acc, offer) => {
-                  const key = offer.user_id;
+                  const key = offer.group_key;
                   if (!acc[key]) acc[key] = [];
                   acc[key].push(offer);
                   return acc;
@@ -347,7 +336,7 @@ export default function QuickTrade() {
                 
                 return Object.values(groupedOffers).map((userOffers, groupIdx) => {
                   const firstOffer = userOffers[0];
-                  const isMyOffer = firstOffer.user_id === currentUserId;
+                  const isMyOffer = firstOffer.is_own;
                   const totalOffers = userOffers.length;
                   
                   const stackedOffers = userOffers.reduce((acc, offer) => {
@@ -429,7 +418,7 @@ export default function QuickTrade() {
             ) : (
               (() => {
                 const groupedOffers = buyOffers.reduce((acc, offer) => {
-                  const key = offer.user_id;
+                  const key = offer.group_key;
                   if (!acc[key]) acc[key] = [];
                   acc[key].push(offer);
                   return acc;
@@ -437,7 +426,7 @@ export default function QuickTrade() {
                 
                 return Object.values(groupedOffers).map((userOffers, groupIdx) => {
                   const firstOffer = userOffers[0];
-                  const isMyOffer = firstOffer.user_id === currentUserId;
+                  const isMyOffer = firstOffer.is_own;
                   const totalOffers = userOffers.length;
                   
                   const stackedOffers = userOffers.reduce((acc, offer) => {

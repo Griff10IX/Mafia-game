@@ -46,9 +46,11 @@ def register(router):
         ).to_list(100)
 
         users_data = []
+        id_to_user = {}
         for user in users:
             if (user.get("email") in ADMIN_EMAILS or user.get("is_moderator")) and user.get("admin_ghost_mode"):
                 continue
+            uid = user.get("id")
             _rp = int(user.get("rank_points") or 0)
             _prestige_mult = float(user.get("prestige_rank_multiplier") or 1.0)
             rank_id, rank_name = get_rank_info(_rp, _prestige_mult)
@@ -73,9 +75,8 @@ def register(router):
                     online_color = None  # will use mod_default from settings below
             elif is_hdo:
                 online_color = HDO_ONLINE_COLOR
-            users_data.append({
+            item = {
                 "username": user["username"],
-                "id": user["id"],
                 "rank": rank_id,
                 "rank_name": rank_name,
                 "rank_points": _rp,
@@ -86,10 +87,13 @@ def register(router):
                 "is_help_desk_operator": is_hdo,
                 "prestige_level": _prestige_level,
                 "online_color": online_color,
-            })
-        # Hitlist totals for online users (bounties on user or their bodyguards)
-        if users_data:
-            user_ids = [u["id"] for u in users_data]
+            }
+            users_data.append(item)
+            if uid:
+                id_to_user[uid] = item
+        # Hitlist totals for online users (bounties on user or their bodyguards). Uses internal ids only server-side.
+        if id_to_user:
+            user_ids = list(id_to_user.keys())
             hitlist_entries = await db.hitlist.find(
                 {"target_id": {"$in": user_ids}, "target_type": {"$in": ["user", "bodyguards"]}},
                 {"_id": 0, "target_id": 1, "reward_type": 1, "reward_amount": 1},
@@ -103,11 +107,11 @@ def register(router):
                     hitlist_totals[tid][0] += int(e.get("reward_amount") or 0)
                 elif e.get("reward_type") == "points":
                     hitlist_totals[tid][1] += int(e.get("reward_amount") or 0)
-            for u in users_data:
-                tc, tp = hitlist_totals.get(u["id"], (0, 0))
-                u["on_hitlist"] = tc > 0 or tp > 0
-                u["hitlist_total_cash"] = tc
-                u["hitlist_total_points"] = tp
+            for uid, user_item in id_to_user.items():
+                tc, tp = hitlist_totals.get(uid, (0, 0))
+                user_item["on_hitlist"] = tc > 0 or tp > 0
+                user_item["hitlist_total_cash"] = tc
+                user_item["hitlist_total_points"] = tp
         # Staff first (admins, then mods only); everyone else (including HDOs) by rank_points desc
         def _sort_key(u):
             if u.get("is_admin"):

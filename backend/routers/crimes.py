@@ -632,8 +632,20 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         },
         upsert=True,
     )
+    # Lightweight per-crime event for analytics and anti-cheat (no public exposure).
+    # Stored as a single small document per attempt.
+    city = (current_user.get("current_state") or "").strip() or None
     await db.crime_events.insert_one(
-        {"user_id": current_user["id"], "at": now, "success": success, "profit": reward if success and reward is not None else 0}
+        {
+            "user_id": current_user["id"],
+            "crime_id": crime_id,
+            "crime_name": crime.get("name"),
+            "crime_type": crime.get("crime_type") or "normal",
+            "at": now,
+            "success": success,
+            "profit": int(reward or 0) if success and reward is not None else 0,
+            "city": city,
+        }
     )
     await log_activity(
         current_user["id"],

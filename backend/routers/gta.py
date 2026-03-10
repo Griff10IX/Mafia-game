@@ -893,9 +893,9 @@ async def get_marketplace_listings(current_user: dict = Depends(get_current_user
             continue
         seller = await db.users.find_one({"id": uc["user_id"]}, {"_id": 0, "username": 1})
         listing_id = uc.get("id") or str(uc.get("_id", ""))
+        # Public marketplace response: expose only seller_username, never raw seller_id
         out.append({
             "user_car_id": listing_id,
-            "seller_id": uc["user_id"],
             "seller_username": seller.get("username", "?"),
             "car_id": uc.get("car_id"),
             "name": uc.get("car_name") or car_info.get("name"),

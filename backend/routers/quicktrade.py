@@ -43,32 +43,39 @@ class CreateBuyOffer(BaseModel):
 
 # ----- Sell offers -----
 async def get_sell_offers(current_user: dict = Depends(get_current_user)):
+    """List active sell offers. Does not expose user_id; uses opaque group_key for grouping same-seller offers."""
     global _sell_offers_cache, _sell_offers_ts
     now = time.monotonic()
     if _sell_offers_cache is not None and now <= _sell_offers_ts + _LIST_TTL_SEC:
-        payload = _sell_offers_cache
-        # Recompute is_own per user
-        return [{**o, "is_own": o["user_id"] == current_user["id"]} for o in payload]
-    try:
-        offers = await db.trade_sell_offers.find({"status": "active"}).sort("created_at", -1).to_list(length=100)
-        result = []
-        for offer in offers:
-            result.append({
-                "id": str(offer["_id"]),
-                "username": offer.get("username", "Anonymous") if not offer.get("hide_name") else "[Anonymous]",
-                "user_id": offer["user_id"],
-                "points": offer["points"],
-                "money": offer["cost"],
-                "hide_name": offer.get("hide_name", False),
-                "created_at": offer.get("created_at"),
-                "is_own": offer["user_id"] == current_user["id"]
-            })
-        _sell_offers_cache = result
-        _sell_offers_ts = now
-        return result
-    except Exception as e:
-        print(f"Error fetching sell offers: {e}")
-        return []
+        raw_list = _sell_offers_cache
+    else:
+        try:
+            raw_list = await db.trade_sell_offers.find({"status": "active"}).sort("created_at", -1).to_list(length=100)
+            _sell_offers_cache = raw_list
+            _sell_offers_ts = now
+        except Exception as e:
+            print(f"Error fetching sell offers: {e}")
+            return []
+    uid_to_key = {}
+    next_key = [0]
+    result = []
+    for offer in raw_list:
+        uid = offer.get("user_id")
+        if uid not in uid_to_key:
+            uid_to_key[uid] = f"g{next_key[0]}"
+            next_key[0] += 1
+        group_key = uid_to_key[uid]
+        result.append({
+            "id": str(offer["_id"]),
+            "username": offer.get("username", "Anonymous") if not offer.get("hide_name") else "[Anonymous]",
+            "group_key": group_key,
+            "points": offer["points"],
+            "money": offer["cost"],
+            "hide_name": offer.get("hide_name", False),
+            "created_at": offer.get("created_at"),
+            "is_own": uid == current_user["id"],
+        })
+    return result
 
 
 async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends(get_current_user)):
@@ -178,31 +185,39 @@ async def cancel_sell_offer_post(offer_id: str, current_user: dict = Depends(get
 
 # ----- Buy offers -----
 async def get_buy_offers(current_user: dict = Depends(get_current_user)):
+    """List active buy offers. Does not expose user_id; uses opaque group_key for grouping same-buyer offers."""
     global _buy_offers_cache, _buy_offers_ts
     now = time.monotonic()
     if _buy_offers_cache is not None and now <= _buy_offers_ts + _LIST_TTL_SEC:
-        payload = _buy_offers_cache
-        return [{**o, "is_own": o["user_id"] == current_user["id"]} for o in payload]
-    try:
-        offers = await db.trade_buy_offers.find({"status": "active"}).sort("created_at", -1).to_list(length=100)
-        result = []
-        for offer in offers:
-            result.append({
-                "id": str(offer["_id"]),
-                "username": offer.get("username", "Anonymous") if not offer.get("hide_name") else "[Anonymous]",
-                "user_id": offer["user_id"],
-                "points": offer["points"],
-                "cost": offer["offer"],
-                "hide_name": offer.get("hide_name", False),
-                "created_at": offer.get("created_at"),
-                "is_own": offer["user_id"] == current_user["id"]
-            })
-        _buy_offers_cache = result
-        _buy_offers_ts = now
-        return result
-    except Exception as e:
-        print(f"Error fetching buy offers: {e}")
-        return []
+        raw_list = _buy_offers_cache
+    else:
+        try:
+            raw_list = await db.trade_buy_offers.find({"status": "active"}).sort("created_at", -1).to_list(length=100)
+            _buy_offers_cache = raw_list
+            _buy_offers_ts = now
+        except Exception as e:
+            print(f"Error fetching buy offers: {e}")
+            return []
+    uid_to_key = {}
+    next_key = [0]
+    result = []
+    for offer in raw_list:
+        uid = offer.get("user_id")
+        if uid not in uid_to_key:
+            uid_to_key[uid] = f"g{next_key[0]}"
+            next_key[0] += 1
+        group_key = uid_to_key[uid]
+        result.append({
+            "id": str(offer["_id"]),
+            "username": offer.get("username", "Anonymous") if not offer.get("hide_name") else "[Anonymous]",
+            "group_key": group_key,
+            "points": offer["points"],
+            "cost": offer["offer"],
+            "hide_name": offer.get("hide_name", False),
+            "created_at": offer.get("created_at"),
+            "is_own": uid == current_user["id"],
+        })
+    return result
 
 
 async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(get_current_user)):
@@ -320,7 +335,6 @@ async def get_properties_for_sale(current_user: dict = Depends(get_current_user)
                 "location": prop.get("location", "Unknown"),
                 "property_name": prop.get("name", "Property"),
                 "owner": prop.get("owner_username", "Unknown"),
-                "owner_id": str(prop.get("owner_id", "")),
                 "points": prop.get("sale_price", 0),
                 "created_at": prop.get("created_at")
             })

@@ -1552,6 +1552,63 @@ def register(router):
         entries = await cursor.to_list(limit)
         return {"entries": entries, "count": len(entries)}
 
+    @router.get("/admin/crimes/analytics/summary")
+    async def admin_crimes_analytics_summary(
+        days: int = Query(7, ge=1, le=90),
+        limit: int = Query(100, ge=1, le=500),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Per-crime analytics summary for the last N days.
+        Admin or moderator only. Uses compact crime_events documents.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        since = now - timedelta(days=int(days))
+        pipeline = [
+            {"$match": {"at": {"$gte": since}}},
+            {
+                "$group": {
+                    "_id": "$crime_id",
+                    "crime_name": {"$last": "$crime_name"},
+                    "crime_type": {"$last": "$crime_type"},
+                    "attempts": {"$sum": 1},
+                    "successes": {"$sum": {"$cond": ["$success", 1, 0]}},
+                    "total_profit": {"$sum": "$profit"},
+                    "last_at": {"$max": "$at"},
+                }
+            },
+            {"$sort": {"attempts": -1}},
+            {"$limit": int(limit)},
+        ]
+        cursor = db.crime_events.aggregate(pipeline)
+        docs = await cursor.to_list(int(limit))
+        total_attempts = sum(int(d.get("attempts", 0) or 0) for d in docs) or 1
+        out = []
+        for d in docs:
+            attempts = int(d.get("attempts", 0) or 0)
+            successes = int(d.get("successes", 0) or 0)
+            total_profit = int(d.get("total_profit", 0) or 0)
+            success_rate = successes / attempts if attempts > 0 else 0.0
+            avg_profit = total_profit / attempts if attempts > 0 else 0.0
+            usage_share = attempts / total_attempts if total_attempts > 0 else 0.0
+            out.append(
+                {
+                    "crime_id": d.get("_id"),
+                    "crime_name": d.get("crime_name") or d.get("_id"),
+                    "crime_type": d.get("crime_type") or "normal",
+                    "attempts": attempts,
+                    "successes": successes,
+                    "success_rate": success_rate,
+                    "avg_profit": avg_profit,
+                    "total_profit": total_profit,
+                    "usage_share": usage_share,
+                    "last_at": d.get("last_at"),
+                }
+            )
+        return {"generated_at": now.isoformat(), "days": days, "items": out}
+
     @router.post("/admin/gambling-log/clear")
     async def admin_gambling_log_clear(
         days: int = 30,
