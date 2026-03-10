@@ -490,7 +490,7 @@ export default function CrackSafe() {
   }
 
   return (
-    <div className={`space-y-3 max-w-4xl ${styles.pageContent}`}>
+    <div className={`space-y-3 max-w-5xl mx-auto ${styles.pageContent}`}>
       <style>{CS_STYLES}</style>
 
       {/* Page header */}

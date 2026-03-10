@@ -131,6 +131,11 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
         "Joe Adonis", "Tony Accardo", "Paul Ricca", "Jake Guzik", "Machine Gun Jack",
         "Scarface Al", "Big Jim Colosimo", "Diamond Joe", "Nails Morton", "Bugs Moran",
         "Lefty Louie", "Tony the Rat", "Mad Dog Coll", "Pretty Amberg", "Broadway Charlie",
+        "Frankie Yale", "Angelo Genna", "Jack McGurn", "Rocco Fischetti",
+        "Owney Madden", "Dutch Anderson", "Frank Scalise", "Joe Profaci",
+        "Tony Galento", "Joe Aiello", "Tommy Lucchese", "Nick Civella",
+        "Albert Tannenbaum", "Augie Pisano", "Frankie Carbo", "Ciro Terranova",
+        "Nicola Gentile", "Louis Buchalter", "Abe Reles", "Harry Greenberg",
     ]
     base = _camelize(random.choice(robot_names))
     rank = random.choice(RANKS)
