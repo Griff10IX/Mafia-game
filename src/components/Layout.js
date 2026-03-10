@@ -271,6 +271,7 @@ export default function Layout({ children }) {
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [topBarCustomizeOpen, setTopBarCustomizeOpen] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
+  const [findUserQuery, setFindUserQuery] = useState('');
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState([]);
@@ -1490,6 +1491,41 @@ export default function Layout({ children }) {
                     </div>
                   );
                 })}
+              </div>
+
+              {/* Find user — under stats / property */}
+              <div className="pt-1.5">
+                <label className="block text-[8px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em] mb-1" style={{ color: 'var(--noir-muted)' }}>Find user</label>
+                <form
+                  className="flex gap-1"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const q = findUserQuery.trim();
+                    if (!q) return;
+                    if (isMobileViewport) setRightSidebarOpen(false);
+                    navigate(`/profile/${encodeURIComponent(q)}`);
+                    setFindUserQuery('');
+                  }}
+                >
+                  <input
+                    type="text"
+                    value={findUserQuery}
+                    onChange={(e) => setFindUserQuery(e.target.value)}
+                    placeholder="Username"
+                    className="flex-1 min-w-0 px-1.5 py-1 rounded text-[9px] font-heading bg-secondary border border-border placeholder:text-mutedForeground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    style={{ color: 'var(--noir-foreground)' }}
+                    aria-label="Search for user by username"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!findUserQuery.trim()}
+                    className="shrink-0 p-1 rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                    aria-label="Go to profile"
+                    title="Go to profile"
+                  >
+                    <Search size={12} />
+                  </button>
+                </form>
               </div>
 
               <div className="h-px shrink-0" style={dividerStyle} />

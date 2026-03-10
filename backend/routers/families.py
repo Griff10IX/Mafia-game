@@ -149,6 +149,14 @@ class FamilyCrewOCApplyRequest(BaseModel):
     family_id: str
 
 
+class FamilyProfileTextRequest(BaseModel):
+    profile_text: Optional[str] = None
+
+
+class FamilyAvatarRequest(BaseModel):
+    avatar_data: Optional[str] = None  # data URL (data:image/...); empty or null to clear
+
+
 class WarTruceRequest(BaseModel):
     war_id: str
 
@@ -581,6 +589,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "treasury": fam.get("treasury", 0), "crew_oc_cooldown_until": fam.get("crew_oc_cooldown_until"),
             "crew_oc_join_fee": int(fam.get("crew_oc_join_fee") or 0),
             "crew_oc_forum_topic_id": fam.get("crew_oc_forum_topic_id"),
+            "profile_text": (fam.get("profile_text") or "").strip() or None,
             "racket_income_bonus_percent": float((fam.get("racket_income_bonus_percent") or 0) or 0),
             "head_of_state": fam.get("head_of_state"),
             "state_head_income": fam.get("state_head_income") or {},
@@ -647,6 +656,8 @@ async def families_lookup(tag: str = None, current_user: dict = Depends(get_curr
     return {
         "id": fam["id"], "name": fam["name"], "tag": fam["tag"], "treasury": fam.get("treasury", 0),
         "head_of_state": fam.get("head_of_state"),
+        "profile_text": (fam.get("profile_text") or "").strip() or None,
+        "avatar_url": fam.get("avatar_url"),
         "member_count": len(members), "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "crew_oc_join_fee": crew_oc_join_fee, "crew_oc_cooldown_until": crew_oc_cooldown_until,
         "crew_oc_forum_topic_id": crew_oc_forum_topic_id,
@@ -850,6 +861,48 @@ async def families_crew_oc_set_fee(request: FamilyCrewOCSetFeeRequest, current_u
     await db.families.update_one({"id": family_id}, {"$set": {"crew_oc_join_fee": fee}})
     _invalidate_my_cache(current_user["id"])
     return {"message": "Crew OC join fee updated.", "fee": fee}
+
+
+FAMILY_PROFILE_TEXT_MAX_LENGTH = 10000
+
+
+async def families_update_profile_text(request: FamilyProfileTextRequest, current_user: dict = Depends(get_current_user)):
+    """Update your family's profile text (BBCode: [b], [i], [center], [img]url[/img], etc.). Only Boss, Underboss, or Capo."""
+    if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
+        raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can edit family profile")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    raw = (request.profile_text or "").strip() or None
+    if raw is not None and len(raw) > FAMILY_PROFILE_TEXT_MAX_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Profile text cannot exceed {FAMILY_PROFILE_TEXT_MAX_LENGTH} characters")
+    await db.families.update_one({"id": family_id}, {"$set": {"profile_text": raw if raw else ""}})
+    _invalidate_my_cache(current_user["id"])
+    _invalidate_list_cache()
+    return {"message": "Family profile updated.", "profile_text": raw}
+
+
+FAMILY_AVATAR_MAX_BYTES = 250_000  # same as user avatar
+
+
+async def families_update_avatar(request: FamilyAvatarRequest, current_user: dict = Depends(get_current_user)):
+    """Update your family's profile picture (data URL). Only Boss, Underboss, or Capo. Pass null or empty to clear."""
+    if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
+        raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can set family picture")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    avatar = (request.avatar_data or "").strip() or None
+    if avatar is not None:
+        if not avatar.startswith("data:image/"):
+            raise HTTPException(status_code=400, detail="Avatar must be an image data URL (data:image/...)")
+        if len(avatar) > FAMILY_AVATAR_MAX_BYTES:
+            raise HTTPException(status_code=400, detail="Image too large. Use a smaller image.")
+    update = {"$set": {"avatar_url": avatar}} if avatar else {"$unset": {"avatar_url": ""}}
+    await db.families.update_one({"id": family_id}, update)
+    _invalidate_my_cache(current_user["id"])
+    _invalidate_list_cache()
+    return {"message": "Family picture updated.", "avatar_url": avatar}
 
 
 CREW_OC_TOPIC_WINDOW_MINUTES = 10  # Can create Crew OC topic only when OC is available or within this many mins before
@@ -1520,6 +1573,8 @@ def register(router):
     router.add_api_route("/families/deposit", families_deposit, methods=["POST"])
     router.add_api_route("/families/withdraw", families_withdraw, methods=["POST"])
     router.add_api_route("/families/crew-oc/set-fee", families_crew_oc_set_fee, methods=["POST"])
+    router.add_api_route("/families/profile-text", families_update_profile_text, methods=["PATCH"])
+    router.add_api_route("/families/avatar", families_update_avatar, methods=["PATCH"])
     router.add_api_route("/families/crew-oc/advertise", families_crew_oc_advertise, methods=["POST"])
     router.add_api_route("/families/crew-oc/apply", families_crew_oc_apply, methods=["POST"])
     router.add_api_route("/families/crew-oc/applications", families_crew_oc_applications, methods=["GET"])

@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../utils/api';
-import { Building2, Users, TrendingUp, ArrowLeft, Crosshair, Clock, Skull, MapPin } from 'lucide-react';
+import { Building2, Users, TrendingUp, ArrowLeft, Crosshair, Clock, Skull, MapPin, Bold, Italic, AlignCenter, Image } from 'lucide-react';
 import { toast } from 'sonner';
+import { parseForumContent, insertAtCursor } from '../utils/forumContent';
 import styles from '../styles/noir.module.css';
 
 function formatMoney(n) {
@@ -104,6 +105,7 @@ const fpStyles = `
   }
   .fp-member-card { transition:box-shadow 0.3s ease; }
   .fp-member-card:hover { box-shadow:0 6px 24px rgba(0,0,0,.4); }
+  .fp-profile-content .forum-content-media { max-width: 100%; height: auto; border-radius: 8px; margin: 0.25em 0; display: block; }
 `;
 
 // Spine dot marker
@@ -174,6 +176,12 @@ export default function FamilyProfilePage() {
   const [family, setFamily] = useState(null);
   const [loading, setLoading] = useState(true);
   const [crewOCApplyLoading, setCrewOCApplyLoading] = useState(false);
+  const [profileTextEdit, setProfileTextEdit] = useState('');
+  const [savingProfileText, setSavingProfileText] = useState(false);
+  const [savingAvatar, setSavingAvatar] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const profileTextareaRef = useRef(null);
+  const familyAvatarInputRef = useRef(null);
 
   useEffect(() => {
     const id = (familyId && String(familyId).trim()) || '';
@@ -183,6 +191,7 @@ export default function FamilyProfilePage() {
       try {
         const res = await api.get('/families/lookup', { params: { tag: id } });
         setFamily(res.data);
+        setProfileTextEdit((res.data?.profile_text || '').trim() || '');
       } catch (e) {
         toast.error(e.response?.data?.detail ?? e.message ?? 'Family not found');
         setFamily(null);
@@ -237,6 +246,76 @@ export default function FamilyProfilePage() {
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to apply');
     } finally { setCrewOCApplyLoading(false); }
+  };
+
+  const canEditProfile = isMyFamily && ['boss', 'underboss', 'capo'].includes((family.my_role || '').toLowerCase());
+  const insertFamilyMarkup = (before, after = '') => {
+    const ta = profileTextareaRef.current;
+    if (!ta) {
+      setProfileTextEdit((c) => c + before + after);
+      return;
+    }
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const { value, cursor } = insertAtCursor(profileTextEdit, before, after, start, end);
+    setProfileTextEdit(value);
+    setTimeout(() => {
+      ta.focus();
+      ta.setSelectionRange(cursor, cursor);
+    }, 0);
+  };
+  const saveFamilyProfile = async () => {
+    setSavingProfileText(true);
+    try {
+      await api.patch('/families/profile-text', { profile_text: (profileTextEdit || '').trim() || null });
+      toast.success('Family profile updated.');
+      const r = await api.get('/families/lookup', { params: { tag: family.tag } });
+      setFamily(r.data);
+      setProfileTextEdit((r.data?.profile_text || '').trim() || '');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save');
+    } finally { setSavingProfileText(false); }
+  };
+
+  const familyPictureSrc = avatarPreview || family.avatar_url || null;
+  const handleFamilyAvatarChange = (e) => {
+    const file = e.target?.files?.[0];
+    if (!file || !file.type.startsWith('image/')) {
+      toast.error('Please choose an image file');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      if (dataUrl && typeof dataUrl === 'string' && dataUrl.length > 250000) {
+        toast.error('Image too large. Use a smaller image.');
+        return;
+      }
+      setSavingAvatar(true);
+      api.patch('/families/avatar', { avatar_data: dataUrl })
+        .then(() => {
+          toast.success('Family picture updated.');
+          setAvatarPreview(null);
+          return api.get('/families/lookup', { params: { tag: family.tag } });
+        })
+        .then((r) => setFamily(r.data))
+        .catch((err) => toast.error(err.response?.data?.detail || 'Failed to update picture'))
+        .finally(() => { setSavingAvatar(false); e.target.value = ''; });
+    };
+    reader.readAsDataURL(file);
+  };
+  const handleRemoveFamilyPicture = () => {
+    if (!window.confirm('Remove the family picture?')) return;
+    setSavingAvatar(true);
+    api.patch('/families/avatar', { avatar_data: null })
+      .then(() => {
+        toast.success('Family picture removed.');
+        setAvatarPreview(null);
+        return api.get('/families/lookup', { params: { tag: family.tag } });
+      })
+      .then((r) => setFamily(r.data))
+      .catch((err) => toast.error(err.response?.data?.detail || 'Failed to remove'))
+      .finally(() => setSavingAvatar(false));
   };
 
   const sorted      = [...members].sort((a, b) => (getRoleConfig(a.role).rank ?? 5) - (getRoleConfig(b.role).rank ?? 5));
@@ -558,6 +637,98 @@ export default function FamilyProfilePage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* ══════════════════════════════════════════
+          FAMILY PROFILE (picture & text)
+      ══════════════════════════════════════════ */}
+      <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in`} style={{ animationDelay: '0.2s' }}>
+        <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/10">
+          <Building2 size={11} className="text-primary/60" />
+          <span className="text-[10px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em]">Family profile</span>
+        </div>
+        <div className="p-4 space-y-4">
+          {/* Family picture */}
+          <div className="flex flex-col sm:flex-row items-start gap-3">
+            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg overflow-hidden border border-primary/20 bg-zinc-900/80 shrink-0 flex items-center justify-center">
+              {familyPictureSrc ? (
+                <img src={familyPictureSrc} alt={`${family.name} family`} className="w-full h-full object-cover" />
+              ) : (
+                <Building2 size={32} className="text-zinc-600" aria-hidden />
+              )}
+            </div>
+            {canEditProfile && (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={familyAvatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFamilyAvatarChange}
+                />
+                <button
+                  type="button"
+                  onClick={() => familyAvatarInputRef.current?.click()}
+                  disabled={savingAvatar}
+                  className="px-3 py-1.5 rounded-md bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase hover:bg-primary/30 disabled:opacity-50"
+                >
+                  {savingAvatar ? 'Uploading…' : familyPictureSrc ? 'Change picture' : 'Add picture'}
+                </button>
+                {familyPictureSrc && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveFamilyPicture}
+                    disabled={savingAvatar}
+                    className="px-3 py-1.5 rounded-md border border-zinc-600 text-zinc-400 text-[10px] font-heading font-bold uppercase hover:bg-zinc-800 hover:text-zinc-300 disabled:opacity-50"
+                  >
+                    Remove picture
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Display profile text */}
+          {((family.profile_text || '').trim() || '').length > 0 ? (
+            <div
+              className="fp-profile-content font-heading text-sm text-foreground prose prose-invert prose-sm max-w-none prose-p:my-1 prose-img:my-2 prose-div:my-1"
+              dangerouslySetInnerHTML={{ __html: parseForumContent((family.profile_text || '').trim()) }}
+            />
+          ) : !canEditProfile ? (
+            <p className="text-[10px] text-mutedForeground font-heading text-center py-4">No family profile set</p>
+          ) : null}
+
+          {/* Edit (Boss / Underboss / Capo only) */}
+          {canEditProfile && (
+            <>
+              <div className="space-y-2">
+                <label className="block text-[9px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em]">Profile text</label>
+                <textarea
+                  ref={profileTextareaRef}
+                  value={profileTextEdit}
+                  onChange={(e) => setProfileTextEdit(e.target.value)}
+                  placeholder="Add a family picture and text... [center][img]https://example.com/photo.png[/img][/center] [b]bold[/b], [i]italic[/i]"
+                  rows={8}
+                  className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y font-mono leading-relaxed"
+                />
+                <div className="flex flex-wrap items-center gap-1">
+                  <button type="button" onClick={() => insertFamilyMarkup('[b]', '[/b]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Bold"><Bold size={14} /></button>
+                  <button type="button" onClick={() => insertFamilyMarkup('[i]', '[/i]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Italic"><Italic size={14} /></button>
+                  <button type="button" onClick={() => insertFamilyMarkup('[center]', '[/center]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Center"><AlignCenter size={14} /></button>
+                  <button type="button" onClick={() => { const u = window.prompt('Image URL (e.g. family picture):'); if (u && u.trim()) insertFamilyMarkup('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Image"><Image size={14} /></button>
+                </div>
+                <button
+                  type="button"
+                  onClick={saveFamilyProfile}
+                  disabled={savingProfileText}
+                  className="w-full py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingProfileText ? 'Saving…' : 'Save profile text'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ══════════════════════════════════════════
