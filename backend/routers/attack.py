@@ -638,6 +638,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 rewards = hitlist_entry.get("npc_rewards") or {}
                 rp_added = int(rewards.get("rank_points", 0) or 0)
                 inc = {"money": int(rewards.get("cash", 0) or 0), "points": int(rewards.get("points", 0) or 0), "rank_points": rp_added, "bullets": int(rewards.get("bullets", 0) or 0), "total_kills": 1, "hitlist_npc_kills": 1}
+                if target.get("is_bodyguard"):
+                    inc["robot_bodyguard_kills"] = 1
                 respect_drop = maybe_respect_points_drop()
                 if respect_drop:
                     inc["respect_points"] = respect_drop
@@ -758,10 +760,10 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 prop_names.append(p["name"])
         killer_doc = await db.users.find_one({"id": killer_id}, {"_id": 0, "rank_points": 1, "username": 1})
         killer_rp_before = int((killer_doc or {}).get("rank_points") or 0)
-        await db.users.update_one(
-            {"id": killer_id},
-            {"$inc": {"money": cash_loot, "total_kills": 1, "rank_points": rank_points}}
-        )
+        kill_inc = {"money": cash_loot, "total_kills": 1, "rank_points": rank_points}
+        if target.get("is_bodyguard") and target.get("is_npc"):
+            kill_inc["robot_bodyguard_kills"] = 1
+        await db.users.update_one({"id": killer_id}, {"$inc": kill_inc})
         try:
             await maybe_process_rank_up(killer_id, killer_rp_before, rank_points, (killer_doc or {}).get("username", ""))
         except Exception as e:
