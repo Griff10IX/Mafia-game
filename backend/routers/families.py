@@ -978,17 +978,16 @@ async def families_crew_oc_apply(request: FamilyCrewOCApplyRequest, current_user
         await db.families.update_one({"id": family_id}, {"$inc": {"treasury": fee}})
         await db.family_crew_oc_applications.insert_one({
             "id": application_id, "family_id": family_id, "user_id": uid,
-            "username": current_user.get("username") or "?", "status": "accepted", "amount_paid": fee, "created_at": now,
+            "username": current_user.get("username") or "?", "status": "pending", "amount_paid": fee, "created_at": now,
         })
-        await send_notification(uid, "Crew OC – You're in", f"You paid ${fee:,} and joined {fam.get('name')} [{fam.get('tag')}] Crew OC for their next run.", "reward", category="crew_oc")
-        await send_notification_to_family(family_id, "Crew OC – New crew member", f"{current_user.get('username') or '?'} paid ${fee:,} and joined your Crew OC for the next run.", "reward", category="oc_invites")
+        await send_notification_to_family(family_id, "Crew OC application", f'"{current_user.get("username") or "?"}" applied to your Crew OC (paid ${fee:,}). Accept or reject in Families → Crew OC.', "system", category="oc_invites")
         _invalidate_my_cache(current_user["id"])
-        return {"message": "You paid and joined the crew. You'll get rewards when they commit.", "status": "accepted", "amount_paid": fee}
+        return {"message": "Application sent. The family will accept or reject.", "status": "pending", "amount_paid": fee}
     await db.family_crew_oc_applications.insert_one({
         "id": application_id, "family_id": family_id, "user_id": uid,
         "username": current_user.get("username") or "?", "status": "pending", "amount_paid": 0, "created_at": now,
     })
-    await send_notification_to_family(family_id, "Crew OC – New application", f"{current_user.get('username') or '?'} applied to join your Crew OC. Accept or reject in Families → Crew OC.", "system", category="oc_invites")
+    await send_notification_to_family(family_id, "Crew OC application", f'"{current_user.get("username") or "?"}" applied to your Crew OC. Accept or reject in Families → Crew OC.', "system", category="oc_invites")
     _invalidate_my_cache(current_user["id"])
     return {"message": "Application sent. The family will accept or reject.", "status": "pending"}
 
@@ -1034,8 +1033,37 @@ async def families_crew_oc_reject(application_id: str, current_user: dict = Depe
     if app.get("status") != "pending":
         raise HTTPException(status_code=400, detail="Application already processed")
     await db.family_crew_oc_applications.update_one({"id": application_id}, {"$set": {"status": "rejected"}})
+    amount_paid = int(app.get("amount_paid") or 0)
+    if amount_paid > 0:
+        await db.users.update_one({"id": app["user_id"]}, {"$inc": {"money": amount_paid}})
+        await db.families.update_one({"id": family_id}, {"$inc": {"treasury": -amount_paid}})
     _invalidate_my_cache(current_user["id"])
-    return {"message": "Application rejected."}
+    _invalidate_my_cache(app["user_id"])
+    return {"message": "Application rejected." + (f" ${amount_paid:,} refunded." if amount_paid > 0 else "")}
+
+
+async def families_crew_oc_kick(application_id: str, current_user: dict = Depends(get_current_user)):
+    if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    app = await db.family_crew_oc_applications.find_one({"id": application_id, "family_id": family_id}, {"_id": 0})
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if app.get("status") != "accepted":
+        raise HTTPException(status_code=400, detail="Can only kick accepted crew members")
+    await db.family_crew_oc_applications.update_one({"id": application_id}, {"$set": {"status": "kicked"}})
+    amount_paid = int(app.get("amount_paid") or 0)
+    if amount_paid > 0:
+        await db.users.update_one({"id": app["user_id"]}, {"$inc": {"money": amount_paid}})
+        await db.families.update_one({"id": family_id}, {"$inc": {"treasury": -amount_paid}})
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "tag": 1})
+    fam_name = (fam or {}).get("name") or (fam or {}).get("tag") or "the family"
+    await send_notification(app["user_id"], "Crew OC – Kicked", f"You were removed from {fam_name} Crew OC." + (f" ${amount_paid:,} has been refunded." if amount_paid > 0 else ""), "system", category="crew_oc")
+    _invalidate_my_cache(current_user["id"])
+    _invalidate_my_cache(app["user_id"])
+    return {"message": "Crew member kicked." + (f" ${amount_paid:,} refunded." if amount_paid > 0 else "")}
 
 
 async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)):
@@ -1580,6 +1608,7 @@ def register(router):
     router.add_api_route("/families/crew-oc/applications", families_crew_oc_applications, methods=["GET"])
     router.add_api_route("/families/crew-oc/applications/{application_id}/accept", families_crew_oc_accept, methods=["POST"])
     router.add_api_route("/families/crew-oc/applications/{application_id}/reject", families_crew_oc_reject, methods=["POST"])
+    router.add_api_route("/families/crew-oc/applications/{application_id}/kick", families_crew_oc_kick, methods=["POST"])
     router.add_api_route("/families/crew-oc/commit", families_crew_oc_commit, methods=["POST"])
     router.add_api_route("/families/rackets/{racket_id}/collect", families_racket_collect, methods=["POST"])
     router.add_api_route("/families/rackets/{racket_id}/unlock", families_racket_unlock, methods=["POST"])

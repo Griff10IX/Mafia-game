@@ -1178,7 +1178,7 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
 const CrewOCTab = ({
   family, myRole, crewOCCooldownUntil, committerHasTimer, crewOCJoinFee, crewOCForumTopicId,
   crewOCApplications, canManageCrewOC, onCommit, committing, feeInput, setFeeInput,
-  onSetFee, setFeeLoading, onAdvertise, advertiseLoading, onAcceptApp, onRejectApp,
+  onSetFee, setFeeLoading, onAdvertise, advertiseLoading, onAcceptApp, onRejectApp, onKickApp,
 }) => {
   const canCommit = ['boss', 'underboss', 'capo'].includes(myRole?.toLowerCase());
   const cooldownHours = committerHasTimer ? 6 : 8;
@@ -1244,18 +1244,27 @@ const CrewOCTab = ({
         <p className="text-[10px] text-zinc-500 font-heading">Only Boss, Underboss, or Capo can commit.</p>
       )}
 
-      {/* Applications */}
-      {(pending.length > 0 || accepted.length > 0) && (
+      {/* Applications — always visible for Boss/Underboss/Capo so they can accept/reject; also when there are any */}
+      {(canManageCrewOC || pending.length > 0 || accepted.length > 0) && (
         <div className="space-y-2 pt-2 border-t border-zinc-700/30">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1">
             <UserPlus size={12} /> Applications
           </span>
           {accepted.length > 0 && (
-            <div className="text-[10px] text-zinc-400 font-heading">
-              In crew: {accepted.map((a, i) => (
-              <span key={a.id}>{i > 0 && ', '}<Link to={`/profile/${encodeURIComponent(a.username)}`} className="text-primary hover:underline">{a.username}</Link></span>
-            ))}
+            <div className="space-y-1.5">
+              <span className="text-[10px] text-zinc-400 font-heading block">In crew (kick from here):</span>
+              {accepted.map((a) => (
+                <div key={a.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
+                  <Link to={`/profile/${encodeURIComponent(a.username)}`} className="text-xs font-heading text-primary hover:underline">{a.username}</Link>
+                  {canManageCrewOC && onKickApp && (
+                    <button type="button" onClick={() => onKickApp(a.id)} className="shrink-0 text-[10px] font-bold text-amber-400 hover:text-amber-300 px-2 py-1 rounded border border-amber-500/40 hover:bg-amber-500/10 transition-all">Kick</button>
+                  )}
+                </div>
+              ))}
             </div>
+          )}
+          {pending.length === 0 && canManageCrewOC && (
+            <p className="text-[10px] text-zinc-500 font-heading">No pending applications.</p>
           )}
           {pending.map((a) => (
             <div key={a.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
@@ -1540,6 +1549,10 @@ export default function FamilyPage() {
     try { await api.post(`/families/crew-oc/applications/${applicationId}/reject`); toast.success('Application rejected.'); fetchData(); }
     catch (e) { toast.error(apiDetail(e)); }
   };
+  const handleCrewOCKick = async (applicationId) => {
+    try { await api.post(`/families/crew-oc/applications/${applicationId}/kick`); toast.success('Crew member kicked.'); fetchData(); }
+    catch (e) { toast.error(apiDetail(e)); }
+  };
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 1000); return () => clearInterval(id); }, []);
@@ -1704,7 +1717,7 @@ export default function FamilyPage() {
                   canManageCrewOC={canManageCrewOC} onCommit={handleCrewOCCommit} committing={crewOCCommitting}
                   feeInput={crewOCFeeInput} setFeeInput={setCrewOCFeeInput} onSetFee={handleCrewOCSetFee}
                   setFeeLoading={crewOCSetFeeLoading} onAdvertise={handleCrewOCAdvertise} advertiseLoading={crewOCAdvertiseLoading}
-                  onAcceptApp={handleCrewOCAccept} onRejectApp={handleCrewOCReject}
+                  onAcceptApp={handleCrewOCAccept} onRejectApp={handleCrewOCReject} onKickApp={handleCrewOCKick}
                 />
               )}
               {activeTab === 'raid' && (
