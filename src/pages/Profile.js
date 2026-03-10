@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -214,6 +214,7 @@ const ProfileInfoCard = ({
     },
     { 
       label: 'Status', 
+      icon: Activity,
       isStatus: true, 
       isDead: profile.is_dead, 
       isOnline: profile.online 
@@ -228,6 +229,7 @@ const ProfileInfoCard = ({
     },
     { 
       label: 'Jailbusts', 
+      icon: GalleryVerticalEnd,
       value: String(profile.jail_busts ?? 0), 
       valueClass: 'text-foreground font-heading font-bold' 
     },

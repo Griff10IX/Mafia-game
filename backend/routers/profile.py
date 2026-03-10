@@ -300,7 +300,6 @@ def register(router):
         }
         if not is_own_profile:
             for key in (
-                "prestige_level", "prestige_name",
                 "created_at", "last_seen",
                 "messages_sent", "messages_received", "top_cars", "show_cars_on_profile", "youtube_url",
                 "hide_kills_on_profile", "hide_jailbusts_on_profile",
