@@ -266,7 +266,6 @@ export default function Admin() {
       setIsAdmin(admin);
       setIsModerator(mod);
       if (admin) {
-        fetchNPCs();
         fetchMeta();
         fetchEventsStatus();
         fetchBoozeRotation();
@@ -1260,16 +1259,6 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
-  // Security handlers
-  const handleTestTelegram = async () => {
-    setSecurityLoading(true);
-    try {
-      const response = await api.post('/admin/security/test-telegram');
-      toast.success(response.data.message || 'Test alert sent to Telegram!');
-    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to send test alert'); }
-    finally { setSecurityLoading(false); }
-  };
-
   const handleFetchSecuritySummary = async () => {
     setSecurityLoading(true);
     try {
@@ -1844,41 +1833,6 @@ export default function Admin() {
           Game World
         </h2>
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={Bot}
-            title="NPC Management"
-          badge={
-            <span className="text-[10px] font-heading">
-              <span className={npcData.npcs_enabled ? 'text-emerald-400' : 'text-red-400'}>{npcData.npcs_enabled ? 'On' : 'Off'}</span>
-              <span className="text-mutedForeground"> · {npcData.npc_count} active</span>
-            </span>
-          }
-          isCollapsed={collapsed.npcs}
-          onToggle={() => toggleSection('npcs')}
-        />
-        {!collapsed.npcs && (
-          <div className="p-3 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <Input type="number" min="1" max="50" value={npcCount} onChange={(e) => setNpcCount(parseInt(e.target.value) || 10)} placeholder="Count" />
-              <BtnPrimary onClick={() => handleToggleNPCs(true)}>Enable NPCs</BtnPrimary>
-              <BtnDanger onClick={() => handleToggleNPCs(false)}>Disable</BtnDanger>
-            </div>
-            {npcData.npcs.length > 0 && (
-              <div className="max-h-32 overflow-y-auto space-y-0.5">
-                {npcData.npcs.slice(0, 10).map((npc) => (
-                  <div key={npc.id} className="flex items-center justify-between px-2 py-1 rounded bg-zinc-800/30 text-[10px] font-heading">
-                    <span className="text-foreground font-bold truncate">{npc.username}</span>
-                    <span className="text-mutedForeground">{npc.rank_name} · ${npc.money?.toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-        </div>
-
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Zap}
@@ -2132,20 +2086,6 @@ export default function Admin() {
           <div className="p-2 space-y-1">
             <ActionRow icon={Building2} label="Seed Families" description="Create 3 families with 5 users each">
               <BtnPrimary onClick={handleSeedFamilies}>Seed</BtnPrimary>
-            </ActionRow>
-            <ActionRow icon={Users} label="Create 30 test users" description="Real users, random ranks, crews, own casinos/properties. Password: test1234">
-              <BtnPrimary onClick={handleCreateTestUsers}>Create</BtnPrimary>
-            </ActionRow>
-            <ActionRow icon={Bot} label="Test users: auto-rank" description="Enable or disable auto-rank for all test users (test_* / @test.mafia)">
-              <button type="button" onClick={() => handleTestUsersAutoRank(true)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30">Enable</button>
-              <button type="button" onClick={() => handleTestUsersAutoRank(false)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600">Disable</button>
-            </ActionRow>
-            <ActionRow icon={Bot} label="Seeded users: auto-rank" description="Enable or disable auto-rank for Seed Families (Corleone, Baranco, Stracci)">
-              <button type="button" onClick={() => handleSeededUsersAutoRank(true)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30">Enable</button>
-              <button type="button" onClick={() => handleSeededUsersAutoRank(false)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600">Disable</button>
-            </ActionRow>
-            <ActionRow icon={UserCog} label="Force Online" description="Bring offline users online for 1h">
-              <BtnPrimary onClick={handleForceOnline}>Force</BtnPrimary>
             </ActionRow>
             <ActionRow icon={Gift} label="Give All Points" description="Give points to all alive accounts">
               <FormattedNumberInput value={String(giveAllPoints)} onChange={(raw) => setGiveAllPoints(parseInt(raw, 10) || 1)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
@@ -2942,12 +2882,6 @@ export default function Admin() {
         />
         {!collapsed.security && (
           <div className="p-2 space-y-1">
-            <ActionRow icon={Shield} label="Test Telegram" description="Send test alert to Telegram">
-              <BtnPrimary onClick={handleTestTelegram} disabled={securityLoading}>
-                {securityLoading ? '...' : 'Test'}
-              </BtnPrimary>
-            </ActionRow>
-
             <ActionRow icon={Shield} label="View Security Summary" description="Load recent security flags">
               <BtnPrimary onClick={handleFetchSecuritySummary} disabled={securityLoading}>
                 {securityLoading ? '...' : 'Load'}
@@ -3149,9 +3083,6 @@ export default function Admin() {
               <div className="text-[10px] font-heading text-primary uppercase tracking-wider mb-2">IP Bans</div>
               <p className="text-[10px] text-mutedForeground mb-2">Banned IPs cannot access the server (login, API, etc.).</p>
               <div className="flex flex-wrap items-center gap-2 mb-2">
-                <BtnSecondary onClick={handleTestIpBan} disabled={ipBansLoading} title="Ban your IP for 30s then auto-unban">
-                  Test IP ban (30s)
-                </BtnSecondary>
                 <input
                   type="text"
                   value={ipBanIp}
@@ -3255,82 +3186,188 @@ export default function Admin() {
 
         {/* Betting Log — all casino and sports bets */}
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <SectionHeader
-          icon={Dice5}
-          title="Betting Log"
-          badge={gamblingLog.entries?.length != null && <span className="text-[10px] font-heading text-mutedForeground">{gamblingLog.entries.length} entries</span>}
-          isCollapsed={collapsed.gamblingLog}
-          onToggle={() => toggleSection('gamblingLog')}
-        />
-        {!collapsed.gamblingLog && (
-          <div className="p-3 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="text"
-                value={gamblingLogUsername}
-                onChange={(e) => setGamblingLogUsername(e.target.value)}
-                placeholder="Filter by username"
-                className="min-w-[100px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
-              />
-              <select
-                value={gamblingLogGameType}
-                onChange={(e) => setGamblingLogGameType(e.target.value)}
-                className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
-              >
-                <option value="">All games</option>
-                <option value="dice">Dice</option>
-                <option value="roulette">Roulette</option>
-                <option value="blackjack">Blackjack</option>
-                <option value="slots">Slots</option>
-                <option value="videopoker">Video Poker</option>
-                <option value="horseracing">Horse Racing</option>
-                <option value="sports_bet">Sports</option>
-                <option value="mdg">MDG (Pot)</option>
-              </select>
-              <BtnPrimary onClick={fetchGamblingLog} disabled={gamblingLogLoading}>
-                {gamblingLogLoading ? '...' : 'Load'}
-              </BtnPrimary>
-            </div>
-            <div className="max-h-64 overflow-y-auto rounded border border-zinc-700/50">
-              <table className="w-full text-[10px] font-heading">
-                <thead className="bg-zinc-800/50 sticky top-0">
-                  <tr>
-                    <th className="text-left p-2 text-mutedForeground uppercase">Time</th>
-                    <th className="text-left p-2 text-mutedForeground uppercase">User</th>
-                    <th className="text-left p-2 text-mutedForeground uppercase">Game</th>
-                    <th className="text-left p-2 text-mutedForeground uppercase">Details</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(gamblingLog.entries || []).map((e) => (
-                    <tr key={e.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
-                      <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</td>
-                      <td className="p-2 text-primary font-bold">{e.username || '—'}</td>
-                      <td className="p-2">{e.game_type || '—'}</td>
-                      <td className="p-2 text-mutedForeground max-w-[220px] truncate" title={JSON.stringify(e.details || {})}>{e.details ? JSON.stringify(e.details) : '—'}</td>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Dice5}
+            title="Betting Log"
+            badge={gamblingLog.entries?.length != null && <span className="text-[10px] font-heading text-mutedForeground">{gamblingLog.entries.length} entries</span>}
+            isCollapsed={collapsed.gamblingLog}
+            onToggle={() => toggleSection('gamblingLog')}
+          />
+          {!collapsed.gamblingLog && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={gamblingLogUsername}
+                  onChange={(e) => setGamblingLogUsername(e.target.value)}
+                  placeholder="Filter by username"
+                  className="min-w-[100px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <select
+                  value={gamblingLogGameType}
+                  onChange={(e) => setGamblingLogGameType(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="">All games</option>
+                  <option value="dice">Dice</option>
+                  <option value="roulette">Roulette</option>
+                  <option value="blackjack">Blackjack</option>
+                  <option value="slots">Slots</option>
+                  <option value="videopoker">Video Poker</option>
+                  <option value="horseracing">Horse Racing</option>
+                  <option value="sports_bet">Sports</option>
+                  <option value="mdg">MDG (Pot)</option>
+                </select>
+                <BtnPrimary onClick={fetchGamblingLog} disabled={gamblingLogLoading}>
+                  {gamblingLogLoading ? '...' : 'Load'}
+                </BtnPrimary>
+              </div>
+              <div className="max-h-64 overflow-y-auto rounded border border-zinc-700/50">
+                <table className="w-full text-[10px] font-heading">
+                  <thead className="bg-zinc-800/50 sticky top-0">
+                    <tr>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Time</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">User</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Game</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Details</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(gamblingLog.entries || []).map((e) => (
+                      <tr key={e.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
+                        <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</td>
+                        <td className="p-2 text-primary font-bold">{e.username || '—'}</td>
+                        <td className="p-2">{e.game_type || '—'}</td>
+                        <td className="p-2 text-mutedForeground max-w-[220px] truncate" title={JSON.stringify(e.details || {})}>{e.details ? JSON.stringify(e.details) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-zinc-700/30">
+                <span className="text-[10px] text-mutedForeground">Clear logs older than</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={clearGamblingDays}
+                  onChange={(e) => setClearGamblingDays(parseInt(e.target.value) || 30)}
+                  className="w-14 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
+                />
+                <span className="text-[10px] text-mutedForeground">days</span>
+                <BtnDanger onClick={handleClearGamblingLog} disabled={clearGamblingLoading}>
+                  {clearGamblingLoading ? '...' : 'Clear old'}
+                </BtnDanger>
+              </div>
+              {(gamblingLog.entries || []).length === 0 && !gamblingLogLoading && <p className="text-xs text-mutedForeground">Load to see all casino activity (dice, roulette, blackjack, slots, video poker, horseracing, sports, MDG).</p>}
             </div>
-            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-zinc-700/30">
-              <span className="text-[10px] text-mutedForeground">Clear logs older than</span>
-              <input
-                type="number"
-                min={1}
-                value={clearGamblingDays}
-                onChange={(e) => setClearGamblingDays(parseInt(e.target.value) || 30)}
-                className="w-14 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
-              />
-              <span className="text-[10px] text-mutedForeground">days</span>
-              <BtnDanger onClick={handleClearGamblingLog} disabled={clearGamblingLoading}>
-                {clearGamblingLoading ? '...' : 'Clear old'}
-              </BtnDanger>
+          )}
+        </div>
+
+        {/* Crime Analytics */}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Crime Analytics"
+            badge={
+              crimeAnalytics?.items
+                ? <span className="text-[10px] font-heading text-mutedForeground">{crimeAnalytics.items.length} crimes</span>
+                : null
+            }
+            isCollapsed={collapsed.crimeAnalytics}
+            onToggle={() => toggleSection('crimeAnalytics')}
+          />
+          {!collapsed.crimeAnalytics && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-heading text-mutedForeground uppercase tracking-widest">Window</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setCrimeAnalyticsDays(1)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      crimeAnalyticsDays === 1 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    1d
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCrimeAnalyticsDays(7)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      crimeAnalyticsDays === 7 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    7d
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCrimeAnalyticsDays(30)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      crimeAnalyticsDays === 30 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    30d
+                  </button>
+                </div>
+                <BtnPrimary onClick={handleFetchCrimeAnalytics} disabled={crimeAnalyticsLoading}>
+                  {crimeAnalyticsLoading ? 'Loading…' : 'Load crime stats'}
+                </BtnPrimary>
+              </div>
+              {crimeAnalytics && (
+                <p className="text-[10px] text-mutedForeground font-heading">
+                  Generated at {crimeAnalytics.generated_at ? new Date(crimeAnalytics.generated_at).toLocaleString() : '—'} for last {crimeAnalytics.days} day(s).
+                </p>
+              )}
+              <div className="overflow-x-auto max-h-72">
+                {!crimeAnalytics || !crimeAnalytics.items || crimeAnalytics.items.length === 0 ? (
+                  <p className="text-[10px] text-mutedForeground font-heading">No crime attempts in this window.</p>
+                ) : (
+                  <table className="w-full text-left border-collapse text-[10px] font-heading">
+                    <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                      <tr className="border-b border-zinc-700/50">
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Crime</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Type</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Attempts</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Successes</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Success %</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Avg profit</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Total profit</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Usage %</th>
+                        <th className="py-1.5 font-bold text-mutedForeground uppercase">Last used</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {crimeAnalytics.items.map((item) => (
+                        <tr key={item.crime_id} className="border-b border-zinc-700/30">
+                          <td className="py-1.5 pr-2 text-foreground font-medium">{item.crime_name || item.crime_id}</td>
+                          <td className="py-1.5 pr-2 text-mutedForeground">{item.crime_type || 'normal'}</td>
+                          <td className="py-1.5 pr-2">{item.attempts?.toLocaleString?.() ?? item.attempts}</td>
+                          <td className="py-1.5 pr-2">{item.successes?.toLocaleString?.() ?? item.successes}</td>
+                          <td className="py-1.5 pr-2">
+                            {item.success_rate != null ? `${(item.success_rate * 100).toFixed(1)}%` : '—'}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            {item.avg_profit != null ? `$${Math.round(item.avg_profit).toLocaleString()}` : '—'}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            {item.total_profit != null ? `$${Number(item.total_profit).toLocaleString()}` : '—'}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            {item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}
+                          </td>
+                          <td className="py-1.5">
+                            {item.last_at ? new Date(item.last_at).toLocaleString() : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
-            {(gamblingLog.entries || []).length === 0 && !gamblingLogLoading && <p className="text-xs text-mutedForeground">Load to see all casino activity (dice, roulette, blackjack, slots, video poker, horseracing, sports, MDG).</p>}
-          </div>
-        )}
+          )}
         </div>
       </section>
 
