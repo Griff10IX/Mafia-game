@@ -314,13 +314,17 @@ def register(router):
         }
         if not is_own_profile:
             for key in (
-                "created_at", "last_seen",
-                "messages_sent", "messages_received", "top_cars", "show_cars_on_profile", "youtube_url",
-                "hide_kills_on_profile", "hide_jailbusts_on_profile",
+                "created_at",
+                "last_seen",
+                "top_cars",
+                "show_cars_on_profile",
+                "youtube_url",
+                "hide_kills_on_profile",
+                "hide_jailbusts_on_profile",
             ):
                 if key in ("top_cars",):
                     out[key] = []
-                elif key in ("prestige_level", "messages_sent", "messages_received"):
+                elif key in ("prestige_level",):
                     out[key] = 0
                 elif key == "prestige_name":
                     out[key] = ""
