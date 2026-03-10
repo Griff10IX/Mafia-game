@@ -1607,6 +1607,26 @@ def register(router):
         groups.sort(key=lambda g: -g["count"])
         return {"groups": groups[:100], "total_groups": len(groups)}
 
+    @router.get("/admin/cheat-detection/login-attempts")
+    async def admin_cheat_login_attempts(
+        limit: int = Query(200, ge=1, le=1000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Suspicious login attempts: wrong password or unknown account
+        from an IP that already has at least one other alive account.
+        Admin or moderator.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        cursor = (
+            db.suspicious_logins.find({}, {"_id": 0})
+            .sort("at", -1)
+            .limit(limit)
+        )
+        events = await cursor.to_list(limit)
+        return {"events": events}
+
     @router.get("/admin/cheat-detection/duplicate-suspects")
     async def admin_cheat_duplicate_suspects(
         username: str = Query(None, description="Optional: filter by username contains"),

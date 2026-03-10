@@ -375,10 +375,36 @@ def register(router):
         if not (user_data.password or "").strip():
             raise HTTPException(status_code=422, detail="Password is required.")
 
+        ip = _client_ip(request)
+
         # Find user by email or username (case-insensitive)
         pattern = re.compile("^" + re.escape(login_input) + "$", re.IGNORECASE)
         user = await db.users.find_one({"$or": [{"email": pattern}, {"username": pattern}]}, {"_id": 0})
         if not user:
+            # Unknown account: if this IP already has an alive account, record a suspicious attempt
+            if ip:
+                try:
+                    alive_same_ip = await db.users.count_documents(
+                        {
+                            "is_dead": {"$ne": True},
+                            "$or": [
+                                {"registration_ip": ip},
+                                {"login_ips": ip},
+                            ],
+                        }
+                    )
+                    if alive_same_ip >= 1:
+                        await db.suspicious_logins.insert_one(
+                            {
+                                "at": now.isoformat(),
+                                "ip": ip,
+                                "login_input": login_input,
+                                "reason": "no_account_same_ip_alive",
+                                "same_ip_alive_count": alive_same_ip,
+                            }
+                        )
+                except Exception:
+                    logging.exception("Record suspicious login (no account) failed")
             raise HTTPException(
                 status_code=401,
                 detail="No account found with that email or username. Please register or check your input.",
@@ -416,6 +442,34 @@ def register(router):
                 {"$set": {"email": email_clean, "failed_count": count, "locked_until": locked_until.isoformat() if locked_until else None, "updated_at": now.isoformat()}},
                 upsert=True,
             )
+            # Wrong password: if this IP has another alive account (not this user), record as suspicious
+            if ip:
+                try:
+                    alive_same_ip_other = await db.users.count_documents(
+                        {
+                            "is_dead": {"$ne": True},
+                            "id": {"$ne": user["id"]},
+                            "$or": [
+                                {"registration_ip": ip},
+                                {"login_ips": ip},
+                            ],
+                        }
+                    )
+                    if alive_same_ip_other >= 1:
+                        await db.suspicious_logins.insert_one(
+                            {
+                                "at": now.isoformat(),
+                                "ip": ip,
+                                "login_input": login_input,
+                                "user_id": user["id"],
+                                "username": user.get("username"),
+                                "email": email_clean,
+                                "reason": "wrong_password_same_ip_other_alive",
+                                "same_ip_other_alive_count": alive_same_ip_other,
+                            }
+                        )
+                except Exception:
+                    logging.exception("Record suspicious login (wrong password) failed")
             raise HTTPException(
                 status_code=401,
                 detail="Wrong password. Use Forgot password to reset it. After 3 failed attempts this account is locked for 5 minutes.",
@@ -429,7 +483,6 @@ def register(router):
         await db.login_lockouts.delete_one({"email": email_clean})
         # Allow login even when dead so the frontend can render the death screen.
         # Gameplay endpoints remain blocked by get_current_user for dead accounts.
-        ip = _client_ip(request)
         ua = (request.headers.get("User-Agent") or "").strip()[:500]
         device_type = _device_type_from_user_agent(request.headers.get("User-Agent") or "")
         set_fields = {}

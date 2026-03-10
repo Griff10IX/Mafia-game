@@ -4,7 +4,7 @@ import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, Message
 import api from '../utils/api';
 import { toast } from 'sonner';
 import GifPicker from '../components/GifPicker';
-import { insertAtCursor } from '../utils/forumContent';
+import { parseForumContent, insertAtCursor } from '../utils/forumContent';
 import styles from '../styles/noir.module.css';
 
 const FORUM_STYLES = `
@@ -263,6 +263,7 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
   const showDesignerSubmit = designerCompId && isMyTopic;
   const alreadySubmitted = showDesignerSubmit && (myEntryTopicIds || []).includes(topic.id);
   const isSubmitting = submittingTopicId === topic.id;
+  const titleHtml = parseForumContent(topic.title || '');
 
   return (
     <div 
@@ -275,9 +276,12 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
           <Link to={`/forum/topic/${topic.id}`} className="flex items-center gap-1.5 min-w-0 flex-1 truncate">
             {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
             {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
-            <span className={`truncate font-heading ${topic.is_important || topic.is_sticky ? 'text-amber-400' : 'text-foreground'}`}>
-              {topic.is_important ? 'IMPORTANT: ' : ''}{topic.is_sticky && !topic.is_important ? 'STICKY: ' : ''}{topic.title}
-            </span>
+            <span
+              className={`truncate font-heading ${topic.is_important || topic.is_sticky ? 'text-amber-400' : 'text-foreground'}`}
+              dangerouslySetInnerHTML={{
+                __html: `${topic.is_important ? 'IMPORTANT: ' : ''}${topic.is_sticky && !topic.is_important ? 'STICKY: ' : ''}${titleHtml}`,
+              }}
+            />
             {topic.is_locked && <Lock size={10} className="text-mutedForeground shrink-0" />}
           </Link>
           {showDesignerSubmit && (
@@ -345,6 +349,7 @@ const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating
   const showDesignerSubmit = designerCompId && isMyTopic;
   const alreadySubmitted = showDesignerSubmit && (myEntryTopicIds || []).includes(topic.id);
   const isSubmitting = submittingTopicId === topic.id;
+  const titleHtml = parseForumContent(topic.title || '');
 
   return (
   <Link to={`/forum/topic/${topic.id}`} className="sm:hidden block px-3 py-2 f-row transition-colors active:bg-zinc-800/50">
@@ -353,9 +358,10 @@ const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating
         <div className="flex items-center gap-1.5">
           {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
           {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
-          <span className={`text-xs font-heading truncate ${topic.is_important || topic.is_sticky ? 'text-amber-400 font-bold' : 'text-foreground'}`}>
-            {topic.title}
-          </span>
+          <span
+            className={`text-xs font-heading truncate ${topic.is_important || topic.is_sticky ? 'text-amber-400 font-bold' : 'text-foreground'}`}
+            dangerouslySetInnerHTML={{ __html: titleHtml }}
+          />
           {topic.is_locked && <Lock size={10} className="text-mutedForeground shrink-0" />}
         </div>
         <div className="flex items-center gap-3 mt-1 text-[10px] text-mutedForeground">

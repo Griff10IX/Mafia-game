@@ -101,6 +101,16 @@ def register(router):
             _list_cache[user_id] = {"ts": now_ts, "data": out}
         return out
 
+    @router.get("/notifications/sent")
+    async def get_sent_messages(current_user: dict = Depends(get_current_user)):
+        """Return sent direct messages for the current user."""
+        user_id = current_user["id"]
+        sent = await db.notifications.find(
+            {"user_id": user_id, "notification_type": "user_message_sent"},
+            {"_id": 0}
+        ).sort("created_at", -1).to_list(50)
+        return {"sent_messages": sent}
+
     @router.post("/notifications/{notification_id}/read")
     async def mark_notification_read(notification_id: str, current_user: dict = Depends(get_current_user)):
         _invalidate_list_cache(current_user["id"])

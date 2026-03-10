@@ -367,9 +367,10 @@ export default function ForumTopic() {
             <div className="flex items-center gap-2">
               {topic.is_important && <AlertCircle size={14} className="text-amber-400" />}
               {topic.is_sticky && !topic.is_important && <Pin size={14} className="text-amber-400" />}
-              <h1 className="text-lg sm:text-xl font-heading font-bold text-primary">
-                {topic.title}
-              </h1>
+              <h1
+                className="text-lg sm:text-xl font-heading font-bold text-primary prof-banner-content"
+                dangerouslySetInnerHTML={{ __html: parseForumContent(topic.title || '') }}
+              />
               {topic.is_locked && <Lock size={14} className="text-red-400" />}
             </div>
             <div className="flex items-center gap-3 mt-1 text-[10px] text-mutedForeground">

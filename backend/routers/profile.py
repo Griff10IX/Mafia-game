@@ -211,6 +211,7 @@ def register(router):
             property_,
             messages_received,
             top_cars,
+            messages_sent_count,
         ) = await asyncio.gather(
             _family_name_and_tag(),
             _rank_for_field("total_kills", int(user.get("total_kills") or 0)),
@@ -227,6 +228,7 @@ def register(router):
             _casinos_for_type("videopoker", db.videopoker_ownership),
             _user_owns_any_property(user_id),
             db.notifications.count_documents({"user_id": user_id, "notification_type": "user_message"}),
+            db.notifications.count_documents({"user_id": user_id, "notification_type": "user_message_sent"}),
             _top_cars_for_profile(user_id, 5, user.get("profile_show_cars", False), user.get("profile_car_ids") or ([user.get("profile_featured_car_id")] if user.get("profile_featured_car_id") else [])),
         )
 
@@ -244,7 +246,7 @@ def register(router):
 
         if property_ and user_id != current_user.get("id") and property_.get("type") == "airport":
             property_ = {k: v for k, v in property_.items() if k != "total_earnings"}
-        messages_sent = 0
+        messages_sent = int(messages_sent_count or 0)
 
         # Own profile only if the requested profile is the current user (by id and by URL username)
         requested_username_norm = (username or "").strip().lower()

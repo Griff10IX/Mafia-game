@@ -105,7 +105,7 @@ export default function InboxChat() {
   }
 
   return (
-    <div className={`${styles.pageContent} flex flex-col h-[calc(100vh-8rem)] max-h-[800px] min-h-[400px]`}>
+    <div className={`${styles.pageContent} flex flex-col h-[calc(100vh-10rem)] max-h-[700px] min-h-[320px]`}>
       {/* Header */}
       <div className="flex items-center gap-3 py-3 border-b border-primary/20 shrink-0">
         <button

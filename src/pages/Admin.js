@@ -208,6 +208,7 @@ export default function Admin() {
 
   // Cheat detection
   const [cheatSameIp, setCheatSameIp] = useState(null);
+  const [cheatLoginEvents, setCheatLoginEvents] = useState(null);
   const [cheatDuplicates, setCheatDuplicates] = useState(null);
   const [cheatLoading, setCheatLoading] = useState(false);
   const [duplicateSuspectsUsername, setDuplicateSuspectsUsername] = useState('');
@@ -1016,6 +1017,21 @@ export default function Admin() {
       const res = await api.get('/admin/cheat-detection/same-ip');
       setCheatSameIp(res.data);
       toast.success(res.data?.total_groups ? `${res.data.total_groups} IP group(s) with 2+ accounts` : 'No shared IPs found');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setCheatLoading(false);
+    }
+  };
+
+  const handleFetchLoginAttempts = async () => {
+    setCheatLoading(true);
+    setCheatLoginEvents(null);
+    try {
+      const res = await api.get('/admin/cheat-detection/login-attempts');
+      setCheatLoginEvents(res.data);
+      const count = res.data?.events?.length ?? 0;
+      toast.success(count ? `${count} suspicious login attempt(s) loaded` : 'No suspicious login attempts found');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
@@ -2496,6 +2512,43 @@ export default function Admin() {
                               <span className="text-mutedForeground">{a.source}</span>
                             </div>
                           ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Suspicious login attempts</div>
+              <p className="text-xs text-mutedForeground mb-2">
+                Failed logins (wrong password or unknown account) from an IP that already has at least one other alive account.
+                Useful for spotting users trying to access multiple accounts from the same IP.
+              </p>
+              <BtnPrimary onClick={handleFetchLoginAttempts} disabled={cheatLoading}>Load hacking attempts</BtnPrimary>
+              {cheatLoginEvents && (
+                <div className="mt-3 max-h-64 overflow-y-auto space-y-1.5">
+                  {(cheatLoginEvents.events || []).length === 0 ? (
+                    <p className="text-xs text-mutedForeground">No suspicious login attempts recorded.</p>
+                  ) : (
+                    (cheatLoginEvents.events || []).map((e, idx) => (
+                      <div key={idx} className="p-2 rounded bg-zinc-900/60 border border-red-500/30 text-[10px] font-heading">
+                        <div className="flex justify-between gap-2 flex-wrap mb-1">
+                          <span className="text-amber-400">IP: {e.ip}</span>
+                          <span className="text-zinc-500">{e.at && new Date(e.at).toLocaleString()}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-zinc-400">
+                          {e.username && <span>Username: <span className="text-foreground font-bold">{e.username}</span></span>}
+                          {e.email && <span>Email: <span className="text-foreground">{e.email}</span></span>}
+                          {e.login_input && <span>Login input: <span className="text-foreground">{e.login_input}</span></span>}
+                          {typeof e.same_ip_alive_count === 'number' && (
+                            <span>Alive accounts on IP: <span className="text-foreground">{e.same_ip_alive_count}</span></span>
+                          )}
+                          {typeof e.same_ip_other_alive_count === 'number' && (
+                            <span>Other alive accounts on IP: <span className="text-foreground">{e.same_ip_other_alive_count}</span></span>
+                          )}
+                          {e.reason && <span className="text-red-400">Reason: {e.reason}</span>}
                         </div>
                       </div>
                     ))
