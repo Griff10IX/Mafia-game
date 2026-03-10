@@ -267,7 +267,7 @@ def register(router):
             {"id": uid},
             {
                 "_id": 0,
-                "total_kills": 1, "total_deaths": 1, "hitlist_npc_kills": 1,
+                "total_kills": 1, "total_deaths": 1, "hitlist_npc_kills": 1, "robot_bodyguard_kills": 1,
                 "total_crimes": 1, "crime_profit": 1,
                 "total_gta": 1,
                 "jail_busts": 1, "jail_bust_attempts": 1, "jail_busts_npc": 1,

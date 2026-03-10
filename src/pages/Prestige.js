@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
-import { Star, TrendingUp, Shield, Car, Crosshair, Lock, Check, ChevronRight } from 'lucide-react';
+import { Star, TrendingUp, Shield, Car, Crosshair, Lock, Check } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import PrestigeBadge from '../components/PrestigeBadge';
 import styles from '../styles/noir.module.css';
@@ -15,6 +15,14 @@ const PRESTIGE_COLORS = {
 };
 
 const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' };
+
+const PRESTIGE_CRIME_INFO = {
+  1: { name: 'The Syndicate Run',     dropType: '30% Rare Drop',    rewards: ['Cash', 'Respect', 'Moonshine'] },
+  2: { name: 'Contraband Courier',    dropType: '30% Rare Drop',    rewards: ['Moonshine', 'Bullets'] },
+  3: { name: 'Black Market Deal',     dropType: '30% Rare Drop',    rewards: ['Moonshine', 'Bullets', 'Points'] },
+  4: { name: "The Commission's Work", dropType: 'Guaranteed ×0.5',  rewards: ['Cash', 'Respect', 'Moonshine', 'Bullets', 'Points'] },
+  5: { name: "Godfather's Orders",    dropType: 'Guaranteed ×1',    rewards: ['Cash', 'Respect', 'Moonshine', 'Bullets', 'Points'] },
+};
 
 function ProgressBar({ value, max, color }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
@@ -372,6 +380,84 @@ export default function Prestige() {
             })}
           </div>
         )}
+      </div>
+
+      {/* ── PRESTIGE CRIMES ────────────────────────────────────────────── */}
+      <div
+        className={`${styles.panel} rounded-xl overflow-hidden prestige-fade`}
+        style={{ animationDelay: '0.12s', border: '1px solid rgba(184,145,68,0.18)' }}
+      >
+        <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: 'rgba(184,145,68,0.15)', background: 'rgba(184,145,68,0.05)' }}>
+          <Star size={14} style={{ color: '#c9a84c' }} />
+          <span className="text-xs font-heading font-bold uppercase tracking-widest" style={{ color: '#c9a84c' }}>
+            Prestige Crimes
+          </span>
+          <span className="ml-auto text-[8px] font-heading text-zinc-600 uppercase tracking-wider">Exclusive per level</span>
+        </div>
+        <div className="divide-y divide-zinc-800/40">
+          {[1, 2, 3, 4, 5].map((lvl) => {
+            const info = PRESTIGE_CRIME_INFO[lvl];
+            const crimeColor = PRESTIGE_COLORS[lvl];
+            const isUnlocked = lvl <= level;
+            const isGuaranteed = lvl >= 4;
+            return (
+              <div
+                key={lvl}
+                className="flex flex-col gap-1.5 px-4 py-3"
+                style={isUnlocked ? { background: `${crimeColor}06` } : undefined}
+              >
+                {/* Level badge + crime name */}
+                <div className="flex items-center gap-2 min-w-0">
+                  {isUnlocked ? (
+                    <PrestigeBadge level={lvl} size="sm" />
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-heading font-bold border"
+                      style={{ color: '#52525b', borderColor: 'rgba(63,63,70,0.5)' }}
+                    >
+                      <Lock size={7} /> {ROMAN[lvl]}
+                    </span>
+                  )}
+                  <span
+                    className="text-[11px] font-heading font-bold truncate"
+                    style={{ color: isUnlocked ? crimeColor : '#52525b' }}
+                  >
+                    {info.name}
+                  </span>
+                  {!isUnlocked && (
+                    <span className="ml-auto text-[8px] font-heading text-zinc-600 shrink-0">Requires Prestige {lvl}</span>
+                  )}
+                </div>
+                {/* Drop type chip + reward pills */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span
+                    className="shrink-0 inline-flex items-center text-[8px] font-heading font-bold uppercase px-1.5 py-0.5 rounded border"
+                    style={isUnlocked
+                      ? isGuaranteed
+                        ? { color: '#34d399', borderColor: 'rgba(52,211,153,0.3)', background: 'rgba(52,211,153,0.08)' }
+                        : { color: '#fbbf24', borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.08)' }
+                      : { color: '#3f3f46', borderColor: 'rgba(63,63,70,0.4)' }
+                    }
+                  >
+                    {info.dropType}
+                  </span>
+                  {info.rewards.map((r) => (
+                    <span
+                      key={r}
+                      className="shrink-0 inline-flex items-center text-[8px] font-heading px-1.5 py-0.5 rounded"
+                      style={isUnlocked
+                        ? { color: crimeColor + 'cc', background: crimeColor + '10', border: `1px solid ${crimeColor}22` }
+                        : { color: '#3f3f46', background: 'rgba(39,39,42,0.4)', border: '1px solid rgba(63,63,70,0.3)' }
+                      }
+                    >
+                      {r}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── ALL LEVELS ─────────────────────────────────────────────────────

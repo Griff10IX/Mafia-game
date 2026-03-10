@@ -132,6 +132,8 @@ class CrimeResponse(BaseModel):
     successes: int = 0
     progress: int = 25
     unlocked: bool = True
+    prestige_required: Optional[int] = None
+    prestige_bonus: Optional[dict] = None
 
 
 class CommitCrimeResponse(BaseModel):
@@ -141,11 +143,86 @@ class CommitCrimeResponse(BaseModel):
     next_available: str
     progress_after: Optional[int] = None
     respect_points: int = 0
+    prestige_bonus_earned: Optional[dict] = None
 
 
 # ---------------------------------------------------------------------------
 # Game data init (called from server on startup)
 # ---------------------------------------------------------------------------
+
+# Prestige-exclusive crimes — one per level, unlocked cumulatively (P3 can do P1, P2, P3)
+# P1-P3: 30% rare bonus drop on top of cash; P4-P5: guaranteed all reward types × multiplier
+PRESTIGE_CRIMES = [
+    {
+        "id": "prestige_crime_1", "name": "The Syndicate Run",
+        "description": "Trusted work for the Made — slip packages through the city unseen. A rare score awaits the careful.",
+        "min_rank": 1, "reward_min": 20_000, "reward_max": 60_000,
+        "cooldown_seconds": 1800, "cooldown_minutes": 30, "crime_type": "prestige",
+        "prestige_required": 1,
+        "prestige_bonus": {
+            "rare_chance": 0.30,
+            "cash": [2000, 8000],
+            "respect_points": [5, 20],
+            "booze": {"id": "moonshine", "min": 1, "max": 3},
+        },
+    },
+    {
+        "id": "prestige_crime_2", "name": "Contraband Courier",
+        "description": "Move illegal goods across state lines. Earners know which routes to take — and what's in the crates.",
+        "min_rank": 1, "reward_min": 40_000, "reward_max": 120_000,
+        "cooldown_seconds": 3600, "cooldown_minutes": 60, "crime_type": "prestige",
+        "prestige_required": 2,
+        "prestige_bonus": {
+            "rare_chance": 0.30,
+            "booze": {"id": "moonshine", "min": 2, "max": 5},
+            "bullets": [100, 300],
+        },
+    },
+    {
+        "id": "prestige_crime_3", "name": "Black Market Deal",
+        "description": "Broker a deal between factions — the Capo knows every buyer. Rare rewards flow to those who close.",
+        "min_rank": 1, "reward_min": 80_000, "reward_max": 220_000,
+        "cooldown_seconds": 7200, "cooldown_minutes": 120, "crime_type": "prestige",
+        "prestige_required": 3,
+        "prestige_bonus": {
+            "rare_chance": 0.30,
+            "booze": {"id": "moonshine", "min": 2, "max": 5},
+            "bullets": [100, 300],
+            "points": [20, 60],
+        },
+    },
+    {
+        "id": "prestige_crime_4", "name": "The Commission's Work",
+        "description": "Direct orders from the Commission. The Don delivers, and the rewards are always waiting.",
+        "min_rank": 1, "reward_min": 150_000, "reward_max": 400_000,
+        "cooldown_seconds": 14400, "cooldown_minutes": 240, "crime_type": "prestige",
+        "prestige_required": 4,
+        "prestige_bonus": {
+            "multiplier": 0.5,
+            "cash": [5000, 20_000],
+            "respect_points": [10, 30],
+            "booze": {"id": "moonshine", "min": 3, "max": 8},
+            "bullets": [150, 400],
+            "points": [30, 80],
+        },
+    },
+    {
+        "id": "prestige_crime_5", "name": "Godfather's Orders",
+        "description": "Only the Godfather Legacy receives these calls. Every reward, full measure.",
+        "min_rank": 1, "reward_min": 300_000, "reward_max": 800_000,
+        "cooldown_seconds": 28800, "cooldown_minutes": 480, "crime_type": "prestige",
+        "prestige_required": 5,
+        "prestige_bonus": {
+            "multiplier": 1.0,
+            "cash": [5000, 20_000],
+            "respect_points": [10, 30],
+            "booze": {"id": "moonshine", "min": 3, "max": 8},
+            "bullets": [150, 400],
+            "points": [30, 80],
+        },
+    },
+]
+
 
 # Fallback seed only when DB is empty and data/crimes.json is missing
 CRIMES_SEED_FALLBACK = [
@@ -215,25 +292,28 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
     global _crimes_cache
     if _crimes_cache is None:
         _crimes_cache = await db.crimes.find({}, {"_id": 0}).to_list(100)
-    crimes = _crimes_cache
+    all_crimes = list(_crimes_cache) + PRESTIGE_CRIMES
     user_rank, _ = get_rank_info(current_user.get("rank_points", 0))
+    user_prestige = int(current_user.get("prestige_level") or 0)
     user_crimes_list = await db.user_crimes.find(
-        {"user_id": current_user["id"], "crime_id": {"$in": [c["id"] for c in crimes]}},
+        {"user_id": current_user["id"], "crime_id": {"$in": [c["id"] for c in all_crimes]}},
         {"_id": 0, "crime_id": 1, "cooldown_until": 1, "attempts": 1, "successes": 1, "progress": 1, "progress_max": 1},
-    ).to_list(len(crimes))
+    ).to_list(len(all_crimes))
     user_crime_by_id = {uc["crime_id"]: uc for uc in user_crimes_list}
     result = []
-    for crime in crimes:
+    for crime in all_crimes:
         user_crime = user_crime_by_id.get(crime["id"])
-        can_commit = crime["min_rank"] <= user_rank
+        prestige_required = crime.get("prestige_required")
+        prestige_locked = prestige_required is not None and user_prestige < prestige_required
+
+        can_commit = crime["min_rank"] <= user_rank and not prestige_locked
         next_available = None
         if user_crime and "cooldown_until" in user_crime:
             cooldown_time = _parse_iso_datetime(user_crime["cooldown_until"])
             if cooldown_time and cooldown_time > datetime.now(timezone.utc):
                 can_commit = False
                 next_available = user_crime["cooldown_until"]
-        
-        # Get skill stats and progress bar for this crime
+
         attempts = int((user_crime or {}).get("attempts", 0) or 0)
         successes = int((user_crime or {}).get("successes", 0) or 0)
         stored = (user_crime or {}).get("progress")
@@ -242,9 +322,12 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
             if stored is not None and CRIME_PROGRESS_MIN <= int(stored) <= CRIME_PROGRESS_MAX
             else _progress_from_attempts(attempts)
         )
-        
-        unlocked = crime["min_rank"] <= user_rank
-        min_rank_name = next((r["name"] for r in RANKS if r["id"] == crime["min_rank"]), None)
+
+        unlocked = crime["min_rank"] <= user_rank and not prestige_locked
+        min_rank_name = (
+            f"Prestige {prestige_required}" if prestige_locked
+            else next((r["name"] for r in RANKS if r["id"] == crime["min_rank"]), None)
+        )
         result.append(
             CrimeResponse(
                 id=crime["id"],
@@ -262,6 +345,8 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
                 successes=successes,
                 progress=progress,
                 unlocked=unlocked,
+                prestige_required=prestige_required,
+                prestige_bonus=crime.get("prestige_bonus"),
             )
         )
     return result
@@ -278,13 +363,57 @@ async def commit_crime(crime_id: str, current_user: dict = Depends(get_current_u
 
 
 def _get_crime_by_id(crime_id: str):
-    """Return crime doc from cache if available, else None (caller may fall back to DB)."""
+    """Return crime doc — checks prestige crimes first, then DB cache."""
+    for c in PRESTIGE_CRIMES:
+        if c.get("id") == crime_id:
+            return c
     if _crimes_cache is None:
         return None
     for c in _crimes_cache:
         if c.get("id") == crime_id:
             return c
     return None
+
+
+def _apply_prestige_bonus(crime: dict, user: dict) -> dict:
+    """Roll prestige bonus rewards for a prestige crime. Returns dict of earned extras (empty if none)."""
+    bonus = crime.get("prestige_bonus")
+    if not bonus:
+        return {}
+    earned = {}
+    multiplier = bonus.get("multiplier")  # P4/P5: guaranteed at this multiplier
+    rare_chance = bonus.get("rare_chance")  # P1-P3: random gate
+
+    if multiplier is not None:
+        # Guaranteed rewards scaled by multiplier
+        trigger = True
+        mult = float(multiplier)
+    elif rare_chance is not None:
+        trigger = random.random() < float(rare_chance)
+        mult = 1.0
+    else:
+        return {}
+
+    if not trigger:
+        return {}
+
+    if "cash" in bonus:
+        lo, hi = bonus["cash"]
+        earned["cash"] = max(1, int(random.randint(lo, hi) * mult))
+    if "respect_points" in bonus:
+        lo, hi = bonus["respect_points"]
+        earned["respect_points"] = max(1, int(random.randint(lo, hi) * mult))
+    if "booze" in bonus:
+        b = bonus["booze"]
+        amt = max(1, int(random.randint(b["min"], b["max"]) * mult))
+        earned["booze"] = {"id": b["id"], "amount": amt}
+    if "bullets" in bonus:
+        lo, hi = bonus["bullets"]
+        earned["bullets"] = max(1, int(random.randint(lo, hi) * mult))
+    if "points" in bonus:
+        lo, hi = bonus["points"]
+        earned["points"] = max(1, int(random.randint(lo, hi) * mult))
+    return earned
 
 
 async def _commit_crime_impl(crime_id: str, current_user: dict):
@@ -298,6 +427,9 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
     user_rank, _ = get_rank_info(current_user.get("rank_points", 0))
     if crime["min_rank"] > user_rank:
         raise HTTPException(status_code=403, detail="Rank too low for this crime")
+    prestige_required = crime.get("prestige_required")
+    if prestige_required and int(current_user.get("prestige_level") or 0) < prestige_required:
+        raise HTTPException(status_code=403, detail=f"Requires Prestige {prestige_required}")
     user_crime = await db.user_crimes.find_one(
         {"user_id": current_user["id"], "crime_id": crime_id},
         {"_id": 0},
@@ -350,10 +482,9 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
             r_max = r_min
         reward = random.randint(r_min, r_max)
         rank_points = (
-            3
-            if crime["crime_type"] == "petty"
-            else 7
-            if crime["crime_type"] == "medium"
+            3 if crime["crime_type"] == "petty"
+            else 7 if crime["crime_type"] == "medium"
+            else 25 if crime["crime_type"] == "prestige"
             else 15
         )
         ev = await get_effective_event()
@@ -387,6 +518,27 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
             {"id": current_user["id"]},
             {"$inc": inc},
         )
+
+        # Prestige bonus rewards (separate update so they're always applied cleanly)
+        prestige_bonus_earned = None
+        if crime.get("prestige_bonus"):
+            prestige_bonus_earned = _apply_prestige_bonus(crime, current_user)
+            if prestige_bonus_earned:
+                bonus_inc = {}
+                if "cash" in prestige_bonus_earned:
+                    bonus_inc["money"] = prestige_bonus_earned["cash"]
+                if "respect_points" in prestige_bonus_earned:
+                    bonus_inc["respect_points"] = prestige_bonus_earned["respect_points"]
+                if "bullets" in prestige_bonus_earned:
+                    bonus_inc["bullets"] = prestige_bonus_earned["bullets"]
+                if "points" in prestige_bonus_earned:
+                    bonus_inc["points"] = prestige_bonus_earned["points"]
+                if "booze" in prestige_bonus_earned:
+                    b = prestige_bonus_earned["booze"]
+                    bonus_inc[f"booze_carrying.{b['id']}"] = b["amount"]
+                if bonus_inc:
+                    await db.users.update_one({"id": current_user["id"]}, {"$inc": bonus_inc})
+
         new_total_crimes = (current_user.get("total_crimes") or 0) + 1
         claimed = current_user.get("respect_points_crime_milestones_claimed") or []
         new_claimed = [m for m in CRIME_MILESTONES if m <= new_total_crimes and m not in claimed]
@@ -410,6 +562,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         message = random.choice(CRIME_SUCCESS_MESSAGES).format(reward=reward, rank_points=rank_points)
     else:
         reward = None
+        prestige_bonus_earned = None
         message = random.choice(CRIME_FAIL_MESSAGES)
         respect_earned = 0
     cooldown_min = crime.get("cooldown_minutes", 5)
@@ -451,6 +604,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         next_available=cooldown_until,
         progress_after=progress_after,
         respect_points=respect_earned if success else 0,
+        prestige_bonus_earned=prestige_bonus_earned if success else None,
     )
 
 

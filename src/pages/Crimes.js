@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { HelpCircle, Clock, AlertCircle, Bot, Skull, Zap } from 'lucide-react';
+import { HelpCircle, Clock, AlertCircle, Bot, Skull, Zap, Lock, Star } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { getCrimesPrefetch, clearCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -17,6 +17,25 @@ const CRIME_SUCCESS_RATES = {
   petty: 0.7,
   medium: 0.5,
   major: 0.3,
+};
+
+const PRESTIGE_COLORS = {
+  1: '#cd7f32',
+  2: '#a8a9ad',
+  3: '#ffd700',
+  4: '#b9f2ff',
+  5: '#dc2626',
+};
+
+const PRESTIGE_ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' };
+
+// Reward pills shown on prestige crime rows
+const PRESTIGE_BONUS_LABELS = {
+  1: ['Cash', 'Respect', 'Moonshine'],
+  2: ['Moonshine', 'Bullets'],
+  3: ['Moonshine', 'Bullets', 'Points'],
+  4: ['Cash', 'Respect', 'Moonshine', 'Bullets', 'Points'],
+  5: ['Cash', 'Respect', 'Moonshine', 'Bullets', 'Points'],
 };
 
 const TICK_INTERVAL = 1000;
@@ -288,6 +307,123 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
   );
 };
 
+// Prestige crime row — separate styled row for prestige-exclusive crimes
+const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
+  const level = crime.prestige_required;
+  const color = PRESTIGE_COLORS[level] || '#71717a';
+  const isLocked = crime.unlocked === false;
+  const onCooldown = !crime.can_commit && crime.remaining && crime.remaining > 0;
+  const isGuaranteed = level >= 4;
+  const rewardLabels = PRESTIGE_BONUS_LABELS[level] || [];
+
+  return (
+    <div
+      className="flex flex-col gap-1.5 px-2.5 py-2 rounded-md transition-all cr-row"
+      style={{
+        background: isLocked ? 'rgba(39,39,42,0.3)' : `${color}08`,
+        border: `1px solid ${isLocked ? 'rgba(63,63,70,0.4)' : color + '25'}`,
+        opacity: isLocked ? 0.7 : 1,
+      }}
+    >
+      {/* Top row: badge + name + lock chip */}
+      <div className="flex items-center gap-2 min-w-0">
+        {/* Prestige badge */}
+        <span
+          className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-heading font-bold uppercase tracking-wider border"
+          style={isLocked
+            ? { color: '#52525b', borderColor: 'rgba(63,63,70,0.5)' }
+            : { color, borderColor: color + '50', backgroundColor: color + '12' }
+          }
+        >
+          {isLocked ? <Lock size={7} /> : <Star size={7} />}
+          {PRESTIGE_ROMAN[level]}
+        </span>
+
+        {/* Name */}
+        <span className="text-[11px] font-heading font-bold truncate" style={{ color: isLocked ? '#52525b' : '#e4e4e7' }}>
+          {crime.name}
+        </span>
+
+        {/* Lock chip */}
+        {isLocked && (
+          <span
+            className="shrink-0 inline-flex items-center gap-0.5 text-[9px] font-heading font-bold uppercase px-1.5 py-0.5 rounded border"
+            style={{ color: '#71717a', borderColor: 'rgba(63,63,70,0.5)' }}
+          >
+            <Lock size={7} /> Prestige {level}
+          </span>
+        )}
+      </div>
+
+      {/* Description */}
+      <div className="text-[9px] text-zinc-600 hidden sm:block leading-tight">{crime.description}</div>
+
+      {/* Bottom row: drop type + reward pills + cooldown + button */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Drop type chip */}
+        {!isLocked && (
+          <span
+            className="shrink-0 inline-flex items-center gap-0.5 text-[8px] font-heading font-bold uppercase px-1.5 py-0.5 rounded border"
+            style={isGuaranteed
+              ? { color: '#34d399', borderColor: 'rgba(52,211,153,0.3)', background: 'rgba(52,211,153,0.08)' }
+              : { color: '#fbbf24', borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.08)' }
+            }
+          >
+            {isGuaranteed ? `Guaranteed ×${level === 4 ? '0.5' : '1'}` : '30% Rare Drop'}
+          </span>
+        )}
+
+        {/* Reward pills */}
+        {!isLocked && rewardLabels.map((label) => (
+          <span
+            key={label}
+            className="shrink-0 inline-flex items-center text-[8px] font-heading px-1.5 py-0.5 rounded"
+            style={{ color: color + 'cc', backgroundColor: color + '0f', border: `1px solid ${color}20` }}
+          >
+            {label}
+          </span>
+        ))}
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Cooldown */}
+        {onCooldown && crime.remaining > 0 && (
+          <div className="flex items-center gap-0.5 text-[10px] text-zinc-500 font-heading whitespace-nowrap">
+            <Clock size={8} className="shrink-0" style={{ color }} />
+            <span>{crime.remaining}s</span>
+          </div>
+        )}
+        {!onCooldown && !isLocked && !crime.can_commit && (
+          <span className="text-[9px] text-zinc-600 font-heading">{crime.wait}</span>
+        )}
+
+        {/* Action button */}
+        <div className="shrink-0">
+          {manualPlayDisabled && crime.can_commit ? (
+            <button type="button" disabled className="bg-zinc-700/50 text-zinc-500 rounded px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase border border-zinc-600/50 cursor-not-allowed">Locked</button>
+          ) : crime.can_commit ? (
+            <button
+              type="button"
+              onClick={() => onCommit(crime.id)}
+              className="rounded px-2 py-0.5 text-[9px] font-heading font-bold uppercase tracking-wide border transition-all touch-manipulation"
+              style={{ color, borderColor: color + '60', background: color + '15' }}
+            >
+              ★ Commit
+            </button>
+          ) : onCooldown ? (
+            <button type="button" disabled className="bg-zinc-700/50 text-zinc-500 rounded px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase border border-zinc-600/50 cursor-not-allowed">Wait</button>
+          ) : isLocked ? (
+            <span className="text-[9px] text-zinc-600">—</span>
+          ) : (
+            <span className="text-[9px] text-zinc-600">Unavailable</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Main component
 export default function Crimes() {
   const [crimes, setCrimes] = useState([]);
@@ -370,9 +506,20 @@ export default function Crimes() {
       const progressAfter = response.data?.progress_after;
 
       if (response.data.success) {
-        const msg = response.data.respect_points
-          ? `${response.data.message}${response.data.message.trim().endsWith('.') ? '' : '.'} +${response.data.respect_points} respect`
-          : response.data.message;
+        const bonus = response.data.prestige_bonus_earned;
+        let msg = response.data.message;
+        if (response.data.respect_points) {
+          msg += `${msg.trim().endsWith('.') ? '' : '.'} +${response.data.respect_points} respect`;
+        }
+        if (bonus && Object.keys(bonus).length > 0) {
+          const parts = [];
+          if (bonus.cash) parts.push(`$${bonus.cash.toLocaleString()}`);
+          if (bonus.respect_points) parts.push(`+${bonus.respect_points} respect`);
+          if (bonus.booze) parts.push(`${bonus.booze.amount}× Moonshine`);
+          if (bonus.bullets) parts.push(`${bonus.bullets} bullets`);
+          if (bonus.points) parts.push(`${bonus.points} pts`);
+          if (parts.length > 0) msg += ` ★ Bonus: ${parts.join(', ')}`;
+        }
         toast.success(msg);
         refreshUser();
       } else {
@@ -488,7 +635,9 @@ export default function Crimes() {
     }
   };
 
-  const commitAllCount = crimeRows.filter((c) => c.can_commit).length;
+  const regularCrimeRows = crimeRows.filter((c) => c.crime_type !== 'prestige');
+  const prestigeCrimeRows = crimeRows.filter((c) => c.crime_type === 'prestige');
+  const commitAllCount = regularCrimeRows.filter((c) => c.can_commit).length;
 
   if (loading) {
     return <CrimesPageSkeleton />;
@@ -565,12 +714,32 @@ export default function Crimes() {
         </div>
 
         <div className="p-1.5 space-y-0.5">
-          {crimeRows.map((crime) => (
+          {regularCrimeRows.map((crime) => (
             <CrimeRow key={crime.id} crime={crime} onCommit={commitCrime} manualPlayDisabled={autoRankCrimesDisabled} />
           ))}
         </div>
         <div className="cr-art-line text-primary mx-2.5" />
       </div>
+
+      {/* Prestige Crimes */}
+      {prestigeCrimeRows.length > 0 && (
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden cr-fade-in`} style={{ animationDelay: '0.08s', border: '1px solid rgba(184,145,68,0.2)' }}>
+          <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(184,145,68,0.5), transparent)' }} />
+          <div className="px-2.5 py-1.5 border-b flex items-center gap-2" style={{ background: 'rgba(184,145,68,0.06)', borderColor: 'rgba(184,145,68,0.15)' }}>
+            <Star size={10} style={{ color: '#c9a84c' }} />
+            <span className="text-[9px] font-heading font-bold uppercase tracking-[0.12em]" style={{ color: '#c9a84c' }}>
+              Prestige Crimes
+            </span>
+            <span className="text-[8px] font-heading text-zinc-600 ml-1">— exclusive to each prestige level</span>
+          </div>
+          <div className="p-1.5 space-y-1.5">
+            {prestigeCrimeRows.map((crime) => (
+              <PrestigeCrimeRow key={crime.id} crime={crime} onCommit={commitCrime} manualPlayDisabled={autoRankCrimesDisabled} />
+            ))}
+          </div>
+          <div className="cr-art-line mx-2.5" style={{ color: 'rgba(184,145,68,0.3)' }} />
+        </div>
+      )}
     </div>
   );
 }

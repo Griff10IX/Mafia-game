@@ -708,8 +708,6 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                     })
                 except Exception:
                     pass
-                if _is_npc_bodyguard:
-                    await db.users.update_one({"id": killer_id}, {"$inc": {"robot_bodyguard_kills": 1}})
                 await send_notification(killer_id, "Hitlist NPC kill", success_message, "attack", category="attacks")
                 # If this NPC was a bodyguard (e.g. robot), do bodyguard cleanup and record vendetta war stats
                 if target.get("is_bodyguard"):
@@ -799,9 +797,22 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 )
         await db.user_properties.update_many({"user_id": victim_id}, {"$set": {"user_id": killer_id}})
         now_iso = datetime.now(timezone.utc).isoformat()
+        killer_family_doc = None
+        if current_user.get("family_id"):
+            killer_family_doc = await db.families.find_one({"id": current_user["family_id"]}, {"_id": 0, "name": 1})
         await db.users.update_one(
             {"id": victim_id},
-            {"$set": {"is_dead": True, "dead_at": now_iso, "points_at_death": target.get("points", 0), "money_at_death": target.get("money", 0), "money": 0, "health": 0}, "$inc": {"total_deaths": 1}}
+            {"$set": {
+                "is_dead": True,
+                "dead_at": now_iso,
+                "points_at_death": target.get("points", 0),
+                "money_at_death": target.get("money", 0),
+                "money": 0,
+                "health": 0,
+                "killed_by_username": current_user.get("username"),
+                "killed_by_user_id": current_user["id"],
+                "killed_by_family_name": (killer_family_doc or {}).get("name"),
+            }, "$inc": {"total_deaths": 1}}
         )
         try:
             from routers.families import maybe_promote_after_boss_death
@@ -957,8 +968,6 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         attempt_base["target_is_npc"] = is_victim_npc
         if is_victim_bodyguard and bodyguard_owner_username:
             attempt_base["bodyguard_owner_username"] = bodyguard_owner_username
-        if is_victim_bodyguard and is_victim_npc:
-            await db.users.update_one({"id": killer_id}, {"$inc": {"robot_bodyguard_kills": 1}})
         success_message = f"You killed {target_name}! You got ${cash_loot:,}"
         extras = []
         if victim_props_count:

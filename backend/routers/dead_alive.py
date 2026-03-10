@@ -1,18 +1,48 @@
 # Dead-alive: 5% tax — you receive 95% of dead account's money and points (one-time)
 from fastapi import Depends, HTTPException
 
+REVEAL_KILLER_COST = 1000
+
 
 def register(router):
     """Register dead-alive routes. Dependencies from server to avoid circular imports."""
     import server as srv
 
     db = srv.db
+    get_current_user = srv.get_current_user
     get_current_user_verified = srv.get_current_user_verified
     get_head_family_id_for_state = srv.get_head_family_id_for_state
     _username_pattern = srv._username_pattern
     verify_password = srv.verify_password
     DeadAliveRetrieveRequest = srv.DeadAliveRetrieveRequest
     DEAD_ALIVE_PERCENT = srv.DEAD_ALIVE_PERCENT
+
+    @router.post("/death/reveal-killer")
+    async def reveal_killer(current_user: dict = Depends(get_current_user)):
+        """Spend 1,000 points to reveal who killed you. Only usable while dead."""
+        if not current_user.get("is_dead"):
+            raise HTTPException(status_code=400, detail="You are not dead")
+        killer_username = current_user.get("killed_by_username")
+        if not killer_username:
+            raise HTTPException(status_code=404, detail="Killer identity is unknown")
+        if current_user.get("killer_revealed"):
+            return {
+                "killer_username": current_user.get("killed_by_username"),
+                "killer_family": current_user.get("killed_by_family_name"),
+                "already_revealed": True,
+            }
+        points = int(current_user.get("points") or 0)
+        if points < REVEAL_KILLER_COST:
+            raise HTTPException(status_code=400, detail=f"You need {REVEAL_KILLER_COST:,} points to reveal your killer")
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$inc": {"points": -REVEAL_KILLER_COST}, "$set": {"killer_revealed": True}}
+        )
+        return {
+            "killer_username": current_user.get("killed_by_username"),
+            "killer_family": current_user.get("killed_by_family_name"),
+            "already_revealed": False,
+        }
 
     @router.post("/dead-alive/retrieve")
     async def dead_alive_retrieve(request: DeadAliveRetrieveRequest, current_user: dict = Depends(get_current_user_verified)):

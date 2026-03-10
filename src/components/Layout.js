@@ -9,6 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import ThemePicker from './ThemePicker';
 import ErrorBoundary from './ErrorBoundary';
 import GameChat from './GameChat';
+import DeathScreen from './DeathScreen';
 import styles from '../styles/noir.module.css';
 
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
@@ -982,6 +983,10 @@ export default function Layout({ children }) {
 
     return null;
   };
+
+  if (user?.is_dead) {
+    return <DeathScreen user={user} onLogout={handleLogout} />;
+  }
 
   return (
     <div className={`min-h-screen ${styles.page} ${styles.themeGangsterModern}`}>
