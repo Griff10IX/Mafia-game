@@ -675,11 +675,13 @@ def register(router):
                 armour_name = armour.get("name") if armour else f"Level {alvl}"
             location = str(u.get("current_state") or "").strip() or None
             gang_name = None
+            family_name = None
             family_id = u.get("family_id")
             if family_id:
                 fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1})
                 if fam:
                     gang_name = fam.get("name")
+                    family_name = fam.get("name")
             bodyguard_count = await db.bodyguards.count_documents({
                 "user_id": u["id"],
                 "$or": [
@@ -747,6 +749,14 @@ def register(router):
                 admin_online_color=admin_online_color,
                 mod_online_color=mod_online_color,
                 is_help_desk_operator=bool(u.get("is_help_desk_operator", False)),
+                is_dead=bool(u.get("is_dead", False)),
+                dead_at=u.get("dead_at"),
+                money_at_death=_safe_int(u.get("money_at_death"), 0),
+                points_at_death=_safe_int(u.get("points_at_death"), 0),
+                killed_by_username=u.get("killed_by_username"),
+                killed_by_family_name=u.get("killed_by_family_name"),
+                killer_revealed=bool(u.get("killer_revealed", False)),
+                family_name=family_name,
             )
         except HTTPException:
             raise

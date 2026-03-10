@@ -440,6 +440,15 @@ class UserResponse(BaseModel):
     admin_online_color: Optional[str] = None  # global setting for styling "Admin" rank (so profile API can omit it when viewing others)
     mod_online_color: Optional[str] = None  # moderator's own colour on Users Online (default dark blue when not set)
     is_help_desk_operator: bool = False  # can reply/close help desk tickets; shown dark green on Users Online
+    # Death state (when account has been killed)
+    is_dead: bool = False
+    dead_at: Optional[str] = None
+    money_at_death: int = 0
+    points_at_death: Optional[int] = None
+    killed_by_username: Optional[str] = None
+    killed_by_family_name: Optional[str] = None
+    killer_revealed: bool = False
+    family_name: Optional[str] = None  # convenience for DeathScreen; mirrors gang_name for dead users
 
 class NotificationCreate(BaseModel):
     title: str
@@ -525,6 +534,7 @@ def _log_auth_failure(user_id: Optional[str], status: int, reason: str):
 
 
 ACCOUNT_LOCKED_WHITELIST = {"/api/auth/me", "/api/account-locked", "/api/account-locked-reply"}
+DEAD_ACCOUNT_WHITELIST = {"/api/auth/me", "/api/death/reveal-killer"}
 
 
 async def get_current_user(
@@ -552,11 +562,15 @@ async def get_current_user(
         _log_auth_failure(user_id, 401, "Session invalidated (token_version mismatch)")
         raise HTTPException(status_code=401, detail="Session invalidated. Please log in again.")
     if user.get("is_dead"):
-        _log_auth_failure(user_id, 403, "Account is dead")
-        raise HTTPException(
-            status_code=403,
-            detail="This account is dead and cannot be used. Create a new account and use Dead > Alive to receive 95% (5% tax) of this account’s money and points."
-        )
+        # Allow limited access for dead accounts so the frontend can render the death screen
+        # and killer reveal flow. Gameplay endpoints remain blocked.
+        path = request.url.path if request else ""
+        if path not in DEAD_ACCOUNT_WHITELIST:
+            _log_auth_failure(user_id, 403, "Account is dead")
+            raise HTTPException(
+                status_code=403,
+                detail="This account is dead and cannot be used. Create a new account and use Dead > Alive to receive 95% (5% tax) of this account’s money and points."
+            )
     # Auto-expire lock when account_locked_until is in the past
     locked_until = user.get("account_locked_until")
     if user.get("account_locked") and locked_until:
