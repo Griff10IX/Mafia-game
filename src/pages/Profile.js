@@ -580,6 +580,7 @@ const RARITY_LABELS = {
   ultra_rare: 'Ultra rare',
   legendary: 'Legendary',
   custom: 'Custom',
+  loot_exclusive: 'Loot',
   exclusive: 'Exclusive',
 };
 
@@ -591,6 +592,7 @@ const RARITY_BADGE_CLASSES = {
   ultra_rare: 'border-purple-400/70 text-purple-400',
   legendary: 'border-amber-400/70 text-amber-400',
   custom: 'border-primary/70 text-primary',
+  loot_exclusive: 'border-rose-400/70 text-rose-400 bg-rose-950/30',
   exclusive: 'border-rose-400/70 text-rose-400',
 };
 
