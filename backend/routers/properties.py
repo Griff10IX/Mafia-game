@@ -234,11 +234,18 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
             pass
     # Streak bonus: +1% income per consecutive day (up to MAX_STREAK_DAYS)
     streak_days = int(user_prop.get("collection_streak_days") or 0)
-    days_since_collect = (now_utc.date() - last_collected.date()).days
-    if days_since_collect <= 1:
-        streak_days = min(MAX_STREAK_DAYS, streak_days + 1)
-    else:
+    # First ever collection: start streak at 1
+    if streak_days <= 0:
         streak_days = 1
+    else:
+        # Use hours to avoid abusing tiny frequent collects:
+        # - If between 24–48h since last collect: streak can increase
+        # - If >48h: streak resets to 1
+        # - If <24h: streak is maintained but does not increase
+        if hours_passed >= 24.0 and hours_passed <= 48.0:
+            streak_days = min(MAX_STREAK_DAYS, streak_days + 1)
+        elif hours_passed > 48.0:
+            streak_days = 1
     if streak_days > 0:
         income *= 1.0 + streak_days * STREAK_BONUS_PER_DAY
     # Per-property reinvest buff
