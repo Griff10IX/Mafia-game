@@ -226,7 +226,7 @@ def register(router):
             _casinos_for_type("slots", db.slots_ownership, "state"),
             _casinos_for_type("videopoker", db.videopoker_ownership),
             _user_owns_any_property(user_id),
-            db.notifications.count_documents({"user_id": user_id}),
+            db.notifications.count_documents({"user_id": user_id, "notification_type": "user_message"}),
             _top_cars_for_profile(user_id, 5, user.get("profile_show_cars", False), user.get("profile_car_ids") or ([user.get("profile_featured_car_id")] if user.get("profile_featured_car_id") else [])),
         )
 

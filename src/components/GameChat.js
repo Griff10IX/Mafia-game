@@ -56,7 +56,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
 
   const fetchMessages = useCallback(async () => {
     try {
-      const res = await api.get('/game-chat/messages', { params: { limit: 50 } });
+      const res = await api.get('/game-chat/messages', { params: { limit: 10 } });
       setMessages(res.data.messages || []);
     } catch (e) {
       if (loading) setMessages([]);
