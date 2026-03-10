@@ -572,7 +572,27 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
     attacker_bullets = current_user.get("bullets", 0)
     attacker_molotovs = int(current_user.get("molotovs") or 0)
     MOLOTOV_BULLET_EQUIV = 5000
-    best_damage, best_weapon_name = await _best_weapon_for_user(current_user["id"], current_user.get("equipped_weapon_id"))
+    equipped_weapon_id = (current_user.get("equipped_weapon_id") or "").strip() or None
+
+    # Require an owned and equipped gun before attacking. This avoids \"punch\" attacks
+    # and gives clearer feedback when players forget to buy/equip a weapon.
+    owned_weapons = await db.user_weapons.find(
+        {"user_id": current_user["id"], "quantity": {"$gt": 0}},
+        {"_id": 0, "weapon_id": 1},
+    ).to_list(100)
+    owned_weapon_ids = {w.get("weapon_id") for w in owned_weapons if w.get("weapon_id")}
+    if not owned_weapon_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="You don't own a gun. Visit the armoury or store to buy one before you can attack.",
+        )
+    if not equipped_weapon_id or equipped_weapon_id not in owned_weapon_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="You need to equip a gun before you can attack.",
+        )
+
+    best_damage, best_weapon_name = await _best_weapon_for_user(current_user["id"], equipped_weapon_id)
     inflation = await _apply_kill_inflation_decay(current_user["id"])
     bullets_base = _bullets_to_kill(target_armour, target_rank_id, best_damage, attacker_rank_id)
     bullets_required = int(math.ceil(bullets_base * (1.0 + inflation)))
