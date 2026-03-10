@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -93,6 +93,14 @@ export default function Store() {
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [customCarName, setCustomCarName] = useState('');
   const [activeTab, setActiveTab] = useState('upgrades');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const validTabs = ['points', 'sendpts', 'upgrades', 'bullets'];
+  useEffect(() => {
+    if (tabFromUrl && validTabs.includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
   const [pointsTransfers, setPointsTransfers] = useState([]);
   const [adminTransfers, setAdminTransfers] = useState([]);
   const [adminTransfersOpen, setAdminTransfersOpen] = useState(false);

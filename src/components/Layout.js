@@ -1453,18 +1453,18 @@ export default function Layout({ children }) {
               {/* Stat rows — IMPROVEMENT 4: hover highlight, colour-coded values */}
               <div className="space-y-0">
                 {[
-                  { label: 'Cash', value: formatMoney(user.money), className: 'text-primary' },
-                  { label: 'Bank', isLink: true, to: '/bank', value: 'Go →' },
-                  { label: 'Points', value: formatInt(user.points) },
+                  { label: 'Cash', value: formatMoney(user.money), className: 'text-primary', isLink: true, to: '/bank' },
+                  { label: 'Bank', value: formatMoney(user.bank ?? user.swiss_balance ?? 0), className: 'text-primary' },
+                  { label: 'Points', value: formatInt(user.points), isLink: true, to: '/store?tab=upgrades' },
                   { label: 'Respect', value: formatInt(user.respect_points ?? 0) },
-                  { label: 'Bullets', value: formatInt(user.bullets) },
+                  { label: 'Bullets', value: formatInt(user.bullets), isLink: true, to: '/store?tab=bullets' },
                   { label: 'Health', value: Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%', className: Number(user.health) > 50 ? 'text-emerald-400' : Number(user.health) > 25 ? 'text-amber-400' : 'text-red-400' },
-                  { label: 'Kills', value: formatInt(user.total_kills), className: 'text-red-400' },
-                  { label: 'Weapon', value: user.gun_name || 'None', truncate: true },
-                  { label: 'Armour', value: user.armour_name || 'None', truncate: true },
-                  { label: 'Location', value: user.current_state || user.location || '—', truncate: true },
-                  { label: 'Family', value: user.gang_name || 'None', truncate: true },
-                  { label: 'Guards', value: typeof user.bodyguard_count === 'number' ? `${user.bodyguard_count}/${user.bodyguard_slots ?? 1}` : '—' },
+                  { label: 'Kills', value: formatInt(user.total_kills), className: 'text-red-400', isLink: true, to: '/attack' },
+                  { label: 'Weapon', value: user.gun_name || 'None', truncate: true, isLink: true, to: '/armour-weapons' },
+                  { label: 'Armour', value: user.armour_name || 'None', truncate: true, isLink: true, to: '/armour-weapons' },
+                  { label: 'Location', value: user.current_state || user.location || '—', truncate: true, isLink: true, to: '/travel' },
+                  { label: 'Family', value: user.gang_name || 'None', truncate: true, isLink: true, to: '/families' },
+                  { label: 'Guards', value: typeof user.bodyguard_count === 'number' ? `${user.bodyguard_count}/${user.bodyguard_slots ?? 1}` : '—', isLink: true, to: '/bodyguards' },
                   ...(hasCasinoOrProperty ? [
                     { label: 'Casino', value: formatMoney(user.casino_profit ?? 0), className: (user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400' },
                     { label: 'Property', value: `${formatInt(user.property_profit ?? 0)} pts` },
@@ -1478,7 +1478,7 @@ export default function Layout({ children }) {
                         onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.05)'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
                         <span style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
-                        <span style={{ color: 'var(--noir-primary)' }}>{row.value}</span>
+                        <span className={row.className || ''} style={row.className ? undefined : { color: 'var(--noir-primary)' }}>{row.value}</span>
                       </Link>
                     );
                   }
