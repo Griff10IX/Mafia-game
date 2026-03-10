@@ -517,6 +517,7 @@ export default function Crimes() {
           if (bonus.respect_points) parts.push(`+${bonus.respect_points} respect`);
           if (bonus.booze) parts.push(`${bonus.booze.amount}× Moonshine`);
           if (bonus.bullets) parts.push(`${bonus.bullets} bullets`);
+          if (bonus.molotovs) parts.push(`${bonus.molotovs} molotov${bonus.molotovs === 1 ? '' : 's'} (each counts as 5,000 bullets)`);
           if (bonus.points) parts.push(`${bonus.points} pts`);
           if (parts.length > 0) msg += ` ★ Bonus: ${parts.join(', ')}`;
         }

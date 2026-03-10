@@ -189,6 +189,9 @@ PRESTIGE_CRIMES = [
             "booze": {"id": "moonshine", "min": 2, "max": 5},
             "bullets": [100, 300],
             "points": [20, 60],
+            # Extremely rare consumable used on the attack page:
+            # when dropped, each molotov can replace 5,000 bullets worth of damage.
+            "molotovs": [1, 1],
         },
     },
     {
@@ -410,6 +413,9 @@ def _apply_prestige_bonus(crime: dict, user: dict) -> dict:
     if "bullets" in bonus:
         lo, hi = bonus["bullets"]
         earned["bullets"] = max(1, int(random.randint(lo, hi) * mult))
+    if "molotovs" in bonus:
+        lo, hi = bonus["molotovs"]
+        earned["molotovs"] = max(1, int(random.randint(lo, hi) * mult))
     if "points" in bonus:
         lo, hi = bonus["points"]
         earned["points"] = max(1, int(random.randint(lo, hi) * mult))
@@ -531,6 +537,8 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                     bonus_inc["respect_points"] = prestige_bonus_earned["respect_points"]
                 if "bullets" in prestige_bonus_earned:
                     bonus_inc["bullets"] = prestige_bonus_earned["bullets"]
+                if "molotovs" in prestige_bonus_earned:
+                    bonus_inc["molotovs"] = prestige_bonus_earned["molotovs"]
                 if "points" in prestige_bonus_earned:
                     bonus_inc["points"] = prestige_bonus_earned["points"]
                 if "booze" in prestige_bonus_earned:
