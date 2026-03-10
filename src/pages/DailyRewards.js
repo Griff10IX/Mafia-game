@@ -34,8 +34,8 @@ const RPS_STYLES = `
     100% { transform: scale(1) translateY(0); }
   }
   @keyframes winPulse {
-    0%,100% { filter: drop-shadow(0 0 6px rgba(212,175,55,0.4)); transform: scale(1); }
-    50%     { filter: drop-shadow(0 0 18px rgba(212,175,55,0.85)); transform: scale(1.06); }
+    0%,100% { filter: drop-shadow(0 0 6px rgba(var(--noir-primary-rgb),0.4)); transform: scale(1); }
+    50%     { filter: drop-shadow(0 0 18px rgba(var(--noir-primary-rgb),0.85)); transform: scale(1.06); }
   }
   @keyframes losePulse {
     0%,100% { filter: drop-shadow(0 0 6px rgba(239,68,68,0.3)); }
@@ -54,7 +54,7 @@ const RPS_STYLES = `
   }
   @keyframes goldGlow {
     0%,100% { box-shadow: 0 0 0px transparent; }
-    50%     { box-shadow: 0 0 20px rgba(212,175,55,0.25), 0 0 40px rgba(212,175,55,0.1); }
+    50%     { box-shadow: 0 0 20px rgba(var(--noir-primary-rgb),0.25), 0 0 40px rgba(var(--noir-primary-rgb),0.1); }
   }
   @keyframes spinnerRotate {
     to { transform: rotate(360deg); }
@@ -73,8 +73,8 @@ const RPS_STYLES = `
     100% { transform: scale(1); opacity: 1; }
   }
   @keyframes winnerGlow {
-    0%,100% { background: rgba(212,175,55,0.08); }
-    50%     { background: rgba(212,175,55,0.18); }
+    0%,100% { background: rgba(var(--noir-primary-rgb),0.08); }
+    50%     { background: rgba(var(--noir-primary-rgb),0.18); }
   }
   @keyframes shimmer {
     0%   { background-position: -200% center; }
@@ -102,7 +102,14 @@ const RPS_STYLES = `
   .anim-cellPop  { animation: cellPop 0.3s cubic-bezier(0.22,1,0.36,1) both; }
 
   .shimmer-text {
-    background: linear-gradient(90deg, #a16207 0%, #eab308 40%, #fef08a 55%, #eab308 70%, #a16207 100%);
+    background: linear-gradient(
+      90deg,
+      rgba(var(--noir-primary-rgb),0.65) 0%,
+      rgba(var(--noir-primary-rgb),1) 40%,
+      rgba(var(--noir-primary-rgb),0.85) 55%,
+      rgba(var(--noir-primary-rgb),1) 70%,
+      rgba(var(--noir-primary-rgb),0.65) 100%
+    );
     background-size: 200% auto;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -113,7 +120,7 @@ const RPS_STYLES = `
     display: inline-block;
     width: 6px; height: 6px;
     border-radius: 50%;
-    background: #eab308;
+    background: rgba(var(--noir-primary-rgb),1);
     animation: dotPulse 1.2s ease-in-out infinite;
   }
   .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -157,9 +164,9 @@ function PlaysBar({ left, total }) {
         style={{
           width: `${pct}%`,
           background: pct > 0
-            ? 'linear-gradient(90deg, #a16207, #eab308, #fef08a)'
+            ? 'linear-gradient(90deg, rgba(var(--noir-primary-rgb),0.7), rgba(var(--noir-primary-rgb),1), rgba(var(--noir-primary-rgb),0.6))'
             : 'transparent',
-          boxShadow: pct > 0 ? '0 0 8px rgba(234,179,8,0.5)' : 'none',
+          boxShadow: pct > 0 ? '0 0 8px rgba(var(--noir-primary-rgb),0.5)' : 'none',
         }}
       />
     </div>
@@ -307,8 +314,8 @@ export default function DailyRewards() {
           <div
             style={{
               width: 36, height: 36,
-              border: '3px solid rgba(234,179,8,0.15)',
-              borderTopColor: '#eab308',
+              border: '3px solid rgba(var(--noir-primary-rgb),0.15)',
+              borderTopColor: 'rgba(var(--noir-primary-rgb),1)',
               borderRadius: '50%',
               animation: 'spinnerRotate 0.8s linear infinite',
             }}
@@ -389,10 +396,10 @@ export default function DailyRewards() {
                 onClick={() => { setGameMode(m.id); setResult(null); setLastThrow(null); }}
                 className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-heading text-xs uppercase tracking-wider transition-all duration-200 active:scale-95"
                 style={{
-                  border: `2px solid ${active ? '#eab308' : 'rgba(63,63,70,1)'}`,
-                  background: active ? 'rgba(234,179,8,0.12)' : 'rgba(39,39,42,0.5)',
-                  color: active ? '#eab308' : '#71717a',
-                  boxShadow: active ? '0 0 12px rgba(234,179,8,0.15)' : 'none',
+                  border: `2px solid ${active ? 'rgba(var(--noir-primary-rgb),1)' : 'rgba(63,63,70,1)'}`,
+                  background: active ? 'rgba(var(--noir-primary-rgb),0.12)' : 'rgba(39,39,42,0.5)',
+                  color: active ? 'rgba(var(--noir-primary-rgb),1)' : '#71717a',
+                  boxShadow: active ? '0 0 12px rgba(var(--noir-primary-rgb),0.15)' : 'none',
                 }}
               >
                 <Icon size={16} />
@@ -489,7 +496,7 @@ export default function DailyRewards() {
                       result.result === 'win'  ? 'rgba(234,179,8,0.5)'  :
                       result.result === 'lose' ? 'rgba(239,68,68,0.4)' :
                       'rgba(63,63,70,0.6)'}`,
-                    color: result.result === 'win' ? '#eab308' : result.result === 'lose' ? '#f87171' : '#71717a',
+                    color: result.result === 'win' ? 'rgba(var(--noir-primary-rgb),1)' : result.result === 'lose' ? '#f87171' : '#71717a',
                   }}
                 >
                   {result.result === 'win' ? '🏆 You win!' : result.result === 'lose' ? '💀 You lose' : '🤝 Draw'}
@@ -561,7 +568,7 @@ export default function DailyRewards() {
                   <span className="text-4xl select-none">{c.emoji}</span>
                   <span
                     className="text-[10px] font-heading font-bold uppercase tracking-wider"
-                    style={{ color: canPlay && !playing ? '#eab308' : '#52525b' }}
+                style={{ color: canPlay && !playing ? 'rgba(var(--noir-primary-rgb),1)' : '#52525b' }}
                   >
                     {c.label}
                   </span>
@@ -587,7 +594,7 @@ export default function DailyRewards() {
             <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Noughts &amp; Crosses</span>
             {tttGame && (
               <span className="text-[9px] font-heading uppercase tracking-wider"
-                style={{ color: tttGame.turn === tttGame.player_side ? '#4ade80' : '#eab308' }}
+                style={{ color: tttGame.turn === tttGame.player_side ? '#4ade80' : 'rgba(var(--noir-primary-rgb),1)' }}
               >
                 {tttGame.turn === tttGame.player_side ? '● Your turn' : '● AI thinking…'}
               </span>
@@ -610,10 +617,10 @@ export default function DailyRewards() {
                   onClick={tttStart}
                   className="px-8 py-3 rounded-xl font-heading text-sm uppercase tracking-wider transition-all duration-200 active:scale-95"
                   style={{
-                    border: canPlay && !tttLoading ? '2px solid #eab308' : '2px solid rgba(63,63,70,0.6)',
-                    background: canPlay && !tttLoading ? 'rgba(234,179,8,0.12)' : 'rgba(39,39,42,0.4)',
-                    color: canPlay && !tttLoading ? '#eab308' : '#52525b',
-                    boxShadow: canPlay && !tttLoading ? '0 0 16px rgba(234,179,8,0.15)' : 'none',
+                    border: canPlay && !tttLoading ? '2px solid rgba(var(--noir-primary-rgb),1)' : '2px solid rgba(63,63,70,0.6)',
+                    background: canPlay && !tttLoading ? 'rgba(var(--noir-primary-rgb),0.12)' : 'rgba(39,39,42,0.4)',
+                    color: canPlay && !tttLoading ? 'rgba(var(--noir-primary-rgb),1)' : '#52525b',
+                    boxShadow: canPlay && !tttLoading ? '0 0 16px rgba(var(--noir-primary-rgb),0.15)' : 'none',
                     cursor: canPlay && !tttLoading ? 'pointer' : 'not-allowed',
                   }}
                 >
@@ -658,36 +665,36 @@ export default function DailyRewards() {
                           aspectRatio: '1',
                           fontSize: '1.75rem',
                           border: cell
-                            ? `2px solid ${isX ? 'rgba(234,179,8,0.6)' : 'rgba(167,139,250,0.5)'}`
+                            ? `2px solid ${isX ? 'rgba(var(--noir-primary-rgb),0.6)' : 'rgba(167,139,250,0.5)'}`
                             : isEmpty && isMyTurn
-                            ? '2px solid rgba(234,179,8,0.25)'
+                            ? '2px solid rgba(var(--noir-primary-rgb),0.25)'
                             : '2px solid rgba(63,63,70,0.4)',
                           background: cell
-                            ? isX ? 'rgba(234,179,8,0.1)' : 'rgba(167,139,250,0.08)'
+                            ? isX ? 'rgba(var(--noir-primary-rgb),0.1)' : 'rgba(167,139,250,0.08)'
                             : isEmpty && isMyTurn
-                            ? 'rgba(234,179,8,0.04)'
+                            ? 'rgba(var(--noir-primary-rgb),0.04)'
                             : 'rgba(24,24,27,0.4)',
-                          color: isX ? '#eab308' : '#a78bfa',
+                          color: isX ? 'rgba(var(--noir-primary-rgb),1)' : '#a78bfa',
                           cursor: isEmpty && isMyTurn ? 'pointer' : 'not-allowed',
                           boxShadow: cell
-                            ? isX ? '0 0 8px rgba(234,179,8,0.15)' : '0 0 8px rgba(167,139,250,0.12)'
+                            ? isX ? '0 0 8px rgba(var(--noir-primary-rgb),0.15)' : '0 0 8px rgba(167,139,250,0.12)'
                             : 'none',
                         }}
                         onMouseEnter={e => {
                           if (isEmpty && isMyTurn) {
-                            e.currentTarget.style.borderColor = 'rgba(234,179,8,0.5)';
-                            e.currentTarget.style.background = 'rgba(234,179,8,0.08)';
+                            e.currentTarget.style.borderColor = 'rgba(var(--noir-primary-rgb),0.5)';
+                            e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb),0.08)';
                           }
                         }}
                         onMouseLeave={e => {
                           if (isEmpty) {
-                            e.currentTarget.style.borderColor = isMyTurn ? 'rgba(234,179,8,0.25)' : 'rgba(63,63,70,0.4)';
-                            e.currentTarget.style.background = isMyTurn ? 'rgba(234,179,8,0.04)' : 'rgba(24,24,27,0.4)';
+                            e.currentTarget.style.borderColor = isMyTurn ? 'rgba(var(--noir-primary-rgb),0.25)' : 'rgba(63,63,70,0.4)';
+                            e.currentTarget.style.background = isMyTurn ? 'rgba(var(--noir-primary-rgb),0.04)' : 'rgba(24,24,27,0.4)';
                           }
                         }}
                       >
                         {cell || (isEmpty && isMyTurn ? (
-                          <span style={{ opacity: 0.15, color: '#eab308', fontSize: '1.2rem' }}>+</span>
+                          <span style={{ opacity: 0.15, color: 'rgba(var(--noir-primary-rgb),1)', fontSize: '1.2rem' }}>+</span>
                         ) : '')}
                       </button>
                     );
@@ -711,15 +718,15 @@ export default function DailyRewards() {
                   className="px-6 py-2.5 rounded-full font-heading font-bold text-sm uppercase tracking-widest"
                   style={{
                     background: tttResult.result === 'win'
-                      ? 'linear-gradient(90deg,rgba(234,179,8,0.18),rgba(254,240,138,0.12))'
+                      ? 'linear-gradient(90deg,rgba(var(--noir-primary-rgb),0.18),rgba(var(--noir-primary-rgb),0.12))'
                       : tttResult.result === 'lose'
                       ? 'rgba(239,68,68,0.1)'
                       : 'rgba(63,63,70,0.4)',
                     border: `1px solid ${
-                      tttResult.result === 'win'  ? 'rgba(234,179,8,0.5)'  :
+                      tttResult.result === 'win'  ? 'rgba(var(--noir-primary-rgb),0.5)'  :
                       tttResult.result === 'lose' ? 'rgba(239,68,68,0.4)' :
                       'rgba(63,63,70,0.5)'}`,
-                    color: tttResult.result === 'win' ? '#eab308' : tttResult.result === 'lose' ? '#f87171' : '#71717a',
+                    color: tttResult.result === 'win' ? 'rgba(var(--noir-primary-rgb),1)' : tttResult.result === 'lose' ? '#f87171' : '#71717a',
                   }}
                 >
                   {tttResult.result === 'win' ? '🏆 You win!' : tttResult.result === 'lose' ? '💀 You lose' : '🤝 Draw'}
@@ -745,9 +752,9 @@ export default function DailyRewards() {
                     disabled={tttLoading}
                     className="px-6 py-2 rounded-xl font-heading text-xs uppercase tracking-wider transition-all duration-200 active:scale-95"
                     style={{
-                      border: '2px solid rgba(234,179,8,0.4)',
-                      background: 'rgba(234,179,8,0.08)',
-                      color: '#eab308',
+                      border: '2px solid rgba(var(--noir-primary-rgb),0.4)',
+                      background: 'rgba(var(--noir-primary-rgb),0.08)',
+                      color: 'rgba(var(--noir-primary-rgb),1)',
                     }}
                   >
                     Play again

@@ -737,7 +737,7 @@ export default function Bodyguards() {
                       onClick={sendInvite}
                       disabled={inviting}
                       data-testid="invite-human-next"
-                      className="bg-emerald-500/20 text-emerald-400 rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-emerald-500/40 hover:bg-emerald-500/30 font-heading disabled:opacity-60"
+                      className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 font-heading disabled:opacity-60"
                     >
                       {inviting ? '…' : '👤 Invite'}
                     </button>
