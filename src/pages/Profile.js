@@ -257,7 +257,7 @@ const ProfileInfoCard = ({
         <h2 className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase tracking-[0.12em] truncate">
           {profile.username}
         </h2>
-        <div className="flex items-center gap-1 md:gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 md:gap-1.5 shrink-0 flex-wrap justify-end">
           <div
             className={`flex items-center gap-1 px-1.5 py-0.5 md:px-2 md:py-1 rounded-md border-2 bg-primary/20 ${roleColor ? '' : 'border-primary/50'}`}
             style={roleColor ? { borderColor: `${roleColor}80`, backgroundColor: `${roleColor}20` } : undefined}
@@ -270,9 +270,6 @@ const ProfileInfoCard = ({
               {profile.rank_name || '—'}
             </span>
           </div>
-          {profile.prestige_level > 0 && (
-            <PrestigeBadge level={profile.prestige_level} size="icon" showLabel={false} />
-          )}
           {isMe && onOpenSettings && (
             <button
               type="button"
@@ -317,6 +314,9 @@ const ProfileInfoCard = ({
                 <DollarSign size={12} className="md:w-3.5 md:h-3.5" />
               </button>
             </>
+          )}
+          {profile.prestige_level > 0 && (
+            <PrestigeBadge level={profile.prestige_level} size="icon" showLabel={false} />
           )}
         </div>
       </div>

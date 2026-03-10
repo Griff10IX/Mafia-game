@@ -111,7 +111,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
 
   return (
     <div
-      className={`relative z-10 ${styles.panel} rounded-md border px-2 py-1 min-h-[28px] flex items-center uo-row uo-card uo-fade-in ${user.on_hitlist ? 'uo-hitlist border-red-500/40' : 'border-primary/20'}`}
+      className={`relative z-10 ${styles.panel} rounded-md border px-2 py-1 h-7 md:h-8 flex items-center uo-row uo-card uo-fade-in ${user.on_hitlist ? 'uo-hitlist border-red-500/40' : 'border-primary/20'}`}
       data-testid="user-card"
     >
       <div className="flex items-center gap-1 min-h-[20px] w-full">
