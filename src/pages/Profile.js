@@ -257,67 +257,74 @@ const ProfileInfoCard = ({
         <h2 className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase tracking-[0.12em] truncate">
           {profile.username}
         </h2>
-        <div className="flex items-center gap-1 md:gap-1.5 shrink-0 flex-wrap justify-end">
-          <div
-            className={`flex items-center gap-1 px-1.5 py-0.5 md:px-2 md:py-1 rounded-md border-2 bg-primary/20 ${roleColor ? '' : 'border-primary/50'}`}
-            style={roleColor ? { borderColor: `${roleColor}80`, backgroundColor: `${roleColor}20` } : undefined}
-          >
-            <Shield size={12} className={!roleColor ? 'text-primary' : ''} style={roleColor ? { color: roleColor } : undefined} />
-            <span
-              className={`text-[9px] md:text-[10px] font-heading font-bold uppercase ${roleColor ? '' : 'text-primary'}`}
-              style={roleColor ? { color: roleColor } : undefined}
+        <div className="flex items-center gap-1.5 md:gap-2 shrink-0 flex-wrap justify-end">
+          {/* Rank + prestige side-by-side */}
+          <div className="flex items-center gap-1 md:gap-1.5">
+            <div
+              className={`flex items-center gap-1 px-1.5 py-0.5 md:px-2 md:py-1 rounded-md border-2 bg-primary/20 ${roleColor ? '' : 'border-primary/50'}`}
+              style={roleColor ? { borderColor: `${roleColor}80`, backgroundColor: `${roleColor}20` } : undefined}
             >
-              {profile.rank_name || '—'}
-            </span>
+              <Shield size={12} className={!roleColor ? 'text-primary' : ''} style={roleColor ? { color: roleColor } : undefined} />
+              <span
+                className={`text-[9px] md:text-[10px] font-heading font-bold uppercase ${roleColor ? '' : 'text-primary'}`}
+                style={roleColor ? { color: roleColor } : undefined}
+              >
+                {profile.rank_name || '—'}
+              </span>
+            </div>
+            {profile.prestige_level > 0 && (
+              <PrestigeBadge level={profile.prestige_level} size="icon" showLabel={false} />
+            )}
           </div>
-          {isMe && onOpenSettings && (
-            <button
-              type="button"
-              onClick={onOpenSettings}
-              className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
-              title="Profile settings"
-              aria-label="Profile settings"
-            >
-              <Settings size={12} className="md:w-3.5 md:h-3.5" />
-            </button>
-          )}
-          {!isMe && (
-            <>
+
+          {/* Action buttons group */}
+          <div className="flex items-center gap-1 md:gap-1.5">
+            {isMe && onOpenSettings && (
               <button
                 type="button"
-                onClick={onAddToSearch}
+                onClick={onOpenSettings}
                 className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
-                title="Add to Attack searches"
-                aria-label="Add to Attack searches"
-                data-testid="profile-add-to-search"
+                title="Profile settings"
+                aria-label="Profile settings"
               >
-                <Search size={12} className="md:w-3.5 md:h-3.5" />
+                <Settings size={12} className="md:w-3.5 md:h-3.5" />
               </button>
-              {profile.id && (
+            )}
+            {!isMe && (
+              <>
                 <button
                   type="button"
-                  onClick={() => onSendMessage?.()}
+                  onClick={onAddToSearch}
                   className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
-                  title="Send message"
-                  aria-label="Send message"
+                  title="Add to Attack searches"
+                  aria-label="Add to Attack searches"
+                  data-testid="profile-add-to-search"
                 >
-                  <MessageCircle size={12} className="md:w-3.5 md:h-3.5" />
+                  <Search size={12} className="md:w-3.5 md:h-3.5" />
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => onSendMoney?.()}
-                className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
-                title="Send money"
-                aria-label="Send money"
-              >
-                <DollarSign size={12} className="md:w-3.5 md:h-3.5" />
-              </button>
-            </>
-          )}
-          {profile.prestige_level > 0 && (
-            <PrestigeBadge level={profile.prestige_level} size="icon" showLabel={false} />
-          )}
+                {profile.id && (
+                  <button
+                    type="button"
+                    onClick={() => onSendMessage?.()}
+                    className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+                    title="Send message"
+                    aria-label="Send message"
+                  >
+                    <MessageCircle size={12} className="md:w-3.5 md:h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onSendMoney?.()}
+                  className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+                  title="Send money"
+                  aria-label="Send money"
+                >
+                  <DollarSign size={12} className="md:w-3.5 md:h-3.5" />
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
