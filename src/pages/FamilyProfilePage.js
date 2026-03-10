@@ -798,10 +798,23 @@ export default function FamilyProfilePage() {
               </div>
             )}
             {crewOCApp ? (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/8 border border-primary/15">
-                <Clock size={11} className="text-primary/60" />
-                <p className="text-[10px] font-heading text-primary">Applied: <span className="font-bold uppercase">{crewOCApp.status}</span></p>
-              </div>
+              (() => {
+                const canReapply = ['kicked', 'rejected'].includes((crewOCApp.status || '').toLowerCase());
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/8 border border-primary/15">
+                      <Clock size={11} className="text-primary/60" />
+                      <p className="text-[10px] font-heading text-primary">Applied: <span className="font-bold uppercase">{crewOCApp.status}</span></p>
+                    </div>
+                    {canReapply && (
+                      <button type="button" onClick={handleApplyCrewOC} disabled={crewOCApplyLoading}
+                        className="w-full py-2 font-heading font-bold uppercase tracking-wider text-[11px] rounded-lg border border-primary/30 bg-primary/8 text-primary hover:bg-primary/15 disabled:opacity-50 transition-all">
+                        {crewOCApplyLoading ? 'Applying...' : crewOCFee > 0 ? `Reapply — $${crewOCFee.toLocaleString()}` : 'Reapply (free)'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()
             ) : (
               <button type="button" onClick={handleApplyCrewOC} disabled={crewOCApplyLoading}
                 className="w-full py-2 font-heading font-bold uppercase tracking-wider text-[11px] rounded-lg border border-primary/30 bg-primary/8 text-primary hover:bg-primary/15 disabled:opacity-50 transition-all">

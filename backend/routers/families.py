@@ -967,7 +967,11 @@ async def families_crew_oc_apply(request: FamilyCrewOCApplyRequest, current_user
     fee = int(fam.get("crew_oc_join_fee") or 0)
     existing = await db.family_crew_oc_applications.find_one({"family_id": family_id, "user_id": uid}, {"_id": 0, "status": 1})
     if existing:
-        raise HTTPException(status_code=400, detail=f"You already applied (status: {existing.get('status')})")
+        status = (existing.get("status") or "").strip().lower()
+        if status in ("pending", "accepted"):
+            raise HTTPException(status_code=400, detail=f"You already applied (status: {existing.get('status')})")
+        # kicked or rejected: allow reapply by removing the old application
+        await db.family_crew_oc_applications.delete_one({"family_id": family_id, "user_id": uid})
     now = datetime.now(timezone.utc).isoformat()
     application_id = str(uuid.uuid4())
     if fee > 0:

@@ -541,9 +541,27 @@ export default function ForumTopic() {
                 : ' Free — your application will need approval.'}
             </p>
             {topic.crew_oc_my_application ? (
-              <p className="text-xs font-heading font-bold text-primary">
-                You applied: {topic.crew_oc_my_application.status}
-              </p>
+              (() => {
+                const status = (topic.crew_oc_my_application.status || '').toLowerCase();
+                const canReapply = status === 'kicked' || status === 'rejected';
+                return (
+                  <div className="space-y-2">
+                    <p className="text-xs font-heading font-bold text-primary">
+                      You applied: {topic.crew_oc_my_application.status}
+                    </p>
+                    {canReapply && (
+                      <button
+                        type="button"
+                        onClick={applyCrewOC}
+                        disabled={crewOCApplyLoading}
+                        className="w-full py-2 font-heading font-bold uppercase tracking-wider text-xs rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                      >
+                        {crewOCApplyLoading ? '...' : topic.crew_oc_join_fee > 0 ? `Reapply — pay $${(topic.crew_oc_join_fee || 0).toLocaleString()}` : 'Reapply (free)'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()
             ) : (
               <button
                 type="button"
