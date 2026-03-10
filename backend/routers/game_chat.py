@@ -157,6 +157,10 @@ def register(router):
         has_more = len(messages) > limit
         if has_more:
             messages = messages[:limit]
+        # Do not expose internal user_ids or family_ids in the public game chat payload
+        for m in messages:
+            m.pop("user_id", None)
+            m.pop("family_id", None)
         messages.reverse()
         return {"messages": messages, "has_more": has_more}
 
@@ -203,8 +207,9 @@ def register(router):
         if body.gif_url:
             doc["gif_url"] = body.gif_url.strip()
         await db.game_chat_messages.insert_one(doc)
-        del doc["_id"]
-        return {"message": doc}
+        # Response to clients should not expose internal ids
+        safe_doc = {k: v for k, v in doc.items() if k not in ("user_id", "family_id")}
+        return {"message": safe_doc}
 
     @router.get("/game-chat/prefs")
     async def get_game_chat_prefs(current_user: dict = Depends(get_current_user)):

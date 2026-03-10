@@ -11,7 +11,9 @@ from server import (
     db,
     get_current_user,
     send_notification,
+    send_notification_to_all,
     _username_pattern,
+    ADMIN_EMAILS,
 )
 
 # ----- Constants -----
@@ -194,6 +196,22 @@ def register(router):
         await db.notifications.insert_one(sent_copy)
         _invalidate_list_cache(target["id"])
         return {"message": f"Message sent to {target['username']}"}
+
+    class AdminBroadcastRequest(BaseModel):
+        title: str
+        message: str
+
+    @router.post("/notifications/admin/broadcast")
+    async def admin_broadcast_system_message(request: AdminBroadcastRequest, current_user: dict = Depends(get_current_user)):
+        """Admin: send a system notification to all users (respects notification preferences for 'system')."""
+        if (current_user.get("email") or "") not in (ADMIN_EMAILS or []):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        title = (request.title or "").strip() or "System message"
+        message = (request.message or "").strip()
+        if not message:
+            raise HTTPException(status_code=400, detail="Message is required")
+        await send_notification_to_all(title, message, notification_type="system", category="system")
+        return {"message": "System message sent to all users"}
 
     @router.get("/notifications/thread/{other_user_id}")
     async def get_thread(other_user_id: str, current_user: dict = Depends(get_current_user)):

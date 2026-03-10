@@ -166,6 +166,9 @@ export default function Admin() {
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState(null);
   const [userSearchLoading, setUserSearchLoading] = useState(false);
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [broadcastSending, setBroadcastSending] = useState(false);
   const [allUsersList, setAllUsersList] = useState(null);
   const [allUsersTotal, setAllUsersTotal] = useState(null);
   const [allUsersFilter, setAllUsersFilter] = useState('all');
@@ -1053,6 +1056,27 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
       setCheatLoading(false);
+    }
+  };
+
+  const handleBroadcastSystemMessage = async () => {
+    const title = (broadcastTitle || '').trim() || 'System message';
+    const msg = (broadcastMessage || '').trim();
+    if (!msg) {
+      toast.error('Enter a message to broadcast');
+      return;
+    }
+    if (!window.confirm('Send this system message to all users?')) return;
+    setBroadcastSending(true);
+    try {
+      const res = await api.post('/notifications/admin/broadcast', { title, message: msg });
+      toast.success(res.data?.message || 'System message sent');
+      setBroadcastTitle('');
+      setBroadcastMessage('');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to send system message');
+    } finally {
+      setBroadcastSending(false);
     }
   };
 
@@ -2608,6 +2632,39 @@ export default function Admin() {
                 </div>
               )}
             </div>
+
+            {isAdmin && (
+              <div>
+                <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Broadcast system message</div>
+                <p className="text-xs text-mutedForeground mb-2">
+                  Send a one-off system notification to all users (respects their notification preferences for system messages).
+                </p>
+                <div className="space-y-1">
+                  <input
+                    type="text"
+                    value={broadcastTitle}
+                    onChange={(e) => setBroadcastTitle(e.target.value)}
+                    placeholder="Title (optional, defaults to 'System message')"
+                    className="w-full px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                  />
+                  <textarea
+                    value={broadcastMessage}
+                    onChange={(e) => setBroadcastMessage(e.target.value)}
+                    placeholder="Message to send to all users..."
+                    rows={3}
+                    className="w-full px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading resize-y"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleBroadcastSystemMessage}
+                    disabled={broadcastSending}
+                    className="px-3 py-1.5 rounded text-[10px] font-heading font-bold uppercase border bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 disabled:opacity-50"
+                  >
+                    {broadcastSending ? 'Sending…' : 'Send to all users'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
         </div>
