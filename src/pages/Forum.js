@@ -1164,14 +1164,39 @@ export default function Forum() {
         ) : topics.length === 0 ? (
           <div className="p-6 text-center text-xs text-mutedForeground">No topics yet. Create one!</div>
         ) : (
-          <div className="divide-y divide-zinc-700/30">
+          <div className="space-y-1.5 px-1 sm:px-0">
             {/* Pinned topics first */}
             {pinnedTopics.length > 0 && (
               <>
                 {pinnedTopics.map((t) => (
-                  <div key={t.id}>
-                    <TopicRowDesktop topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={null} myEntryTopicIds={[]} meUsername={user?.username} onSubmitToComp={() => {}} submittingTopicId={null} />
-                    <TopicRowMobile topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={null} myEntryTopicIds={[]} meUsername={user?.username} onSubmitToComp={() => {}} submittingTopicId={null} />
+                  <div
+                    key={t.id}
+                    className={`${styles.panel} rounded-md overflow-hidden border border-zinc-800/60 bg-zinc-900/70`}
+                  >
+                    <TopicRowDesktop
+                      topic={t}
+                      canStickyImportant={isAdmin || isModerator}
+                      canLock={isAdmin || isModerator || isHdo}
+                      onUpdate={updateTopicFlags}
+                      updating={updatingId === t.id}
+                      designerCompId={null}
+                      myEntryTopicIds={[]}
+                      meUsername={user?.username}
+                      onSubmitToComp={() => {}}
+                      submittingTopicId={null}
+                    />
+                    <TopicRowMobile
+                      topic={t}
+                      canStickyImportant={isAdmin || isModerator}
+                      canLock={isAdmin || isModerator || isHdo}
+                      onUpdate={updateTopicFlags}
+                      updating={updatingId === t.id}
+                      designerCompId={null}
+                      myEntryTopicIds={[]}
+                      meUsername={user?.username}
+                      onSubmitToComp={() => {}}
+                      submittingTopicId={null}
+                    />
                   </div>
                 ))}
                 {regularTopics.length > 0 && (
@@ -1182,9 +1207,34 @@ export default function Forum() {
             
             {/* Regular topics */}
             {regularTopics.map((t) => (
-              <div key={t.id}>
-                <TopicRowDesktop topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={null} myEntryTopicIds={[]} meUsername={user?.username} onSubmitToComp={() => {}} submittingTopicId={null} />
-                <TopicRowMobile topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} designerCompId={null} myEntryTopicIds={[]} meUsername={user?.username} onSubmitToComp={() => {}} submittingTopicId={null} />
+              <div
+                key={t.id}
+                className={`${styles.panel} rounded-md overflow-hidden border border-zinc-800/60 bg-zinc-900/70`}
+              >
+                <TopicRowDesktop
+                  topic={t}
+                  canStickyImportant={isAdmin || isModerator}
+                  canLock={isAdmin || isModerator || isHdo}
+                  onUpdate={updateTopicFlags}
+                  updating={updatingId === t.id}
+                  designerCompId={null}
+                  myEntryTopicIds={[]}
+                  meUsername={user?.username}
+                  onSubmitToComp={() => {}}
+                  submittingTopicId={null}
+                />
+                <TopicRowMobile
+                  topic={t}
+                  canStickyImportant={isAdmin || isModerator}
+                  canLock={isAdmin || isModerator || isHdo}
+                  onUpdate={updateTopicFlags}
+                  updating={updatingId === t.id}
+                  designerCompId={null}
+                  myEntryTopicIds={[]}
+                  meUsername={user?.username}
+                  onSubmitToComp={() => {}}
+                  submittingTopicId={null}
+                />
               </div>
             ))}
           </div>
