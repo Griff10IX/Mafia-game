@@ -203,6 +203,14 @@ export default function Admin() {
   const [crimeAnalytics, setCrimeAnalytics] = useState(null);
   const [crimeAnalyticsLoading, setCrimeAnalyticsLoading] = useState(false);
 
+  // Attack analytics
+  const [attackAnalyticsDays, setAttackAnalyticsDays] = useState(7);
+  const [attackAnalytics, setAttackAnalytics] = useState(null);
+  const [attackAnalyticsLoading, setAttackAnalyticsLoading] = useState(false);
+  const [attackUserId, setAttackUserId] = useState('');
+  const [attackUserProfile, setAttackUserProfile] = useState(null);
+  const [attackUserLoading, setAttackUserLoading] = useState(false);
+
   // Activity & Gambling logs
   const [activityLog, setActivityLog] = useState({ entries: [] });
   const [activityLogLoading, setActivityLogLoading] = useState(false);
@@ -1096,6 +1104,38 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load crime analytics');
     } finally {
       setCrimeAnalyticsLoading(false);
+    }
+  };
+
+  const handleFetchAttackAnalytics = async () => {
+    setAttackAnalyticsLoading(true);
+    try {
+      const res = await api.get('/admin/attacks/analytics/summary', {
+        params: { days: attackAnalyticsDays, limit: 100 },
+      });
+      setAttackAnalytics(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load attack analytics');
+    } finally {
+      setAttackAnalyticsLoading(false);
+    }
+  };
+
+  const handleFetchAttackUserProfile = async () => {
+    const id = (attackUserId || '').trim();
+    if (!id) {
+      toast.error('Enter a user ID');
+      return;
+    }
+    setAttackUserLoading(true);
+    setAttackUserProfile(null);
+    try {
+      const res = await api.get(`/admin/attacks/user/${encodeURIComponent(id)}`);
+      setAttackUserProfile(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load attack profile');
+    } finally {
+      setAttackUserLoading(false);
     }
   };
 
@@ -2394,37 +2434,234 @@ export default function Admin() {
         </div>
 
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <SectionHeader
-          icon={Shield}
-          title="Bodyguard Tools"
-          isCollapsed={collapsed.bodyguards}
-          onToggle={() => toggleSection('bodyguards')}
-        />
-        {!collapsed.bodyguards && (
-          <div className="p-2 space-y-1">
-            <ActionRow icon={Shield} label="Generate Robots" description="For target user">
-              <Input type="number" min="1" max="4" value={bgTestCount} onChange={(e) => setBgTestCount(parseInt(e.target.value) || 1)} />
-              <BtnPrimary onClick={handleGenerateBodyguards}>Generate</BtnPrimary>
-            </ActionRow>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Shield}
+            title="Bodyguard Tools"
+            isCollapsed={collapsed.bodyguards}
+            onToggle={() => toggleSection('bodyguards')}
+          />
+          {!collapsed.bodyguards && (
+            <div className="p-2 space-y-1">
+              <ActionRow icon={Shield} label="Generate Robots" description="For target user">
+                <Input type="number" min="1" max="4" value={bgTestCount} onChange={(e) => setBgTestCount(parseInt(e.target.value) || 1)} />
+                <BtnPrimary onClick={handleGenerateBodyguards}>Generate</BtnPrimary>
+              </ActionRow>
 
-            <ActionRow icon={Trash2} label="Clear Target's BGs" description="Remove all bodyguards" color="text-red-400">
-              <BtnDanger onClick={handleClearBodyguards}>Clear</BtnDanger>
-            </ActionRow>
+              <ActionRow icon={Trash2} label="Clear Target's BGs" description="Remove all bodyguards" color="text-red-400">
+                <BtnDanger onClick={handleClearBodyguards}>Clear</BtnDanger>
+              </ActionRow>
 
-            <ActionRow icon={Trash2} label="Drop ALL Bodyguards" description="Remove from every user" color="text-red-400">
-              <BtnDanger onClick={handleDropAllHumanBodyguards} disabled={dropHumanBgLoading}>
-                {dropHumanBgLoading ? '...' : 'Drop All'}
-              </BtnDanger>
-            </ActionRow>
+              <ActionRow icon={Trash2} label="Drop ALL Bodyguards" description="Remove from every user" color="text-red-400">
+                <BtnDanger onClick={handleDropAllHumanBodyguards} disabled={dropHumanBgLoading}>
+                  {dropHumanBgLoading ? '...' : 'Drop All'}
+                </BtnDanger>
+              </ActionRow>
 
-            <ActionRow icon={Shield} label="Test bodyguard payout" description="Run weekly payout job once (human BGs only)">
-              <BtnPrimary onClick={handleTestBodyguardPayout} disabled={testPayoutLoading}>
-                {testPayoutLoading ? '...' : 'Run test payout'}
-              </BtnPrimary>
-            </ActionRow>
-          </div>
-        )}
+              <ActionRow icon={Shield} label="Test bodyguard payout" description="Run weekly payout job once (human BGs only)">
+                <BtnPrimary onClick={handleTestBodyguardPayout} disabled={testPayoutLoading}>
+                  {testPayoutLoading ? '...' : 'Run test payout'}
+                </BtnPrimary>
+              </ActionRow>
+            </div>
+          )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Attack Analytics"
+            isCollapsed={collapsed.attackAnalytics}
+            onToggle={() => toggleSection('attackAnalytics')}
+          />
+          {!collapsed.attackAnalytics && (
+            <div className="p-3 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-heading text-mutedForeground uppercase tracking-widest">Per-weapon stats</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setAttackAnalyticsDays(1)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      attackAnalyticsDays === 1 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    1d
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAttackAnalyticsDays(7)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      attackAnalyticsDays === 7 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    7d
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAttackAnalyticsDays(30)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      attackAnalyticsDays === 30 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    30d
+                  </button>
+                </div>
+                <BtnPrimary onClick={handleFetchAttackAnalytics} disabled={attackAnalyticsLoading}>
+                  {attackAnalyticsLoading ? 'Loading…' : 'Load stats'}
+                </BtnPrimary>
+              </div>
+              {attackAnalytics && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-heading text-mutedForeground">
+                    Global: {attackAnalytics.global?.attempts ?? 0} attempts, {attackAnalytics.global?.kills ?? 0} kills,{' '}
+                    {attackAnalytics.global?.kill_rate != null ? `${(attackAnalytics.global.kill_rate * 100).toFixed(1)}% kill rate` : '—'}
+                  </p>
+                  <div className="overflow-x-auto max-h-72">
+                    {(!attackAnalytics.items || attackAnalytics.items.length === 0) ? (
+                      <p className="text-[10px] text-mutedForeground font-heading">No attack attempts in this window.</p>
+                    ) : (
+                      <table className="w-full text-left border-collapse text-[10px] font-heading">
+                        <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                          <tr className="border-b border-zinc-700/50">
+                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Weapon</th>
+                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Attempts</th>
+                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Kills</th>
+                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Kill %</th>
+                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Avg bullets</th>
+                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Avg damage</th>
+                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Usage %</th>
+                            <th className="py-1.5 font-bold text-mutedForeground uppercase">Last used</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {attackAnalytics.items.map((item, idx) => (
+                            <tr key={`${item.weapon_id || item.weapon_name || idx}`} className="border-b border-zinc-700/30">
+                              <td className="py-1.5 pr-2 text-foreground font-medium">
+                                {item.weapon_name || 'Unknown'}
+                              </td>
+                              <td className="py-1.5 pr-2">{item.attempts?.toLocaleString?.() ?? item.attempts}</td>
+                              <td className="py-1.5 pr-2">{item.kills?.toLocaleString?.() ?? item.kills}</td>
+                              <td className="py-1.5 pr-2">
+                                {item.kill_rate != null ? `${(item.kill_rate * 100).toFixed(1)}%` : '—'}
+                              </td>
+                              <td className="py-1.5 pr-2">
+                                {item.avg_bullets_per_attempt != null ? Math.round(item.avg_bullets_per_attempt).toLocaleString() : '—'}
+                              </td>
+                              <td className="py-1.5 pr-2">
+                                {item.avg_damage != null ? item.avg_damage.toFixed(1) : '—'}
+                              </td>
+                              <td className="py-1.5 pr-2">
+                                {item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}
+                              </td>
+                              <td className="py-1.5">
+                                {item.last_at ? new Date(item.last_at).toLocaleString() : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-zinc-700/50 pt-3 mt-2 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-heading text-mutedForeground uppercase tracking-widest">Per-user attack profile</span>
+                  <Input
+                    type="text"
+                    value={attackUserId}
+                    onChange={(e) => setAttackUserId(e.target.value)}
+                    placeholder="User ID"
+                    className="w-48 text-[11px]"
+                  />
+                  <BtnSecondary onClick={handleFetchAttackUserProfile} disabled={attackUserLoading}>
+                    {attackUserLoading ? 'Loading…' : 'Load user'}
+                  </BtnSecondary>
+                </div>
+                {attackUserProfile && (
+                  <div className="text-[10px] font-heading space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-mutedForeground">User:</span>
+                      <span className="text-foreground font-bold">{attackUserProfile.user?.username ?? '—'}</span>
+                      <span className="text-zinc-500 font-mono text-[9px]">{attackUserProfile.user?.id}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-[9px] font-heading text-mutedForeground uppercase mb-1">As attacker</div>
+                        <div className="space-y-0.5 text-[10px]">
+                          <div>Attempts: {attackUserProfile.attacker_summary?.attempts ?? 0}</div>
+                          <div>Kills: {attackUserProfile.attacker_summary?.kills ?? 0}</div>
+                          <div>
+                            Kill %:{' '}
+                            {attackUserProfile.attacker_summary?.kill_rate != null
+                              ? `${(attackUserProfile.attacker_summary.kill_rate * 100).toFixed(1)}%`
+                              : '—'}
+                          </div>
+                          <div>
+                            Avg bullets / attempt:{' '}
+                            {attackUserProfile.attacker_summary?.avg_bullets_per_attempt != null
+                              ? Math.round(attackUserProfile.attacker_summary.avg_bullets_per_attempt).toLocaleString()
+                              : '—'}
+                          </div>
+                          <div>
+                            Avg damage / attempt:{' '}
+                            {attackUserProfile.attacker_summary?.avg_damage_per_attempt != null
+                              ? attackUserProfile.attacker_summary.avg_damage_per_attempt.toFixed(1)
+                              : '—'}
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] font-heading text-mutedForeground uppercase mb-1">As target</div>
+                        <div className="space-y-0.5 text-[10px]">
+                          <div>Times attacked: {attackUserProfile.target_summary?.times_attacked ?? 0}</div>
+                          <div>Times killed: {attackUserProfile.target_summary?.times_killed ?? 0}</div>
+                          <div>
+                            Death %:{' '}
+                            {attackUserProfile.target_summary?.death_rate != null
+                              ? `${(attackUserProfile.target_summary.death_rate * 100).toFixed(1)}%`
+                              : '—'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {attackUserProfile.top_weapons?.length > 0 && (
+                      <div>
+                        <div className="text-[9px] font-heading text-mutedForeground uppercase mb-1">Top weapons</div>
+                        <div className="overflow-x-auto max-h-40">
+                          <table className="w-full text-left border-collapse text-[10px] font-heading">
+                            <thead>
+                              <tr className="border-b border-zinc-700/50">
+                                <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Weapon</th>
+                                <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Attempts</th>
+                                <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Kills</th>
+                                <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Kill %</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {attackUserProfile.top_weapons.map((w, idx) => (
+                                <tr key={`${w.weapon_id || w.weapon_name || idx}`} className="border-b border-zinc-700/30">
+                                  <td className="py-1.5 pr-2">{w.weapon_name || 'Unknown'}</td>
+                                  <td className="py-1.5 pr-2">{w.attempts?.toLocaleString?.() ?? w.attempts}</td>
+                                  <td className="py-1.5 pr-2">{w.kills?.toLocaleString?.() ?? w.kills}</td>
+                                  <td className="py-1.5 pr-2">
+                                    {w.kill_rate != null ? `${(w.kill_rate * 100).toFixed(1)}%` : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </section>
       )}

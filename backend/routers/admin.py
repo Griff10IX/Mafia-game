@@ -1609,6 +1609,232 @@ def register(router):
             )
         return {"generated_at": now.isoformat(), "days": days, "items": out}
 
+    @router.get("/admin/attacks/analytics/summary")
+    async def admin_attacks_analytics_summary(
+        days: int = Query(7, ge=1, le=90),
+        limit: int = Query(100, ge=1, le=500),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Per-weapon attack analytics summary for the last N days.
+        Admin or moderator only. Uses compact attack_attempts documents.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        since = now - timedelta(days=int(days))
+        since_iso = since.isoformat()
+        pipeline = [
+            {"$match": {"created_at": {"$gte": since_iso}}},
+            {
+                "$group": {
+                    "_id": {"weapon_name": "$weapon_name", "weapon_id": "$weapon_id"},
+                    "weapon_name": {"$last": "$weapon_name"},
+                    "weapon_id": {"$last": "$weapon_id"},
+                    "attempts": {"$sum": 1},
+                    "kills": {
+                        "$sum": {
+                            "$cond": [{"$eq": ["$outcome", "killed"]}, 1, 0],
+                        }
+                    },
+                    "total_bullets_spent": {"$sum": {"$ifNull": ["$bullets_spent", "$bullets_used"]}},
+                    "total_damage_done": {"$sum": {"$ifNull": ["$damage_done", 0]}},
+                    "last_at": {"$max": "$created_at"},
+                }
+            },
+            {"$sort": {"attempts": -1}},
+            {"$limit": int(limit)},
+        ]
+        cursor = db.attack_attempts.aggregate(pipeline)
+        docs = await cursor.to_list(int(limit))
+        total_attempts = sum(int(d.get("attempts", 0) or 0) for d in docs) or 1
+        total_kills = sum(int(d.get("kills", 0) or 0) for d in docs)
+        total_bullets = sum(int(d.get("total_bullets_spent", 0) or 0) for d in docs)
+        total_damage = sum(float(d.get("total_damage_done", 0.0) or 0.0) for d in docs)
+        items = []
+        for d in docs:
+            attempts = int(d.get("attempts", 0) or 0)
+            kills = int(d.get("kills", 0) or 0)
+            total_b = int(d.get("total_bullets_spent", 0) or 0)
+            total_dmg = float(d.get("total_damage_done", 0.0) or 0.0)
+            kill_rate = kills / attempts if attempts > 0 else 0.0
+            avg_bullets_per_attempt = total_b / attempts if attempts > 0 else 0.0
+            avg_bullets_per_kill = total_b / kills if kills > 0 else 0.0
+            avg_damage = total_dmg / attempts if attempts > 0 else 0.0
+            usage_share = attempts / total_attempts if total_attempts > 0 else 0.0
+            items.append(
+                {
+                    "weapon_id": d.get("weapon_id"),
+                    "weapon_name": d.get("weapon_name") or (d.get("_id") or {}).get("weapon_name") or "Unknown",
+                    "attempts": attempts,
+                    "kills": kills,
+                    "kill_rate": kill_rate,
+                    "avg_bullets_per_attempt": avg_bullets_per_attempt,
+                    "avg_bullets_per_kill": avg_bullets_per_kill,
+                    "avg_damage": avg_damage,
+                    "total_bullets_spent": total_b,
+                    "total_damage_done": total_dmg,
+                    "usage_share": usage_share,
+                    "last_at": d.get("last_at"),
+                }
+            )
+        global_stats = {
+            "attempts": int(total_attempts),
+            "kills": int(total_kills),
+            "kill_rate": (total_kills / total_attempts) if total_attempts > 0 else 0.0,
+            "avg_bullets_per_attempt": (total_bullets / total_attempts) if total_attempts > 0 else 0.0,
+            "avg_damage_per_attempt": (total_damage / total_attempts) if total_attempts > 0 else 0.0,
+        }
+        return {
+            "generated_at": now.isoformat(),
+            "days": days,
+            "items": items,
+            "global": global_stats,
+        }
+
+    @router.get("/admin/attacks/user/{user_id}")
+    async def admin_attacks_user_profile(
+        user_id: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Per-user attack profile for admins/moderators.
+        Aggregates stats for the user as attacker and as target, plus recent attack events.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        user = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "current_state": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Aggregate attacker summary
+        attacker_pipeline = [
+            {"$match": {"attacker_id": user_id}},
+            {
+                "$group": {
+                    "_id": None,
+                    "attempts": {"$sum": 1},
+                    "kills": {
+                        "$sum": {
+                            "$cond": [{"$eq": ["$outcome", "killed"]}, 1, 0],
+                        }
+                    },
+                    "total_bullets_spent": {"$sum": {"$ifNull": ["$bullets_spent", "$bullets_used"]}},
+                    "total_damage_done": {"$sum": {"$ifNull": ["$damage_done", 0]}},
+                }
+            },
+        ]
+        attacker_cursor = db.attack_attempts.aggregate(attacker_pipeline)
+        attacker_docs = await attacker_cursor.to_list(1)
+        attacker_summary_raw = attacker_docs[0] if attacker_docs else {}
+        attacker_attempts = int(attacker_summary_raw.get("attempts", 0) or 0)
+        attacker_kills = int(attacker_summary_raw.get("kills", 0) or 0)
+        attacker_bullets = int(attacker_summary_raw.get("total_bullets_spent", 0) or 0)
+        attacker_damage = float(attacker_summary_raw.get("total_damage_done", 0.0) or 0.0)
+        attacker_summary = {
+            "attempts": attacker_attempts,
+            "kills": attacker_kills,
+            "kill_rate": (attacker_kills / attacker_attempts) if attacker_attempts > 0 else 0.0,
+            "total_bullets_spent": attacker_bullets,
+            "total_damage_done": attacker_damage,
+            "avg_bullets_per_attempt": (attacker_bullets / attacker_attempts) if attacker_attempts > 0 else 0.0,
+            "avg_damage_per_attempt": (attacker_damage / attacker_attempts) if attacker_attempts > 0 else 0.0,
+        }
+
+        # Aggregate target/victim summary
+        target_pipeline = [
+            {"$match": {"target_id": user_id}},
+            {
+                "$group": {
+                    "_id": None,
+                    "times_attacked": {"$sum": 1},
+                    "times_killed": {
+                        "$sum": {
+                            "$cond": [{"$eq": ["$outcome", "killed"]}, 1, 0],
+                        }
+                    },
+                }
+            },
+        ]
+        target_cursor = db.attack_attempts.aggregate(target_pipeline)
+        target_docs = await target_cursor.to_list(1)
+        target_summary_raw = target_docs[0] if target_docs else {}
+        target_attempts = int(target_summary_raw.get("times_attacked", 0) or 0)
+        target_killed = int(target_summary_raw.get("times_killed", 0) or 0)
+        target_summary = {
+            "times_attacked": target_attempts,
+            "times_killed": target_killed,
+            "death_rate": (target_killed / target_attempts) if target_attempts > 0 else 0.0,
+        }
+
+        # Top weapons used by this user as attacker
+        weapons_pipeline = [
+            {"$match": {"attacker_id": user_id}},
+            {
+                "$group": {
+                    "_id": {"weapon_name": "$weapon_name", "weapon_id": "$weapon_id"},
+                    "weapon_name": {"$last": "$weapon_name"},
+                    "weapon_id": {"$last": "$weapon_id"},
+                    "attempts": {"$sum": 1},
+                    "kills": {
+                        "$sum": {
+                            "$cond": [{"$eq": ["$outcome", "killed"]}, 1, 0],
+                        }
+                    },
+                    "total_bullets_spent": {"$sum": {"$ifNull": ["$bullets_spent", "$bullets_used"]}},
+                    "total_damage_done": {"$sum": {"$ifNull": ["$damage_done", 0]}},
+                }
+            },
+            {"$sort": {"attempts": -1}},
+            {"$limit": 10},
+        ]
+        weapons_cursor = db.attack_attempts.aggregate(weapons_pipeline)
+        weapon_docs = await weapons_cursor.to_list(10)
+        top_weapons = []
+        for d in weapon_docs:
+            attempts = int(d.get("attempts", 0) or 0)
+            kills = int(d.get("kills", 0) or 0)
+            total_b = int(d.get("total_bullets_spent", 0) or 0)
+            total_dmg = float(d.get("total_damage_done", 0.0) or 0.0)
+            top_weapons.append(
+                {
+                    "weapon_id": d.get("weapon_id"),
+                    "weapon_name": d.get("weapon_name") or (d.get("_id") or {}).get("weapon_name") or "Unknown",
+                    "attempts": attempts,
+                    "kills": kills,
+                    "kill_rate": (kills / attempts) if attempts > 0 else 0.0,
+                    "avg_bullets_per_attempt": (total_b / attempts) if attempts > 0 else 0.0,
+                    "avg_damage_per_attempt": (total_dmg / attempts) if attempts > 0 else 0.0,
+                }
+            )
+
+        # Recent attacks as attacker and as target (most recent first)
+        recent_attacker = (
+            await db.attack_attempts.find(
+                {"attacker_id": user_id},
+                {"_id": 0},
+            )
+            .sort("created_at", -1)
+            .to_list(50)
+        )
+        recent_target = (
+            await db.attack_attempts.find(
+                {"target_id": user_id},
+                {"_id": 0},
+            )
+            .sort("created_at", -1)
+            .to_list(50)
+        )
+
+        return {
+            "user": user,
+            "attacker_summary": attacker_summary,
+            "target_summary": target_summary,
+            "top_weapons": top_weapons,
+            "recent_as_attacker": recent_attacker,
+            "recent_as_target": recent_target,
+        }
+
     @router.post("/admin/gambling-log/clear")
     async def admin_gambling_log_clear(
         days: int = 30,

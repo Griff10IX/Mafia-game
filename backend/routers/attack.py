@@ -568,6 +568,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
     target_armour = target.get("armour_level", 0)
     attacker_rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
     target_rank_id, _ = get_rank_info(target.get("rank_points", 0))
+    attacker_armour = int(current_user.get("armour_level") or 0)
     attacker_bullets = current_user.get("bullets", 0)
     attacker_molotovs = int(current_user.get("molotovs") or 0)
     MOLOTOV_BULLET_EQUIV = 5000
@@ -626,6 +627,9 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
     else:
         bullets_used = min(requested_effective, attacker_bullets)
         effective_bullets = bullets_used
+    attacker_state = ((attacker_location or current_user.get("current_state") or "").strip() or None)
+    target_state = ((target.get("current_state") or "").strip() or None)
+    weapon_id = (current_user.get("equipped_weapon_id") or "").strip() or None
     health_dealt_pct = min(100.0, (effective_bullets / bullets_required) * 100.0)
     killed = health_dealt_pct >= target_health
     inc_shooter = {"bullets": -bullets_used}
@@ -649,6 +653,14 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         "target_armour_level": int(target_armour or 0),
         "target_rank_id": int(target_rank_id or 1),
         "attacker_rank_id": int(attacker_rank_id or 1),
+        "attacker_armour_level": int(attacker_armour or 0),
+        "weapon_id": weapon_id or None,
+        "weapon_name": best_weapon_name,
+        "weapon_damage": int(best_damage or 0),
+        "attacker_state": attacker_state,
+        "target_state": target_state,
+        "state": attack.get("location_state"),
+        "bullets_spent": int(effective_bullets),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     if killed:
@@ -718,6 +730,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 except Exception:
                     pass
                 _is_npc_bodyguard = bool(target.get("is_bodyguard"))
+                damage_done = float(target_health)
                 try:
                     await db.attack_attempts.insert_one({
                         **attempt_base,
@@ -727,6 +740,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                         "rewards": rewards,
                         "target_health_before": target_health,
                         "target_health_after": 0.0,
+                        "damage_done": damage_done,
                         "is_npc_kill": True,
                         "is_bodyguard_kill": _is_npc_bodyguard,
                         "target_is_npc": True,
@@ -1103,6 +1117,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             except Exception as e:
                 logging.exception("Family notify/war on kill: %s", e)
         try:
+            damage_done = float(target_health)
             await db.attack_attempts.insert_one({
                 **attempt_base,
                 "outcome": "killed",
@@ -1111,6 +1126,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 "rewards": {"money": cash_loot, "rank_points": rank_points, "cars_taken": victim_cars_count, "properties_taken": victim_props_count},
                 "target_health_before": target_health,
                 "target_health_after": 0.0,
+                "damage_done": damage_done,
             })
         except Exception:
             pass
@@ -1121,6 +1137,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         )
     else:
         new_health = max(0.0, target_health - health_dealt_pct)
+        damage_done = float(max(0.0, target_health - new_health))
         await db.users.update_one(
             {"id": target["id"]},
             {"$set": {"health": new_health}}
@@ -1141,6 +1158,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 "target_health_before": target_health,
                 "target_health_after": new_health,
                 "health_dealt_pct": float(health_dealt_pct),
+                "damage_done": damage_done,
                 "message": fail_message,
             })
         except Exception:
