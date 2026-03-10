@@ -126,6 +126,34 @@ PRESTIGE_CONFIGS = {
     5: {"threshold_mult": 5.0,  "crime_mult": 1.50, "oc_mult": 1.50, "gta_rare_boost": 2.5,  "npc_mult": 1.50, "name": "Godfather Legacy", "godfather_req": 2_000_000, "mission_reward_mult": 2.5},
 }
 
+def get_prestige_requirement(current_level: int) -> int:
+    """
+    Effective rank points required to prestige from current_level -> current_level+1.
+
+    Uses PRESTIGE_CONFIGS godfather_req as the target but blends it with the
+    Godfather threshold so that most of the climb happens across all ranks and
+    only a shorter stretch is spent parked at Godfather.
+    """
+    if current_level < 0 or current_level >= 5:
+        return 0
+    next_level = current_level + 1
+    cfg = PRESTIGE_CONFIGS.get(next_level)
+    if not cfg:
+        return 0
+    base_req = int(cfg.get("godfather_req") or 0)
+    if base_req <= 0:
+        return 0
+    base_gf_req = RANKS[-1]["required_points"]  # 400,000
+    if base_req <= base_gf_req:
+        return base_req
+    # Blend the original requirement with the Godfather threshold so that
+    # effective RP at first reaching Godfather already covers a large share
+    # of the requirement, and the extra needed at Godfather is a shorter stretch.
+    blended = int((base_req + base_gf_req) / 2)
+    # Always require at least a small amount above Godfather.
+    min_above_gf = base_gf_req + 25_000
+    return max(blended, min_above_gf)
+
 def get_prestige_bonus(user: dict) -> dict:
     """Return stacking benefit multipliers for a user based on their prestige_level."""
     level = min(int(user.get("prestige_level") or 0), 5)

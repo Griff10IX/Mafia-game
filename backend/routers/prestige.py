@@ -10,6 +10,7 @@ def register(router):
     get_rank_info = srv.get_rank_info
     PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     get_prestige_bonus = srv.get_prestige_bonus
+    get_prestige_requirement = srv.get_prestige_requirement
 
     @router.get("/prestige/info")
     async def prestige_info(current_user: dict = Depends(get_current_user)):
@@ -21,8 +22,7 @@ def register(router):
 
         at_max = level >= 5
         next_level = level + 1 if not at_max else None
-        next_cfg = PRESTIGE_CONFIGS.get(next_level) if next_level else None
-        godfather_req = next_cfg["godfather_req"] if next_cfg else None
+        godfather_req = get_prestige_requirement(level) if next_level else None
 
         effective_rp = int(rank_points / mult) if mult > 1.0 else rank_points
         # Require Godfather rank and effective RP >= next level's requirement
@@ -72,13 +72,12 @@ def register(router):
         mult = float(current_user.get("prestige_rank_multiplier") or 1.0)
         rank_points = int(current_user.get("rank_points") or 0)
         effective_rp = int(rank_points / mult) if mult > 1.0 else rank_points
-        next_cfg = PRESTIGE_CONFIGS.get(level + 1)
-        godfather_req = next_cfg["godfather_req"] if next_cfg else None
+        godfather_req = get_prestige_requirement(level)
 
         rank_id, _ = get_rank_info(rank_points, mult)
         if rank_id < 11:
             raise HTTPException(status_code=400, detail="You must reach Godfather rank before prestiging")
-        if godfather_req is None or effective_rp < godfather_req:
+        if godfather_req is None or godfather_req <= 0 or effective_rp < godfather_req:
             raise HTTPException(status_code=400, detail=f"You need {godfather_req:,} effective rank points to prestige (you have {effective_rp:,})")
 
         new_level = level + 1
@@ -118,7 +117,7 @@ def register(router):
             current_user["id"],
             f"Prestige {new_level} — {new_cfg['name']}!",
             f"You have prestiged to level {new_level} ({new_cfg['name']}). Your rank has reset to Rat. "
-            f"Next prestige requires {new_cfg['godfather_req']:,} rank points to reach Godfather.",
+            f"Next prestige requires {get_prestige_requirement(new_level):,} effective rank points at Godfather.",
             "system",
             category="system",
         )
