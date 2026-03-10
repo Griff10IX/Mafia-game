@@ -146,6 +146,12 @@ class CommitCrimeResponse(BaseModel):
     prestige_bonus_earned: Optional[dict] = None
 
 
+# Extremely rare global molotov drop from any successful crime
+# 0.02% (~1 in 5,000 successful crimes) for 1 molotov
+MOLOTOV_GLOBAL_DROP_CHANCE = 0.0002
+MOLOTOV_GLOBAL_DROP_AMOUNT = 1
+
+
 # ---------------------------------------------------------------------------
 # Game data init (called from server on startup)
 # ---------------------------------------------------------------------------
@@ -520,32 +526,45 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         respect_drop = maybe_respect_points_drop()
         if respect_drop:
             inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_CRIMES_MULT))
+        # Global ultra-rare molotov drop from any successful crime
+        prestige_bonus_earned: Optional[dict] = None
+        if random.random() < MOLOTOV_GLOBAL_DROP_CHANCE:
+            inc["molotovs"] = inc.get("molotovs", 0) + MOLOTOV_GLOBAL_DROP_AMOUNT
+            prestige_bonus_earned = {"molotovs": MOLOTOV_GLOBAL_DROP_AMOUNT}
         await db.users.update_one(
             {"id": current_user["id"]},
             {"$inc": inc},
         )
 
         # Prestige bonus rewards (separate update so they're always applied cleanly)
-        prestige_bonus_earned = None
         if crime.get("prestige_bonus"):
-            prestige_bonus_earned = _apply_prestige_bonus(crime, current_user)
-            if prestige_bonus_earned:
+            prestige_bonus_from_prestige = _apply_prestige_bonus(crime, current_user)
+            if prestige_bonus_from_prestige:
                 bonus_inc = {}
-                if "cash" in prestige_bonus_earned:
-                    bonus_inc["money"] = prestige_bonus_earned["cash"]
-                if "respect_points" in prestige_bonus_earned:
-                    bonus_inc["respect_points"] = prestige_bonus_earned["respect_points"]
-                if "bullets" in prestige_bonus_earned:
-                    bonus_inc["bullets"] = prestige_bonus_earned["bullets"]
-                if "molotovs" in prestige_bonus_earned:
-                    bonus_inc["molotovs"] = prestige_bonus_earned["molotovs"]
-                if "points" in prestige_bonus_earned:
-                    bonus_inc["points"] = prestige_bonus_earned["points"]
-                if "booze" in prestige_bonus_earned:
-                    b = prestige_bonus_earned["booze"]
+                if "cash" in prestige_bonus_from_prestige:
+                    bonus_inc["money"] = prestige_bonus_from_prestige["cash"]
+                if "respect_points" in prestige_bonus_from_prestige:
+                    bonus_inc["respect_points"] = prestige_bonus_from_prestige["respect_points"]
+                if "bullets" in prestige_bonus_from_prestige:
+                    bonus_inc["bullets"] = prestige_bonus_from_prestige["bullets"]
+                if "molotovs" in prestige_bonus_from_prestige:
+                    bonus_inc["molotovs"] = bonus_inc.get("molotovs", 0) + prestige_bonus_from_prestige["molotovs"]
+                if "points" in prestige_bonus_from_prestige:
+                    bonus_inc["points"] = prestige_bonus_from_prestige["points"]
+                if "booze" in prestige_bonus_from_prestige:
+                    b = prestige_bonus_from_prestige["booze"]
                     bonus_inc[f"booze_carrying.{b['id']}"] = b["amount"]
                 if bonus_inc:
                     await db.users.update_one({"id": current_user["id"]}, {"$inc": bonus_inc})
+                # Merge prestige bonuses into the response dict (preserving any global molotov drop)
+                if prestige_bonus_earned is None:
+                    prestige_bonus_earned = dict(prestige_bonus_from_prestige)
+                else:
+                    for k, v in prestige_bonus_from_prestige.items():
+                        if k in {"cash", "respect_points", "bullets", "points", "molotovs"}:
+                            prestige_bonus_earned[k] = prestige_bonus_earned.get(k, 0) + v
+                        elif k == "booze":
+                            prestige_bonus_earned["booze"] = v
 
         new_total_crimes = (current_user.get("total_crimes") or 0) + 1
         claimed = current_user.get("respect_points_crime_milestones_claimed") or []
