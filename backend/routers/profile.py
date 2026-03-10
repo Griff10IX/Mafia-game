@@ -61,34 +61,22 @@ def register(router):
     CARS = srv.CARS
 
     async def _top_cars_for_profile(user_id: str, limit: int = 5, show_cars: bool = False, featured_car_id: Optional[str] = None):
-        """Return up to 5 cars for profile. If show_cars is False, return []. If featured_car_id set, put that first then fill by value (max 5)."""
-        if not show_cars:
+        """Return only the explicitly featured car for the profile. Other cars are never shown automatically."""
+        if not show_cars or not featured_car_id:
             return []
-        cursor = db.user_cars.find({"user_id": user_id}, {"_id": 0, "id": 1, "car_id": 1})
-        owned = await cursor.to_list(500)
+        uc = await db.user_cars.find_one({"user_id": user_id, "id": featured_car_id}, {"_id": 0, "id": 1, "car_id": 1})
+        if not uc:
+            return []
         cars_catalog = {c["id"]: c for c in (CARS or [])}
-        with_value = []
-        featured = None
-        for uc in owned:
-            info = cars_catalog.get(uc.get("car_id")) if uc.get("car_id") else None
-            if not info:
-                continue
-            entry = {
-                "id": uc.get("id"),
-                "name": info.get("name") or "?",
-                "value": int(info.get("value") or 0),
-                "rarity": info.get("rarity") or "common",
-            }
-            if uc.get("id") == featured_car_id:
-                featured = entry
-            else:
-                with_value.append(entry)
-        with_value.sort(key=lambda x: -x["value"])
-        if featured:
-            result = [featured] + [c for c in with_value if c["id"] != featured.get("id")][: limit - 1]
-        else:
-            result = with_value[:limit]
-        return result
+        info = cars_catalog.get(uc.get("car_id")) if uc.get("car_id") else None
+        if not info:
+            return []
+        return [{
+            "id": uc.get("id"),
+            "name": info.get("name") or "?",
+            "value": int(info.get("value") or 0),
+            "rarity": info.get("rarity") or "common",
+        }]
 
     @router.get("/users/{username}/profile-preview")
     async def get_user_profile_preview(username: str, current_user: dict = Depends(get_current_user)):

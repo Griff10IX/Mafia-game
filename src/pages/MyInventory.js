@@ -124,73 +124,73 @@ export default function MyInventory() {
           Equip your armour and weapons. View your loot-exclusive items.
         </p>
 
-        {/* Weapons & Armour side by side */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 inv-fade-in" style={{ animationDelay: '0.1s' }}>
+        {/* Weapons & Armour side by side — always 2 columns */}
+        <div className="grid grid-cols-2 gap-3 inv-fade-in" style={{ animationDelay: '0.1s' }}>
           {/* Weapons */}
           <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 min-w-0`}>
-          <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
-            <Swords size={14} className="text-primary" />
-            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Weapons</h2>
-          </div>
-          <div className="p-2.5 divide-y divide-zinc-700/30">
-            {weapons.length === 0 ? (
-              <div className="py-3 text-[10px] text-mutedForeground font-heading text-center">No weapons owned</div>
-            ) : (
-              weapons.map((w) => (
-                <div key={w.id} className="inv-item flex items-center justify-between py-2 gap-2">
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[11px] sm:text-xs font-heading font-medium text-foreground truncate block">
-                      {w.name}
-                      {w.equipped && <span className="text-primary ml-1">✓</span>}
-                      {w.loot_exclusive && <span className="text-amber-400 ml-1">Loot Exclusive</span>}
-                    </span>
+            <div className="px-2 py-1.5 sm:px-2.5 sm:py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
+              <Swords size={12} className="text-primary shrink-0" />
+              <h2 className="text-[9px] sm:text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Weapons</h2>
+            </div>
+            <div className="p-2 sm:p-2.5 divide-y divide-zinc-700/30">
+              {weapons.length === 0 ? (
+                <div className="py-3 text-[9px] text-mutedForeground font-heading text-center">No weapons owned</div>
+              ) : (
+                weapons.map((w) => (
+                  <div key={w.id} className="inv-item flex items-center justify-between py-1.5 gap-1">
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-heading font-medium text-foreground truncate block">
+                        {w.name}
+                        {w.equipped && <span className="text-primary ml-1">✓</span>}
+                      </span>
+                      {w.loot_exclusive && <span className="text-[8px] text-amber-400 block">Loot Exclusive</span>}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={equipping.weapon !== null}
+                      onClick={() => (w.equipped ? unequipWeapon() : equipWeapon(w.id))}
+                      className="px-1.5 py-1 rounded text-[8px] sm:text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 shrink-0"
+                    >
+                      {equipping.weapon === w.id || (equipping.weapon === '' && w.equipped) ? '...' : w.equipped ? 'Unequip' : 'Equip'}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    disabled={equipping.weapon !== null}
-                    onClick={() => (w.equipped ? unequipWeapon() : equipWeapon(w.id))}
-                    className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 shrink-0"
-                  >
-                    {equipping.weapon === w.id || (equipping.weapon === '' && w.equipped) ? '...' : w.equipped ? 'Unequip' : 'Equip'}
-                  </button>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Armour */}
-        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 min-w-0`}>
-          <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
-            <Shield size={14} className="text-primary" />
-            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Armour</h2>
-          </div>
-          <div className="p-2.5 divide-y divide-zinc-700/30">
-            {armourOptions.length === 0 ? (
-              <div className="py-3 text-[10px] text-mutedForeground font-heading text-center">No armour owned</div>
-            ) : (
-              armourOptions.map((o) => (
-                <div key={o.level} className="inv-item flex items-center justify-between py-2 gap-2">
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[11px] sm:text-xs font-heading font-medium text-foreground truncate block">
-                      Lv.{o.level} {o.name}
-                      {o.equipped && <span className="text-primary ml-1">✓</span>}
-                    </span>
-                    {o.loot_exclusive && <span className="text-[9px] text-amber-400">Loot Exclusive</span>}
+          {/* Armour */}
+          <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 min-w-0`}>
+            <div className="px-2 py-1.5 sm:px-2.5 sm:py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
+              <Shield size={12} className="text-primary shrink-0" />
+              <h2 className="text-[9px] sm:text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Armour</h2>
+            </div>
+            <div className="p-2 sm:p-2.5 divide-y divide-zinc-700/30">
+              {armourOptions.length === 0 ? (
+                <div className="py-3 text-[9px] text-mutedForeground font-heading text-center">No armour owned</div>
+              ) : (
+                armourOptions.map((o) => (
+                  <div key={o.level} className="inv-item flex items-center justify-between py-1.5 gap-1">
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-heading font-medium text-foreground truncate block">
+                        Lv.{o.level} {o.name}
+                        {o.equipped && <span className="text-primary ml-1">✓</span>}
+                      </span>
+                      {o.loot_exclusive && <span className="text-[8px] text-amber-400 block">Loot Exclusive</span>}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={equipping.armour !== null}
+                      onClick={() => (o.equipped ? unequipArmour() : equipArmour(o.level))}
+                      className="px-1.5 py-1 rounded text-[8px] sm:text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 shrink-0"
+                    >
+                      {equipping.armour === o.level || (equipping.armour === 0 && o.equipped) ? '...' : o.equipped ? 'Unequip' : 'Equip'}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    disabled={equipping.armour !== null}
-                    onClick={() => (o.equipped ? unequipArmour() : equipArmour(o.level))}
-                    className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 shrink-0"
-                  >
-                    {equipping.armour === o.level || (equipping.armour === 0 && o.equipped) ? '...' : o.equipped ? 'Unequip' : 'Equip'}
-                  </button>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
-        </div>
         </div>
 
         {/* Loot Exclusives */}

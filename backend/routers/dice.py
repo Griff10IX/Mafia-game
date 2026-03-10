@@ -29,7 +29,8 @@ from server import (
 DICE_SIDES_MIN = 2
 DICE_SIDES_MAX = 5000
 DICE_HOUSE_EDGE = 0.05  # 5% house edge
-DICE_MAX_BET = 5_000_000
+DICE_MAX_BET = 5_000_000          # default max bet for new tables
+DICE_ABSOLUTE_MAX_BET = 500_000_000  # hard ceiling owners can set up to
 DICE_CLAIM_COST_POINTS = 0  # cost in points to claim a dice table (0 = free)
 
 # ----- Models -----
@@ -311,7 +312,10 @@ def register(router):
             raise HTTPException(status_code=400, detail="Not enough points to claim")
         await db.dice_ownership.update_one(
             {"city": city},
-            {"$set": {"owner_id": current_user["id"], "owner_username": current_user["username"], "max_bet": DICE_MAX_BET, "buy_back_reward": 0, "profit": 0}},
+            {
+                "$set": {"owner_id": current_user["id"], "owner_username": current_user["username"], "buy_back_reward": 0, "profit": 0},
+                "$setOnInsert": {"max_bet": DICE_MAX_BET},  # only set default on new docs; preserve owner's configured max_bet on reclaim
+            },
             upsert=True,
         )
         if DICE_CLAIM_COST_POINTS > 0:
@@ -341,9 +345,9 @@ def register(router):
         stored_city, doc = await _get_dice_ownership_doc(city)
         if not doc or doc.get("owner_id") != current_user["id"]:
             raise HTTPException(status_code=403, detail="You do not own this table")
-        max_bet = max(0, int(request.max_bet))
+        max_bet = max(1, min(int(request.max_bet), DICE_ABSOLUTE_MAX_BET))
         await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": max_bet}})
-        return {"message": "Max bet updated."}
+        return {"message": f"Max bet set to ${max_bet:,}"}
 
     @router.post("/casino/dice/set-buy-back-reward")
     async def casino_dice_set_buy_back_reward(request: DiceSetBuyBackRequest, current_user: dict = Depends(get_current_user_verified)):

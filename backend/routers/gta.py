@@ -1090,32 +1090,11 @@ async def get_car(car_id: str, current_user: dict = Depends(get_current_user)):
 
 
 async def _is_car_on_owner_profile(db, owner_id: str, user_car_id: str) -> bool:
-    """Return True if owner has show_cars and this user_car id is in their profile top 5 (same logic as profile _top_cars_for_profile)."""
+    """Return True only if this specific car is the one the owner has explicitly set as their featured profile car."""
     owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "profile_show_cars": 1, "profile_featured_car_id": 1})
-    if not owner or owner.get("profile_show_cars") is False:
+    if not owner or not owner.get("profile_show_cars") or not owner.get("profile_featured_car_id"):
         return False
-    cursor = db.user_cars.find({"user_id": owner_id}, {"_id": 0, "id": 1, "car_id": 1})
-    owned = await cursor.to_list(500)
-    cars_catalog = {c["id"]: c for c in (CARS or [])}
-    with_value = []
-    featured = None
-    featured_id = owner.get("profile_featured_car_id")
-    for uc in owned:
-        info = cars_catalog.get(uc.get("car_id")) if uc.get("car_id") else None
-        if not info:
-            continue
-        entry = {"id": uc.get("id"), "value": int(info.get("value") or 0)}
-        if uc.get("id") == featured_id:
-            featured = entry
-        else:
-            with_value.append(entry)
-    with_value.sort(key=lambda x: (-x["value"], x["id"]))
-    if featured:
-        result = [featured] + [e for e in with_value if e["id"] != featured["id"]][:4]
-    else:
-        result = with_value[:5]
-    top_ids = {e["id"] for e in result}
-    return user_car_id in top_ids
+    return owner.get("profile_featured_car_id") == user_car_id
 
 
 async def update_custom_car_image(

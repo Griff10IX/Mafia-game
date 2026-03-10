@@ -700,6 +700,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                         "target_health_before": target_health,
                         "target_health_after": 0.0,
                         "is_npc_kill": True,
+                        "is_bodyguard_kill": bool(target.get("is_bodyguard")),
+                        "target_is_npc": True,
                     })
                 except Exception:
                     pass
