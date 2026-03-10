@@ -634,6 +634,35 @@ export default function ForumTopic() {
                     </span>
                   )}
                 </div>
+
+                {/* Quoted parent when this is a reply */}
+                {c.reply_to_comment_id && (() => {
+                  const parent = comments.find((p) => p.id === c.reply_to_comment_id);
+                  if (!parent) return null;
+                  const parentIndex = comments.findIndex((p) => p.id === parent.id);
+                  return (
+                    <div className="mt-2 mb-2 px-2.5 py-2 rounded-md bg-zinc-900/70 border border-zinc-800/80">
+                      <div className="flex items-center gap-2 text-[9px] text-zinc-500 font-heading mb-1">
+                        <span className="uppercase tracking-wider">Replying to</span>
+                        <Link
+                          to={`/profile/${encodeURIComponent(parent.author_username)}`}
+                          className="text-foreground font-bold hover:text-primary hover:underline"
+                        >
+                          {parent.author_username}
+                        </Link>
+                        {parentIndex >= 0 && (
+                          <span className="text-zinc-600">#{parentIndex + 1}</span>
+                        )}
+                      </div>
+                      {parent.content && parent.content !== '(GIF)' && (
+                        <div
+                          className="text-[10px] text-zinc-400 font-normal forum-content line-clamp-3"
+                          dangerouslySetInnerHTML={{ __html: parseForumContent(parent.content) }}
+                        />
+                      )}
+                    </div>
+                  );
+                })()}
                 
                 {/* GIF (legacy gif_url) */}
                 {c.gif_url && (
