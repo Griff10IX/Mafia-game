@@ -17,11 +17,11 @@ const PRESTIGE_COLORS = {
 const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' };
 
 const PRESTIGE_CRIME_INFO = {
-  1: { name: 'The Syndicate Run',     dropType: '30% Rare Drop',    rewards: ['Cash', 'Respect', 'Moonshine'] },
-  2: { name: 'Contraband Courier',    dropType: '30% Rare Drop',    rewards: ['Moonshine', 'Bullets'] },
-  3: { name: 'Black Market Deal',     dropType: '30% Rare Drop',    rewards: ['Moonshine', 'Bullets', 'Points'] },
-  4: { name: "The Commission's Work", dropType: 'Guaranteed ×0.5',  rewards: ['Cash', 'Respect', 'Moonshine', 'Bullets', 'Points'] },
-  5: { name: "Godfather's Orders",    dropType: 'Guaranteed ×1',    rewards: ['Cash', 'Respect', 'Moonshine', 'Bullets', 'Points'] },
+  1: { name: 'The Syndicate Run',     dropType: '30% Rare Drop',    rewards: ['Cash', 'Respect', 'Booze'] },
+  2: { name: 'Contraband Courier',    dropType: '30% Rare Drop',    rewards: ['Booze', 'Bullets'] },
+  3: { name: 'Black Market Deal',     dropType: '30% Rare Drop',    rewards: ['Booze', 'Bullets', 'Points'] },
+  4: { name: "The Commission's Work", dropType: 'Guaranteed ×0.5',  rewards: ['Cash', 'Respect', 'Booze', 'Bullets', 'Points'] },
+  5: { name: "Godfather's Orders",    dropType: 'Guaranteed ×1',    rewards: ['Cash', 'Respect', 'Booze', 'Bullets', 'Points'] },
 };
 
 function ProgressBar({ value, max, color }) {

@@ -31,11 +31,11 @@ const PRESTIGE_ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' };
 
 // Reward pills shown on prestige crime rows
 const PRESTIGE_BONUS_LABELS = {
-  1: ['Cash', 'Respect', 'Moonshine'],
-  2: ['Moonshine', 'Bullets'],
-  3: ['Moonshine', 'Bullets', 'Points'],
-  4: ['Cash', 'Respect', 'Moonshine', 'Bullets', 'Points'],
-  5: ['Cash', 'Respect', 'Moonshine', 'Bullets', 'Points'],
+  1: ['Cash', 'Respect', 'Booze'],
+  2: ['Booze', 'Bullets'],
+  3: ['Booze', 'Bullets', 'Points'],
+  4: ['Cash', 'Respect', 'Booze', 'Bullets', 'Points'],
+  5: ['Cash', 'Respect', 'Booze', 'Bullets', 'Points'],
 };
 
 const TICK_INTERVAL = 1000;
@@ -515,7 +515,11 @@ export default function Crimes() {
           const parts = [];
           if (bonus.cash) parts.push(`$${bonus.cash.toLocaleString()}`);
           if (bonus.respect_points) parts.push(`+${bonus.respect_points} respect`);
-          if (bonus.booze) parts.push(`${bonus.booze.amount}× Moonshine`);
+          if (bonus.booze) {
+            const boozeId = typeof bonus.booze.id === 'string' ? bonus.booze.id : 'booze';
+            const boozeName = boozeId.charAt(0).toUpperCase() + boozeId.slice(1);
+            parts.push(`${bonus.booze.amount}× ${boozeName}`);
+          }
           if (bonus.bullets) parts.push(`${bonus.bullets} bullets`);
           if (bonus.molotovs) parts.push(`${bonus.molotovs} molotov${bonus.molotovs === 1 ? '' : 's'} (each counts as 5,000 bullets)`);
           if (bonus.points) parts.push(`${bonus.points} pts`);
