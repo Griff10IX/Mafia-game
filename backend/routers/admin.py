@@ -1738,6 +1738,114 @@ def register(router):
             )
         return {"generated_at": now.isoformat(), "days": days, "items": items}
 
+    @router.get("/admin/hitlist-bodyguards/analytics/summary")
+    async def admin_hitlist_bodyguards_analytics_summary(
+        days: int = Query(7, ge=1, le=90),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Hitlist and bodyguard event analytics for the last N days.
+        Admin or moderator only. Uses hitlist_bodyguard_events.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        since = now - timedelta(days=int(days))
+        since_iso = since.isoformat()
+
+        cursor = db.hitlist_bodyguard_events.find(
+            {"at": {"$gte": since_iso}},
+            {"_id": 0},
+        )
+        by_type = {}
+        async for e in cursor:
+            ev_type = (e.get("type") or "").strip() or "unknown"
+            s = by_type.setdefault(
+                ev_type,
+                {"event_type": ev_type, "count": 0, "total_cost_cash": 0, "total_cost_points": 0, "total_hire_cost": 0},
+            )
+            s["count"] += 1
+            s["total_cost_cash"] += int(e.get("cost_cash") or 0)
+            s["total_cost_points"] += int(e.get("cost_points") or 0)
+            s["total_hire_cost"] += int(e.get("hire_cost") or e.get("cost") or 0)
+
+        items = []
+        total_events = sum(v["count"] for v in by_type.values()) or 1
+        for ev_type, s in sorted(by_type.items(), key=lambda kv: -kv[1]["count"]):
+            count = s["count"]
+            usage_share = count / total_events if total_events > 0 else 0.0
+            items.append(
+                {
+                    "event_type": s["event_type"],
+                    "count": count,
+                    "total_cost_cash": s["total_cost_cash"],
+                    "total_cost_points": s["total_cost_points"],
+                    "total_hire_cost": s["total_hire_cost"],
+                    "usage_share": usage_share,
+                }
+            )
+        return {"generated_at": now.isoformat(), "days": days, "items": items}
+
+    @router.get("/admin/economy/analytics/summary")
+    async def admin_economy_analytics_summary(
+        days: int = Query(7, ge=1, le=90),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Economy event analytics (car trades, property buys, loot drops, loot box opens, booze runs) for the last N days.
+        Admin or moderator only. Uses economy_events.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        since = now - timedelta(days=int(days))
+        since_iso = since.isoformat()
+
+        cursor = db.economy_events.find(
+            {"at": {"$gte": since_iso}},
+            {"_id": 0},
+        )
+        by_type = {}
+        async for e in cursor:
+            ev_type = (e.get("type") or "").strip() or "unknown"
+            s = by_type.setdefault(
+                ev_type,
+                {
+                    "event_type": ev_type,
+                    "count": 0,
+                    "total_price": 0,
+                    "total_cost": 0,
+                    "total_profit": 0,
+                    "total_revenue": 0,
+                    "total_pieces": 0,
+                },
+            )
+            s["count"] += 1
+            s["total_price"] += int(e.get("price") or 0)
+            s["total_cost"] += int(e.get("cost") or 0)
+            s["total_profit"] += int(e.get("profit") or 0)
+            s["total_revenue"] += int(e.get("revenue") or 0)
+            s["total_pieces"] += int(e.get("pieces") or 0)
+
+        items = []
+        total_events = sum(v["count"] for v in by_type.values()) or 1
+        for ev_type, s in sorted(by_type.items(), key=lambda kv: -kv[1]["count"]):
+            count = s["count"]
+            usage_share = count / total_events if total_events > 0 else 0.0
+            items.append(
+                {
+                    "event_type": s["event_type"],
+                    "count": count,
+                    "total_price": s["total_price"],
+                    "total_cost": s["total_cost"],
+                    "total_profit": s["total_profit"],
+                    "total_revenue": s["total_revenue"],
+                    "total_pieces": s["total_pieces"],
+                    "usage_share": usage_share,
+                }
+            )
+        return {"generated_at": now.isoformat(), "days": days, "items": items}
+
     @router.get("/admin/attacks/analytics/summary")
     async def admin_attacks_analytics_summary(
         days: int = Query(7, ge=1, le=90),

@@ -410,6 +410,16 @@ async def upgrade_bodyguard_armour(slot: int, current_user: dict = Depends(get_c
     )
     await db.users.update_one({"id": bg["bodyguard_user_id"]}, {"$set": {"armour_level": new_level}})
     _invalidate_bodyguards_cache(current_user["id"])
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.hitlist_bodyguard_events.insert_one({
+        "at": now_iso,
+        "type": "bodyguard_armour_upgrade",
+        "owner_id": current_user["id"],
+        "owner_username": current_user.get("username") or "",
+        "slot": slot,
+        "new_level": new_level,
+        "cost": cost,
+    })
     return {"message": f"Upgraded bodyguard armour to level {new_level} for {cost} points", "armour_level": new_level, "cost": cost}
 
 
@@ -429,6 +439,15 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
         {"id": current_user["id"]},
         {"$inc": {"points": -cost, "bodyguard_slots": 1, "lifetime_points_spent": cost}}
     )
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.hitlist_bodyguard_events.insert_one({
+        "at": now_iso,
+        "type": "bodyguard_slot_bought",
+        "user_id": current_user["id"],
+        "username": current_user.get("username") or "",
+        "cost": cost,
+        "slots_after": current_user["bodyguard_slots"] + 1,
+    })
     _invalidate_bodyguards_cache(current_user["id"])
     return {"message": f"Bodyguard slot purchased for {cost} points"}
 
@@ -499,6 +518,17 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
         "hire_cost": cost,
     }
     await db.bodyguards.insert_one(bodyguard_doc)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.hitlist_bodyguard_events.insert_one({
+        "at": now_iso,
+        "type": "bodyguard_hired",
+        "owner_id": current_user["id"],
+        "owner_username": current_user.get("username") or "",
+        "slot": slot,
+        "is_robot": is_robot,
+        "hire_cost": cost,
+        "bodyguard_username": robot_name if is_robot else None,
+    })
     asyncio.create_task(send_notification(
         current_user["id"],
         "🛡️ Bodyguard Hired",
@@ -564,6 +594,15 @@ async def invite_bodyguard(request: BodyguardInviteRequest, current_user: dict =
         "duration_hours": int(request.duration_hours or 168),
         "status": "pending",
         "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.hitlist_bodyguard_events.insert_one({
+        "at": now_iso,
+        "type": "bodyguard_invite_sent",
+        "inviter_id": current_user["id"],
+        "inviter_username": current_user.get("username") or "",
+        "invitee_id": target["id"],
+        "invitee_username": target["username"],
     })
     await send_notification(
         target["id"],
@@ -745,6 +784,17 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
         {"id": invite_id},
         {"$set": {"status": "accepted"}}
     )
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.hitlist_bodyguard_events.insert_one({
+        "at": now_iso,
+        "type": "bodyguard_invite_accepted",
+        "inviter_id": inviter["id"],
+        "inviter_username": inviter.get("username") or "",
+        "invitee_id": current_user["id"],
+        "invitee_username": current_user.get("username") or "",
+        "slot": empty_slot,
+        "hire_cost": human_hire_cost,
+    })
     await send_notification(
         inviter["id"],
         "🛡️ Bodyguard Accepted",
@@ -763,23 +813,45 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
 
 
 async def decline_bodyguard_invite(invite_id: str, current_user: dict = Depends(get_current_user)):
+    invite = await db.bodyguard_invites.find_one({"id": invite_id, "invitee_id": current_user["id"], "status": "pending"}, {"_id": 0, "inviter_id": 1, "inviter_username": 1})
     result = await db.bodyguard_invites.update_one(
         {"id": invite_id, "invitee_id": current_user["id"], "status": "pending"},
         {"$set": {"status": "declined"}}
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Invite not found")
+    if invite:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.hitlist_bodyguard_events.insert_one({
+            "at": now_iso,
+            "type": "bodyguard_invite_declined",
+            "inviter_id": invite.get("inviter_id"),
+            "inviter_username": invite.get("inviter_username") or "",
+            "invitee_id": current_user["id"],
+            "invitee_username": current_user.get("username") or "",
+        })
     return {"message": "Invite declined"}
 
 
 async def cancel_bodyguard_invite(invite_id: str, current_user: dict = Depends(get_current_user)):
     """Inviter cancels a pending invite they sent."""
+    invite = await db.bodyguard_invites.find_one({"id": invite_id, "inviter_id": current_user["id"], "status": "pending"}, {"_id": 0, "invitee_id": 1, "invitee_username": 1})
     result = await db.bodyguard_invites.update_one(
         {"id": invite_id, "inviter_id": current_user["id"], "status": "pending"},
         {"$set": {"status": "cancelled"}}
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Invite not found")
+    if invite:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.hitlist_bodyguard_events.insert_one({
+            "at": now_iso,
+            "type": "bodyguard_invite_cancelled",
+            "inviter_id": current_user["id"],
+            "inviter_username": current_user.get("username") or "",
+            "invitee_id": invite.get("invitee_id"),
+            "invitee_username": invite.get("invitee_username") or "",
+        })
     return {"message": "Invite cancelled"}
 
 
@@ -1046,6 +1118,15 @@ async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_use
         "bodyguard",
     )
     now = datetime.now(timezone.utc)
+    await db.hitlist_bodyguard_events.insert_one({
+        "at": now.isoformat(),
+        "type": "bodyguard_dropped",
+        "owner_id": current_user["id"],
+        "owner_username": current_user.get("username") or "",
+        "guard_id": guard_id,
+        "guard_username": guard_name,
+        "slot": slot,
+    })
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$set": {"bodyguard_last_drop_at": now.isoformat()}},

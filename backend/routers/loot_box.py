@@ -539,6 +539,15 @@ async def open_loot_box(
             {"id": user_id},
             {"$push": {"loot_box_recent": {"$each": [win_entry], "$slice": -10}}},
         )
+        await db.economy_events.insert_one({
+            "at": now.isoformat(),
+            "type": "loot_box_open",
+            "user_id": user_id,
+            "username": current_user.get("username") if current_user else "",
+            "box_quality": box_quality,
+            "prizes_count": len(rewards),
+            "reward_types": [r.get("type") for r in rewards if r.get("type")],
+        })
 
         return {
             "rewards": rewards,

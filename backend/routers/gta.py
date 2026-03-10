@@ -1018,6 +1018,19 @@ async def buy_listed_car(
     await db.users.update_one({"id": buyer_id}, {"$inc": {"money": -price}})
     await db.users.update_one({"id": seller_id}, {"$inc": {"money": price}})
     seller = await db.users.find_one({"id": seller_id}, {"_id": 0, "username": 1})
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.economy_events.insert_one({
+        "at": now_iso,
+        "type": "car_trade",
+        "buyer_id": buyer_id,
+        "buyer_username": current_user.get("username") or "",
+        "seller_id": seller_id,
+        "seller_username": (seller or {}).get("username") or "?",
+        "user_car_id": user_car.get("id"),
+        "car_id": user_car.get("car_id"),
+        "car_name": car_name,
+        "price": price,
+    })
     await log_activity(
         buyer_id,
         current_user.get("username") or "?",

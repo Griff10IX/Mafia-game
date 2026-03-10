@@ -550,6 +550,19 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
             {"id": current_user["id"]},
             {"$inc": inc},
         )
+        if inc.get("loot_box_pieces"):
+            try:
+                await db.economy_events.insert_one({
+                    "at": now_utc.isoformat(),
+                    "type": "loot_piece_drop",
+                    "user_id": current_user["id"],
+                    "username": current_user.get("username") or "",
+                    "crime_id": crime.get("id"),
+                    "crime_name": crime.get("name"),
+                    "pieces": inc.get("loot_box_pieces"),
+                })
+            except Exception as e:
+                logger.warning("economy_events loot_piece_drop insert: %s", e)
 
         # Prestige bonus rewards (separate update so they're always applied cleanly)
         if crime.get("prestige_bonus"):

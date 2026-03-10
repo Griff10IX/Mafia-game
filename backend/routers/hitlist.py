@@ -181,6 +181,33 @@ async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(g
         "hitlist_add",
         {"target_username": target["username"], "target_type": target_type, "reward_cash": reward_cash, "reward_points": reward_points, "hidden": hidden},
     )
+    now_iso = now.isoformat()
+    if use_dual:
+        await db.hitlist_bodyguard_events.insert_one({
+            "at": now_iso,
+            "type": "hitlist_placed",
+            "placer_id": current_user["id"],
+            "placer_username": current_user.get("username") or "",
+            "target_id": target["id"],
+            "target_username": target["username"],
+            "target_type": target_type,
+            "reward_cash": reward_cash,
+            "reward_points": reward_points,
+            "hidden": hidden,
+        })
+    else:
+        await db.hitlist_bodyguard_events.insert_one({
+            "at": now_iso,
+            "type": "hitlist_placed",
+            "placer_id": current_user["id"],
+            "placer_username": current_user.get("username") or "",
+            "target_id": target["id"],
+            "target_username": target["username"],
+            "target_type": target_type,
+            "reward_type": (request.reward_type or "").strip().lower(),
+            "reward_amount": int(request.reward_amount or 0),
+            "hidden": hidden,
+        })
     return {"message": msg}
 
 
@@ -277,6 +304,16 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
         "hitlist_add_npc",
         {"npc_username": npc_username, "hitlist_id": hitlist_id, "rank_name": rank_name, "npc_template_id": template.get("id", "")},
     )
+    await db.hitlist_bodyguard_events.insert_one({
+        "at": now_iso,
+        "type": "hitlist_placed_npc",
+        "placer_id": current_user["id"],
+        "placer_username": current_user.get("username") or "",
+        "npc_user_id": npc_user_id,
+        "npc_username": npc_username,
+        "npc_rank": rank_id,
+        "npc_template_id": template.get("id", ""),
+    })
     return {"message": f"Added {base_name} (NPC) — {rank_name}. Rewards: {reward_desc}. Attack them from the Attack page.", "hitlist_id": hitlist_id}
 
 
@@ -381,6 +418,16 @@ async def hitlist_buy_off(current_user: dict = Depends(get_current_user)):
         )
     except Exception as e:
         logger.exception("Hitlist buy-off notification: %s", e)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.hitlist_bodyguard_events.insert_one({
+        "at": now_iso,
+        "type": "hitlist_buy_off_self",
+        "user_id": user_id,
+        "username": current_user.get("username") or "",
+        "deleted_count": res.deleted_count,
+        "cost_cash": cost_cash,
+        "cost_points": cost_points,
+    })
     await log_activity(
         current_user["id"],
         current_user.get("username") or "?",
@@ -445,6 +492,18 @@ async def hitlist_buy_off_user(request: HitlistBuyOffUserRequest, current_user: 
         )
     except Exception as e:
         logger.exception("Hitlist buy-off-user notification: %s", e)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.hitlist_bodyguard_events.insert_one({
+        "at": now_iso,
+        "type": "hitlist_buy_off_user",
+        "buyer_id": current_user["id"],
+        "buyer_username": current_user.get("username") or "",
+        "target_id": target["id"],
+        "target_username": target["username"],
+        "deleted_count": res.deleted_count,
+        "cost_cash": cost_cash,
+        "cost_points": cost_points,
+    })
     await log_activity(
         current_user["id"],
         current_user.get("username") or "?",
@@ -468,6 +527,15 @@ async def hitlist_reveal(current_user: dict = Depends(get_current_user)):
     await db.users.update_one({"id": user_id}, {"$set": {"hitlist_revealed": True}, "$inc": {"points": -cost}})
     entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
     who = [{"placer_username": "Anonymous" if e.get("hidden") else (e.get("placer_username") or "Unknown"), "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.hitlist_bodyguard_events.insert_one({
+        "at": now_iso,
+        "type": "hitlist_reveal",
+        "user_id": user_id,
+        "username": current_user.get("username") or "",
+        "cost_points": cost,
+        "entries_count": len(entries),
+    })
     await log_activity(
         current_user["id"],
         current_user.get("username") or "?",

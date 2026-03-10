@@ -210,6 +210,18 @@ export default function Admin() {
   const [attackUserId, setAttackUserId] = useState('');
   const [attackUserProfile, setAttackUserProfile] = useState(null);
   const [attackUserLoading, setAttackUserLoading] = useState(false);
+  const [casinoAnalyticsDays, setCasinoAnalyticsDays] = useState(7);
+  const [casinoAnalytics, setCasinoAnalytics] = useState(null);
+  const [casinoAnalyticsLoading, setCasinoAnalyticsLoading] = useState(false);
+  const [tradesAnalyticsDays, setTradesAnalyticsDays] = useState(7);
+  const [tradesAnalytics, setTradesAnalytics] = useState(null);
+  const [tradesAnalyticsLoading, setTradesAnalyticsLoading] = useState(false);
+  const [hitlistBodyguardsAnalyticsDays, setHitlistBodyguardsAnalyticsDays] = useState(7);
+  const [hitlistBodyguardsAnalytics, setHitlistBodyguardsAnalytics] = useState(null);
+  const [hitlistBodyguardsAnalyticsLoading, setHitlistBodyguardsAnalyticsLoading] = useState(false);
+  const [economyAnalyticsDays, setEconomyAnalyticsDays] = useState(7);
+  const [economyAnalytics, setEconomyAnalytics] = useState(null);
+  const [economyAnalyticsLoading, setEconomyAnalyticsLoading] = useState(false);
   const [attackLogsUsername, setAttackLogsUsername] = useState('');
   const [attackLogsLimit, setAttackLogsLimit] = useState(500);
   const [attackLogsData, setAttackLogsData] = useState(null);
@@ -1111,6 +1123,54 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load crime analytics');
     } finally {
       setCrimeAnalyticsLoading(false);
+    }
+  };
+
+  const handleFetchCasinoAnalytics = async () => {
+    setCasinoAnalyticsLoading(true);
+    try {
+      const res = await api.get('/admin/casinos/analytics/summary', { params: { days: casinoAnalyticsDays } });
+      setCasinoAnalytics(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load casino analytics');
+    } finally {
+      setCasinoAnalyticsLoading(false);
+    }
+  };
+
+  const handleFetchTradesAnalytics = async () => {
+    setTradesAnalyticsLoading(true);
+    try {
+      const res = await api.get('/admin/trades/analytics/summary', { params: { days: tradesAnalyticsDays } });
+      setTradesAnalytics(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load trades analytics');
+    } finally {
+      setTradesAnalyticsLoading(false);
+    }
+  };
+
+  const handleFetchHitlistBodyguardsAnalytics = async () => {
+    setHitlistBodyguardsAnalyticsLoading(true);
+    try {
+      const res = await api.get('/admin/hitlist-bodyguards/analytics/summary', { params: { days: hitlistBodyguardsAnalyticsDays } });
+      setHitlistBodyguardsAnalytics(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load hitlist/bodyguards analytics');
+    } finally {
+      setHitlistBodyguardsAnalyticsLoading(false);
+    }
+  };
+
+  const handleFetchEconomyAnalytics = async () => {
+    setEconomyAnalyticsLoading(true);
+    try {
+      const res = await api.get('/admin/economy/analytics/summary', { params: { days: economyAnalyticsDays } });
+      setEconomyAnalytics(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load economy analytics');
+    } finally {
+      setEconomyAnalyticsLoading(false);
     }
   };
 
@@ -2650,6 +2710,112 @@ export default function Admin() {
           )}
         </div>
 
+        {/* Crime Analytics */}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Crime Analytics"
+            badge={
+              crimeAnalytics?.items
+                ? <span className="text-[10px] font-heading text-mutedForeground">{crimeAnalytics.items.length} crimes</span>
+                : null
+            }
+            isCollapsed={collapsed.crimeAnalytics}
+            onToggle={() => toggleSection('crimeAnalytics')}
+          />
+          {!collapsed.crimeAnalytics && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-heading text-mutedForeground uppercase tracking-widest">Window</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setCrimeAnalyticsDays(1)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      crimeAnalyticsDays === 1 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    1d
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCrimeAnalyticsDays(7)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      crimeAnalyticsDays === 7 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    7d
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCrimeAnalyticsDays(30)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      crimeAnalyticsDays === 30 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    30d
+                  </button>
+                </div>
+                <BtnPrimary onClick={handleFetchCrimeAnalytics} disabled={crimeAnalyticsLoading}>
+                  {crimeAnalyticsLoading ? 'Loading…' : 'Load crime stats'}
+                </BtnPrimary>
+              </div>
+              {crimeAnalytics && (
+                <p className="text-[10px] text-mutedForeground font-heading">
+                  Generated at {crimeAnalytics.generated_at ? new Date(crimeAnalytics.generated_at).toLocaleString() : '—'} for last {crimeAnalytics.days} day(s).
+                </p>
+              )}
+              <div className="overflow-x-auto max-h-72">
+                {!crimeAnalytics || !crimeAnalytics.items || crimeAnalytics.items.length === 0 ? (
+                  <p className="text-[10px] text-mutedForeground font-heading">No crime attempts in this window.</p>
+                ) : (
+                  <table className="w-full text-left border-collapse text-[10px] font-heading">
+                    <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                      <tr className="border-b border-zinc-700/50">
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Crime</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Type</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Attempts</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Successes</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Success %</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Avg profit</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Total profit</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Usage %</th>
+                        <th className="py-1.5 font-bold text-mutedForeground uppercase">Last used</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {crimeAnalytics.items.map((item) => (
+                        <tr key={item.crime_id} className="border-b border-zinc-700/30">
+                          <td className="py-1.5 pr-2 text-foreground font-medium">{item.crime_name || item.crime_id}</td>
+                          <td className="py-1.5 pr-2 text-mutedForeground">{item.crime_type || 'normal'}</td>
+                          <td className="py-1.5 pr-2">{item.attempts?.toLocaleString?.() ?? item.attempts}</td>
+                          <td className="py-1.5 pr-2">{item.successes?.toLocaleString?.() ?? item.successes}</td>
+                          <td className="py-1.5 pr-2">
+                            {item.success_rate != null ? `${(item.success_rate * 100).toFixed(1)}%` : '—'}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            {item.avg_profit != null ? `$${Math.round(item.avg_profit).toLocaleString()}` : '—'}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            {item.total_profit != null ? `$${Number(item.total_profit).toLocaleString()}` : '—'}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            {item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}
+                          </td>
+                          <td className="py-1.5">
+                            {item.last_at ? new Date(item.last_at).toLocaleString() : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
@@ -3452,108 +3618,197 @@ export default function Admin() {
           )}
         </div>
 
-        {/* Crime Analytics */}
+        {/* Casino Analytics */}
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={BarChart3}
-            title="Crime Analytics"
-            badge={
-              crimeAnalytics?.items
-                ? <span className="text-[10px] font-heading text-mutedForeground">{crimeAnalytics.items.length} crimes</span>
-                : null
-            }
-            isCollapsed={collapsed.crimeAnalytics}
-            onToggle={() => toggleSection('crimeAnalytics')}
+            title="Casino Analytics"
+            badge={casinoAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{casinoAnalytics.items.length} games</span> : null}
+            isCollapsed={collapsed.casinoAnalytics}
+            onToggle={() => toggleSection('casinoAnalytics')}
           />
-          {!collapsed.crimeAnalytics && (
+          {!collapsed.casinoAnalytics && (
             <div className="p-3 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-heading text-mutedForeground uppercase tracking-widest">Window</span>
-                <div className="flex items-center gap-1">
+                {[1, 7, 30].map((d) => (
                   <button
+                    key={d}
                     type="button"
-                    onClick={() => setCrimeAnalyticsDays(1)}
-                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
-                      crimeAnalyticsDays === 1 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
-                    }`}
+                    onClick={() => setCasinoAnalyticsDays(d)}
+                    className={`px-2 py-1 rounded border text-[10px] font-heading ${casinoAnalyticsDays === d ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}
                   >
-                    1d
+                    {d}d
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setCrimeAnalyticsDays(7)}
-                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
-                      crimeAnalyticsDays === 7 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
-                    }`}
-                  >
-                    7d
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCrimeAnalyticsDays(30)}
-                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
-                      crimeAnalyticsDays === 30 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
-                    }`}
-                  >
-                    30d
-                  </button>
-                </div>
-                <BtnPrimary onClick={handleFetchCrimeAnalytics} disabled={crimeAnalyticsLoading}>
-                  {crimeAnalyticsLoading ? 'Loading…' : 'Load crime stats'}
+                ))}
+                <BtnPrimary onClick={handleFetchCasinoAnalytics} disabled={casinoAnalyticsLoading}>
+                  {casinoAnalyticsLoading ? 'Loading…' : 'Load stats'}
                 </BtnPrimary>
               </div>
-              {crimeAnalytics && (
-                <p className="text-[10px] text-mutedForeground font-heading">
-                  Generated at {crimeAnalytics.generated_at ? new Date(crimeAnalytics.generated_at).toLocaleString() : '—'} for last {crimeAnalytics.days} day(s).
-                </p>
+              {casinoAnalytics && (
+                <>
+                  <p className="text-[10px] text-mutedForeground font-heading">Generated at {casinoAnalytics.generated_at ? new Date(casinoAnalytics.generated_at).toLocaleString() : '—'} for last {casinoAnalytics.days} day(s).</p>
+                  <div className="overflow-x-auto max-h-72">
+                    {(!casinoAnalytics.items || casinoAnalytics.items.length === 0) ? (
+                      <p className="text-[10px] text-mutedForeground font-heading">No casino activity in this window.</p>
+                    ) : (
+                      <table className="w-full text-[10px] font-heading">
+                        <thead><tr><th className="text-left p-1.5 text-mutedForeground">Game</th><th className="text-right p-1.5 text-mutedForeground">Attempts</th><th className="text-right p-1.5 text-mutedForeground">Wins</th><th className="text-right p-1.5 text-mutedForeground">Profit</th><th className="text-right p-1.5 text-mutedForeground">Share</th></tr></thead>
+                        <tbody>
+                          {casinoAnalytics.items.map((item, idx) => (
+                            <tr key={idx} className="border-b border-zinc-700/30">
+                              <td className="py-1.5 pr-2 font-medium">{item.game_type || '—'}</td>
+                              <td className="py-1.5 text-right">{item.attempts != null ? item.attempts.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.wins != null ? item.wins.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_profit != null ? `$${Number(item.total_profit).toLocaleString()}` : '—'}</td>
+                              <td className="py-1.5 text-right">{item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
               )}
-              <div className="overflow-x-auto max-h-72">
-                {!crimeAnalytics || !crimeAnalytics.items || crimeAnalytics.items.length === 0 ? (
-                  <p className="text-[10px] text-mutedForeground font-heading">No crime attempts in this window.</p>
-                ) : (
-                  <table className="w-full text-left border-collapse text-[10px] font-heading">
-                    <thead className="sticky top-0 bg-zinc-900/95 z-10">
-                      <tr className="border-b border-zinc-700/50">
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Crime</th>
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Type</th>
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Attempts</th>
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Successes</th>
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Success %</th>
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Avg profit</th>
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Total profit</th>
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Usage %</th>
-                        <th className="py-1.5 font-bold text-mutedForeground uppercase">Last used</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {crimeAnalytics.items.map((item) => (
-                        <tr key={item.crime_id} className="border-b border-zinc-700/30">
-                          <td className="py-1.5 pr-2 text-foreground font-medium">{item.crime_name || item.crime_id}</td>
-                          <td className="py-1.5 pr-2 text-mutedForeground">{item.crime_type || 'normal'}</td>
-                          <td className="py-1.5 pr-2">{item.attempts?.toLocaleString?.() ?? item.attempts}</td>
-                          <td className="py-1.5 pr-2">{item.successes?.toLocaleString?.() ?? item.successes}</td>
-                          <td className="py-1.5 pr-2">
-                            {item.success_rate != null ? `${(item.success_rate * 100).toFixed(1)}%` : '—'}
-                          </td>
-                          <td className="py-1.5 pr-2">
-                            {item.avg_profit != null ? `$${Math.round(item.avg_profit).toLocaleString()}` : '—'}
-                          </td>
-                          <td className="py-1.5 pr-2">
-                            {item.total_profit != null ? `$${Number(item.total_profit).toLocaleString()}` : '—'}
-                          </td>
-                          <td className="py-1.5 pr-2">
-                            {item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}
-                          </td>
-                          <td className="py-1.5">
-                            {item.last_at ? new Date(item.last_at).toLocaleString() : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+            </div>
+          )}
+        </div>
+
+        {/* Trades Analytics */}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Trades (Quicktrade) Analytics"
+            badge={tradesAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{tradesAnalytics.items.length} types</span> : null}
+            isCollapsed={collapsed.tradesAnalytics}
+            onToggle={() => toggleSection('tradesAnalytics')}
+          />
+          {!collapsed.tradesAnalytics && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {[1, 7, 30].map((d) => (
+                  <button key={d} type="button" onClick={() => setTradesAnalyticsDays(d)} className={`px-2 py-1 rounded border text-[10px] font-heading ${tradesAnalyticsDays === d ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}>{d}d</button>
+                ))}
+                <BtnPrimary onClick={handleFetchTradesAnalytics} disabled={tradesAnalyticsLoading}>{tradesAnalyticsLoading ? 'Loading…' : 'Load stats'}</BtnPrimary>
               </div>
+              {tradesAnalytics && (
+                <>
+                  <p className="text-[10px] text-mutedForeground font-heading">Last {tradesAnalytics.days} day(s).</p>
+                  <div className="overflow-x-auto max-h-72">
+                    {(!tradesAnalytics.items || tradesAnalytics.items.length === 0) ? <p className="text-[10px] text-mutedForeground font-heading">No trade events.</p> : (
+                      <table className="w-full text-[10px] font-heading">
+                        <thead><tr><th className="text-left p-1.5 text-mutedForeground">Type</th><th className="text-left p-1.5 text-mutedForeground">Direction</th><th className="text-right p-1.5 text-mutedForeground">Count</th><th className="text-right p-1.5 text-mutedForeground">Points</th><th className="text-right p-1.5 text-mutedForeground">Money</th><th className="text-right p-1.5 text-mutedForeground">Share</th></tr></thead>
+                        <tbody>
+                          {tradesAnalytics.items.map((item, idx) => (
+                            <tr key={idx} className="border-b border-zinc-700/30">
+                              <td className="py-1.5 pr-2 font-medium">{item.event_type || '—'}</td>
+                              <td className="py-1.5">{item.direction || '—'}</td>
+                              <td className="py-1.5 text-right">{item.count != null ? item.count.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_points != null ? item.total_points.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_money != null ? item.total_money.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Hitlist & Bodyguards Analytics */}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Hitlist & Bodyguards Analytics"
+            badge={hitlistBodyguardsAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{hitlistBodyguardsAnalytics.items.length} event types</span> : null}
+            isCollapsed={collapsed.hitlistBodyguardsAnalytics}
+            onToggle={() => toggleSection('hitlistBodyguardsAnalytics')}
+          />
+          {!collapsed.hitlistBodyguardsAnalytics && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {[1, 7, 30].map((d) => (
+                  <button key={d} type="button" onClick={() => setHitlistBodyguardsAnalyticsDays(d)} className={`px-2 py-1 rounded border text-[10px] font-heading ${hitlistBodyguardsAnalyticsDays === d ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}>{d}d</button>
+                ))}
+                <BtnPrimary onClick={handleFetchHitlistBodyguardsAnalytics} disabled={hitlistBodyguardsAnalyticsLoading}>{hitlistBodyguardsAnalyticsLoading ? 'Loading…' : 'Load stats'}</BtnPrimary>
+              </div>
+              {hitlistBodyguardsAnalytics && (
+                <>
+                  <p className="text-[10px] text-mutedForeground font-heading">Last {hitlistBodyguardsAnalytics.days} day(s).</p>
+                  <div className="overflow-x-auto max-h-72">
+                    {(!hitlistBodyguardsAnalytics.items || hitlistBodyguardsAnalytics.items.length === 0) ? <p className="text-[10px] text-mutedForeground font-heading">No events.</p> : (
+                      <table className="w-full text-[10px] font-heading">
+                        <thead><tr><th className="text-left p-1.5 text-mutedForeground">Event type</th><th className="text-right p-1.5 text-mutedForeground">Count</th><th className="text-right p-1.5 text-mutedForeground">Cost cash</th><th className="text-right p-1.5 text-mutedForeground">Cost pts</th><th className="text-right p-1.5 text-mutedForeground">Hire cost</th><th className="text-right p-1.5 text-mutedForeground">Share</th></tr></thead>
+                        <tbody>
+                          {hitlistBodyguardsAnalytics.items.map((item, idx) => (
+                            <tr key={idx} className="border-b border-zinc-700/30">
+                              <td className="py-1.5 pr-2 font-medium">{item.event_type || '—'}</td>
+                              <td className="py-1.5 text-right">{item.count != null ? item.count.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_cost_cash != null ? item.total_cost_cash.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_cost_points != null ? item.total_cost_points.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_hire_cost != null ? item.total_hire_cost.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Economy Analytics (cars, properties, loot, booze) */}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Economy Analytics"
+            badge={economyAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{economyAnalytics.items.length} types</span> : null}
+            isCollapsed={collapsed.economyAnalytics}
+            onToggle={() => toggleSection('economyAnalytics')}
+          />
+          {!collapsed.economyAnalytics && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {[1, 7, 30].map((d) => (
+                  <button key={d} type="button" onClick={() => setEconomyAnalyticsDays(d)} className={`px-2 py-1 rounded border text-[10px] font-heading ${economyAnalyticsDays === d ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}>{d}d</button>
+                ))}
+                <BtnPrimary onClick={handleFetchEconomyAnalytics} disabled={economyAnalyticsLoading}>{economyAnalyticsLoading ? 'Loading…' : 'Load stats'}</BtnPrimary>
+              </div>
+              {economyAnalytics && (
+                <>
+                  <p className="text-[10px] text-mutedForeground font-heading">Car trades, property buys, loot drops, loot box opens, booze runs. Last {economyAnalytics.days} day(s).</p>
+                  <div className="overflow-x-auto max-h-72">
+                    {(!economyAnalytics.items || economyAnalytics.items.length === 0) ? <p className="text-[10px] text-mutedForeground font-heading">No economy events.</p> : (
+                      <table className="w-full text-[10px] font-heading">
+                        <thead><tr><th className="text-left p-1.5 text-mutedForeground">Type</th><th className="text-right p-1.5 text-mutedForeground">Count</th><th className="text-right p-1.5 text-mutedForeground">Price/Cost</th><th className="text-right p-1.5 text-mutedForeground">Profit</th><th className="text-right p-1.5 text-mutedForeground">Revenue</th><th className="text-right p-1.5 text-mutedForeground">Pieces</th><th className="text-right p-1.5 text-mutedForeground">Share</th></tr></thead>
+                        <tbody>
+                          {economyAnalytics.items.map((item, idx) => (
+                            <tr key={idx} className="border-b border-zinc-700/30">
+                              <td className="py-1.5 pr-2 font-medium">{item.event_type || '—'}</td>
+                              <td className="py-1.5 text-right">{item.count != null ? item.count.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{(item.total_price || item.total_cost) != null ? (item.total_price || item.total_cost).toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_profit != null ? item.total_profit.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_revenue != null ? item.total_revenue.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_pieces != null ? item.total_pieces.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

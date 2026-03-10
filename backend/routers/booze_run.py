@@ -313,6 +313,19 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
         updates["$inc"][f"booze_carrying_cost.{booze_id}"] = -cost_of_sold
     await db.users.update_one({"id": user["id"]}, updates)
     if is_run:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.economy_events.insert_one({
+            "at": now_iso,
+            "type": "booze_run_sell",
+            "user_id": user["id"],
+            "username": user.get("username") or "",
+            "booze_id": booze_id,
+            "booze_name": booze_name,
+            "amount": amount,
+            "revenue": revenue,
+            "profit": profit,
+        })
+    if is_run:
         try:
             from routers.objectives import update_objectives_progress
             await update_objectives_progress(user["id"], "booze_runs", 1)

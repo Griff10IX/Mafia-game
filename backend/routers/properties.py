@@ -197,6 +197,17 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
             "level": 1,
             "last_collected": datetime.now(timezone.utc).isoformat()
         })
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.economy_events.insert_one({
+        "at": now_iso,
+        "type": "property_buy",
+        "user_id": current_user["id"],
+        "username": current_user.get("username") or "",
+        "property_id": property_id,
+        "property_name": (prop or {}).get("name") or property_id,
+        "cost": cost,
+        "level": 1 if not user_prop else (user_prop.get("level") or 0) + 1,
+    })
     return {"message": f"Successfully purchased/upgraded {prop['name']}"}
 
 
