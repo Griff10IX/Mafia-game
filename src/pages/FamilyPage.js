@@ -1176,9 +1176,9 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
 // ============================================================================
 
 const CrewOCTab = ({
-  family, myRole, crewOCCooldownUntil, committerHasTimer, crewOCJoinFee, crewOCForumTopicId,
+  family, myRole, crewOCCooldownUntil, committerHasTimer, crewOCJoinFee, crewOCAutoAccept, crewOCForumTopicId,
   crewOCApplications, canManageCrewOC, onCommit, committing, feeInput, setFeeInput,
-  onSetFee, setFeeLoading, onAdvertise, advertiseLoading, onAcceptApp, onRejectApp, onKickApp,
+  onSetFee, setFeeLoading, onAdvertise, advertiseLoading, onAcceptApp, onRejectApp, onKickApp, onSetAutoAccept, setAutoAcceptLoading,
 }) => {
   const canCommit = ['boss', 'underboss', 'capo'].includes(myRole?.toLowerCase());
   const cooldownHours = committerHasTimer ? 6 : 8;
@@ -1210,6 +1210,16 @@ const CrewOCTab = ({
               {setFeeLoading ? '...' : 'Set fee'}
             </button>
           </div>
+          <label className="flex items-center gap-2 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={!!crewOCAutoAccept}
+              onChange={(e) => onSetAutoAccept && onSetAutoAccept(e.target.checked)}
+              disabled={setAutoAcceptLoading}
+              className="rounded border-zinc-600 bg-zinc-900 text-primary focus:ring-primary/50"
+            />
+            <span className="text-[10px] font-heading text-zinc-400 group-hover:text-zinc-300">Auto-accept applications</span>
+          </label>
           <div className="flex items-center gap-2">
             {crewOCForumTopicId ? (
               <Link to={`/forum/topic/${crewOCForumTopicId}`} className="inline-flex items-center gap-1 text-xs font-heading text-primary hover:underline">
@@ -1553,6 +1563,16 @@ export default function FamilyPage() {
     try { await api.post(`/families/crew-oc/applications/${applicationId}/kick`); toast.success('Crew member kicked.'); fetchData(); }
     catch (e) { toast.error(apiDetail(e)); }
   };
+  const [crewOCSetAutoAcceptLoading, setCrewOCSetAutoAcceptLoading] = useState(false);
+  const handleCrewOCSetAutoAccept = async (autoAccept) => {
+    setCrewOCSetAutoAcceptLoading(true);
+    try {
+      await api.post('/families/crew-oc/set-auto-accept', { auto_accept: autoAccept });
+      toast.success(autoAccept ? 'Auto-accept turned on.' : 'Auto-accept turned off.');
+      fetchData();
+    } catch (e) { toast.error(apiDetail(e)); }
+    finally { setCrewOCSetAutoAcceptLoading(false); }
+  };
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 1000); return () => clearInterval(id); }, []);
@@ -1713,11 +1733,13 @@ export default function FamilyPage() {
                 <CrewOCTab
                   family={family} myRole={myRole} crewOCCooldownUntil={family?.crew_oc_cooldown_until}
                   committerHasTimer={myFamily?.crew_oc_committer_has_timer} crewOCJoinFee={family?.crew_oc_join_fee}
-                  crewOCForumTopicId={family?.crew_oc_forum_topic_id} crewOCApplications={myFamily?.crew_oc_applications}
+                  crewOCAutoAccept={family?.crew_oc_auto_accept} crewOCForumTopicId={family?.crew_oc_forum_topic_id}
+                  crewOCApplications={myFamily?.crew_oc_applications}
                   canManageCrewOC={canManageCrewOC} onCommit={handleCrewOCCommit} committing={crewOCCommitting}
                   feeInput={crewOCFeeInput} setFeeInput={setCrewOCFeeInput} onSetFee={handleCrewOCSetFee}
                   setFeeLoading={crewOCSetFeeLoading} onAdvertise={handleCrewOCAdvertise} advertiseLoading={crewOCAdvertiseLoading}
                   onAcceptApp={handleCrewOCAccept} onRejectApp={handleCrewOCReject} onKickApp={handleCrewOCKick}
+                  onSetAutoAccept={handleCrewOCSetAutoAccept} setAutoAcceptLoading={crewOCSetAutoAcceptLoading}
                 />
               )}
               {activeTab === 'raid' && (

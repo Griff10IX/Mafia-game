@@ -178,10 +178,7 @@ export default function FamilyProfilePage() {
   const [crewOCApplyLoading, setCrewOCApplyLoading] = useState(false);
   const [profileTextEdit, setProfileTextEdit] = useState('');
   const [savingProfileText, setSavingProfileText] = useState(false);
-  const [savingAvatar, setSavingAvatar] = useState(false);
-  const [avatarPreview, setAvatarPreview] = useState(null);
   const profileTextareaRef = useRef(null);
-  const familyAvatarInputRef = useRef(null);
 
   useEffect(() => {
     const id = (familyId && String(familyId).trim()) || '';
@@ -275,47 +272,6 @@ export default function FamilyProfilePage() {
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to save');
     } finally { setSavingProfileText(false); }
-  };
-
-  const familyPictureSrc = avatarPreview || family.avatar_url || null;
-  const handleFamilyAvatarChange = (e) => {
-    const file = e.target?.files?.[0];
-    if (!file || !file.type.startsWith('image/')) {
-      toast.error('Please choose an image file');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      if (dataUrl && typeof dataUrl === 'string' && dataUrl.length > 250000) {
-        toast.error('Image too large. Use a smaller image.');
-        return;
-      }
-      setSavingAvatar(true);
-      api.patch('/families/avatar', { avatar_data: dataUrl })
-        .then(() => {
-          toast.success('Family picture updated.');
-          setAvatarPreview(null);
-          return api.get('/families/lookup', { params: { tag: family.tag } });
-        })
-        .then((r) => setFamily(r.data))
-        .catch((err) => toast.error(err.response?.data?.detail || 'Failed to update picture'))
-        .finally(() => { setSavingAvatar(false); e.target.value = ''; });
-    };
-    reader.readAsDataURL(file);
-  };
-  const handleRemoveFamilyPicture = () => {
-    if (!window.confirm('Remove the family picture?')) return;
-    setSavingAvatar(true);
-    api.patch('/families/avatar', { avatar_data: null })
-      .then(() => {
-        toast.success('Family picture removed.');
-        setAvatarPreview(null);
-        return api.get('/families/lookup', { params: { tag: family.tag } });
-      })
-      .then((r) => setFamily(r.data))
-      .catch((err) => toast.error(err.response?.data?.detail || 'Failed to remove'))
-      .finally(() => setSavingAvatar(false));
   };
 
   const sorted      = [...members].sort((a, b) => (getRoleConfig(a.role).rank ?? 5) - (getRoleConfig(b.role).rank ?? 5));
@@ -648,46 +604,6 @@ export default function FamilyProfilePage() {
           <span className="text-[10px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em]">Family profile</span>
         </div>
         <div className="p-4 space-y-4">
-          {/* Family picture */}
-          <div className="flex flex-col sm:flex-row items-start gap-3">
-            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg overflow-hidden border border-primary/20 bg-zinc-900/80 shrink-0 flex items-center justify-center">
-              {familyPictureSrc ? (
-                <img src={familyPictureSrc} alt={`${family.name} family`} className="w-full h-full object-cover" />
-              ) : (
-                <Building2 size={32} className="text-zinc-600" aria-hidden />
-              )}
-            </div>
-            {canEditProfile && (
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  ref={familyAvatarInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleFamilyAvatarChange}
-                />
-                <button
-                  type="button"
-                  onClick={() => familyAvatarInputRef.current?.click()}
-                  disabled={savingAvatar}
-                  className="px-3 py-1.5 rounded-md bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase hover:bg-primary/30 disabled:opacity-50"
-                >
-                  {savingAvatar ? 'Uploading…' : familyPictureSrc ? 'Change picture' : 'Add picture'}
-                </button>
-                {familyPictureSrc && (
-                  <button
-                    type="button"
-                    onClick={handleRemoveFamilyPicture}
-                    disabled={savingAvatar}
-                    className="px-3 py-1.5 rounded-md border border-zinc-600 text-zinc-400 text-[10px] font-heading font-bold uppercase hover:bg-zinc-800 hover:text-zinc-300 disabled:opacity-50"
-                  >
-                    Remove picture
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* Display profile text */}
           {((family.profile_text || '').trim() || '').length > 0 ? (
             <div
@@ -707,7 +623,7 @@ export default function FamilyProfilePage() {
                   ref={profileTextareaRef}
                   value={profileTextEdit}
                   onChange={(e) => setProfileTextEdit(e.target.value)}
-                  placeholder="Add a family picture and text... [center][img]https://example.com/photo.png[/img][/center] [b]bold[/b], [i]italic[/i]"
+                  placeholder="Add profile text... [b]bold[/b], [i]italic[/i], [center]...[/center], [img]url[/img]"
                   rows={8}
                   className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y font-mono leading-relaxed"
                 />

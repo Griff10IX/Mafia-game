@@ -900,8 +900,12 @@ export default function Attack() {
   const refreshAttacks = async () => {
     try {
       const response = await api.get('/attack/list');
-      setAttacks(response.data.attacks || []);
-    } catch (error) {}
+      const list = response.data.attacks || [];
+      setAttacks(list);
+      return list;
+    } catch (error) {
+      return attacks;
+    }
   };
 
   const toggleSelected = (attackId) => {
@@ -1033,7 +1037,20 @@ export default function Attack() {
       return;
     }
 
-    const found = attacks.filter((a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'found');
+    // Refetch attacks so we have the latest list (e.g. after refresh), then use that list
+    setLoading(true);
+    let list;
+    try {
+      const response = await api.get('/attack/list');
+      list = response.data.attacks || [];
+      setAttacks(list);
+    } catch {
+      list = attacks;
+    } finally {
+      setLoading(false);
+    }
+
+    const found = list.filter((a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'found');
     const best = found.find((a) => a.can_attack);
 
     if (!best) {
@@ -1042,7 +1059,7 @@ export default function Attack() {
         return;
       }
       // If we're already searching for this target, don't start another search
-      const alreadySearching = attacks.some(
+      const alreadySearching = list.some(
         (a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'searching'
       );
       if (alreadySearching) {

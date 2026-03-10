@@ -145,6 +145,10 @@ class FamilyCrewOCSetFeeRequest(BaseModel):
     fee: int
 
 
+class FamilyCrewOCSetAutoAcceptRequest(BaseModel):
+    auto_accept: bool
+
+
 class FamilyCrewOCApplyRequest(BaseModel):
     family_id: str
 
@@ -588,6 +592,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "id": fam["id"], "name": fam["name"], "tag": fam["tag"],
             "treasury": fam.get("treasury", 0), "crew_oc_cooldown_until": fam.get("crew_oc_cooldown_until"),
             "crew_oc_join_fee": int(fam.get("crew_oc_join_fee") or 0),
+            "crew_oc_auto_accept": bool(fam.get("crew_oc_auto_accept")),
             "crew_oc_forum_topic_id": fam.get("crew_oc_forum_topic_id"),
             "profile_text": (fam.get("profile_text") or "").strip() or None,
             "racket_income_bonus_percent": float((fam.get("racket_income_bonus_percent") or 0) or 0),
@@ -863,6 +868,18 @@ async def families_crew_oc_set_fee(request: FamilyCrewOCSetFeeRequest, current_u
     return {"message": "Crew OC join fee updated.", "fee": fee}
 
 
+async def families_crew_oc_set_auto_accept(request: FamilyCrewOCSetAutoAcceptRequest, current_user: dict = Depends(get_current_user)):
+    if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
+        raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can set Crew OC auto-accept")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    auto_accept = bool(request.auto_accept)
+    await db.families.update_one({"id": family_id}, {"$set": {"crew_oc_auto_accept": auto_accept}})
+    _invalidate_my_cache(current_user["id"])
+    return {"message": "Crew OC auto-accept updated.", "auto_accept": auto_accept}
+
+
 FAMILY_PROFILE_TEXT_MAX_LENGTH = 10000
 
 
@@ -961,10 +978,11 @@ async def families_crew_oc_apply(request: FamilyCrewOCApplyRequest, current_user
     uid = current_user["id"]
     if current_user.get("family_id") == family_id:
         raise HTTPException(status_code=400, detail="You are already in this family")
-    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_join_fee": 1})
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_join_fee": 1, "crew_oc_auto_accept": 1})
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
     fee = int(fam.get("crew_oc_join_fee") or 0)
+    auto_accept = bool(fam.get("crew_oc_auto_accept"))
     existing = await db.family_crew_oc_applications.find_one({"family_id": family_id, "user_id": uid}, {"_id": 0, "status": 1})
     if existing:
         status = (existing.get("status") or "").strip().lower()
@@ -980,18 +998,32 @@ async def families_crew_oc_apply(request: FamilyCrewOCApplyRequest, current_user
             raise HTTPException(status_code=400, detail=f"Join fee is ${fee:,}. You need ${fee - money:,} more cash.")
         await db.users.update_one({"id": uid}, {"$inc": {"money": -fee}})
         await db.families.update_one({"id": family_id}, {"$inc": {"treasury": fee}})
+        status = "accepted" if auto_accept else "pending"
         await db.family_crew_oc_applications.insert_one({
             "id": application_id, "family_id": family_id, "user_id": uid,
-            "username": current_user.get("username") or "?", "status": "pending", "amount_paid": fee, "created_at": now,
+            "username": current_user.get("username") or "?", "status": status, "amount_paid": fee, "created_at": now,
         })
-        await send_notification_to_family(family_id, "Crew OC application", f'"{current_user.get("username") or "?"}" applied to your Crew OC (paid ${fee:,}). Accept or reject in Families → Crew OC.', "system", category="oc_invites")
+        fam_name = (fam.get("name") or fam.get("tag") or "the family").strip()
+        if auto_accept:
+            await send_notification(uid, "Crew OC – You're in", f"You paid ${fee:,} and joined {fam_name} Crew OC for their next run.", "reward", category="crew_oc")
+            await send_notification_to_family(family_id, "Crew OC – New crew member", f'{current_user.get("username") or "?"} paid ${fee:,} and joined your Crew OC for the next run.', "reward", category="oc_invites", actor_username=current_user.get("username") or "?")
+            _invalidate_my_cache(current_user["id"])
+            return {"message": "You paid and joined the crew. You'll get rewards when they commit.", "status": "accepted", "amount_paid": fee}
+        await send_notification_to_family(family_id, "Crew OC application", f'{current_user.get("username") or "?"} applied to your Crew OC (paid ${fee:,}). Accept or reject in Families → Crew OC.', "system", category="oc_invites", actor_username=current_user.get("username") or "?")
         _invalidate_my_cache(current_user["id"])
         return {"message": "Application sent. The family will accept or reject.", "status": "pending", "amount_paid": fee}
+    status = "accepted" if auto_accept else "pending"
     await db.family_crew_oc_applications.insert_one({
         "id": application_id, "family_id": family_id, "user_id": uid,
-        "username": current_user.get("username") or "?", "status": "pending", "amount_paid": 0, "created_at": now,
+        "username": current_user.get("username") or "?", "status": status, "amount_paid": 0, "created_at": now,
     })
-    await send_notification_to_family(family_id, "Crew OC application", f'"{current_user.get("username") or "?"}" applied to your Crew OC. Accept or reject in Families → Crew OC.', "system", category="oc_invites")
+    fam_name = (fam.get("name") or fam.get("tag") or "the family").strip()
+    if auto_accept:
+        await send_notification(uid, "Crew OC – You're in", f"You applied and joined {fam_name} Crew OC for their next run.", "reward", category="crew_oc")
+        await send_notification_to_family(family_id, "Crew OC – New crew member", f'{current_user.get("username") or "?"} applied and joined your Crew OC for the next run.', "reward", category="oc_invites", actor_username=current_user.get("username") or "?")
+        _invalidate_my_cache(current_user["id"])
+        return {"message": "You joined the crew. You'll get rewards when they commit.", "status": "accepted"}
+    await send_notification_to_family(family_id, "Crew OC application", f'{current_user.get("username") or "?"} applied to your Crew OC. Accept or reject in Families → Crew OC.', "system", category="oc_invites", actor_username=current_user.get("username") or "?")
     _invalidate_my_cache(current_user["id"])
     return {"message": "Application sent. The family will accept or reject.", "status": "pending"}
 
@@ -1605,6 +1637,7 @@ def register(router):
     router.add_api_route("/families/deposit", families_deposit, methods=["POST"])
     router.add_api_route("/families/withdraw", families_withdraw, methods=["POST"])
     router.add_api_route("/families/crew-oc/set-fee", families_crew_oc_set_fee, methods=["POST"])
+    router.add_api_route("/families/crew-oc/set-auto-accept", families_crew_oc_set_auto_accept, methods=["POST"])
     router.add_api_route("/families/profile-text", families_update_profile_text, methods=["PATCH"])
     router.add_api_route("/families/avatar", families_update_avatar, methods=["PATCH"])
     router.add_api_route("/families/crew-oc/advertise", families_crew_oc_advertise, methods=["POST"])

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircle, Send, X, ChevronRight } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -40,6 +40,27 @@ function getTimeAgo(dateString) {
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+// Render notification message; if actor_username is set, make it a profile link
+function NotificationMessage({ message, actorUsername, className }) {
+  if (!message || typeof message !== 'string') return null;
+  if (!actorUsername || typeof actorUsername !== 'string') {
+    return <span className={className}>{message}</span>;
+  }
+  const idx = message.indexOf(actorUsername);
+  if (idx === -1) return <span className={className}>{message}</span>;
+  const before = message.slice(0, idx);
+  const after = message.slice(idx + actorUsername.length);
+  return (
+    <span className={className}>
+      {before}
+      <Link to={`/profile/${encodeURIComponent(actorUsername)}`} className="text-primary hover:underline font-heading">
+        {actorUsername}
+      </Link>
+      {after}
+    </span>
+  );
 }
 
 // Subcomponents
@@ -238,7 +259,7 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
           </span>
         </div>
         <p className="text-[9px] text-mutedForeground truncate">
-          {notification.message}
+          <NotificationMessage message={notification.message} actorUsername={notification.actor_username} className="text-inherit" />
         </p>
       </div>
 
@@ -291,7 +312,7 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
             
             {/* Preview Body */}
             <p className="text-[10px] text-foreground leading-snug max-h-32 overflow-y-auto whitespace-pre-wrap">
-              {notification.message}
+              <NotificationMessage message={notification.message} actorUsername={notification.actor_username} className="text-inherit" />
             </p>
             
             {/* GIF Preview */}
@@ -389,7 +410,7 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
       <div className="flex-1 overflow-y-auto p-2">
         <div className="prose prose-invert max-w-none">
           <p className="text-[11px] text-foreground leading-snug whitespace-pre-wrap">
-            {notification.message}
+            <NotificationMessage message={notification.message} actorUsername={notification.actor_username} className="text-inherit" />
           </p>
           
           {notification.gif_url && (

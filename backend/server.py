@@ -678,11 +678,11 @@ async def send_notification(user_id: str, title: str, message: str, notification
     return notification
 
 
-async def send_notification_to_family(family_id: str, title: str, message: str, notification_type: str, category: Optional[str] = None):
-    """Notify every member of a family."""
+async def send_notification_to_family(family_id: str, title: str, message: str, notification_type: str, category: Optional[str] = None, **extra):
+    """Notify every member of a family. Pass actor_username= to make that username linkable in the inbox."""
     members = await db.family_members.find({"family_id": family_id}, {"_id": 0, "user_id": 1}).to_list(100)
     for m in members:
-        await send_notification(m["user_id"], title, message, notification_type, category=category, **{})
+        await send_notification(m["user_id"], title, message, notification_type, category=category, **extra)
 
 
 async def send_notification_to_all(title: str, message: str, notification_type: str = "system", category: Optional[str] = None):
