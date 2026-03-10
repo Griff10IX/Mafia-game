@@ -326,6 +326,16 @@ export default function Jail() {
     }
   };
 
+  const fetchJailPlayers = async () => {
+    try {
+      const res = await api.get('/jail/players');
+      setJailedPlayers(res.data.players);
+    } catch (error) {
+      // Silent fail — players list will refresh on next full fetch
+      console.error('Failed to refresh jail players:', error);
+    }
+  };
+
   const fetchJailStatus = async () => {
     try {
       const response = await api.get('/jail/status');
@@ -343,8 +353,12 @@ export default function Jail() {
 
   useEffect(() => {
     fetchJailData();
-    const interval = setInterval(fetchJailStatus, 1000);
-    return () => clearInterval(interval);
+    const statusInterval = setInterval(fetchJailStatus, 1000);
+    const playersInterval = setInterval(fetchJailPlayers, 3000);
+    return () => {
+      clearInterval(statusInterval);
+      clearInterval(playersInterval);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

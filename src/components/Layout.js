@@ -1454,11 +1454,10 @@ export default function Layout({ children }) {
               <div className="space-y-0">
                 {[
                   { label: 'Cash', value: formatMoney(user.money), className: 'text-primary', isLink: true, to: '/bank' },
-                  { label: 'Bank', value: formatMoney(user.bank ?? user.swiss_balance ?? 0), className: 'text-primary' },
                   { label: 'Points', value: formatInt(user.points), isLink: true, to: '/store?tab=upgrades' },
-                  { label: 'Respect', value: formatInt(user.respect_points ?? 0) },
+                  { label: 'Respect', value: formatInt(user.respect_points ?? 0), isLink: true, to: '/store?tab=upgrades' },
                   { label: 'Bullets', value: formatInt(user.bullets), isLink: true, to: '/store?tab=bullets' },
-                  { label: 'Health', value: Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%', className: Number(user.health) > 50 ? 'text-emerald-400' : Number(user.health) > 25 ? 'text-amber-400' : 'text-red-400' },
+                  { label: 'Health', value: Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%', className: Number(user.health) > 50 ? 'text-emerald-400' : Number(user.health) > 25 ? 'text-amber-400' : 'text-red-400', isLink: true, to: '/store?tab=upgrades' },
                   { label: 'Kills', value: formatInt(user.total_kills), className: 'text-red-400', isLink: true, to: '/attack' },
                   { label: 'Weapon', value: user.gun_name || 'None', truncate: true, isLink: true, to: '/armour-weapons' },
                   { label: 'Armour', value: user.armour_name || 'None', truncate: true, isLink: true, to: '/armour-weapons' },
@@ -1466,28 +1465,28 @@ export default function Layout({ children }) {
                   { label: 'Family', value: user.gang_name || 'None', truncate: true, isLink: true, to: '/families' },
                   { label: 'Guards', value: typeof user.bodyguard_count === 'number' ? `${user.bodyguard_count}/${user.bodyguard_slots ?? 1}` : '—', isLink: true, to: '/bodyguards' },
                   ...(hasCasinoOrProperty ? [
-                    { label: 'Casino', value: formatMoney(user.casino_profit ?? 0), className: (user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400' },
-                    { label: 'Property', value: `${formatInt(user.property_profit ?? 0)} pts` },
+                    { label: 'Casino', value: formatMoney(user.casino_profit ?? 0), className: (user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400', isLink: true, to: '/my-properties' },
+                    { label: 'Property', value: `${formatInt(user.property_profit ?? 0)} pts`, isLink: true, to: '/my-properties' },
                   ] : []),
                 ].map((row, i) => {
                   if (row.isLink) {
                     return (
                       <Link key={i} to={row.to} onClick={() => isMobileViewport && setRightSidebarOpen(false)}
-                        className="flex justify-between items-center gap-1 text-[10px] font-heading px-1 py-1.5 rounded-sm transition-colors"
+                        className="flex justify-between items-center gap-1 text-[9px] font-heading px-1 py-1 rounded-sm transition-colors min-w-0"
                         style={{ color: 'var(--noir-foreground)' }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.05)'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
-                        <span style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
-                        <span className={row.className || ''} style={row.className ? undefined : { color: 'var(--noir-primary)' }}>{row.value}</span>
+                        <span className="shrink-0" style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
+                        <span className={`shrink min-w-0 truncate max-w-[72px] text-right ${row.className || ''}`} style={row.className ? undefined : { color: 'var(--noir-primary)' }} title={row.value}>{row.value}</span>
                       </Link>
                     );
                   }
                   return (
-                    <div key={i} className="flex justify-between items-center gap-1 text-[10px] font-heading px-1 py-1.5 rounded-sm transition-colors"
+                    <div key={i} className="flex justify-between items-center gap-1 text-[9px] font-heading px-1 py-1 rounded-sm transition-colors min-w-0"
                       onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.04)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
-                      <span style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
-                      <span className={`${row.truncate ? 'truncate max-w-[80px]' : ''} ${row.className || ''}`} style={!row.className ? { color: 'var(--noir-foreground)' } : undefined}>{row.value}</span>
+                      <span className="shrink-0" style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
+                      <span className={`shrink min-w-0 text-right ${row.truncate ? 'truncate max-w-[72px]' : ''} ${row.className || ''}`} style={!row.className ? { color: 'var(--noir-foreground)' } : undefined} title={row.value}>{row.value}</span>
                     </div>
                   );
                 })}
