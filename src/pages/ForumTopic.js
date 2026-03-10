@@ -613,9 +613,12 @@ export default function ForumTopic() {
         {comments.length === 0 ? (
           <div className="p-4 text-center text-xs text-mutedForeground">No comments yet. Be the first!</div>
         ) : (
-          <div className="divide-y divide-zinc-800/40">
+          <div className="space-y-1.5">
             {comments.map((c, idx) => (
-              <div key={c.id} className="p-3 sm:p-3.5">
+              <div
+                key={c.id}
+                className={`${styles.panel} border border-zinc-800/60 bg-zinc-900/70 rounded-md p-3 sm:p-3.5`}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2 text-[10px] text-mutedForeground">
