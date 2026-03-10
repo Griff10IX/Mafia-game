@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building, TrendingUp, DollarSign, Lock, Zap } from 'lucide-react';
+import { Building, TrendingUp, DollarSign, Lock, Zap, Martini, Factory, Crown } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -187,13 +187,25 @@ export default function Properties() {
             <div className="px-3 py-2 bg-primary/8 border-b border-primary/15 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] truncate">{property.name}</h3>
-                <p className="text-[9px] text-mutedForeground capitalize font-heading tracking-wider">{property.property_type}</p>
+                <p className="text-[9px] text-mutedForeground capitalize font-heading tracking-wider">
+                  {property.property_type}
+                  {property.collection_streak_days > 1 && (
+                    <span className="ml-1 text-amber-400/90">
+                      · Streak {property.collection_streak_days}d
+                    </span>
+                  )}
+                </p>
               </div>
-              <Building className="text-primary/50 shrink-0" size={18} />
+              <div className="shrink-0 flex items-center gap-1.5">
+                {property.name.includes('Speakeasy') && <Martini className="text-primary/70" size={16} />}
+                {property.name.includes('Casino') && !property.name.includes('Speakeasy') && <Crown className="text-primary/70" size={16} />}
+                {property.property_type === 'factory' && <Factory className="text-primary/70" size={16} />}
+                <Building className="text-primary/40" size={16} />
+              </div>
             </div>
 
             <div className="p-3">
-              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mb-3 text-[10px] font-heading">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mb-2 text-[10px] font-heading">
                 <span className="text-mutedForeground uppercase tracking-wider">Price</span>
                 <span className="text-primary font-bold text-right">${property.price.toLocaleString()}</span>
                 <span className="text-mutedForeground uppercase tracking-wider">Income/hr</span>
@@ -215,6 +227,25 @@ export default function Properties() {
                 )}
               </div>
 
+              {property.owned && (
+                <div className="mb-3">
+                  <div className="flex items-center justify-between text-[9px] font-heading text-mutedForeground mb-0.5">
+                    <span>Safe for 24h</span>
+                    <span>
+                      {(property.hours_since_collect ?? 0).toFixed(1)}h since last collect
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-zinc-900 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-emerald-500 via-amber-400 to-red-500"
+                      style={{
+                        width: `${Math.min(100, ((property.hours_since_collect ?? 0) / 24) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 {property.owned ? (
                   <>
@@ -235,6 +266,15 @@ export default function Properties() {
                       >
                         <TrendingUp size={11} /> Upgrade ${(property.price * (property.level + 1)).toLocaleString()}
                       </button>
+                    )}
+                    {property.owned && (
+                      <>
+                        {property.buff_label && (
+                          <div className="text-[9px] text-amber-400/90 font-heading text-center">
+                            {property.buff_label}
+                          </div>
+                        )}
+                      </>
                     )}
                   </>
                 ) : (
