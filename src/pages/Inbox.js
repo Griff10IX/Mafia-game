@@ -192,10 +192,17 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
   // Get recipient for sent messages
   const recipient = isSent ? (notification.recipient_username || notification.to_username || notification.target_username) : null;
 
+  const handleMouseEnter = () => {
+    setShowPreview(true);
+    if (!isSent && !notification.read && onMarkRead) {
+      onMarkRead(notification.id);
+    }
+  };
+
   return (
     <div
       onClick={onClick}
-      onMouseEnter={() => setShowPreview(true)}
+      onMouseEnter={handleMouseEnter}
       onMouseLeave={() => setShowPreview(false)}
       className={`group relative flex items-center gap-2 px-2 py-1.5 border-b border-border cursor-pointer transition-all ib-row ${
         isSelected 

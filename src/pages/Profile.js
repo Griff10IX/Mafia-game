@@ -273,7 +273,7 @@ const ProfileInfoCard = ({
               </span>
             </div>
             {profile.prestige_level > 0 && (
-              <PrestigeBadge level={profile.prestige_level} size="icon" showLabel={false} />
+              <PrestigeBadge level={profile.prestige_level} size="icon" showLabel />
             )}
           </div>
 
