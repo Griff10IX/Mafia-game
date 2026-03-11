@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import api from "../utils/api";
+import styles from "../styles/noir.module.css";
 
 // ── FIGHT ENGINE ─────────────────────────────────────────────────────────────
 function rand(a, b) { return a + Math.random() * (b - a); }
@@ -795,7 +796,7 @@ export default function Boxing3D() {
     setGameState("fighting");setWinText("");setActionText("");
   };
 
-  const gold="#c9a84c",crimson="#8b1a1a",bg="#05070b";
+  const gold="#d4af37",crimson="#b5463c";
 
   const Bar=({val,flip,color})=>(
     <div style={{height:5,background:"rgba(255,255,255,0.07)",borderRadius:2,overflow:"hidden"}}>
@@ -804,10 +805,10 @@ export default function Boxing3D() {
   );
 
   return (
-    <div style={{minHeight:"100vh",background:bg,fontFamily:"'Cinzel',serif",color:"#e8dcc8",display:"flex",flexDirection:"column"}}>
+    <div className={styles.page} style={{minHeight:"100vh",fontFamily:"'Cinzel',serif",display:"flex",flexDirection:"column"}}>
 
       {/* Header */}
-      <div style={{borderBottom:"1px solid rgba(201,168,76,0.25)",padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(0,0,0,0.7)"}}>
+      <div className={styles.pageContent} style={{borderBottom:"1px solid var(--noir-border-light)",padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div>
           <div style={{fontSize:16,letterSpacing:"0.2em",color:gold}}>BOXING GYM & LEAGUE</div>
           <div style={{fontSize:9,color:"#6a5a3a",letterSpacing:"0.12em"}}>TRAIN • UPGRADE • FIGHT • BET</div>
@@ -815,9 +816,9 @@ export default function Boxing3D() {
       </div>
 
       {/* Training / Gym / Coach / Gear */}
-      <div style={{padding:"18px 20px 12px",background:"#050302",borderTop:"1px solid rgba(201,168,76,0.25)",display:"grid",gridTemplateColumns:"minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr)",gap:16}}>
+      <div className={styles.pageContent} style={{padding:"18px 20px 12px",display:"grid",gridTemplateColumns:"minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr)",gap:16}}>
         {/* Training & Stats */}
-        <div style={{border:"1px solid rgba(201,168,76,0.25)",borderRadius:4,background:"rgba(0,0,0,0.7)",padding:12,minHeight:140}}>
+        <div className={styles.panel} style={{padding:12,minHeight:140}}>
           <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>TRAINING & STATS</div>
           {metaError && <div style={{fontSize:10,color:"#ff6666",marginBottom:6}}>{metaError}</div>}
           {loadingMeta && !profile && (
@@ -860,7 +861,7 @@ export default function Boxing3D() {
         </div>
 
         {/* Gym & Coach */}
-        <div style={{border:"1px solid rgba(201,168,76,0.25)",borderRadius:4,background:"rgba(0,0,0,0.7)",padding:12,minHeight:140,display:"flex",flexDirection:"column",gap:10}}>
+        <div className={styles.panel} style={{padding:12,minHeight:140,display:"flex",flexDirection:"column",gap:10}}>
           <div>
             <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>GYM</div>
             {gymInfo && (
@@ -922,7 +923,7 @@ export default function Boxing3D() {
         </div>
 
         {/* Gear */}
-        <div style={{border:"1px solid rgba(201,168,76,0.25)",borderRadius:4,background:"rgba(0,0,0,0.7)",padding:12,minHeight:140}}>
+        <div className={styles.panel} style={{padding:12,minHeight:140}}>
           <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>GEAR</div>
           {gearInfo && (
             <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6,fontSize:10}}>
@@ -972,9 +973,9 @@ export default function Boxing3D() {
       </div>
 
       {/* Matches / Bets / League */}
-      <div style={{padding:"12px 20px 26px",background:"#050302",borderTop:"1px solid rgba(201,168,76,0.22)",display:"grid",gridTemplateColumns:"minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,1.0fr)",gap:16}}>
+      <div className={styles.pageContent} style={{padding:"12px 20px 26px",borderTop:"1px solid var(--noir-border-light)",display:"grid",gridTemplateColumns:"minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,1.0fr)",gap:16}}>
         {/* PvP Matches */}
-        <div style={{border:"1px solid rgba(201,168,76,0.25)",borderRadius:4,background:"rgba(0,0,0,0.75)",padding:12,minHeight:140}}>
+        <div className={styles.panel} style={{padding:12,minHeight:140}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
             <div style={{fontSize:11,color:gold,letterSpacing:"0.16em"}}>MATCHES</div>
             <button onClick={refreshMatches} disabled={matchesLoading} style={{padding:"2px 8px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(0,0,0,0.7)",color:"#d4c890",cursor:matchesLoading?"wait":"pointer"}}>Refresh</button>
@@ -985,12 +986,14 @@ export default function Boxing3D() {
               value={opponentName}
               onChange={(e)=>setOpponentName(e.target.value)}
               placeholder="Challenge username"
-              style={{flex:"0 0 180px",minWidth:140,padding:"4px 6px",fontSize:10,borderRadius:2,border:"1px solid rgba(201,168,76,0.35)",background:"#050509",color:"#f5e8c8"}}
+              className={styles.input}
+              style={{flex:"0 0 180px",minWidth:140,padding:"4px 6px",fontSize:10}}
             />
             <button
               onClick={handleCreateMatch}
               disabled={busyAction==="create_match"}
-              style={{padding:"4px 10px",fontSize:10,border:"1px solid rgba(201,168,76,0.5)",borderRadius:2,background:"rgba(201,168,76,0.15)",color:"#f5e8c8",cursor:busyAction==="create_match"?"wait":"pointer"}}
+              className={styles.btnPrimary}
+              style={{padding:"4px 10px",fontSize:10,cursor:busyAction==="create_match"?"wait":"pointer"}}
             >
               Start PvP Match
             </button>
@@ -1035,7 +1038,7 @@ export default function Boxing3D() {
         </div>
 
         {/* Betting */}
-        <div style={{border:"1px solid rgba(201,168,76,0.25)",borderRadius:4,background:"rgba(0,0,0,0.75)",padding:12,minHeight:140}}>
+        <div className={styles.panel} style={{padding:12,minHeight:140}}>
           <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>BETTING</div>
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
             <span style={{fontSize:9,color:"#8a7a4a"}}>Stake</span>
@@ -1043,7 +1046,8 @@ export default function Boxing3D() {
               type="number"
               value={betStake}
               onChange={(e)=>setBetStake(e.target.value)}
-              style={{width:90,padding:"3px 6px",fontSize:10,borderRadius:2,border:"1px solid rgba(201,168,76,0.35)",background:"#050509",color:"#f5e8c8"}}
+              className={styles.input}
+              style={{width:90,padding:"3px 6px",fontSize:10}}
             />
           </div>
           <div style={{fontSize:9,color:"#7a6a4a",marginBottom:4}}>Click a fighter to bet:</div>
@@ -1087,7 +1091,7 @@ export default function Boxing3D() {
         </div>
 
         {/* League */}
-        <div style={{border:"1px solid rgba(201,168,76,0.25)",borderRadius:4,background:"rgba(0,0,0,0.75)",padding:12,minHeight:140}}>
+        <div className={styles.panel} style={{padding:12,minHeight:140}}>
           <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>LEAGUE (WEEKLY)</div>
           {league && (
             <div style={{maxHeight:210,overflowY:"auto",fontSize:10}}>
