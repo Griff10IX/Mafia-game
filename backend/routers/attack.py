@@ -55,19 +55,63 @@ from routers.families import resolve_family_id
 
 
 def _request_meta(request: Optional[Request]) -> dict:
-    """Build dict of user_agent, client_ip, and attacker_is_bot for attack attempt logging."""
+    """Build dict of user_agent, client_ip, attacker_is_bot, and attacker_bot_label for attack attempt logging."""
     out = {}
     if request:
         ua = (request.headers.get("user-agent") or "").strip() or None
         if ua:
             out["user_agent"] = ua[:500]  # cap length
-        out["attacker_is_bot"] = _is_bot_ua(out.get("user_agent") or "")
+        is_bot = _is_bot_ua(out.get("user_agent") or "")
+        out["attacker_is_bot"] = is_bot
+        if is_bot:
+            label = _bot_label_from_ua(out.get("user_agent") or "")
+            if label:
+                out["attacker_bot_label"] = label[:120]
         forwarded = (request.headers.get("x-forwarded-for") or "").strip()
         if forwarded:
             out["client_ip"] = forwarded.split(",")[0].strip()[:45]
         elif getattr(request, "client", None) and getattr(request.client, "host", None):
             out["client_ip"] = str(request.client.host)[:45]
     return out
+
+
+def _bot_label_from_ua(user_agent: str) -> Optional[str]:
+    """Return a short human-readable bot type/language label from User-Agent, or None if not a bot."""
+    if not user_agent or not isinstance(user_agent, str):
+        return None
+    ua = user_agent.lower()
+    # Order matters: check specific names first
+    if "mafiakillbot" in ua:
+        return "MafiaKillBot (C# / .NET)"
+    if "bot" in ua and ("kill" in ua or "attack" in ua):
+        return "Custom attack bot"
+    if any(x in ua for x in ("python", "requests", "urllib", "aiohttp", "httpx")):
+        return "Python"
+    if any(x in ua for x in ("axios/", "node/", "node.js", "undici", "got/", "superagent")):
+        return "JavaScript / Node.js"
+    if any(x in ua for x in ("java/", "okhttp", "apache-httpclient", "jetty")):
+        return "Java"
+    if any(x in ua for x in ("dotnet", ".net", "httpclient", "webrequest")):
+        return "C# / .NET"
+    if any(x in ua for x in ("go-http", "go/")):
+        return "Go"
+    if "ruby" in ua or "faraday" in ua:
+        return "Ruby"
+    if "php" in ua:
+        return "PHP"
+    if any(x in ua for x in ("reqwest", "ureq")):
+        return "Rust"
+    if any(x in ua for x in ("selenium", "webdriver", "headless", "puppeteer", "playwright", "phantom")):
+        return "Browser automation (Selenium/Puppeteer/etc.)"
+    if any(x in ua for x in ("curl", "wget", "libwww")):
+        return "curl / wget (CLI)"
+    if any(x in ua for x in ("postman", "insomnia", "rest-assured", "swagger")):
+        return "API client (Postman/Insomnia/etc.)"
+    if any(x in ua for x in ("crawler", "spider", "scraper", "fetcher")):
+        return "Crawler / scraper"
+    if "bot" in ua:
+        return "Bot (generic)"
+    return None
 
 
 def _is_bot_ua(user_agent: str) -> bool:

@@ -2161,8 +2161,19 @@ export default function Admin() {
                 <div><span className="text-mutedForeground">Bullets used:</span> {attackLogViewRow.bullets_used != null ? Number(attackLogViewRow.bullets_used).toLocaleString() : '—'}</div>
                 <div><span className="text-mutedForeground">Bodyguard kill:</span> {attackLogViewRow.is_bodyguard_kill ? 'Yes' : attackLogViewRow.outcome === 'bodyguard' ? 'Blocked' : '—'}</div>
                 <div><span className="text-mutedForeground">Bot?</span> {attackLogViewRow.attacker_is_bot === true ? 'Yes' : attackLogViewRow.attacker_is_bot === false ? 'No' : '—'}</div>
+                {attackLogViewRow.attacker_bot_label && (
+                  <div className="col-span-2"><span className="text-mutedForeground">Bot type:</span> <span className="text-amber-400 font-medium">{attackLogViewRow.attacker_bot_label}</span></div>
+                )}
                 <div><span className="text-mutedForeground">Time:</span> {formatAttackLogTime(attackLogViewRow.created_at)}</div>
               </div>
+              {(attackLogViewRow.attacker_is_bot || attackLogViewRow.attacker_bot_label) && (
+                <div>
+                  <div className="text-mutedForeground font-bold uppercase tracking-wider border-b border-zinc-700/50 pb-0.5 mb-1">Bot info</div>
+                  <p className="text-foreground text-[10px]">
+                    {attackLogViewRow.attacker_bot_label && <><span className="text-amber-400 font-medium">Type/language: </span>{attackLogViewRow.attacker_bot_label}</>}
+                  </p>
+                </div>
+              )}
               <div>
                 <div className="text-mutedForeground font-bold uppercase tracking-wider border-b border-zinc-700/50 pb-0.5 mb-1">Player message</div>
                 <p className="text-foreground whitespace-pre-wrap break-words">{attackLogViewRow.player_message ?? '—'}</p>
@@ -3139,7 +3150,9 @@ export default function Admin() {
                       <tbody>
                         {attackLogsData.logs.map((row, idx) => {
                           const { device, bot: uaBot } = parseAttackLogUA(row.user_agent);
-                          const botLabel = row.attacker_is_bot === true ? 'Yes' : (row.attacker_is_bot === false ? 'No' : (uaBot || '—'));
+                          const botLabel = row.attacker_is_bot === true
+                            ? (row.attacker_bot_label ? `Yes · ${row.attacker_bot_label}` : 'Yes')
+                            : (row.attacker_is_bot === false ? 'No' : (uaBot || '—'));
                           return (
                           <tr key={row.id || idx} className="border-b border-zinc-700/30">
                             <td className="py-1 pr-1 text-foreground">{row.attacker_username ?? '—'}</td>
