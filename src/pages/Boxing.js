@@ -58,9 +58,7 @@ function buildRing(scene) {
   const floor = new THREE.Mesh(new THREE.BoxGeometry(7,0.15,7),mat(0x4a4540));
   floor.receiveShadow=true; scene.add(floor);
   const lm=new THREE.MeshBasicMaterial({color:0xe8d898,transparent:true,opacity:0.55});
-  // Center line: flat strip along X (width 6.8, thin in Y and Z)
-  const cl=new THREE.Mesh(new THREE.BoxGeometry(6.8,0.02,0.05),lm); cl.position.y=0.09; scene.add(cl);
-  // Center circle: flat ring on floor (RingGeometry is horizontal by default)
+  // Center circle only (no center line — it was rendering as a vertical bar from some angles)
   const cc=new THREE.Mesh(new THREE.RingGeometry(0.67,0.7,32),lm); cc.rotation.x=-Math.PI/2; cc.position.y=0.09; scene.add(cc);
   const postMat=mat(0xd9b85c), capMat=mat(0xfff2aa);
   [[-3.2,-3.2],[3.2,-3.2],[3.2,3.2],[-3.2,3.2]].forEach(([x,z])=>{
