@@ -757,7 +757,7 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
     loser_id = victim_family_id
     now_dt = datetime.now(timezone.utc)
     now = now_dt.isoformat()
-    loser_family = await db.families.find_one({"id": loser_id}, {"_id": 0, "name": 1, "tag": 1, "rackets": 1, "treasury": 1})
+    loser_family = await db.families.find_one({"id": loser_id}, {"_id": 0, "name": 1, "tag": 1, "rackets": 1, "treasury": 1, "compound_cash": 1, "compound_points": 1, "compound_loot_pieces": 1})
     winner_family = await db.families.find_one({"id": winner_id}, {"_id": 0, "name": 1, "tag": 1, "boss_id": 1, "racket_income_bonus_percent": 1})
     winner_family_name = (winner_family or {}).get("name") or (winner_family or {}).get("tag") or winner_id
     loser_family_name = (loser_family or {}).get("name") or (loser_family or {}).get("tag") or loser_id
@@ -770,11 +770,23 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
     winner_boss_id = winner_family.get("boss_id")
     loser_rackets = (loser_family or {}).get("rackets") or {}
     loser_treasury = int((loser_family or {}).get("treasury", 0) or 0)
+    loser_compound_cash = int((loser_family or {}).get("compound_cash", 0) or 0)
+    loser_compound_points = int((loser_family or {}).get("compound_points", 0) or 0)
+    loser_compound_loot_pieces = int((loser_family or {}).get("compound_loot_pieces", 0) or 0)
     ev = await get_effective_event()
     prize_racket_cash = compute_loser_racket_cash(loser_rackets, ev, now=now_dt, war_doc=war)
-    total_cash_prize = loser_treasury + prize_racket_cash
+    total_cash_prize = loser_treasury + prize_racket_cash + loser_compound_cash
     if total_cash_prize > 0:
         await db.families.update_one({"id": winner_id}, {"$inc": {"treasury": total_cash_prize}})
+    if loser_compound_points > 0 or loser_compound_loot_pieces > 0:
+        await db.families.update_one(
+            {"id": winner_id},
+            {"$inc": {"compound_points": loser_compound_points, "compound_loot_pieces": loser_compound_loot_pieces}},
+        )
+    await db.families.update_one(
+        {"id": loser_id},
+        {"$set": {"compound_cash": 0, "compound_points": 0, "compound_loot_pieces": 0, "compound_deposits_by_user": {}}},
+    )
     current_bonus = float((winner_family.get("racket_income_bonus_percent") or 0) or 0)
     new_bonus = min(current_bonus + WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT)
     await db.families.update_one(
@@ -808,11 +820,16 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
             "prize_rackets": None,
             "prize_treasury": loser_treasury,
             "prize_racket_cash": prize_racket_cash,
+            "prize_compound_cash": loser_compound_cash,
+            "prize_compound_points": loser_compound_points,
+            "prize_compound_loot_pieces": loser_compound_loot_pieces,
         }},
     )
-    msg = f"Your family won the war. You received ${total_cash_prize:,} (their treasury + racket cash) and a permanent +{WAR_WIN_RACKET_INCOME_BONUS_PERCENT}% on all racket income."
+    msg = f"Your family won the war. You received ${total_cash_prize:,} (their treasury + racket cash + compound) and a permanent +{WAR_WIN_RACKET_INCOME_BONUS_PERCENT}% on all racket income."
     if prize_count:
         msg += f" You also took {prize_count} exclusive car(s)."
+    if loser_compound_points > 0 or loser_compound_loot_pieces > 0:
+        msg += f" Their compound yielded {loser_compound_points:,} points and {loser_compound_loot_pieces:,} loot pieces."
     await send_notification_to_family(winner_id, "🏆 War Won", msg, "reward")
 
 

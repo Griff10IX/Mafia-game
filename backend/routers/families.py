@@ -136,6 +136,26 @@ class FamilyWithdrawRequest(BaseModel):
     amount: int
 
 
+class CompoundDepositRequest(BaseModel):
+    cash: int = 0
+    points: int = 0
+    loot_pieces: int = 0
+
+
+class CompoundWithdrawRequest(BaseModel):
+    cash: int = 0
+    points: int = 0
+    loot_pieces: int = 0
+
+
+class CompoundReturnToMemberRequest(BaseModel):
+    user_id: str
+
+
+class CompoundClaimForFamilyRequest(BaseModel):
+    user_id: str
+
+
 class FamilyAttackRacketRequest(BaseModel):
     family_id: str
     racket_id: str
@@ -268,9 +288,12 @@ async def cleanup_dead_families():
             now = now_dt.isoformat()
             rackets = fam.get("rackets") or {}
             treasury = int(fam.get("treasury", 0) or 0)
+            compound_cash = int(fam.get("compound_cash", 0) or 0)
+            compound_points = int(fam.get("compound_points", 0) or 0)
+            compound_loot_pieces = int(fam.get("compound_loot_pieces", 0) or 0)
             ev = await get_effective_event()
             prize_racket_cash = compute_loser_racket_cash(rackets, ev, now=now_dt)
-            total_cash_prize = treasury + prize_racket_cash
+            total_cash_prize = treasury + prize_racket_cash + compound_cash
             assets_transferred = False
             winner_id = None
             for active_war in active_wars:
@@ -286,6 +309,11 @@ async def cleanup_dead_families():
                             await db.families.update_one({"id": winner_id}, {"$inc": {"treasury": total_cash_prize}})
                             prize_treasury = treasury
                             prize_racket_cash_record = prize_racket_cash
+                        if compound_points > 0 or compound_loot_pieces > 0:
+                            await db.families.update_one(
+                                {"id": winner_id},
+                                {"$inc": {"compound_points": compound_points, "compound_loot_pieces": compound_loot_pieces}},
+                            )
                         current_bonus = float((winner_fam.get("racket_income_bonus_percent") or 0) or 0)
                         new_bonus = min(current_bonus + WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT)
                         await db.families.update_one(
@@ -293,7 +321,7 @@ async def cleanup_dead_families():
                             {"$set": {"racket_income_bonus_percent": new_bonus}}
                         )
                     msg = (
-                        f"The enemy family {fam['name']} has been destroyed! You received ${total_cash_prize:,} (their treasury + racket cash) and a permanent +{WAR_WIN_RACKET_INCOME_BONUS_PERCENT}% on all your racket income."
+                        f"The enemy family {fam['name']} has been destroyed! You received ${total_cash_prize:,} (their treasury + racket cash + compound) and a permanent +{WAR_WIN_RACKET_INCOME_BONUS_PERCENT}% on all your racket income."
                     )
                     await send_notification_to_family(winner_id, "🏆 WAR VICTORY!", msg, "system")
                     assets_transferred = True
@@ -312,6 +340,9 @@ async def cleanup_dead_families():
                         "prize_rackets": None,
                         "prize_treasury": prize_treasury,
                         "prize_racket_cash": prize_racket_cash_record,
+                        "prize_compound_cash": compound_cash,
+                        "prize_compound_points": compound_points,
+                        "prize_compound_loot_pieces": compound_loot_pieces,
                     }}
                 )
             head_state = (fam.get("head_of_state") or "").strip()
@@ -587,6 +618,36 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         crew_oc_applications = await app_cursor.to_list(50)
     qualifies_for_state_head = await family_qualifies_for_state_head(family_id)
     vault_and_rackets_locked = await _family_in_active_war(family_id)
+    compound_cash = int((fam.get("compound_cash") or 0) or 0)
+    compound_points = int((fam.get("compound_points") or 0) or 0)
+    compound_loot_pieces = int((fam.get("compound_loot_pieces") or 0) or 0)
+    compound_deposits_by_user = fam.get("compound_deposits_by_user") or {}
+    my_compound = compound_deposits_by_user.get(current_user["id"]) or {}
+    my_compound_cash = int((my_compound.get("cash") or 0) or 0)
+    my_compound_points = int((my_compound.get("points") or 0) or 0)
+    my_compound_loot_pieces = int((my_compound.get("loot_pieces") or 0) or 0)
+    my_compound_cars = 0
+    compound_cars = fam.get("compound_cars") or []
+    for car in compound_cars:
+        if car.get("deposited_by_user_id") == current_user["id"]:
+            my_compound_cars += 1
+    returning_members_with_balance = []
+    if my_role and my_role in ("boss", "underboss", "consigliere"):
+        member_ids = {m["user_id"] for m in members_docs}
+        for uid, attrib in compound_deposits_by_user.items():
+            if uid in member_ids:
+                ac = int((attrib.get("cash") or 0) or 0)
+                ap = int((attrib.get("points") or 0) or 0)
+                al = int((attrib.get("loot_pieces") or 0) or 0)
+                cars_count = sum(1 for c in compound_cars if c.get("deposited_by_user_id") == uid)
+                if ac > 0 or ap > 0 or al > 0 or cars_count > 0:
+                    u = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
+                    returning_members_with_balance.append({
+                        "user_id": uid,
+                        "username": (u or {}).get("username", "?"),
+                        "compound_cash": ac, "compound_points": ap, "compound_loot_pieces": al,
+                        "compound_cars": cars_count,
+                    })
     payload = {
         "family": {
             "id": fam["id"], "name": fam["name"], "tag": fam["tag"],
@@ -598,12 +659,17 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "racket_income_bonus_percent": float((fam.get("racket_income_bonus_percent") or 0) or 0),
             "head_of_state": fam.get("head_of_state"),
             "state_head_income": fam.get("state_head_income") or {},
+            "compound_cash": compound_cash, "compound_points": compound_points, "compound_loot_pieces": compound_loot_pieces,
         },
         "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "vault_and_rackets_locked": vault_and_rackets_locked,
         "qualifies_for_state_head": qualifies_for_state_head,
         "crew_oc_committer_has_timer": bool(current_user.get("crew_oc_timer_reduced", False)),
         "crew_oc_applications": crew_oc_applications,
+        "compound_cars": compound_cars,
+        "my_compound_cash": my_compound_cash, "my_compound_points": my_compound_points,
+        "my_compound_loot_pieces": my_compound_loot_pieces, "my_compound_cars": my_compound_cars,
+        "returning_members_with_balance": returning_members_with_balance,
     }
     if len(_my_cache) >= _my_cache_max_entries:
         _my_cache.clear()
@@ -695,6 +761,8 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         "id": family_id, "name": name, "tag": tag, "boss_id": current_user["id"],
         "treasury": 0, "created_at": now,
         "rackets": {first_racket_id: {"level": 1, "last_collected_at": None}},
+        "compound_cash": 0, "compound_points": 0, "compound_loot_pieces": 0,
+        "compound_deposits_by_user": {},
     })
     await db.family_members.insert_one({
         "id": str(uuid.uuid4()), "family_id": family_id, "user_id": current_user["id"],
@@ -852,6 +920,182 @@ async def families_withdraw(request: FamilyWithdrawRequest, current_user: dict =
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": amount}})
     _invalidate_my_cache(current_user["id"])
     return {"message": "Withdrew from treasury"}
+
+
+async def families_compound_deposit(request: CompoundDepositRequest, current_user: dict = Depends(get_current_user)):
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail="Compound is locked until the family war is over")
+    cash = int(request.cash or 0)
+    points = int(request.points or 0)
+    loot_pieces = int(request.loot_pieces or 0)
+    if cash < 0 or points < 0 or loot_pieces < 0:
+        raise HTTPException(status_code=400, detail="Amounts cannot be negative")
+    if cash == 0 and points == 0 and loot_pieces == 0:
+        raise HTTPException(status_code=400, detail="Specify at least one amount to deposit")
+    user_money = int(current_user.get("money") or 0)
+    user_points = int(current_user.get("points") or 0)
+    user_loot = int(current_user.get("loot_box_pieces") or 0)
+    if user_money < cash:
+        raise HTTPException(status_code=400, detail="Not enough cash")
+    if user_points < points:
+        raise HTTPException(status_code=400, detail="Not enough points")
+    if user_loot < loot_pieces:
+        raise HTTPException(status_code=400, detail="Not enough loot pieces")
+    uid = current_user["id"]
+    updates = {"$inc": {"compound_cash": cash, "compound_points": points, "compound_loot_pieces": loot_pieces}}
+    by_user = (await db.families.find_one({"id": family_id}, {"_id": 0, "compound_deposits_by_user": 1})) or {}
+    deposits = dict((by_user.get("compound_deposits_by_user") or {}).get(uid) or {})
+    deposits["cash"] = int(deposits.get("cash") or 0) + cash
+    deposits["points"] = int(deposits.get("points") or 0) + points
+    deposits["loot_pieces"] = int(deposits.get("loot_pieces") or 0) + loot_pieces
+    updates["$set"] = {f"compound_deposits_by_user.{uid}": deposits}
+    await db.families.update_one({"id": family_id}, updates)
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"money": -cash, "points": -points, "loot_box_pieces": -loot_pieces}},
+    )
+    _invalidate_my_cache(current_user["id"])
+    return {"message": "Deposited to compound"}
+
+
+async def families_compound_withdraw(request: CompoundWithdrawRequest, current_user: dict = Depends(get_current_user)):
+    if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail="Compound is locked until the family war is over")
+    cash = int(request.cash or 0)
+    points = int(request.points or 0)
+    loot_pieces = int(request.loot_pieces or 0)
+    if cash < 0 or points < 0 or loot_pieces < 0:
+        raise HTTPException(status_code=400, detail="Amounts cannot be negative")
+    if cash == 0 and points == 0 and loot_pieces == 0:
+        raise HTTPException(status_code=400, detail="Specify at least one amount to withdraw")
+    fam = await db.families.find_one(
+        {"id": family_id},
+        {"_id": 0, "compound_cash": 1, "compound_points": 1, "compound_loot_pieces": 1, "compound_deposits_by_user": 1},
+    )
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    total_cash = int((fam.get("compound_cash") or 0) or 0)
+    total_points = int((fam.get("compound_points") or 0) or 0)
+    total_loot = int((fam.get("compound_loot_pieces") or 0) or 0)
+    if total_cash < cash or total_points < points or total_loot < loot_pieces:
+        raise HTTPException(status_code=400, detail="Not enough in compound")
+    uid = current_user["id"]
+    by_user = fam.get("compound_deposits_by_user") or {}
+    my_deposits = dict((by_user.get(uid) or {}))
+    my_cash = int(my_deposits.get("cash") or 0)
+    my_points = int(my_deposits.get("points") or 0)
+    my_loot = int(my_deposits.get("loot_pieces") or 0)
+    cash_take = min(cash, total_cash, my_cash)
+    points_take = min(points, total_points, my_points)
+    loot_take = min(loot_pieces, total_loot, my_loot)
+    if cash_take == 0 and points_take == 0 and loot_take == 0:
+        raise HTTPException(status_code=400, detail="Nothing to withdraw from your share")
+    my_deposits["cash"] = my_cash - cash_take
+    my_deposits["points"] = my_points - points_take
+    my_deposits["loot_pieces"] = my_loot - loot_take
+    updates = {
+        "$inc": {"compound_cash": -cash_take, "compound_points": -points_take, "compound_loot_pieces": -loot_take},
+        "$set": {f"compound_deposits_by_user.{uid}": my_deposits},
+    }
+    await db.families.update_one({"id": family_id}, updates)
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"money": cash_take, "points": points_take, "loot_box_pieces": loot_take}},
+    )
+    _invalidate_my_cache(current_user["id"])
+    return {"message": "Withdrew from compound"}
+
+
+async def families_compound_return_to_member(request: CompoundReturnToMemberRequest, current_user: dict = Depends(get_current_user)):
+    if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    target_id = (request.user_id or "").strip()
+    if not target_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    member = await db.family_members.find_one({"family_id": family_id, "user_id": target_id}, {"_id": 0})
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    fam = await db.families.find_one(
+        {"id": family_id},
+        {"_id": 0, "compound_cash": 1, "compound_points": 1, "compound_loot_pieces": 1, "compound_deposits_by_user": 1, "compound_cars": 1},
+    )
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    by_user = fam.get("compound_deposits_by_user") or {}
+    attrib = by_user.get(target_id) or {}
+    ac = int((attrib.get("cash") or 0) or 0)
+    ap = int((attrib.get("points") or 0) or 0)
+    al = int((attrib.get("loot_pieces") or 0) or 0)
+    if ac == 0 and ap == 0 and al == 0:
+        raise HTTPException(status_code=400, detail="Member has no compound share to return")
+    total_cash = int((fam.get("compound_cash") or 0) or 0)
+    total_points = int((fam.get("compound_points") or 0) or 0)
+    total_loot = int((fam.get("compound_loot_pieces") or 0) or 0)
+    if ac > total_cash or ap > total_points or al > total_loot:
+        raise HTTPException(status_code=400, detail="Compound totals inconsistent")
+    updates = {
+        "$inc": {"compound_cash": -ac, "compound_points": -ap, "compound_loot_pieces": -al},
+        "$unset": {f"compound_deposits_by_user.{target_id}": ""},
+    }
+    await db.families.update_one({"id": family_id}, updates)
+    await db.users.update_one(
+        {"id": target_id},
+        {"$inc": {"money": ac, "points": ap, "loot_box_pieces": al}},
+    )
+    _invalidate_my_cache(current_user["id"])
+    _invalidate_my_cache(target_id)
+    return {"message": "Returned compound share to member"}
+
+
+async def families_compound_claim_for_family(request: CompoundClaimForFamilyRequest, current_user: dict = Depends(get_current_user)):
+    if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    target_id = (request.user_id or "").strip()
+    if not target_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    member = await db.family_members.find_one({"family_id": family_id, "user_id": target_id}, {"_id": 0})
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    fam = await db.families.find_one(
+        {"id": family_id},
+        {"_id": 0, "compound_cash": 1, "compound_points": 1, "compound_loot_pieces": 1, "compound_deposits_by_user": 1, "compound_cars": 1},
+    )
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    by_user = fam.get("compound_deposits_by_user") or {}
+    attrib = by_user.get(target_id) or {}
+    ac = int((attrib.get("cash") or 0) or 0)
+    ap = int((attrib.get("points") or 0) or 0)
+    al = int((attrib.get("loot_pieces") or 0) or 0)
+    if ac == 0 and ap == 0 and al == 0:
+        raise HTTPException(status_code=400, detail="Member has no compound share to claim")
+    total_cash = int((fam.get("compound_cash") or 0) or 0)
+    total_points = int((fam.get("compound_points") or 0) or 0)
+    total_loot = int((fam.get("compound_loot_pieces") or 0) or 0)
+    if ac > total_cash or ap > total_points or al > total_loot:
+        raise HTTPException(status_code=400, detail="Compound totals inconsistent")
+    updates = {
+        "$inc": {"compound_cash": -ac, "treasury": ac},
+        "$unset": {f"compound_deposits_by_user.{target_id}": ""},
+    }
+    await db.families.update_one({"id": family_id}, updates)
+    _invalidate_my_cache(current_user["id"])
+    _invalidate_my_cache(target_id)
+    return {"message": "Claimed compound share for the family"}
 
 
 async def families_crew_oc_set_fee(request: FamilyCrewOCSetFeeRequest, current_user: dict = Depends(get_current_user)):
@@ -1636,6 +1880,10 @@ def register(router):
     router.add_api_route("/families/assign-role", families_assign_role, methods=["POST"])
     router.add_api_route("/families/deposit", families_deposit, methods=["POST"])
     router.add_api_route("/families/withdraw", families_withdraw, methods=["POST"])
+    router.add_api_route("/families/compound/deposit", families_compound_deposit, methods=["POST"])
+    router.add_api_route("/families/compound/withdraw", families_compound_withdraw, methods=["POST"])
+    router.add_api_route("/families/compound/return-to-member", families_compound_return_to_member, methods=["POST"])
+    router.add_api_route("/families/compound/claim-for-family", families_compound_claim_for_family, methods=["POST"])
     router.add_api_route("/families/crew-oc/set-fee", families_crew_oc_set_fee, methods=["POST"])
     router.add_api_route("/families/crew-oc/set-auto-accept", families_crew_oc_set_auto_accept, methods=["POST"])
     router.add_api_route("/families/profile-text", families_update_profile_text, methods=["PATCH"])

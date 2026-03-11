@@ -231,7 +231,15 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect
 // TREASURY TAB — vault with quick amounts
 // ============================================================================
 
-const TreasuryTab = ({ treasury, canWithdraw, vaultAndRacketsLocked, depositAmount, setDepositAmount, withdrawAmount, setWithdrawAmount, onDeposit, onWithdraw }) => (
+const TreasuryTab = ({
+  treasury, canWithdraw, vaultAndRacketsLocked,
+  depositAmount, setDepositAmount, withdrawAmount, setWithdrawAmount, onDeposit, onWithdraw,
+  compoundCash, compoundPoints, compoundLootPieces, myCompoundCash, myCompoundPoints, myCompoundLootPieces, myCompoundCars,
+  compoundDepositCash, setCompoundDepositCash, compoundDepositPoints, setCompoundDepositPoints, compoundDepositLootPieces, setCompoundDepositLootPieces,
+  compoundWithdrawCash, setCompoundWithdrawCash, compoundWithdrawPoints, setCompoundWithdrawPoints, compoundWithdrawLootPieces, setCompoundWithdrawLootPieces,
+  onCompoundDeposit, onCompoundWithdraw,
+  returningMembersWithBalance, onCompoundReturnToMember, onCompoundClaimForFamily,
+}) => (
   <div className="space-y-3">
     {vaultAndRacketsLocked && (
       <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[10px] text-amber-200/90 font-heading">
@@ -304,6 +312,63 @@ const TreasuryTab = ({ treasury, canWithdraw, vaultAndRacketsLocked, depositAmou
         </form>
       </div>
     )}
+
+    {/* Compound */}
+    <div className={`border-t border-zinc-700/40 pt-4 mt-4 ${vaultAndRacketsLocked ? 'opacity-60 pointer-events-none' : ''}`}>
+      <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
+        <Shield size={10} /> Family Compound
+      </p>
+      <p className="text-[10px] text-zinc-600 mb-2">Shared stash. On war loss, the enemy takes it. Your share can be returned if you rejoin after a solo death.</p>
+      <div className="grid grid-cols-3 gap-2 mb-2 text-center">
+        <div className="bg-zinc-800/50 rounded border border-zinc-700/40 px-2 py-1.5">
+          <span className="text-[9px] text-zinc-500 block">Cash</span>
+          <span className="text-sm font-heading font-bold text-primary">{formatMoney(compoundCash ?? 0)}</span>
+        </div>
+        <div className="bg-zinc-800/50 rounded border border-zinc-700/40 px-2 py-1.5">
+          <span className="text-[9px] text-zinc-500 block">Points</span>
+          <span className="text-sm font-heading font-bold">{(compoundPoints ?? 0).toLocaleString()}</span>
+        </div>
+        <div className="bg-zinc-800/50 rounded border border-zinc-700/40 px-2 py-1.5">
+          <span className="text-[9px] text-zinc-500 block">Loot pieces</span>
+          <span className="text-sm font-heading font-bold">{(compoundLootPieces ?? 0).toLocaleString()}</span>
+        </div>
+      </div>
+      <p className="text-[9px] text-zinc-500 mb-2">Your share: {formatMoney(myCompoundCash ?? 0)} · {(myCompoundPoints ?? 0).toLocaleString()} pts · {(myCompoundLootPieces ?? 0).toLocaleString()} pieces{(myCompoundCars ? ` · ${myCompoundCars} car(s)` : '')}</p>
+
+      <form onSubmit={onCompoundDeposit} className="flex flex-wrap gap-2 mb-2">
+        <input type="number" min="0" placeholder="Cash" value={compoundDepositCash} onChange={(e) => setCompoundDepositCash(e.target.value)} className="w-24 px-2 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-xs font-heading" />
+        <input type="number" min="0" placeholder="Points" value={compoundDepositPoints} onChange={(e) => setCompoundDepositPoints(e.target.value)} className="w-20 px-2 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-xs font-heading" />
+        <input type="number" min="0" placeholder="Loot" value={compoundDepositLootPieces} onChange={(e) => setCompoundDepositLootPieces(e.target.value)} className="w-20 px-2 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-xs font-heading" />
+        <button type="submit" className="px-3 py-1 rounded text-[10px] font-heading font-bold uppercase border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30">Deposit to compound</button>
+      </form>
+
+      {canWithdraw && (
+        <form onSubmit={onCompoundWithdraw} className="flex flex-wrap gap-2 mb-3">
+          <input type="number" min="0" placeholder="Cash" value={compoundWithdrawCash} onChange={(e) => setCompoundWithdrawCash(e.target.value)} className="w-24 px-2 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-xs font-heading" />
+          <input type="number" min="0" placeholder="Points" value={compoundWithdrawPoints} onChange={(e) => setCompoundWithdrawPoints(e.target.value)} className="w-20 px-2 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-xs font-heading" />
+          <input type="number" min="0" placeholder="Loot" value={compoundWithdrawLootPieces} onChange={(e) => setCompoundWithdrawLootPieces(e.target.value)} className="w-20 px-2 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-xs font-heading" />
+          <button type="submit" className="px-3 py-1 rounded text-[10px] font-heading font-bold uppercase border bg-zinc-700/50 border-zinc-600/50 text-zinc-300 hover:bg-zinc-700/70">Withdraw from compound</button>
+        </form>
+      )}
+
+      {returningMembersWithBalance && returningMembersWithBalance.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-zinc-700/40">
+          <p className="text-[9px] text-zinc-500 font-heading uppercase tracking-wider mb-2">Returning members (your share)</p>
+          <div className="space-y-1.5">
+            {returningMembersWithBalance.map((m) => (
+              <div key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 bg-zinc-800/40 rounded px-2 py-1.5 border border-zinc-700/30">
+                <span className="text-xs font-heading text-foreground">{m.username}</span>
+                <span className="text-[10px] text-zinc-500">{formatMoney(m.compound_cash)} · {m.compound_points} pts · {m.compound_loot_pieces} pieces</span>
+                <div className="flex gap-1">
+                  <button type="button" onClick={() => onCompoundReturnToMember(m.user_id)} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-emerald-600/50 text-emerald-400 hover:bg-emerald-500/10">Return</button>
+                  <button type="button" onClick={() => onCompoundClaimForFamily(m.user_id)} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-amber-600/50 text-amber-400 hover:bg-amber-500/10">Keep for family</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   </div>
 );
 
@@ -1430,6 +1495,12 @@ export default function FamilyPage() {
   const [joinId, setJoinId] = useState('');
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [compoundDepositCash, setCompoundDepositCash] = useState('');
+  const [compoundDepositPoints, setCompoundDepositPoints] = useState('');
+  const [compoundDepositLootPieces, setCompoundDepositLootPieces] = useState('');
+  const [compoundWithdrawCash, setCompoundWithdrawCash] = useState('');
+  const [compoundWithdrawPoints, setCompoundWithdrawPoints] = useState('');
+  const [compoundWithdrawLootPieces, setCompoundWithdrawLootPieces] = useState('');
   const [warStats, setWarStats] = useState(null);
   const [warHistory, setWarHistory] = useState([]);
   const [showWarModal, setShowWarModal] = useState(false);
@@ -1499,6 +1570,48 @@ export default function FamilyPage() {
   const handleAssignRole = async (userId, role) => { try { await api.post('/families/assign-role', { user_id: userId, role }); toast.success(`Assigned ${getRoleConfig(role).label}`); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleDeposit = async (e) => { e.preventDefault(); const amount = parseInt(depositAmount.replace(/\D/g, ''), 10); if (!amount) return; try { await api.post('/families/deposit', { amount }); toast.success('Deposited'); setDepositAmount(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleWithdraw = async (e) => { e.preventDefault(); const amount = parseInt(withdrawAmount.replace(/\D/g, ''), 10); if (!amount) return; try { await api.post('/families/withdraw', { amount }); toast.success('Withdrew'); setWithdrawAmount(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleCompoundDeposit = async (e) => {
+    e.preventDefault();
+    const cash = parseInt(String(compoundDepositCash).replace(/\D/g, ''), 10) || 0;
+    const points = parseInt(String(compoundDepositPoints).replace(/\D/g, ''), 10) || 0;
+    const loot_pieces = parseInt(String(compoundDepositLootPieces).replace(/\D/g, ''), 10) || 0;
+    if (cash === 0 && points === 0 && loot_pieces === 0) return;
+    try {
+      await api.post('/families/compound/deposit', { cash, points, loot_pieces });
+      toast.success('Deposited to compound');
+      setCompoundDepositCash(''); setCompoundDepositPoints(''); setCompoundDepositLootPieces('');
+      refreshUser(); fetchData();
+    } catch (err) { toast.error(apiDetail(err)); }
+  };
+  const handleCompoundWithdraw = async (e) => {
+    e.preventDefault();
+    const cash = parseInt(String(compoundWithdrawCash).replace(/\D/g, ''), 10) || 0;
+    const points = parseInt(String(compoundWithdrawPoints).replace(/\D/g, ''), 10) || 0;
+    const loot_pieces = parseInt(String(compoundWithdrawLootPieces).replace(/\D/g, ''), 10) || 0;
+    if (cash === 0 && points === 0 && loot_pieces === 0) return;
+    try {
+      await api.post('/families/compound/withdraw', { cash, points, loot_pieces });
+      toast.success('Withdrew from compound');
+      setCompoundWithdrawCash(''); setCompoundWithdrawPoints(''); setCompoundWithdrawLootPieces('');
+      refreshUser(); fetchData();
+    } catch (err) { toast.error(apiDetail(err)); }
+  };
+  const handleCompoundReturnToMember = async (userId) => {
+    if (!window.confirm('Return this member\'s compound share?')) return;
+    try {
+      await api.post('/families/compound/return-to-member', { user_id: userId });
+      toast.success('Returned share to member');
+      fetchData();
+    } catch (err) { toast.error(apiDetail(err)); }
+  };
+  const handleCompoundClaimForFamily = async (userId) => {
+    if (!window.confirm('Keep this member\'s share for the family? They will get nothing back.')) return;
+    try {
+      await api.post('/families/compound/claim-for-family', { user_id: userId });
+      toast.success('Claimed for family');
+      fetchData();
+    } catch (err) { toast.error(apiDetail(err)); }
+  };
   const collectRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/collect`); toast.success(res.data?.message || 'Collected'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const collectAllRackets = async () => {
     const ready = rackets.filter(r => r.level > 0 && (formatTimeLeft(r.next_collect_at) === 'Ready' || !formatTimeLeft(r.next_collect_at)));
@@ -1747,7 +1860,41 @@ export default function FamilyPage() {
                   raidCooldown={raidCooldownUntil > 0 && Date.now() < raidCooldownUntil}
                   onRaid={attackFamilyRacket} onRefresh={fetchRacketAttackTargets} refreshing={targetsRefreshing} />
               )}
-              {activeTab === 'treasury' && <TreasuryTab treasury={family.treasury} canWithdraw={canWithdraw} vaultAndRacketsLocked={vaultAndRacketsLocked} depositAmount={depositAmount} setDepositAmount={setDepositAmount} withdrawAmount={withdrawAmount} setWithdrawAmount={setWithdrawAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw} />}
+              {activeTab === 'treasury' && <TreasuryTab
+                treasury={family.treasury}
+                canWithdraw={canWithdraw}
+                vaultAndRacketsLocked={vaultAndRacketsLocked}
+                depositAmount={depositAmount}
+                setDepositAmount={setDepositAmount}
+                withdrawAmount={withdrawAmount}
+                setWithdrawAmount={setWithdrawAmount}
+                onDeposit={handleDeposit}
+                onWithdraw={handleWithdraw}
+                compoundCash={family.compound_cash}
+                compoundPoints={family.compound_points}
+                compoundLootPieces={family.compound_loot_pieces}
+                myCompoundCash={myFamily.my_compound_cash}
+                myCompoundPoints={myFamily.my_compound_points}
+                myCompoundLootPieces={myFamily.my_compound_loot_pieces}
+                myCompoundCars={myFamily.my_compound_cars}
+                compoundDepositCash={compoundDepositCash}
+                setCompoundDepositCash={setCompoundDepositCash}
+                compoundDepositPoints={compoundDepositPoints}
+                setCompoundDepositPoints={setCompoundDepositPoints}
+                compoundDepositLootPieces={compoundDepositLootPieces}
+                setCompoundDepositLootPieces={setCompoundDepositLootPieces}
+                compoundWithdrawCash={compoundWithdrawCash}
+                setCompoundWithdrawCash={setCompoundWithdrawCash}
+                compoundWithdrawPoints={compoundWithdrawPoints}
+                setCompoundWithdrawPoints={setCompoundWithdrawPoints}
+                compoundWithdrawLootPieces={compoundWithdrawLootPieces}
+                setCompoundWithdrawLootPieces={setCompoundWithdrawLootPieces}
+                onCompoundDeposit={handleCompoundDeposit}
+                onCompoundWithdraw={handleCompoundWithdraw}
+                returningMembersWithBalance={myFamily.returning_members_with_balance}
+                onCompoundReturnToMember={handleCompoundReturnToMember}
+                onCompoundClaimForFamily={handleCompoundClaimForFamily}
+              />}
               {activeTab === 'statehead' && family?.head_of_state && (
                 <StateHeadTab headOfState={family.head_of_state} stateHeadIncome={family.state_head_income} />
               )}
