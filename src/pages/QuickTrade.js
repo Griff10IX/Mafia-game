@@ -108,7 +108,10 @@ export default function QuickTrade() {
 
   const handleAcceptOffer = async (offerId, type) => {
     try {
-      await api.post(`/trade/${type}-offer/${offerId}/accept`);
+      const url = type === 'property'
+        ? `/trade/property/${offerId}/accept`
+        : `/trade/${type}-offer/${offerId}/accept`;
+      await api.post(url);
       toast.success('Trade completed!');
       fetchTrades();
       refreshUser();
