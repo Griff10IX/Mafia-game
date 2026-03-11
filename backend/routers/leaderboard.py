@@ -288,6 +288,10 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
             "Weekly leaderboard payout: week %s paid %d users total %d points",
             last_week_start_str, len(user_points), sum(user_points.values()),
         )
+
+
+async def get_leaderboard(current_user: dict = Depends(get_current_user)):
+    """Single leaderboard: top 10 by money (alive, non-bodyguard, non-npc)."""
     query = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
     query.update(_leaderboard_user_filter())
     users = await db.users.find(
