@@ -894,6 +894,7 @@ export default function Boxing3D() {
   const [league, setLeague] = useState(null);
   const [betStake, setBetStake] = useState(10000);
   const [drillTick, setDrillTick] = useState(0); // force re-render every 1s for cooldown countdown
+  const [narrowLayout, setNarrowLayout] = useState(typeof window !== "undefined" && window.innerWidth < 768);
 
   const { matchId: arenaMatchId } = useParams();
   const navigate = useNavigate();
@@ -1016,9 +1017,22 @@ export default function Boxing3D() {
 
   useEffect(() => {
     if (!profile || !Object.keys(drills || {}).length) return;
-    const id = setInterval(() => setDrillTick((k) => k + 1), 1000);
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
+    const interval = isMobile ? 2000 : 1000; // 2s on mobile to reduce re-renders and lag
+    let id;
+    const tick = () => {
+      if (document.visibilityState === "visible") setDrillTick((k) => k + 1);
+    };
+    id = setInterval(tick, interval);
     return () => clearInterval(id);
   }, [profile, drills]);
+
+  useEffect(() => {
+    const check = () => setNarrowLayout(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   const startNpcFight = async (npc) => {
     if (npcFightState && !npcFightState.result) return;
@@ -1805,7 +1819,7 @@ export default function Boxing3D() {
         </div>
       </div>
 
-      <div className={styles.pageContent} style={{padding:"18px 20px 12px",display:"grid",gridTemplateColumns:"minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr)",gap:16}}>
+      <div className={styles.pageContent} style={{padding:"18px 20px 12px",display:"grid",gridTemplateColumns: narrowLayout ? "1fr" : "minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr)",gap:16}}>
         <div className={styles.panel} style={{padding:12,minHeight:140}}>
           <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>TRAINING & STATS</div>
           {metaError && <div style={{fontSize:10,color:"#ff6666",marginBottom:6}}>{metaError}</div>}
@@ -1938,7 +1952,7 @@ export default function Boxing3D() {
               {typeof gearInfo.total_wins === "number" && (
                 <div style={{fontSize:10,color:"#8a7a4a",marginBottom:6}}>Wins: {gearInfo.total_wins}</div>
               )}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6,fontSize:10}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(100px,1fr))",gap:6,fontSize:10}}>
                 {(gearInfo.gear || []).map((g) => {
                   const owned = (gearInfo.owned_ids || []).includes(g.id);
                   const equippedSlot = gearInfo.equipped?.[g.slot];
@@ -1946,12 +1960,13 @@ export default function Boxing3D() {
                   const unlocked = g.unlocked !== false;
                   const winsReq = g.wins_required;
                   const themeLabel = g.theme ? ` · ${g.theme}` : "";
+                  const nameLine = (g.name || g.id) + themeLabel;
                   return (
-                    <div key={g.id} style={{background: unlocked ? "rgba(255,255,255,0.02)" : "rgba(80,60,40,0.2)",borderRadius:3,padding:"4px 6px",border:isEquipped?"1px solid rgba(201,168,76,0.7)":"1px solid rgba(201,168,76,0.25)"}}>
-                      <div style={{fontSize:10,color:unlocked ? "#e0d0a0" : "#6a5a4a"}}>{g.name}{themeLabel}</div>
-                      <div style={{fontSize:9,color:"#8a7a4a",marginBottom:2}}>{g.slot}</div>
-                      {!unlocked && winsReq != null && <div style={{fontSize:9,color:"#9a7a4a",marginBottom:3}}>Unlock at {winsReq} wins</div>}
-                      <div style={{display:"flex",gap:4}}>
+                    <div key={g.id} style={{background: unlocked ? "rgba(255,255,255,0.02)" : "rgba(80,60,40,0.2)",borderRadius:3,padding:"6px 8px",border:isEquipped?"1px solid rgba(201,168,76,0.7)":"1px solid rgba(201,168,76,0.25)",minHeight:72,overflow:"hidden",display:"flex",flexDirection:"column",gap:4}}>
+                      <div style={{fontSize:10,color:unlocked ? "#e0d0a0" : "#6a5a4a",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}} title={nameLine}>{nameLine}</div>
+                      <div style={{fontSize:9,color:"#8a7a4a",flexShrink:0}}>{g.slot}</div>
+                      {!unlocked && winsReq != null && <div style={{fontSize:9,color:"#9a7a4a",flexShrink:0}}>Unlock at {winsReq} wins</div>}
+                      <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:"auto"}}>
                         {!owned && (
                           <button
                             onClick={() => unlocked && handleGearBuy(g.id)}
@@ -1989,7 +2004,7 @@ export default function Boxing3D() {
         </div>
       </div>
 
-      <div className={styles.pageContent} style={{padding:"12px 20px 26px",borderTop:"1px solid var(--noir-border-light)",display:"grid",gridTemplateColumns:"minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,1.0fr)",gap:16}}>
+      <div className={styles.pageContent} style={{padding:"12px 20px 26px",borderTop:"1px solid var(--noir-border-light)",display:"grid",gridTemplateColumns: narrowLayout ? "1fr" : "minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,1.0fr)",gap:16}}>
         <div className={styles.panel} style={{padding:12,minHeight:140}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
             <div style={{fontSize:11,color:gold,letterSpacing:"0.16em"}}>MATCHES</div>
