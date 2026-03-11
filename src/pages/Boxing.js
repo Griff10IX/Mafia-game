@@ -113,7 +113,11 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
 
   // Head group — pivot at neck
   const headG=new THREE.Group(); headG.position.set(0,0.72,0); torsoG.add(headG);
-  headG.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.12,0.16,8),m(skinHex)),{position:new THREE.Vector3(0,0.08,0)}));
+  {
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.12,0.16,8),m(skinHex));
+    neck.position.set(0,0.08,0);
+    headG.add(neck);
+  }
   const head=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.38,0.36),m(skinHex)); head.position.y=0.29; head.castShadow=true; headG.add(head);
   const hg=new THREE.Mesh(new THREE.SphereGeometry(0.24,10,8),m(colorHex)); hg.position.y=0.3; hg.scale.set(1,0.87,1); headG.add(hg);
   const em=new THREE.MeshBasicMaterial({color:0x000000});
