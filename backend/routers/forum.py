@@ -112,6 +112,22 @@ async def get_topics(
     skip = (page - 1) * FORUM_TOPICS_PER_PAGE
     topics = await db.forum_topics.find(query, {"_id": 0}).sort(sort).skip(skip).limit(FORUM_TOPICS_PER_PAGE).to_list(FORUM_TOPICS_PER_PAGE)
     author_ids = [t.get("author_id") for t in topics if t.get("author_id")]
+    # Resolve authors by username for topics missing author_id (e.g. older topics)
+    username_to_id = {}
+    usernames_to_resolve = list(set(
+        (t.get("author_username") or "").strip()
+        for t in topics
+        if not t.get("author_id") and (t.get("author_username") or "").strip()
+    ))
+    if usernames_to_resolve:
+        for uname in usernames_to_resolve:
+            u = await db.users.find_one(
+                {"username": re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)},
+                {"_id": 0, "id": 1, "username": 1},
+            )
+            if u and u.get("id"):
+                username_to_id[(uname or "").lower()] = u["id"]
+                author_ids.append(u["id"])
     colors = await _get_author_display_colors(author_ids)
     out = []
     for t in topics:
@@ -129,8 +145,9 @@ async def get_topics(
             "created_at": t.get("created_at"),
             "updated_at": t.get("updated_at"),
         }
-        if t.get("author_id") and colors.get(t["author_id"]):
-            item["author_online_color"] = colors[t["author_id"]]
+        author_id = t.get("author_id") or (username_to_id.get((t.get("author_username") or "").strip().lower()) if t.get("author_username") else None)
+        if author_id and colors.get(author_id):
+            item["author_online_color"] = colors[author_id]
         if t.get("crew_oc_family_id"):
             item["crew_oc_family_id"] = t["crew_oc_family_id"]
             fam = await db.families.find_one({"id": t["crew_oc_family_id"]}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_join_fee": 1})
@@ -155,12 +172,32 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
     topic["views"] = topic.get("views", 0) + 1
     comments = await db.forum_comments.find({"topic_id": topic_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
     author_ids = [topic.get("author_id")] + [c.get("author_id") for c in comments if c.get("author_id")]
-    colors = await _get_author_display_colors(author_ids)
-    if topic.get("author_id") and colors.get(topic["author_id"]):
-        topic["author_online_color"] = colors[topic["author_id"]]
+    # Resolve by username when author_id missing (e.g. older data)
+    usernames_to_resolve = []
+    if not topic.get("author_id") and (topic.get("author_username") or "").strip():
+        usernames_to_resolve.append((topic.get("author_username") or "").strip())
     for c in comments:
-        if c.get("author_id") and colors.get(c["author_id"]):
-            c["author_online_color"] = colors[c["author_id"]]
+        if not c.get("author_id") and (c.get("author_username") or "").strip():
+            usernames_to_resolve.append((c.get("author_username") or "").strip())
+    username_to_id = {}
+    for uname in set(usernames_to_resolve):
+        if not uname:
+            continue
+        u = await db.users.find_one(
+            {"username": re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)},
+            {"_id": 0, "id": 1, "username": 1},
+        )
+        if u and u.get("id"):
+            username_to_id[uname.lower()] = u["id"]
+            author_ids.append(u["id"])
+    colors = await _get_author_display_colors(author_ids)
+    topic_author_id = topic.get("author_id") or username_to_id.get((topic.get("author_username") or "").strip().lower())
+    if topic_author_id and colors.get(topic_author_id):
+        topic["author_online_color"] = colors[topic_author_id]
+    for c in comments:
+        c_author_id = c.get("author_id") or username_to_id.get((c.get("author_username") or "").strip().lower())
+        if c_author_id and colors.get(c_author_id):
+            c["author_online_color"] = colors[c_author_id]
     # Attach like status for current user
     uid = current_user["id"]
     for c in comments:

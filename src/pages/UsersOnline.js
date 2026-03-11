@@ -71,7 +71,6 @@ const DEFAULT_HDO_COLOR = '#166534';
 
 const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor }) => {
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
-  const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
   const hdoColor = (hdoOnlineColor && hdoOnlineColor.trim()) || DEFAULT_HDO_COLOR;
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in`}>
@@ -85,7 +84,6 @@ const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor }) =>
           <span className="text-mutedForeground">Admin</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-sm shrink-0 border border-white/20" style={{ backgroundColor: modColor }} aria-hidden />
           <span className="text-mutedForeground">Mod (profile colour)</span>
         </span>
         <span className="flex items-center gap-1.5">
