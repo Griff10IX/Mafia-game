@@ -23,6 +23,7 @@ function makeBrickTexture() {
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
   const brickW = 64;
   const brickH = 24;
   const mortar = 3;
@@ -41,7 +42,7 @@ function makeBrickTexture() {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(1.5, 0.8);
-  tex.colorSpace = THREE.SRGBColorSpace;
+  if (typeof tex.colorSpace !== 'undefined') tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
@@ -51,6 +52,7 @@ function makeTileTexture() {
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
   const tile = 32;
   const light = "#e8dcc8";
   const dark = "#8b7355";
@@ -63,7 +65,7 @@ function makeTileTexture() {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(5, 7);
-  tex.colorSpace = THREE.SRGBColorSpace;
+  if (typeof tex.colorSpace !== 'undefined') tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
@@ -74,6 +76,7 @@ function makeShootingRangeSignTexture() {
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
   ctx.fillStyle = "#e8e0d4";
   ctx.fillRect(0, 0, w, h);
   ctx.font = "bold 48px Arial";
@@ -82,7 +85,7 @@ function makeShootingRangeSignTexture() {
   ctx.textBaseline = "middle";
   ctx.fillText("SHOOTING RANGE", w / 2, h / 2);
   const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
+  if (typeof tex.colorSpace !== 'undefined') tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
@@ -124,16 +127,17 @@ function buildLongRangeScene(scene) {
   const textures = [];
 
   const brickTex = makeBrickTexture();
-  textures.push(brickTex);
+  if (brickTex) textures.push(brickTex);
   const tileTex = makeTileTexture();
-  textures.push(tileTex);
+  if (tileTex) textures.push(tileTex);
   const signTex = makeShootingRangeSignTexture();
-  textures.push(signTex);
+  if (signTex) textures.push(signTex);
 
   // Floor – checkerboard tiles
   const floorGeo = new THREE.PlaneGeometry(corridorWidth + 1, floorLen);
   const floorMat = new THREE.MeshStandardMaterial({
-    map: tileTex,
+    ...(tileTex && { map: tileTex }),
+    color: 0x585a54,
     roughness: 0.9,
     metalness: 0.05,
   });
@@ -146,7 +150,8 @@ function buildLongRangeScene(scene) {
   // Side walls – brick
   const wallGeo = new THREE.PlaneGeometry(floorLen, 3.5);
   const wallMat = new THREE.MeshStandardMaterial({
-    map: brickTex,
+    ...(brickTex && { map: brickTex }),
+    color: 0x6a6d68,
     roughness: 0.9,
     metalness: 0.0,
   });
@@ -162,19 +167,21 @@ function buildLongRangeScene(scene) {
   scene.add(rightWall);
 
   // "SHOOTING RANGE" sign on left wall (small panel)
-  const signGeo = new THREE.PlaneGeometry(2.2, 0.5);
-  const signMat = new THREE.MeshStandardMaterial({
-    map: signTex,
-    transparent: true,
-    opacity: 0.95,
-    roughness: 0.8,
-    metalness: 0,
-    side: THREE.DoubleSide,
-  });
-  const sign = new THREE.Mesh(signGeo, signMat);
-  sign.rotation.y = -Math.PI / 2;
-  sign.position.set(-corridorWidth / 2 - 0.48, 2.4, -6);
-  scene.add(sign);
+  if (signTex) {
+    const signGeo = new THREE.PlaneGeometry(2.2, 0.5);
+    const signMat = new THREE.MeshStandardMaterial({
+      map: signTex,
+      transparent: true,
+      opacity: 0.95,
+      roughness: 0.8,
+      metalness: 0,
+      side: THREE.DoubleSide,
+    });
+    const sign = new THREE.Mesh(signGeo, signMat);
+    sign.rotation.y = -Math.PI / 2;
+    sign.position.set(-corridorWidth / 2 - 0.48, 2.4, -6);
+    scene.add(sign);
+  }
 
   // Ceiling beams (dark metal rails)
   const beamGeo = new THREE.BoxGeometry(floorLen + 2, 0.12, 0.2);
@@ -314,6 +321,7 @@ export default function ShootingRange3D() {
   const [score, setScore] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
+  const [sceneError, setSceneError] = useState(null);
   const gamePhaseRef = useRef(gamePhase);
   useEffect(() => {
     gamePhaseRef.current = gamePhase;
@@ -369,20 +377,30 @@ export default function ShootingRange3D() {
 
   useEffect(() => {
     if (!weaponId || !canvasRef.current || ownedGuns.every((w) => w.id !== weaponId)) return;
+    setSceneError(null);
     const canvas = canvasRef.current;
     setSceneReady(false);
+    let textures = [];
+    let renderer = null;
+    let scene = null;
+    let raf = null;
+    let bulletGroup = null;
+    let bullets = [];
+    let onPointerDown = null;
+    let onResize = null;
+    try {
     const W = Math.max(320, canvas.clientWidth || 640);
     const H = Math.max(200, canvas.clientHeight || 400);
     const isMobile = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile });
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
     renderer.setSize(W, H, false);
     renderer.setClearColor(0x5a5c58);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    const scene = new THREE.Scene();
+    scene = new THREE.Scene();
     scene.background = new THREE.Color(0x5a5c58);
     scene.fog = new THREE.Fog(0x6a6c68, 20, 50);
 
@@ -411,15 +429,17 @@ export default function ShootingRange3D() {
     fill.position.set(0, 2, -12);
     scene.add(fill);
 
-    const { target, textures } = buildLongRangeScene(scene);
+    const { target, textures: sceneTextures } = buildLongRangeScene(scene);
+    textures = sceneTextures || [];
     const gun = createGunModel();
     camera.add(gun);
 
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
-    const bulletGroup = new THREE.Group();
-    scene.add(bulletGroup);
-    const bullets = [];
+    const bulletGroupLocal = new THREE.Group();
+    scene.add(bulletGroupLocal);
+    bulletGroup = bulletGroupLocal;
+    bullets = [];
     const muzzleFlash = createMuzzleFlash();
     muzzleFlash.visible = false;
     scene.add(muzzleFlash);
@@ -439,16 +459,17 @@ export default function ShootingRange3D() {
       roundEndAt: 0,
     };
 
-    const onResize = () => {
+    const onResizeLocal = () => {
       const w = Math.max(320, canvas.clientWidth || 640);
       const h = Math.max(200, canvas.clientHeight || 400);
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
     };
+    onResize = onResizeLocal;
     window.addEventListener("resize", onResize);
 
-      const onPointerDown = (e) => {
+    onPointerDown = (e) => {
         const r = refs.current;
         if (!r.camera || r.target?.visible === false || gamePhaseRef.current !== "playing") return;
       const rect = canvas.getBoundingClientRect();
@@ -471,7 +492,6 @@ export default function ShootingRange3D() {
     };
     canvas.addEventListener("pointerdown", onPointerDown);
 
-    let raf;
     const loop = () => {
       raf = requestAnimationFrame(loop);
       const r = refs.current;
@@ -541,26 +561,34 @@ export default function ShootingRange3D() {
     };
     loop();
     setSceneReady(true);
+    } catch (err) {
+      setSceneError(err?.message || String(err));
+      setSceneReady(false);
+    }
 
     return () => {
       setSceneReady(false);
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("resize", onResize);
-      cancelAnimationFrame(raf);
-      textures.forEach((t) => t.dispose());
-      bullets.forEach((b) => {
-        bulletGroup.remove(b.mesh);
-        b.mesh.geometry.dispose();
-        b.mesh.material.dispose();
-      });
-      renderer.dispose();
-      scene.traverse((o) => {
-        if (o.geometry) o.geometry.dispose();
-        if (o.material) {
-          if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
-          else o.material.dispose();
-        }
-      });
+      if (onResize) window.removeEventListener("resize", onResize);
+      if (onPointerDown) canvas.removeEventListener("pointerdown", onPointerDown);
+      if (raf != null) cancelAnimationFrame(raf);
+      textures.forEach((t) => t && t.dispose && t.dispose());
+      if (bulletGroup && Array.isArray(bullets)) {
+        bullets.forEach((b) => {
+          bulletGroup.remove(b.mesh);
+          b.mesh.geometry.dispose();
+          b.mesh.material.dispose();
+        });
+      }
+      if (renderer && scene) {
+        renderer.dispose();
+        scene.traverse((o) => {
+          if (o.geometry) o.geometry.dispose();
+          if (o.material) {
+            if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
+            else o.material.dispose();
+          }
+        });
+      }
     };
   }, [weaponId]);
 
@@ -602,6 +630,14 @@ export default function ShootingRange3D() {
         </div>
       ) : (
         <>
+          {sceneError ? (
+            <div className="rounded-lg p-4 bg-amber-500/10 border border-amber-500/40">
+              <p className="text-sm font-heading text-amber-200 mb-2">Something went wrong loading the 3D range.</p>
+              <p className="text-xs text-zinc-400 font-mono mb-3">{sceneError}</p>
+              <Link to="/shooting-range" className="text-sm font-heading font-bold uppercase tracking-wider" style={{ color: "var(--noir-primary)" }}>← Back to Shooting range</Link>
+            </div>
+          ) : (
+          <>
           <div
             className="relative rounded-lg overflow-hidden border border-zinc-700/50 bg-black"
             style={{ aspectRatio: "16/10", maxHeight: "60vh", minHeight: 320 }}
@@ -640,6 +676,8 @@ export default function ShootingRange3D() {
             )}
           </div>
           <p className="text-[10px] text-zinc-500 mt-2">Click to shoot. Watch your bullets travel; hit the red target before the next one appears.</p>
+          </>
+          )}
         </>
       )}
     </div>

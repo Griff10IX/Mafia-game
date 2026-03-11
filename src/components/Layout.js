@@ -727,6 +727,7 @@ export default function Layout({ children }) {
     { path: '/daily-rewards', icon: Gift, label: 'Daily Rewards' },
     { path: '/flappygangster', icon: Zap, label: 'Flappy Gangster' },
     { path: '/boxing', icon: Heart, label: 'Boxing' },
+    { path: '/racing', icon: Car, label: 'Racing' },
     { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { path: '/store', icon: ShoppingBag, label: 'Store' },
     { path: '/quick-trade', icon: ArrowLeftRight, label: 'Quick Trade' },
@@ -1395,13 +1396,23 @@ export default function Layout({ children }) {
         )}
         {(() => {
           const pathNorm = (location.pathname || '').replace(/\/$/, '') || '/';
-          const lockedMessage = pageLocks[pathNorm];
-          if (lockedMessage && !isAdmin) {
+          let lockedMessage = pageLocks[pathNorm];
+          if (!lockedMessage && typeof pageLocks === 'object') {
+            const matchingKeys = Object.keys(pageLocks).filter(
+              (k) => pathNorm === k || pathNorm.startsWith(k + '/')
+            );
+            if (matchingKeys.length > 0) {
+              const longest = matchingKeys.sort((a, b) => b.length - a.length)[0];
+              lockedMessage = pageLocks[longest];
+            }
+          }
+          const msg = typeof lockedMessage === 'object' ? lockedMessage?.message : lockedMessage;
+          if (msg && !isAdmin) {
             return (
               <div className="flex flex-col items-center justify-center min-h-[50vh] px-4 text-center">
                 <div className="rounded-xl border-2 p-8 max-w-md w-full" style={{ borderColor: 'var(--noir-primary)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.08)' }}>
                   <p className="text-lg font-heading font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--noir-primary)' }}>Down for maintenance</p>
-                  <p className="text-sm font-heading text-muted-foreground mb-6">{lockedMessage}</p>
+                  <p className="text-sm font-heading text-muted-foreground mb-6">{msg}</p>
                   <Link to="/dashboard" className="text-sm font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Back to Dashboard</Link>
                 </div>
               </div>

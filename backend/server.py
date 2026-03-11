@@ -1284,7 +1284,7 @@ async def _user_owns_any_property(user_id: str):
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail, attack, etc.)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, armoury, objectives, attack, bank, families, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, mp_blackjack, mp_poker, horseracing, slots, video_poker, mdg, stock_market, notifications, hitlist, properties, store, racket, leaderboard, meta, user_progress, states, events, security_admin, sports_betting, auth, profile, admin, payments, stats, dead_alive, users, giphy, crack_safe, prestige, game_chat, illegal_business, gauntlet, boxing
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, armoury, objectives, attack, bank, families, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, mp_blackjack, mp_poker, horseracing, slots, video_poker, mdg, stock_market, notifications, hitlist, properties, store, racket, leaderboard, meta, user_progress, states, events, security_admin, sports_betting, auth, profile, admin, payments, stats, dead_alive, users, giphy, crack_safe, prestige, game_chat, illegal_business, gauntlet, boxing, racing
 from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
 from routers.families import FAMILY_RACKETS, compute_loser_racket_cash, WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT  # used by _family_war_check_wipe_and_award and seed
 from routers.bodyguards import _create_robot_bodyguard_user  # used by seed
@@ -1359,6 +1359,7 @@ from routers import daily_rewards
 daily_rewards.register(api_router)
 gauntlet.register(api_router)
 boxing.register(api_router)
+racing.register(api_router)
 from routers import auto_rank as auto_rank_router
 auto_rank_router.register(api_router)
 

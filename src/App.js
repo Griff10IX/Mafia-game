@@ -82,6 +82,7 @@ const HelpDesk = lazy(() => import("./pages/HelpDesk"));
 const IllegalBusiness = lazy(() => import("./pages/IllegalBusiness"));
 const Gauntlet = lazy(() => import("./pages/Gauntlet"));
 const Boxing = lazy(() => import("./pages/Boxing"));
+const Racing = lazy(() => import("./pages/Racing"));
 
 const PageLoader = () => (
   <div className="min-h-[200px] flex items-center justify-center text-primary text-sm font-heading">Loading...</div>
@@ -760,6 +761,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Boxing />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/racing"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Racing />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
