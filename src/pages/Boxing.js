@@ -275,9 +275,9 @@ export default function Boxing3D() {
     // knockdown
     kdA:0,     // seconds remaining
     kdB:0,
-    // positions
-    xA:-1.3, xB:1.3,
-    txA:-1.3, txB:1.3,
+    // positions (start a bit closer together)
+    xA:-1.0, xB:1.0,
+    txA:-1.0, txB:1.0,
   });
 
   const [hpA,setHpA]=useState(100);
@@ -585,18 +585,18 @@ export default function Boxing3D() {
     renderer.shadowMap.enabled=true;
     renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     renderer.toneMapping=THREE.ReinhardToneMapping;
-    renderer.toneMappingExposure=1.35;
+    renderer.toneMappingExposure=1.9;
 
     const scene=new THREE.Scene();
     // Slightly brighter, cooler noir backdrop to match game theme
-    scene.background=new THREE.Color(0x111117);
-    scene.fog=new THREE.FogExp2(0x050509,0.022);
+    scene.background=new THREE.Color(0x181822);
+    scene.fog=new THREE.FogExp2(0x090912,0.016);
 
     const camera=new THREE.PerspectiveCamera(52,W/H,0.1,80);
     camera.position.set(0,2.9,7.4); camera.lookAt(0,1.1,0);
 
-    scene.add(new THREE.AmbientLight(0x2a2620,1.1));
-    const spot=new THREE.SpotLight(0xfff7d0,5.6,26,Math.PI/4.0,0.3);
+    scene.add(new THREE.AmbientLight(0x393530,1.4));
+    const spot=new THREE.SpotLight(0xfff7e0,6.3,28,Math.PI/3.8,0.3);
     spot.position.set(0,10,1); spot.target.position.set(0,0,0);
     spot.castShadow=true; spot.shadow.mapSize.set(1024,1024);
     scene.add(spot); scene.add(spot.target);
@@ -608,8 +608,8 @@ export default function Boxing3D() {
 
     const bA=buildBoxer(scene,FIGHTERS[0].color,0xc8956a);
     const bB=buildBoxer(scene,FIGHTERS[1].color,0xb07850);
-    bA.group.position.set(-1.3,0.08,0);
-    bB.group.position.set(1.3,0.08,0);
+    bA.group.position.set(-1.0,0.08,0);
+    bB.group.position.set(1.0,0.08,0);
     bB.group.rotation.y=Math.PI;
 
     // Crowd
@@ -643,8 +643,8 @@ export default function Boxing3D() {
       crowd.rotation.y+=0.0006;
 
       // ── SMOOTH X POSITION ──
-      r.xA=lerp(r.xA,r.txA,dt*7);
-      r.xB=lerp(r.xB,r.txB,dt*7);
+      r.xA=lerp(r.xA,r.txA,dt*9);
+      r.xB=lerp(r.xB,r.txB,dt*9);
       bA.group.position.x=r.xA;
       bB.group.position.x=r.xB;
 
@@ -677,20 +677,20 @@ export default function Boxing3D() {
       // ── PUNCH ANIMATIONS ──
       let aPunching=false, bPunching=false;
 
-      if(r.pA&&r.kdA<=0){
+          if(r.pA&&r.kdA<=0){
         aPunching=true;
         r.pA.p=Math.min(1,r.pA.p+dt*PUNCH_SPEED);
         applyPunch(bA,r.pA.type,r.pA.p,"a");
-        // step in
-        r.txA=-1.1+Math.sin(r.pA.p*Math.PI)*0.28;
-        if(r.pA.p>=1){r.pA=null; r.txA=-1.3;}
+        // step in closer to centre when throwing
+        r.txA=-0.55+Math.sin(r.pA.p*Math.PI)*0.18;
+        if(r.pA.p>=1){r.pA=null; r.txA=-1.0;}
       }
       if(r.pB&&r.kdB<=0){
         bPunching=true;
         r.pB.p=Math.min(1,r.pB.p+dt*PUNCH_SPEED);
         applyPunch(bB,r.pB.type,r.pB.p,"b");
-        r.txB=1.1-Math.sin(r.pB.p*Math.PI)*0.28;
-        if(r.pB.p>=1){r.pB=null; r.txB=1.3;}
+        r.txB=0.55-Math.sin(r.pB.p*Math.PI)*0.18;
+        if(r.pB.p>=1){r.pB=null; r.txB=1.0;}
       }
 
       // ── HIT REACTIONS (additive on top of whatever pose) ──
@@ -757,8 +757,8 @@ export default function Boxing3D() {
     r.fight=result; r.phase="fighting"; r.evIdx=0; r.evTimer=0.6;
     r.pA=null; r.pB=null; r.hA=null; r.hB=null;
     r.kdA=0; r.kdB=0; r.xA=-1.3; r.xB=1.3; r.txA=-1.3; r.txB=1.3;
-    if(r.bA){r.bA.group.position.set(-1.3,0.08,0);r.bA.group.rotation.set(0,0,0);}
-    if(r.bB){r.bB.group.position.set(1.3,0.08,0);r.bB.group.rotation.set(0,Math.PI,0);}
+    if(r.bA){r.bA.group.position.set(-1.0,0.08,0);r.bA.group.rotation.set(0,0,0);}
+    if(r.bB){r.bB.group.position.set(1.0,0.08,0);r.bB.group.rotation.set(0,Math.PI,0);}
     setHpA(100);setHpB(100);setStamA(100);setStamB(100);setRound(1);
     setGameState("fighting");setWinText("");setActionText("");
   },[]);
