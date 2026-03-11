@@ -14,14 +14,14 @@ const TARGET_RESPAWN = 0.8;
 
 function buildRangeScene(scene) {
   const floorGeo = new THREE.PlaneGeometry(14, 10);
-  const floorMat = new THREE.MeshLambertMaterial({ color: 0x353230 });
+  const floorMat = new THREE.MeshLambertMaterial({ color: 0x505048 });
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, 0, -3);
   scene.add(floor);
 
   const wallGeo = new THREE.PlaneGeometry(14, 7);
-  const wallMat = new THREE.MeshLambertMaterial({ color: 0x22201e });
+  const wallMat = new THREE.MeshLambertMaterial({ color: 0x404038 });
   const wall = new THREE.Mesh(wallGeo, wallMat);
   wall.position.set(0, 1.5, -5.5);
   scene.add(wall);
@@ -48,17 +48,17 @@ function buildRangeScene(scene) {
     group.userData.respawnAt = 0;
     group.userData.index = i;
     const backGeo = new THREE.CylinderGeometry(targetRadius * 1.1, targetRadius * 1.1, 0.06, 24);
-    const backMat = new THREE.MeshLambertMaterial({ color: 0x333230 });
+    const backMat = new THREE.MeshLambertMaterial({ color: 0x4a4844 });
     const back = new THREE.Mesh(backGeo, backMat);
     group.add(back);
     const faceGeo = new THREE.CircleGeometry(targetRadius, 24);
-    const faceMat = new THREE.MeshLambertMaterial({ color: 0xc03030 });
+    const faceMat = new THREE.MeshBasicMaterial({ color: 0xe04040 });
     const face = new THREE.Mesh(faceGeo, faceMat);
     face.rotation.x = -Math.PI / 2;
     face.position.z = 0.04;
     group.add(face);
     const innerGeo = new THREE.CircleGeometry(targetRadius * 0.35, 16);
-    const innerMat = new THREE.MeshLambertMaterial({ color: 0xf0e0a0 });
+    const innerMat = new THREE.MeshBasicMaterial({ color: 0xffe070 });
     const inner = new THREE.Mesh(innerGeo, innerMat);
     inner.rotation.x = -Math.PI / 2;
     inner.position.z = 0.045;
@@ -148,25 +148,28 @@ export default function ShootingRange3D() {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
     renderer.setSize(W, H, false);
-    renderer.setClearColor(0x1a1a18);
+    renderer.setClearColor(0x383832);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1a1a18);
-    scene.fog = new THREE.FogExp2(0x121210, 0.04);
+    scene.background = new THREE.Color(0x383832);
+    scene.fog = new THREE.FogExp2(0x383832, 0.012);
 
     const camera = new THREE.PerspectiveCamera(58, W / H, 0.1, 60);
     camera.position.set(0, 1.35, 2.5);
     camera.lookAt(0, 1.15, -4);
 
-    scene.add(new THREE.AmbientLight(0x6a6258, 1.4));
-    const spot = new THREE.SpotLight(0xfff8e8, 5, 28, Math.PI / 5, 0.35);
-    spot.position.set(0, 5, -2);
-    spot.target.position.set(0, 0, -5);
+    scene.add(new THREE.AmbientLight(0xb0a898, 2.2));
+    const spot = new THREE.SpotLight(0xfffce8, 10, 30, Math.PI / 5, 0.25);
+    spot.position.set(0, 6, -1);
+    spot.target.position.set(0, 1, -5);
     scene.add(spot);
     scene.add(spot.target);
-    const fill = new THREE.PointLight(0x88aacc, 1.0, 22);
-    fill.position.set(5, 2, 1);
+    const fill = new THREE.PointLight(0xaaccff, 2.0, 25);
+    fill.position.set(4, 3, 0);
     scene.add(fill);
+    const fill2 = new THREE.PointLight(0xffeedd, 1.5, 20);
+    fill2.position.set(-3, 2, 1);
+    scene.add(fill2);
 
     const { targets } = buildRangeScene(scene);
     const raycaster = new THREE.Raycaster();

@@ -265,7 +265,19 @@ function simulateFight(aS, bS) {
     winner="a";
     reason = b.kds>=3 ? "TKO" : (b.cut && b.cut.severity > 0.78 ? "TKO" : "KO");
   } else {
-    winner = "a"; // simplification: player (a) wins decisions
+    // Decision: mirror server logic — total damage, then total hits, then random
+    let totalADmg = 0, totalBDmg = 0, hitsA = 0, hitsB = 0;
+    for (const ev of events) {
+      totalADmg += ev.aDmg || 0;
+      totalBDmg += ev.bDmg || 0;
+      if (ev.aLanded) hitsA++;
+      if (ev.bLanded) hitsB++;
+    }
+    if (totalADmg > totalBDmg) { winner = "a"; reason = "Decision"; }
+    else if (totalBDmg > totalADmg) { winner = "b"; reason = "Decision"; }
+    else if (hitsA > hitsB) { winner = "a"; reason = "Decision"; }
+    else if (hitsB > hitsA) { winner = "b"; reason = "Decision"; }
+    else { winner = Math.random() < 0.5 ? "a" : "b"; reason = "Split decision"; }
   }
   return {events, winner, reason};
 }
@@ -1870,6 +1882,15 @@ export default function Boxing3D() {
             {isBetweenRounds && <div style={{fontSize:9,color:"#8a7a4a",textAlign:"center",marginTop:1}}>Recovering…</div>}
             {isCounting && <div style={{fontSize:10,color:"#e0b050",textAlign:"center",marginTop:3}}>Referee count – {secsToCountEnd}s</div>}
             {gameState==="done" && winText && <div style={{fontSize:12,color:gold,textAlign:"center",marginTop:3,fontWeight:700}}>{winText}</div>}
+            {matchOver && arenaServerResult && (() => {
+              const winnerName = arenaServerResult.winner === m?.a_id ? nameA : nameB;
+              const reasonStr = (arenaServerResult.finish_reason || "decision").replace(/_/g, " ");
+              return (
+                <div style={{fontSize:10,color:"#a09070",textAlign:"center",marginTop:2}}>
+                  Official result: {winnerName} wins by {reasonStr}
+                </div>
+              );
+            })()}
           </div>
           {/* KO COUNT OVERLAY — centred on canvas, not in bottom bar */}
           {koCount && (
