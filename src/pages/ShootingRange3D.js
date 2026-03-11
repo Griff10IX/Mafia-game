@@ -14,14 +14,14 @@ const TARGET_RESPAWN = 0.8;
 
 function buildRangeScene(scene) {
   const floorGeo = new THREE.PlaneGeometry(14, 10);
-  const floorMat = new THREE.MeshLambertMaterial({ color: 0x252220 });
+  const floorMat = new THREE.MeshLambertMaterial({ color: 0x353230 });
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, 0, -3);
   scene.add(floor);
 
   const wallGeo = new THREE.PlaneGeometry(14, 7);
-  const wallMat = new THREE.MeshLambertMaterial({ color: 0x181614 });
+  const wallMat = new THREE.MeshLambertMaterial({ color: 0x22201e });
   const wall = new THREE.Mesh(wallGeo, wallMat);
   wall.position.set(0, 1.5, -5.5);
   scene.add(wall);
@@ -141,30 +141,30 @@ export default function ShootingRange3D() {
     if (!weaponId || !canvasRef.current || ownedGuns.every((w) => w.id !== weaponId)) return;
     const canvas = canvasRef.current;
     setSceneReady(false);
-    const W = canvas.clientWidth || 640;
-    const H = canvas.clientHeight || 400;
+    const W = Math.max(320, canvas.clientWidth || 640);
+    const H = Math.max(200, canvas.clientHeight || 400);
     const isMobile = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
     renderer.setSize(W, H, false);
-    renderer.setClearColor(0x0c0c0c);
+    renderer.setClearColor(0x1a1a18);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0c0c0c);
-    scene.fog = new THREE.FogExp2(0x080808, 0.055);
+    scene.background = new THREE.Color(0x1a1a18);
+    scene.fog = new THREE.FogExp2(0x121210, 0.04);
 
     const camera = new THREE.PerspectiveCamera(58, W / H, 0.1, 60);
     camera.position.set(0, 1.35, 2.5);
     camera.lookAt(0, 1.15, -4);
 
-    scene.add(new THREE.AmbientLight(0x443d38, 1.0));
-    const spot = new THREE.SpotLight(0xfff4e0, 3.5, 28, Math.PI / 5, 0.35);
+    scene.add(new THREE.AmbientLight(0x6a6258, 1.4));
+    const spot = new THREE.SpotLight(0xfff8e8, 5, 28, Math.PI / 5, 0.35);
     spot.position.set(0, 5, -2);
     spot.target.position.set(0, 0, -5);
     scene.add(spot);
     scene.add(spot.target);
-    const fill = new THREE.PointLight(0x6688aa, 0.6, 22);
+    const fill = new THREE.PointLight(0x88aacc, 1.0, 22);
     fill.position.set(5, 2, 1);
     scene.add(fill);
 
@@ -193,8 +193,8 @@ export default function ShootingRange3D() {
     };
 
     const onResize = () => {
-      const w = canvas.clientWidth;
-      const h = canvas.clientHeight;
+      const w = Math.max(320, canvas.clientWidth || 640);
+      const h = Math.max(200, canvas.clientHeight || 400);
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
@@ -372,7 +372,10 @@ export default function ShootingRange3D() {
         </div>
       ) : (
         <>
-          <div className="relative rounded-lg overflow-hidden border border-zinc-700/50 bg-black" style={{ aspectRatio: "16/10", maxHeight: "60vh" }}>
+          <div
+            className="relative rounded-lg overflow-hidden border border-zinc-700/50 bg-black"
+            style={{ aspectRatio: "16/10", maxHeight: "60vh", minHeight: 320 }}
+          >
             <canvas
               ref={canvasRef}
               style={{ width: "100%", height: "100%", display: "block", cursor: "crosshair" }}
