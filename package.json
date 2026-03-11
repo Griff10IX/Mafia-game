@@ -2,9 +2,10 @@
   "name": "mafia-game",
   "version": "0.1.0",
   "private": true,
-  "engines": { "node": "20.x" },
+  "engines": {
+    "node": "20.x"
+  },
   "dependencies": {
-    "ajv": "6.12.6",
     "@hookform/resolvers": "^5.0.1",
     "@radix-ui/react-accordion": "^1.2.8",
     "@radix-ui/react-alert-dialog": "^1.1.11",
@@ -33,6 +34,7 @@
     "@radix-ui/react-toggle": "^1.1.6",
     "@radix-ui/react-toggle-group": "^1.1.7",
     "@radix-ui/react-tooltip": "^1.2.4",
+    "ajv": "6.12.6",
     "axios": "^1.8.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -54,6 +56,7 @@
     "sonner": "^2.0.3",
     "tailwind-merge": "^3.2.0",
     "tailwindcss-animate": "^1.0.7",
+    "three": "^0.183.2",
     "vaul": "^1.1.2",
     "zod": "^3.24.4"
   },
@@ -65,14 +68,22 @@
     "overnight": "node scripts/run-overnight.js"
   },
   "browserslist": {
-    "production": [">0.2%", "not dead", "not op_mini all"],
-    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   },
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
-    "cross-env": "^7.0.3",
     "@craco/craco": "6.4.5",
     "autoprefixer": "^10.4.20",
+    "cross-env": "^7.0.3",
     "eslint": "^7.32.0",
     "eslint-plugin-import": "2.31.0",
     "eslint-plugin-jsx-a11y": "6.10.2",
@@ -82,9 +93,13 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17"
   },
-  "resolutions": { "ajv": "6.12.6" },
+  "resolutions": {
+    "ajv": "6.12.6"
+  },
   "overrides": {
     "ajv": "6.12.6",
-    "schema-utils": { "ajv": "6.12.6" }
+    "schema-utils": {
+      "ajv": "6.12.6"
+    }
   }
 }
