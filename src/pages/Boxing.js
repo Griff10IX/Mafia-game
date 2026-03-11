@@ -296,19 +296,123 @@ function applyHit(bx, type, intensity, age, side) {
   bx.torsoG.rotation.y+=decay*0.2*s;
 }
 
-// FIX: Knockdown keeps boxer ON the canvas — raise y to compensate for sideways tip
-// At full tip (rotation.z=1.45 rad), the model width (~0.6) extends down by sin(1.45)*0.6≈0.6
-// So we lift the group by that amount so the model rests ON the canvas surface.
+// ── KNOCKDOWN (get-up after ~3s) ─────────────────────────────────────────────
 function applyKnockdown(bx, t, side) {
   const f=clamp(t,0,1);
   const tipAngle = (side==="a"?-1:1)*f*1.45;
   bx.group.rotation.z = tipAngle;
-  // Raise y proportional to tip so model stays ON canvas (base y=0.25)
   const yLift = Math.abs(Math.sin(tipAngle)) * 0.55;
   bx.group.position.y = 0.25 + yLift * f;
   bx.torsoG.rotation.x=f*0.55;
   bx.armL.rotation.x=-0.35+f*1.1;
   bx.armR.rotation.x=-0.35+f*0.8;
+}
+
+// ── KO FALL — multi-phase collapse ───────────────────────────────────────────
+// phase 0-0.15: stagger back (still upright, lurching)
+// phase 0.15-0.45: knees buckle, body crumples forward-sideways
+// phase 0.45-0.75: torso crashes to canvas with impact
+// phase 0.75-1.0:  body settles / slight bounce, arm flops out
+function applyKOFall(bx, t, side) {
+  const s = side==="a" ? 1 : -1;
+  resetGuard(bx, side);
+
+  if (t < 0.15) {
+    // Stagger — head snaps back, body lurches
+    const f = t / 0.15;
+    bx.headG.rotation.x = f * 0.55;
+    bx.headG.rotation.z = f * 0.18 * s;
+    bx.torsoG.rotation.x = -f * 0.2;          // lean back
+    bx.torsoG.rotation.z = f * 0.08 * s;
+    bx.root.position.x = f * 0.18 * s;        // stumble sideways
+    bx.root.position.z = f * 0.12;            // stumble back
+    bx.armL.rotation.x = -0.35 + f * 0.4;
+    bx.armR.rotation.x = -0.35 + f * 0.4;
+    bx.group.position.y = 0.25;
+  } else if (t < 0.45) {
+    // Buckle — knees give way, whole body sinks and tips
+    const f = (t - 0.15) / 0.30;
+    const ease = f * f;                        // accelerate as gravity takes over
+    bx.torsoG.rotation.x = -0.2 + ease * 0.9; // tips forward
+    bx.torsoG.rotation.z = (0.08 + ease * 0.6) * s;
+    bx.headG.rotation.x = 0.55 - ease * 0.3;
+    bx.headG.rotation.z = (0.18 + ease * 0.2) * s;
+    bx.legL.rotation.x = ease * 0.5;
+    bx.legR.rotation.x = ease * 0.5;
+    bx.armL.rotation.x = 0.05 + ease * 0.6;
+    bx.armR.rotation.x = 0.05 + ease * 0.3;
+    bx.armL.rotation.z = (0.24 + ease * 0.8) * s;
+    // Sink toward canvas
+    bx.group.position.y = 0.25 - ease * 0.15;
+    bx.root.position.x = (0.18 + ease * 0.22) * s;
+    bx.root.position.z = 0.12 + ease * 0.1;
+    // Begin tipping group
+    bx.group.rotation.z = -ease * 0.7 * s;
+  } else if (t < 0.75) {
+    // Impact — slam to canvas
+    const f = (t - 0.45) / 0.30;
+    const ease = 1 - Math.pow(1 - f, 2);      // decelerate at impact
+    const fullTip = 1.52;
+    bx.group.rotation.z = -(0.7 + ease * (fullTip - 0.7)) * s;
+    // Y: compute canvas-resting height from tip angle
+    const tip = Math.abs(0.7 + ease * (fullTip - 0.7));
+    bx.group.position.y = 0.25 + Math.sin(tip) * 0.52;
+    // Arms fly out on impact
+    bx.torsoG.rotation.x = 0.7 + ease * 0.4;
+    bx.armL.rotation.x = 0.65 + ease * 0.7;
+    bx.armR.rotation.x = 0.35 + ease * 0.5;
+    bx.armL.rotation.z = (1.04 - ease * 0.3) * s;
+    bx.armR.rotation.z = (-0.24 - ease * 0.6) * s;
+    bx.faL.rotation.x = -0.2 + ease * 0.5;
+    bx.faR.rotation.x = ease * 0.4;
+    bx.headG.rotation.x = 0.25 + ease * 0.45;
+    bx.legL.rotation.x = 0.5 + ease * 0.3;
+    bx.legR.rotation.x = 0.5 + ease * 0.2;
+    bx.root.position.x = 0.4 * s;
+  } else {
+    // Settle — slight bounce, arm flop, body at rest on canvas
+    const f = (t - 0.75) / 0.25;
+    const bounce = Math.sin(f * Math.PI) * 0.04 * (1 - f); // small bounce
+    const fullTip = 1.52;
+    bx.group.rotation.z = -fullTip * s;
+    bx.group.position.y = 0.25 + Math.sin(fullTip) * 0.52 + bounce;
+    bx.torsoG.rotation.x = 1.1;
+    bx.armL.rotation.x = 1.35 + bounce * 3;   // arm bounces on canvas
+    bx.armR.rotation.x = 0.85;
+    bx.armL.rotation.z = 0.74 * s;
+    bx.armR.rotation.z = -0.84 * s;
+    bx.faL.rotation.x = 0.3;
+    bx.faR.rotation.x = 0.4;
+    bx.headG.rotation.x = 0.7;
+    bx.legL.rotation.x = 0.8;
+    bx.legR.rotation.x = 0.7;
+    bx.root.position.x = 0.4 * s;
+  }
+}
+
+// ── KO FLOOR — static rest pose on canvas ────────────────────────────────────
+function applyKOFloor(bx, side) {
+  applyKOFall(bx, 1.0, side); // just use settle phase statically
+}
+
+// ── VICTORY POSE — winner raises both hands ───────────────────────────────────
+function applyVictoryPose(bx, t, side) {
+  const s = side==="a" ? 1 : -1;
+  const f = clamp(t * 1.8, 0, 1);
+  const sway = Math.sin(t * 2.2) * 0.03;
+  resetGuard(bx, side);
+  // Both arms raise high — left punches sky, right follows
+  bx.armL.rotation.x = -0.35 - f * 1.65;
+  bx.armR.rotation.x = -0.35 - f * 1.55;
+  bx.armL.rotation.z = (0.24 - f * 0.5) * s;
+  bx.armR.rotation.z = (-0.24 + f * 0.5) * s;
+  bx.faL.rotation.x = 0.55 - f * 0.4;
+  bx.faR.rotation.x = 0.55 - f * 0.4;
+  bx.torsoG.rotation.y = sway;
+  bx.torsoG.rotation.x = -f * 0.12;          // slight proud lean-back
+  bx.headG.rotation.x = -f * 0.08;
+  bx.group.position.y = 0.25;
+  bx.group.rotation.z = 0;
 }
 
 // ── FIGHTERS DATA ────────────────────────────────────────────────────────────
@@ -336,6 +440,9 @@ export default function Boxing3D() {
     kdB:0,
     xA:-0.85, xB:0.85,
     txA:-0.85, txB:0.85,
+    // KO sequence
+    koPhase: null,   // null | { side:"a"|"b", t:0, stage:"fall"|"count"|"done", count:0, countTimer:0, isTKO:false }
+    victoryT: 0,
   });
 
   const [hpA,setHpA]=useState(100);
@@ -346,6 +453,7 @@ export default function Boxing3D() {
   const [gameState,setGameState]=useState("idle");
   const [winText,setWinText]=useState("");
   const [actionText,setActionText]=useState("");
+  const [koCount,setKoCount]=useState(null); // null | { count:number, side:"a"|"b", name:string, tko:boolean }
 
   const [npcs, setNpcs] = useState([]);
   const [npcFightState, setNpcFightState] = useState(null);
@@ -744,11 +852,75 @@ export default function Boxing3D() {
       bB.group.position.x=r.xB;
 
       if(r.phase==="idle"||r.phase==="done"){
-        applyIdle(bA,t,"a"); applyIdle(bB,t,"b");
+        // In done phase: winner celebrates, loser stays on floor
+        if(r.phase==="done" && r.koPhase){
+          const ko=r.koPhase;
+          const downBx = ko.side==="a"?bA:bB;
+          const upBx   = ko.side==="a"?bB:bA;
+          applyKOFloor(downBx, ko.side);
+          r.victoryT += dt;
+          applyVictoryPose(upBx, r.victoryT, ko.side==="a"?"b":"a");
+        } else {
+          applyIdle(bA,t,"a"); applyIdle(bB,t,"b");
+        }
         renderer.render(scene,camera); return;
       }
 
-      // ── KNOCKDOWNS ──
+      // ── KO SEQUENCE PHASE ──────────────────────────────────────────────────
+      if(r.phase==="ko"){
+        const ko=r.koPhase;
+        const downBx = ko.side==="a"?bA:bB;
+        const upBx   = ko.side==="a"?bB:bA;
+
+        if(ko.stage==="fall"){
+          ko.t += dt / 1.1;  // fall takes 1.1 seconds
+          applyKOFall(downBx, clamp(ko.t,0,1), ko.side);
+          // winner backs away to neutral corner
+          if(ko.side==="a"){ r.txA=-(1.8); r.txB=1.6; }
+          else              { r.txB=1.8;  r.txA=-1.6; }
+          applyIdle(upBx, t, ko.side==="a"?"b":"a");
+          if(ko.t >= 1.0){
+            ko.stage="count";
+            ko.count=0;
+            ko.countTimer=0.85;  // first count after ~0.85s
+            // snap to floor pose
+            applyKOFloor(downBx, ko.side);
+          }
+        } else if(ko.stage==="count"){
+          applyKOFloor(downBx, ko.side);
+          applyIdle(upBx, t, ko.side==="a"?"b":"a");
+          ko.countTimer -= dt;
+          if(ko.countTimer <= 0){
+            ko.count++;
+            setKoCount({ count: ko.count, side: ko.side,
+              name: (ko.side==="a" ? r.fight?.nameA : r.fight?.nameB) || "FIGHTER",
+              tko: ko.isTKO });
+            // TKO: ref waves off at 8 (fighter can't defend), else full 10
+            const stopAt = ko.isTKO ? 8 : 10;
+            if(ko.count >= stopAt){
+              ko.stage="done";
+              setKoCount(null);
+              r.phase="done";
+              r.victoryT=0;
+              setGameState("done");
+              const res=r.fight;
+              const nameA=res?.nameA||FIGHTERS[0].name;
+              const nameB=res?.nameB||FIGHTERS[1].name;
+              const winSide = ko.side==="a"?"b":"a";
+              const wName = winSide==="a"?nameA:nameB;
+              setWinText(`${wName.split(" ")[0]} WINS — ${ko.isTKO?"TKO":"KO"}`);
+            } else {
+              // Real boxing count rhythm: slightly slower at 8-9-10
+              const slow = ko.count >= 7 ? 1.3 : 1.0;
+              ko.countTimer = slow;
+            }
+          }
+        }
+        renderer.render(scene,camera);
+        return;
+      }
+
+      // ── NORMAL KNOCKDOWNS (get-up variety) ──
       if(r.kdA>0){
         r.kdA-=dt;
         const getUp=r.kdA<0.7;
@@ -774,7 +946,6 @@ export default function Boxing3D() {
         aPunching=true;
         r.pA.p=Math.min(1,r.pA.p+dt*PUNCH_SPEED);
         applyPunch(bA,r.pA.type,r.pA.p,"a");
-        // Step in aggressively — close the gap at peak extension
         r.txA=-0.35+Math.sin(r.pA.p*Math.PI)*0.35;
         if(r.pA.p>=1){r.pA=null; r.txA=-0.85;}
       }
@@ -824,12 +995,24 @@ export default function Boxing3D() {
           r.evTimer=0.38+Math.random()*0.22+kdDelay;
         }
 
+        // ── FIGHT OVER — trigger KO sequence or decision ──
         if(r.evIdx>=r.fight.events.length&&!r.pA&&!r.pB&&r.evTimer<=0){
-          r.phase="done"; setGameState("done");
           const res=r.fight;
-          const nameA=res.nameA||FIGHTERS[0].name; const nameB=res.nameB||FIGHTERS[1].name;
-          const wName=res.winner==="a"?nameA:res.winner==="b"?nameB:"";
-          setWinText(res.reason==="Draw"?"DRAW":`${wName.split(" ")[0]} WINS — ${res.reason}`);
+          if(res.reason==="KO"||res.reason==="TKO"){
+            // Start KO cinematic
+            const downSide = res.winner==="a"?"b":"a";
+            r.phase="ko";
+            r.koPhase={ side:downSide, t:0, stage:"fall", count:0, countTimer:0, isTKO:res.reason==="TKO" };
+            r.pA=null; r.pB=null;
+            // Pause punching — winner steps back
+            const downName = downSide==="a"?(res.nameA||FIGHTERS[0].name):(res.nameB||FIGHTERS[1].name);
+            flashMsg(`💥 ${downName.split(" ")[0].toUpperCase()} IS DOWN!`, 2000);
+          } else {
+            r.phase="done"; setGameState("done");
+            const nameA=res.nameA||FIGHTERS[0].name; const nameB=res.nameB||FIGHTERS[1].name;
+            const wName=res.winner==="a"?nameA:res.winner==="b"?nameB:"";
+            setWinText(res.reason==="Draw"?"DRAW":`${wName.split(" ")[0]} WINS — ${res.reason}`);
+          }
         }
       }
 
@@ -878,6 +1061,8 @@ export default function Boxing3D() {
     r.fight=result; r.phase="fighting"; r.evIdx=0; r.evTimer=0.6;
     r.pA=null; r.pB=null; r.hA=null; r.hB=null;
     r.kdA=0; r.kdB=0; r.xA=-0.85; r.xB=0.85; r.txA=-0.85; r.txB=0.85;
+    r.koPhase=null; r.victoryT=0;
+    setKoCount(null);
     // FIX: also apply corrected rotations in startFight reset
     if(r.bA){r.bA.group.position.set(-0.85,0.25,0);r.bA.group.rotation.set(0,Math.PI/2,0);}
     if(r.bB){r.bB.group.position.set(0.85,0.25,0);r.bB.group.rotation.set(0,-Math.PI/2,0);}
@@ -924,15 +1109,60 @@ export default function Boxing3D() {
             </div>
             {actionText && <div style={{fontSize:12,color:"#fff",textAlign:"center",marginTop:6}}>{actionText}</div>}
             {gameState==="done" && winText && <div style={{fontSize:14,color:gold,textAlign:"center",marginTop:6,fontWeight:700}}>{winText}</div>}
-            {arenaServerResult && (
-              <div style={{fontSize:11,color:"#8a9a6a",textAlign:"center",marginTop:6}}>
-                Server: Match over — {arenaServerResult.finish_reason || (arenaServerResult.winner ? "Winner decided" : "Draw")}
-                <Link to="/boxing" style={{marginLeft:8,color:gold}}>Back to gym</Link>
-              </div>
-            )}
           </div>
+          {/* KO COUNT OVERLAY — centred on canvas, not in bottom bar */}
+          {koCount && (
+            <div style={{
+              position:"absolute", inset:0, display:"flex", flexDirection:"column",
+              alignItems:"center", justifyContent:"center", pointerEvents:"none",
+            }}>
+              {/* Darkening vignette */}
+              <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.55) 100%)"}}/>
+              {/* Count box */}
+              <div style={{
+                position:"relative", textAlign:"center",
+                animation:"koCountPulse 0.18s ease-out",
+              }}>
+                <div style={{
+                  fontSize:"clamp(18px,4vw,28px)", letterSpacing:"0.35em", color:"#c9a84c",
+                  fontFamily:"'Cinzel',serif", textShadow:"0 0 18px rgba(201,168,76,0.7)",
+                  marginBottom:4,
+                }}>
+                  {koCount.tko ? "REF STOPS FIGHT" : "REFEREE COUNT"}
+                </div>
+                <div style={{
+                  fontSize:"clamp(64px,14vw,110px)", fontWeight:700, lineHeight:1,
+                  fontFamily:"'Cinzel',serif", color:"#fff",
+                  textShadow:"0 0 40px rgba(255,80,80,0.9), 0 4px 0 rgba(0,0,0,0.8)",
+                  letterSpacing:"0.05em",
+                }}>
+                  {koCount.count}
+                </div>
+                <div style={{
+                  fontSize:"clamp(11px,2.2vw,16px)", letterSpacing:"0.2em", color:"#e0d0a0",
+                  marginTop:6, textShadow:"0 2px 8px rgba(0,0,0,0.8)",
+                }}>
+                  {koCount.name.toUpperCase()} IS DOWN
+                </div>
+                {koCount.count >= 8 && !koCount.tko && (
+                  <div style={{
+                    fontSize:"clamp(10px,2vw,13px)", color:"#ff8888", marginTop:6,
+                    letterSpacing:"0.15em", animation:"koCountPulse 0.3s ease-out",
+                  }}>
+                    {koCount.count === 8 ? "CAN HE BEAT THE COUNT?" : koCount.count === 9 ? "LAST CHANCE!" : ""}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');`}</style>
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+          @keyframes koCountPulse {
+            0%   { transform: scale(1.35); opacity:0.4; }
+            100% { transform: scale(1.0);  opacity:1; }
+          }
+        `}</style>
       </div>
     );
   }
