@@ -669,7 +669,20 @@ function applyIdle(bx, t, side) {
   bx.torsoG.rotation.x = -0.05 + breathe;
 }
 
-// ── HIT REACTIONS — snappy snap with exponential decay ────────────────────────
+// ── BETWEEN-ROUNDS RECOVERY POSE — corner rest, hands on knees, breathing ─────
+function applyRecoveryPose(bx, t, side) {
+  const s = side === "a" ? 1 : -1;
+  resetGuard(bx, side);
+  const breathe = Math.sin(t * 1.1) * 0.012;
+  // Slight kneel / lean forward, hands on knees
+  bx.legL.rotation.x = 0.18 + Math.sin(t * 1.1) * 0.02;
+  bx.legR.rotation.x = 0.14 + Math.sin(t * 1.1 + 0.3) * 0.02;
+  bx.torsoG.rotation.x = 0.25 + breathe;           // lean forward
+  bx.armL.rotation.x = 0.35; bx.armL.rotation.z = 0.15 * s;  // hands toward knees
+  bx.armR.rotation.x = 0.28; bx.armR.rotation.z = -0.12 * s;
+  bx.headG.rotation.x = breathe * 0.4;
+  bx.root.position.y = breathe * 0.5;
+}
 function applyHit(bx, type, intensity, age, side) {
   const s = side==="a" ? 1 : -1;
   const decay = Math.exp(-age * 11) * intensity;
@@ -708,15 +721,64 @@ function applyHit(bx, type, intensity, age, side) {
 }
 
 // ── KNOCKDOWN (get-up after ~3s) ─────────────────────────────────────────────
-function applyKnockdown(bx, t, side) {
-  const f=clamp(t,0,1);
-  const tipAngle = (side==="a"?-1:1)*f*1.45;
+// When isGetUp is true, prog 0→1 is the recovery: phase 1 on canvas, phase 2 push to knees, phase 3 stand.
+function applyKnockdown(bx, t, side, isGetUp) {
+  const f = clamp(t, 0, 1);
+  const s = side === "a" ? 1 : -1;
+
+  if (isGetUp) {
+    // Get-up: three clear phases so recovery is visible
+    if (f < 0.33) {
+      // Phase 1: on canvas, arms pushing off (start to rise)
+      const p1 = f / 0.33;
+      const ease = p1 * p1;
+      bx.group.rotation.z = -1.45 * s * (1 - ease * 0.35);  // lift slightly off canvas
+      bx.group.position.y = 0.25 + Math.sin(1.45) * 0.52 * (1 - ease * 0.4);
+      bx.torsoG.rotation.x = 1.1 - ease * 0.5;   // torso starts to rise
+      bx.armL.rotation.x = 1.35 - ease * 0.9;   // arms push down/back
+      bx.armR.rotation.x = 0.85 - ease * 0.6;
+      bx.armL.rotation.z = 0.74 * s;
+      bx.armR.rotation.z = -0.84 * s;
+      bx.legL.rotation.x = 0.8;
+      bx.legR.rotation.x = 0.7;
+    } else if (f < 0.66) {
+      // Phase 2: to knees — torso up, knees under
+      const p2 = (f - 0.33) / 0.33;
+      const ease = p2 * p2;
+      bx.group.rotation.z = -1.45 * s * 0.65 * (1 - ease);  // come upright
+      bx.group.position.y = 0.25 + Math.sin(1.45 * 0.65) * 0.52 * (1 - ease) + ease * 0.12;
+      bx.torsoG.rotation.x = 0.6 - ease * 0.5;   // torso more vertical
+      bx.armL.rotation.x = 0.45 - ease * 0.5;   // arms in toward body / on knees
+      bx.armR.rotation.x = 0.25 - ease * 0.3;
+      bx.legL.rotation.x = 0.8 - ease * 0.6;    // knees bend under
+      bx.legR.rotation.x = 0.7 - ease * 0.5;
+      bx.armL.rotation.z = 0.4 * s * (1 - ease);
+      bx.armR.rotation.z = -0.4 * s * (1 - ease);
+    } else {
+      // Phase 3: stand — rise to feet, return to guard height
+      const p3 = (f - 0.66) / 0.34;
+      const ease = 1 - Math.pow(1 - p3, 2);
+      bx.group.rotation.z = -1.45 * s * 0.65 * (1 - ease) * (1 - ease);
+      bx.group.position.y = 0.25 + (1 - ease) * 0.12;
+      bx.torsoG.rotation.x = 0.1 - ease * 0.15;
+      bx.armL.rotation.x = -0.65 + ease * 0.1;
+      bx.armR.rotation.x = -0.50 + ease * 0.1;
+      bx.legL.rotation.x = -0.12 + ease * 0.02;
+      bx.legR.rotation.x = 0.10 + ease * 0.02;
+      bx.armL.rotation.z = 0.20 * s;
+      bx.armR.rotation.z = -0.28 * s;
+    }
+    return;
+  }
+
+  // Fall / down phase: tip over onto canvas
+  const tipAngle = (side === "a" ? -1 : 1) * f * 1.45;
   bx.group.rotation.z = tipAngle;
   const yLift = Math.abs(Math.sin(tipAngle)) * 0.55;
   bx.group.position.y = 0.25 + yLift * f;
-  bx.torsoG.rotation.x=f*0.55;
-  bx.armL.rotation.x=-0.35+f*1.1;
-  bx.armR.rotation.x=-0.35+f*0.8;
+  bx.torsoG.rotation.x = f * 0.55;
+  bx.armL.rotation.x = -0.35 + f * 1.1;
+  bx.armR.rotation.x = -0.35 + f * 0.8;
 }
 
 // ── KO FALL — multi-phase collapse ───────────────────────────────────────────
@@ -859,6 +921,11 @@ export default function Boxing3D() {
     cutStateB: null,
     // blood splatter particles on canvas
     spatters: [],
+    // punch-contact sync: trigger hit/impact and KD only when punch reaches p>=0.45
+    pendingHitOnA: null,  // { type, intensity } when ev.bLanded, clear when applied
+    pendingHitOnB: null,  // { type, intensity } when ev.aLanded, clear when applied
+    pendingKDA: false,    // A will go down from B's punch
+    pendingKDB: false,    // B will go down from A's punch
   });
 
   const [hpA,setHpA]=useState(100);
@@ -1483,20 +1550,21 @@ export default function Boxing3D() {
       }
 
       // ── NORMAL KNOCKDOWNS (get-up variety) — blocked during KO ──
+      const GET_UP_DURATION = 0.9;
       if(r.kdA>0 && r.phase==="fighting"){
         r.kdA-=dt;
-        const getUp=r.kdA<0.7;
-        const prog=getUp?1-(r.kdA/0.7):clamp((2.8-r.kdA)/0.6,0,1);
-        applyKnockdown(bA,prog,"a");
+        const getUp=r.kdA<GET_UP_DURATION;
+        const prog=getUp?1-(r.kdA/GET_UP_DURATION):clamp((2.8-r.kdA)/0.6,0,1);
+        applyKnockdown(bA,prog,"a",getUp);
         r.txA=-1.65;
         if(r.kdA<=0){bA.group.rotation.z=0;bA.group.position.y=0.25;r.txA=-1.05;}
       } else if(r.phase==="fighting") { bA.group.position.y=0.25; bA.group.rotation.z=0; }
 
       if(r.kdB>0 && r.phase==="fighting"){
         r.kdB-=dt;
-        const getUp=r.kdB<0.7;
-        const prog=getUp?1-(r.kdB/0.7):clamp((2.8-r.kdB)/0.6,0,1);
-        applyKnockdown(bB,prog,"b");
+        const getUp=r.kdB<GET_UP_DURATION;
+        const prog=getUp?1-(r.kdB/GET_UP_DURATION):clamp((2.8-r.kdB)/0.6,0,1);
+        applyKnockdown(bB,prog,"b",getUp);
         r.txB=1.65;
         if(r.kdB<=0){bB.group.rotation.z=0;bB.group.position.y=0.25;r.txB=1.05;}
       } else if(r.phase==="fighting") { bB.group.position.y=0.25; bB.group.rotation.z=0; }
@@ -1534,8 +1602,46 @@ export default function Boxing3D() {
         if(r.hB.age>0.75) r.hB=null;
       }
 
-      if(!aPunching&&r.kdA<=0&&r.phase==="fighting") applyIdle(bA,t,"a");
-      if(!bPunching&&r.kdB<=0&&r.phase==="fighting") applyIdle(bB,t,"b");
+      // ── TRIGGER HIT / IMPACT AT PUNCH CONTACT (p>=0.45) ──
+      const PUNCH_CONTACT = 0.45;
+      if(r.pA && r.pA.p >= PUNCH_CONTACT && r.pendingHitOnB){
+        const ph = r.pendingHitOnB;
+        r.hB = { type: ph.type, intensity: ph.intensity, age: 0 };
+        if(r.bB && r.bB.group && r.scene) addImpactVFX(r.bB.group.getWorldPosition(r.tempVec).clone(), clamp(ph.intensity, 0.3, 1.6));
+        r.pendingHitOnB = null;
+      }
+      if(r.pB && r.pB.p >= PUNCH_CONTACT && r.pendingHitOnA){
+        const ph = r.pendingHitOnA;
+        r.hA = { type: ph.type, intensity: ph.intensity, age: 0 };
+        if(r.bA && r.bA.group && r.scene) addImpactVFX(r.bA.group.getWorldPosition(r.tempVec).clone(), clamp(ph.intensity, 0.3, 1.6));
+        r.pendingHitOnA = null;
+      }
+      // ── TRIGGER KNOCKDOWN AT PUNCH CONTACT ──
+      if(r.pendingKDB && r.pA && r.pA.p >= PUNCH_CONTACT && r.phase==="fighting"){
+        r.kdB = 2.9; r.txB = 1.65; r.pendingKDB = false;
+        const nb = (r.fight?.nameB||FIGHTERS[1].name).split(" ")[0].toUpperCase();
+        flashMsg(`⚡ ${nb} IS DOWN!`);
+      }
+      if(r.pendingKDA && r.pB && r.pB.p >= PUNCH_CONTACT && r.phase==="fighting"){
+        r.kdA = 2.9; r.txA = -1.65; r.pendingKDA = false;
+        const na = (r.fight?.nameA||FIGHTERS[0].name).split(" ")[0].toUpperCase();
+        flashMsg(`⚡ ${na} IS DOWN!`);
+      }
+
+      // ── IDLE vs BETWEEN-ROUNDS RECOVERY ──
+      const m = arenaMatchDetailRef.current;
+      const nowMs = Date.now();
+      const nextRoundAtMs = m?.next_round_at ? new Date(m.next_round_at).getTime() : 0;
+      const roundNum = m?.round ?? 0;
+      const isBetweenRounds = m?.state === "running" && roundNum > 0 && nextRoundAtMs > nowMs;
+      if(!aPunching&&r.kdA<=0&&r.phase==="fighting"){
+        if(isBetweenRounds){ r.txA=-1.08; applyRecoveryPose(bA,t,"a"); }
+        else { r.txA=-0.90; applyIdle(bA,t,"a"); }
+      }
+      if(!bPunching&&r.kdB<=0&&r.phase==="fighting"){
+        if(isBetweenRounds){ r.txB=1.08; applyRecoveryPose(bB,t,"b"); }
+        else { r.txB=0.90; applyIdle(bB,t,"b"); }
+      }
 
       // ── EVENT DISPATCH ──
       if(r.phase==="fighting"&&r.fight){
@@ -1553,16 +1659,15 @@ export default function Boxing3D() {
             // Only queue the winning punch, block the loser's punch
             if(downSide==="b" && r.kdA<=0) r.pA={type:ev.aPunch,p:0};
             if(downSide==="a" && r.kdB<=0) r.pB={type:ev.bPunch,p:0};
-            // Hit reaction on the loser
-            const hitDelay = 170;
-            if(downSide==="b" && ev.aLanded) setTimeout(()=>{ r.hB={type:ev.aPunch,intensity:2.0,age:0}; },hitDelay);
-            if(downSide==="a" && ev.bLanded) setTimeout(()=>{ r.hA={type:ev.bPunch,intensity:2.0,age:0}; },hitDelay);
+            // Hit reaction on the loser — triggered in loop when punch reaches contact (p>=0.45)
+            if(downSide==="b" && ev.aLanded) r.pendingHitOnB = { type: ev.aPunch, intensity: 2.0 };
+            if(downSide==="a" && ev.bLanded) r.pendingHitOnA = { type: ev.bPunch, intensity: 2.0 };
             // After winning punch finishes, start KO sequence
             // Duration = 1/PUNCH_SPEED seconds for punch + small buffer
             const koDelay = Math.round((1/2.6 + 0.35) * 1000);
             setTimeout(()=>{
               if(r.phase!=="fighting") return; // guard against double-fire
-              r.pA=null; r.pB=null; r.kdA=0; r.kdB=0; // kill any lingering timers
+              r.pA=null; r.pB=null; r.kdA=0; r.kdB=0; r.pendingHitOnA=null; r.pendingHitOnB=null; r.pendingKDA=false; r.pendingKDB=false;
               r.phase="ko";
               const downName = downSide==="a"?(res.nameA||FIGHTERS[0].name):(res.nameB||FIGHTERS[1].name);
               r.koPhase={ side:downSide, t:0, stage:"fall", count:0, countTimer:0, isTKO:res.reason==="TKO" };
@@ -1577,8 +1682,9 @@ export default function Boxing3D() {
           if(r.kdA<=0) r.pA={type:ev.aPunch,p:0};
           setTimeout(()=>{ if(r.kdB<=0&&r.phase==="fighting") r.pB={type:ev.bPunch,p:0}; },110);
 
-          if(ev.aLanded) setTimeout(()=>{ if(r.phase==="fighting") r.hB={type:ev.aPunch,intensity:clamp(ev.aDmg/13,0.3,1.6),age:0}; r.bB&&r.bB.group&&r.scene&&addImpactVFX(r.bB.group.getWorldPosition(r.tempVec).clone(),clamp(ev.aDmg/13,0.3,1.6)); },170);
-          if(ev.bLanded) setTimeout(()=>{ if(r.phase==="fighting") r.hA={type:ev.bPunch,intensity:clamp(ev.bDmg/13,0.3,1.6),age:0}; r.bA&&r.bA.group&&r.scene&&addImpactVFX(r.bA.group.getWorldPosition(r.tempVec).clone(),clamp(ev.bDmg/13,0.3,1.6)); },270);
+          // Hit/impact triggered in loop when punch reaches contact (p>=0.45)
+          if(ev.aLanded) r.pendingHitOnB = { type: ev.aPunch, intensity: clamp(ev.aDmg/13,0.3,1.6) };
+          if(ev.bLanded) r.pendingHitOnA = { type: ev.bPunch, intensity: clamp(ev.bDmg/13,0.3,1.6) };
 
           // ── CUT EVENTS — update live cut state & create canvas blood ──
           if(ev.cutA) {
@@ -1609,9 +1715,9 @@ export default function Boxing3D() {
           if(ev.cutStateA) r.cutStateA = ev.cutStateA;
           if(ev.cutStateB) r.cutStateB = ev.cutStateB;
 
-          // Mid-fight knockdowns (get-up variety — not the final KO)
-          if(ev.aKD && !ev.isFinal){ setTimeout(()=>{ if(r.phase==="fighting"){r.kdA=2.9;r.txA=-1.65;} },200); const na=(r.fight.nameA||FIGHTERS[0].name).split(" ")[0].toUpperCase(); flashMsg(`⚡ ${na} IS DOWN!`); }
-          if(ev.bKD && !ev.isFinal){ setTimeout(()=>{ if(r.phase==="fighting"){r.kdB=2.9;r.txB=1.65;} },200); const nb=(r.fight.nameB||FIGHTERS[1].name).split(" ")[0].toUpperCase(); flashMsg(`⚡ ${nb} IS DOWN!`); }
+          // Mid-fight knockdowns — triggered in loop when dropping punch reaches contact (p>=0.45)
+          if(ev.aKD && !ev.isFinal) r.pendingKDA = true;
+          if(ev.bKD && !ev.isFinal) r.pendingKDB = true;
 
           if(!ev.aKD&&ev.aLanded&&ev.aDmg>14) flashMsg(`💥 ${(r.fight.nameA||FIGHTERS[0].name).split("'")[1]?.split("'")[0] || (r.fight.nameA||FIGHTERS[0].name).split(" ")[0]} lands big!`,900);
           else if(!ev.bKD&&ev.bLanded&&ev.bDmg>14) flashMsg(`💢 ${(r.fight.nameB||FIGHTERS[1].name).split("'")[1]?.split("'")[0] || (r.fight.nameB||FIGHTERS[1].name).split(" ")[0]} fires back!`,900);
@@ -1695,6 +1801,7 @@ export default function Boxing3D() {
     r.cutStateA=null; r.cutStateB=null; r.spatters=[];
     r.pA=null; r.pB=null; r.hA=null; r.hB=null;
     r.kdA=0; r.kdB=0; r.xA=-0.90; r.xB=0.90; r.txA=-0.90; r.txB=0.90;
+    r.pendingHitOnA=null; r.pendingHitOnB=null; r.pendingKDA=false; r.pendingKDB=false;
     r.koPhase=null; r.victoryT=0;
     setKoCount(null);
     // FIX: also apply corrected rotations in startFight reset
@@ -2073,7 +2180,7 @@ export default function Boxing3D() {
                 <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"3px 0",borderBottom:"1px solid rgba(201,168,76,0.08)"}}>
                   <div style={{minWidth:0}}>
                     <div style={{fontSize:9,color:mine?"#f5e8c8":"#d0c090"}}>
-                      {m.a_username} vs {m.b_username} <span style={{color:"#7a6a4a"}}>• {m.state} R{m.round}/{m.max_rounds}</span>
+                      {m.a_username} vs {m.b_username} <span style={{color:"#7a6a4a"}}>• {m.state} R{Math.min(Number(m.round) || 0, Number(m.max_rounds) || 12)}/{m.max_rounds ?? 12}</span>
                     </div>
                     <div style={{fontSize:8,color:"#6a5a3a"}}>HP {m.hp?.a ?? 0}/{m.hp?.b ?? 0} • Odds A {m.odds?.a ?? "-"} / B {m.odds?.b ?? "-"}</div>
                   </div>

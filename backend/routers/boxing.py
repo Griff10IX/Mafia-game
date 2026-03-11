@@ -636,6 +636,13 @@ async def matches_live(current_user: dict = Depends(get_current_user)):
         {"_id": 0, "id": 1, "state": 1, "created_at": 1, "started_at": 1, "a_username": 1, "b_username": 1, "round": 1, "max_rounds": 1, "hp": 1, "stam": 1, "odds": 1, "is_open": 1},
     ).sort("created_at", -1).limit(25)
     matches = await cursor.to_list(25)
+    # Cap round at max_rounds so we never show e.g. R77/12 (fight ends at 12)
+    max_r = 12
+    for m in matches:
+        mr = int(m.get("max_rounds") or 12)
+        r = int(m.get("round") or 0)
+        if r > mr:
+            m["round"] = mr
     return {"matches": matches}
 
 
@@ -792,6 +799,10 @@ async def advance_running_matches(database) -> int:
 
         out = _round_exchange(a_eff, b_eff, hp_a, hp_b, stam_a, stam_b, first_round=(rnd == 1))
 
+        max_rounds = int(claim.get("max_rounds") or 12)
+        if rnd > max_rounds:
+            rnd = max_rounds  # Defensive: never persist round > max_rounds
+
         finish = None
         reason = None
         go_to_counting = None  # "a" or "b" if that fighter is down and we enter count
@@ -802,7 +813,7 @@ async def advance_running_matches(database) -> int:
             go_to_counting = "a"
         elif out["hp"]["b"] <= 0:
             go_to_counting = "b"
-        elif rnd >= int(claim.get("max_rounds") or 12):
+        elif rnd >= max_rounds:
             # decision by total damage, then hits, then random
             total_a = sum((r.get("a_dmg") or 0) for r in (claim.get("rounds") or [])) + out["a_dmg"]
             total_b = sum((r.get("b_dmg") or 0) for r in (claim.get("rounds") or [])) + out["b_dmg"]
