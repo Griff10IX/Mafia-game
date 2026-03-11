@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, User, Target } from 'lucide-react';
+import { Users, User, Target, Building2, Plane, Factory, Mail } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardTrigger, HoverCardPortal, HoverCardContent } from "@/components/ui/hover-card";
@@ -165,9 +165,9 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
                     <span className="text-[10px] font-heading font-bold text-red-400 uppercase">On the hitlist</span>
                   </div>
                 )}
-                <div className="p-2 space-y-2">
-                  <div className="flex gap-2">
-                    <div className="w-10 h-10 rounded overflow-hidden border border-primary/20 bg-secondary flex items-center justify-center shrink-0">
+                <div className="p-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-11 h-11 rounded-md overflow-hidden border border-primary/25 bg-secondary flex items-center justify-center shrink-0">
                       {preview.avatar_url ? (
                         <img src={preview.avatar_url} alt="avatar" className="w-full h-full object-cover" />
                       ) : (
@@ -175,47 +175,62 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="font-heading font-bold text-foreground text-[12px] truncate mb-1">
+                      <div className="font-heading font-bold text-foreground text-[12px] truncate leading-tight">
                         {preview.username}
                       </div>
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] font-heading">
-                        <div className="flex justify-between">
+                      <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-heading">
+                        <div className="flex items-center justify-between gap-2">
                           <span className="text-mutedForeground">Kills</span>
-                          <span className="text-foreground font-bold">{preview.kills}</span>
+                          <span className="text-foreground font-bold tabular-nums">{preview.kills}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-mutedForeground">Jailbusts</span>
-                          <span className="text-foreground font-bold">{preview.jail_busts}</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-mutedForeground">Jail</span>
+                          <span className="text-foreground font-bold tabular-nums">{preview.jail_busts}</span>
                         </div>
-                        <div className="flex justify-between col-span-2">
-                          <span className="text-mutedForeground">Messages</span>
-                          <span className="text-foreground font-bold">{preview.messages_sent ?? 0} sent / {preview.messages_received ?? 0} recv</span>
+                        <div className="col-span-2 flex items-center justify-between gap-2">
+                          <span className="text-mutedForeground inline-flex items-center gap-1">
+                            <Mail size={12} className="opacity-70" aria-hidden />
+                            Msgs
+                          </span>
+                          <span className="text-foreground font-bold tabular-nums">
+                            {(preview.messages_sent ?? 0)} / {(preview.messages_received ?? 0)}
+                          </span>
                         </div>
                       </div>
                     </div>
                   </div>
                   {(preview.family || preview.owns_casino || preview.property_type) && (
-                    <div className="space-y-0.5 text-[10px] font-heading">
+                    <div className="mt-2 pt-2 border-t border-border/70 space-y-1 text-[10px] font-heading">
                       {preview.family && (
-                        <div className="flex justify-between gap-2">
+                        <div className="flex items-center justify-between gap-2">
                           <span className="text-mutedForeground">Family</span>
                           <span className="text-foreground truncate">{preview.family}</span>
                         </div>
                       )}
-                      {preview.owns_casino && (
-                        <div className="text-foreground">Casino</div>
-                      )}
-                      {preview.property_type === 'airport' && (
-                        <div className="text-foreground">Airport</div>
-                      )}
-                      {preview.property_type === 'armoury' && (
-                        <div className="text-foreground">Armoury</div>
-                      )}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {preview.owns_casino ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20 text-foreground">
+                            <Building2 size={12} className="text-primary/80" aria-hidden />
+                            Casino
+                          </span>
+                        ) : null}
+                        {preview.property_type === 'airport' ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20 text-foreground">
+                            <Plane size={12} className="text-primary/80" aria-hidden />
+                            Airport
+                          </span>
+                        ) : null}
+                        {preview.property_type === 'armoury' ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20 text-foreground">
+                            <Factory size={12} className="text-primary/80" aria-hidden />
+                            Armoury
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   )}
-                  
-                  <div className="pt-2 border-t border-border text-[9px] text-mutedForeground font-heading italic text-center">
-                    Click username to view full profile
+                  <div className="mt-2 pt-2 border-t border-border/70 text-[9px] text-mutedForeground font-heading italic text-center">
+                    Click username to open full profile
                   </div>
                 </div>
               </>

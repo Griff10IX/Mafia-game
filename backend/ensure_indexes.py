@@ -190,6 +190,26 @@ async def ensure_all_indexes(db):
         await db.sports_bets.create_index([("user_id", 1), ("status", 1), ("settled_at", -1)])
         await db.sports_bets.create_index("id")
 
+        # --- Flappy Gangster (Gauntlet) ---
+        await db.gauntlet_scores.create_index("id", unique=True)
+        await db.gauntlet_scores.create_index([("score", -1), ("at", 1)])
+        await db.gauntlet_scores.create_index([("user_id", 1), ("at", -1)])
+        await db.gauntlet_scores.create_index([("at", -1)])
+
+        # --- Boxing ---
+        await db.boxing_profiles.create_index("user_id", unique=True)
+        await db.user_boxing_gear.create_index([("user_id", 1), ("gear_id", 1)], unique=True)
+        await db.user_boxing_gear.create_index([("user_id", 1), ("acquired_at", -1)])
+        await db.boxing_matches.create_index("id", unique=True)
+        await db.boxing_matches.create_index([("state", 1), ("next_round_at", 1)])
+        await db.boxing_matches.create_index([("a_id", 1), ("created_at", -1)])
+        await db.boxing_matches.create_index([("b_id", 1), ("created_at", -1)])
+        await db.boxing_bets.create_index("id")
+        await db.boxing_bets.create_index([("match_id", 1), ("status", 1)])
+        await db.boxing_bets.create_index([("user_id", 1), ("status", 1), ("created_at", -1)])
+        await db.boxing_events.create_index([("user_id", 1), ("at", -1)])
+        await db.boxing_events.create_index([("at", -1)])
+
         # --- Quick trade ---
         await db.trade_sell_offers.create_index([("status", 1), ("created_at", -1)])
         await db.trade_sell_offers.create_index([("user_id", 1), ("status", 1)])

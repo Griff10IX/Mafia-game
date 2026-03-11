@@ -1,7 +1,8 @@
 # Flappy Gangster (Flappy-style) — cash rewards by score.
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import uuid
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from server import db, get_current_user, log_activity
@@ -18,6 +19,7 @@ REWARD_TIERS = [
 
 # Basic sanity limits (frontend is not trusted).
 MAX_SCORE_ACCEPTED = 250
+MAX_PLAYS_PER_HOUR = 10
 
 
 def _get_cash_reward(score: int) -> dict:
@@ -33,6 +35,35 @@ class GauntletClaimRequest(BaseModel):
 
 
 def register(router):
+    @router.get("/gauntlet/leaderboard")
+    async def gauntlet_leaderboard(
+        period: str = Query("weekly", description="weekly (Mon UTC) or alltime"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        p = (period or "weekly").lower()
+        now_dt = datetime.now(timezone.utc)
+        if p == "weekly":
+            # Monday 00:00 UTC
+            d = now_dt.date()
+            days_since_monday = (d.weekday()) % 7
+            week_start = datetime(d.year, d.month, d.day, tzinfo=timezone.utc) - timedelta(days=days_since_monday)
+            match = {"_ts": {"$gte": week_start}}
+            pipeline = [
+                {"$addFields": {"_ts": {"$toDate": "$at"}}},
+                {"$match": match},
+                # Best score per user for the period
+                {"$group": {"_id": "$user_id", "best_score": {"$max": "$score"}, "username": {"$last": "$username"}}},
+                {"$sort": {"best_score": -1}},
+                {"$limit": 10},
+            ]
+            rows = await db.gauntlet_scores.aggregate(pipeline).to_list(10)
+            out = [{"rank": i + 1, "user_id": r.get("_id"), "username": r.get("username") or "?", "score": int(r.get("best_score") or 0)} for i, r in enumerate(rows)]
+        else:
+            cursor = db.gauntlet_scores.find({}, {"_id": 0}).sort([("score", -1), ("at", 1)]).limit(10)
+            rows = await cursor.to_list(10)
+            out = [{"rank": i + 1, "user_id": r.get("user_id"), "username": r.get("username") or "?", "score": int(r.get("score") or 0), "at": r.get("at")} for i, r in enumerate(rows)]
+        return {"period": p, "top10": out}
+
     @router.post("/gauntlet/claim")
     async def gauntlet_claim(payload: GauntletClaimRequest, current_user: dict = Depends(get_current_user)):
         score = int(payload.score or 0)
@@ -41,13 +72,67 @@ def register(router):
         if score > MAX_SCORE_ACCEPTED:
             raise HTTPException(status_code=400, detail="Score too high to claim.")
 
+        # Limit: 5 plays per hour (UTC). Track in user_meta.
+        now_dt = datetime.now(timezone.utc).replace(microsecond=0)
+        now_iso = now_dt.isoformat().replace("+00:00", "Z")
+        hour_start = now_dt.replace(minute=0, second=0)
+        hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
+        reset_dt = hour_start + timedelta(hours=1)
+        reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
+        meta = await db.user_meta.find_one(
+            {"user_id": current_user["id"]},
+            {"_id": 0, "gauntlet_hour_start": 1, "gauntlet_hour_count": 1},
+        )
+        meta_start = (meta or {}).get("gauntlet_hour_start")
+        meta_count = int((meta or {}).get("gauntlet_hour_count") or 0)
+        if meta_start == hour_start_iso:
+            if meta_count >= MAX_PLAYS_PER_HOUR:
+                remaining = max(0, int((reset_dt - now_dt).total_seconds()))
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Hourly limit reached (5 plays). Try again in {remaining}s.",
+                )
+            new_count = meta_count + 1
+            await db.user_meta.update_one(
+                {"user_id": current_user["id"]},
+                {
+                    "$setOnInsert": {"user_id": current_user["id"]},
+                    "$set": {
+                        "gauntlet_hour_start": hour_start_iso,
+                        "gauntlet_hour_reset_at": reset_iso,
+                        "gauntlet_hour_count": new_count,
+                    },
+                },
+                upsert=True,
+            )
+            plays_left = max(0, MAX_PLAYS_PER_HOUR - new_count)
+        else:
+            await db.user_meta.update_one(
+                {"user_id": current_user["id"]},
+                {"$setOnInsert": {"user_id": current_user["id"]}, "$set": {"gauntlet_hour_start": hour_start_iso, "gauntlet_hour_reset_at": reset_iso, "gauntlet_hour_count": 1}},
+                upsert=True,
+            )
+            plays_left = MAX_PLAYS_PER_HOUR - 1
+
         reward = _get_cash_reward(score)
         cash = int(reward["cash"] or 0)
         if cash <= 0:
-            return {"cash_awarded": 0, "label": reward["label"], "tier": reward["tier"]}
+            # Still record the run for leaderboard purposes.
+            try:
+                await db.gauntlet_scores.insert_one(
+                    {"id": str(uuid.uuid4()), "user_id": current_user["id"], "username": current_user.get("username") or "?", "score": score, "cash": 0, "at": now_iso}
+                )
+            except Exception:
+                pass
+            return {"cash_awarded": 0, "label": reward["label"], "tier": reward["tier"], "plays_left": plays_left, "resets_at": reset_iso}
 
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": cash}})
-        now_iso = datetime.now(timezone.utc).isoformat()
+        try:
+            await db.gauntlet_scores.insert_one(
+                {"id": str(uuid.uuid4()), "user_id": current_user["id"], "username": current_user.get("username") or "?", "score": score, "cash": cash, "at": now_iso}
+            )
+        except Exception:
+            pass
         await db.user_meta.update_one(
             {"user_id": current_user["id"]},
             {"$set": {"gauntlet_last_claim_at": now_iso, "gauntlet_last_score": score, "gauntlet_last_cash": cash}},
@@ -66,5 +151,7 @@ def register(router):
             "tier": reward["tier"],
             "score": score,
             "money": int((user_doc or {}).get("money") or 0),
+            "plays_left": plays_left,
+            "resets_at": reset_iso,
         }
 

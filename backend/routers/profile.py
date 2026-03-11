@@ -559,6 +559,12 @@ def register(router):
     async def update_avatar(request: AvatarUpdateRequest, current_user: dict = Depends(get_current_user)):
         """Update your avatar (stored as a data URL)."""
         avatar = (request.avatar_data or "").strip()
+        if not avatar:
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {"$set": {"avatar_url": None}},
+            )
+            return {"message": "Avatar removed"}
         if not avatar.startswith("data:image/"):
             raise HTTPException(status_code=400, detail="Avatar must be an image data URL (data:image/...)")
         if len(avatar) > 250_000:

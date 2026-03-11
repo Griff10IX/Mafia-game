@@ -79,6 +79,7 @@ const IPRules = lazy(() => import("./pages/IPRules"));
 const HelpDesk = lazy(() => import("./pages/HelpDesk"));
 const IllegalBusiness = lazy(() => import("./pages/IllegalBusiness"));
 const Gauntlet = lazy(() => import("./pages/Gauntlet"));
+const Boxing = lazy(() => import("./pages/Boxing"));
 
 const PageLoader = () => (
   <div className="min-h-[200px] flex items-center justify-center text-primary text-sm font-heading">Loading...</div>
@@ -726,12 +727,25 @@ function App() {
               )
             }
           />
+          <Route path="/gauntlet" element={<Navigate to="/flappygangster" replace />} />
           <Route
-            path="/gauntlet"
+            path="/flappygangster"
             element={
               isAuthenticated ? (
                 <Layout>
                   <Gauntlet />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/boxing"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Boxing />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

@@ -38,6 +38,36 @@ function formatDateTime(iso) {
   });
 }
 
+async function fileToCompressedDataUrl(file, maxDim = 160, quality = 0.82) {
+  if (!file) return '';
+  const dataUrl = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result || ''));
+    r.onerror = () => reject(new Error('Failed to read file'));
+    r.readAsDataURL(file);
+  });
+  if (!String(dataUrl).startsWith('data:image/')) return '';
+  const img = await new Promise((resolve, reject) => {
+    const i = new window.Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error('Invalid image'));
+    i.src = String(dataUrl);
+  });
+  const w = img.width || 1;
+  const h = img.height || 1;
+  const scale = Math.min(1, maxDim / Math.max(w, h));
+  const cw = Math.max(1, Math.round(w * scale));
+  const ch = Math.max(1, Math.round(h * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = cw;
+  canvas.height = ch;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return String(dataUrl);
+  ctx.drawImage(img, 0, 0, cw, ch);
+  const jpeg = canvas.toDataURL('image/jpeg', quality);
+  return jpeg && jpeg.startsWith('data:image/') ? jpeg : canvas.toDataURL('image/png');
+}
+
 // Subcomponents
 const LoadingSpinner = () => (
   <div className={`space-y-3 ${styles.pageContent}`}>
@@ -848,12 +878,55 @@ export default function Profile() {
   const isMe = !!(me && profile && me.username === profile.username);
   /** When true, we're viewing our own profile as a visitor would (no settings, no avatar edit, etc.). */
   const isPublicView = isMe && viewPublic;
+  const [savingAvatar, setSavingAvatar] = useState(false);
 
   const refetchMe = async () => {
     try {
       const meRes = await api.get('/auth/me');
       setMe(meRes.data);
     } catch (_) {}
+  };
+
+  const refetchProfile = async () => {
+    if (!username) return;
+    try {
+      const res = await api.get(`/users/${encodeURIComponent(username)}/profile`);
+      setProfile(res.data);
+    } catch (_) {}
+  };
+
+  const uploadAvatar = async (file) => {
+    if (!file) return;
+    setSavingAvatar(true);
+    try {
+      const dataUrl = await fileToCompressedDataUrl(file);
+      if (!dataUrl) {
+        toast.error('Please choose an image file.');
+        return;
+      }
+      await api.post('/profile/avatar', { avatar_data: dataUrl });
+      toast.success('Avatar updated');
+      await refetchMe();
+      await refetchProfile();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Failed to update avatar');
+    } finally {
+      setSavingAvatar(false);
+    }
+  };
+
+  const removeAvatar = async () => {
+    setSavingAvatar(true);
+    try {
+      await api.post('/profile/avatar', { avatar_data: '' });
+      toast.success('Avatar removed');
+      await refetchMe();
+      await refetchProfile();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Failed to remove avatar');
+    } finally {
+      setSavingAvatar(false);
+    }
   };
 
   useEffect(() => {
@@ -1209,6 +1282,50 @@ export default function Profile() {
         {isMe && !isPublicView ? (
           /* ─── Edit Profile: notepad + profile settings only ─── */
           <>
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">
+                  Avatar
+                </h2>
+              </div>
+              <div className="p-3 flex items-center gap-3">
+                <div className="w-14 h-14 rounded-md overflow-hidden border border-primary/25 bg-secondary flex items-center justify-center shrink-0">
+                  {me?.avatar_url ? (
+                    <img src={me.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <UserIcon size={22} className="text-mutedForeground" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] text-mutedForeground font-heading">
+                    Upload a picture for your profile preview.
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <label className={`inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-xs hover:bg-primary/30 cursor-pointer ${savingAvatar ? 'opacity-60 cursor-not-allowed' : ''}`}>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={savingAvatar}
+                        onChange={(e) => uploadAvatar(e.target.files?.[0])}
+                      />
+                      {savingAvatar ? 'Saving…' : 'Choose image'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={removeAvatar}
+                      disabled={savingAvatar || !me?.avatar_url}
+                      className="inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-secondary border border-border text-foreground font-heading font-bold text-xs hover:bg-primary/10 disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="prof-art-line text-primary mx-3" />
+            </div>
+
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">

@@ -58,17 +58,17 @@ function Pipe({ x, topHeight, gap }) {
   const bottomHeight = VIEW_H - bottomY;
   return (
     <g>
-      <rect x={x} y={0} width={PIPE_WIDTH} height={topHeight} fill="var(--noir-bg)" />
-      <rect x={x} y={0} width={PIPE_WIDTH} height={topHeight} fill="url(#brickPattern)" opacity="0.4" />
+      <rect x={x} y={0} width={PIPE_WIDTH} height={topHeight} fill="var(--noir-panel)" />
+      <rect x={x} y={0} width={PIPE_WIDTH} height={topHeight} fill="url(#brickPattern)" opacity="0.28" />
       <rect x={x - 4} y={topHeight - 24} width={PIPE_WIDTH + 8} height={24} rx="3" fill="var(--noir-panel)" />
-      <rect x={x - 4} y={topHeight - 24} width={PIPE_WIDTH + 8} height={24} rx="3" fill="url(#brickPattern)" opacity="0.3" />
-      <rect x={x} y={0} width="3" height={topHeight} fill="rgba(255,255,255,0.05)" />
+      <rect x={x - 4} y={topHeight - 24} width={PIPE_WIDTH + 8} height={24} rx="3" fill="url(#brickPattern)" opacity="0.22" />
+      <rect x={x} y={0} width="3" height={topHeight} fill="rgba(255,255,255,0.10)" />
 
-      <rect x={x} y={bottomY} width={PIPE_WIDTH} height={bottomHeight} fill="var(--noir-bg)" />
-      <rect x={x} y={bottomY} width={PIPE_WIDTH} height={bottomHeight} fill="url(#brickPattern)" opacity="0.4" />
+      <rect x={x} y={bottomY} width={PIPE_WIDTH} height={bottomHeight} fill="var(--noir-panel)" />
+      <rect x={x} y={bottomY} width={PIPE_WIDTH} height={bottomHeight} fill="url(#brickPattern)" opacity="0.28" />
       <rect x={x - 4} y={bottomY} width={PIPE_WIDTH + 8} height={24} rx="3" fill="var(--noir-panel)" />
-      <rect x={x - 4} y={bottomY} width={PIPE_WIDTH + 8} height={24} rx="3" fill="url(#brickPattern)" opacity="0.3" />
-      <rect x={x} y={bottomY} width="3" height={bottomHeight} fill="rgba(255,255,255,0.05)" />
+      <rect x={x - 4} y={bottomY} width={PIPE_WIDTH + 8} height={24} rx="3" fill="url(#brickPattern)" opacity="0.22" />
+      <rect x={x} y={bottomY} width="3" height={bottomHeight} fill="rgba(255,255,255,0.10)" />
     </g>
   );
 }
@@ -86,6 +86,8 @@ export default function Gauntlet() {
   const [particles, setParticles] = useState([]);
   const [bgOffset, setBgOffset] = useState(0);
   const [claimStatus, setClaimStatus] = useState({ state: "idle", cash: 0, message: "" }); // idle|claiming|claimed|error
+  const [lbPeriod, setLbPeriod] = useState("weekly");
+  const [top10, setTop10] = useState([]);
 
   const frameRef = useRef(null);
   const stateRef = useRef(gameState);
@@ -120,6 +122,20 @@ export default function Gauntlet() {
     };
   }, []);
 
+  const loadLeaderboard = useCallback(async (period) => {
+    try {
+      const p = (period || lbPeriod || "weekly").toLowerCase();
+      const r = await api.get("/gauntlet/leaderboard", { params: { period: p } });
+      setTop10(Array.isArray(r.data?.top10) ? r.data.top10 : []);
+    } catch (_) {
+      setTop10([]);
+    }
+  }, [lbPeriod]);
+
+  useEffect(() => {
+    loadLeaderboard(lbPeriod);
+  }, [lbPeriod, loadLeaderboard]);
+
   const spawnParticles = useCallback((x, y, color = "#c9a84c") => {
     const newP = Array.from({ length: 8 }, (_, i) => ({
       id: Date.now() + i,
@@ -140,16 +156,25 @@ export default function Gauntlet() {
     try {
       const res = await api.post("/gauntlet/claim", { score: Number(finalScore || 0) });
       const cash = Number(res.data?.cash_awarded || 0);
+      const playsLeft = res.data?.plays_left;
+      const resetsAt = res.data?.resets_at;
       const newMoney = res.data?.money;
       if (newMoney != null) {
         setMoney(Number(newMoney));
         refreshUser(Number(newMoney));
       }
-      setClaimStatus({ state: "claimed", cash, message: cash > 0 ? `Claimed $${cash.toLocaleString()}` : "No reward (score 1+ to earn cash)" });
+      const playsMsg = (playsLeft != null) ? ` • Plays left this hour: ${Number(playsLeft)}` : "";
+      const resetMsg = (resetsAt && typeof resetsAt === "string") ? ` (resets ${resetsAt.replace("T", " ").replace("Z", " UTC")})` : "";
+      setClaimStatus({
+        state: "claimed",
+        cash,
+        message: (cash > 0 ? `Claimed $${cash.toLocaleString()}` : "No reward (score 1+ to earn cash)") + playsMsg + resetMsg,
+      });
+      loadLeaderboard(lbPeriod);
     } catch (e) {
       setClaimStatus({ state: "error", cash: 0, message: getApiErrorMessage(e) });
     }
-  }, [claimStatus.state]);
+  }, [claimStatus.state, lbPeriod, loadLeaderboard]);
 
   const jump = useCallback(() => {
     if (stateRef.current === "idle") {
@@ -321,35 +346,37 @@ export default function Gauntlet() {
         </div>
       </div>
 
-      <div
-        style={{
-          position: "relative",
-          width: "min(420px, 100%)",
-          borderRadius: "10px",
-          overflow: "hidden",
-          border: "2px solid var(--noir-border-mid)",
-          boxShadow: "0 0 40px rgba(var(--noir-primary-rgb),0.08), inset 0 0 60px rgba(0,0,0,0.8)",
-          cursor: "pointer",
-          touchAction: "manipulation",
-          userSelect: "none",
-          WebkitUserSelect: "none",
-          WebkitTapHighlightColor: "transparent",
-        }}
-        onPointerDown={onPointerDown}
-      >
+      <div className="w-full flex flex-col md:flex-row md:items-start md:justify-center gap-3">
+        <div
+          style={{
+            position: "relative",
+            width: "min(420px, 100%)",
+            borderRadius: "10px",
+            overflow: "hidden",
+            border: "2px solid var(--noir-border-mid)",
+            boxShadow: "0 0 40px rgba(var(--noir-primary-rgb),0.10), inset 0 0 40px rgba(0,0,0,0.45)",
+            cursor: "pointer",
+            touchAction: "manipulation",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+            WebkitTapHighlightColor: "transparent",
+          }}
+          onPointerDown={onPointerDown}
+        >
         <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} style={{ display: "block", width: "100%", height: "auto" }}>
           <defs>
             <pattern id="brickPattern" x="0" y="0" width="30" height="20" patternUnits="userSpaceOnUse">
               <rect width="30" height="20" fill="none" />
-              <rect x="0" y="0" width="28" height="9" rx="0" fill="rgba(60,30,10,0.6)" />
-              <rect x="15" y="10" width="28" height="9" rx="0" fill="rgba(60,30,10,0.6)" />
-              <line x1="0" y1="10" x2="30" y2="10" stroke="rgba(0,0,0,0.4)" strokeWidth="1" />
+              <rect x="0" y="0" width="28" height="9" rx="0" fill="rgba(140, 90, 40, 0.32)" />
+              <rect x="15" y="10" width="28" height="9" rx="0" fill="rgba(140, 90, 40, 0.32)" />
+              <line x1="0" y1="10" x2="30" y2="10" stroke="rgba(0,0,0,0.25)" strokeWidth="1" />
             </pattern>
             <pattern id="bgStripes" x={bgOffset} y="0" width="60" height="60" patternUnits="userSpaceOnUse">
-              <line x1="0" y1="0" x2="60" y2="60" stroke="rgba(var(--noir-primary-rgb),0.03)" strokeWidth="1" />
+              <line x1="0" y1="0" x2="60" y2="60" stroke="rgba(var(--noir-primary-rgb),0.05)" strokeWidth="1" />
             </pattern>
             <radialGradient id="skyGrad" cx="50%" cy="30%" r="70%">
-              <stop offset="0%" stopColor="var(--noir-content)" />
+              <stop offset="0%" stopColor="var(--noir-surface)" />
+              <stop offset="55%" stopColor="var(--noir-content)" />
               <stop offset="100%" stopColor="var(--noir-bg)" />
             </radialGradient>
             <filter id="glow">
@@ -363,6 +390,7 @@ export default function Gauntlet() {
 
           <rect width={VIEW_W} height={VIEW_H} fill="url(#skyGrad)" />
           <rect width={VIEW_W} height={VIEW_H} fill="url(#bgStripes)" />
+          <rect width={VIEW_W} height={VIEW_H} fill="rgba(255,255,255,0.06)" />
 
           <circle cx={VIEW_W - 60} cy={70} r={35} fill="var(--noir-panel)" />
           <circle cx={VIEW_W - 55} cy={65} r={33} fill="var(--noir-primary)" opacity="0.12" />
@@ -375,7 +403,7 @@ export default function Gauntlet() {
               y={VIEW_H - 80 - (i % 3) * 40 - (i % 5) * 20}
               width={35}
               height={80 + (i % 3) * 40 + (i % 5) * 20}
-              fill="rgba(10,7,3,0.9)"
+              fill="rgba(0,0,0,0.28)"
             />
           ))}
 
@@ -407,7 +435,7 @@ export default function Gauntlet() {
 
           {gameState === "idle" && (
             <g>
-              <rect width={VIEW_W} height={VIEW_H} fill="rgba(0,0,0,0.55)" />
+              <rect width={VIEW_W} height={VIEW_H} fill="rgba(0,0,0,0.38)" />
               <FedoraHat x={70 - BIRD_SIZE / 2} y={VIEW_H / 2 - BIRD_SIZE / 2} rotation={0} />
 
               <text x={VIEW_W / 2} y={VIEW_H / 2 - 80} textAnchor="middle" fill="#c9a84c" fontSize="32" fontFamily="Cinzel, serif" fontWeight="700" letterSpacing="3">
@@ -474,6 +502,85 @@ export default function Gauntlet() {
             </g>
           )}
         </svg>
+        </div>
+
+        <div
+          className="w-full md:w-[340px] rounded-md"
+          style={{
+            background: "var(--noir-content)",
+            border: "1px solid var(--noir-border-mid)",
+            padding: "10px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div style={{ fontSize: 12, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--noir-primary)" }}>
+              Top 10
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <select
+                value={lbPeriod}
+                onChange={(e) => setLbPeriod(e.target.value)}
+                style={{
+                  background: "var(--noir-surface)",
+                  border: "1px solid var(--noir-border-light)",
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                  fontSize: 11,
+                  color: "var(--noir-foreground)",
+                }}
+              >
+                <option value="weekly">Weekly</option>
+                <option value="alltime">All-time</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => loadLeaderboard(lbPeriod)}
+                style={{
+                  background: "var(--noir-raised)",
+                  border: "1px solid var(--noir-border-light)",
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  fontSize: 11,
+                  color: "var(--noir-foreground)",
+                }}
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+            {(top10 || []).map((r) => (
+              <div
+                key={`${r.rank}-${r.user_id || r.username}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                  background: "var(--noir-raised)",
+                  border: "1px solid var(--noir-border-light)",
+                  borderRadius: 6,
+                  padding: "6px 10px",
+                  fontSize: 12,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
+                  <span style={{ color: "var(--noir-primary)", fontWeight: 700 }}>#{r.rank}</span>
+                  <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.username}</span>
+                </div>
+                <div style={{ fontWeight: 700 }}>{Number(r.score || 0)}</div>
+              </div>
+            ))}
+            {!top10?.length ? (
+              <div style={{ color: "var(--noir-muted)", fontSize: 11 }}>No scores yet.</div>
+            ) : null}
+          </div>
+
+          <div style={{ marginTop: 10, color: "var(--noir-muted)", fontSize: 10, letterSpacing: "0.06em" }}>
+            Weekly = best score since Monday (UTC).
+          </div>
+        </div>
       </div>
 
       <div
