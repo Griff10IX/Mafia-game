@@ -162,7 +162,8 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
   }
   const gloveR=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.29,0.27),m(colorHex)); gloveR.position.y=-0.45; faR.add(gloveR);
 
-  g.position.y=0.08;
+  // Raise group so feet sit on canvas surface (feet bottom is at local y≈-0.17, canvas top at y=0.075)
+  g.position.y=0.25;
   scene.add(g);
   return {group:g, root, torsoG, headG, armL, faL, armR, faR, legL, legR, hips};
 }
@@ -184,41 +185,94 @@ function resetGuard(bx, side) {
 
 function applyPunch(bx, type, p, side) {
   const s=side==="a"?1:-1;
-  const e=Math.sin(p*Math.PI);
+  const e=Math.sin(p*Math.PI);         // 0→1→0 arc
+  const eIn=clamp(p*2,0,1);            // 0→1 on first half (wind-up/extend)
+  const eOut=clamp((p-0.5)*2,0,1);     // 0→1 on second half (retract)
   resetGuard(bx, side);
   switch(type) {
-    case "jab":
-      bx.armL.rotation.x=-0.35-e*1.35;
-      bx.armL.rotation.y=e*0.18*s;
-      bx.faL.rotation.x=0.55-e*0.45;
-      bx.torsoG.rotation.y=0.12*s-e*0.22*s;
+    case "jab": {
+      // Lead (left) hand snaps forward, shoulder drives, slight lean
+      const ext = Math.sin(p*Math.PI);
+      bx.armL.rotation.x = -0.35 - ext*1.5;
+      bx.armL.rotation.y = ext*0.25*s;
+      bx.armL.rotation.z = (0.24 - ext*0.15)*s;
+      bx.faL.rotation.x = 0.55 - ext*0.5;
+      bx.torsoG.rotation.y = 0.12*s - ext*0.28*s;
+      bx.torsoG.rotation.z = ext*0.06*s;     // slight shoulder dip
+      bx.legL.rotation.x = ext*0.12;         // push off back leg
+      bx.root.position.z = -ext*0.08;        // lean into punch
       break;
-    case "cross":
-      bx.armR.rotation.x=-0.35-e*1.45;
-      bx.armR.rotation.y=-e*0.22*s;
-      bx.faR.rotation.x=0.55-e*0.45;
-      bx.torsoG.rotation.y=0.12*s+e*0.4*s;
-      bx.hips.rotation.y=e*0.18*s;
+    }
+    case "cross": {
+      // Rear (right) hand — full body rotation, hip drive, full extension
+      const ext = Math.sin(p*Math.PI);
+      bx.armR.rotation.x = -0.35 - ext*1.6;
+      bx.armR.rotation.y = -ext*0.3*s;
+      bx.armR.rotation.z = (-0.24 + ext*0.18)*s;
+      bx.faR.rotation.x = 0.55 - ext*0.52;
+      // Big hip + shoulder rotation
+      bx.torsoG.rotation.y = 0.12*s + ext*0.55*s;
+      bx.hips.rotation.y = ext*0.32*s;
+      bx.torsoG.rotation.x = -ext*0.08;      // slight forward lean
+      bx.torsoG.rotation.z = -ext*0.09*s;    // shoulder comes over
+      // Guard arm pulls back slightly for counter-balance
+      bx.armL.rotation.x = -0.35 + ext*0.15;
+      bx.armL.rotation.z = (0.24 - ext*0.08)*s;
+      bx.legR.rotation.x = ext*0.15;         // push off back foot
+      bx.root.position.z = -ext*0.1;
       break;
-    case "hook":
-      bx.armL.rotation.x=-0.55-e*0.25;
-      bx.armL.rotation.z=(0.24+e*1.2)*s;
-      bx.armL.rotation.y=e*0.4*s;
-      bx.faL.rotation.x=0.35+e*0.5;
-      bx.torsoG.rotation.y=0.12*s-e*0.5*s;
+    }
+    case "hook": {
+      // Lead hook — horizontal arc, elbow up, torso whip
+      const ext = Math.sin(p*Math.PI);
+      bx.armL.rotation.x = -0.6 - ext*0.15;
+      bx.armL.rotation.z = (0.24 + ext*1.35)*s;
+      bx.armL.rotation.y = ext*0.5*s;
+      bx.faL.rotation.x = 0.3 + ext*0.55;
+      bx.faL.rotation.z = ext*0.2*s;
+      // Torso whips hard
+      bx.torsoG.rotation.y = 0.12*s - ext*0.65*s;
+      bx.hips.rotation.y = -ext*0.22*s;
+      bx.torsoG.rotation.z = ext*0.12*s;
+      bx.torsoG.rotation.x = ext*0.05;
+      bx.root.position.z = -ext*0.06;
       break;
-    case "uppercut":
-      bx.armR.rotation.x=-0.35+e*1.1;
-      bx.faR.rotation.x=-e*0.9;
-      bx.torsoG.rotation.y=0.12*s+e*0.3*s;
-      bx.torsoG.rotation.x=-e*0.22;
+    }
+    case "uppercut": {
+      // Crouch down on wind-up, drive upward
+      const windUp = clamp(p*2.5,0,1);       // quick dip
+      const drive  = clamp((p-0.2)*1.8,0,1); // drive up
+      const driveE = Math.sin(drive*Math.PI);
+      bx.torsoG.rotation.x = windUp*0.3 - driveE*0.28;  // dip then rise
+      bx.torsoG.rotation.y = 0.12*s + driveE*0.4*s;
+      bx.hips.rotation.y   = driveE*0.22*s;
+      bx.armR.rotation.x   = -0.35 + driveE*1.3;         // drives up
+      bx.armR.rotation.y   = driveE*0.18*s;
+      bx.faR.rotation.x    = 0.55 - driveE*1.1;          // fist faces up at peak
+      bx.armR.rotation.z   = (-0.24 + driveE*0.2)*s;
+      bx.legR.rotation.x   = -windUp*0.15 + driveE*0.2;  // push off floor
+      bx.root.position.y   = driveE*0.06;                 // slight rise on drive
+      bx.root.position.z   = -driveE*0.07;
       break;
-    case "body":
-      bx.armL.rotation.x=-0.35-e*0.9;
-      bx.armL.rotation.z=(0.24+e*0.4)*s;
-      bx.torsoG.rotation.x=e*0.38;
-      bx.torsoG.rotation.y=0.12*s-e*0.22*s;
+    }
+    case "body": {
+      // Crouch and dig into body — exaggerated dip
+      const ext = Math.sin(p*Math.PI);
+      bx.torsoG.rotation.x = ext*0.52;       // big lean forward/down
+      bx.torsoG.rotation.y = 0.12*s - ext*0.3*s;
+      bx.torsoG.rotation.z = ext*0.08*s;
+      bx.hips.rotation.y   = -ext*0.15*s;
+      bx.armL.rotation.x   = -0.35 - ext*1.0;
+      bx.armL.rotation.z   = (0.24 + ext*0.5)*s;
+      bx.armL.rotation.y   = ext*0.2*s;
+      bx.faL.rotation.x    = 0.35 + ext*0.3;
+      // Knees bend — simulate with leg rotation
+      bx.legL.rotation.x   = ext*0.2;
+      bx.legR.rotation.x   = ext*0.18;
+      bx.root.position.y   = -ext*0.09;      // whole boxer dips
+      bx.root.position.z   = -ext*0.06;
       break;
+    }
   }
 }
 
@@ -249,9 +303,9 @@ function applyKnockdown(bx, t, side) {
   const f=clamp(t,0,1);
   const tipAngle = (side==="a"?-1:1)*f*1.45;
   bx.group.rotation.z = tipAngle;
-  // Raise y proportional to how far we've tipped to keep boxer above canvas
+  // Raise y proportional to tip so model stays ON canvas (base y=0.25)
   const yLift = Math.abs(Math.sin(tipAngle)) * 0.55;
-  bx.group.position.y = 0.08 + yLift * f;
+  bx.group.position.y = 0.25 + yLift * f;
   bx.torsoG.rotation.x=f*0.55;
   bx.armL.rotation.x=-0.35+f*1.1;
   bx.armR.rotation.x=-0.35+f*0.8;
@@ -280,8 +334,8 @@ export default function Boxing3D() {
     hB:null,
     kdA:0,
     kdB:0,
-    xA:-1.0, xB:1.0,
-    txA:-1.0, txB:1.0,
+    xA:-0.85, xB:0.85,
+    txA:-0.85, txB:0.85,
   });
 
   const [hpA,setHpA]=useState(100);
@@ -645,8 +699,8 @@ export default function Boxing3D() {
 
     const bA=buildBoxer(scene,FIGHTERS[0].color,0xc8956a);
     const bB=buildBoxer(scene,FIGHTERS[1].color,0xb07850);
-    bA.group.position.set(-1.0,0.08,0);
-    bB.group.position.set(1.0,0.08,0);
+    bA.group.position.set(-0.85,0.25,0);
+    bB.group.position.set(0.85,0.25,0);
     // FIX: boxers face each other correctly
     // Boxer model faces +Z by default. A is at -X, needs to face +X → rotation.y = +PI/2
     // B is at +X, needs to face -X → rotation.y = -PI/2
@@ -672,7 +726,7 @@ export default function Boxing3D() {
     };
     window.addEventListener("resize",onResize);
 
-    const PUNCH_SPEED=2.8;
+    const PUNCH_SPEED=3.2;
 
     let raf;
     const loop=()=>{
@@ -701,8 +755,8 @@ export default function Boxing3D() {
         const prog=getUp?1-(r.kdA/0.7):clamp((2.8-r.kdA)/0.6,0,1);
         applyKnockdown(bA,prog,"a");
         r.txA=-1.65;
-        if(r.kdA<=0){bA.group.rotation.z=0;bA.group.position.y=0.08;r.txA=-1.3;}
-      } else { bA.group.position.y=0.08; bA.group.rotation.z=0; }
+        if(r.kdA<=0){bA.group.rotation.z=0;bA.group.position.y=0.25;r.txA=-1.1;}
+      } else { bA.group.position.y=0.25; bA.group.rotation.z=0; }
 
       if(r.kdB>0){
         r.kdB-=dt;
@@ -710,8 +764,8 @@ export default function Boxing3D() {
         const prog=getUp?1-(r.kdB/0.7):clamp((2.8-r.kdB)/0.6,0,1);
         applyKnockdown(bB,prog,"b");
         r.txB=1.65;
-        if(r.kdB<=0){bB.group.rotation.z=0;bB.group.position.y=0.08;r.txB=1.3;}
-      } else { bB.group.position.y=0.08; bB.group.rotation.z=0; }
+        if(r.kdB<=0){bB.group.rotation.z=0;bB.group.position.y=0.25;r.txB=1.1;}
+      } else { bB.group.position.y=0.25; bB.group.rotation.z=0; }
 
       // ── PUNCH ANIMATIONS ──
       let aPunching=false, bPunching=false;
@@ -720,15 +774,16 @@ export default function Boxing3D() {
         aPunching=true;
         r.pA.p=Math.min(1,r.pA.p+dt*PUNCH_SPEED);
         applyPunch(bA,r.pA.type,r.pA.p,"a");
-        r.txA=-0.55+Math.sin(r.pA.p*Math.PI)*0.18;
-        if(r.pA.p>=1){r.pA=null; r.txA=-1.0;}
+        // Step in aggressively — close the gap at peak extension
+        r.txA=-0.35+Math.sin(r.pA.p*Math.PI)*0.35;
+        if(r.pA.p>=1){r.pA=null; r.txA=-0.85;}
       }
       if(r.pB&&r.kdB<=0){
         bPunching=true;
         r.pB.p=Math.min(1,r.pB.p+dt*PUNCH_SPEED);
         applyPunch(bB,r.pB.type,r.pB.p,"b");
-        r.txB=0.55-Math.sin(r.pB.p*Math.PI)*0.18;
-        if(r.pB.p>=1){r.pB=null; r.txB=1.0;}
+        r.txB=0.35-Math.sin(r.pB.p*Math.PI)*0.35;
+        if(r.pB.p>=1){r.pB=null; r.txB=0.85;}
       }
 
       // ── HIT REACTIONS ──
@@ -822,10 +877,10 @@ export default function Boxing3D() {
     const r=refs.current;
     r.fight=result; r.phase="fighting"; r.evIdx=0; r.evTimer=0.6;
     r.pA=null; r.pB=null; r.hA=null; r.hB=null;
-    r.kdA=0; r.kdB=0; r.xA=-1.3; r.xB=1.3; r.txA=-1.3; r.txB=1.3;
+    r.kdA=0; r.kdB=0; r.xA=-0.85; r.xB=0.85; r.txA=-0.85; r.txB=0.85;
     // FIX: also apply corrected rotations in startFight reset
-    if(r.bA){r.bA.group.position.set(-1.0,0.08,0);r.bA.group.rotation.set(0,Math.PI/2,0);}
-    if(r.bB){r.bB.group.position.set(1.0,0.08,0);r.bB.group.rotation.set(0,-Math.PI/2,0);}
+    if(r.bA){r.bA.group.position.set(-0.85,0.25,0);r.bA.group.rotation.set(0,Math.PI/2,0);}
+    if(r.bB){r.bB.group.position.set(0.85,0.25,0);r.bB.group.rotation.set(0,-Math.PI/2,0);}
     setHpA(100);setHpB(100);setStamA(100);setStamB(100);setRound(1);
     setGameState("fighting");setWinText("");setActionText("");
   };
