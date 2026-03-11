@@ -84,7 +84,7 @@ const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor }) =>
           <span className="text-mutedForeground">Admin</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="text-mutedForeground">Mod (profile colour)</span>
+          <span className="text-mutedForeground">Mod</span>
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-3 h-3 rounded-sm shrink-0 border border-white/20" style={{ backgroundColor: hdoColor }} aria-hidden />

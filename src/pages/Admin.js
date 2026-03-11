@@ -3134,122 +3134,6 @@ export default function Admin() {
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
-            icon={Crosshair}
-            title="Attack logs (post data)"
-            badge={attackLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{attackLogsData.logs.length} entries</span> : null}
-            isCollapsed={collapsed.attackLogs}
-            onToggle={() => toggleSection('attackLogs')}
-          />
-          {!collapsed.attackLogs && (
-            <div className="p-3 space-y-3">
-              <p className="text-[10px] text-mutedForeground font-heading">Search by username to load that user&apos;s attack attempts (as attacker or target). Full post data: who shot whom, outcome, bodyguard, bullets, location, etc.</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  value={attackLogsUsername}
-                  onChange={(e) => setAttackLogsUsername(e.target.value)}
-                  placeholder="Username"
-                  className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
-                />
-                <span className="text-[10px] text-mutedForeground">Limit</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={1000}
-                  value={attackLogsLimit}
-                  onChange={(e) => setAttackLogsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 500)))}
-                  className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
-                />
-                <BtnPrimary onClick={handleFetchAttackLogs} disabled={attackLogsLoading}>
-                  {attackLogsLoading ? 'Loading…' : 'Load attack logs'}
-                </BtnPrimary>
-                <label className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={attackLogsLive}
-                    onChange={(e) => setAttackLogsLive(e.target.checked)}
-                    className="rounded border border-input"
-                  />
-                  Live
-                </label>
-                {attackLogsLive && (attackLogsUsername || '').trim() && (
-                  <span className="text-[9px] text-primary font-heading">Refreshing every 5s</span>
-                )}
-              </div>
-              {attackLogsData && (
-                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-                  <p className="text-[10px] font-heading text-primary mb-1">Attack log for: <strong>{attackLogsData.username ?? '—'}</strong></p>
-                  {(!attackLogsData.logs || attackLogsData.logs.length === 0) ? (
-                    <p className="text-[10px] text-mutedForeground font-heading">No attack attempts found.</p>
-                  ) : (
-                    <table className="w-full text-left border-collapse text-[9px] font-heading">
-                      <thead className="sticky top-0 bg-zinc-900/95 z-10">
-                        <tr className="border-b border-zinc-700/50">
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Attacker</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Target</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Outcome</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Player message</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">IP</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">User-Agent</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Device</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bot?</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bodyguard?</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bullets</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Location</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Time</th>
-                          <th className="py-1 font-bold text-mutedForeground uppercase">View</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {attackLogsData.logs.map((row, idx) => {
-                          const { device, bot: uaBot } = parseAttackLogUA(row.user_agent);
-                          const botLabel = row.attacker_is_bot === true
-                            ? (row.attacker_bot_label ? `Yes · ${row.attacker_bot_label}` : 'Yes')
-                            : (row.attacker_is_bot === false ? 'No' : (uaBot || '—'));
-                          return (
-                          <tr key={row.id || idx} className="border-b border-zinc-700/30">
-                            <td className="py-1 pr-1 text-foreground">{row.attacker_username ?? '—'}</td>
-                            <td className="py-1 pr-1 text-foreground">{row.target_username ?? '—'}</td>
-                            <td className="py-1 pr-1">
-                              {row.outcome === 'killed' && <span className="text-red-400">Killed</span>}
-                              {row.outcome === 'failed' && <span className="text-amber-400">Failed</span>}
-                              {row.outcome === 'bodyguard' && <span className="text-amber-500">Bodyguard</span>}
-                              {row.outcome === 'error' && <span className="text-orange-400">Error</span>}
-                              {!['killed','failed','bodyguard','error'].includes(row.outcome) && (row.outcome ? <span className="text-mutedForeground">{row.outcome}</span> : '—')}
-                            </td>
-                            <td className="py-1 pr-1 max-w-[200px] truncate text-mutedForeground" title={row.player_message ?? ''}>{row.player_message ?? '—'}</td>
-                            <td className="py-1 pr-1 text-mutedForeground font-mono text-[9px]">{row.client_ip ?? '—'}</td>
-                            <td className="py-1 pr-1 max-w-[140px] truncate text-mutedForeground font-mono text-[8px]" title={row.user_agent ?? ''}>{row.user_agent ?? '—'}</td>
-                            <td className="py-1 pr-1 text-mutedForeground">{device}</td>
-                            <td className="py-1 pr-1">{botLabel ? <span className="text-amber-400 font-medium">{botLabel}</span> : '—'}</td>
-                            <td className="py-1 pr-1">{row.is_bodyguard_kill ? 'Yes' : row.outcome === 'bodyguard' ? 'Blocked' : '—'}</td>
-                            <td className="py-1 pr-1">{row.bullets_used != null ? Number(row.bullets_used).toLocaleString() : '—'}</td>
-                            <td className="py-1 pr-1 text-mutedForeground">{row.location_state ?? row.state ?? '—'}</td>
-                            <td className="py-1 pr-1 text-mutedForeground font-mono">{formatAttackLogTime(row.created_at)}</td>
-                            <td className="py-1">
-                              <button
-                                type="button"
-                                onClick={() => setAttackLogViewRow(row)}
-                                className="px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary text-[9px] font-heading hover:bg-primary/20"
-                              >
-                                View
-                              </button>
-                            </td>
-                          </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
             icon={Skull}
             title="Crime logs (post data)"
             badge={crimeLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{crimeLogsData.logs.length} entries</span> : null}
@@ -4016,6 +3900,123 @@ export default function Admin() {
           <ScrollText size={12} />
           Logs
         </h2>
+        {/* Attack logs (post data) — admin and mod */}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Crosshair}
+            title="Attack logs (post data)"
+            badge={attackLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{attackLogsData.logs.length} entries</span> : null}
+            isCollapsed={collapsed.attackLogs}
+            onToggle={() => toggleSection('attackLogs')}
+          />
+          {!collapsed.attackLogs && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">Search by username to load that user&apos;s attack attempts (as attacker or target). Full post data: who shot whom, outcome, bodyguard, bullets, location, etc.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={attackLogsUsername}
+                  onChange={(e) => setAttackLogsUsername(e.target.value)}
+                  placeholder="Username"
+                  className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                />
+                <span className="text-[10px] text-mutedForeground">Limit</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={attackLogsLimit}
+                  onChange={(e) => setAttackLogsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 500)))}
+                  className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                />
+                <BtnPrimary onClick={handleFetchAttackLogs} disabled={attackLogsLoading}>
+                  {attackLogsLoading ? 'Loading…' : 'Load attack logs'}
+                </BtnPrimary>
+                <label className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={attackLogsLive}
+                    onChange={(e) => setAttackLogsLive(e.target.checked)}
+                    className="rounded border border-input"
+                  />
+                  Live
+                </label>
+                {attackLogsLive && (attackLogsUsername || '').trim() && (
+                  <span className="text-[9px] text-primary font-heading">Refreshing every 5s</span>
+                )}
+              </div>
+              {attackLogsData && (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <p className="text-[10px] font-heading text-primary mb-1">Attack log for: <strong>{attackLogsData.username ?? '—'}</strong></p>
+                  {(!attackLogsData.logs || attackLogsData.logs.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground font-heading">No attack attempts found.</p>
+                  ) : (
+                    <table className="w-full text-left border-collapse text-[9px] font-heading">
+                      <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                        <tr className="border-b border-zinc-700/50">
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Attacker</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Target</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Outcome</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Player message</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">IP</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">User-Agent</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Device</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bot?</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bodyguard?</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bullets</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Location</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Time</th>
+                          <th className="py-1 font-bold text-mutedForeground uppercase">View</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {attackLogsData.logs.map((row, idx) => {
+                          const { device, bot: uaBot } = parseAttackLogUA(row.user_agent);
+                          const botLabel = row.attacker_is_bot === true
+                            ? (row.attacker_bot_label ? `Yes · ${row.attacker_bot_label}` : 'Yes')
+                            : (row.attacker_is_bot === false ? 'No' : (uaBot || '—'));
+                          return (
+                          <tr key={row.id || idx} className="border-b border-zinc-700/30">
+                            <td className="py-1 pr-1 text-foreground">{row.attacker_username ?? '—'}</td>
+                            <td className="py-1 pr-1 text-foreground">{row.target_username ?? '—'}</td>
+                            <td className="py-1 pr-1">
+                              {row.outcome === 'killed' && <span className="text-red-400">Killed</span>}
+                              {row.outcome === 'failed' && <span className="text-amber-400">Failed</span>}
+                              {row.outcome === 'bodyguard' && <span className="text-amber-500">Bodyguard</span>}
+                              {row.outcome === 'error' && <span className="text-orange-400">Error</span>}
+                              {!['killed','failed','bodyguard','error'].includes(row.outcome) && (row.outcome ? <span className="text-mutedForeground">{row.outcome}</span> : '—')}
+                            </td>
+                            <td className="py-1 pr-1 max-w-[200px] truncate text-mutedForeground" title={row.player_message ?? ''}>{row.player_message ?? '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground font-mono text-[9px]">{row.client_ip ?? '—'}</td>
+                            <td className="py-1 pr-1 max-w-[140px] truncate text-mutedForeground font-mono text-[8px]" title={row.user_agent ?? ''}>{row.user_agent ?? '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground">{device}</td>
+                            <td className="py-1 pr-1">{botLabel ? <span className="text-amber-400 font-medium">{botLabel}</span> : '—'}</td>
+                            <td className="py-1 pr-1">{row.is_bodyguard_kill ? 'Yes' : row.outcome === 'bodyguard' ? 'Blocked' : '—'}</td>
+                            <td className="py-1 pr-1">{row.bullets_used != null ? Number(row.bullets_used).toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground">{row.location_state ?? row.state ?? '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground font-mono">{formatAttackLogTime(row.created_at)}</td>
+                            <td className="py-1">
+                              <button
+                                type="button"
+                                onClick={() => setAttackLogViewRow(row)}
+                                className="px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary text-[9px] font-heading hover:bg-primary/20"
+                              >
+                                View
+                              </button>
+                            </td>
+                          </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader

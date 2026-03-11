@@ -2126,7 +2126,7 @@ def register(router):
         Use since= to fetch only new entries (e.g. for live refresh).
         """
         if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
         key = (username or "").strip()
         user = await db.users.find_one(
             {"id": key},
