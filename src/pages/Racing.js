@@ -5,7 +5,6 @@ import api, { refreshUser } from "../utils/api";
 import { getApiErrorMessage } from "../utils/api";
 import styles from "../styles/noir.module.css";
 
-const RACE_VIEW_KEY = "racing_view_mode"; // "2d" | "3d"
 const RACE_DURATION_MS = 5500;
 const COMMENTARY = [
   "They're off!",
@@ -145,40 +144,7 @@ function RaceRun2D({ participants, resultOrder, onComplete }) {
   );
 }
 
-/* ─── Simple 3D placeholder (optional view) ─── */
-function RaceRun3D({ participants, resultOrder, onComplete }) {
-  const [done, setDone] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setDone(true), RACE_DURATION_MS + 500);
-    return () => clearTimeout(t);
-  }, []);
-  useEffect(() => {
-    if (done) onComplete?.();
-  }, [done, onComplete]);
-
-  return (
-    <div className={styles.panel} style={{ padding: "1.5rem", textAlign: "center" }}>
-      <div className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>
-        Road race — 3D view
-      </div>
-      <div className="text-sm text-[var(--noir-muted)] mb-4">
-        Period-accurate board track. Results below.
-      </div>
-      {resultOrder?.length > 0 && (
-        <div className="flex flex-wrap justify-center gap-2">
-          {resultOrder.map((id, i) => {
-            const p = (participants || []).find((x) => (x.user_id || x.id) === id);
-            return (
-              <span key={id} className="px-2 py-1 rounded surface text-xs">
-                #{i + 1} {p?.username || p?.car_name || id}
-              </span>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
+/* ─── Race run (2D only) ─── */
 
 export default function Racing() {
   const navigate = useNavigate();
@@ -192,7 +158,6 @@ export default function Racing() {
   const [comps, setComps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeRace, setActiveRace] = useState(null);
-  const [raceViewMode, setRaceViewMode] = useState(() => localStorage.getItem(RACE_VIEW_KEY) || "2d");
   const [tab, setTab] = useState("races"); // races | myride | crew | leaderboard | comps
   const [creating, setCreating] = useState(false);
   const [joiningId, setJoiningId] = useState(null);
@@ -424,46 +389,14 @@ export default function Racing() {
         </p>
       </div>
 
-      {/* Active race: show run (2D/3D) then results */}
+      {/* Active race: show 2D run then results */}
       {activeRace?.state === "completed" && !activeRace._resultsShown && (
         <div className="p-4">
-          <div className="flex justify-end gap-2 mb-2">
-            <label className="flex items-center gap-1 text-sm">
-              <input
-                type="radio"
-                checked={raceViewMode === "2d"}
-                onChange={() => {
-                  setRaceViewMode("2d");
-                  localStorage.setItem(RACE_VIEW_KEY, "2d");
-                }}
-              />
-              2D
-            </label>
-            <label className="flex items-center gap-1 text-sm">
-              <input
-                type="radio"
-                checked={raceViewMode === "3d"}
-                onChange={() => {
-                  setRaceViewMode("3d");
-                  localStorage.setItem(RACE_VIEW_KEY, "3d");
-                }}
-              />
-              3D
-            </label>
-          </div>
-          {raceViewMode === "2d" ? (
-            <RaceRun2D
-              participants={activeRace.participants}
-              resultOrder={activeRace.result_order}
-              onComplete={() => setActiveRace((r) => (r ? { ...r, _resultsShown: true } : null))}
-            />
-          ) : (
-            <RaceRun3D
-              participants={activeRace.participants}
-              resultOrder={activeRace.result_order}
-              onComplete={() => setActiveRace((r) => (r ? { ...r, _resultsShown: true } : null))}
-            />
-          )}
+          <RaceRun2D
+            participants={activeRace.participants}
+            resultOrder={activeRace.result_order}
+            onComplete={() => setActiveRace((r) => (r ? { ...r, _resultsShown: true } : null))}
+          />
         </div>
       )}
 

@@ -121,7 +121,8 @@ async def _ensure_racing_profile(user_id: str) -> dict:
         return prof
     doc = {"user_id": user_id, **DEFAULT_PROFILE}
     await db.racing_profiles.insert_one(doc)
-    return doc
+    # Return a copy without _id (Motor may add _id to doc in place; ObjectId is not JSON-serializable)
+    return {k: v for k, v in doc.items() if k != "_id"}
 
 
 async def _get_user_racing_car(user_id: str, instance_id: str) -> Optional[dict]:
@@ -497,8 +498,11 @@ async def get_racing_comps(current_user: dict = Depends(get_current_user)):
             "start_at": start_at.isoformat().replace("+00:00", "Z"),
             "end_at": end_at.isoformat().replace("+00:00", "Z"),
         }
-        await db.racing_comps.insert_one(seed_comp)
-        comps = [{k: v for k, v in seed_comp.items() if k != "_id"}]
+        await db.racing_comps.insert_one(seed_comp.copy())
+        # Use a clean dict for response (insert_one may add _id to the passed dict in place)
+        comps = [
+            {"id": comp_id, "name": seed_comp["name"], "track_id": seed_comp["track_id"], "entry_fee": seed_comp["entry_fee"], "start_at": seed_comp["start_at"], "end_at": seed_comp["end_at"]}
+        ]
     return {"comps": comps}
 
 
