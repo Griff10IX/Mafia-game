@@ -304,19 +304,30 @@ function buildRing(scene) {
 }
 
 // ── BUILD BOXER ──────────────────────────────────────────────────────────────
-function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
+// options: { gloveColor, trunkColor, skinHex, shoeColor } or (scene, colorHex, skinHex) for backward compat
+function buildBoxer(scene, colorHexOrOptions, skinHexDefault=0xc8956a) {
+  const opts = typeof colorHexOrOptions === "object" && colorHexOrOptions !== null
+    ? colorHexOrOptions
+    : { gloveColor: colorHexOrOptions, trunkColor: colorHexOrOptions, skinHex: skinHexDefault, shoeColor: 0x1a1a12 };
+  const gloveColor = opts.gloveColor ?? 0xd9b85c;
+  const trunkColor = opts.trunkColor ?? 0xd9b85c;
+  const skinHex = opts.skinHex ?? 0xc8956a;
+  const shoeColor = opts.shoeColor ?? 0x1a1a12;
+
   const g=new THREE.Group();
   const m=c=>new THREE.MeshLambertMaterial({color:c});
 
   const root=new THREE.Group(); g.add(root);
 
-  // Legs
+  // Legs (with shoes on feet)
   const legL=new THREE.Group(); legL.position.set(-0.15,0.5,0); root.add(legL);
   {
     const upperLegL = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.58,0.22),m(0x111008));
     upperLegL.position.set(0,-0.29,0); legL.add(upperLegL);
     const lowerLegL = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.1,0.34),m(0x2a1a0a));
     lowerLegL.position.set(0,-0.62,0.06); legL.add(lowerLegL);
+    const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.08,0.38),m(shoeColor));
+    shoeL.position.set(0,-0.68,0.08); legL.add(shoeL);
   }
   const legR=new THREE.Group(); legR.position.set(0.15,0.5,0); root.add(legR);
   {
@@ -324,10 +335,12 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
     upperLegR.position.set(0,-0.29,0); legR.add(upperLegR);
     const lowerLegR = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.1,0.34),m(0x2a1a0a));
     lowerLegR.position.set(0,-0.62,0.06); legR.add(lowerLegR);
+    const shoeR = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.08,0.38),m(shoeColor));
+    shoeR.position.set(0,-0.68,0.08); legR.add(shoeR);
   }
 
-  // Hips
-  const hips=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.28,0.3),m(colorHex));
+  // Trunks (hips)
+  const hips=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.28,0.3),m(trunkColor));
   hips.position.set(0,0.64,0); root.add(hips);
 
   // Torso
@@ -341,7 +354,7 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
   neck.position.set(0,0.08,0); headG.add(neck);
   const head=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.38,0.36),m(skinHex));
   head.position.y=0.29; head.castShadow=true; headG.add(head);
-  const hg=new THREE.Mesh(new THREE.SphereGeometry(0.24,10,8),m(colorHex));
+  const hg=new THREE.Mesh(new THREE.SphereGeometry(0.24,10,8),m(gloveColor));
   hg.position.y=0.3; hg.scale.set(1,0.87,1); headG.add(hg);
   const em=new THREE.MeshBasicMaterial({color:0x000000});
   const eL=new THREE.Mesh(new THREE.SphereGeometry(0.042,6,6),em);
@@ -383,12 +396,10 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
   headG.add(swellEye);
 
   // ── BLOOD DRIP PARTICLES ──────────────────────────────────────────────────
-  // Pre-bake a small set of drip trails per cut location
   const drips = [];
   for (let i=0; i<8; i++) {
     const dg = new THREE.BufferGeometry();
     const pts = [];
-    // Each drip: 6 points falling downward from cut location
     for (let j=0; j<6; j++) pts.push(rand(-0.06,0.06), 0.38 - j*0.055 - rand(0,0.02), 0.185);
     dg.setAttribute("position", new THREE.Float32BufferAttribute(pts,3));
     const dm = new THREE.LineBasicMaterial({color:0x660000,transparent:true,opacity:0,linewidth:1.5});
@@ -398,15 +409,15 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
     drips.push(drip);
   }
 
-  // Arms
+  // Arms — rounded gloves (sphere + box hybrid for a fuller look)
   const armL=new THREE.Group(); armL.position.set(-0.4,0.54,0); torsoG.add(armL);
   const upperArmL=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.44,0.2),m(skinHex));
   upperArmL.position.set(0,-0.22,0); armL.add(upperArmL);
   const faL=new THREE.Group(); faL.position.set(0,-0.47,0); armL.add(faL);
   const forearmL=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.4,0.18),m(skinHex));
   forearmL.position.set(0,-0.2,0); faL.add(forearmL);
-  const gloveL=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.29,0.27),m(colorHex));
-  gloveL.position.y=-0.45; faL.add(gloveL);
+  const gloveL=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,10),m(gloveColor));
+  gloveL.scale.set(1.1,1.2,1.1); gloveL.position.y=-0.45; faL.add(gloveL);
 
   const armR=new THREE.Group(); armR.position.set(0.4,0.54,0); torsoG.add(armR);
   const upperArmR=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.44,0.2),m(skinHex));
@@ -414,18 +425,16 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
   const faR=new THREE.Group(); faR.position.set(0,-0.47,0); armR.add(faR);
   const forearmR=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.4,0.18),m(skinHex));
   forearmR.position.set(0,-0.2,0); faR.add(forearmR);
-  const gloveR=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.29,0.27),m(colorHex));
-  gloveR.position.y=-0.45; faR.add(gloveR);
+  const gloveR=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,10),m(gloveColor));
+  gloveR.scale.set(1.1,1.2,1.1); gloveR.position.y=-0.45; faR.add(gloveR);
 
   g.position.y=0.25;
   scene.add(g);
   return {
     group:g, root, torsoG, headG, armL, faL, armR, faR, legL, legR, hips,
-    // cut/blood refs
     cuts:{ eyebrowL:cutEyebrowL, eyebrowR:cutEyebrowR, cheek:cutCheek, nose:cutNose },
     swell:{ eye:swellEye },
     drips,
-    // current cut state for animation
     cutState: { eyebrow:0, cheek:0, nose:0 },
   };
 }
@@ -663,35 +672,35 @@ function applyIdle(bx, t, side) {
 // ── HIT REACTIONS — snappy snap with exponential decay ────────────────────────
 function applyHit(bx, type, intensity, age, side) {
   const s = side==="a" ? 1 : -1;
-  // Fast snap then slow fade
   const decay = Math.exp(-age * 11) * intensity;
-  const slow  = Math.exp(-age * 4)  * intensity * 0.3; // lingering sway
+  const slow  = Math.exp(-age * 4)  * intensity * 0.3;
+  const boost = intensity > 1.0 ? 1.0 + (intensity - 1.0) * 0.4 : 1.0; // heavier shots = bigger reaction
   switch(type) {
     case "jab":
-      bx.headG.rotation.y += -decay * 0.55 * s;   // head snaps away
-      bx.headG.rotation.z +=  decay * 0.22 * s;
+      bx.headG.rotation.y += -decay * 0.55 * s * boost;
+      bx.headG.rotation.z +=  decay * 0.22 * s * boost;
       bx.torsoG.rotation.y += -slow * 0.18 * s;
       break;
     case "cross":
-      bx.headG.rotation.y += -decay * 0.75 * s;   // bigger snap
-      bx.headG.rotation.x +=  decay * 0.20;
-      bx.headG.rotation.z +=  decay * 0.30 * s;
+      bx.headG.rotation.y += -decay * 0.75 * s * boost;
+      bx.headG.rotation.x +=  decay * 0.20 * boost;
+      bx.headG.rotation.z +=  decay * 0.30 * s * boost;
       bx.torsoG.rotation.y += -slow * 0.22 * s;
       bx.torsoG.rotation.z +=  slow * 0.08 * s;
       break;
     case "hook":
-      bx.headG.rotation.y += -decay * 1.0 * s;    // hard snap to side
-      bx.headG.rotation.z +=  decay * 0.45 * s;
+      bx.headG.rotation.y += -decay * 1.0 * s * boost;
+      bx.headG.rotation.z +=  decay * 0.45 * s * boost;
       bx.torsoG.rotation.y += -slow * 0.30 * s;
       bx.torsoG.rotation.z +=  slow * 0.12 * s;
       break;
     case "uppercut":
-      bx.headG.rotation.x +=  decay * 0.65;        // head snaps back and up
+      bx.headG.rotation.x +=  decay * 0.65 * boost;
       bx.headG.rotation.z +=  decay * 0.15 * s;
       bx.torsoG.rotation.x += -slow * 0.20;
       break;
     case "body":
-      bx.torsoG.rotation.x +=  decay * 0.50;       // body folds
+      bx.torsoG.rotation.x +=  decay * 0.50 * boost;
       bx.torsoG.rotation.y += -slow * 0.14 * s;
       bx.headG.rotation.x  +=  slow  * 0.18;
       break;
@@ -884,6 +893,7 @@ export default function Boxing3D() {
   const [bets, setBets] = useState([]);
   const [league, setLeague] = useState(null);
   const [betStake, setBetStake] = useState(10000);
+  const [drillTick, setDrillTick] = useState(0); // force re-render every 1s for cooldown countdown
 
   const { matchId: arenaMatchId } = useParams();
   const navigate = useNavigate();
@@ -1003,6 +1013,12 @@ export default function Boxing3D() {
   useEffect(() => {
     return () => { if (npcPollRef.current) clearInterval(npcPollRef.current); };
   }, []);
+
+  useEffect(() => {
+    if (!profile || !Object.keys(drills || {}).length) return;
+    const id = setInterval(() => setDrillTick((k) => k + 1), 1000);
+    return () => clearInterval(id);
+  }, [profile, drills]);
 
   const startNpcFight = async (npc) => {
     if (npcFightState && !npcFightState.result) return;
@@ -1208,18 +1224,19 @@ export default function Boxing3D() {
     const canvas=canvasRef.current; if(!canvas) return;
     setSceneReady(false);
     const W=canvas.clientWidth||640, H=canvas.clientHeight||440;
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
 
-    const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+    const renderer=new THREE.WebGLRenderer({canvas,antialias:!isMobile});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
     renderer.setSize(W,H,false);
-    renderer.shadowMap.enabled=true;
-    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.shadowMap.enabled=!isMobile;
+    if(!isMobile){ renderer.shadowMap.type=THREE.PCFSoftShadowMap; }
     renderer.toneMapping=THREE.ReinhardToneMapping;
     renderer.toneMappingExposure=2.4;
 
     const scene=new THREE.Scene();
     scene.background=new THREE.Color(0x1e1e2e);
-    scene.fog=new THREE.FogExp2(0x141420,0.012);
+    scene.fog=new THREE.FogExp2(0x141420, isMobile ? 0.018 : 0.012);
 
     const camera=new THREE.PerspectiveCamera(52,W/H,0.1,80);
     camera.position.set(0,2.9,7.4); camera.lookAt(0,1.1,0);
@@ -1227,11 +1244,13 @@ export default function Boxing3D() {
     scene.add(new THREE.AmbientLight(0x554d48,1.9));
     const spot=new THREE.SpotLight(0xfff8e8,8.5,32,Math.PI/3.6,0.25);
     spot.position.set(0,10,1); spot.target.position.set(0,0,0);
-    spot.castShadow=true; spot.shadow.mapSize.set(1024,1024);
+    spot.castShadow=!isMobile;
+    if(!isMobile){ spot.shadow.mapSize.set(1024,1024); }
     scene.add(spot); scene.add(spot.target);
     const fl1=new THREE.PointLight(0xd9b85c,1.8,22); fl1.position.set(-6,5,4); scene.add(fl1);
     const fl2=new THREE.PointLight(0xa03030,1.0,18); fl2.position.set(6,5,4); scene.add(fl2);
     const fl3=new THREE.PointLight(0x5a6070,0.9,16); fl3.position.set(0,2,-5); scene.add(fl3);
+    const rimLight=new THREE.PointLight(0xaaccff,0.8,25); rimLight.position.set(0,4,-6); scene.add(rimLight);
 
     buildRing(scene);
 
@@ -1240,24 +1259,67 @@ export default function Boxing3D() {
     bA.group.position.set(-0.90,0.25,0);
     bB.group.position.set(0.90,0.25,0);
     // FIX: boxers face each other correctly
-    // Boxer model faces +Z by default. A is at -X, needs to face +X → rotation.y = +PI/2
-    // B is at +X, needs to face -X → rotation.y = -PI/2
     bA.group.rotation.y = Math.PI/2;
     bB.group.rotation.y = -Math.PI/2;
 
-    // Crowd
+    // Crowd — fewer points on mobile for performance
+    const crowdCount = isMobile ? 180 : 500;
     const cg=new THREE.BufferGeometry();
-    const cp=[]; for(let i=0;i<500;i++){const a=Math.random()*Math.PI*2,r=8+Math.random()*7;cp.push(r*Math.cos(a),1.2+Math.random()*4,r*Math.sin(a));}
+    const cp=[]; for(let i=0;i<crowdCount;i++){const a=Math.random()*Math.PI*2,r=8+Math.random()*7;cp.push(r*Math.cos(a),1.2+Math.random()*4,r*Math.sin(a));}
     cg.setAttribute("position",new THREE.Float32BufferAttribute(cp,3));
-    const crowd=new THREE.Points(cg,new THREE.PointsMaterial({color:0xc9a84c,size:0.14,transparent:true,opacity:0.28}));
+    const crowd=new THREE.Points(cg,new THREE.PointsMaterial({color:0xc9a84c,size: isMobile ? 0.18 : 0.14,transparent:true,opacity:0.28}));
     scene.add(crowd);
 
     const r=refs.current;
     r.renderer=renderer; r.scene=scene; r.camera=camera;
     r.bA=bA; r.bB=bB; r.crowd=crowd;
     r.spatters=[]; r.cutStateA=null; r.cutStateB=null;
+    r.isMobile=isMobile;
+    r.lastRenderTime=0;
+    r.maxSpatters=isMobile?20:50;
+    r.cameraBasePosition={x:0,y:2.9,z:7.4};
+    r.shake={amount:0};
+    r.impactVFX=[];
+    r.tempVec=new THREE.Vector3();
     r.clock.start();
     setSceneReady(true);
+
+    function trimSpatters(){
+      while(r.spatters.length > r.maxSpatters){
+        const o=r.spatters.shift();
+        if(r.scene&&o){ r.scene.remove(o); if(o.geometry)o.geometry.dispose(); if(o.material)o.material.dispose(); }
+      }
+    }
+
+    function addImpactVFX(pos, intensity){
+      const maxLife=0.22;
+      const flashGeo=new THREE.PlaneGeometry(0.35,0.35);
+      const flashMat=new THREE.MeshBasicMaterial({color:0xffee88,transparent:true,opacity:0.9,side:THREE.DoubleSide});
+      const flash=new THREE.Mesh(flashGeo,flashMat);
+      flash.position.copy(pos);
+      flash.position.y+=0.2;
+      flash.lookAt(camera.position);
+      r.scene.add(flash);
+      r.impactVFX.push({type:"flash",mesh:flash,life:0,maxLife});
+
+      const n=isMobile?4:8;
+      const pts=[]; const vels=[];
+      for(let i=0;i<n;i++){
+        pts.push(0,0,0);
+        const a=Math.random()*Math.PI*2; const b=Math.random()*0.4;
+        vels.push((Math.random()-0.5)*2, 0.5+Math.random(), (Math.random()-0.5)*2);
+      }
+      const pGeo=new THREE.BufferGeometry();
+      pGeo.setAttribute("position",new THREE.Float32BufferAttribute(pts,3));
+      const pMat=new THREE.PointsMaterial({color:0xeeeeaa,size:0.06,transparent:true,opacity:0.8});
+      const particles=new THREE.Points(pGeo,pMat);
+      particles.position.copy(pos);
+      particles.userData.vels=vels;
+      r.scene.add(particles);
+      r.impactVFX.push({type:"particles",mesh:particles,life:0,maxLife:0.4,vels});
+
+      r.shake.amount=Math.min(0.4,intensity*0.2);
+    }
 
     const onResize=()=>{
       const w=canvas.clientWidth,h=canvas.clientHeight;
@@ -1265,13 +1327,19 @@ export default function Boxing3D() {
     };
     window.addEventListener("resize",onResize);
 
-    const PUNCH_SPEED=2.6; // smoother, more visible punches
+    const PUNCH_SPEED=2.6;
 
     let raf;
     const loop=()=>{
       raf=requestAnimationFrame(loop);
       const dt=Math.min(r.clock.getDelta(),0.05);
       const t=r.clock.getElapsedTime();
+      // On mobile optionally throttle to ~30fps to save GPU/CPU
+      if(r.isMobile){
+        const now=performance.now();
+        if(now-r.lastRenderTime<32){ return; }
+        r.lastRenderTime=now;
+      }
       if(!r.bA||!r.bB){renderer.render(scene,camera);return;}
       const {bA,bB}=r;
 
@@ -1281,6 +1349,45 @@ export default function Boxing3D() {
       r.xB=lerp(r.xB,r.txB,dt*9);
       bA.group.position.x=r.xA;
       bB.group.position.x=r.xB;
+
+      // Camera shake (decay each frame)
+      if(r.shake&&r.shake.amount>0.01){
+        r.shake.amount*=0.88;
+        const sx=(Math.random()-0.5)*r.shake.amount*0.02;
+        const sy=(Math.random()-0.5)*r.shake.amount*0.02;
+        camera.position.set(r.cameraBasePosition.x+sx,r.cameraBasePosition.y+sy,r.cameraBasePosition.z);
+      } else if(r.cameraBasePosition) {
+        camera.position.set(r.cameraBasePosition.x,r.cameraBasePosition.y,r.cameraBasePosition.z);
+      }
+
+      // Update impact VFX (flash + particles)
+      if(r.impactVFX&&r.impactVFX.length>0){
+        const still=[];
+        for(const v of r.impactVFX){
+          v.life+=dt;
+          if(v.life>=v.maxLife){
+            r.scene.remove(v.mesh);
+            if(v.mesh.geometry)v.mesh.geometry.dispose();
+            if(v.mesh.material)v.mesh.material.dispose();
+            continue;
+          }
+          const norm=v.life/v.maxLife;
+          if(v.type==="flash"){
+            v.mesh.material.opacity=0.9*(1-norm);
+          } else if(v.type==="particles"&&v.vels){
+            const pos=v.mesh.geometry.attributes.position.array;
+            const n=v.vels.length/3;
+            for(let i=0;i<n;i++){
+              const j=i*3;
+              pos[j]+=v.vels[j]*dt*2; pos[j+1]+=v.vels[j+1]*dt*2; pos[j+2]+=v.vels[j+2]*dt*2;
+            }
+            v.mesh.geometry.attributes.position.needsUpdate=true;
+            v.mesh.material.opacity=0.8*(1-norm);
+          }
+          still.push(v);
+        }
+        r.impactVFX=still;
+      }
 
       if(r.phase==="idle"||r.phase==="done"){
         // In done phase: winner celebrates, loser stays on floor
@@ -1306,6 +1413,13 @@ export default function Boxing3D() {
         if(ko.stage==="fall"){
           ko.t += dt / 1.1;  // fall takes 1.1 seconds
           applyKOFall(downBx, clamp(ko.t,0,1), ko.side);
+          if(ko.t >= 0.45 && !ko.slamDone){
+            ko.slamDone=true;
+            const p=downBx.group.getWorldPosition(r.tempVec).clone();
+            p.y=0.08;
+            if(r.scene&&addImpactVFX) addImpactVFX(p, 1.8);
+            if(r.shake) r.shake.amount=Math.min(0.6, (r.shake.amount||0)+0.35);
+          }
           // winner backs away to neutral corner
           if(ko.side==="a"){ r.txA=-(1.8); r.txB=1.6; }
           else              { r.txB=1.8;  r.txA=-1.6; }
@@ -1445,8 +1559,8 @@ export default function Boxing3D() {
           if(r.kdA<=0) r.pA={type:ev.aPunch,p:0};
           setTimeout(()=>{ if(r.kdB<=0&&r.phase==="fighting") r.pB={type:ev.bPunch,p:0}; },110);
 
-          if(ev.aLanded) setTimeout(()=>{ if(r.phase==="fighting") r.hB={type:ev.aPunch,intensity:clamp(ev.aDmg/13,0.3,1.6),age:0}; },170);
-          if(ev.bLanded) setTimeout(()=>{ if(r.phase==="fighting") r.hA={type:ev.bPunch,intensity:clamp(ev.bDmg/13,0.3,1.6),age:0}; },270);
+          if(ev.aLanded) setTimeout(()=>{ if(r.phase==="fighting") r.hB={type:ev.aPunch,intensity:clamp(ev.aDmg/13,0.3,1.6),age:0}; r.bB&&r.bB.group&&r.scene&&addImpactVFX(r.bB.group.getWorldPosition(r.tempVec).clone(),clamp(ev.aDmg/13,0.3,1.6)); },170);
+          if(ev.bLanded) setTimeout(()=>{ if(r.phase==="fighting") r.hA={type:ev.bPunch,intensity:clamp(ev.bDmg/13,0.3,1.6),age:0}; r.bA&&r.bA.group&&r.scene&&addImpactVFX(r.bA.group.getWorldPosition(r.tempVec).clone(),clamp(ev.bDmg/13,0.3,1.6)); },270);
 
           // ── CUT EVENTS — update live cut state & create canvas blood ──
           if(ev.cutA) {
@@ -1456,6 +1570,7 @@ export default function Boxing3D() {
               const sz = 0.05 + ev.cutA.severity * 0.10;
               const sp = createSpatter(r.scene, bxPos.x + rand(-0.15,0.15), bxPos.z + rand(-0.15,0.15), sz);
               r.spatters.push(sp);
+              trimSpatters();
             }
             const aName = (r.fight?.nameA||FIGHTERS[0].name).split(" ")[0];
             flashMsg(`🩸 ${aName.toUpperCase()} CUT — ${ev.cutA.loc.toUpperCase()}`, 1400);
@@ -1467,6 +1582,7 @@ export default function Boxing3D() {
               const sz = 0.05 + ev.cutB.severity * 0.10;
               const sp = createSpatter(r.scene, bxPos.x + rand(-0.15,0.15), bxPos.z + rand(-0.15,0.15), sz);
               r.spatters.push(sp);
+              trimSpatters();
             }
             const bName = (r.fight?.nameB||FIGHTERS[1].name).split(" ")[0];
             flashMsg(`🩸 ${bName.toUpperCase()} CUT — ${ev.cutB.loc.toUpperCase()}`, 1400);
@@ -1509,6 +1625,7 @@ export default function Boxing3D() {
         if(downBxGroup && Math.random() < dt * 0.35) {
           const sp = createSpatter(r.scene, downBxGroup.position.x + rand(-0.08,0.08), downBxGroup.position.z + rand(-0.08,0.08), 0.06);
           r.spatters.push(sp);
+          trimSpatters();
         }
       }
 
@@ -1714,16 +1831,38 @@ export default function Boxing3D() {
                 {Object.entries(drills || {}).map(([id, d]) => {
                   const conf = (profile && profile.training && profile.training[id]) || d;
                   const lastAt = conf?.last_at;
+                  const cooldownSec = typeof d.cooldown_seconds === "number" ? d.cooldown_seconds : 60;
+                  let remainingSec = 0;
+                  if (lastAt) {
+                    try {
+                      const readyAt = new Date(lastAt).getTime() + cooldownSec * 1000;
+                      remainingSec = Math.max(0, Math.ceil((readyAt - Date.now()) / 1000));
+                    } catch (_) { remainingSec = 0; }
+                  }
+                  const available = remainingSec <= 0;
+                  const stamCost = d.stamina_cost != null ? d.stamina_cost : "";
+                  const gainsStr = d.gains && typeof d.gains === "object" ? Object.entries(d.gains).map(([k, v]) => `+${v} ${k}`).join(", ") : "";
                   return (
-                    <button
-                      key={id}
-                      onClick={() => handleTrain(id)}
-                      disabled={busyAction===`train:${id}`}
-                      style={{padding:"4px 8px",fontSize:9,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,background:"rgba(255,255,255,0.02)",color:"#e0d0a0",cursor:busyAction===`train:${id}`?"wait":"pointer"}}
-                    >
-                      {d.name || id.replace(/_/g," ")}
-                      {lastAt && <span style={{marginLeft:4,color:"#777"}}>• trained</span>}
-                    </button>
+                    <div key={id} style={{display:"flex",flexDirection:"column",gap:2}}>
+                      <button
+                        onClick={() => available && handleTrain(id)}
+                        disabled={busyAction===`train:${id}` || !available}
+                        style={{
+                          padding:"4px 8px",fontSize:9,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,
+                          background: available ? "rgba(255,255,255,0.02)" : "rgba(60,50,30,0.3)",
+                          color: available ? "#e0d0a0" : "#7a6a4a",
+                          cursor: available && busyAction!==`train:${id}` ? "pointer" : "default",
+                        }}
+                      >
+                        {d.name || id.replace(/_/g," ")}
+                        {available ? <span style={{marginLeft:4,color:"#8a9a6a"}}>Ready</span> : <span style={{marginLeft:4,color:"#6a5a4a"}}>{remainingSec}s</span>}
+                      </button>
+                      {(stamCost || gainsStr) && (
+                        <div style={{fontSize:8,color:"#6a5a4a"}}>
+                          {stamCost ? `${stamCost} stam` : ""}{stamCost && gainsStr ? " · " : ""}{gainsStr}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
