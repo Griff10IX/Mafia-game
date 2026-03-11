@@ -22,9 +22,10 @@ const ADMIN_CATEGORIES = [
   { id: 'admin-logs', label: 'Logs', icon: ScrollText },
   { id: 'admin-database', label: 'Database', icon: Skull },
   { id: 'admin-moderators', label: 'Moderators', icon: Shield },
+  { id: 'admin-mod-display', label: 'Mod display', icon: Palette },
   { id: 'admin-hdo', label: 'Help Desk Operators', icon: HelpCircle },
 ];
-const MOD_ONLY_CATEGORY_IDS = ['admin-moderation', 'admin-logs', 'admin-hdo', 'admin-moderators'];
+const MOD_ONLY_CATEGORY_IDS = ['admin-moderation', 'admin-logs', 'admin-hdo', 'admin-moderators', 'admin-mod-display'];
 
 function scrollToCategory(id) {
   const el = document.getElementById(id);
@@ -310,6 +311,8 @@ export default function Admin() {
 
   const [moderatorsList, setModeratorsList] = useState([]);
   const [moderatorsLoading, setModeratorsLoading] = useState(false);
+  const [modOnlineColor, setModOnlineColor] = useState('#1e3a5f');
+  const [modColorSaving, setModColorSaving] = useState(false);
   const [promoteModUsername, setPromoteModUsername] = useState('');
   const [promoteModLoading, setPromoteModLoading] = useState(false);
   const [hdosList, setHdosList] = useState([]);
@@ -349,6 +352,20 @@ export default function Admin() {
     }
     finally { setLoading(false); }
   };
+
+  useEffect(() => {
+    if (!isModerator) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/auth/me');
+        if (!cancelled && res.data?.mod_online_color != null && (res.data.mod_online_color || '').trim())
+          setModOnlineColor((res.data.mod_online_color || '').trim());
+        else if (!cancelled && res.data && !res.data.mod_online_color) setModOnlineColor('#1e3a5f');
+      } catch (_) {}
+    })();
+    return () => { cancelled = true; };
+  }, [isModerator]);
 
   const fetchModerators = async () => {
     setModeratorsLoading(true);
@@ -423,6 +440,25 @@ export default function Admin() {
       fetchHdos();
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed');
+    }
+  };
+
+  const handleSaveModOnlineColor = async () => {
+    const hex = (modOnlineColor || '').trim() || '#1e3a5f';
+    if (!/^#[0-9A-Fa-f]{3}([0-9A-Fa-f]{3})?$/.test(hex)) {
+      toast.error('Enter a valid hex colour (e.g. #1e3a5f)');
+      return;
+    }
+    setModColorSaving(true);
+    try {
+      await api.patch('/profile/mod-online-color', { color: hex });
+      toast.success('Mod online colour saved');
+      const res = await api.get('/auth/me');
+      if (res.data?.mod_online_color != null) setModOnlineColor((res.data.mod_online_color || '').trim() || '#1e3a5f');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to save');
+    } finally {
+      setModColorSaving(false);
     }
   };
 
@@ -2346,7 +2382,7 @@ export default function Admin() {
                 <span className="text-mutedForeground">Admin</span>
               </span>
               <span className="flex items-center gap-1 text-mutedForeground">
-                <span className="text-[9px]">Mod = their profile colour</span>
+                <span className="text-[9px]">Mod = set in Mod display</span>
               </span>
             </span>
           }
@@ -2355,7 +2391,7 @@ export default function Admin() {
         />
         {!collapsed.adminDisplay && (
           <div className="p-3 space-y-2">
-            <p className="text-[10px] text-mutedForeground font-heading">Colours used for usernames and badges on the Users Online page. Admin colour is set here. Mod colour is set by each mod on their own profile (not here).</p>
+            <p className="text-[10px] text-mutedForeground font-heading">Colours used for usernames and badges on the Users Online page. Admin colour is set here. Mods set their own colour in Mod display (same page).</p>
               <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
                 <input
@@ -2389,7 +2425,7 @@ export default function Admin() {
                   placeholder="#1e3a5f"
                   className="w-24 font-mono text-[11px]"
                 />
-                <span className="text-[10px] text-mutedForeground font-heading">Mod default (fallback if mod has not set a colour on profile)</span>
+                <span className="text-[10px] text-mutedForeground font-heading">Mod default (fallback if mod has not set a colour in Mod display)</span>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
@@ -4687,6 +4723,58 @@ export default function Admin() {
             </div>
           </div>
           <div className="admin-art-line text-primary mx-3" />
+        </div>
+      </section>
+      )}
+
+      {/* ─── Mod display (moderators only) ─── */}
+      {isModerator && (
+      <section id="admin-mod-display" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <Palette size={12} />
+          Mod display
+        </h2>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Palette}
+            title="Your mod online colour"
+            badge={
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full border border-primary/30 shrink-0" style={{ backgroundColor: modOnlineColor }} />
+                <span className="text-mutedForeground text-[10px] font-heading">Users Online</span>
+              </span>
+            }
+            isCollapsed={collapsed.modDisplay}
+            onToggle={() => toggleSection('modDisplay')}
+          />
+          {!collapsed.modDisplay && (
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">Set the colour for your username on the Users Online page. Same as admins setting their colour in Admin display.</p>
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={modOnlineColor}
+                    onChange={(e) => setModOnlineColor(e.target.value)}
+                    className="h-9 w-12 rounded border border-input bg-transparent cursor-pointer"
+                    aria-label="Mod colour"
+                  />
+                  <Input
+                    type="text"
+                    value={modOnlineColor}
+                    onChange={(e) => setModOnlineColor(e.target.value)}
+                    placeholder="#1e3a5f"
+                    className="w-24 font-mono text-[11px]"
+                  />
+                  <span className="text-[10px] text-mutedForeground font-heading">Your colour</span>
+                </div>
+              </div>
+              <BtnPrimary onClick={handleSaveModOnlineColor} disabled={modColorSaving}>
+                {modColorSaving ? 'Saving...' : 'Save mod colour'}
+              </BtnPrimary>
+            </div>
+          )}
         </div>
       </section>
       )}

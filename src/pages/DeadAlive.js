@@ -47,7 +47,7 @@ export default function DeadAlive() {
   };
 
   return (
-    <div className={`space-y-6 ${styles.pageContent}`} data-testid="dead-alive-page">
+    <div className={`space-y-6 max-w-4xl mx-auto ${styles.pageContent}`} data-testid="dead-alive-page">
       <style>{DA_STYLES}</style>
 
       {/* ── Header ── */}

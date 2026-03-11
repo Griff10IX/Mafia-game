@@ -941,6 +941,11 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 now_iso = datetime.now(timezone.utc).isoformat()
                 await db.users.update_one({"id": victim_id}, {"$set": {"is_dead": True, "dead_at": now_iso, "money": 0, "health": 0}, "$inc": {"total_deaths": 1}})
                 await db.attacks.delete_many({"target_id": victim_id})
+                try:
+                    from routers.quicktrade import cancel_offers_on_death
+                    await cancel_offers_on_death(victim_id)
+                except Exception:
+                    pass
                 reward_parts = []
                 if inc.get("money"): reward_parts.append(f"${inc['money']:,} cash")
                 if inc.get("points"): reward_parts.append(f"{inc['points']} pts")
@@ -1090,6 +1095,11 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             await maybe_promote_after_boss_death(victim_id)
         except Exception as e:
             logging.exception("Promote after boss death: %s", e)
+        try:
+            from routers.quicktrade import cancel_offers_on_death
+            await cancel_offers_on_death(victim_id)
+        except Exception as e:
+            logging.exception("Quick trade offers on death: %s", e)
         # Transfer victim's casino ownership to killer (or release if killer already has one)
         killer_owns_casino = await _user_owns_any_casino(killer_id)
         casino_colls = [

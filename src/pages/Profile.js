@@ -1416,34 +1416,11 @@ export default function Profile() {
               <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20">
                 <span className="text-[9px] md:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Users online colour</span>
               </div>
-              <div className="px-2.5 py-2 md:px-3 md:py-2.5 flex flex-wrap items-center gap-2">
-                <input
-                  type="color"
-                  value={modOnlineColor}
-                  onChange={(e) => setModOnlineColor(e.target.value)}
-                  className="h-8 w-12 cursor-pointer rounded border border-primary/30 bg-secondary"
-                  aria-label="Colour picker"
-                />
-                <input
-                  type="text"
-                  value={modOnlineColor}
-                  onChange={(e) => setModOnlineColor(e.target.value)}
-                  className="w-20 px-2 py-1 text-[11px] font-mono bg-secondary border border-primary/20 rounded"
-                  placeholder="#1e3a5f"
-                  aria-label="Hex colour"
-                />
-                <button
-                  type="button"
-                  onClick={saveModOnlineColor}
-                  disabled={savingModColor}
-                  className="px-2.5 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/50 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50"
-                >
-                  {savingModColor ? 'Saving…' : 'Save'}
-                </button>
+              <div className="px-2.5 py-2 md:px-3 md:py-2.5">
+                <p className="text-[9px] md:text-[10px] text-mutedForeground font-heading">
+                  Set your colour for the Users Online page from <Link to="/admin" className="text-primary hover:underline font-heading">Admin → Mod display</Link> (mod tools), not here.
+                </p>
               </div>
-              <p className="px-2.5 py-1.5 md:px-3 text-[9px] md:text-[10px] text-mutedForeground font-heading">
-                Colour for your name on the Users Online page. Default: dark blue.
-              </p>
             </div>
             </>
             ) : null}

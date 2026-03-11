@@ -75,16 +75,17 @@ async def _top_by_field_weekly(
     dead: bool,
     extra_match: dict = None,
 ) -> List[StatLeaderboardEntry]:
-    """Aggregate events in collection since week start, then filter by alive/dead and return top N."""
+    """Aggregate events in collection since week start, then filter by alive/dead and return top N.
+    Normalizes time field to date so both BSON Date and ISO string storage work."""
     limit = max(1, min(100, int(limit)))
     now = datetime.now(timezone.utc)
     week_start = _week_start(now)
-    week_start_iso = week_start.isoformat()
-    match_time = {"$gte": week_start_iso} if time_is_iso else {"$gte": week_start}
-    match_stage = {time_field: match_time}
+    match_stage = {"_lb_ts": {"$gte": week_start}}
     if extra_match:
         match_stage.update(extra_match)
     pipeline = [
+        # Normalize time to date so both BSON Date and ISO string in DB compare correctly
+        {"$addFields": {"_lb_ts": {"$toDate": f"${time_field}"}}},
         {"$match": match_stage},
         {"$group": {"_id": f"${user_field}", "value": {"$sum": 1}}},
         {"$sort": {"value": -1}},
@@ -139,17 +140,16 @@ async def _top_by_field_for_week(
     limit: int,
     extra_match: dict = None,
 ) -> List[dict]:
-    """Aggregate events in collection between week_start_dt and week_end_dt; return top N as [{user_id, value, rank}] for alive non-bodyguard non-npc users."""
+    """Aggregate events in collection between week_start_dt and week_end_dt; return top N as [{user_id, value, rank}] for alive non-bodyguard non-npc users.
+    Uses $toDate on time field so both BSON Date and ISO string storage work."""
     limit = max(1, min(100, int(limit)))
-    match_time = (
-        {"$gte": week_start_dt.isoformat(), "$lt": week_end_dt.isoformat()}
-        if time_is_iso
-        else {"$gte": week_start_dt, "$lt": week_end_dt}
-    )
-    match_stage = {time_field: match_time}
+    match_stage = {
+        "_lb_ts": {"$gte": week_start_dt, "$lt": week_end_dt},
+    }
     if extra_match:
         match_stage.update(extra_match)
     pipeline = [
+        {"$addFields": {"_lb_ts": {"$toDate": f"${time_field}"}}},
         {"$match": match_stage},
         {"$group": {"_id": f"${user_field}", "value": {"$sum": 1}}},
         {"$sort": {"value": -1}},

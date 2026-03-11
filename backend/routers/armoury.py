@@ -837,6 +837,9 @@ async def get_armour_options(request: Request, current_user: dict = Depends(get_
         effective_money = int(cost_money * ARMOUR_WEAPON_MARGIN * mult) if cost_money is not None else None
         effective_points = int(cost_points * ARMOUR_WEAPON_MARGIN * mult) if cost_points is not None else None
         affordable = True
+        # Must buy tiers in order: can only buy level L if you already own level L-1
+        if s["level"] > 1 and owned_max < s["level"] - 1:
+            affordable = False
         if effective_money is not None and money < effective_money:
             affordable = False
         if effective_points is not None and points < effective_points:
@@ -882,6 +885,13 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
     owned_max = int(current_user.get("armour_owned_level_max", equipped_level) or 0)
     if level <= owned_max:
         raise HTTPException(status_code=400, detail="You already own this armour tier")
+    # Must buy in order: can only buy level L if you already own level L-1
+    if level > 1 and owned_max < level - 1:
+        prev_name = next((a["name"] for a in ARMOUR_SETS if a["level"] == level - 1), f"Level {level - 1}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"You must buy armour tiers in order. Purchase {prev_name} (Lv.{level - 1}) first.",
+        )
     armour = next((a for a in ARMOUR_SETS if a["level"] == level), None)
     if not armour:
         raise HTTPException(status_code=404, detail="Armour not found")

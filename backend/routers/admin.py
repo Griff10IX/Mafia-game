@@ -778,6 +778,11 @@ def register(router):
             await maybe_promote_after_boss_death(target["id"])
         except Exception as e:
             logging.exception("Promote after boss death: %s", e)
+        try:
+            from routers.quicktrade import cancel_offers_on_death
+            await cancel_offers_on_death(target["id"])
+        except Exception as e:
+            logging.exception("Quick trade offers on death: %s", e)
         return {"message": f"Killed {target_username}. Account is dead (cannot login); use Dead to Alive to revive."}
 
     @router.post("/admin/give-auto-rank")

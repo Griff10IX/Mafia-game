@@ -347,7 +347,7 @@ async def hitlist_list(current_user: dict = Depends(get_current_user)):
 
 async def hitlist_me(current_user: dict = Depends(get_current_user)):
     """Whether current user is on the hitlist (count, total bounty); and if they paid to reveal, who placed them.
-    'who' entries never include placer_id (only placer_username or Anonymous)."""
+    'who' shows actual placer usernames once revealed (hidden contracts only hide on the public list)."""
     user_id = current_user["id"]
     entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
     count = len(entries)
@@ -358,9 +358,9 @@ async def hitlist_me(current_user: dict = Depends(get_current_user)):
     revealed = current_user.get("hitlist_revealed") is True
     who = []
     if revealed:
-        # Expose only placer_username (or Anonymous); never placer_id
+        # Once you paid to reveal, show actual placer names (hidden only hides on public list, not from the target who paid).
         who = [
-            {"placer_username": "Anonymous" if e.get("hidden") else (e.get("placer_username") or "Unknown"), "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")}
+            {"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")}
             for e in entries
         ]
     return {
@@ -515,18 +515,20 @@ async def hitlist_buy_off_user(request: HitlistBuyOffUserRequest, current_user: 
 
 async def hitlist_reveal(current_user: dict = Depends(get_current_user)):
     """Pay 5000 points to see who placed bounties on you. One-time; stored on user.
-    Returned 'who' never includes placer_id."""
+    Once revealed, you see real placer usernames (hidden only hides on the public board)."""
     user_id = current_user["id"]
     if current_user.get("hitlist_revealed") is True:
         entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
-        who = [{"placer_username": "Anonymous" if e.get("hidden") else (e.get("placer_username") or "Unknown"), "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
+        # Once revealed, show actual placer names (hidden only affects public list).
+        who = [{"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
         return {"message": "Already revealed.", "who": who}
     cost = HITLIST_REVEAL_COST_POINTS
     if (current_user.get("points") or 0) < cost:
         raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost})")
     await db.users.update_one({"id": user_id}, {"$set": {"hitlist_revealed": True}, "$inc": {"points": -cost}})
     entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
-    who = [{"placer_username": "Anonymous" if e.get("hidden") else (e.get("placer_username") or "Unknown"), "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
+    # Show actual placer names; hidden only affects public list, not the target who paid to reveal.
+    who = [{"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.hitlist_bodyguard_events.insert_one({
         "at": now_iso,

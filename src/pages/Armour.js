@@ -194,6 +194,7 @@ export default function Armour() {
           <h3 className="text-xl font-heading font-semibold text-primary mb-3">Armour System</h3>
           <ul className="space-y-2 text-sm text-mutedForeground">
             <li>• Armour has 5 tiers (Lv.1 → Lv.5)</li>
+            <li>• Tiers must be bought in order — you need the previous tier before the next</li>
             <li>• The first 3 tiers cost cash; the top 2 tiers cost points</li>
             <li>• Higher armour increases the bullets required to kill you</li>
           </ul>

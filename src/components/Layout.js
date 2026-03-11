@@ -1449,7 +1449,7 @@ export default function Layout({ children }) {
                   <div className="h-1.5 w-full rounded-full overflow-hidden mb-1" style={{ backgroundColor: '#2a2a2a' }}>
                     <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
                   </div>
-                  <p className="text-[9px] font-heading" style={{ color: 'var(--noir-primary)' }}>{(Number(rankProgress.rank_points_progress) || 0).toFixed(0)}% · {rankProgress.current_rank_name}</p>
+                  <p className="text-[9px] font-heading" style={{ color: 'var(--noir-primary)' }}>{(user?.premium_rank_bar ? (Number(rankProgress.rank_points_progress) || 0).toFixed(2) : (Number(rankProgress.rank_points_progress) || 0).toFixed(0))}% · {rankProgress.current_rank_name}</p>
                 </div>
               )}
 

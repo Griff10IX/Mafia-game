@@ -606,14 +606,17 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
         car_info = next((c for c in CARS if c["id"] == car_id), None)
         if car_info:
             user_car_id = user_car.get("id") or str(user_car.get("_id", ""))
+            display_name = (user_car.get("custom_name") or user_car.get("car_name")) if car_id == "car_custom" else (user_car.get("car_name") or car_info.get("name"))
             entry = {
                 "user_car_id": user_car_id,
                 "car_id": car_id,
-                "car_name": user_car.get("car_name"),
+                "car_name": display_name,
                 "acquired_at": user_car.get("acquired_at"),
                 "damage_percent": min(100, max(0, float(user_car.get("damage_percent", 0)))),
                 **car_info,
             }
+            if car_id == "car_custom":
+                entry["name"] = display_name or car_info.get("name")
             if car_id == "car_custom" and user_car.get("custom_image_url"):
                 entry["image"] = user_car.get("custom_image_url")
             if user_car.get("listed_for_sale"):
@@ -640,14 +643,17 @@ async def get_recent_stolen(current_user: dict = Depends(get_current_user)):
         car_info = next((c for c in CARS if c["id"] == car_id), None)
         if car_info:
             user_car_id = user_car.get("id") or str(user_car.get("_id", ""))
+            display_name = (user_car.get("custom_name") or user_car.get("car_name") or car_info.get("name") or "Car") if car_id == "car_custom" else (user_car.get("car_name") or car_info.get("name") or "Car")
             entry = {
                 "user_car_id": user_car_id,
                 "car_id": car_id,
-                "car_name": user_car.get("car_name") or car_info.get("name") or "Car",
+                "car_name": display_name,
                 "acquired_at": user_car.get("acquired_at"),
                 "damage_percent": min(100, max(0, float(user_car.get("damage_percent", 0)))),
                 **car_info,
             }
+            if car_id == "car_custom":
+                entry["name"] = display_name
             if car_id == "car_custom" and user_car.get("custom_image_url"):
                 entry["image"] = user_car.get("custom_image_url")
             car_details.append(entry)
@@ -926,7 +932,7 @@ async def get_marketplace_listings(current_user: dict = Depends(get_current_user
     """List cars that other players have listed for sale (cash). Excludes current user's own listings."""
     cursor = db.user_cars.find(
         {"listed_for_sale": True, "user_id": {"$ne": current_user["id"]}},
-        {"_id": 1, "id": 1, "user_id": 1, "car_id": 1, "car_name": 1, "sale_price": 1, "listed_at": 1, "damage_percent": 1},
+        {"_id": 1, "id": 1, "user_id": 1, "car_id": 1, "car_name": 1, "custom_name": 1, "sale_price": 1, "listed_at": 1, "damage_percent": 1},
     ).sort("listed_at", -1)
     listings = await cursor.to_list(200)
     out = []
@@ -934,6 +940,7 @@ async def get_marketplace_listings(current_user: dict = Depends(get_current_user
         car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
         if not car_info:
             continue
+        display_name = (uc.get("custom_name") or uc.get("car_name") or car_info.get("name")) if uc.get("car_id") == "car_custom" else (uc.get("car_name") or car_info.get("name"))
         seller = await db.users.find_one({"id": uc["user_id"]}, {"_id": 0, "username": 1})
         listing_id = uc.get("id") or str(uc.get("_id", ""))
         # Public marketplace response: expose only seller_username, never raw seller_id
@@ -941,7 +948,7 @@ async def get_marketplace_listings(current_user: dict = Depends(get_current_user
             "user_car_id": listing_id,
             "seller_username": seller.get("username", "?"),
             "car_id": uc.get("car_id"),
-            "name": uc.get("car_name") or car_info.get("name"),
+            "name": display_name,
             "value": car_info.get("value", 0),
             "rarity": car_info.get("rarity", "common"),
             "image": car_info.get("image"),
@@ -1049,7 +1056,7 @@ async def buy_listed_car(
     buyer = await db.users.find_one({"id": buyer_id})
     if not buyer or buyer.get("money", 0) < price:
         raise HTTPException(status_code=400, detail=f"Insufficient money. Need ${price:,}.")
-    car_name = (car_info or {}).get("name") or user_car.get("car_name") or "Car"
+    car_name = (user_car.get("custom_name") or user_car.get("car_name") or (car_info or {}).get("name") or "Car") if (user_car.get("car_id") == "car_custom") else ((car_info or {}).get("name") or user_car.get("car_name") or "Car")
     if user_car.get("_id") is not None:
         q = {"_id": user_car["_id"]}
     else:
@@ -1206,7 +1213,7 @@ async def get_view_car(
     rarity = car_info.get("rarity") or "common"
     travel_time = TRAVEL_TIMES.get("custom", 20) if car_info.get("id") == "car_custom" else TRAVEL_TIMES.get(rarity, 45)
     damage_percent = min(100, max(0, float(user_car.get("damage_percent", 0))))
-    name = user_car.get("car_name") or car_info.get("name")
+    name = user_car.get("custom_name") or user_car.get("car_name") or car_info.get("name")
     image = car_info.get("image")
     if user_car.get("car_id") == "car_custom" and user_car.get("custom_image_url"):
         image = user_car.get("custom_image_url")

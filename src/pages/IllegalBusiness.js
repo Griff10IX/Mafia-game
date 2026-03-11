@@ -12,6 +12,20 @@ function formatMoney(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
+function formatMissionRewards(rewards) {
+  if (!rewards || typeof rewards !== 'object') return null;
+  const parts = [];
+  if (rewards.guard_slots) parts.push(`+${rewards.guard_slots} guard slot${rewards.guard_slots > 1 ? 's' : ''}`);
+  if (rewards.income_mult) {
+    const pct = Math.round((Number(rewards.income_mult) - 1) * 100);
+    if (pct) parts.push(`+${pct}% income`);
+  }
+  if (rewards.guard_weapon_max) parts.push('Weapon tier +1');
+  if (rewards.points) parts.push(`+${rewards.points} pts`);
+  if (rewards.cash) parts.push(formatMoney(rewards.cash));
+  return parts.length ? parts.join(' · ') : null;
+}
+
 // ─── Injected styles ──────────────────────────────────────────────────────────
 
 const RACKET_STYLES = `
@@ -257,6 +271,12 @@ export default function IllegalBusiness() {
     refreshUser(); fetchData();
   });
 
+  const handleBuyGuardSlot = withSave(async () => {
+    await api.post('/illegal-business/guards/buy-slot');
+    toast.success('Another slot on the door.');
+    refreshUser(); fetchData();
+  });
+
   const handleUpgradeSecurity = withSave(async (upgradeId) => {
     await api.post(`/illegal-business/security/upgrade/${upgradeId}`);
     toast.success('Upgrade installed.');
@@ -330,6 +350,8 @@ export default function IllegalBusiness() {
   const pendingRewards = data?.pending_kill_rewards || [];
   const securityList   = data?.security_upgrades_list || [];
   const guardSlots     = business?.guard_slots ?? 2;
+  const nextGuardSlotCostCash   = data?.next_guard_slot_cost_cash ?? null;
+  const nextGuardSlotCostPoints = data?.next_guard_slot_cost_points ?? null;
   const upgradesDone   = business?.security_upgrades || [];
   const nextUpgradeIdx = upgradesDone.length;
   const nextUpgrade    = nextUpgradeIdx < securityList.length ? securityList[nextUpgradeIdx] : null;
@@ -463,6 +485,15 @@ export default function IllegalBusiness() {
                   >
                     <UserPlus size={9} /> Hire
                   </button>
+                ) : nextGuardSlotCostCash != null ? (
+                  <button
+                    onClick={handleBuyGuardSlot}
+                    disabled={saving}
+                    className="flex items-center gap-1 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2 py-1 rounded hover:bg-primary/10 disabled:opacity-40 transition-all"
+                    title={`${formatMoney(nextGuardSlotCostCash)}${nextGuardSlotCostPoints ? ` + ${nextGuardSlotCostPoints} pts` : ''}`}
+                  >
+                    <UserPlus size={9} /> Add slot — {formatMoney(nextGuardSlotCostCash)}{nextGuardSlotCostPoints ? ` / ${nextGuardSlotCostPoints} pts` : ''}
+                  </button>
                 ) : null
               }
             />
@@ -495,7 +526,7 @@ export default function IllegalBusiness() {
           </div>
 
           {/* Security */}
-          <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
+          <div id="illegal-business-security" className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
             <CardHead icon={Lock} title="Security" />
             <div className="p-4 space-y-2">
               {securityList.length === 0 ? (
@@ -560,6 +591,9 @@ export default function IllegalBusiness() {
             <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
               <CardHead icon={ListChecks} title="Missions" />
               <div className="p-4 space-y-3">
+                <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-widest mb-1">
+                  Buy upgrades in the <button type="button" onClick={() => document.getElementById('illegal-business-security')?.scrollIntoView({ behavior: 'smooth' })} className="text-primary underline hover:no-underline">Security</button> section →
+                </p>
                 {missions.map(({ mission, completed, current, target }) => {
                   const requirementsMet = target && Object.keys(target).every((k) => (Number(current?.[k]) ?? 0) >= (Number(target[k]) ?? 0));
                   const progressLines = !completed && target && typeof current === 'object' && current !== null
@@ -588,6 +622,11 @@ export default function IllegalBusiness() {
                           )}
                           {progressLines && (
                             <p className="text-[10px] font-heading text-primary/90 mt-1 tracking-wide">{progressLines}</p>
+                          )}
+                          {mission.rewards && formatMissionRewards(mission.rewards) && (
+                            <p className="text-[10px] text-primary/80 font-heading mt-1">
+                              Rewards: {formatMissionRewards(mission.rewards)}
+                            </p>
                           )}
                         </div>
                         {!completed && requirementsMet && (

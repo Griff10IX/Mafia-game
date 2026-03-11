@@ -29,6 +29,23 @@ def _invalidate_trade_caches():
     _properties_ts = 0
 
 
+async def cancel_offers_on_death(user_id: str):
+    """
+    When a user dies: cancel all their active sell and buy offers.
+    No refunds — points (sell) and money (buy) are removed from the game economy.
+    """
+    now = datetime.now(timezone.utc)
+    await db.trade_sell_offers.update_many(
+        {"user_id": user_id, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": now}},
+    )
+    await db.trade_buy_offers.update_many(
+        {"user_id": user_id, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": now}},
+    )
+    _invalidate_trade_caches()
+
+
 class CreateSellOffer(BaseModel):
     points: int
     cost: int
@@ -61,10 +78,12 @@ async def get_sell_offers(current_user: dict = Depends(get_current_user)):
     result = []
     for offer in raw_list:
         uid = offer.get("user_id")
-        if uid not in uid_to_key:
-            uid_to_key[uid] = f"g{next_key[0]}"
+        hide = offer.get("hide_name", False)
+        group_key_tuple = (uid, hide)
+        if group_key_tuple not in uid_to_key:
+            uid_to_key[group_key_tuple] = f"g{next_key[0]}"
             next_key[0] += 1
-        group_key = uid_to_key[uid]
+        group_key = uid_to_key[group_key_tuple]
         result.append({
             "id": str(offer["_id"]),
             "username": offer.get("username", "Anonymous") if not offer.get("hide_name") else "[Anonymous]",
@@ -84,10 +103,12 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
     if offer.points <= 0 or offer.cost <= 0:
         raise HTTPException(status_code=400, detail="Points and cost must be positive")
     active_offers = await db.trade_sell_offers.count_documents({"user_id": user_id, "status": "active"})
+    if active_offers >= 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 offers at once (normal + anonymous combined)")
     if offer.hide_name:
         hidden_count = await db.trade_sell_offers.count_documents({"user_id": user_id, "status": "active", "hide_name": True})
         if hidden_count >= 5:
-            raise HTTPException(status_code=400, detail="Maximum 5 hidden offers allowed")
+            raise HTTPException(status_code=400, detail="Maximum 5 anonymous offers allowed")
     else:
         non_hidden_count = await db.trade_sell_offers.count_documents({"user_id": user_id, "status": "active", "hide_name": False})
         if non_hidden_count >= 10:
@@ -264,10 +285,12 @@ async def get_buy_offers(current_user: dict = Depends(get_current_user)):
     result = []
     for offer in raw_list:
         uid = offer.get("user_id")
-        if uid not in uid_to_key:
-            uid_to_key[uid] = f"g{next_key[0]}"
+        hide = offer.get("hide_name", False)
+        group_key_tuple = (uid, hide)
+        if group_key_tuple not in uid_to_key:
+            uid_to_key[group_key_tuple] = f"g{next_key[0]}"
             next_key[0] += 1
-        group_key = uid_to_key[uid]
+        group_key = uid_to_key[group_key_tuple]
         result.append({
             "id": str(offer["_id"]),
             "username": offer.get("username", "Anonymous") if not offer.get("hide_name") else "[Anonymous]",
@@ -286,10 +309,13 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(g
     username = current_user.get("username", "Unknown")
     if offer.points <= 0 or offer.offer <= 0:
         raise HTTPException(status_code=400, detail="Points and offer must be positive")
+    active_offers = await db.trade_buy_offers.count_documents({"user_id": user_id, "status": "active"})
+    if active_offers >= 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 offers at once (normal + anonymous combined)")
     if offer.hide_name:
         hidden_count = await db.trade_buy_offers.count_documents({"user_id": user_id, "status": "active", "hide_name": True})
         if hidden_count >= 5:
-            raise HTTPException(status_code=400, detail="Maximum 5 hidden offers allowed")
+            raise HTTPException(status_code=400, detail="Maximum 5 anonymous offers allowed")
     else:
         non_hidden_count = await db.trade_buy_offers.count_documents({"user_id": user_id, "status": "active", "hide_name": False})
         if non_hidden_count >= 10:

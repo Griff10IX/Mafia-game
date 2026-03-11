@@ -108,20 +108,21 @@ const EquipmentSection = ({ equipmentData, onSelect, selecting }) => {
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+      <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
         <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
           <Wrench size={10} />
           Equipment
         </span>
       </div>
-      <div className="p-2 space-y-1">
+      <div className="p-1.5 space-y-0.5">
         <p className="text-[9px] text-mutedForeground">
-          Pick gear for your next heist. Cost is charged when you run the heist. Better gear = higher success %.
+          Pick gear for your next heist. Cost is charged when you run the heist. Better gear = higher success chance.
         </p>
         <div className="space-y-0.5">
           {list.map((eq) => {
             const isSelected = eq.id === selectedId;
             const canAfford = eq.can_afford;
+            const desc = (eq.description || '').replace(/%/g, '');
             return (
               <div
                 key={eq.id}
@@ -131,7 +132,7 @@ const EquipmentSection = ({ equipmentData, onSelect, selecting }) => {
               >
                 <div className="min-w-0">
                   <div className="text-[11px] font-heading font-bold text-foreground">{eq.name}</div>
-                  <div className="text-[9px] text-mutedForeground">{eq.description}</div>
+                  <div className="text-[9px] text-mutedForeground">{desc}</div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <span className="text-[10px] text-primary font-bold">{formatMoney(eq.cost)}</span>
@@ -169,7 +170,7 @@ const JobCard = ({ job, selected, onSelect }) => (
   <button
     type="button"
     onClick={() => onSelect(job.id)}
-    className={`flex flex-col p-2 rounded-md transition-all text-left ${
+    className={`flex flex-col p-1.5 rounded-md transition-all text-left ${
       selected 
         ? 'bg-primary/15 border-2 border-primary/50 shadow shadow-primary/10' 
         : 'bg-zinc-800/30 border border-zinc-700/50 hover:border-primary/30 hover:bg-zinc-800/50'
@@ -184,9 +185,6 @@ const JobCard = ({ job, selected, onSelect }) => (
       <span className="text-[11px] font-heading font-bold text-foreground truncate">{job.name}</span>
     </div>
     <div className="flex items-center justify-between gap-1 text-[10px] font-heading">
-      <span className={`${selected ? 'text-foreground' : 'text-mutedForeground'}`} title="Base success chance; equipment adds more">
-        {(job.success_rate * 100).toFixed(0)}%
-      </span>
       <span className="text-primary font-bold">${(job.cash || 0).toLocaleString()}</span>
     </div>
     <div className="text-[9px] text-mutedForeground font-heading mt-0.5">
@@ -265,7 +263,6 @@ const RoleSlotRow = ({ roleId, value, onValueChange, inviteInput, onInviteChange
             : 'bg-zinc-900/50 border-zinc-700/50 text-foreground focus:border-primary/50'
         }`}
       />
-      <span className="text-[9px] text-mutedForeground">%</span>
     </div>
   </div>
 );
@@ -277,13 +274,13 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-amber-500/30 oc-fade-in`}>
       <div className="h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between">
+      <div className="px-2 py-1 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between">
         <span className="text-[9px] font-heading font-bold text-amber-400 uppercase tracking-[0.12em] flex items-center gap-1">
           <UserCheck size={10} />
           Pending Heist
         </span>
       </div>
-      <div className="p-2 space-y-1">
+      <div className="p-1.5 space-y-0.5">
         {ROLE_IDS.map((roleId) => {
           const val = status.pending_heist[roleId];
           const inv = (status.pending_invites || []).find((i) => i.role === roleId);
@@ -381,7 +378,7 @@ const InfoSection = ({ cooldownHours, isCollapsed, onToggle }) => (
     <button
       type="button"
       onClick={onToggle}
-      className="w-full px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
+      className="w-full px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
     >
       <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         ℹ️ Rules
@@ -392,7 +389,7 @@ const InfoSection = ({ cooldownHours, isCollapsed, onToggle }) => (
     </button>
     {!isCollapsed && (
       <>
-        <div className="p-2">
+        <div className="p-1.5">
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-mutedForeground font-heading">
             <li className="flex items-start gap-1">
               <span className="text-primary shrink-0">•</span>
@@ -404,7 +401,7 @@ const InfoSection = ({ cooldownHours, isCollapsed, onToggle }) => (
             </li>
             <li className="flex items-start gap-1">
               <span className="text-primary shrink-0">•</span>
-              <span>Cut % must sum to 100. NPCs auto-assigned</span>
+              <span>Cut must sum to 100. NPCs auto-assigned</span>
             </li>
             <li className="flex items-start gap-1">
               <span className="text-primary shrink-0">•</span>
@@ -554,7 +551,7 @@ export default function OrganisedCrime() {
 
   const sendInvitesOnly = async () => {
     if (!hasInviteSlot() || sendInviteLoading || pctTotal !== 100 || selfCount !== 1) {
-      if (pctTotal !== 100) toast.error('Cut % must sum to 100 first.');
+      if (pctTotal !== 100) toast.error('Cut must sum to 100 first.');
       else if (selfCount !== 1) toast.error('Exactly one slot must be You.');
       return;
     }
@@ -587,7 +584,7 @@ export default function OrganisedCrime() {
 
   const execute = async () => {
     if (!canExecute || executing) return;
-    if (pctTotal !== 100) { toast.error('Cut % must sum to 100'); return; }
+    if (pctTotal !== 100) { toast.error('Cut must sum to 100'); return; }
     
     const payload = {
       job_id: selectedJobId,
@@ -726,7 +723,7 @@ export default function OrganisedCrime() {
 
   if (loading) {
     return (
-      <div className={`space-y-2 ${styles.pageContent}`}>
+      <div className={`space-y-1.5 ${styles.pageContent}`}>
         <style>{OC_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -734,7 +731,7 @@ export default function OrganisedCrime() {
   }
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} data-testid="organised-crime-page">
+    <div className={`space-y-1.5 ${styles.pageContent}`} data-testid="organised-crime-page">
       <style>{OC_STYLES}</style>
 
       <div className="relative oc-fade-in">
@@ -767,16 +764,16 @@ export default function OrganisedCrime() {
       {/* Job Selection */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.03s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+        <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
             Select Job
           </span>
         </div>
-        <div className="p-2">
-          <p className="text-[9px] text-mutedForeground font-heading mb-1">
-            Cash shown is your reward if the heist succeeds. Success chance is 50%; rest is fail or jail.
+        <div className="p-1.5">
+          <p className="text-[9px] text-mutedForeground font-heading mb-0.5">
+            Cash shown is your reward if the heist succeeds. Success chance is 50; rest is fail or jail.
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
             {(config.jobs || []).map((job) => (
               <JobCard key={job.id} job={job} selected={selectedJobId === job.id} onSelect={setSelectedJobId} />
             ))}
@@ -788,15 +785,15 @@ export default function OrganisedCrime() {
       {/* Team Slots */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.04s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+        <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-            Team & Cut %
+            Team & Cut
           </span>
           <span className={`text-[10px] font-heading font-bold ${pctTotal === 100 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {pctTotal}%
+            {pctTotal}
           </span>
         </div>
-        <div className="p-1.5 space-y-0.5">
+        <div className="p-1 space-y-0.5">
           {ROLE_IDS.map((roleId) => (
             <RoleSlotRow
               key={roleId}
@@ -822,7 +819,7 @@ export default function OrganisedCrime() {
         {pctTotal !== 100 && (
           <div className="px-2.5 pb-1">
             <p className="text-[9px] font-heading text-mutedForeground">
-              Percentages must sum to 100
+              Cuts must sum to 100
             </p>
           </div>
         )}
@@ -830,12 +827,12 @@ export default function OrganisedCrime() {
       </div>
 
       {/* Execute Button */}
-      {!status?.pending_heist && (
+        {!status?.pending_heist && (
         <button
           type="button"
           onClick={autoRankOcDisabled ? undefined : execute}
           disabled={autoRankOcDisabled || !canExecute || onCooldown || executing}
-          className={`w-full py-2 font-heading font-bold uppercase tracking-wider text-[10px] transition-all touch-manipulation rounded-md ${
+          className={`w-full py-1.5 font-heading font-bold uppercase tracking-wider text-[10px] transition-all touch-manipulation rounded-md ${
             autoRankOcDisabled || !canExecute || onCooldown || executing
               ? 'opacity-50 cursor-not-allowed bg-zinc-800 text-mutedForeground border border-zinc-700'
               : 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 shadow'

@@ -151,6 +151,23 @@ export default function QuickTrade() {
     }
   };
 
+  const handleAcceptBatch = async (offerIds, type) => {
+    if (!offerIds.length) return;
+    const n = offerIds.length;
+    try {
+      for (const id of offerIds) {
+        await api.post(`/trade/${type}-offer/${id}/accept`);
+      }
+      toast.success(n === 1 ? 'Trade completed!' : `${n} trades completed!`);
+      fetchTrades();
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Trade failed');
+      fetchTrades();
+      refreshUser();
+    }
+  };
+
   const handleCancelOffer = async (offerId, type) => {
     if (!window.confirm('Cancel this offer? The fee will be refunded.')) return;
     try {
@@ -442,11 +459,16 @@ export default function QuickTrade() {
                                   Cancel{offer.ids.length > 1 ? ` (${offer.ids.length})` : ''}
                                 </button>
                               ) : (
-                                offer.ids.map((id, idIdx) => (
-                                  <button key={idIdx} onClick={() => handleAcceptOffer(id, 'sell')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap">
+                                <>
+                                  <button onClick={() => handleAcceptOffer(offer.ids[0], 'sell')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap">
                                     Accept
                                   </button>
-                                ))
+                                  {offer.ids.length > 1 && (
+                                    <button onClick={() => handleAcceptBatch(offer.ids, 'sell')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap">
+                                      Accept all ({offer.ids.length})
+                                    </button>
+                                  )}
+                                </>
                               )}
                             </div>
                           </div>
@@ -535,11 +557,16 @@ export default function QuickTrade() {
                                   Cancel{offer.ids.length > 1 ? ` (${offer.ids.length})` : ''}
                                 </button>
                               ) : (
-                                offer.ids.map((id, idIdx) => (
-                                  <button key={idIdx} onClick={() => handleAcceptOffer(id, 'buy')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap">
+                                <>
+                                  <button onClick={() => handleAcceptOffer(offer.ids[0], 'buy')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap">
                                     Accept
                                   </button>
-                                ))
+                                  {offer.ids.length > 1 && (
+                                    <button onClick={() => handleAcceptBatch(offer.ids, 'buy')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap">
+                                      Accept all ({offer.ids.length})
+                                    </button>
+                                  )}
+                                </>
                               )}
                             </div>
                           </div>

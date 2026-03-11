@@ -935,6 +935,32 @@ export default function Attack() {
     }
   };
 
+  const fetchBullets = async () => {
+    try {
+      const res = await api.get('/auth/me');
+      setUserBullets(res.data?.bullets ?? 0);
+      setUserMolotovs(res.data?.molotovs ?? 0);
+    } catch (e) {}
+  };
+
+  const fetchInflation = async () => {
+    try {
+      const res = await api.get('/attack/inflation');
+      setInflationPct(Number(res.data?.inflation_pct ?? 0));
+    } catch (e) {}
+  };
+
+  const refreshAttacks = async () => {
+    try {
+      const response = await api.get('/attack/list');
+      const list = response.data.attacks || [];
+      setAttacks(list);
+      return list;
+    } catch (error) {
+      return attacks;
+    }
+  };
+
   // Tick every second so expiry countdowns update (24h → 00:00)
   useEffect(() => {
     const id = setInterval(() => setCountdownTick((t) => t + 1), 1000);
@@ -1101,32 +1127,6 @@ export default function Attack() {
     };
     run();
   }, [pendingResend]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const fetchBullets = async () => {
-    try {
-      const res = await api.get('/auth/me');
-      setUserBullets(res.data?.bullets ?? 0);
-      setUserMolotovs(res.data?.molotovs ?? 0);
-    } catch (e) {}
-  };
-
-  const fetchInflation = async () => {
-    try {
-      const res = await api.get('/attack/inflation');
-      setInflationPct(Number(res.data?.inflation_pct ?? 0));
-    } catch (e) {}
-  };
-
-  const refreshAttacks = async () => {
-    try {
-      const response = await api.get('/attack/list');
-      const list = response.data.attacks || [];
-      setAttacks(list);
-      return list;
-    } catch (error) {
-      return attacks;
-    }
-  };
 
   const toggleSelected = (attackId) => {
     setSelectedAttackIds((prev) => (

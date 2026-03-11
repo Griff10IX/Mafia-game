@@ -13,8 +13,15 @@ const UO_STYLES = `
   .uo-card { transition: all 0.3s ease; }
   .uo-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .uo-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
-  .uo-hitlist { box-shadow: 0 0 12px rgba(220, 38, 38, 0.45), inset 0 0 0 1px rgba(220, 38, 38, 0.25); }
-  .uo-hitlist:hover { box-shadow: 0 0 16px rgba(220, 38, 38, 0.5), 0 4px 16px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(220, 38, 38, 0.3); }
+  @keyframes uo-hitlist-pulse {
+    0%, 100% { box-shadow: 0 0 12px rgba(220, 38, 38, 0.4), inset 0 0 0 1px rgba(220, 38, 38, 0.25); }
+    50% { box-shadow: 0 0 20px rgba(220, 38, 38, 0.7), inset 0 0 0 1px rgba(220, 38, 38, 0.45); }
+  }
+  .uo-hitlist {
+    animation: uo-hitlist-pulse 2s ease-in-out infinite;
+    box-shadow: 0 0 12px rgba(220, 38, 38, 0.4), inset 0 0 0 1px rgba(220, 38, 38, 0.25);
+  }
+  .uo-hitlist:hover { box-shadow: 0 0 20px rgba(220, 38, 38, 0.65), 0 4px 16px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(220, 38, 38, 0.4); }
   .uo-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
