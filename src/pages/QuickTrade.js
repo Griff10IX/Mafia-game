@@ -372,17 +372,20 @@ export default function QuickTrade() {
                               <div>Per: <span className="text-mutedForeground">${formatCurrency((offer.money || 0) / (offer.points || 1))}</span> {offer.count > 1 && <span className="text-primary font-bold">x{offer.count}</span>}</div>
                             </div>
                             <div className="flex flex-col gap-1 shrink-0 items-stretch">
-                              {offer.ids.map((id, idIdx) => (
-                                isMyOffer ? (
-                                  <button key={idIdx} onClick={() => handleCancelOffer(id, 'sell')} className="px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 whitespace-nowrap">
-                                    Cancel
-                                  </button>
-                                ) : (
+                              {isMyOffer ? (
+                                <button
+                                  onClick={() => offer.ids.length === 1 ? handleCancelOffer(offer.ids[0], 'sell') : handleCancelAllOffers('sell', offer.ids)}
+                                  className="px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 whitespace-nowrap"
+                                >
+                                  Cancel{offer.ids.length > 1 ? ` (${offer.ids.length})` : ''}
+                                </button>
+                              ) : (
+                                offer.ids.map((id, idIdx) => (
                                   <button key={idIdx} onClick={() => handleAcceptOffer(id, 'sell')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap">
                                     Accept
                                   </button>
-                                )
-                              ))}
+                                ))
+                              )}
                             </div>
                           </div>
                         ))}
@@ -462,17 +465,20 @@ export default function QuickTrade() {
                               <div>Per: <span className="text-mutedForeground">${formatCurrency((offer.cost || 0) / (offer.points || 1))}</span> {offer.count > 1 && <span className="text-primary font-bold">x{offer.count}</span>}</div>
                             </div>
                             <div className="flex flex-col gap-1 shrink-0 items-stretch">
-                              {offer.ids.map((id, idIdx) => (
-                                isMyOffer ? (
-                                  <button key={idIdx} onClick={() => handleCancelOffer(id, 'buy')} className="px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 whitespace-nowrap">
-                                    Cancel
-                                  </button>
-                                ) : (
+                              {isMyOffer ? (
+                                <button
+                                  onClick={() => offer.ids.length === 1 ? handleCancelOffer(offer.ids[0], 'buy') : handleCancelAllOffers('buy', offer.ids)}
+                                  className="px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 whitespace-nowrap"
+                                >
+                                  Cancel{offer.ids.length > 1 ? ` (${offer.ids.length})` : ''}
+                                </button>
+                              ) : (
+                                offer.ids.map((id, idIdx) => (
                                   <button key={idIdx} onClick={() => handleAcceptOffer(id, 'buy')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap">
                                     Accept
                                   </button>
-                                )
-                              ))}
+                                ))
+                              )}
                             </div>
                           </div>
                         ))}

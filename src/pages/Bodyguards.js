@@ -164,6 +164,28 @@ export default function Bodyguards() {
     }
   };
 
+  /** Lightweight refetch after hire: update bodyguards + inflation only, no loading spinner. */
+  const refetchAfterHire = async () => {
+    try {
+      const [bodyguardsRes, inflationRes] = await Promise.all([
+        api.get('/bodyguards'),
+        api.get('/bodyguards/inflation').catch(() => ({ data: { next_hire_inflation_pct: nextHireInflationPct } })),
+      ]);
+      if (bodyguardsRes.status >= 400) return;
+      const bgData = bodyguardsRes.data;
+      setBodyguards(Array.isArray(bgData) ? bgData : (bgData?.bodyguards ?? []));
+      setBodyguardFor(bgData?.bodyguard_for ?? null);
+      setBodyguardProfit(bgData?.bodyguard_profit ?? null);
+      setBodyguardLastDropAt(bgData?.bodyguard_last_drop_at ?? null);
+      if (inflationRes?.data != null) {
+        setNextHireInflationPct(inflationRes.data.next_hire_inflation_pct ?? nextHireInflationPct);
+        if (inflationRes.data.inflation_window_ends_at != null) setInflationWindowEndsAt(inflationRes.data.inflation_window_ends_at);
+      }
+    } catch {
+      // ignore; optimistic update already applied
+    }
+  };
+
   const hireBodyguard = async (slot, isRobot) => {
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
@@ -177,7 +199,7 @@ export default function Bodyguards() {
         )
       );
       refreshUser().catch(() => {});
-      fetchData().catch(() => {});
+      refetchAfterHire();
     } catch (error) {
       const detail = (error.response?.data?.detail || 'Failed to hire bodyguard').toString();
       refreshUser().catch(() => {});
@@ -545,6 +567,15 @@ export default function Bodyguards() {
       {/* Stats row */}
       <div className="flex flex-wrap items-center justify-end gap-4 bg-fade-in" style={{ animationDelay: '0.05s' }}>
         <div className="flex items-center gap-3 text-xs font-heading">
+          {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
+            <button
+              onClick={() => hireBodyguard(nextEmptySlot, true)}
+              data-testid="hire-robot-next"
+              className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading shrink-0"
+            >
+              {`🤖 Hire robot (${getHireCost(nextEmptySlot)} pts${nextHireInflationPct > 0 ? ` +${nextHireInflationPct}%` : ''})`}
+            </button>
+          )}
           {(nextHireInflationPct > 0 || inflationCountdown) && (
             <div className="flex items-center gap-1.5 text-amber-400/90">
               {nextHireInflationPct > 0 && (
@@ -673,18 +704,6 @@ export default function Bodyguards() {
             <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Robots</h4>
             <div className="space-y-1">
               {robotBodyguards.map((bg) => renderBodyguardCard(bg))}
-              {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
-                <div className="bg-row rounded-lg bg-zinc-800/30 border border-transparent hover:border-primary/20 px-3 py-2 flex items-center justify-between gap-3">
-                  <span className="text-[10px] text-mutedForeground">Empty slot · hire a robot</span>
-                  <button
-                    onClick={() => hireBodyguard(nextEmptySlot, true)}
-                    data-testid="hire-robot-next"
-                    className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 font-heading"
-                  >
-                    {`🤖 Hire (${getHireCost(nextEmptySlot)} pts${nextHireInflationPct > 0 ? ` +${nextHireInflationPct}%` : ''})`}
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 

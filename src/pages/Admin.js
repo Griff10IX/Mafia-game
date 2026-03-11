@@ -290,6 +290,7 @@ export default function Admin() {
 
   // Cheat detection
   const [cheatSameIp, setCheatSameIp] = useState(null);
+  const [cheatSameDeviceIps, setCheatSameDeviceIps] = useState(null);
   const [cheatLoginEvents, setCheatLoginEvents] = useState(null);
   const [cheatDuplicates, setCheatDuplicates] = useState(null);
   const [cheatLoading, setCheatLoading] = useState(false);
@@ -1130,6 +1131,21 @@ export default function Admin() {
       const res = await api.get(url);
       setCheatDuplicates(res.data);
       toast.success('Duplicate suspects loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setCheatLoading(false);
+    }
+  };
+
+  const handleFetchSameDeviceDifferentIps = async () => {
+    setCheatLoading(true);
+    setCheatSameDeviceIps(null);
+    try {
+      const res = await api.get('/admin/cheat-detection/same-device-different-ips');
+      setCheatSameDeviceIps(res.data);
+      const n = res.data?.total_groups ?? 0;
+      toast.success(n ? `${n} group(s): same device, different IPs` : 'No same-device / different-IP groups found');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
@@ -3465,7 +3481,7 @@ export default function Admin() {
           icon={AlertTriangle}
           title="Cheat Detection"
           badge={
-            ((cheatSameIp?.total_groups ?? 0) > 0 || ((cheatDuplicates?.by_domain?.length ?? 0) + (cheatDuplicates?.by_similar_username?.length ?? 0)) > 0) && (
+            ((cheatSameIp?.total_groups ?? 0) > 0 || (cheatSameDeviceIps?.total_groups ?? 0) > 0 || ((cheatDuplicates?.by_domain?.length ?? 0) + (cheatDuplicates?.by_similar_username?.length ?? 0)) > 0) && (
               <span className="text-[10px] font-heading text-amber-400">Review below</span>
             )
           }
@@ -3503,7 +3519,37 @@ export default function Admin() {
             </div>
 
             <div>
-              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Suspicious login attempts</div>
+              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Same device, different IPs</div>
+              <p className="text-xs text-mutedForeground mb-2">Find users who share the same browser/device (User-Agent) but log in from different IPs. Possible multi-account or same device on VPN / different networks.</p>
+              <BtnPrimary onClick={handleFetchSameDeviceDifferentIps} disabled={cheatLoading}>Load same-device report</BtnPrimary>
+              {cheatSameDeviceIps && (
+                <div className="mt-3 max-h-72 overflow-y-auto space-y-2">
+                  {cheatSameDeviceIps.total_groups === 0 ? (
+                    <p className="text-xs text-mutedForeground">No groups with same device and different IPs.</p>
+                  ) : (
+                    (cheatSameDeviceIps.groups || []).map((g, i) => (
+                      <div key={i} className="p-2 rounded bg-zinc-900/50 border border-amber-500/20">
+                        <div className="text-[10px] font-heading text-amber-400 mb-1">
+                          {g.account_count} account(s) · {g.distinct_ip_count} different IP(s)
+                        </div>
+                        <div className="text-[9px] font-mono text-mutedForeground mb-1 truncate" title={g.user_agent_full}>{g.user_agent}</div>
+                        <div className="space-y-0.5">
+                          {(g.users || []).map((a, j) => (
+                            <div key={j} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px]">
+                              <span className="text-foreground font-bold">{a.username}</span>
+                              <span className="text-mutedForeground">{a.email}</span>
+                              <span className="text-mutedForeground font-mono">IPs: {(a.ips || []).join(', ') || '—'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div>
               <p className="text-xs text-mutedForeground mb-2">
                 Failed logins (wrong password or unknown account) from an IP that already has at least one other alive account.
                 Useful for spotting users trying to access multiple accounts from the same IP.

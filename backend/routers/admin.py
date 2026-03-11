@@ -2415,6 +2415,61 @@ def register(router):
             "by_similar_username": name_groups[:50],
         }
 
+    @router.get("/admin/cheat-detection/same-device-different-ips")
+    async def admin_cheat_same_device_different_ips(current_user: dict = Depends(get_current_user)):
+        """
+        Find users who share the same browser/device (last_user_agent) but use different IPs.
+        Possible same device / multi-account with VPN or different networks.
+        Admin or moderator only.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        users = await db.users.find(
+            {"is_dead": {"$ne": True}, "last_user_agent": {"$exists": True, "$ne": None, "$ne": ""}},
+            {"_id": 0, "id": 1, "username": 1, "email": 1, "registration_ip": 1, "login_ips": 1, "last_login_ip": 1, "last_request_ip": 1, "last_user_agent": 1},
+        ).to_list(10000)
+        # Group by exact last_user_agent
+        ua_to_users = {}
+        for u in users:
+            ua = (u.get("last_user_agent") or "").strip()
+            if not ua:
+                continue
+            ips = set()
+            for key in ("registration_ip", "last_login_ip", "last_request_ip"):
+                v = (u.get(key) or "").strip()
+                if v:
+                    ips.add(v)
+            for lip in (u.get("login_ips") or []):
+                lip = (lip or "").strip()
+                if lip:
+                    ips.add(lip)
+            summary = {
+                "id": u["id"],
+                "username": u.get("username"),
+                "email": u.get("email"),
+                "ips": sorted(ips),
+            }
+            ua_to_users.setdefault(ua, []).append(summary)
+        # Only groups with 2+ users and at least 2 distinct IPs across the group
+        groups = []
+        for ua, accs in ua_to_users.items():
+            if len(accs) < 2:
+                continue
+            all_ips = set()
+            for a in accs:
+                all_ips.update(a["ips"])
+            if len(all_ips) < 2:
+                continue
+            groups.append({
+                "user_agent": ua[:120] + ("..." if len(ua) > 120 else ""),
+                "user_agent_full": ua,
+                "users": accs,
+                "account_count": len(accs),
+                "distinct_ip_count": len(all_ips),
+            })
+        groups.sort(key=lambda g: -g["account_count"])
+        return {"groups": groups[:80], "total_groups": len(groups)}
+
     @router.get("/admin/users/search")
     async def admin_search_users(
         q: str = Query(..., min_length=1, max_length=100),
