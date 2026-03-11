@@ -74,6 +74,11 @@ async def ensure_all_indexes(db):
         await db.user_properties.create_index("user_id")
         await db.user_properties.create_index([("user_id", 1), ("property_id", 1)])
 
+        # --- Illegal business (racket) ---
+        await db.illegal_businesses.create_index("user_id", unique=True)
+        await db.illegal_business_guards.create_index([("business_id", 1), ("slot_number", 1)])
+        await db.illegal_business_guards.create_index("user_id")
+
         # --- Airport / bullet factory ---
         await db.airport_ownership.create_index("owner_id")
         await db.airport_ownership.create_index([("state", 1), ("slot", 1)], unique=True)

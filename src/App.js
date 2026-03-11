@@ -77,6 +77,7 @@ const QuickTrade = lazy(() => import("./pages/QuickTrade"));
 const LockedPage = lazy(() => import("./pages/LockedPage"));
 const IPRules = lazy(() => import("./pages/IPRules"));
 const HelpDesk = lazy(() => import("./pages/HelpDesk"));
+const IllegalBusiness = lazy(() => import("./pages/IllegalBusiness"));
 
 const PageLoader = () => (
   <div className="min-h-[200px] flex items-center justify-center text-primary text-sm font-heading">Loading...</div>
@@ -816,6 +817,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <BoozeRun />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/racket"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <IllegalBusiness />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

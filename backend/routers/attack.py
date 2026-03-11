@@ -1193,6 +1193,29 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     {"owner_id": victim_id},
                     {"$set": {"owner_id": killer_id}},
                 )
+        # Illegal business: victim loses it; killer gets pending reward (cash or income_boost via claim endpoint)
+        try:
+            victim_biz = await db.illegal_businesses.find_one({"user_id": victim_id}, {"_id": 0, "id": 1, "total_spent": 1, "level": 1, "security_level": 1, "security_upgrades": 1})
+            if victim_biz:
+                biz_id = victim_biz["id"]
+                await db.illegal_business_guards.delete_many({"business_id": biz_id})
+                await db.illegal_businesses.delete_one({"id": biz_id})
+                await send_notification(victim_id, "Illegal business", "You lost your illegal business.", "attack", category="attacks")
+                total_spent = int(victim_biz.get("total_spent") or 0)
+                from routers.illegal_business import _is_moderately_upgraded
+                moderately_upgraded = _is_moderately_upgraded(victim_biz)
+                killer_doc = await db.users.find_one({"id": killer_id}, {"_id": 0, "pending_illegal_business_rewards": 1})
+                pending = list((killer_doc or {}).get("pending_illegal_business_rewards") or [])
+                pending.append({
+                    "victim_id": victim_id,
+                    "victim_username": target_name,
+                    "total_spent": total_spent,
+                    "moderately_upgraded": moderately_upgraded,
+                    "at": now_iso,
+                })
+                await db.users.update_one({"id": killer_id}, {"$set": {"pending_illegal_business_rewards": pending}})
+        except Exception as e:
+            logging.exception("Illegal business on kill: %s", e)
         victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1, "hire_cost": 1}).to_list(10)
         if not victim_as_bodyguard and target.get("is_bodyguard") and target.get("bodyguard_owner_id"):
             victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"], "hire_cost": 0}]
