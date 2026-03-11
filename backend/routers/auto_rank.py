@@ -530,6 +530,8 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         return
+    if user.get("is_dead"):
+        return
     chat_id = (telegram_chat_id or "").strip()
     token = (bot_token or "").strip() or (user.get("telegram_bot_token") or "").strip()
     bust_every_5 = user.get("auto_rank_bust_every_5_sec", False)
@@ -773,7 +775,7 @@ async def run_booze_arrivals():
     now_iso = now.isoformat()
 
     stuck_jailed = db.users.find(
-        {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_booze": True, "in_jail": True, "travel_arrives_at": {"$lte": now_iso}, "traveling_to": {"$exists": True, "$ne": None}},
+        {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_booze": True, "in_jail": True, "travel_arrives_at": {"$lte": now_iso}, "traveling_to": {"$exists": True, "$ne": None}, "is_dead": {"$ne": True}},
         {"_id": 0, "id": 1, "traveling_to": 1},
     )
     async for u in stuck_jailed:
@@ -785,7 +787,7 @@ async def run_booze_arrivals():
                 logger.warning("Auto rank booze cleanup: arrival update for jailed %s failed: %s", u.get("id"), e)
 
     cursor = db.users.find(
-        {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_booze": True, "travel_arrives_at": {"$lte": now_iso}, "in_jail": {"$ne": True}},
+        {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_booze": True, "travel_arrives_at": {"$lte": now_iso}, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}},
         {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
     )
     users = await cursor.to_list(200)
@@ -823,6 +825,7 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
             "auto_rank_purchased": True,
             "auto_rank_enabled": True,
             "in_jail": {"$ne": True},
+            "is_dead": {"$ne": True},
             "$or": [
                 {"auto_rank_next_run_at": {"$exists": False}},
                 {"auto_rank_next_run_at": None},
@@ -878,7 +881,7 @@ async def run_bust_5sec_once():
         return
     try:
         cursor = db.users.find(
-            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True, "in_jail": {"$ne": True}},
+            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}},
             {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
         )
         users = await cursor.to_list(500)
@@ -936,7 +939,7 @@ async def run_auto_rank_oc_once():
     now = datetime.now(timezone.utc)
     try:
         cursor = db.users.find(
-            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_oc": True, "in_jail": {"$ne": True}},
+            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_oc": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}},
             {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_oc_retry_at": 1},
         )
         users = await cursor.to_list(500)

@@ -968,17 +968,20 @@ export default function Attack() {
         setUserMolotovs(meRes.data?.molotovs ?? 0);
         setEvent(eventsRes.data?.event ?? null);
         setEventsEnabled(!!eventsRes.data?.events_enabled);
-        // If user pressed F5 after submitting search or kill, resend that request
-        try {
-          const raw = sessionStorage.getItem('attack-last-submit');
-          if (raw) {
-            sessionStorage.removeItem('attack-last-submit');
-            const data = JSON.parse(raw);
-            if (data && (data.type === 'search' || data.type === 'kill')) {
-              setPendingResend(data);
+        // Only resend when page was loaded via F5 (reload), not when navigating back to Attack via app link
+        const navEntry = typeof performance !== 'undefined' && performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+        const isReload = navEntry && navEntry.type === 'reload';
+        if (isReload) {
+          try {
+            const raw = sessionStorage.getItem('attack-last-submit');
+            if (raw) {
+              const data = JSON.parse(raw);
+              if (data && (data.type === 'search' || data.type === 'kill')) {
+                setPendingResend(data);
+              }
             }
-          }
-        } catch (_) {}
+          } catch (_) {}
+        }
       } catch (_) {}
     };
     load();
