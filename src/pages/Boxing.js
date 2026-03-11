@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import api from "../utils/api";
 
@@ -751,7 +751,7 @@ export default function Boxing3D() {
     return()=>{cancelAnimationFrame(raf);window.removeEventListener("resize",onResize);renderer.dispose();};
   },[]);
 
-  const startFight=useCallback(()=>{
+  const startFight = () => {
     // Build sim stats from your effective profile (if available) and a generic or NPC opponent.
     const baseA = FIGHTERS[0];
     const baseB = FIGHTERS[1];
@@ -793,7 +793,7 @@ export default function Boxing3D() {
     if(r.bB){r.bB.group.position.set(1.0,0.08,0);r.bB.group.rotation.set(0,Math.PI,0);}
     setHpA(100);setHpB(100);setStamA(100);setStamB(100);setRound(1);
     setGameState("fighting");setWinText("");setActionText("");
-  },[]);
+  };
 
   const gold="#c9a84c",crimson="#8b1a1a",bg="#05070b";
 
@@ -807,114 +807,11 @@ export default function Boxing3D() {
     <div style={{minHeight:"100vh",background:bg,fontFamily:"'Cinzel',serif",color:"#e8dcc8",display:"flex",flexDirection:"column"}}>
 
       {/* Header */}
-      <div style={{borderBottom:"1px solid rgba(201,168,76,0.15)",padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(0,0,0,0.55)"}}>
+      <div style={{borderBottom:"1px solid rgba(201,168,76,0.25)",padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(0,0,0,0.7)"}}>
         <div>
-          <div style={{fontSize:16,letterSpacing:"0.2em",color:gold}}>THE UNDERGROUND RING</div>
-          <div style={{fontSize:9,color:"#3a2a10",letterSpacing:"0.12em"}}>1920s MAFIA BOXING • SIMULATION</div>
+          <div style={{fontSize:16,letterSpacing:"0.2em",color:gold}}>BOXING GYM & LEAGUE</div>
+          <div style={{fontSize:9,color:"#6a5a3a",letterSpacing:"0.12em"}}>TRAIN • UPGRADE • FIGHT • BET</div>
         </div>
-        <div style={{display:"flex",gap:6,alignItems:"center"}}>
-          <span style={{padding:"3px 8px",border:"1px solid rgba(201,168,76,0.2)",borderRadius:2,fontSize:9,color:gold}}>12 RDS</span>
-          {gameState==="fighting"&&<span style={{padding:"3px 8px",border:"1px solid rgba(180,40,40,0.5)",borderRadius:2,fontSize:9,color:"#dd4444",letterSpacing:"0.1em"}}>● LIVE</span>}
-        </div>
-      </div>
-
-      {/* HUD */}
-      <div style={{display:"flex",background:"rgba(0,0,0,0.65)",borderBottom:"1px solid rgba(201,168,76,0.08)"}}>
-        {/* A */}
-        <div style={{flex:1,padding:"9px 14px",borderRight:"1px solid rgba(201,168,76,0.07)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:7}}>
-            <div style={{width:8,height:8,borderRadius:"50%",background:FIGHTERS[0].colorCSS,boxShadow:`0 0 5px ${FIGHTERS[0].colorCSS}`}}/>
-            <span style={{fontSize:10,color:"#ffe0a0",letterSpacing:"0.05em"}}>{FIGHTERS[0].name}</span>
-          </div>
-          <div style={{marginBottom:5}}>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#5a4a28",marginBottom:2}}><span>HP</span><span style={{color:hpA<30?crimson:gold}}>{hpA}</span></div>
-            <Bar val={hpA} color={hpA<30?crimson:hpA<55?"#cc7722":gold}/>
-          </div>
-          <div style={{fontSize:8,color:"#5a4a28",marginBottom:2,display:"flex",justifyContent:"space-between"}}><span>STAM</span><span style={{color:"#4a9a6a"}}>{stamA}</span></div>
-          <Bar val={stamA} color="#3a7a5a"/>
-        </div>
-        {/* Round */}
-        <div style={{padding:"9px 14px",textAlign:"center",minWidth:54}}>
-          <div style={{fontSize:20,color:gold,fontWeight:700,lineHeight:1}}>{round}</div>
-          <div style={{fontSize:8,color:"#3a2a10",letterSpacing:"0.08em"}}>ROUND</div>
-        </div>
-        {/* B */}
-        <div style={{flex:1,padding:"9px 14px",borderLeft:"1px solid rgba(201,168,76,0.07)",textAlign:"right"}}>
-          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:7,justifyContent:"flex-end"}}>
-            <span style={{fontSize:10,color:"#ffe0a0",letterSpacing:"0.05em"}}>{FIGHTERS[1].name}</span>
-            <div style={{width:8,height:8,borderRadius:"50%",background:FIGHTERS[1].colorCSS,boxShadow:`0 0 5px ${FIGHTERS[1].colorCSS}`}}/>
-          </div>
-          <div style={{marginBottom:5}}>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#5a4a28",marginBottom:2}}><span style={{marginLeft:"auto"}}>{hpB} HP</span></div>
-            <Bar val={hpB} flip color={hpB<30?crimson:hpB<55?"#cc7722":FIGHTERS[1].colorCSS}/>
-          </div>
-          <div style={{fontSize:8,color:"#5a4a28",marginBottom:2,display:"flex",justifyContent:"flex-end"}}><span style={{color:"#4a9a6a"}}>{stamB} STAM</span></div>
-          <Bar val={stamB} flip color="#3a7a5a"/>
-        </div>
-      </div>
-
-      {/* Canvas */}
-      <div style={{position:"relative",flex:1,minHeight:420}}>
-        <canvas ref={canvasRef} style={{width:"100%",height:"100%",minHeight:420,display:"block"}}/>
-
-        {/* Action flash */}
-        {actionText&&(
-          <div style={{position:"absolute",top:"15%",left:"50%",transform:"translateX(-50%)",fontSize:"clamp(13px,2.8vw,20px)",color:actionText.includes("DOWN")?"#ff6666":"#ffe066",fontWeight:700,letterSpacing:"0.1em",textAlign:"center",whiteSpace:"nowrap",textShadow:"0 0 28px rgba(0,0,0,1),0 2px 8px rgba(0,0,0,0.9)",pointerEvents:"none"}}>
-            {actionText}
-          </div>
-        )}
-
-        {/* Win overlay */}
-        {gameState==="done"&&winText&&(
-          <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(4,2,1,0.92)",border:"1px solid rgba(201,168,76,0.4)",borderRadius:4,padding:"18px 32px",textAlign:"center",pointerEvents:"none"}}>
-            <div style={{fontSize:9,color:"#5a4a28",letterSpacing:"0.2em",marginBottom:5}}>FIGHT OVER</div>
-            <div style={{fontSize:"clamp(14px,3vw,22px)",color:"#ffe066",letterSpacing:"0.1em"}}>{winText}</div>
-          </div>
-        )}
-
-        {/* Idle */}
-        {gameState==="idle"&&(
-          <div style={{position:"absolute",bottom:"22%",left:"50%",transform:"translateX(-50%)",fontSize:11,color:gold,letterSpacing:"0.18em",opacity:0.55,pointerEvents:"none"}}>PRESS START TO FIGHT</div>
-        )}
-
-        {/* Vignette */}
-        <div style={{position:"absolute",inset:0,pointerEvents:"none",background:"radial-gradient(ellipse 75% 65% at 50% 42%,transparent 22%,rgba(0,0,0,0.45) 100%)"}}/>
-      </div>
-
-      {/* Control */}
-      <div style={{padding:"12px 20px",borderTop:"1px solid rgba(201,168,76,0.1)",display:"flex",flexDirection:"column",alignItems:"center",gap:10,background:"rgba(0,0,0,0.65)"}}>
-        <button onClick={startFight} style={{background:"rgba(201,168,76,0.14)",border:"1px solid rgba(201,168,76,0.45)",borderRadius:3,color:"#ffe066",fontFamily:"'Cinzel',serif",fontSize:12,letterSpacing:"0.15em",padding:"10px 32px",cursor:"pointer",textTransform:"uppercase",fontWeight:700}}>
-          🥊 {gameState==="idle"?"Start Fight":"Rematch"}
-        </button>
-        {npcs.length > 0 && (
-          <div style={{display:"flex",flexWrap:"wrap",justifyContent:"center",gap:6,alignItems:"center"}}>
-            <span style={{fontSize:10,color:"#8a7a4a",letterSpacing:"0.08em"}}>Fight NPC:</span>
-            {npcs.map((npc) => (
-              <button
-                key={npc.id}
-                onClick={() => startNpcFight(npc)}
-                disabled={npcFightState && !npcFightState.result}
-                style={{padding:"6px 12px",fontSize:10,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,background:"rgba(201,168,76,0.08)",color:"#d4b858",cursor:npcFightState&&!npcFightState.result?"not-allowed":"pointer",opacity:npcFightState&&!npcFightState.result?0.6:1}}
-              >
-                {npc.name} <span style={{color:"#6a5a30"}}>({npc.rating})</span>
-              </button>
-            ))}
-          </div>
-        )}
-        {npcFightState?.matchId && !npcFightState.result && (
-          <div style={{fontSize:10,color:"#8a9a6a"}}>Fight vs {npcFightState.npcName} in progress…</div>
-        )}
-        {npcFightState?.result && npcFightState.result !== "error" && (
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:11,color:npcFightState.result==="win"?"#6a9a4a":npcFightState.result==="loss"?"#aa4444":"#8a7a4a"}}>
-              {npcFightState.result==="win"?"You won":npcFightState.result==="loss"?"You lost":"Draw"} vs {npcFightState.npcName}{npcFightState.reason?` (${npcFightState.reason})`:""}
-            </span>
-            <button onClick={clearNpcResult} style={{padding:"2px 8px",fontSize:9,border:"1px solid rgba(201,168,76,0.3)",borderRadius:2,background:"rgba(0,0,0,0.4)",color:"#a09050",cursor:"pointer"}}>Dismiss</button>
-          </div>
-        )}
-        {npcFightState?.result === "error" && (
-          <div style={{fontSize:10,color:"#aa4444"}}>{npcFightState.message} <button onClick={clearNpcResult} style={{marginLeft:6,padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.3)",borderRadius:2,background:"rgba(0,0,0,0.4)",color:"#a09050",cursor:"pointer"}}>Dismiss</button></div>
-        )}
       </div>
 
       {/* Training / Gym / Coach / Gear */}
