@@ -734,8 +734,8 @@ export default function Racing() {
                   ))}
                 </tbody>
               </table>
-            </div>
-          )}
+            )}
+          </div>
         )}
 
         {tab === "comps" && (
