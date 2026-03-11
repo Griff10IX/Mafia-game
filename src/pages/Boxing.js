@@ -752,7 +752,39 @@ export default function Boxing3D() {
   },[]);
 
   const startFight=useCallback(()=>{
-    const result=simulateFight(FIGHTERS[0],FIGHTERS[1]);
+    // Build sim stats from your effective profile (if available) and a generic or NPC opponent.
+    const baseA = FIGHTERS[0];
+    const baseB = FIGHTERS[1];
+
+    const scaleStat = (v, base) => {
+      const n = Number(v || 1);
+      if (!Number.isFinite(n)) return base;
+      // Map 1..20-ish -> 50..95 range
+      return Math.max(45, Math.min(95, 45 + n * 3));
+    };
+
+    const youStats = effective || profile || null;
+    const npc = (npcs && npcs[0]) || null;
+
+    const simA = youStats ? {
+      name: (me?.username ? `${me.username.toUpperCase()}` : baseA.name),
+      power: scaleStat(youStats.power, baseA.power),
+      speed: scaleStat(youStats.speed, baseA.speed),
+      stamina: scaleStat(youStats.stamina, baseA.stamina),
+      defense: scaleStat(youStats.defense, baseA.defense),
+      chin: 65, // generic durability
+    } : baseA;
+
+    const simB = npc ? {
+      name: npc.name,
+      power: scaleStat(npc.power, baseB.power),
+      speed: scaleStat(npc.speed, baseB.speed),
+      stamina: scaleStat(npc.stamina, baseB.stamina),
+      defense: scaleStat(npc.defense, baseB.defense),
+      chin: scaleStat(npc.accuracy ?? 5, 60),
+    } : baseB;
+
+    const result=simulateFight(simA, simB);
     const r=refs.current;
     r.fight=result; r.phase="fighting"; r.evIdx=0; r.evTimer=0.6;
     r.pA=null; r.pB=null; r.hA=null; r.hB=null;
