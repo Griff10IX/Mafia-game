@@ -722,7 +722,7 @@ export default function Layout({ children }) {
     { path: '/casino', icon: Dice5, label: 'Casino' },
     { path: '/crack-safe', icon: Lock, label: 'Crack the Safe' },
     { path: '/daily-rewards', icon: Gift, label: 'Daily Rewards' },
-    { path: '/gauntlet', icon: Zap, label: 'The Gauntlet' },
+    { path: '/gauntlet', icon: Zap, label: 'Flappy Gangster' },
     { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { path: '/store', icon: ShoppingBag, label: 'Store' },
     { path: '/quick-trade', icon: ArrowLeftRight, label: 'Quick Trade' },

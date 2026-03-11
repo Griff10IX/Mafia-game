@@ -1,4 +1,4 @@
-# The Gauntlet (Flappy-style) — cash rewards by score.
+# Flappy Gangster (Flappy-style) — cash rewards by score.
 from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException
@@ -54,7 +54,7 @@ def register(router):
             upsert=True,
         )
         try:
-            await log_activity(current_user["id"], f"Claimed ${cash:,} from The Gauntlet (score {score}).")
+            await log_activity(current_user["id"], f"Claimed ${cash:,} from Flappy Gangster (score {score}).")
         except Exception:
             pass
 

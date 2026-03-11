@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import api, { getApiErrorMessage, refreshUser } from "../utils/api";
+import styles from "../styles/noir.module.css";
 
 const GRAVITY = 0.42;
 const JUMP_FORCE = -7.2;
@@ -40,11 +41,11 @@ function getNextTier(score) {
 function FedoraHat({ x, y, rotation }) {
   return (
     <g transform={`translate(${x}, ${y}) rotate(${rotation}, 18, 18)`}>
-      <ellipse cx="18" cy="22" rx="14" ry="10" fill="#c9a84c" />
-      <ellipse cx="18" cy="14" rx="18" ry="5" fill="#1a1008" />
-      <rect x="8" y="4" width="20" height="12" rx="4" fill="#2a1a0a" />
-      <rect x="8" y="13" width="20" height="3" fill="#c9a84c" />
-      <circle cx="25" cy="20" r="3" fill="#1a1008" />
+      <ellipse cx="18" cy="22" rx="14" ry="10" fill="var(--noir-primary)" />
+      <ellipse cx="18" cy="14" rx="18" ry="5" fill="var(--noir-bg)" />
+      <rect x="8" y="4" width="20" height="12" rx="4" fill="var(--noir-panel)" />
+      <rect x="8" y="13" width="20" height="3" fill="var(--noir-primary)" />
+      <circle cx="25" cy="20" r="3" fill="var(--noir-bg)" />
       <circle cx="26" cy="19" r="1" fill="#fff" />
       <rect x="30" y="22" width="8" height="2" rx="1" fill="#e8e0d0" />
       <circle cx="38" cy="23" r="2" fill="#ff6b35" opacity="0.9" />
@@ -57,15 +58,15 @@ function Pipe({ x, topHeight, gap }) {
   const bottomHeight = VIEW_H - bottomY;
   return (
     <g>
-      <rect x={x} y={0} width={PIPE_WIDTH} height={topHeight} fill="#1a1008" />
+      <rect x={x} y={0} width={PIPE_WIDTH} height={topHeight} fill="var(--noir-bg)" />
       <rect x={x} y={0} width={PIPE_WIDTH} height={topHeight} fill="url(#brickPattern)" opacity="0.4" />
-      <rect x={x - 4} y={topHeight - 24} width={PIPE_WIDTH + 8} height={24} rx="3" fill="#2a1a0a" />
+      <rect x={x - 4} y={topHeight - 24} width={PIPE_WIDTH + 8} height={24} rx="3" fill="var(--noir-panel)" />
       <rect x={x - 4} y={topHeight - 24} width={PIPE_WIDTH + 8} height={24} rx="3" fill="url(#brickPattern)" opacity="0.3" />
       <rect x={x} y={0} width="3" height={topHeight} fill="rgba(255,255,255,0.05)" />
 
-      <rect x={x} y={bottomY} width={PIPE_WIDTH} height={bottomHeight} fill="#1a1008" />
+      <rect x={x} y={bottomY} width={PIPE_WIDTH} height={bottomHeight} fill="var(--noir-bg)" />
       <rect x={x} y={bottomY} width={PIPE_WIDTH} height={bottomHeight} fill="url(#brickPattern)" opacity="0.4" />
-      <rect x={x - 4} y={bottomY} width={PIPE_WIDTH + 8} height={24} rx="3" fill="#2a1a0a" />
+      <rect x={x - 4} y={bottomY} width={PIPE_WIDTH + 8} height={24} rx="3" fill="var(--noir-panel)" />
       <rect x={x - 4} y={bottomY} width={PIPE_WIDTH + 8} height={24} rx="3" fill="url(#brickPattern)" opacity="0.3" />
       <rect x={x} y={bottomY} width="3" height={bottomHeight} fill="rgba(255,255,255,0.05)" />
     </g>
@@ -263,33 +264,35 @@ export default function Gauntlet() {
 
   return (
     <div
+      className={styles.panel}
       style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "flex-start",
         width: "100%",
-        background: "#0d0a05",
-        fontFamily: "'Cinzel', serif",
+        background: "var(--noir-surface)",
+        color: "var(--noir-foreground)",
+        fontFamily: "var(--font-heading, 'Cinzel', serif)",
         padding: isTouch ? "10px 10px 14px" : "14px 14px 16px",
         borderRadius: "8px",
-        border: "1px solid rgba(201,168,76,0.15)",
+        border: "1px solid var(--noir-border-mid)",
       }}
     >
       <div style={{ textAlign: "center", marginBottom: "10px" }}>
         <h1
           style={{
             fontSize: "clamp(18px, 4.5vw, 28px)",
-            color: "#c9a84c",
+            color: "var(--noir-primary)",
             letterSpacing: "0.15em",
             textTransform: "uppercase",
             margin: 0,
-            textShadow: "0 0 20px rgba(201,168,76,0.5)",
+            textShadow: "0 0 20px rgba(var(--noir-primary-rgb),0.35)",
           }}
         >
-          The Gauntlet
+          Flappy Gangster
         </h1>
-        <p style={{ color: "#6b5a3a", fontSize: "11px", letterSpacing: "0.1em", margin: "2px 0 0" }}>
+        <p style={{ color: "var(--noir-muted)", fontSize: "11px", letterSpacing: "0.1em", margin: "2px 0 0" }}>
           FLY THE CORRIDOR — EARN YOUR KEEP
         </p>
       </div>
@@ -300,21 +303,21 @@ export default function Gauntlet() {
           gap: "18px",
           marginBottom: "10px",
           padding: "8px 16px",
-          background: "rgba(201,168,76,0.06)",
-          border: "1px solid rgba(201,168,76,0.2)",
+          background: "rgba(var(--noir-primary-rgb),0.06)",
+          border: "1px solid var(--noir-border-light)",
           borderRadius: "6px",
           width: "min(420px, 100%)",
           justifyContent: "space-between",
         }}
       >
         <div style={{ textAlign: "center", flex: 1 }}>
-          <div style={{ color: "#6b5a3a", fontSize: "9px", letterSpacing: "0.1em" }}>BANK</div>
-          <div style={{ color: "#c9a84c", fontSize: "16px", fontWeight: "700" }}>${Number(money || 0).toLocaleString()}</div>
+          <div style={{ color: "var(--noir-muted)", fontSize: "9px", letterSpacing: "0.1em" }}>BANK</div>
+          <div style={{ color: "var(--noir-primary)", fontSize: "16px", fontWeight: "700" }}>${Number(money || 0).toLocaleString()}</div>
         </div>
-        <div style={{ width: "1px", background: "rgba(201,168,76,0.2)" }} />
+        <div style={{ width: "1px", background: "var(--noir-border-light)" }} />
         <div style={{ textAlign: "center", flex: 1 }}>
-          <div style={{ color: "#6b5a3a", fontSize: "9px", letterSpacing: "0.1em" }}>BEST</div>
-          <div style={{ color: "#8a7040", fontSize: "16px" }}>{bestScore}</div>
+          <div style={{ color: "var(--noir-muted)", fontSize: "9px", letterSpacing: "0.1em" }}>BEST</div>
+          <div style={{ color: "var(--noir-foreground)", opacity: 0.85, fontSize: "16px" }}>{bestScore}</div>
         </div>
       </div>
 
@@ -324,8 +327,8 @@ export default function Gauntlet() {
           width: "min(420px, 100%)",
           borderRadius: "10px",
           overflow: "hidden",
-          border: "2px solid rgba(201,168,76,0.3)",
-          boxShadow: "0 0 40px rgba(201,168,76,0.1), inset 0 0 60px rgba(0,0,0,0.8)",
+          border: "2px solid var(--noir-border-mid)",
+          boxShadow: "0 0 40px rgba(var(--noir-primary-rgb),0.08), inset 0 0 60px rgba(0,0,0,0.8)",
           cursor: "pointer",
           touchAction: "manipulation",
           userSelect: "none",
@@ -343,11 +346,11 @@ export default function Gauntlet() {
               <line x1="0" y1="10" x2="30" y2="10" stroke="rgba(0,0,0,0.4)" strokeWidth="1" />
             </pattern>
             <pattern id="bgStripes" x={bgOffset} y="0" width="60" height="60" patternUnits="userSpaceOnUse">
-              <line x1="0" y1="0" x2="60" y2="60" stroke="rgba(201,168,76,0.03)" strokeWidth="1" />
+              <line x1="0" y1="0" x2="60" y2="60" stroke="rgba(var(--noir-primary-rgb),0.03)" strokeWidth="1" />
             </pattern>
             <radialGradient id="skyGrad" cx="50%" cy="30%" r="70%">
-              <stop offset="0%" stopColor="#1a1206" />
-              <stop offset="100%" stopColor="#080503" />
+              <stop offset="0%" stopColor="var(--noir-content)" />
+              <stop offset="100%" stopColor="var(--noir-bg)" />
             </radialGradient>
             <filter id="glow">
               <feGaussianBlur stdDeviation="3" result="coloredBlur" />
@@ -361,9 +364,9 @@ export default function Gauntlet() {
           <rect width={VIEW_W} height={VIEW_H} fill="url(#skyGrad)" />
           <rect width={VIEW_W} height={VIEW_H} fill="url(#bgStripes)" />
 
-          <circle cx={VIEW_W - 60} cy={70} r={35} fill="#1e1508" />
-          <circle cx={VIEW_W - 55} cy={65} r={33} fill="#c9a84c" opacity="0.12" />
-          <circle cx={VIEW_W - 55} cy={65} r={28} fill="#c9a84c" opacity="0.07" />
+          <circle cx={VIEW_W - 60} cy={70} r={35} fill="var(--noir-panel)" />
+          <circle cx={VIEW_W - 55} cy={65} r={33} fill="var(--noir-primary)" opacity="0.12" />
+          <circle cx={VIEW_W - 55} cy={65} r={28} fill="var(--noir-primary)" opacity="0.07" />
 
           {[0, 40, 80, 120, 160, 200, 240, 280, 320, 360].map((bx, i) => (
             <rect
@@ -376,8 +379,8 @@ export default function Gauntlet() {
             />
           ))}
 
-          <rect x={0} y={VIEW_H - 30} width={VIEW_W} height={30} fill="#1a1008" />
-          <rect x={0} y={VIEW_H - 30} width={VIEW_W} height={4} fill="#c9a84c" opacity="0.2" />
+          <rect x={0} y={VIEW_H - 30} width={VIEW_W} height={30} fill="var(--noir-bg)" />
+          <rect x={0} y={VIEW_H - 30} width={VIEW_W} height={4} fill="var(--noir-primary)" opacity="0.2" />
 
           {pipes.map((p, i) => (
             <Pipe key={i} x={p.x} topHeight={p.topHeight} gap={PIPE_GAP} />
@@ -391,11 +394,11 @@ export default function Gauntlet() {
 
           {gameState === "playing" && (
             <g filter={flashGold ? "url(#glow)" : ""}>
-              <text x={VIEW_W / 2} y={55} textAnchor="middle" fill={flashGold ? "#ffe066" : "#c9a84c"} fontSize="42" fontFamily="Cinzel, serif" fontWeight="700" opacity="0.9">
+              <text x={VIEW_W / 2} y={55} textAnchor="middle" fill={flashGold ? "var(--noir-primary-bright)" : "var(--noir-primary)"} fontSize="42" fontFamily="Cinzel, serif" fontWeight="700" opacity="0.9">
                 {score}
               </text>
               {reward.label !== "Nobody" && (
-                <text x={VIEW_W / 2} y={78} textAnchor="middle" fill="#6b5a3a" fontSize="11" fontFamily="Cinzel, serif" letterSpacing="2">
+                <text x={VIEW_W / 2} y={78} textAnchor="middle" fill="var(--noir-muted)" fontSize="11" fontFamily="Cinzel, serif" letterSpacing="2">
                   {reward.label.toUpperCase()}
                 </text>
               )}
@@ -408,24 +411,24 @@ export default function Gauntlet() {
               <FedoraHat x={70 - BIRD_SIZE / 2} y={VIEW_H / 2 - BIRD_SIZE / 2} rotation={0} />
 
               <text x={VIEW_W / 2} y={VIEW_H / 2 - 80} textAnchor="middle" fill="#c9a84c" fontSize="32" fontFamily="Cinzel, serif" fontWeight="700" letterSpacing="3">
-                THE GAUNTLET
+                FLAPPY GANGSTER
               </text>
-              <text x={VIEW_W / 2} y={VIEW_H / 2 - 50} textAnchor="middle" fill="#6b5a3a" fontSize="12" fontFamily="Cinzel, serif" letterSpacing="2">
+              <text x={VIEW_W / 2} y={VIEW_H / 2 - 50} textAnchor="middle" fill="var(--noir-muted)" fontSize="12" fontFamily="Cinzel, serif" letterSpacing="2">
                 NAVIGATE THE CORRIDORS OF POWER
               </text>
 
               {REWARD_TIERS.slice(0, 4).map((t, i) => (
                 <g key={i}>
-                  <text x={VIEW_W / 2 - 60} y={VIEW_H / 2 + 20 + i * 22} textAnchor="middle" fill="#8a7040" fontSize="11" fontFamily="Cinzel, serif">
+                  <text x={VIEW_W / 2 - 60} y={VIEW_H / 2 + 20 + i * 22} textAnchor="middle" fill="var(--noir-foreground)" opacity="0.75" fontSize="11" fontFamily="Cinzel, serif">
                     {t.label} ({t.score}+)
                   </text>
-                  <text x={VIEW_W / 2 + 70} y={VIEW_H / 2 + 20 + i * 22} textAnchor="middle" fill="#c9a84c" fontSize="11" fontFamily="Cinzel, serif">
+                  <text x={VIEW_W / 2 + 70} y={VIEW_H / 2 + 20 + i * 22} textAnchor="middle" fill="var(--noir-primary)" fontSize="11" fontFamily="Cinzel, serif">
                     +${t.cash.toLocaleString()}
                   </text>
                 </g>
               ))}
 
-              <text x={VIEW_W / 2} y={VIEW_H / 2 + 130} textAnchor="middle" fill="#c9a84c" fontSize="13" fontFamily="Cinzel, serif" letterSpacing="3" opacity={0.85}>
+              <text x={VIEW_W / 2} y={VIEW_H / 2 + 130} textAnchor="middle" fill="var(--noir-primary)" fontSize="13" fontFamily="Cinzel, serif" letterSpacing="3" opacity={0.85}>
                 {isTouch ? "TAP TO BEGIN" : "TAP / SPACE TO BEGIN"}
               </text>
             </g>
@@ -438,34 +441,34 @@ export default function Gauntlet() {
               <text x={VIEW_W / 2} y={VIEW_H / 2 - 130} textAnchor="middle" fill="#8b1a1a" fontSize="30" fontFamily="Cinzel, serif" fontWeight="700" letterSpacing="3">
                 YOU'RE DONE
               </text>
-              <text x={VIEW_W / 2} y={VIEW_H / 2 - 95} textAnchor="middle" fill="#6b5a3a" fontSize="11" fontFamily="Cinzel, serif" letterSpacing="1">
+              <text x={VIEW_W / 2} y={VIEW_H / 2 - 95} textAnchor="middle" fill="var(--noir-muted)" fontSize="11" fontFamily="Cinzel, serif" letterSpacing="1">
                 THE FAMILY SENDS ITS REGARDS
               </text>
 
-              <text x={VIEW_W / 2} y={VIEW_H / 2 - 50} textAnchor="middle" fill="#c9a84c" fontSize="60" fontFamily="Cinzel, serif" fontWeight="700">
+              <text x={VIEW_W / 2} y={VIEW_H / 2 - 50} textAnchor="middle" fill="var(--noir-primary)" fontSize="60" fontFamily="Cinzel, serif" fontWeight="700">
                 {score}
               </text>
-              <text x={VIEW_W / 2} y={VIEW_H / 2 - 20} textAnchor="middle" fill="#6b5a3a" fontSize="11" fontFamily="Cinzel, serif" letterSpacing="2">
+              <text x={VIEW_W / 2} y={VIEW_H / 2 - 20} textAnchor="middle" fill="var(--noir-muted)" fontSize="11" fontFamily="Cinzel, serif" letterSpacing="2">
                 GATES CLEARED
               </text>
 
-              <rect x={VIEW_W / 2 - 110} y={VIEW_H / 2} width={220} height={68} rx="6" fill="rgba(201,168,76,0.08)" stroke="rgba(201,168,76,0.25)" strokeWidth="1" />
+              <rect x={VIEW_W / 2 - 110} y={VIEW_H / 2} width={220} height={68} rx="6" fill="rgba(var(--noir-primary-rgb),0.08)" stroke="var(--noir-border-mid)" strokeWidth="1" />
 
-              <text x={VIEW_W / 2} y={VIEW_H / 2 + 22} textAnchor="middle" fill="#c9a84c" fontSize="13" fontFamily="Cinzel, serif" letterSpacing="2">
+              <text x={VIEW_W / 2} y={VIEW_H / 2 + 22} textAnchor="middle" fill="var(--noir-primary)" fontSize="13" fontFamily="Cinzel, serif" letterSpacing="2">
                 {reward.label !== "Nobody" ? reward.label.toUpperCase() : "NOBODY"}
               </text>
 
-              <text x={VIEW_W / 2} y={VIEW_H / 2 + 50} textAnchor="middle" fill={claimStatus.state === "error" ? "#f87171" : claimStatus.cash > 0 ? "#ffe066" : "#6b5a3a"} fontSize="15" fontFamily="Cinzel, serif" fontWeight="700">
+              <text x={VIEW_W / 2} y={VIEW_H / 2 + 50} textAnchor="middle" fill={claimStatus.state === "error" ? "#f87171" : claimStatus.cash > 0 ? "var(--noir-primary-bright)" : "var(--noir-muted)"} fontSize="15" fontFamily="Cinzel, serif" fontWeight="700">
                 {claimStatus.state === "claiming" ? "CLAIMING..." : (claimStatus.message || (reward.cash > 0 ? `+${reward.cash.toLocaleString()} EARNED` : "Score 1+ to earn cash"))}
               </text>
 
               {nextTier && (
-                <text x={VIEW_W / 2} y={VIEW_H / 2 + 88} textAnchor="middle" fill="#4a3a20" fontSize="10" fontFamily="Cinzel, serif" letterSpacing="1">
+                <text x={VIEW_W / 2} y={VIEW_H / 2 + 88} textAnchor="middle" fill="var(--noir-muted)" fontSize="10" fontFamily="Cinzel, serif" letterSpacing="1">
                   REACH {nextTier.score} FOR {nextTier.label.toUpperCase()} (+${nextTier.cash.toLocaleString()})
                 </text>
               )}
 
-              <text x={VIEW_W / 2} y={VIEW_H / 2 + 124} textAnchor="middle" fill="#c9a84c" fontSize="12" fontFamily="Cinzel, serif" letterSpacing="3" opacity="0.85">
+              <text x={VIEW_W / 2} y={VIEW_H / 2 + 124} textAnchor="middle" fill="var(--noir-primary)" fontSize="12" fontFamily="Cinzel, serif" letterSpacing="3" opacity="0.85">
                 TAP TO TRY AGAIN
               </text>
             </g>
@@ -491,23 +494,23 @@ export default function Gauntlet() {
               key={i}
               style={{
                 padding: "4px 10px",
-                border: `1px solid ${current ? "#c9a84c" : active ? "rgba(201,168,76,0.4)" : "rgba(201,168,76,0.1)"}`,
+                border: `1px solid ${current ? "var(--noir-primary)" : active ? "var(--noir-border-mid)" : "var(--noir-border-light)"}`,
                 borderRadius: "6px",
-                background: current ? "rgba(201,168,76,0.15)" : "transparent",
+                background: current ? "rgba(var(--noir-primary-rgb),0.12)" : "transparent",
                 textAlign: "center",
                 transition: "all 0.3s",
                 minWidth: 92,
               }}
             >
-              <div style={{ color: current ? "#c9a84c" : "#4a3a20", fontSize: "9px", letterSpacing: "0.1em" }}>{t.label.toUpperCase()}</div>
-              <div style={{ color: current ? "#ffe066" : "#4a3a20", fontSize: "11px", fontWeight: "700" }}>${t.cash.toLocaleString()}</div>
-              <div style={{ color: "#2a1a0a", fontSize: "8px" }}>{t.score}+ gates</div>
+              <div style={{ color: current ? "var(--noir-primary)" : "var(--noir-muted)", fontSize: "9px", letterSpacing: "0.1em" }}>{t.label.toUpperCase()}</div>
+              <div style={{ color: current ? "var(--noir-primary-bright)" : "var(--noir-foreground)", opacity: current ? 1 : 0.8, fontSize: "11px", fontWeight: "700" }}>${t.cash.toLocaleString()}</div>
+              <div style={{ color: "var(--noir-muted)", fontSize: "8px" }}>{t.score}+ gates</div>
             </div>
           );
         })}
       </div>
 
-      <p style={{ color: "#4a3a20", fontSize: "10px", marginTop: "10px", letterSpacing: "0.1em" }}>
+      <p style={{ color: "var(--noir-muted)", fontSize: "10px", marginTop: "10px", letterSpacing: "0.1em" }}>
         {isTouch ? "TAP TO FLY" : "SPACE / TAP TO FLY"}
       </p>
     </div>
