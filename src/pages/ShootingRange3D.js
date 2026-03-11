@@ -15,61 +15,111 @@ const TARGET_SPAWN_DELAY_MIN = 0.4;
 const TARGET_SPAWN_DELAY_MAX = 1.4;
 const RANGE_LENGTH = 28;
 const BACK_WALL_Z = -RANGE_LENGTH;
-const TARGET_RADIUS = 0.22;
+const TARGET_RADIUS = 0.28;
 
 function createTargetMesh() {
   const group = new THREE.Group();
-  const backGeo = new THREE.CylinderGeometry(TARGET_RADIUS * 1.1, TARGET_RADIUS * 1.1, 0.05, 24);
-  const backMat = new THREE.MeshLambertMaterial({ color: 0x4a4844 });
+  // Rim (short cylinder facing camera)
+  const backGeo = new THREE.CylinderGeometry(TARGET_RADIUS * 1.15, TARGET_RADIUS * 1.15, 0.04, 32);
+  const backMat = new THREE.MeshStandardMaterial({ color: 0x3a3834, metalness: 0.3, roughness: 0.8 });
   const back = new THREE.Mesh(backGeo, backMat);
+  back.rotation.x = Math.PI / 2; // axis along Z so disc faces camera
   group.add(back);
-  const faceGeo = new THREE.CircleGeometry(TARGET_RADIUS, 24);
+  // Red face (facing camera – no rotation, default normal is +Z)
+  const faceGeo = new THREE.CircleGeometry(TARGET_RADIUS, 32);
   const faceMat = new THREE.MeshBasicMaterial({ color: 0xe04040 });
   const face = new THREE.Mesh(faceGeo, faceMat);
-  face.rotation.x = -Math.PI / 2;
-  face.position.z = 0.03;
+  face.position.z = 0.025;
   group.add(face);
-  const innerGeo = new THREE.CircleGeometry(TARGET_RADIUS * 0.4, 16);
+  // Bullseye
+  const innerGeo = new THREE.CircleGeometry(TARGET_RADIUS * 0.4, 24);
   const innerMat = new THREE.MeshBasicMaterial({ color: 0xffe070 });
   const inner = new THREE.Mesh(innerGeo, innerMat);
-  inner.rotation.x = -Math.PI / 2;
-  inner.position.z = 0.035;
+  inner.position.z = 0.03;
   group.add(inner);
   return group;
 }
 
 function buildLongRangeScene(scene) {
-  const floorLen = RANGE_LENGTH + 4;
-  const floorGeo = new THREE.PlaneGeometry(5, floorLen);
-  const floorMat = new THREE.MeshLambertMaterial({ color: 0x505048 });
+  const floorLen = RANGE_LENGTH + 6;
+  const corridorWidth = 4;
+
+  // Floor – concrete-style
+  const floorGeo = new THREE.PlaneGeometry(corridorWidth + 1, floorLen);
+  const floorMat = new THREE.MeshStandardMaterial({
+    color: 0x585a54,
+    roughness: 0.9,
+    metalness: 0.05,
+  });
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
-  floor.position.set(0, 0, -floorLen / 2 - 2);
+  floor.position.set(0, 0, -floorLen / 2 - 1);
+  floor.receiveShadow = true;
   scene.add(floor);
 
-  const wallGeo = new THREE.PlaneGeometry(5, 4);
-  const wallMat = new THREE.MeshLambertMaterial({ color: 0x404038 });
-  const backWall = new THREE.Mesh(wallGeo, wallMat);
+  // Left wall
+  const wallGeo = new THREE.PlaneGeometry(floorLen, 3.5);
+  const wallMat = new THREE.MeshStandardMaterial({
+    color: 0x4a4d48,
+    roughness: 0.85,
+    metalness: 0.0,
+  });
+  const leftWall = new THREE.Mesh(wallGeo, wallMat);
+  leftWall.rotation.y = Math.PI / 2;
+  leftWall.position.set(-corridorWidth / 2 - 0.5, 1.4, -floorLen / 2 - 1);
+  leftWall.receiveShadow = true;
+  scene.add(leftWall);
+  const rightWall = new THREE.Mesh(wallGeo, wallMat);
+  rightWall.rotation.y = -Math.PI / 2;
+  rightWall.position.set(corridorWidth / 2 + 0.5, 1.4, -floorLen / 2 - 1);
+  rightWall.receiveShadow = true;
+  scene.add(rightWall);
+
+  // Back wall with target board area (lighter panel)
+  const boardWidth = 3.5;
+  const boardHeight = 2.2;
+  const wallFullGeo = new THREE.PlaneGeometry(corridorWidth + 2, 4);
+  const wallFullMat = new THREE.MeshStandardMaterial({
+    color: 0x3e403a,
+    roughness: 0.9,
+    metalness: 0.0,
+  });
+  const backWall = new THREE.Mesh(wallFullGeo, wallFullMat);
   backWall.position.set(0, 1.5, BACK_WALL_Z);
+  backWall.receiveShadow = true;
   scene.add(backWall);
+
+  const boardGeo = new THREE.PlaneGeometry(boardWidth, boardHeight);
+  const boardMat = new THREE.MeshStandardMaterial({
+    color: 0x8a8580,
+    roughness: 0.95,
+    metalness: 0.0,
+  });
+  const targetBoard = new THREE.Mesh(boardGeo, boardMat);
+  targetBoard.position.set(0, 1.5, BACK_WALL_Z + 0.02);
+  targetBoard.receiveShadow = true;
+  scene.add(targetBoard);
 
   const target = createTargetMesh();
   target.visible = false;
-  target.position.z = BACK_WALL_Z + 0.1;
+  target.position.z = BACK_WALL_Z + 0.12;
+  target.children.forEach((c) => {
+    if (c.isMesh) c.castShadow = true;
+  });
   scene.add(target);
 
   return { target, floor, backWall };
 }
 
 function createBulletMesh() {
-  const geo = new THREE.SphereGeometry(0.022, 6, 6);
-  const mat = new THREE.MeshBasicMaterial({ color: 0xe8c040 });
+  const geo = new THREE.SphereGeometry(0.018, 8, 8);
+  const mat = new THREE.MeshStandardMaterial({ color: 0xc9a227, metalness: 0.6, roughness: 0.4 });
   return new THREE.Mesh(geo, mat);
 }
 
 function createMuzzleFlash() {
-  const geo = new THREE.SphereGeometry(0.1, 8, 8);
-  const mat = new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.95 });
+  const geo = new THREE.SphereGeometry(0.08, 10, 10);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffaa22, transparent: true, opacity: 0.9 });
   return new THREE.Mesh(geo, mat);
 }
 
@@ -148,7 +198,7 @@ export default function ShootingRange3D() {
     gamePhaseRef.current = "playing";
     setTimeLeft(ROUND_DURATION_SEC);
     setScore(0);
-    refs.current.nextSpawnAt = performance.now() / 1000;
+    refs.current.nextSpawnAt = 0; // spawn first target immediately on next frame
     refs.current.roundEndAt = performance.now() / 1000 + ROUND_DURATION_SEC;
   }, []);
 
@@ -163,25 +213,41 @@ export default function ShootingRange3D() {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
     renderer.setSize(W, H, false);
-    renderer.setClearColor(0x383832);
+    renderer.setClearColor(0x2a2c28);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x383832);
-    scene.fog = new THREE.FogExp2(0x383832, 0.008);
+    scene.background = new THREE.Color(0x2a2c28);
+    scene.fog = new THREE.Fog(0x2a2c28, 15, 55);
 
-    const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 80);
-    camera.position.set(0, 1.35, 4);
-    camera.lookAt(0, 1.2, -RANGE_LENGTH / 2);
+    const camera = new THREE.PerspectiveCamera(52, W / H, 0.1, 80);
+    camera.position.set(0, 1.35, 5);
+    camera.lookAt(0, 1.25, -RANGE_LENGTH / 2);
 
-    scene.add(new THREE.AmbientLight(0xb0a898, 2.2));
-    const spot = new THREE.SpotLight(0xfffce8, 10, 50, Math.PI / 8, 0.3);
-    spot.position.set(0, 8, 0);
-    spot.target.position.set(0, 1, -15);
-    scene.add(spot);
-    scene.add(spot.target);
-    const fill = new THREE.PointLight(0xaaccff, 2.0, 40);
-    fill.position.set(0, 2, -10);
+    const mainLight = new THREE.DirectionalLight(0xfff5e6, 2.2);
+    mainLight.position.set(0, 8, -8);
+    mainLight.target.position.set(0, 0, -15);
+    mainLight.castShadow = true;
+    mainLight.shadow.mapSize.width = 1024;
+    mainLight.shadow.mapSize.height = 512;
+    mainLight.shadow.camera.near = 1;
+    mainLight.shadow.camera.far = 60;
+    mainLight.shadow.camera.left = -8;
+    mainLight.shadow.camera.right = 8;
+    mainLight.shadow.camera.top = 4;
+    mainLight.shadow.camera.bottom = -4;
+    mainLight.shadow.bias = -0.0002;
+    scene.add(mainLight);
+    scene.add(mainLight.target);
+
+    scene.add(new THREE.AmbientLight(0xa0a8a0, 0.5));
+    const fill = new THREE.PointLight(0xc8d4e0, 0.8, 35);
+    fill.position.set(2, 2, -10);
     scene.add(fill);
+    const fill2 = new THREE.PointLight(0xc8d4e0, 0.5, 35);
+    fill2.position.set(-2, 2, -10);
+    scene.add(fill2);
 
     const { target } = buildLongRangeScene(scene);
     const raycaster = new THREE.Raycaster();
