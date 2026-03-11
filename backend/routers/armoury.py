@@ -46,6 +46,9 @@ MASTERY_MAX_BULLET_REDUCTION_PCT = 10
 MASTERY_AUTO_SIM_PCT_PER_CHUNK = 5  # +5% per "Train 5 min" chunk
 MASTERY_COOLDOWN_MINUTES = 5  # min time between auto_sim trains per weapon
 BRASS_KNUCKLES_WEAPON_ID = "weapon1"  # exclude from shooting range (no bullets)
+# Playing the 3D range: grant more mastery per hit than auto_sim (quicker mastery when you play)
+MASTERY_PCT_PER_LIVE_HIT = 1  # 1% per hit when playing the 3D game (max 30 hits per submit)
+MASTERY_LIVE_HITS_MAX_PER_REQUEST = 30
 
 
 class StateOptionalRequest(BaseModel):
@@ -87,7 +90,8 @@ class UseTokenRequest(BaseModel):
 
 class ShootingRangeTrainRequest(BaseModel):
     weapon_id: str
-    mode: str = "auto_sim"  # "auto_sim" for button train chunk
+    mode: str = "auto_sim"  # "auto_sim" | "live" (3D game)
+    hits: Optional[int] = None  # for mode=live: number of hits in session (1..MASTERY_LIVE_HITS_MAX_PER_REQUEST)
 
 
 def _normalize_state(state: str) -> str:
@@ -1357,25 +1361,33 @@ async def train_shooting_range(request: ShootingRangeTrainRequest, current_user:
     owned = await db.user_weapons.find_one({"user_id": current_user["id"], "weapon_id": weapon_id, "quantity": {"$gt": 0}}, {"_id": 1})
     if not owned:
         raise HTTPException(status_code=400, detail="You must own this weapon to train it.")
-    if request.mode != "auto_sim":
-        raise HTTPException(status_code=400, detail="Only auto_sim mode is supported.")
+    if request.mode not in ("auto_sim", "live"):
+        raise HTTPException(status_code=400, detail="Use mode 'auto_sim' or 'live'.")
     now = datetime.now(timezone.utc)
     doc = await db.user_weapon_mastery.find_one({"user_id": current_user["id"], "weapon_id": weapon_id}, {"_id": 0, "mastery_pct": 1, "last_trained_at": 1})
-    last = doc.get("last_trained_at") if doc else None
-    if last:
-        try:
-            last_dt = datetime.fromisoformat(last.replace("Z", "+00:00")) if isinstance(last, str) else last
-            if last_dt.tzinfo is None:
-                last_dt = last_dt.replace(tzinfo=timezone.utc)
-            if (now - last_dt).total_seconds() < MASTERY_COOLDOWN_MINUTES * 60:
-                wait_sec = MASTERY_COOLDOWN_MINUTES * 60 - int((now - last_dt).total_seconds())
-                raise HTTPException(status_code=429, detail=f"Wait {max(1, wait_sec // 60)} min before training this weapon again.")
-        except HTTPException:
-            raise
-        except Exception:
-            pass
     current_pct = min(100, max(0, int(doc.get("mastery_pct", 0) or 0))) if doc else 0
-    add_pct = min(MASTERY_AUTO_SIM_PCT_PER_CHUNK, 100 - current_pct)
+
+    if request.mode == "live":
+        hits = request.hits if request.hits is not None else 0
+        if not (1 <= hits <= MASTERY_LIVE_HITS_MAX_PER_REQUEST):
+            raise HTTPException(status_code=400, detail=f"hits must be 1–{MASTERY_LIVE_HITS_MAX_PER_REQUEST} for live mode.")
+        add_pct = min(hits * MASTERY_PCT_PER_LIVE_HIT, 100 - current_pct)
+    else:
+        last = doc.get("last_trained_at") if doc else None
+        if last:
+            try:
+                last_dt = datetime.fromisoformat(last.replace("Z", "+00:00")) if isinstance(last, str) else last
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                if (now - last_dt).total_seconds() < MASTERY_COOLDOWN_MINUTES * 60:
+                    wait_sec = MASTERY_COOLDOWN_MINUTES * 60 - int((now - last_dt).total_seconds())
+                    raise HTTPException(status_code=429, detail=f"Wait {max(1, wait_sec // 60)} min before training this weapon again.")
+            except HTTPException:
+                raise
+            except Exception:
+                pass
+        add_pct = min(MASTERY_AUTO_SIM_PCT_PER_CHUNK, 100 - current_pct)
+
     if add_pct <= 0:
         return {"message": "Already at 100% mastery.", "mastery_pct": 100, "next_train_at": None}
     now_iso = now.isoformat()
@@ -1384,8 +1396,9 @@ async def train_shooting_range(request: ShootingRangeTrainRequest, current_user:
         {"$set": {"mastery_pct": current_pct + add_pct, "last_trained_at": now_iso}, "$setOnInsert": {"user_id": current_user["id"], "weapon_id": weapon_id}},
         upsert=True,
     )
-    next_train_at = (now + timedelta(minutes=MASTERY_COOLDOWN_MINUTES)).isoformat()
-    return {"message": f"+{add_pct}% mastery ({weapon.get('name', weapon_id)}).", "mastery_pct": current_pct + add_pct, "next_train_at": next_train_at}
+    next_train_at = (now + timedelta(minutes=MASTERY_COOLDOWN_MINUTES)).isoformat() if request.mode == "auto_sim" else None
+    msg = f"+{add_pct}% mastery ({weapon.get('name', weapon_id)})." if request.mode == "auto_sim" else f"+{add_pct}% mastery from {request.hits} hits ({weapon.get('name', weapon_id)})."
+    return {"message": msg, "mastery_pct": current_pct + add_pct, "next_train_at": next_train_at}
 
 
 def _tokens_from_user(user: dict) -> dict:

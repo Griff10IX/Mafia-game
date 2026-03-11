@@ -765,6 +765,36 @@ async def advance_running_matches(database) -> int:
     if not claim:
         return 0
     match_id = claim.get("id")
+    max_rounds = int(claim.get("max_rounds") or 12)
+    current_round = int(claim.get("round") or 0)
+
+    # If we're already at max rounds (e.g. get-up after R12 or stuck state), resolve immediately by decision
+    if current_round >= max_rounds:
+        rounds_list = claim.get("rounds") or []
+        total_a = sum((r.get("a_dmg") or 0) for r in rounds_list)
+        total_b = sum((r.get("b_dmg") or 0) for r in rounds_list)
+        if total_a == total_b:
+            hits_a = sum((r.get("a_hits") or 0) for r in rounds_list)
+            hits_b = sum((r.get("b_hits") or 0) for r in rounds_list)
+            if hits_a == hits_b:
+                finish_side = "a" if random.random() < 0.5 else "b"
+                reason = "split_decision"
+            else:
+                finish_side = "a" if hits_a > hits_b else "b"
+                reason = "decision"
+        else:
+            finish_side = "a" if total_a > total_b else "b"
+            reason = "decision"
+        a_id, b_id = claim.get("a_id"), claim.get("b_id")
+        winner_id = a_id if finish_side == "a" else b_id
+        now = _now_iso()
+        await database.boxing_matches.update_one(
+            {"id": match_id},
+            {"$set": {"state": "finished", "finished_at": now, "winner": winner_id, "finish_reason": reason, "sim_lock": None}},
+        )
+        await _finalize_match(database, match_id, winner_id=winner_id, finish_reason=reason)
+        return 1
+
     try:
         a_id, b_id = claim.get("a_id"), claim.get("b_id")
         a_prof, b_prof = await asyncio.gather(
@@ -873,8 +903,33 @@ async def advance_counting_matches(database) -> int:
     match_id = claim.get("id")
     try:
         down = claim.get("down_fighter")  # "a" or "b"
+        max_rounds = int(claim.get("max_rounds") or 12)
+        current_round = int(claim.get("round") or 0)
         if down not in ("a", "b"):
-            await database.boxing_matches.update_one({"id": match_id}, {"$set": {"state": "running", "sim_lock": None}})
+            # Invalid counting state: if at max rounds, finish by decision; else resume running
+            a_id, b_id = claim.get("a_id"), claim.get("b_id")
+            if current_round >= max_rounds:
+                rounds_list = claim.get("rounds") or []
+                total_a = sum((r.get("a_dmg") or 0) for r in rounds_list)
+                total_b = sum((r.get("b_dmg") or 0) for r in rounds_list)
+                if total_a == total_b:
+                    hits_a = sum((r.get("a_hits") or 0) for r in rounds_list)
+                    hits_b = sum((r.get("b_hits") or 0) for r in rounds_list)
+                    if hits_a == hits_b:
+                        finish_side = "a" if random.random() < 0.5 else "b"
+                    else:
+                        finish_side = "a" if hits_a > hits_b else "b"
+                else:
+                    finish_side = "a" if total_a > total_b else "b"
+                winner_id = a_id if finish_side == "a" else b_id
+                now = _now_iso()
+                await database.boxing_matches.update_one(
+                    {"id": match_id},
+                    {"$set": {"state": "finished", "finished_at": now, "winner": winner_id, "finish_reason": "decision", "down_fighter": None, "count_ends_at": None, "sim_lock": None}},
+                )
+                await _finalize_match(database, match_id, winner_id=winner_id, finish_reason="decision")
+            else:
+                await database.boxing_matches.update_one({"id": match_id}, {"$set": {"state": "running", "sim_lock": None}})
             return 1
         a_id, b_id = claim.get("a_id"), claim.get("b_id")
         a_prof = await database.boxing_profiles.find_one({"user_id": a_id}, {"_id": 0})
@@ -896,16 +951,38 @@ async def advance_counting_matches(database) -> int:
         got_up = random.random() < p_get_up
         hp = dict(claim.get("hp") or {"a": 100, "b": 100})
         stam = dict(claim.get("stam") or {"a": 100, "b": 100})
+
         if got_up:
-            new_hp = min(100, 5 + recovery)
-            hp[down] = new_hp
-            stam[down] = max(0, int((stam.get(down) or 0) * 0.5))
-            break_sec = int(claim.get("round_break_seconds") or ROUND_BREAK_SECONDS)
-            next_round_at = (datetime.now(timezone.utc) + timedelta(seconds=break_sec)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-            await database.boxing_matches.update_one(
-                {"id": match_id},
-                {"$set": {"state": "running", "hp": hp, "stam": stam, "next_round_at": next_round_at, "down_fighter": None, "count_ends_at": None}},
-            )
+            # If we're already at max rounds, fight is over — resolve by decision (no extra round)
+            if current_round >= max_rounds:
+                rounds_list = claim.get("rounds") or []
+                total_a = sum((r.get("a_dmg") or 0) for r in rounds_list)
+                total_b = sum((r.get("b_dmg") or 0) for r in rounds_list)
+                if total_a == total_b:
+                    hits_a = sum((r.get("a_hits") or 0) for r in rounds_list)
+                    hits_b = sum((r.get("b_hits") or 0) for r in rounds_list)
+                    if hits_a == hits_b:
+                        finish_side = "a" if random.random() < 0.5 else "b"
+                    else:
+                        finish_side = "a" if hits_a > hits_b else "b"
+                else:
+                    finish_side = "a" if total_a > total_b else "b"
+                winner_id = a_id if finish_side == "a" else b_id
+                await database.boxing_matches.update_one(
+                    {"id": match_id},
+                    {"$set": {"state": "finished", "finished_at": now, "winner": winner_id, "finish_reason": "decision", "down_fighter": None, "count_ends_at": None}},
+                )
+                await _finalize_match(database, match_id, winner_id=winner_id, finish_reason="decision")
+            else:
+                new_hp = min(100, 5 + recovery)
+                hp[down] = new_hp
+                stam[down] = max(0, int((stam.get(down) or 0) * 0.5))
+                break_sec = int(claim.get("round_break_seconds") or ROUND_BREAK_SECONDS)
+                next_round_at = (datetime.now(timezone.utc) + timedelta(seconds=break_sec)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+                await database.boxing_matches.update_one(
+                    {"id": match_id},
+                    {"$set": {"state": "running", "hp": hp, "stam": stam, "next_round_at": next_round_at, "down_fighter": None, "count_ends_at": None}},
+                )
         else:
             winner_id = b_id if down == "a" else a_id
             await database.boxing_matches.update_one(

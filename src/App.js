@@ -51,6 +51,7 @@ const StockMarket = lazy(() => import("./pages/StockMarket"));
 const Bank = lazy(() => import("./pages/Bank"));
 const ArmourWeapons = lazy(() => import("./pages/ArmourWeapons"));
 const ShootingRange = lazy(() => import("./pages/ShootingRange"));
+const ShootingRange3D = lazy(() => import("./pages/ShootingRange3D"));
 const Attemps = lazy(() => import("./pages/Attemps"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const Store = lazy(() => import("./pages/Store"));
@@ -783,6 +784,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <ShootingRange />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/shooting-range/play/:weaponId?"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <ShootingRange3D />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

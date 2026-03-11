@@ -61,6 +61,15 @@ export default function ShootingRange() {
       <p className="text-[11px] text-zinc-400 font-heading mb-4">
         Master a weapon here to reduce bullets needed when attacking with it (up to 10% at full mastery). Train guns you own.
       </p>
+      <div className="flex gap-2 mb-4">
+        <Link
+          to="/shooting-range/play"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded text-[10px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+        >
+          <Crosshair size={14} />
+          Play 3D range
+        </Link>
+      </div>
       <div className="rounded-lg p-3 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40">
         <div className="text-[9px] sm:text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
           <Crosshair size={10} className="sm:w-[11px] sm:h-[11px]" />
