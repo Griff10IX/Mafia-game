@@ -52,18 +52,18 @@ function simulateFight(aS, bS) {
 // ── BUILD RING ───────────────────────────────────────────────────────────────
 function buildRing(scene) {
   const mat = c => new THREE.MeshLambertMaterial({color:c});
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(7,0.15,7),mat(0x1e1008));
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(7,0.15,7),mat(0x262020));
   floor.receiveShadow=true; scene.add(floor);
-  const lm=new THREE.MeshBasicMaterial({color:0xc9a84c,transparent:true,opacity:0.2});
+  const lm=new THREE.MeshBasicMaterial({color:0xd8b868,transparent:true,opacity:0.3});
   const cl=new THREE.Mesh(new THREE.BoxGeometry(6.8,0.02,0.05),lm); cl.position.y=0.09; scene.add(cl);
   const cc=new THREE.Mesh(new THREE.TorusGeometry(0.7,0.03,8,32),lm); cc.rotation.x=-Math.PI/2; cc.position.y=0.09; scene.add(cc);
-  const postMat=mat(0xc9a84c), capMat=mat(0xffe066);
+  const postMat=mat(0xc9a84c), capMat=mat(0xfff2aa);
   [[-3.2,-3.2],[3.2,-3.2],[3.2,3.2],[-3.2,3.2]].forEach(([x,z])=>{
     const p=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,3.5,8),postMat); p.position.set(x,1.75,z); p.castShadow=true; scene.add(p);
     const c=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8),capMat); c.position.set(x,3.56,z); scene.add(c);
   });
   [0.9,1.6,2.3].forEach(y=>{
-    const rm=mat(y===1.6?0x8b1a1a:0xc9a84c);
+    const rm=mat(y===1.6?0x9b2a2a:0xe0c27a);
     [[-3.2,-3.2,3.2,-3.2],[3.2,-3.2,3.2,3.2],[3.2,3.2,-3.2,3.2],[-3.2,3.2,-3.2,-3.2]].forEach(([x1,z1,x2,z2])=>{
       const len=Math.sqrt((x2-x1)**2+(z2-z1)**2);
       const rope=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,len,6),rm);
@@ -72,7 +72,7 @@ function buildRing(scene) {
       scene.add(rope);
     });
   });
-  const base=new THREE.Mesh(new THREE.BoxGeometry(9,0.4,9),mat(0x0a0703)); base.position.y=-0.27; scene.add(base);
+  const base=new THREE.Mesh(new THREE.BoxGeometry(9,0.4,9),mat(0x101014)); base.position.y=-0.27; scene.add(base);
 }
 
 // ── BUILD BOXER ──────────────────────────────────────────────────────────────
@@ -304,6 +304,16 @@ export default function Boxing3D() {
   const [metaError, setMetaError] = useState("");
   const [busyAction, setBusyAction] = useState("");
 
+  // PvP matches / betting / league
+  const [me, setMe] = useState(null);
+  const [opponentName, setOpponentName] = useState("");
+  const [liveMatches, setLiveMatches] = useState([]);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+  const [matchError, setMatchError] = useState("");
+  const [bets, setBets] = useState([]);
+  const [league, setLeague] = useState(null);
+  const [betStake, setBetStake] = useState(10000);
+
   const flashMsg=(msg,ms=1600)=>{ setActionText(msg); setTimeout(()=>setActionText(""),ms); };
 
   const getErr = (e) => e?.response?.data?.detail || e?.message || "Something went wrong";
@@ -311,6 +321,7 @@ export default function Boxing3D() {
   // Load NPCs + boxing meta (profile / gym / coach / gear)
   useEffect(() => {
     let cancelled = false;
+    api.get("/auth/me").then((r) => { if (!cancelled) setMe(r.data || null); }).catch(() => {});
     api.get("/boxing/npcs").then((r) => { if (!cancelled) setNpcs(r.data?.npcs || []); }).catch(() => {});
     const loadMeta = async () => {
       try {
@@ -336,6 +347,26 @@ export default function Boxing3D() {
       }
     };
     loadMeta();
+    const loadMatches = async () => {
+      try {
+        setMatchesLoading(true);
+        const [liveRes, betsRes, leagueRes] = await Promise.all([
+          api.get("/boxing/matches/live"),
+          api.get("/boxing/bets/my-bets"),
+          api.get("/boxing/league?period=weekly"),
+        ]);
+        if (cancelled) return;
+        setLiveMatches(liveRes.data?.matches || []);
+        setBets(betsRes.data?.bets || []);
+        setLeague(leagueRes.data || null);
+        setMatchError("");
+      } catch (e) {
+        if (!cancelled) setMatchError(getErr(e));
+      } finally {
+        if (!cancelled) setMatchesLoading(false);
+      }
+    };
+    loadMatches();
     return () => { cancelled = true; };
   }, []);
 
@@ -485,6 +516,65 @@ export default function Boxing3D() {
     }
   };
 
+  // PvP, bets, league actions
+  const refreshMatches = async () => {
+    try {
+      setMatchesLoading(true);
+      const [liveRes, betsRes, leagueRes] = await Promise.all([
+        api.get("/boxing/matches/live"),
+        api.get("/boxing/bets/my-bets"),
+        api.get("/boxing/league?period=weekly"),
+      ]);
+      setLiveMatches(liveRes.data?.matches || []);
+      setBets(betsRes.data?.bets || []);
+      setLeague(leagueRes.data || null);
+      setMatchError("");
+    } catch (e) {
+      setMatchError(getErr(e));
+    } finally {
+      setMatchesLoading(false);
+    }
+  };
+
+  const handleCreateMatch = async () => {
+    const name = (opponentName || "").trim();
+    if (!name) return;
+    setBusyAction("create_match");
+    try {
+      await api.post("/boxing/matches/create", { opponent_username: name });
+      setOpponentName("");
+      await refreshMatches();
+    } catch (e) {
+      setMatchError(getErr(e));
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const handleReadyMatch = async (matchId, ready) => {
+    setBusyAction(`ready:${matchId}`);
+    try {
+      await api.post("/boxing/matches/ready", { match_id: matchId, ready });
+      await refreshMatches();
+    } catch (e) {
+      setMatchError(getErr(e));
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const handlePlaceBet = async (matchId, fighter) => {
+    setBusyAction(`bet:${matchId}:${fighter}`);
+    try {
+      await api.post("/boxing/bets/place", { match_id: matchId, fighter, stake: Number(betStake) || 0 });
+      await refreshMatches();
+    } catch (e) {
+      setMatchError(getErr(e));
+    } finally {
+      setBusyAction("");
+    }
+  };
+
   useEffect(()=>{
     const canvas=canvasRef.current; if(!canvas) return;
     const W=canvas.clientWidth||640, H=canvas.clientHeight||440;
@@ -495,23 +585,24 @@ export default function Boxing3D() {
     renderer.shadowMap.enabled=true;
     renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     renderer.toneMapping=THREE.ReinhardToneMapping;
-    renderer.toneMappingExposure=1.15;
+    renderer.toneMappingExposure=1.35;
 
     const scene=new THREE.Scene();
-    scene.background=new THREE.Color(0x060402);
-    scene.fog=new THREE.FogExp2(0x080503,0.038);
+    // Slightly brighter, cooler noir backdrop to match game theme
+    scene.background=new THREE.Color(0x111117);
+    scene.fog=new THREE.FogExp2(0x050509,0.022);
 
     const camera=new THREE.PerspectiveCamera(52,W/H,0.1,80);
     camera.position.set(0,2.9,7.4); camera.lookAt(0,1.1,0);
 
-    scene.add(new THREE.AmbientLight(0x221a08,0.85));
-    const spot=new THREE.SpotLight(0xfff2cc,4.5,24,Math.PI/4.2,0.3);
+    scene.add(new THREE.AmbientLight(0x2a2620,1.1));
+    const spot=new THREE.SpotLight(0xfff7d0,5.6,26,Math.PI/4.0,0.3);
     spot.position.set(0,10,1); spot.target.position.set(0,0,0);
     spot.castShadow=true; spot.shadow.mapSize.set(1024,1024);
     scene.add(spot); scene.add(spot.target);
-    const fl1=new THREE.PointLight(0xc9a84c,1.0,18); fl1.position.set(-6,5,4); scene.add(fl1);
-    const fl2=new THREE.PointLight(0x8b2222,0.7,14); fl2.position.set(6,5,4); scene.add(fl2);
-    const fl3=new THREE.PointLight(0x3a3020,0.4,10); fl3.position.set(0,2,-5); scene.add(fl3);
+    const fl1=new THREE.PointLight(0xc9a84c,1.4,20); fl1.position.set(-6,5,4); scene.add(fl1);
+    const fl2=new THREE.PointLight(0x8b2222,0.9,16); fl2.position.set(6,5,4); scene.add(fl2);
+    const fl3=new THREE.PointLight(0x3a404f,0.7,14); fl3.position.set(0,2,-5); scene.add(fl3);
 
     buildRing(scene);
 
@@ -672,7 +763,7 @@ export default function Boxing3D() {
     setGameState("fighting");setWinText("");setActionText("");
   },[]);
 
-  const gold="#c9a84c",crimson="#8b1a1a",bg="#0d0a05";
+  const gold="#c9a84c",crimson="#8b1a1a",bg="#05070b";
 
   const Bar=({val,flip,color})=>(
     <div style={{height:5,background:"rgba(255,255,255,0.07)",borderRadius:2,overflow:"hidden"}}>
@@ -755,7 +846,7 @@ export default function Boxing3D() {
         )}
 
         {/* Vignette */}
-        <div style={{position:"absolute",inset:0,pointerEvents:"none",background:"radial-gradient(ellipse 75% 65% at 50% 42%,transparent 22%,rgba(0,0,0,0.65) 100%)"}}/>
+        <div style={{position:"absolute",inset:0,pointerEvents:"none",background:"radial-gradient(ellipse 75% 65% at 50% 42%,transparent 22%,rgba(0,0,0,0.45) 100%)"}}/>
       </div>
 
       {/* Control */}
@@ -795,7 +886,7 @@ export default function Boxing3D() {
       </div>
 
       {/* Training / Gym / Coach / Gear */}
-      <div style={{padding:"18px 20px 28px",background:"#050302",borderTop:"1px solid rgba(201,168,76,0.25)",display:"grid",gridTemplateColumns:"minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr)",gap:16}}>
+      <div style={{padding:"18px 20px 12px",background:"#050302",borderTop:"1px solid rgba(201,168,76,0.25)",display:"grid",gridTemplateColumns:"minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr)",gap:16}}>
         {/* Training & Stats */}
         <div style={{border:"1px solid rgba(201,168,76,0.25)",borderRadius:4,background:"rgba(0,0,0,0.7)",padding:12,minHeight:140}}>
           <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>TRAINING & STATS</div>
@@ -948,6 +1039,138 @@ export default function Boxing3D() {
               })}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Matches / Bets / League */}
+      <div style={{padding:"12px 20px 26px",background:"#050302",borderTop:"1px solid rgba(201,168,76,0.22)",display:"grid",gridTemplateColumns:"minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,1.0fr)",gap:16}}>
+        {/* PvP Matches */}
+        <div style={{border:"1px solid rgba(201,168,76,0.25)",borderRadius:4,background:"rgba(0,0,0,0.75)",padding:12,minHeight:140}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+            <div style={{fontSize:11,color:gold,letterSpacing:"0.16em"}}>MATCHES</div>
+            <button onClick={refreshMatches} disabled={matchesLoading} style={{padding:"2px 8px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(0,0,0,0.7)",color:"#d4c890",cursor:matchesLoading?"wait":"pointer"}}>Refresh</button>
+          </div>
+          {matchError && <div style={{fontSize:10,color:"#ff6666",marginBottom:6}}>{matchError}</div>}
+          <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
+            <input
+              value={opponentName}
+              onChange={(e)=>setOpponentName(e.target.value)}
+              placeholder="Challenge username"
+              style={{flex:"0 0 180px",minWidth:140,padding:"4px 6px",fontSize:10,borderRadius:2,border:"1px solid rgba(201,168,76,0.35)",background:"#050509",color:"#f5e8c8"}}
+            />
+            <button
+              onClick={handleCreateMatch}
+              disabled={busyAction==="create_match"}
+              style={{padding:"4px 10px",fontSize:10,border:"1px solid rgba(201,168,76,0.5)",borderRadius:2,background:"rgba(201,168,76,0.15)",color:"#f5e8c8",cursor:busyAction==="create_match"?"wait":"pointer"}}
+            >
+              Start PvP Match
+            </button>
+          </div>
+          <div style={{maxHeight:180,overflowY:"auto",fontSize:10}}>
+            {liveMatches.length === 0 && <div style={{color:"#7a6a4a"}}>No pending or live fights.</div>}
+            {liveMatches.map((m) => {
+              const mine = me && (m.a_username === me.username || m.b_username === me.username);
+              const canReady = mine && (m.state==="pending" || m.state==="ready");
+              return (
+                <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid rgba(201,168,76,0.1)"}}>
+                  <div>
+                    <div style={{color:mine?"#f5e8c8":"#d0c090"}}>
+                      {m.a_username} vs {m.b_username} <span style={{color:"#7a6a4a"}}>• {m.state} R{m.round}/{m.max_rounds}</span>
+                    </div>
+                    <div style={{fontSize:9,color:"#6a5a3a"}}>HP {m.hp?.a ?? 0}/{m.hp?.b ?? 0} • Odds A {m.odds?.a ?? "-"} / B {m.odds?.b ?? "-"}</div>
+                  </div>
+                  <div style={{display:"flex",gap:4}}>
+                    {canReady && (
+                      <button
+                        onClick={()=>handleReadyMatch(m.id,true)}
+                        disabled={busyAction===`ready:${m.id}`}
+                        style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(0,0,0,0.8)",color:"#e0d0a0",cursor:busyAction===`ready:${m.id}`?"wait":"pointer"}}
+                      >
+                        Ready
+                      </button>
+                    )}
+                    {!canReady && mine && (
+                      <button
+                        onClick={()=>handleReadyMatch(m.id,false)}
+                        disabled={busyAction===`ready:${m.id}`}
+                        style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(30,20,10,0.9)",color:"#d0b070",cursor:busyAction===`ready:${m.id}`?"wait":"pointer"}}
+                      >
+                        Unready
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Betting */}
+        <div style={{border:"1px solid rgba(201,168,76,0.25)",borderRadius:4,background:"rgba(0,0,0,0.75)",padding:12,minHeight:140}}>
+          <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>BETTING</div>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+            <span style={{fontSize:9,color:"#8a7a4a"}}>Stake</span>
+            <input
+              type="number"
+              value={betStake}
+              onChange={(e)=>setBetStake(e.target.value)}
+              style={{width:90,padding:"3px 6px",fontSize:10,borderRadius:2,border:"1px solid rgba(201,168,76,0.35)",background:"#050509",color:"#f5e8c8"}}
+            />
+          </div>
+          <div style={{fontSize:9,color:"#7a6a4a",marginBottom:4}}>Click a fighter to bet:</div>
+          <div style={{maxHeight:120,overflowY:"auto",fontSize:10,marginBottom:8}}>
+            {liveMatches.length === 0 && <div style={{color:"#7a6a4a"}}>No fights open for betting.</div>}
+            {liveMatches.map((m)=>(
+              <div key={`bet-${m.id}`} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderBottom:"1px solid rgba(201,168,76,0.1)"}}>
+                <div style={{marginRight:6}}>
+                  <div style={{color:"#d0c090"}}>{m.a_username} vs {m.b_username}</div>
+                  <div style={{fontSize:9,color:"#7a6a4a"}}>Odds A {m.odds?.a ?? "-"} / B {m.odds?.b ?? "-"}</div>
+                </div>
+                <div style={{display:"flex",gap:4}}>
+                  <button
+                    onClick={()=>handlePlaceBet(m.id,"a")}
+                    disabled={busyAction===`bet:${m.id}:a`}
+                    style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(0,0,0,0.8)",color:"#e0d0a0",cursor:busyAction===`bet:${m.id}:a`?"wait":"pointer"}}
+                  >
+                    Bet A
+                  </button>
+                  <button
+                    onClick={()=>handlePlaceBet(m.id,"b")}
+                    disabled={busyAction===`bet:${m.id}:b`}
+                    style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(30,10,10,0.9)",color:"#e0d0a0",cursor:busyAction===`bet:${m.id}:b`?"wait":"pointer"}}
+                  >
+                    Bet B
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{fontSize:9,color:"#8a7a4a",marginBottom:4}}>My bets</div>
+          <div style={{maxHeight:90,overflowY:"auto",fontSize:10}}>
+            {bets.length === 0 && <div style={{color:"#7a6a4a"}}>No open or settled bets.</div>}
+            {bets.map((b)=>(
+              <div key={b.id} style={{display:"flex",justifyContent:"space-between",padding:"2px 0"}}>
+                <span style={{color:"#d0c090"}}>#{b.match_id.slice(0,6)} • {b.fighter.toUpperCase()}</span>
+                <span style={{color:b.status==="won"?"#6a9a4a":b.status==="lost"?"#aa4444":"#8a7a4a"}}>{b.status} ${b.stake}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* League */}
+        <div style={{border:"1px solid rgba(201,168,76,0.25)",borderRadius:4,background:"rgba(0,0,0,0.75)",padding:12,minHeight:140}}>
+          <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>LEAGUE (WEEKLY)</div>
+          {league && (
+            <div style={{maxHeight:210,overflowY:"auto",fontSize:10}}>
+              {league.standings?.slice(0,10).map((row)=>(
+                <div key={row.user_id} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:"1px solid rgba(201,168,76,0.1)",color:row.is_current_user?"#f5e8c8":"#d0c090"}}>
+                  <span>#{row.rank} {row.username}</span>
+                  <span>{row.points} pts · {row.wins}-{row.losses}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {!league && <div style={{fontSize:10,color:"#7a6a4a"}}>League table will appear after fights are recorded.</div>}
         </div>
       </div>
 
