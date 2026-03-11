@@ -244,6 +244,14 @@ async def _award_bust_milestones(user_id: str, new_total_busts: int, claimed: li
             {"id": user_id},
             {"$inc": {"respect_points": total_reward}, "$addToSet": {"respect_points_bust_milestones_claimed": {"$each": new_claimed}}},
         )
+        milestones_str = ", ".join(f"{m:,}" for m in sorted(new_claimed))
+        await send_notification(
+            user_id,
+            "Jail bust milestone reached!",
+            f"You reached jail bust milestones: {milestones_str}. You earned {total_reward:,} respect points.",
+            "system",
+            category="system",
+        )
     except Exception as e:
         logger.exception("Award bust milestones: %s", e)
 

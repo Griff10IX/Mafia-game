@@ -2133,6 +2133,12 @@ def register(router):
             {"_id": 0, "id": 1, "username": 1},
         )
         if not user:
+            # Exact username first (uses index), then case-insensitive regex
+            user = await db.users.find_one(
+                {"username": key},
+                {"_id": 0, "id": 1, "username": 1},
+            )
+        if not user:
             pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
             user = await db.users.find_one(
                 {"username": pattern},
@@ -2144,10 +2150,11 @@ def register(router):
         q = {"$or": [{"attacker_id": uid}, {"target_id": uid}]}
         if since:
             q["created_at"] = {"$gt": since}
+        effective_limit = min(limit, 100) if since else limit
         docs = (
             await db.attack_attempts.find(q, {"_id": 0})
             .sort("created_at", -1)
-            .to_list(limit)
+            .to_list(effective_limit)
         )
         return {"username": user.get("username"), "logs": docs}
 

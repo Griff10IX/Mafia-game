@@ -2113,6 +2113,58 @@ export default function Admin() {
         );
       })()}
 
+      {/* Attack log row detail modal */}
+      {attackLogViewRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setAttackLogViewRow(null)}>
+          <div className="bg-zinc-900 border border-primary/30 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-zinc-700/50 flex items-center justify-between shrink-0">
+              <h3 className="text-sm font-heading font-bold text-primary">Attack log entry</h3>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={attackLogsLive}
+                    onChange={(e) => setAttackLogsLive(e.target.checked)}
+                    className="rounded border border-input"
+                  />
+                  Live
+                </label>
+                {attackLogsLive && (attackLogsUsername || '').trim() && (
+                  <span className="text-[9px] text-primary font-heading">Refreshing every 5s</span>
+                )}
+                <button type="button" onClick={() => setAttackLogViewRow(null)} className="p-1 rounded border border-zinc-600 text-zinc-400 hover:bg-zinc-700 hover:text-foreground"><X size={14} /></button>
+              </div>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1 text-[10px] font-heading space-y-3">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                <div><span className="text-mutedForeground">Attacker:</span> {attackLogViewRow.attacker_username ?? '—'}</div>
+                <div><span className="text-mutedForeground">Target:</span> {attackLogViewRow.target_username ?? '—'}</div>
+                <div><span className="text-mutedForeground">Outcome:</span> {attackLogViewRow.outcome ?? '—'}</div>
+                <div><span className="text-mutedForeground">Location:</span> {attackLogViewRow.location_state ?? attackLogViewRow.state ?? '—'}</div>
+                <div><span className="text-mutedForeground">IP:</span> <span className="font-mono">{attackLogViewRow.client_ip ?? '—'}</span></div>
+                <div><span className="text-mutedForeground">Bullets used:</span> {attackLogViewRow.bullets_used != null ? Number(attackLogViewRow.bullets_used).toLocaleString() : '—'}</div>
+                <div><span className="text-mutedForeground">Bodyguard kill:</span> {attackLogViewRow.is_bodyguard_kill ? 'Yes' : attackLogViewRow.outcome === 'bodyguard' ? 'Blocked' : '—'}</div>
+                <div><span className="text-mutedForeground">Time:</span> {formatAttackLogTime(attackLogViewRow.created_at)}</div>
+              </div>
+              <div>
+                <div className="text-mutedForeground font-bold uppercase tracking-wider border-b border-zinc-700/50 pb-0.5 mb-1">Player message</div>
+                <p className="text-foreground whitespace-pre-wrap break-words">{attackLogViewRow.player_message ?? '—'}</p>
+              </div>
+              <div>
+                <div className="text-mutedForeground font-bold uppercase tracking-wider border-b border-zinc-700/50 pb-0.5 mb-1">User-Agent</div>
+                <p className="text-foreground font-mono text-[9px] break-all">{attackLogViewRow.user_agent ?? '—'}</p>
+              </div>
+              {attackLogViewRow.first_bodyguard && (
+                <div>
+                  <div className="text-mutedForeground font-bold uppercase tracking-wider border-b border-zinc-700/50 pb-0.5 mb-1">First bodyguard</div>
+                  <pre className="text-foreground font-mono text-[9px] whitespace-pre-wrap break-words">{JSON.stringify(attackLogViewRow.first_bodyguard, null, 2)}</pre>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── Game World (admin only) ─── */}
       {isAdmin && (
       <section id="admin-gameworld" className="admin-category-nav space-y-4">
@@ -3086,7 +3138,7 @@ export default function Admin() {
                             <td className="py-1 pr-1 max-w-[140px] truncate text-mutedForeground font-mono text-[8px]" title={row.user_agent ?? ''}>{row.user_agent ?? '—'}</td>
                             <td className="py-1 pr-1 text-mutedForeground">{device}</td>
                             <td className="py-1 pr-1">{bot ? <span className="text-amber-400 font-medium">{bot}</span> : '—'}</td>
-                            <td className="py-1 pr-1">{row.is_bodyguard_kill ? 'Yes' : '—'}</td>
+                            <td className="py-1 pr-1">{row.is_bodyguard_kill ? 'Yes' : row.outcome === 'bodyguard' ? 'Blocked' : '—'}</td>
                             <td className="py-1 pr-1">{row.bullets_used != null ? Number(row.bullets_used).toLocaleString() : '—'}</td>
                             <td className="py-1 pr-1 text-mutedForeground">{row.location_state ?? row.state ?? '—'}</td>
                             <td className="py-1 pr-1 text-mutedForeground font-mono">{formatAttackLogTime(row.created_at)}</td>

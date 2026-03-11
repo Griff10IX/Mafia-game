@@ -79,6 +79,7 @@ from server import (
     maybe_process_rank_up,
     maybe_respect_points_drop,
     log_activity,
+    send_notification,
     RANKS,
     CARS,
     TRAVEL_TIMES,
@@ -126,6 +127,14 @@ async def _award_gta_milestones(user_id: str, new_total_gta: int, claimed: list)
         await db.users.update_one(
             {"id": user_id},
             {"$inc": {"respect_points": total_reward}, "$addToSet": {"respect_points_gta_milestones_claimed": {"$each": new_claimed}}},
+        )
+        milestones_str = ", ".join(f"{m:,}" for m in sorted(new_claimed))
+        await send_notification(
+            user_id,
+            "GTA milestone reached!",
+            f"You reached GTA milestones: {milestones_str}. You earned {total_reward:,} respect points.",
+            "system",
+            category="system",
         )
     except Exception as e:
         logger.exception("Award GTA milestones: %s", e)

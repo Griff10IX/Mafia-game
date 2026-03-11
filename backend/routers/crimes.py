@@ -66,6 +66,14 @@ async def _award_crime_milestones(user_id: str, new_total_crimes: int, claimed: 
             {"id": user_id},
             {"$inc": {"respect_points": total_reward}, "$addToSet": {"respect_points_crime_milestones_claimed": {"$each": new_claimed}}},
         )
+        milestones_str = ", ".join(f"{m:,}" for m in sorted(new_claimed))
+        await send_notification(
+            user_id,
+            "Crime milestone reached!",
+            f"You reached crime milestones: {milestones_str}. You earned {total_reward:,} respect points.",
+            "system",
+            category="system",
+        )
     except Exception as e:
         logger.exception("Award crime milestones: %s", e)
 
@@ -299,6 +307,7 @@ from server import (
     log_activity,
     maybe_process_rank_up,
     maybe_respect_points_drop,
+    send_notification,
     RANKS,
 )
 from routers.objectives import update_objectives_progress
