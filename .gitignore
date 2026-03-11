@@ -3,6 +3,9 @@
 *.env
 !*.env.example
 
+# Kill bot - local/testing only; do not commit or deploy to server
+MafiaKillBot/
+
 # Dependencies
 node_modules/
 

@@ -258,7 +258,10 @@ def register(router):
 
         if property_ and user_id != current_user.get("id") and property_.get("type") == "airport":
             property_ = {k: v for k, v in property_.items() if k != "total_earnings"}
-        messages_sent = int(messages_sent_count or 0)
+        if isinstance(messages_sent_count, list):
+            messages_sent = 0
+        else:
+            messages_sent = int(messages_sent_count or 0)
 
         # Own profile only if the requested profile is the current user (by id and by URL username)
         requested_username_norm = (username or "").strip().lower()
