@@ -89,6 +89,12 @@ const getKillToastStyle = () => {
 
 /** Banner shown between event and Kill User when theme is "banner". */
 const KillNotificationBanner = ({ message, onDismiss }) => {
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(onDismiss, 8000);
+    return () => clearTimeout(t);
+  }, [message, onDismiss]);
+
   if (!message) return null;
   const { text, type, description, action } = message;
   const isSuccess = type === 'success';
@@ -101,10 +107,6 @@ const KillNotificationBanner = ({ message, onDismiss }) => {
       : isError
         ? 'bg-destructive/10 border-destructive/30 text-destructive'
         : 'bg-muted/20 border-border text-foreground';
-  useEffect(() => {
-    const t = setTimeout(onDismiss, 8000);
-    return () => clearTimeout(t);
-  }, [onDismiss]);
   return (
     <div className={`atk-fade-in rounded-md border px-3 py-2 flex items-center justify-between gap-2 flex-wrap ${typeClass}`}>
       <div className="min-w-0 flex-1">
@@ -1047,11 +1049,39 @@ export default function Attack() {
             bullets_to_use: payload.bulletsToUse ?? 1,
             use_molotovs: payload.useMolotovs ?? false,
           };
-          await api.post('/attack/execute', { attack_id: best.attack_id, ...extra });
+          const execRes = await api.post('/attack/execute', { attack_id: best.attack_id, ...extra });
           refreshUser();
           fetchBullets();
           await refreshAttacks();
-          showKillResult('Kill executed.', 'success');
+          if (execRes.data?.success) {
+            const rewardMoney = execRes.data.rewards?.money;
+            showKillResult(execRes.data?.message || 'Kill executed.', 'success', {
+              description: rewardMoney != null ? `Rewards: $${Number(rewardMoney).toLocaleString()}` : undefined,
+            });
+          } else if (execRes.data?.first_bodyguard) {
+            const bg = execRes.data.first_bodyguard;
+            showKillResult(execRes.data?.message || 'Target has a bodyguard.', 'warning', {
+              action: {
+                label: 'Search',
+                onClick: async () => {
+                  setKillBannerMessage(null);
+                  setLoading(true);
+                  try {
+                    const note = bg.target_username ? `Bodyguard for: ${bg.target_username}` : '';
+                    const res = await api.post('/attack/search', { target_username: bg.search_username, note });
+                    toast.success(res.data?.message || 'Search started', { duration: 10000 });
+                    await refreshAttacks();
+                  } catch (err) {
+                    toast.error(err.response?.data?.detail || 'Failed to search', { duration: 10000 });
+                  } finally {
+                    setLoading(false);
+                  }
+                },
+              },
+            });
+          } else {
+            showKillResult(execRes.data?.message || 'Kill failed.', 'error');
+          }
         } catch (error) {
           showKillResult(error.response?.data?.detail || 'Failed to execute attack', 'error');
         } finally {
