@@ -800,6 +800,14 @@ const CalcModal = ({
                     {Number(calcResult.inflation_pct ?? 0)}%
                   </span>
                 </div>
+                {Number(calcResult.mastery_discount_pct ?? 0) > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-mutedForeground font-heading">Shooting range mastery:</span>
+                    <span className="text-[11px] font-heading font-bold text-emerald-500">
+                      -{Number(calcResult.mastery_discount_pct).toFixed(1)}% bullets
+                    </span>
+                  </div>
+                )}
                 <div className="pt-2 border-t border-border text-[10px] text-mutedForeground font-heading space-y-0.5">
                   <div>
                     Your Rank: <span className="text-foreground font-bold">{calcResult.attacker_rank_name}</span>

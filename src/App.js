@@ -50,6 +50,7 @@ const SportsBetting = lazy(() => import("./pages/SportsBetting"));
 const StockMarket = lazy(() => import("./pages/StockMarket"));
 const Bank = lazy(() => import("./pages/Bank"));
 const ArmourWeapons = lazy(() => import("./pages/ArmourWeapons"));
+const ShootingRange = lazy(() => import("./pages/ShootingRange"));
 const Attemps = lazy(() => import("./pages/Attemps"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const Store = lazy(() => import("./pages/Store"));
@@ -770,6 +771,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <ArmourWeapons />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/shooting-range"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <ShootingRange />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

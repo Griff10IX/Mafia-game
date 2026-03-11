@@ -51,7 +51,7 @@ from server import (
 )
 from routers.booze_run import BOOZE_TYPES
 from routers.objectives import update_objectives_progress
-from routers.armoury import _best_weapon_for_user
+from routers.armoury import _best_weapon_for_user, _get_weapon_mastery_pct, MASTERY_MAX_BULLET_REDUCTION_PCT
 from routers.families import resolve_family_id
 
 
@@ -675,7 +675,12 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     best_damage, best_weapon_name = await _best_weapon_for_user(current_user["id"], current_user.get("equipped_weapon_id"))
     breakdown = _bullets_to_kill_breakdown(target_armour, target_rank_id, best_damage, attacker_rank_id)
     bullets_base = int(breakdown["bullets_required"])
-    bullets_required = int(math.ceil(bullets_base * (1.0 + inflation)))
+    bullets_after_inflation = bullets_base * (1.0 + inflation)
+    equipped_id = (current_user.get("equipped_weapon_id") or "").strip() or None
+    mastery_pct = await _get_weapon_mastery_pct(current_user["id"], equipped_id) if equipped_id else 0
+    discount = (mastery_pct / 100.0) * (MASTERY_MAX_BULLET_REDUCTION_PCT / 100.0)
+    bullets_required = int(math.ceil(bullets_after_inflation * (1.0 - discount)))
+    mastery_discount_pct = round(discount * 100, 1)
     return {
         "target_username": target["username"],
         "target_rank": target_rank_id,
@@ -689,6 +694,8 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
         "bullets_base": bullets_base,
         "inflation": inflation,
         "inflation_pct": int(round(inflation * 100)),
+        "mastery_pct": mastery_pct,
+        "mastery_discount_pct": mastery_discount_pct,
         "needed_before_clamp": breakdown["needed_before_clamp"],
     }
 
@@ -756,7 +763,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     best_damage, best_weapon_name = await _best_weapon_for_user(current_user["id"], equipped_weapon_id)
     inflation = await _apply_kill_inflation_decay(current_user["id"])
     bullets_base = _bullets_to_kill(target_armour, target_rank_id, best_damage, attacker_rank_id)
-    bullets_required = int(math.ceil(bullets_base * (1.0 + inflation)))
+    mastery_pct = await _get_weapon_mastery_pct(current_user["id"], equipped_weapon_id)
+    discount = (mastery_pct / 100.0) * (MASTERY_MAX_BULLET_REDUCTION_PCT / 100.0)
+    bullets_required = int(math.ceil(bullets_base * (1.0 + inflation) * (1.0 - discount)))
     if attacker_bullets <= 0:
         await _log_attack_error(current_user["id"], current_user.get("username"), "You need bullets to attack.", req)
         raise HTTPException(status_code=400, detail="You need bullets to attack.")

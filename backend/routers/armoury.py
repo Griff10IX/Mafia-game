@@ -41,6 +41,12 @@ BULLET_PACKS = {5000: 100, 10000: 175, 50000: 775, 100000: 1525}  # matches stor
 TOKEN_TYPES = ("xp_double", "jailbust_bonus")
 TOKEN_DURATION_HOURS = 1
 
+# Shooting range: weapon mastery 0-100%; at 100% = up to MASTERY_MAX_BULLET_REDUCTION_PCT fewer bullets in attack.
+MASTERY_MAX_BULLET_REDUCTION_PCT = 10
+MASTERY_AUTO_SIM_PCT_PER_CHUNK = 5  # +5% per "Train 5 min" chunk
+MASTERY_COOLDOWN_MINUTES = 5  # min time between auto_sim trains per weapon
+BRASS_KNUCKLES_WEAPON_ID = "weapon1"  # exclude from shooting range (no bullets)
+
 
 class StateOptionalRequest(BaseModel):
     state: Optional[str] = None
@@ -77,6 +83,11 @@ class StateOptionalBody(BaseModel):
 
 class UseTokenRequest(BaseModel):
     token_type: str  # "xp_double" | "jailbust_bonus"
+
+
+class ShootingRangeTrainRequest(BaseModel):
+    weapon_id: str
+    mode: str = "auto_sim"  # "auto_sim" for button train chunk
 
 
 def _normalize_state(state: str) -> str:
@@ -1304,6 +1315,79 @@ async def _best_weapon_for_user(user_id: str, equipped_weapon_id: str | None = N
     return best_damage, best_name
 
 
+async def _get_weapon_mastery_pct(user_id: str, weapon_id: str | None) -> int:
+    """Return 0-100 mastery for this user/weapon. Used by attack to apply bullet discount. Brass Knuckles excluded."""
+    if not weapon_id or weapon_id == BRASS_KNUCKLES_WEAPON_ID:
+        return 0
+    doc = await db.user_weapon_mastery.find_one(
+        {"user_id": user_id, "weapon_id": weapon_id},
+        {"_id": 0, "mastery_pct": 1},
+    )
+    return min(100, max(0, int(doc.get("mastery_pct", 0) or 0)))
+
+
+async def get_shooting_range_mastery(current_user: dict = Depends(get_current_user)):
+    """Return mastery for all gun weapons (exclude Brass Knuckles) for current user."""
+    weapons_list = await db.weapons.find({}, {"_id": 0, "id": 1, "name": 1, "bullets_needed": 1}).to_list(200)
+    gun_weapons = [w for w in weapons_list if w.get("id") != BRASS_KNUCKLES_WEAPON_ID]
+    mastery_docs = await db.user_weapon_mastery.find(
+        {"user_id": current_user["id"], "weapon_id": {"$in": [w["id"] for w in gun_weapons]}},
+        {"_id": 0, "weapon_id": 1, "mastery_pct": 1, "last_trained_at": 1},
+    ).to_list(100)
+    by_weapon = {d["weapon_id"]: {"mastery_pct": min(100, max(0, int(d.get("mastery_pct", 0) or 0))), "last_trained_at": d.get("last_trained_at")} for d in mastery_docs}
+    result = {}
+    for w in gun_weapons:
+        wid = w.get("id")
+        if wid == BRASS_KNUCKLES_WEAPON_ID:
+            continue
+        result[wid] = by_weapon.get(wid, {"mastery_pct": 0, "last_trained_at": None})
+    return {"mastery": result, "weapons": [{"id": w["id"], "name": w.get("name", w["id"])} for w in gun_weapons]}
+
+
+async def train_shooting_range(request: ShootingRangeTrainRequest, current_user: dict = Depends(get_current_user)):
+    """Train one weapon (auto_sim chunk). User must own the weapon. Gun only (exclude Brass Knuckles)."""
+    weapon_id = (request.weapon_id or "").strip()
+    if not weapon_id:
+        raise HTTPException(status_code=400, detail="weapon_id required")
+    if weapon_id == BRASS_KNUCKLES_WEAPON_ID:
+        raise HTTPException(status_code=400, detail="Brass Knuckles cannot be trained at the shooting range.")
+    weapon = await db.weapons.find_one({"id": weapon_id}, {"_id": 0, "id": 1, "name": 1, "bullets_needed": 1})
+    if not weapon or int(weapon.get("bullets_needed") or 0) <= 0:
+        raise HTTPException(status_code=400, detail="Only guns can be trained at the shooting range.")
+    owned = await db.user_weapons.find_one({"user_id": current_user["id"], "weapon_id": weapon_id, "quantity": {"$gt": 0}}, {"_id": 1})
+    if not owned:
+        raise HTTPException(status_code=400, detail="You must own this weapon to train it.")
+    if request.mode != "auto_sim":
+        raise HTTPException(status_code=400, detail="Only auto_sim mode is supported.")
+    now = datetime.now(timezone.utc)
+    doc = await db.user_weapon_mastery.find_one({"user_id": current_user["id"], "weapon_id": weapon_id}, {"_id": 0, "mastery_pct": 1, "last_trained_at": 1})
+    last = doc.get("last_trained_at") if doc else None
+    if last:
+        try:
+            last_dt = datetime.fromisoformat(last.replace("Z", "+00:00")) if isinstance(last, str) else last
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            if (now - last_dt).total_seconds() < MASTERY_COOLDOWN_MINUTES * 60:
+                wait_sec = MASTERY_COOLDOWN_MINUTES * 60 - int((now - last_dt).total_seconds())
+                raise HTTPException(status_code=429, detail=f"Wait {max(1, wait_sec // 60)} min before training this weapon again.")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    current_pct = min(100, max(0, int(doc.get("mastery_pct", 0) or 0))) if doc else 0
+    add_pct = min(MASTERY_AUTO_SIM_PCT_PER_CHUNK, 100 - current_pct)
+    if add_pct <= 0:
+        return {"message": "Already at 100% mastery.", "mastery_pct": 100, "next_train_at": None}
+    now_iso = now.isoformat()
+    await db.user_weapon_mastery.update_one(
+        {"user_id": current_user["id"], "weapon_id": weapon_id},
+        {"$set": {"mastery_pct": current_pct + add_pct, "last_trained_at": now_iso}, "$setOnInsert": {"user_id": current_user["id"], "weapon_id": weapon_id}},
+        upsert=True,
+    )
+    next_train_at = (now + timedelta(minutes=MASTERY_COOLDOWN_MINUTES)).isoformat()
+    return {"message": f"+{add_pct}% mastery ({weapon.get('name', weapon_id)}).", "mastery_pct": current_pct + add_pct, "next_train_at": next_train_at}
+
+
 def _tokens_from_user(user: dict) -> dict:
     """Build tokens dict for inventory: count and active_until per token type."""
     now = datetime.now(timezone.utc)
@@ -1408,5 +1492,7 @@ def register(router):
     router.add_api_route("/weapons/unequip", unequip_weapon, methods=["POST"])
     router.add_api_route("/weapons/{weapon_id}/buy", buy_weapon, methods=["POST"])
     router.add_api_route("/weapons/{weapon_id}/sell", sell_weapon, methods=["POST"])
+    router.add_api_route("/shooting-range/mastery", get_shooting_range_mastery, methods=["GET"])
+    router.add_api_route("/shooting-range/train", train_shooting_range, methods=["POST"])
     router.add_api_route("/inventory", get_inventory, methods=["GET"])
     router.add_api_route("/inventory/tokens/use", use_consumable_token, methods=["POST"])
