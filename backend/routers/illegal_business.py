@@ -40,15 +40,15 @@ BOOZE_CAP_HOURS_BASE = 24
 GUARD_SLOTS_INITIAL = 2
 SECURITY_LEVEL_INITIAL = 0
 
-# Security upgrades (1920s–30s). Order = unlock order. defence_weight adds to defender_strength.
+# Security upgrades (1920s–30s). Order = unlock order. defence_weight adds to defender_strength. required_mission_id gates purchase.
 SECURITY_UPGRADES = [
-    {"id": "reinforced_door", "name": "Reinforced door", "cost_cash": 15_000, "cost_points": 0, "defence_weight": 8},
-    {"id": "vault", "name": "Vault / safe", "cost_cash": 25_000, "cost_points": 10, "defence_weight": 12},
-    {"id": "lookout", "name": "Lookout", "cost_cash": 20_000, "cost_points": 5, "defence_weight": 10},
-    {"id": "bouncers", "name": "Bouncers", "cost_cash": 30_000, "cost_points": 15, "defence_weight": 15},
-    {"id": "alarm_wire", "name": "Alarm wire", "cost_cash": 18_000, "cost_points": 8, "defence_weight": 9},
-    {"id": "bribed_cop", "name": "Bribed beat cop", "cost_cash": 40_000, "cost_points": 20, "defence_weight": 14},
-    {"id": "thompson", "name": "Thompson in the back", "cost_cash": 35_000, "cost_points": 25, "defence_weight": 18},
+    {"id": "reinforced_door", "name": "Reinforced door", "cost_cash": 15_000, "cost_points": 0, "defence_weight": 8, "required_mission_id": "ibm_1"},
+    {"id": "vault", "name": "Vault / safe", "cost_cash": 25_000, "cost_points": 10, "defence_weight": 12, "required_mission_id": "ibm_2"},
+    {"id": "lookout", "name": "Lookout", "cost_cash": 20_000, "cost_points": 5, "defence_weight": 10, "required_mission_id": "ibm_1"},
+    {"id": "bouncers", "name": "Bouncers", "cost_cash": 30_000, "cost_points": 15, "defence_weight": 15, "required_mission_id": "ibm_4"},
+    {"id": "alarm_wire", "name": "Alarm wire", "cost_cash": 18_000, "cost_points": 8, "defence_weight": 9, "required_mission_id": "ibm_3"},
+    {"id": "bribed_cop", "name": "Bribed beat cop", "cost_cash": 40_000, "cost_points": 20, "defence_weight": 14, "required_mission_id": "ibm_5"},
+    {"id": "thompson", "name": "Thompson in the back", "cost_cash": 35_000, "cost_points": 25, "defence_weight": 18, "required_mission_id": "ibm_5"},
 ]
 SECURITY_UPGRADE_IDS = [u["id"] for u in SECURITY_UPGRADES]
 
@@ -77,15 +77,50 @@ MODERATELY_UPGRADED_SECURITY = 1
 # Missions (fairly hard). requirements map keys: crimes_in_state, business_income_7d, raids_won, guards_weapon_3, security_level, rank_id, etc.
 ILLEGAL_BUSINESS_MISSIONS = [
     {"id": "ibm_1", "order": 1, "title": "Prove the operation", "story": "The Commissioner wants a cut—prove you can run the block.",
+     "how_to_complete": "Reach Capo rank and complete 100 crimes in total.",
      "requirements": {"crimes": 100, "rank_id": CAPO_RANK_ID}, "rewards": {"guard_slots": 1}},
     {"id": "ibm_2", "order": 2, "title": "Expand the take", "story": "Word on the street: you need more muscle before the big boys notice.",
+     "how_to_complete": "Earn $50,000 business income in the last 7 days and reach security level 1 (buy 1 upgrade).",
      "requirements": {"business_income_7d": 50_000, "security_level": 1}, "rewards": {"income_mult": 1.1}},
     {"id": "ibm_3", "order": 3, "title": "Hit back", "story": "They hit you once. Show them you hit harder.",
+     "how_to_complete": "Win 3 raids.",
      "requirements": {"raids_won": 3}, "rewards": {"guard_slots": 1}},
     {"id": "ibm_4", "order": 4, "title": "Heavy security", "story": "A vault keeps the take safe. Get one.",
+     "how_to_complete": "Reach security level 3 (buy 3 upgrades).",
      "requirements": {"security_level": 3}, "rewards": {"guard_weapon_max": 1}},
     {"id": "ibm_5", "order": 5, "title": "Territory boss", "story": "Run 500 crimes in your business state. Own the block.",
+     "how_to_complete": "Complete 500 crimes in your business state.",
      "requirements": {"crimes_in_state": 500}, "rewards": {"income_mult": 1.2, "guard_slots": 1}},
+    {"id": "ibm_6", "order": 6, "title": "Widening the net", "story": "More crimes, more respect. Push to 250 total.",
+     "how_to_complete": "Complete 250 crimes in total.",
+     "requirements": {"crimes": 250}, "rewards": {"guard_slots": 1}},
+    {"id": "ibm_7", "order": 7, "title": "Bigger take", "story": "The operation is growing. Show it in the books.",
+     "how_to_complete": "Earn $150,000 business income in the last 7 days.",
+     "requirements": {"business_income_7d": 150_000}, "rewards": {"income_mult": 1.1}},
+    {"id": "ibm_8", "order": 8, "title": "Raid veteran", "story": "You've hit enough joints to know the score.",
+     "how_to_complete": "Win 5 raids.",
+     "requirements": {"raids_won": 5}, "rewards": {"guard_slots": 1}},
+    {"id": "ibm_9", "order": 9, "title": "Fortress", "story": "Lock it down. Get to five security upgrades.",
+     "how_to_complete": "Reach security level 5 (buy 5 upgrades).",
+     "requirements": {"security_level": 5}, "rewards": {"guard_weapon_max": 1}},
+    {"id": "ibm_10", "order": 10, "title": "State kingpin", "story": "Run 1,000 crimes in your business state.",
+     "how_to_complete": "Complete 1,000 crimes in your business state.",
+     "requirements": {"crimes_in_state": 1000}, "rewards": {"income_mult": 1.15, "guard_slots": 1}},
+    {"id": "ibm_11", "order": 11, "title": "Crime lord", "story": "500 crimes total. The family notices.",
+     "how_to_complete": "Complete 500 crimes in total.",
+     "requirements": {"crimes": 500}, "rewards": {"guard_slots": 2}},
+    {"id": "ibm_12", "order": 12, "title": "Money machine", "story": "Half a million in a week from the operation.",
+     "how_to_complete": "Earn $500,000 business income in the last 7 days.",
+     "requirements": {"business_income_7d": 500_000}, "rewards": {"income_mult": 1.2}},
+    {"id": "ibm_13", "order": 13, "title": "Raid master", "story": "Ten successful hits. You're the one they fear.",
+     "how_to_complete": "Win 10 raids.",
+     "requirements": {"raids_won": 10}, "rewards": {"guard_slots": 1, "income_mult": 1.1}},
+    {"id": "ibm_14", "order": 14, "title": "Maximum security", "story": "Every upgrade. Nobody gets in.",
+     "how_to_complete": "Reach security level 7 (buy all upgrades).",
+     "requirements": {"security_level": 7}, "rewards": {"guard_weapon_max": 1, "income_mult": 1.1}},
+    {"id": "ibm_15", "order": 15, "title": "Empire", "story": "2,500 crimes in your state. You own the block.",
+     "how_to_complete": "Complete 2,500 crimes in your business state.",
+     "requirements": {"crimes_in_state": 2500}, "rewards": {"income_mult": 1.25, "guard_slots": 2}},
 ]
 
 # Default booze type for booze_making passive output (first BOOZE_TYPES id)
@@ -222,6 +257,19 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
         if "crimes_in_state" in req:
             cur["crimes_in_state"] = int(current_user.get("illegal_business_crimes_in_state") or 0)
         missions_progress.append({"mission": m, "completed": m["id"] in completed_ids, "current": cur, "target": req})
+    # Build security upgrades list with locked/unlock hint
+    security_upgrades_with_lock = []
+    for u in SECURITY_UPGRADES:
+        entry = dict(u)
+        rid = u.get("required_mission_id")
+        if rid:
+            mission = next((m for m in ILLEGAL_BUSINESS_MISSIONS if m["id"] == rid), None)
+            entry["unlock_mission_title"] = mission.get("title", rid) if mission else rid
+            entry["locked"] = rid not in completed_ids
+        else:
+            entry["unlock_mission_title"] = None
+            entry["locked"] = False
+        security_upgrades_with_lock.append(entry)
     return {
         "business": business,
         "guards": guards,
@@ -230,7 +278,7 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
         "missions": missions_progress,
         "pending_kill_rewards": pending_rewards,
         "available_types": ILLEGAL_BUSINESS_TYPES,
-        "security_upgrades_list": SECURITY_UPGRADES,
+        "security_upgrades_list": security_upgrades_with_lock,
     }
 
 
@@ -480,6 +528,14 @@ async def upgrade_security(upgrade_id: str, current_user: dict = Depends(get_cur
     if idx > len(upgrades_done):
         raise HTTPException(status_code=400, detail="Unlock previous upgrades first.")
     up_def = SECURITY_UPGRADES[idx]
+    required_mission_id = up_def.get("required_mission_id")
+    if required_mission_id:
+        completions = current_user.get("illegal_business_mission_completions") or []
+        completed_ids = {c.get("mission_id") for c in completions if c.get("mission_id")}
+        if required_mission_id not in completed_ids:
+            mission = next((m for m in ILLEGAL_BUSINESS_MISSIONS if m["id"] == required_mission_id), None)
+            title = mission.get("title", required_mission_id) if mission else required_mission_id
+            raise HTTPException(status_code=403, detail=f"Complete mission \"{title}\" to unlock this upgrade.")
     cost_cash = up_def.get("cost_cash", 0)
     cost_points = up_def.get("cost_points", 0)
     money = int(current_user.get("money") or 0)
@@ -592,7 +648,36 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
         "loot_cash": loot_cash,
         "loot_points": loot_points,
         "message": f"You hit the place. Took ${loot_cash:,}." if won else "They were ready—you got nothing.",
+        "target_username": target_user.get("username"),
     }
+
+
+async def raid_random_illegal_business(current_user: dict = Depends(get_current_user)):
+    """Pick a random eligible target (has business, not self) and run the same raid flow. Cooldown and daily limit apply."""
+    # Daily limit check first
+    today_key = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    raid_count_today = int(current_user.get("illegal_business_raids_today") or 0)
+    raid_date = current_user.get("illegal_business_raids_date")
+    if raid_date != today_key:
+        raid_count_today = 0
+    if raid_count_today >= RAID_DAILY_LIMIT:
+        raise HTTPException(status_code=400, detail=f"Daily raid limit ({RAID_DAILY_LIMIT}) reached.")
+    # Random business other than current user
+    pipeline = [
+        {"$match": {"user_id": {"$ne": current_user["id"]}}},
+        {"$sample": 1},
+    ]
+    cursor = db.illegal_businesses.aggregate(pipeline)
+    result = await cursor.to_list(1)
+    if not result:
+        raise HTTPException(status_code=404, detail="No other players with a business to raid.")
+    business = result[0]
+    target_id = business["user_id"]
+    target_user = await db.users.find_one({"id": target_id}, {"_id": 0, "id": 1, "username": 1})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Target not found.")
+    req = RaidRequest(target_username=target_user["username"], state=business.get("state"))
+    return await raid_illegal_business(req, current_user)
 
 
 async def claim_kill_reward(req: ClaimKillRewardRequest, current_user: dict = Depends(get_current_user)):
@@ -634,4 +719,5 @@ def register(router):
     router.add_api_route("/illegal-business/security/upgrade/{upgrade_id}", upgrade_security, methods=["POST"])
     router.add_api_route("/illegal-business", patch_illegal_business, methods=["PATCH"])
     router.add_api_route("/illegal-business/raid", raid_illegal_business, methods=["POST"])
+    router.add_api_route("/illegal-business/raid/random", raid_random_illegal_business, methods=["POST"])
     router.add_api_route("/illegal-business/claim-kill-reward", claim_kill_reward, methods=["POST"])

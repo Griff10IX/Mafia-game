@@ -282,6 +282,15 @@ export default function IllegalBusiness() {
     fetchData();
   });
 
+  const handleRaidRandom = withSave(async () => {
+    setRaidResult(null);
+    const res = await api.post('/illegal-business/raid/random');
+    setRaidResult(res.data);
+    toast.success(res.data?.message);
+    if (res.data?.loot_cash) refreshUser();
+    fetchData();
+  });
+
   const handleClaimKillReward = withSave(async (victimId, choice) => {
     const res = await api.post('/illegal-business/claim-kill-reward', { victim_id: victimId, choice });
     toast.success(res.data?.message);
@@ -495,24 +504,31 @@ export default function IllegalBusiness() {
                 securityList.map((upg, idx) => {
                   const done   = idx < nextUpgradeIdx;
                   const isNext = idx === nextUpgradeIdx;
+                  const locked = !!upg.locked && !done;
                   return (
                     <div
                       key={upg.id}
                       className={`flex items-center gap-3 p-2.5 rounded border transition-all ${
                         done   ? 'border-primary/10 opacity-45' :
+                        locked ? 'border-zinc-800/50 bg-zinc-900/40 opacity-70' :
                         isNext ? 'border-primary/25 bg-primary/5' :
                                  'border-zinc-800/50 opacity-35'
                       }`}
                     >
                       <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 text-[9px] ${
-                        done ? 'bg-primary/20 border-primary/40 text-primary' : 'border-zinc-700/55'
+                        done ? 'bg-primary/20 border-primary/40 text-primary' : locked ? 'border-zinc-600 bg-zinc-800/50' : 'border-zinc-700/55'
                       }`}>
-                        {done ? '✓' : ''}
+                        {done ? '✓' : locked ? <Lock size={10} className="text-zinc-500" /> : ''}
                       </div>
                       <span className={`flex-1 text-xs ${done ? 'line-through text-zinc-600' : 'text-foreground'}`}>
                         {upg.name}
                       </span>
-                      {!done && isNext && (
+                      {!done && locked && upg.unlock_mission_title && (
+                        <span className="text-[9px] text-mutedForeground font-heading shrink-0 max-w-[140px] text-right">
+                          Complete mission &quot;{upg.unlock_mission_title}&quot; to unlock
+                        </span>
+                      )}
+                      {!done && isNext && !locked && (
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="text-[10px] text-mutedForeground font-heading">{formatMoney(upg.cost_cash)}</span>
                           <button
@@ -524,7 +540,7 @@ export default function IllegalBusiness() {
                           </button>
                         </div>
                       )}
-                      {!done && !isNext && (
+                      {!done && !isNext && !locked && (
                         <span className="text-[9px] text-zinc-700 font-heading shrink-0">{formatMoney(upg.cost_cash)}</span>
                       )}
                     </div>
@@ -543,24 +559,50 @@ export default function IllegalBusiness() {
           {missions.length > 0 && (
             <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
               <CardHead icon={ListChecks} title="Missions" />
-              <div className="p-4 space-y-1.5">
-                {missions.map(({ mission, completed, target }) => (
-                  <div key={mission.id} className="flex items-center gap-3 py-1.5 border-b border-zinc-800/40 last:border-b-0">
-                    <div className={`w-2 h-2 rounded-full border shrink-0 ${completed ? 'mission-dot-done border-primary' : 'border-zinc-600'}`} />
-                    <span className={`flex-1 text-xs leading-snug ${completed ? 'line-through text-zinc-600' : 'text-foreground'}`}>
-                      {mission.title}
-                    </span>
-                    {!completed && target && (
-                      <button
-                        onClick={() => handleCompleteMission(mission.id)}
-                        disabled={saving}
-                        className="flex items-center gap-0.5 shrink-0 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2 py-1 rounded hover:bg-primary/10 disabled:opacity-40 transition-all"
-                      >
-                        <ChevronRight size={9} /> Complete
-                      </button>
-                    )}
-                  </div>
-                ))}
+              <div className="p-4 space-y-3">
+                {missions.map(({ mission, completed, current, target }) => {
+                  const requirementsMet = target && Object.keys(target).every((k) => (Number(current?.[k]) ?? 0) >= (Number(target[k]) ?? 0));
+                  const progressLines = !completed && target && typeof current === 'object' && current !== null
+                    ? Object.entries(target).map(([key, need]) => {
+                        const cur = Number(current[key]) ?? 0;
+                        const n = Number(need) ?? 0;
+                        const fmt = key === 'business_income_7d' ? (x) => formatMoney(x) : (x) => Number(x).toLocaleString();
+                        return `${fmt(cur)} / ${fmt(n)}`;
+                      }).join(' · ')
+                    : null;
+                  return (
+                    <div key={mission.id} className="border-b border-zinc-800/40 last:border-b-0 pb-3 last:pb-0">
+                      <div className="flex items-start gap-3">
+                        <div className={`w-2 h-2 rounded-full border shrink-0 mt-1.5 ${completed ? 'mission-dot-done border-primary' : 'border-zinc-600'}`} />
+                        <div className="flex-1 min-w-0">
+                          <span className={`text-xs font-heading font-bold block ${completed ? 'line-through text-zinc-600' : 'text-foreground'}`}>
+                            {mission.title}
+                          </span>
+                          {mission.story && (
+                            <p className="text-[11px] text-mutedForeground italic mt-0.5">{mission.story}</p>
+                          )}
+                          {mission.how_to_complete && (
+                            <p className={`text-[11px] mt-1 ${completed ? 'text-zinc-600' : 'text-mutedForeground'}`}>
+                              {mission.how_to_complete}
+                            </p>
+                          )}
+                          {progressLines && (
+                            <p className="text-[10px] font-heading text-primary/90 mt-1 tracking-wide">{progressLines}</p>
+                          )}
+                        </div>
+                        {!completed && requirementsMet && (
+                          <button
+                            onClick={() => handleCompleteMission(mission.id)}
+                            disabled={saving}
+                            className="flex items-center gap-0.5 shrink-0 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2 py-1 rounded hover:bg-primary/10 disabled:opacity-40 transition-all"
+                          >
+                            <ChevronRight size={9} /> Complete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -605,6 +647,13 @@ export default function IllegalBusiness() {
               >
                 {saving ? 'Sending crew…' : 'Execute Raid'}
               </button>
+              <button
+                onClick={handleRaidRandom}
+                disabled={saving}
+                className="px-5 py-2.5 bg-primary/10 text-primary font-heading font-bold uppercase tracking-wider text-xs rounded border border-primary/30 hover:bg-primary/20 disabled:opacity-40 transition-all whitespace-nowrap"
+              >
+                Random Raid
+              </button>
             </div>
 
             {raidResult && (
@@ -620,6 +669,11 @@ export default function IllegalBusiness() {
                     </span>
                   )}
                 </div>
+                {raidResult.target_username && (
+                  <p className="text-[10px] text-mutedForeground font-heading mb-0.5">
+                    You hit {raidResult.target_username}&apos;s joint.
+                  </p>
+                )}
                 <p className="text-xs text-foreground">{raidResult.message}</p>
               </div>
             )}
