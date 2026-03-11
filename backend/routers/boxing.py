@@ -33,6 +33,10 @@ DRILLS: Dict[str, dict] = {
     "speed_bag": {"name": "Speed Bag", "cooldown_seconds": 60, "gains": {"speed": 1, "accuracy": 1}, "stamina_cost": 5},
     "roadwork": {"name": "Roadwork", "cooldown_seconds": 90, "gains": {"stamina": 2}, "stamina_cost": 8},
     "sparring": {"name": "Sparring", "cooldown_seconds": 120, "gains": {"defense": 1, "accuracy": 1}, "stamina_cost": 10},
+    "hand_speed": {"name": "Hand Speed", "cooldown_seconds": 75, "gains": {"speed": 1, "accuracy": 1}, "stamina_cost": 6},
+    "slip_bag": {"name": "Slip Bag", "cooldown_seconds": 75, "gains": {"defense": 1, "accuracy": 1}, "stamina_cost": 6},
+    "conditioning": {"name": "Conditioning", "cooldown_seconds": 90, "gains": {"recovery": 1, "stamina": 1}, "stamina_cost": 8},
+    "body_work": {"name": "Body Work", "cooldown_seconds": 90, "gains": {"chin": 1, "defense": 1}, "stamina_cost": 7},
 }
 
 GYMS: List[dict] = [
@@ -48,22 +52,30 @@ COACHES: List[dict] = [
 ]
 
 GEAR: List[dict] = [
-    {"id": "gloves_basic", "slot": "gloves", "name": "Basic Gloves", "cost": 15000, "bonus": {"power": 0.01}},
-    {"id": "gloves_pro", "slot": "gloves", "name": "Pro Gloves", "cost": 90000, "bonus": {"power": 0.02}},
-    {"id": "boots_basic", "slot": "boots", "name": "Basic Boots", "cost": 12000, "bonus": {"speed": 0.01}},
-    {"id": "boots_pro", "slot": "boots", "name": "Pro Boots", "cost": 80000, "bonus": {"speed": 0.02}},
-    {"id": "mouthguard_basic", "slot": "mouthguard", "name": "Mouthguard", "cost": 18000, "bonus": {"defense": 0.01}},
-    {"id": "headgear_basic", "slot": "headgear", "name": "Headgear", "cost": 22000, "bonus": {"defense": 0.01, "accuracy": 0.005}},
+    {"id": "gloves_basic", "slot": "gloves", "name": "Basic Gloves", "cost": 15000, "bonus": {"power": 0.01}, "theme": "classic"},
+    {"id": "gloves_pro", "slot": "gloves", "name": "Pro Gloves", "cost": 90000, "bonus": {"power": 0.02}, "theme": "classic"},
+    {"id": "gloves_champ", "slot": "gloves", "name": "Champion Gloves", "cost": 200000, "bonus": {"power": 0.03}, "theme": "champion", "wins_required": 25},
+    {"id": "gloves_neon", "slot": "gloves", "name": "Neon Gloves", "cost": 120000, "bonus": {"power": 0.02, "speed": 0.01}, "theme": "neon", "wins_required": 10},
+    {"id": "boots_basic", "slot": "boots", "name": "Basic Boots", "cost": 12000, "bonus": {"speed": 0.01}, "theme": "classic"},
+    {"id": "boots_pro", "slot": "boots", "name": "Pro Boots", "cost": 80000, "bonus": {"speed": 0.02}, "theme": "classic"},
+    {"id": "boots_champ", "slot": "boots", "name": "Champion Boots", "cost": 180000, "bonus": {"speed": 0.03}, "theme": "champion", "wins_required": 50},
+    {"id": "boots_neon", "slot": "boots", "name": "Neon Boots", "cost": 95000, "bonus": {"speed": 0.02}, "theme": "neon", "wins_required": 5},
+    {"id": "mouthguard_basic", "slot": "mouthguard", "name": "Mouthguard", "cost": 18000, "bonus": {"defense": 0.01}, "theme": "classic"},
+    {"id": "headgear_basic", "slot": "headgear", "name": "Headgear", "cost": 22000, "bonus": {"defense": 0.01, "accuracy": 0.005}, "theme": "classic"},
 ]
 
 # NPC boxers: id, name, base stats (1-10), rating for odds/rating change
 BOXING_NPCS: List[dict] = [
-    {"id": "npc_bruiser", "name": "Street Bruiser", "power": 8, "speed": 4, "stamina": 6, "defense": 4, "accuracy": 4, "rating": 900},
-    {"id": "npc_slick", "name": "Slick Eddie", "power": 4, "speed": 8, "stamina": 5, "defense": 6, "accuracy": 7, "rating": 950},
-    {"id": "npc_tank", "name": "Iron Tank", "power": 7, "speed": 3, "stamina": 9, "defense": 8, "accuracy": 3, "rating": 1000},
-    {"id": "npc_phantom", "name": "The Phantom", "power": 6, "speed": 9, "stamina": 6, "defense": 5, "accuracy": 8, "rating": 1050},
-    {"id": "npc_champ", "name": "Back-Alley Champ", "power": 8, "speed": 7, "stamina": 7, "defense": 6, "accuracy": 7, "rating": 1150},
+    {"id": "npc_bruiser", "name": "Street Bruiser", "power": 8, "speed": 4, "stamina": 6, "defense": 4, "accuracy": 4, "chin": 6, "recovery": 5, "rating": 900},
+    {"id": "npc_slick", "name": "Slick Eddie", "power": 4, "speed": 8, "stamina": 5, "defense": 6, "accuracy": 7, "chin": 4, "recovery": 5, "rating": 950},
+    {"id": "npc_tank", "name": "Iron Tank", "power": 7, "speed": 3, "stamina": 9, "defense": 8, "accuracy": 3, "chin": 8, "recovery": 7, "rating": 1000},
+    {"id": "npc_phantom", "name": "The Phantom", "power": 6, "speed": 9, "stamina": 6, "defense": 5, "accuracy": 8, "chin": 4, "recovery": 5, "rating": 1050},
+    {"id": "npc_champ", "name": "Back-Alley Champ", "power": 8, "speed": 7, "stamina": 7, "defense": 6, "accuracy": 7, "chin": 7, "recovery": 6, "rating": 1150},
 ]
+
+# Configurable round break (seconds between rounds) and count duration for KD
+ROUND_BREAK_SECONDS = 6
+COUNT_DURATION_SECONDS = 9
 
 
 def _get_npc_by_id_or_name(value: str) -> Optional[dict]:
@@ -82,6 +94,8 @@ DEFAULT_PROFILE = {
     "stamina": 1,
     "defense": 1,
     "accuracy": 1,
+    "chin": 1,
+    "recovery": 1,
     "rating": 1000,
     "gym_id": "gym_starter",
     "gym_level": 0,
@@ -137,8 +151,11 @@ def _gear_bonus(equipped: dict) -> dict:
     return out
 
 
+STAT_KEYS = ("power", "speed", "stamina", "defense", "accuracy", "chin", "recovery")
+
+
 def _effective_stats(profile: dict) -> dict:
-    base = {k: int(profile.get(k, 1) or 1) for k in ("power", "speed", "stamina", "defense", "accuracy")}
+    base = {k: int(profile.get(k, 1) or 1) for k in STAT_KEYS}
     bonus = {}
     for b in (_gym_bonus(profile.get("gym_id"), profile.get("gym_level")), _coach_bonus(profile.get("coach_id")), _gear_bonus(profile.get("equipped"))):
         for k, v in (b or {}).items():
@@ -337,11 +354,22 @@ async def coach_fire(current_user: dict = Depends(get_current_user_verified)):
     return {"message": "Coach fired", "profile": prof2, "effective": _effective_stats(prof2)}
 
 
+async def _get_user_boxing_wins(database, user_id: str) -> int:
+    c = await database.boxing_events.count_documents({"user_id": user_id, "result": "win"})
+    return int(c)
+
+
 async def gear_list(current_user: dict = Depends(get_current_user_verified)):
     prof = await _ensure_profile(current_user["id"])
     owned = await db.user_boxing_gear.find({"user_id": current_user["id"]}, {"_id": 0}).to_list(200)
     owned_ids = {o.get("gear_id") for o in owned if o.get("gear_id")}
-    return {"gear": GEAR, "owned_ids": list(owned_ids), "equipped": prof.get("equipped") or {}}
+    total_wins = await _get_user_boxing_wins(db, current_user["id"])
+    gear_with_unlock = []
+    for g in GEAR:
+        req = g.get("wins_required")
+        unlocked = req is None or total_wins >= int(req)
+        gear_with_unlock.append({**g, "unlocked": unlocked})
+    return {"gear": gear_with_unlock, "owned_ids": list(owned_ids), "equipped": prof.get("equipped") or {}, "total_wins": total_wins}
 
 
 async def gear_buy(payload: GearBuyRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -349,6 +377,11 @@ async def gear_buy(payload: GearBuyRequest, current_user: dict = Depends(get_cur
     item = next((g for g in GEAR if g["id"] == gear_id), None)
     if not item:
         raise HTTPException(status_code=400, detail="Invalid gear")
+    wins_required = item.get("wins_required")
+    if wins_required is not None:
+        total_wins = await _get_user_boxing_wins(db, current_user["id"])
+        if total_wins < int(wins_required):
+            raise HTTPException(status_code=400, detail=f"Unlock at {wins_required} wins (you have {total_wins})")
     existing = await db.user_boxing_gear.find_one({"user_id": current_user["id"], "gear_id": gear_id}, {"_id": 0})
     if existing:
         raise HTTPException(status_code=400, detail="Already owned")
@@ -371,6 +404,11 @@ async def gear_equip(payload: GearEquipRequest, current_user: dict = Depends(get
         item = next((g for g in GEAR if g["id"] == gear_id and g.get("slot") == slot), None)
         if not item:
             raise HTTPException(status_code=400, detail="Invalid gear for slot")
+        wins_required = item.get("wins_required")
+        if wins_required is not None:
+            total_wins = await _get_user_boxing_wins(db, current_user["id"])
+            if total_wins < int(wins_required):
+                raise HTTPException(status_code=400, detail=f"Unlock at {wins_required} wins (you have {total_wins})")
         owned = await db.user_boxing_gear.find_one({"user_id": current_user["id"], "gear_id": gear_id}, {"_id": 0})
         if not owned:
             raise HTTPException(status_code=400, detail="Not owned")
@@ -414,12 +452,20 @@ async def matches_create(payload: MatchCreateRequest, current_user: dict = Depen
         return {"message": "Open match created", "match_id": match_id}
     npc = _get_npc_by_id_or_name(opp_name)
     if npc:
-        # Create match vs NPC: b is NPC, already "ready"; when player readies, fight starts
+        # Create match vs NPC: scale NPC stats to player level
         await _ensure_profile(current_user["id"])
         match_id = str(uuid.uuid4())
         now = _now_iso()
-        a_prof = await db.boxing_profiles.find_one({"user_id": current_user["id"]}, {"_id": 0, "rating": 1})
-        ra = int(a_prof.get("rating") or 1000) if a_prof else 1000
+        a_prof = await db.boxing_profiles.find_one({"user_id": current_user["id"]}, {"_id": 0})
+        a_prof = a_prof or DEFAULT_PROFILE
+        player_eff = _effective_stats(a_prof)
+        player_level = sum(player_eff.get(k, 1) for k in STAT_KEYS) / len(STAT_KEYS)
+        npc_design_level = sum(int(npc.get(k, 1) or 1) for k in STAT_KEYS) / len(STAT_KEYS)
+        if npc_design_level < 1:
+            npc_design_level = 1
+        ratio = player_level / npc_design_level
+        b_npc_stats = {k: max(1, min(15, int(round(int(npc.get(k, 1) or 1) * ratio)))) for k in STAT_KEYS}
+        ra = int(a_prof.get("rating") or 1000)
         rb = int(npc.get("rating") or 1000)
         odds = _match_odds(ra, rb)
         doc = {
@@ -429,6 +475,7 @@ async def matches_create(payload: MatchCreateRequest, current_user: dict = Depen
             "b_id": npc["id"],
             "b_username": npc.get("name") or "?",
             "b_is_npc": True,
+            "b_npc_stats": b_npc_stats,
             "state": "pending",
             "created_at": now,
             "ready": {"a": False, "b": True},
@@ -440,6 +487,7 @@ async def matches_create(payload: MatchCreateRequest, current_user: dict = Depen
             "rounds": [],
             "winner": None,
             "finish_reason": None,
+            "round_break_seconds": ROUND_BREAK_SECONDS,
         }
         await db.boxing_matches.insert_one(doc)
         return {"message": f"Match created vs {npc.get('name')} (NPC)", "match_id": match_id}
@@ -649,13 +697,17 @@ async def bets_my(current_user: dict = Depends(get_current_user_verified)):
     return {"open": open_bets, "closed": closed_bets}
 
 
-def _round_exchange(a_stats: dict, b_stats: dict, a_hp: int, b_hp: int, a_stam: int, b_stam: int) -> dict:
+def _round_exchange(a_stats: dict, b_stats: dict, a_hp: int, b_hp: int, a_stam: int, b_stam: int, first_round: bool = True) -> dict:
     def clamp(n, lo, hi):
         return max(lo, min(hi, int(n)))
 
-    # stamina regen / decay
-    a_stam = clamp(a_stam + 6, 0, 100)
-    b_stam = clamp(b_stam + 6, 0, 100)
+    a_chin = max(1, int(a_stats.get("chin", 1) or 1))
+    b_chin = max(1, int(b_stats.get("chin", 1) or 1))
+
+    # stamina regen at start of round (only flat +6 on first round; round 2+ recovery done in caller)
+    if first_round:
+        a_stam = clamp(a_stam + 6, 0, 100)
+        b_stam = clamp(b_stam + 6, 0, 100)
 
     # per-round attempts scale with speed and current stamina
     a_attempts = clamp(8 + (a_stats["speed"] // 2) + (a_stam // 25), 6, 22)
@@ -668,12 +720,13 @@ def _round_exchange(a_stats: dict, b_stats: dict, a_hp: int, b_hp: int, a_stam: 
         p_hit = max(0.05, min(0.80, base_acc - def_avoid - stam_penalty))
         hits = 0
         dmg = 0
+        def_chin = max(1, int(def_stats.get("chin", 1) or 1))
+        chin_mult = max(0.70, 1.0 - (def_chin - 1) * 0.03)  # Option A: damage reduction by chin
         for _ in range(attempts):
             if random.random() < p_hit:
                 hits += 1
-                # damage per hit scales with power but reduced by defender defense
                 per = 1.0 + (att_stats["power"] * 0.35) - (def_stats["defense"] * 0.12)
-                dmg += max(1, int(round(per)))
+                dmg += max(1, int(round(per * chin_mult)))
         stam_cost = attempts * 2 + hits
         return hits, dmg, stam_cost
 
@@ -683,10 +736,17 @@ def _round_exchange(a_stats: dict, b_stats: dict, a_hp: int, b_hp: int, a_stam: 
     a_stam = clamp(a_stam - a_cost, 0, 100)
     b_stam = clamp(b_stam - b_cost, 0, 100)
 
-    b_hp = clamp(b_hp - a_dmg, 0, 100)
-    a_hp = clamp(a_hp - b_dmg, 0, 100)
+    # Apply damage with Option B: when would go to 0, chin roll to stay at 1 HP
+    b_hp_after = clamp(b_hp - a_dmg, 0, 100)
+    a_hp_after = clamp(a_hp - b_dmg, 0, 100)
+    if b_hp_after <= 0 and b_hp > 0 and b_chin >= 1:
+        if random.random() < (b_chin / 10.0):  # Option B: survive at 1 HP
+            b_hp_after = 1
+    if a_hp_after <= 0 and a_hp > 0 and a_chin >= 1:
+        if random.random() < (a_chin / 10.0):
+            a_hp_after = 1
 
-    return {"a_hits": a_hits, "b_hits": b_hits, "a_dmg": a_dmg, "b_dmg": b_dmg, "hp": {"a": a_hp, "b": b_hp}, "stam": {"a": a_stam, "b": b_stam}}
+    return {"a_hits": a_hits, "b_hits": b_hits, "a_dmg": a_dmg, "b_dmg": b_dmg, "hp": {"a": a_hp_after, "b": b_hp_after}, "stam": {"a": a_stam, "b": b_stam}}
 
 
 async def advance_running_matches(database) -> int:
@@ -712,29 +772,44 @@ async def advance_running_matches(database) -> int:
             database.boxing_profiles.find_one({"user_id": a_id}, {"_id": 0}),
             database.boxing_profiles.find_one({"user_id": b_id}, {"_id": 0}),
         )
-        # NPCs have no DB profile; use predefined stats
+        # NPCs have no DB profile; use match-stored scaled stats or template
         if b_prof is None:
-            npc = next((x for x in BOXING_NPCS if x.get("id") == b_id), None)
-            if npc:
-                b_prof = {k: int(npc.get(k, 1) or 1) for k in ("power", "speed", "stamina", "defense", "accuracy")}
+            b_npc_stats = claim.get("b_npc_stats")
+            if b_npc_stats:
+                b_prof = {k: int(b_npc_stats.get(k, 1) or 1) for k in STAT_KEYS}
+            else:
+                npc = next((x for x in BOXING_NPCS if x.get("id") == b_id), None)
+                if npc:
+                    b_prof = {k: int(npc.get(k, 1) or 1) for k in STAT_KEYS}
         a_eff = _effective_stats(a_prof or DEFAULT_PROFILE)
         b_eff = _effective_stats(b_prof or DEFAULT_PROFILE)
         hp = claim.get("hp") or {"a": 100, "b": 100}
         stam = claim.get("stam") or {"a": 100, "b": 100}
         rnd = int(claim.get("round") or 0) + 1
-        out = _round_exchange(a_eff, b_eff, int(hp.get("a") or 100), int(hp.get("b") or 100), int(stam.get("a") or 100), int(stam.get("b") or 100))
+        hp_a, hp_b = int(hp.get("a") or 100), int(hp.get("b") or 100)
+        stam_a, stam_b = int(stam.get("a") or 100), int(stam.get("b") or 100)
+
+        # Between-round recovery (round 2+)
+        if rnd > 1:
+            stam_a = min(100, stam_a + 6 + (a_eff.get("stamina") or 1) * 0.8 + (a_eff.get("recovery") or 1) * 0.5)
+            stam_b = min(100, stam_b + 6 + (b_eff.get("stamina") or 1) * 0.8 + (b_eff.get("recovery") or 1) * 0.5)
+            hp_a = min(100, hp_a + 2 + (a_eff.get("recovery") or 1) * 0.4)
+            hp_b = min(100, hp_b + 2 + (b_eff.get("recovery") or 1) * 0.4)
+            stam_a, stam_b = max(0, int(stam_a)), max(0, int(stam_b))
+            hp_a, hp_b = max(0, int(hp_a)), max(0, int(hp_b))
+
+        out = _round_exchange(a_eff, b_eff, hp_a, hp_b, stam_a, stam_b, first_round=(rnd == 1))
 
         finish = None
         reason = None
+        go_to_counting = None  # "a" or "b" if that fighter is down and we enter count
         if out["hp"]["a"] <= 0 and out["hp"]["b"] <= 0:
             finish = "draw"
             reason = "double_ko"
         elif out["hp"]["a"] <= 0:
-            finish = "b"
-            reason = "ko"
+            go_to_counting = "a"
         elif out["hp"]["b"] <= 0:
-            finish = "a"
-            reason = "ko"
+            go_to_counting = "b"
         elif rnd >= int(claim.get("max_rounds") or 12):
             # decision by total damage, then hits, then random
             total_a = sum((r.get("a_dmg") or 0) for r in (claim.get("rounds") or [])) + out["a_dmg"]
@@ -753,13 +828,20 @@ async def advance_running_matches(database) -> int:
                 reason = "decision"
 
         round_log = {"round": rnd, "at": now, **out}
-        next_round_at = (datetime.now(timezone.utc) + timedelta(seconds=6)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        break_sec = int(claim.get("round_break_seconds") or ROUND_BREAK_SECONDS)
+        next_round_at = (datetime.now(timezone.utc) + timedelta(seconds=break_sec)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
         updates: Dict[str, Any] = {
             "$set": {"round": rnd, "hp": out["hp"], "stam": out["stam"], "next_round_at": next_round_at},
             "$push": {"rounds": round_log},
         }
-        if finish:
+        if go_to_counting:
+            updates["$set"].update({
+                "state": "counting",
+                "down_fighter": go_to_counting,
+                "count_ends_at": (datetime.now(timezone.utc) + timedelta(seconds=COUNT_DURATION_SECONDS)).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            })
+        elif finish:
             winner = None
             if finish in ("a", "b"):
                 winner = a_id if finish == "a" else b_id
@@ -768,6 +850,65 @@ async def advance_running_matches(database) -> int:
 
         if finish:
             await _finalize_match(database, match_id, winner_id=(a_id if finish == "a" else b_id if finish == "b" else None), finish_reason=reason)
+        return 1
+    finally:
+        await database.boxing_matches.update_one({"id": match_id}, {"$set": {"sim_lock": None}})
+
+
+async def advance_counting_matches(database) -> int:
+    """Process matches in 'counting' phase (KD): roll get-up at count_ends_at."""
+    now = _now_iso()
+    claim = await database.boxing_matches.find_one_and_update(
+        {"state": "counting", "count_ends_at": {"$lte": now}},
+        {"$set": {"sim_lock": str(uuid.uuid4()), "sim_lock_at": now}},
+        projection={"_id": 0},
+        sort=[("count_ends_at", 1)],
+        return_document=True,
+    )
+    if not claim:
+        return 0
+    match_id = claim.get("id")
+    try:
+        down = claim.get("down_fighter")  # "a" or "b"
+        if down not in ("a", "b"):
+            await database.boxing_matches.update_one({"id": match_id}, {"$set": {"state": "running", "sim_lock": None}})
+            return 1
+        a_id, b_id = claim.get("a_id"), claim.get("b_id")
+        a_prof = await database.boxing_profiles.find_one({"user_id": a_id}, {"_id": 0})
+        b_prof = await database.boxing_profiles.find_one({"user_id": b_id}, {"_id": 0})
+        if b_prof is None:
+            b_npc = claim.get("b_npc_stats")
+            if b_npc:
+                b_prof = b_npc
+            else:
+                npc = next((x for x in BOXING_NPCS if x.get("id") == b_id), None)
+                b_prof = {k: int(npc.get(k, 1) or 1) for k in STAT_KEYS} if npc else DEFAULT_PROFILE
+        a_eff = _effective_stats(a_prof or DEFAULT_PROFILE)
+        b_eff = _effective_stats(b_prof or DEFAULT_PROFILE)
+        down_eff = a_eff if down == "a" else b_eff
+        recovery = max(1, int(down_eff.get("recovery") or 1))
+        chin = max(1, int(down_eff.get("chin") or 1))
+        p_get_up = (recovery / 10.0) * 0.6 + (chin / 10.0) * 0.4
+        got_up = random.random() < p_get_up
+        hp = dict(claim.get("hp") or {"a": 100, "b": 100})
+        stam = dict(claim.get("stam") or {"a": 100, "b": 100})
+        if got_up:
+            new_hp = min(100, 5 + recovery)
+            hp[down] = new_hp
+            stam[down] = max(0, int((stam.get(down) or 0) * 0.5))
+            break_sec = int(claim.get("round_break_seconds") or ROUND_BREAK_SECONDS)
+            next_round_at = (datetime.now(timezone.utc) + timedelta(seconds=break_sec)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            await database.boxing_matches.update_one(
+                {"id": match_id},
+                {"$set": {"state": "running", "hp": hp, "stam": stam, "next_round_at": next_round_at, "down_fighter": None, "count_ends_at": None}},
+            )
+        else:
+            winner_id = b_id if down == "a" else a_id
+            await database.boxing_matches.update_one(
+                {"id": match_id},
+                {"$set": {"state": "finished", "finished_at": now, "winner": winner_id, "finish_reason": "ko", "down_fighter": None, "count_ends_at": None}},
+            )
+            await _finalize_match(database, match_id, winner_id=winner_id, finish_reason="ko")
         return 1
     finally:
         await database.boxing_matches.update_one({"id": match_id}, {"$set": {"sim_lock": None}})

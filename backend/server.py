@@ -1521,6 +1521,7 @@ async def startup_db():
         while True:
             try:
                 await boxing_router.advance_running_matches(db)
+                await boxing_router.advance_counting_matches(db)
             except Exception as e:
                 logging.exception("Boxing match ticker: %s", e)
             await asyncio.sleep(1)

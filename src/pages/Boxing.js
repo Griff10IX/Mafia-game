@@ -888,6 +888,7 @@ export default function Boxing3D() {
   const { matchId: arenaMatchId } = useParams();
   const navigate = useNavigate();
   const [arenaMatchDetail, setArenaMatchDetail] = useState(null);
+  const [betweenRoundsTick, setBetweenRoundsTick] = useState(0);
   const [sceneReady, setSceneReady] = useState(false);
   const [arenaServerResult, setArenaServerResult] = useState(null);
   const arenaStartedRef = useRef(false);
@@ -920,13 +921,24 @@ export default function Boxing3D() {
     const poll = () => {
       api.get(`/boxing/matches/${arenaMatchId}`).then((r) => {
         const m = r.data?.match;
-        if (m && m.state === "finished") setArenaServerResult({ winner: m.winner, finish_reason: m.finish_reason || "" });
+        if (m) {
+          setArenaMatchDetail(m);
+          if (m.state === "finished") setArenaServerResult({ winner: m.winner, finish_reason: m.finish_reason || "" });
+        }
       }).catch(() => {});
     };
     const id = setInterval(poll, 2000);
     poll();
     return () => clearInterval(id);
   }, [arenaMatchId]);
+
+  useEffect(() => {
+    if (!arenaMatchId || !arenaMatchDetail?.id) return;
+    const s = arenaMatchDetail.state;
+    if (s !== "running" && s !== "counting") return;
+    const id = setInterval(() => setBetweenRoundsTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [arenaMatchId, arenaMatchDetail?.id, arenaMatchDetail?.state]);
 
   useEffect(() => {
     if (!arenaMatchId || !sceneReady || !refs.current.bA || !arenaMatchDetail || arenaStartedRef.current) return;
@@ -1526,7 +1538,8 @@ export default function Boxing3D() {
       speed: scaleStat(youStats.speed, baseA.speed),
       stamina: scaleStat(youStats.stamina, baseA.stamina),
       defense: scaleStat(youStats.defense, baseA.defense),
-      chin: 65,
+      chin: scaleStat(youStats.chin ?? 1, 65),
+      recovery: scaleStat(youStats.recovery ?? 1, 62),
     } : baseA;
 
     const simB = npc ? {
@@ -1535,7 +1548,8 @@ export default function Boxing3D() {
       speed: scaleStat(npc.speed, baseB.speed),
       stamina: scaleStat(npc.stamina, baseB.stamina),
       defense: scaleStat(npc.defense, baseB.defense),
-      chin: scaleStat(npc.accuracy ?? 5, 60),
+      chin: scaleStat(npc.chin ?? npc.accuracy ?? 5, 60),
+      recovery: scaleStat(npc.recovery ?? 5, 62),
     } : baseB;
 
     const result=simulateFight(simA, simB);
@@ -1566,6 +1580,15 @@ export default function Boxing3D() {
   if (arenaMatchId) {
     const nameA = arenaMatchDetail?.a_username || me?.username || "You";
     const nameB = arenaMatchDetail?.b_username || "Opponent";
+    const m = arenaMatchDetail;
+    const nowMs = Date.now();
+    const nextRoundAtMs = m?.next_round_at ? new Date(m.next_round_at).getTime() : 0;
+    const countEndsAtMs = m?.count_ends_at ? new Date(m.count_ends_at).getTime() : 0;
+    const roundNum = m?.round ?? 0;
+    const isBetweenRounds = m?.state === "running" && roundNum > 0 && nextRoundAtMs > nowMs;
+    const isCounting = m?.state === "counting" && countEndsAtMs > nowMs;
+    const secsToNextRound = isBetweenRounds ? Math.max(0, Math.ceil((nextRoundAtMs - nowMs) / 1000)) : 0;
+    const secsToCountEnd = isCounting ? Math.max(0, Math.ceil((countEndsAtMs - nowMs) / 1000)) : 0;
     return (
       <div className={styles.page} style={{height:"100vh",overflow:"hidden",fontFamily:"'Cinzel',serif",display:"flex",flexDirection:"column"}}>
         <div className={styles.pageContent} style={{padding:"6px 12px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--noir-border-light)"}}>
@@ -1593,6 +1616,9 @@ export default function Boxing3D() {
               <div style={{width:90,fontSize:9,color:crimson,textAlign:"right"}}>{nameB}</div>
             </div>
             {actionText && <div style={{fontSize:10,color:"#fff",textAlign:"center",marginTop:3}}>{actionText}</div>}
+            {isBetweenRounds && <div style={{fontSize:10,color:"#c9a84c",textAlign:"center",marginTop:3}}>Between rounds – next in {secsToNextRound}s</div>}
+            {isBetweenRounds && <div style={{fontSize:9,color:"#8a7a4a",textAlign:"center",marginTop:1}}>Recovering…</div>}
+            {isCounting && <div style={{fontSize:10,color:"#e0b050",textAlign:"center",marginTop:3}}>Referee count – {secsToCountEnd}s</div>}
             {gameState==="done" && winText && <div style={{fontSize:12,color:gold,textAlign:"center",marginTop:3,fontWeight:700}}>{winText}</div>}
           </div>
           {/* KO COUNT OVERLAY — centred on canvas, not in bottom bar */}
@@ -1676,7 +1702,7 @@ export default function Boxing3D() {
                 <span>{profile.rating ?? 1000}</span>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:4,fontSize:10,color:"#e0d0a0",marginBottom:8}}>
-                {["power","speed","stamina","defense","accuracy"].map((k)=>(
+                {["power","speed","stamina","defense","accuracy","chin","recovery"].map((k)=>(
                   <div key={k} style={{display:"flex",justifyContent:"space-between",background:"rgba(0,0,0,0.18)",padding:"4px 6px",borderRadius:2}}>
                     <span style={{textTransform:"uppercase",fontSize:9,color:"#8a7a4a"}}>{k}</span>
                     <span>{effective?.[k] ?? profile?.[k] ?? 1}</span>
@@ -1769,48 +1795,57 @@ export default function Boxing3D() {
         <div className={styles.panel} style={{padding:12,minHeight:140}}>
           <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>GEAR</div>
           {gearInfo && (
-            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6,fontSize:10}}>
-              {gearInfo.gear?.map((g) => {
-                const owned = (gearInfo.owned_ids || []).includes(g.id);
-                const equippedSlot = gearInfo.equipped?.[g.slot];
-                const isEquipped = equippedSlot === g.id;
-                return (
-                  <div key={g.id} style={{background:"rgba(255,255,255,0.02)",borderRadius:3,padding:"4px 6px",border:isEquipped?"1px solid rgba(201,168,76,0.7)":"1px solid rgba(201,168,76,0.25)"}}>
-                    <div style={{fontSize:10,color:"#e0d0a0"}}>{g.name}</div>
-                    <div style={{fontSize:9,color:"#8a7a4a",marginBottom:3}}>{g.slot}</div>
-                    <div style={{display:"flex",gap:4}}>
-                      {!owned && (
-                        <button
-                          onClick={() => handleGearBuy(g.id)}
-                          disabled={busyAction===`buy:${g.id}`}
-                          style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(201,168,76,0.08)",color:"#e0d0a0",cursor:busyAction===`buy:${g.id}`?"wait":"pointer"}}
-                        >
-                          Buy
-                        </button>
-                      )}
-                      {owned && !isEquipped && (
-                        <button
-                          onClick={() => handleGearEquip(g.slot, g.id)}
-                          disabled={busyAction===`equip:${g.slot}:${g.id}`}
-                          style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(255,255,255,0.02)",color:"#e0d0a0",cursor:busyAction===`equip:${g.slot}:${g.id}`?"wait":"pointer"}}
-                        >
-                          Equip
-                        </button>
-                      )}
-                      {owned && isEquipped && (
-                        <button
-                          onClick={() => handleGearEquip(g.slot, null)}
-                          disabled={busyAction===`equip:${g.slot}:none`}
-                          style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(201,168,76,0.22)",color:"#e0d0a0",cursor:busyAction===`equip:${g.slot}:none`?"wait":"pointer"}}
-                        >
-                          Unequip
-                        </button>
-                      )}
+            <>
+              {typeof gearInfo.total_wins === "number" && (
+                <div style={{fontSize:10,color:"#8a7a4a",marginBottom:6}}>Wins: {gearInfo.total_wins}</div>
+              )}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6,fontSize:10}}>
+                {(gearInfo.gear || []).map((g) => {
+                  const owned = (gearInfo.owned_ids || []).includes(g.id);
+                  const equippedSlot = gearInfo.equipped?.[g.slot];
+                  const isEquipped = equippedSlot === g.id;
+                  const unlocked = g.unlocked !== false;
+                  const winsReq = g.wins_required;
+                  const themeLabel = g.theme ? ` · ${g.theme}` : "";
+                  return (
+                    <div key={g.id} style={{background: unlocked ? "rgba(255,255,255,0.02)" : "rgba(80,60,40,0.2)",borderRadius:3,padding:"4px 6px",border:isEquipped?"1px solid rgba(201,168,76,0.7)":"1px solid rgba(201,168,76,0.25)"}}>
+                      <div style={{fontSize:10,color:unlocked ? "#e0d0a0" : "#6a5a4a"}}>{g.name}{themeLabel}</div>
+                      <div style={{fontSize:9,color:"#8a7a4a",marginBottom:2}}>{g.slot}</div>
+                      {!unlocked && winsReq != null && <div style={{fontSize:9,color:"#9a7a4a",marginBottom:3}}>Unlock at {winsReq} wins</div>}
+                      <div style={{display:"flex",gap:4}}>
+                        {!owned && (
+                          <button
+                            onClick={() => unlocked && handleGearBuy(g.id)}
+                            disabled={busyAction===`buy:${g.id}` || !unlocked}
+                            style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:unlocked ? "rgba(201,168,76,0.08)" : "rgba(0,0,0,0.2)",color:unlocked ? "#e0d0a0" : "#5a4a3a",cursor:unlocked && busyAction!==`buy:${g.id}` ? "pointer" : "default"}}
+                          >
+                            Buy
+                          </button>
+                        )}
+                        {owned && !isEquipped && (
+                          <button
+                            onClick={() => unlocked && handleGearEquip(g.slot, g.id)}
+                            disabled={busyAction===`equip:${g.slot}:${g.id}` || !unlocked}
+                            style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:unlocked ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.2)",color:unlocked ? "#e0d0a0" : "#5a4a3a",cursor:unlocked && busyAction!==`equip:${g.slot}:${g.id}` ? "pointer" : "default"}}
+                          >
+                            Equip
+                          </button>
+                        )}
+                        {owned && isEquipped && (
+                          <button
+                            onClick={() => handleGearEquip(g.slot, null)}
+                            disabled={busyAction===`equip:${g.slot}:none`}
+                            style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(201,168,76,0.22)",color:"#e0d0a0",cursor:busyAction===`equip:${g.slot}:none`?"wait":"pointer"}}
+                          >
+                            Unequip
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       </div>
