@@ -324,7 +324,9 @@ async def create_race(body: CreateRaceRequest, current_user: dict = Depends(get_
     await db.racing_races.insert_one(doc)
     if entry_fee > 0:
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -entry_fee}})
-    return {"message": "Race created", "race_id": race_id, "race": doc}
+    # Return a copy without _id (insert_one may add _id to doc in place; ObjectId is not JSON-serializable)
+    race_response = {k: v for k, v in doc.items() if k != "_id"}
+    return {"message": "Race created", "race_id": race_id, "race": race_response}
 
 
 async def get_open_races(current_user: dict = Depends(get_current_user_verified)):
