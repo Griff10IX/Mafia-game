@@ -183,7 +183,11 @@ class TrainRequest(BaseModel):
 
 
 class MatchCreateRequest(BaseModel):
-    opponent_username: str
+    opponent_username: Optional[str] = None
+
+
+class MatchJoinRequest(BaseModel):
+    match_id: str
 
 
 class MatchReadyRequest(BaseModel):
@@ -378,8 +382,36 @@ async def gear_equip(payload: GearEquipRequest, current_user: dict = Depends(get
 
 async def matches_create(payload: MatchCreateRequest, current_user: dict = Depends(get_current_user_verified)):
     opp_name = (payload.opponent_username or "").strip()
+    # If no opponent specified, create an open challenge that any other player can join.
     if not opp_name:
-        raise HTTPException(status_code=400, detail="opponent_username required")
+        await _ensure_profile(current_user["id"])
+        match_id = str(uuid.uuid4())
+        now = _now_iso()
+        a_prof = await db.boxing_profiles.find_one({"user_id": current_user["id"]}, {"_id": 0, "rating": 1})
+        ra = int(a_prof.get("rating") or 1000) if a_prof else 1000
+        # Placeholder odds until someone joins; update on join.
+        odds = {"a": 1.8, "b": 1.8}
+        doc = {
+            "id": match_id,
+            "a_id": current_user["id"],
+            "a_username": current_user.get("username") or "?",
+            "b_id": None,
+            "b_username": None,
+            "state": "pending",
+            "created_at": now,
+            "ready": {"a": False, "b": False},
+            "round": 0,
+            "max_rounds": 12,
+            "hp": {"a": 100, "b": 100},
+            "stam": {"a": 100, "b": 100},
+            "odds": odds,
+            "rounds": [],
+            "winner": None,
+            "finish_reason": None,
+            "is_open": True,
+        }
+        await db.boxing_matches.insert_one(doc)
+        return {"message": "Open match created", "match_id": match_id}
     npc = _get_npc_by_id_or_name(opp_name)
     if npc:
         # Create match vs NPC: b is NPC, already "ready"; when player readies, fight starts
@@ -476,6 +508,44 @@ async def matches_ready(payload: MatchReadyRequest, current_user: dict = Depends
     return {"message": "Ready updated", "state": "ready" if (r.get("a") or r.get("b")) else "pending"}
 
 
+async def matches_join(payload: MatchJoinRequest, current_user: dict = Depends(get_current_user_verified)):
+    match_id = (payload.match_id or "").strip()
+    if not match_id:
+        raise HTTPException(status_code=400, detail="match_id required")
+    m = await db.boxing_matches.find_one({"id": match_id}, {"_id": 0})
+    if not m:
+        raise HTTPException(status_code=404, detail="Match not found")
+    if not m.get("is_open"):
+        raise HTTPException(status_code=400, detail="Match is not open for joining")
+    if m.get("a_id") == current_user["id"]:
+        raise HTTPException(status_code=400, detail="You created this match")
+    if m.get("b_id"):
+        raise HTTPException(status_code=400, detail="Match already has an opponent")
+    if m.get("state") not in ("pending", "ready"):
+        raise HTTPException(status_code=400, detail="Match already started or finished")
+    await _ensure_profile(current_user["id"])
+    # Compute odds now that we know both ratings
+    a_prof, b_prof = await asyncio.gather(
+        db.boxing_profiles.find_one({"user_id": m.get("a_id")}, {"_id": 0, "rating": 1}),
+        db.boxing_profiles.find_one({"user_id": current_user["id"]}, {"_id": 0, "rating": 1}),
+    )
+    ra = int((a_prof or {}).get("rating") or 1000)
+    rb = int((b_prof or {}).get("rating") or 1000)
+    odds = _match_odds(ra, rb)
+    await db.boxing_matches.update_one(
+        {"id": match_id, "b_id": None, "is_open": True},
+        {
+            "$set": {
+                "b_id": current_user["id"],
+                "b_username": current_user.get("username") or "?",
+                "is_open": False,
+                "odds": {"a": odds["a"], "b": odds["b"]},
+            }
+        },
+    )
+    return {"message": "Joined match", "match_id": match_id}
+
+
 async def matches_get(match_id: str, current_user: dict = Depends(get_current_user)):
     mid = (match_id or "").strip()
     if not mid:
@@ -515,7 +585,7 @@ async def matches_live(current_user: dict = Depends(get_current_user)):
     # Public list so spectators can watch without needing a match id.
     cursor = db.boxing_matches.find(
         {"state": {"$in": ["pending", "ready", "running"]}},
-        {"_id": 0, "id": 1, "state": 1, "created_at": 1, "started_at": 1, "a_username": 1, "b_username": 1, "round": 1, "max_rounds": 1, "hp": 1, "stam": 1, "odds": 1},
+        {"_id": 0, "id": 1, "state": 1, "created_at": 1, "started_at": 1, "a_username": 1, "b_username": 1, "round": 1, "max_rounds": 1, "hp": 1, "stam": 1, "odds": 1, "is_open": 1},
     ).sort("created_at", -1).limit(25)
     matches = await cursor.to_list(25)
     return {"matches": matches}
@@ -879,6 +949,7 @@ def register(router):
     router.add_api_route("/boxing/gear/buy", gear_buy, methods=["POST"])
     router.add_api_route("/boxing/gear/equip", gear_equip, methods=["POST"])
     router.add_api_route("/boxing/matches/create", matches_create, methods=["POST"])
+    router.add_api_route("/boxing/matches/join", matches_join, methods=["POST"])
     router.add_api_route("/boxing/matches/ready", matches_ready, methods=["POST"])
     router.add_api_route("/boxing/matches/live", matches_live, methods=["GET"])
     router.add_api_route("/boxing/matches/{match_id}", matches_get, methods=["GET"])
