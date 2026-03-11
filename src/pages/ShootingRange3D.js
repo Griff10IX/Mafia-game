@@ -15,32 +15,33 @@ const TARGET_SPAWN_DELAY_MIN = 0.4;
 const TARGET_SPAWN_DELAY_MAX = 1.4;
 const RANGE_LENGTH = 28;
 const BACK_WALL_Z = -RANGE_LENGTH;
-const TARGET_RADIUS = 0.28;
+const TARGET_RADIUS = 0.42;
 
 function makeBrickTexture() {
-  const size = 256;
+  const size = 512;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext("2d");
-  const brickW = 32;
-  const brickH = 14;
-  const mortar = 2;
-  ctx.fillStyle = "#6b5b4f";
+  const brickW = 64;
+  const brickH = 24;
+  const mortar = 3;
+  ctx.fillStyle = "#7a6f65";
   ctx.fillRect(0, 0, size, size);
-  for (let row = 0; row < 20; row++) {
+  for (let row = 0; row < 22; row++) {
     for (let col = 0; col < 10; col++) {
       const x = col * (brickW + mortar) + (row % 2) * ((brickW + mortar) / 2);
       const y = row * (brickH + mortar);
-      ctx.fillStyle = "#8b7355";
+      ctx.fillStyle = "#b8956e";
       ctx.fillRect(x + mortar / 2, y + mortar / 2, brickW, brickH);
-      ctx.fillStyle = "#7a6b5a";
-      ctx.fillRect(x + mortar / 2 + 2, y + mortar / 2 + 2, brickW - 4, brickH - 4);
+      ctx.fillStyle = "#a08060";
+      ctx.fillRect(x + mortar / 2 + 4, y + mortar / 2 + 4, brickW - 8, brickH - 8);
     }
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(4, 2);
+  tex.repeat.set(1.5, 0.8);
+  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
@@ -51,7 +52,7 @@ function makeTileTexture() {
   canvas.height = size;
   const ctx = canvas.getContext("2d");
   const tile = 32;
-  const light = "#c4a574";
+  const light = "#e8dcc8";
   const dark = "#8b7355";
   for (let i = 0; i < 4; i++) {
     for (let j = 0; j < 4; j++) {
@@ -61,25 +62,27 @@ function makeTileTexture() {
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(6, 8);
+  tex.repeat.set(5, 7);
+  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
 function makeShootingRangeSignTexture() {
-  const w = 256;
-  const h = 64;
+  const w = 512;
+  const h = 128;
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "rgba(0,0,0,0)";
+  ctx.fillStyle = "#e8e0d4";
   ctx.fillRect(0, 0, w, h);
-  ctx.font = "bold 28px Arial";
+  ctx.font = "bold 48px Arial";
   ctx.fillStyle = "#5c4a3a";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText("SHOOTING RANGE", w / 2, h / 2);
   const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
@@ -95,12 +98,12 @@ function createTargetMesh() {
   let z = 0.018;
   // Concentric rings – paper bullseye style (outer to inner)
   const rings = [
-    { r: R, color: 0xf5f0e6 },
+    { r: R, color: 0xfaf6ed },
     { r: R * 0.88, color: 0x1a1a1a },
-    { r: R * 0.76, color: 0xf5f0e6 },
+    { r: R * 0.76, color: 0xfaf6ed },
     { r: R * 0.64, color: 0x1a1a1a },
-    { r: R * 0.52, color: 0xf5f0e6 },
-    { r: R * 0.40, color: 0xc62828 },
+    { r: R * 0.52, color: 0xfaf6ed },
+    { r: R * 0.40, color: 0xd32f2f },
     { r: R * 0.28, color: 0x1a1a1a },
     { r: R * 0.16, color: 0xffeb3b },
   ];
@@ -184,11 +187,11 @@ function buildLongRangeScene(scene) {
     scene.add(beam);
   }
 
-  // Back wall – light grey concrete
+  // Back wall – light grey concrete (like reference)
   const wallFullGeo = new THREE.PlaneGeometry(corridorWidth + 2, 4);
   const wallFullMat = new THREE.MeshStandardMaterial({
-    color: 0x9a9a94,
-    roughness: 0.9,
+    color: 0xb8b8b0,
+    roughness: 0.85,
     metalness: 0.0,
   });
   const backWall = new THREE.Mesh(wallFullGeo, wallFullMat);
@@ -196,13 +199,13 @@ function buildLongRangeScene(scene) {
   backWall.receiveShadow = true;
   scene.add(backWall);
 
-  // Target board (paper/cardboard tone)
+  // Target board (paper/cardboard – cream tone)
   const boardWidth = 3.5;
   const boardHeight = 2.2;
   const boardGeo = new THREE.PlaneGeometry(boardWidth, boardHeight);
   const boardMat = new THREE.MeshStandardMaterial({
-    color: 0xb5a898,
-    roughness: 0.95,
+    color: 0xd8d0c0,
+    roughness: 0.9,
     metalness: 0.0,
   });
   const targetBoard = new THREE.Mesh(boardGeo, boardMat);
@@ -352,8 +355,16 @@ export default function ShootingRange3D() {
     gamePhaseRef.current = "playing";
     setTimeLeft(ROUND_DURATION_SEC);
     setScore(0);
-    refs.current.nextSpawnAt = 0; // spawn first target immediately on next frame
-    refs.current.roundEndAt = performance.now() / 1000 + ROUND_DURATION_SEC;
+    const r = refs.current;
+    r.roundEndAt = performance.now() / 1000 + ROUND_DURATION_SEC;
+    r.nextSpawnAt = 0;
+    if (r.target) {
+      const pos = randomTargetPosition();
+      r.target.position.x = pos.x;
+      r.target.position.y = pos.y;
+      r.target.visible = true;
+      r.nextSpawnAt = performance.now() / 1000 + TARGET_SPAWN_DELAY_MIN + Math.random() * (TARGET_SPAWN_DELAY_MAX - TARGET_SPAWN_DELAY_MIN);
+    }
   }, []);
 
   useEffect(() => {
@@ -367,36 +378,36 @@ export default function ShootingRange3D() {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
     renderer.setSize(W, H, false);
-    renderer.setClearColor(0x4a4c48);
+    renderer.setClearColor(0x5a5c58);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x4a4c48);
-    scene.fog = new THREE.Fog(0x4a4c48, 18, 52);
+    scene.background = new THREE.Color(0x5a5c58);
+    scene.fog = new THREE.Fog(0x6a6c68, 20, 50);
 
     const camera = new THREE.PerspectiveCamera(52, W / H, 0.1, 80);
     camera.position.set(0, 1.35, 5);
     camera.lookAt(0, 1.25, -RANGE_LENGTH / 2);
 
-    const mainLight = new THREE.DirectionalLight(0xfffaf0, 2.0);
-    mainLight.position.set(0, 10, -10);
-    mainLight.target.position.set(0, 0, -18);
+    const mainLight = new THREE.DirectionalLight(0xfffaf0, 2.4);
+    mainLight.position.set(0, 12, -8);
+    mainLight.target.position.set(0, 0, -20);
     mainLight.castShadow = true;
     mainLight.shadow.mapSize.width = 1024;
     mainLight.shadow.mapSize.height = 512;
     mainLight.shadow.camera.near = 1;
     mainLight.shadow.camera.far = 60;
-    mainLight.shadow.camera.left = -8;
-    mainLight.shadow.camera.right = 8;
-    mainLight.shadow.camera.top = 4;
-    mainLight.shadow.camera.bottom = -4;
+    mainLight.shadow.camera.left = -10;
+    mainLight.shadow.camera.right = 10;
+    mainLight.shadow.camera.top = 5;
+    mainLight.shadow.camera.bottom = -5;
     mainLight.shadow.bias = -0.0002;
     scene.add(mainLight);
     scene.add(mainLight.target);
 
-    scene.add(new THREE.AmbientLight(0xe8e4dc, 0.85));
-    const fill = new THREE.PointLight(0xfff8ee, 0.6, 40);
+    scene.add(new THREE.AmbientLight(0xf0ece4, 1.0));
+    const fill = new THREE.PointLight(0xfff8f0, 0.8, 45);
     fill.position.set(0, 2, -12);
     scene.add(fill);
 
