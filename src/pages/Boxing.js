@@ -891,9 +891,20 @@ export default function Boxing3D() {
   const [sceneReady, setSceneReady] = useState(false);
   const [arenaServerResult, setArenaServerResult] = useState(null);
   const arenaStartedRef = useRef(false);
+  const prevArenaMatchIdRef = useRef(undefined);
 
   const flashMsg=(msg,ms=1600)=>{ setActionText(msg); setTimeout(()=>setActionText(""),ms); };
   const getErr = (e) => e?.response?.data?.detail || e?.message || "Something went wrong";
+
+  // When returning from arena to gym: clear npc fight state (so buttons work) and refresh match list
+  useEffect(() => {
+    const wasInArena = prevArenaMatchIdRef.current != null && prevArenaMatchIdRef.current !== "";
+    prevArenaMatchIdRef.current = arenaMatchId;
+    if (wasInArena && !arenaMatchId) {
+      setNpcFightState(null);
+      refreshMatches();
+    }
+  }, [arenaMatchId]);
 
   useEffect(() => {
     if (!arenaMatchId) return;
@@ -1556,33 +1567,33 @@ export default function Boxing3D() {
     const nameA = arenaMatchDetail?.a_username || me?.username || "You";
     const nameB = arenaMatchDetail?.b_username || "Opponent";
     return (
-      <div className={styles.page} style={{minHeight:"100vh",fontFamily:"'Cinzel',serif",display:"flex",flexDirection:"column"}}>
-        <div className={styles.pageContent} style={{padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--noir-border-light)"}}>
-          <Link to="/boxing" className={styles.btnGoldDarkText} style={{padding:"6px 12px",fontSize:11,textDecoration:"none"}}>← Back to gym</Link>
-          <div style={{fontSize:14,letterSpacing:"0.15em",color:gold}}>{nameA} vs {nameB}</div>
-          <div style={{width:80}}/>
+      <div className={styles.page} style={{height:"100vh",overflow:"hidden",fontFamily:"'Cinzel',serif",display:"flex",flexDirection:"column"}}>
+        <div className={styles.pageContent} style={{padding:"6px 12px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--noir-border-light)"}}>
+          <Link to="/boxing" className={styles.btnGoldDarkText} style={{padding:"4px 10px",fontSize:10,textDecoration:"none"}}>← Back to gym</Link>
+          <div style={{fontSize:12,letterSpacing:"0.12em",color:gold}}>{nameA} vs {nameB}</div>
+          <div style={{width:70}}/>
         </div>
-        <div style={{flex:1,position:"relative",minHeight:420}}>
+        <div style={{flex:1,minHeight:0,position:"relative",display:"flex",flexDirection:"column"}}>
           <canvas
             ref={canvasRef}
-            style={{width:"100%",height:"100%",minHeight:380,display:"block",background:"#181822"}}
+            style={{width:"100%",height:"100%",minHeight:200,display:"block",background:"#181822"}}
           />
-          <div style={{position:"absolute",left:0,right:0,bottom:0,padding:"8px 16px",background:"linear-gradient(transparent,rgba(0,0,0,0.85))",pointerEvents:"none"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:720,margin:"0 auto"}}>
-              <div style={{width:120,fontSize:10,color:gold}}>{nameA}</div>
-              <div style={{flex:1,padding:"0 12px"}}>
+          <div style={{position:"absolute",left:0,right:0,bottom:0,padding:"4px 10px 6px",background:"linear-gradient(transparent,rgba(0,0,0,0.9))",pointerEvents:"none",flexShrink:0}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:640,margin:"0 auto",gap:8}}>
+              <div style={{width:90,fontSize:9,color:gold}}>{nameA}</div>
+              <div style={{flex:1,padding:"0 8px",minWidth:0}}>
                 <Bar val={hpA} flip={false} color={gold} />
-                <div style={{fontSize:9,color:"#8a7a4a",marginTop:2}}>HP {hpA}/100</div>
+                <div style={{fontSize:8,color:"#8a7a4a",marginTop:1}}>HP {hpA}/100</div>
               </div>
-              <div style={{fontSize:11,color:"#c9a84c",minWidth:60,textAlign:"center"}}>R{round}/12</div>
-              <div style={{flex:1,padding:"0 12px"}}>
+              <div style={{fontSize:10,color:"#c9a84c",minWidth:44,textAlign:"center"}}>R{round}/12</div>
+              <div style={{flex:1,padding:"0 8px",minWidth:0}}>
                 <Bar val={hpB} flip={true} color={crimson} />
-                <div style={{fontSize:9,color:"#8a7a4a",marginTop:2,textAlign:"right"}}>HP {hpB}/100</div>
+                <div style={{fontSize:8,color:"#8a7a4a",marginTop:1,textAlign:"right"}}>HP {hpB}/100</div>
               </div>
-              <div style={{width:120,fontSize:10,color:crimson,textAlign:"right"}}>{nameB}</div>
+              <div style={{width:90,fontSize:9,color:crimson,textAlign:"right"}}>{nameB}</div>
             </div>
-            {actionText && <div style={{fontSize:12,color:"#fff",textAlign:"center",marginTop:6}}>{actionText}</div>}
-            {gameState==="done" && winText && <div style={{fontSize:14,color:gold,textAlign:"center",marginTop:6,fontWeight:700}}>{winText}</div>}
+            {actionText && <div style={{fontSize:10,color:"#fff",textAlign:"center",marginTop:3}}>{actionText}</div>}
+            {gameState==="done" && winText && <div style={{fontSize:12,color:gold,textAlign:"center",marginTop:3,fontWeight:700}}>{winText}</div>}
           </div>
           {/* KO COUNT OVERLAY — centred on canvas, not in bottom bar */}
           {koCount && (
