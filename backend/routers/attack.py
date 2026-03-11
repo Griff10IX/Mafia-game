@@ -3,11 +3,12 @@ from typing import List, Optional, Dict
 from datetime import datetime, timezone, timedelta
 import math
 import random
+import re
 import uuid
 import os
 import sys
 import logging
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request, Query
 from pydantic import BaseModel, field_validator
 
 logger = logging.getLogger(__name__)
@@ -54,12 +55,13 @@ from routers.families import resolve_family_id
 
 
 def _request_meta(request: Optional[Request]) -> dict:
-    """Build dict of user_agent and client_ip for attack attempt logging."""
+    """Build dict of user_agent, client_ip, and attacker_is_bot for attack attempt logging."""
     out = {}
     if request:
         ua = (request.headers.get("user-agent") or "").strip() or None
         if ua:
             out["user_agent"] = ua[:500]  # cap length
+        out["attacker_is_bot"] = _is_bot_ua(out.get("user_agent") or "")
         forwarded = (request.headers.get("x-forwarded-for") or "").strip()
         if forwarded:
             out["client_ip"] = forwarded.split(",")[0].strip()[:45]
@@ -68,9 +70,45 @@ def _request_meta(request: Optional[Request]) -> dict:
     return out
 
 
+def _is_bot_ua(user_agent: str) -> bool:
+    """True if the User-Agent looks like a bot/script. Diverse patterns: custom bots, languages, HTTP clients, automation."""
+    if not user_agent or not isinstance(user_agent, str):
+        return False
+    ua = user_agent.lower()
+    # Custom / game bots
+    if "mafiakillbot" in ua or ("bot" in ua and ("kill" in ua or "attack" in ua)):
+        return True
+    # Generic crawlers / scrapers
+    if any(x in ua for x in ("bot", "crawler", "spider", "scraper", "fetcher", "curl", "wget", "libwww")):
+        return True
+    # Python
+    if any(x in ua for x in ("python", "requests", "urllib", "aiohttp", "httpx")):
+        return True
+    # JavaScript / Node
+    if any(x in ua for x in ("axios/", "node/", "node.js", "undici", "got/", "superagent")):
+        return True
+    # Java / JVM
+    if any(x in ua for x in ("java/", "okhttp", "apache-httpclient", "jetty", "java ")):
+        return True
+    # .NET / C#
+    if any(x in ua for x in ("dotnet", ".net", "httpclient", "webrequest")):
+        return True
+    # Go / Ruby / PHP / Rust
+    if any(x in ua for x in ("go-http", "go/", "ruby", "faraday", "php/", "php ", "reqwest", "ureq")):
+        return True
+    # Browser automation
+    if any(x in ua for x in ("selenium", "webdriver", "headless", "puppeteer", "playwright", "phantom")):
+        return True
+    # API / testing tools
+    if any(x in ua for x in ("postman", "insomnia", "rest-assured", "swagger")):
+        return True
+    return False
+
+
 async def _log_attack_error(attacker_id: str, attacker_username: str, player_message: str, req: Optional[Request] = None):
     """Log a failed execute attempt (validation/perm error) so admin sees every click."""
     try:
+        meta = _request_meta(req)
         await db.attack_attempts.insert_one({
             "id": str(uuid.uuid4()),
             "attacker_id": attacker_id,
@@ -78,8 +116,35 @@ async def _log_attack_error(attacker_id: str, attacker_username: str, player_mes
             "outcome": "error",
             "player_message": (player_message or "")[:1000],
             "created_at": datetime.now(timezone.utc).isoformat(),
-            **_request_meta(req),
+            **meta,
         })
+    except Exception:
+        pass
+
+
+async def _notify_target_if_bot_attack(
+    target_id: str,
+    attacker_username: str,
+    outcome: str,
+    location_state: Optional[str],
+    player_message: str,
+    attacker_is_bot: bool,
+):
+    """If the attacker was detected as a bot, send an inbox notification to admins only."""
+    if not attacker_is_bot:
+        return
+    admin_emails = list(ADMIN_EMAILS or [])
+    if not admin_emails:
+        return
+    try:
+        admins = await db.users.find({"email": {"$in": admin_emails}}, {"_id": 0, "id": 1}).to_list(100)
+        loc = f" in {location_state}" if location_state else ""
+        target_info = f" (target: {target_id})" if target_id else ""
+        title = "Bot attack"
+        msg = f"{attacker_username} (bot){target_info}{loc}. {player_message[:200]}"
+        for a in admins:
+            if a.get("id"):
+                await send_notification(a["id"], title, msg, "attack", category="attacks")
     except Exception:
         pass
 
@@ -382,11 +447,26 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
         estimated_completion=found_at.isoformat()
     )
 
-async def get_attack_status(current_user: dict = Depends(get_current_user)):
-    attack = await db.attacks.find_one(
-        {"attacker_id": current_user["id"], "status": {"$in": ["searching", "found", "traveling"]}},
-        {"_id": 0}
-    )
+async def get_attack_status(
+    current_user: dict = Depends(get_current_user),
+    target_username: Optional[str] = Query(None, description="If provided, prefer a FOUND attack for this target (so bot can use existing search)"),
+):
+    base_filter = {"attacker_id": current_user["id"], "status": {"$in": ["searching", "found", "traveling"]}}
+    attack = None
+    if target_username and target_username.strip():
+        want = (target_username or "").strip()
+        # Prefer FOUND (or traveling) for this target so we use existing search instead of starting a new one
+        attack = await db.attacks.find_one(
+            {**base_filter, "target_username": {"$regex": f"^{re.escape(want)}$", "$options": "i"}, "status": {"$in": ["found", "traveling"]}},
+            {"_id": 0}
+        )
+        if not attack:
+            attack = await db.attacks.find_one(
+                {**base_filter, "target_username": {"$regex": f"^{re.escape(want)}$", "$options": "i"}, "status": "searching"},
+                {"_id": 0}
+            )
+    if not attack:
+        attack = await db.attacks.find_one(base_filter, {"_id": 0})
     if not attack:
         raise HTTPException(status_code=404, detail="No active attack")
     # If target is dead or is a bodyguard who was killed (e.g. by someone else), remove this search and return 404
@@ -652,6 +732,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         if search_username:
             msg = f"{target_name} has a bodyguard{slot_msg} called {display_name}. You need to kill them first."
             try:
+                meta = _request_meta(req)
                 await db.attack_attempts.insert_one({
                     "id": str(uuid.uuid4()),
                     "attacker_id": current_user["id"],
@@ -665,8 +746,12 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     "bullets_used": 0,
                     "first_bodyguard": {"display_name": display_name, "search_username": search_username, "slot_number": slot_n, "target_username": target_name},
                     "created_at": datetime.now(timezone.utc).isoformat(),
-                    **_request_meta(req),
+                    **meta,
                 })
+                await _notify_target_if_bot_attack(
+                    target["id"], current_user.get("username") or "?", "bodyguard",
+                    attack.get("location_state"), msg, meta.get("attacker_is_bot", False),
+                )
             except Exception:
                 pass
             return AttackExecuteResponse(
@@ -677,6 +762,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             )
         msg = f"{target_name} has a bodyguard{slot_msg}. You need to kill them first."
         try:
+            meta = _request_meta(req)
             await db.attack_attempts.insert_one({
                 "id": str(uuid.uuid4()),
                 "attacker_id": current_user["id"],
@@ -690,8 +776,12 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 "bullets_used": 0,
                 "first_bodyguard": {"display_name": display_name or "bodyguard", "search_username": None, "slot_number": slot_n, "target_username": target_name},
                 "created_at": datetime.now(timezone.utc).isoformat(),
-                **_request_meta(req),
+                **meta,
             })
+            await _notify_target_if_bot_attack(
+                target["id"], current_user.get("username") or "?", "bodyguard",
+                attack.get("location_state"), msg, meta.get("attacker_is_bot", False),
+            )
         except Exception:
             pass
         return AttackExecuteResponse(
@@ -828,6 +918,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 _is_npc_bodyguard = bool(target.get("is_bodyguard"))
                 damage_done = float(target_health)
                 try:
+                    meta = _request_meta(req)
                     await db.attack_attempts.insert_one({
                         **attempt_base,
                         "outcome": "killed",
@@ -840,6 +931,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                         "is_npc_kill": True,
                         "is_bodyguard_kill": _is_npc_bodyguard,
                         "target_is_npc": True,
+                        **meta,
                     })
                 except Exception:
                     pass
@@ -1214,6 +1306,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 logging.exception("Family notify/war on kill: %s", e)
         try:
             damage_done = float(target_health)
+            meta = _request_meta(req)
             await db.attack_attempts.insert_one({
                 **attempt_base,
                 "outcome": "killed",
@@ -1224,8 +1317,12 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 "target_health_before": target_health,
                 "target_health_after": 0.0,
                 "damage_done": damage_done,
-                **_request_meta(req),
+                **meta,
             })
+            await _notify_target_if_bot_attack(
+                attempt_base["target_id"], current_user.get("username") or "?", "killed",
+                attempt_base.get("location_state"), success_message, meta.get("attacker_is_bot", False),
+            )
         except Exception:
             pass
         return AttackExecuteResponse(
