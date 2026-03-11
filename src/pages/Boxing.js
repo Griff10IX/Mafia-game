@@ -85,12 +85,24 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
 
   // Legs
   const legL=new THREE.Group(); legL.position.set(-0.15,0.5,0); root.add(legL);
-  legL.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.22,0.58,0.22),m(0x111008)),{position:new THREE.Vector3(0,-0.29,0)}));
-  legL.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.22,0.1,0.34),m(0x2a1a0a)),{position:new THREE.Vector3(0,-0.62,0.06)}));
+  {
+    const upperLegL = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.58,0.22),m(0x111008));
+    upperLegL.position.set(0,-0.29,0);
+    legL.add(upperLegL);
+    const lowerLegL = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.1,0.34),m(0x2a1a0a));
+    lowerLegL.position.set(0,-0.62,0.06);
+    legL.add(lowerLegL);
+  }
 
   const legR=new THREE.Group(); legR.position.set(0.15,0.5,0); root.add(legR);
-  legR.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.22,0.58,0.22),m(0x111008)),{position:new THREE.Vector3(0,-0.29,0)}));
-  legR.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.22,0.1,0.34),m(0x2a1a0a)),{position:new THREE.Vector3(0,-0.62,0.06)}));
+  {
+    const upperLegR = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.58,0.22),m(0x111008));
+    upperLegR.position.set(0,-0.29,0);
+    legR.add(upperLegR);
+    const lowerLegR = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.1,0.34),m(0x2a1a0a));
+    lowerLegR.position.set(0,-0.62,0.06);
+    legR.add(lowerLegR);
+  }
 
   // Hips
   const hips=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.28,0.3),m(colorHex)); hips.position.set(0,0.64,0); root.add(hips);
@@ -110,16 +122,32 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
 
   // Left arm — pivot at shoulder
   const armL=new THREE.Group(); armL.position.set(-0.4,0.54,0); torsoG.add(armL);
-  armL.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.2,0.44,0.2),m(skinHex)),{position:new THREE.Vector3(0,-0.22,0)}));
+  {
+    const upperArmL = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.44,0.2),m(skinHex));
+    upperArmL.position.set(0,-0.22,0);
+    armL.add(upperArmL);
+  }
   const faL=new THREE.Group(); faL.position.set(0,-0.47,0); armL.add(faL);
-  faL.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.18,0.4,0.18),m(skinHex)),{position:new THREE.Vector3(0,-0.2,0)}));
+  {
+    const forearmL = new THREE.Mesh(new THREE.BoxGeometry(0.18,0.4,0.18),m(skinHex));
+    forearmL.position.set(0,-0.2,0);
+    faL.add(forearmL);
+  }
   const gloveL=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.29,0.27),m(colorHex)); gloveL.position.y=-0.45; faL.add(gloveL);
 
   // Right arm — pivot at shoulder
   const armR=new THREE.Group(); armR.position.set(0.4,0.54,0); torsoG.add(armR);
-  armR.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.2,0.44,0.2),m(skinHex)),{position:new THREE.Vector3(0,-0.22,0)}));
+  {
+    const upperArmR = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.44,0.2),m(skinHex));
+    upperArmR.position.set(0,-0.22,0);
+    armR.add(upperArmR);
+  }
   const faR=new THREE.Group(); faR.position.set(0,-0.47,0); armR.add(faR);
-  faR.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.18,0.4,0.18),m(skinHex)),{position:new THREE.Vector3(0,-0.2,0)}));
+  {
+    const forearmR = new THREE.Mesh(new THREE.BoxGeometry(0.18,0.4,0.18),m(skinHex));
+    forearmR.position.set(0,-0.2,0);
+    faR.add(forearmR);
+  }
   const gloveR=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.29,0.27),m(colorHex)); gloveR.position.y=-0.45; faR.add(gloveR);
 
   g.position.y=0.08;
