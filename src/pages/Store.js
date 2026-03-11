@@ -28,6 +28,8 @@ const BULLET_PACKS = [
   { bullets: 100000, cost: 1525 },
 ];
 const CUSTOM_BULLETS_MAX = 250_000;
+
+const VALID_TABS = ['points', 'sendpts', 'upgrades', 'bullets'];
 const bulletCost = (bullets) => bullets < 5000 ? Math.max(1, Math.floor(bullets * 0.02)) : 100 + Math.floor((bullets - 5000) / 5000) * 75;
 
 const UPGRADES = [
@@ -95,12 +97,11 @@ export default function Store() {
   const [activeTab, setActiveTab] = useState('upgrades');
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
-  const validTabs = ['points', 'sendpts', 'upgrades', 'bullets'];
   useEffect(() => {
-    if (tabFromUrl && validTabs.includes(tabFromUrl)) {
+    if (tabFromUrl && VALID_TABS.includes(tabFromUrl)) {
       setActiveTab(tabFromUrl);
     }
-  }, [tabFromUrl]);
+  }, [tabFromUrl, VALID_TABS]);
   const [pointsTransfers, setPointsTransfers] = useState([]);
   const [adminTransfers, setAdminTransfers] = useState([]);
   const [adminTransfersOpen, setAdminTransfersOpen] = useState(false);

@@ -1321,7 +1321,7 @@ export default function Admin() {
     if (!attackLogViewRow?.id || !attackLogsData?.logs?.length) return;
     const found = attackLogsData.logs.find((l) => l.id === attackLogViewRow.id);
     if (found) setAttackLogViewRow(found);
-  }, [attackLogsData]);
+  }, [attackLogsData, attackLogViewRow?.id]);
 
   const handleFetchCrimeLogs = async () => {
     const un = (crimeLogsUsername || '').trim();
@@ -3484,6 +3484,12 @@ export default function Admin() {
               </ActionRow>
               <ActionRow icon={Lock} label="Unlock Account" description="Restore access after investigation">
                 <BtnPrimary onClick={() => handleUnlockAccount()}>Unlock</BtnPrimary>
+              </ActionRow>
+              <ActionRow icon={Skull} label="Modkill" description="Permanently kill the target account. They become dead and cannot log in until revived. Use for rule breaks or at player request." color="text-red-400">
+                <BtnDanger onClick={handleKillPlayer}>Kill</BtnDanger>
+              </ActionRow>
+              <ActionRow icon={Zap} label="Revive" description="Restore a dead or modkilled account so they can log in again">
+                <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
               </ActionRow>
               {isAdmin && (
                 <ActionRow icon={Lock} label="Test lock (60s)" description="Lock yourself for 60 seconds to test the locked page">

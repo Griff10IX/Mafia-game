@@ -374,7 +374,7 @@ export default function ForumTopic() {
               {topic.is_locked && <Lock size={14} className="text-red-400" />}
             </div>
             <div className="flex items-center gap-3 mt-1 text-[10px] text-mutedForeground">
-              <Link to={`/profile/${encodeURIComponent(topic.author_username)}`} className="text-foreground font-bold hover:text-primary hover:underline">{topic.author_username}</Link>
+              <Link to={`/profile/${encodeURIComponent(topic.author_username)}`} className="text-foreground font-bold hover:text-primary hover:underline" style={topic.author_online_color ? { color: topic.author_online_color } : undefined}>{topic.author_username}</Link>
               <span className="flex items-center gap-0.5"><Clock size={10} /> {getTimeAgo(topic.created_at)}</span>
               <span className="flex items-center gap-0.5"><Eye size={10} /> {topic.views ?? 0}</span>
               <span className="flex items-center gap-0.5"><MessageCircle size={10} /> {commentCount}</span>
@@ -641,7 +641,7 @@ export default function ForumTopic() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2 text-[10px] text-mutedForeground">
-                      <Link to={`/profile/${encodeURIComponent(c.author_username)}`} className="text-foreground font-bold hover:text-primary hover:underline">
+                      <Link to={`/profile/${encodeURIComponent(c.author_username)}`} className="text-foreground font-bold hover:text-primary hover:underline" style={c.author_online_color ? { color: c.author_online_color } : undefined}>
                         {c.author_username}
                       </Link>
                       <span className="text-zinc-600">#{idx + 1}</span>

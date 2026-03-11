@@ -11,8 +11,48 @@ from pydantic import BaseModel
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user, _is_admin, _is_moderator, _is_hdo, log_activity, send_notification
+from server import db, get_current_user, _is_admin, _is_moderator, _is_hdo, log_activity, send_notification, ADMIN_EMAILS
 
+
+MOD_DEFAULT = "#1e3a5f"
+ADMIN_DEFAULT = "#a78bfa"
+
+
+async def _get_author_display_colors(author_ids) -> dict:
+    """Return dict author_id -> hex color for admin/mod display. Empty dict if no ids."""
+    if not author_ids:
+        return {}
+    author_ids = set(aid for aid in author_ids if aid)
+    admin_doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
+    admin_color = (admin_doc.get("value") or ADMIN_DEFAULT)
+    if isinstance(admin_color, str):
+        admin_color = admin_color.strip()
+    if not admin_color or not admin_color.startswith("#"):
+        admin_color = ADMIN_DEFAULT
+    mod_doc = await db.game_settings.find_one({"key": "mod_default_online_color"}, {"_id": 0, "value": 1})
+    mod_default = (mod_doc.get("value") or MOD_DEFAULT)
+    if isinstance(mod_default, str):
+        mod_default = mod_default.strip()
+    if not mod_default or not mod_default.startswith("#"):
+        mod_default = MOD_DEFAULT
+    users = await db.users.find(
+        {"id": {"$in": list(author_ids)}},
+        {"_id": 0, "id": 1, "email": 1, "is_moderator": 1, "mod_online_color": 1},
+    ).to_list(1000)
+    result = {}
+    for u in users:
+        uid = u.get("id")
+        if not uid:
+            continue
+        if _is_admin(u):
+            result[uid] = admin_color
+        elif u.get("is_moderator"):
+            raw = (u.get("mod_online_color") or "").strip()
+            if raw and raw.startswith("#") and len(raw) <= 9:
+                result[uid] = raw
+            else:
+                result[uid] = mod_default
+    return result
 
 FORUM_CATEGORIES = ["general", "entertainer", "crew_oc", "designer"]  # crew_oc = family Crew OC ads; designer = picture designers
 FORUM_TOPICS_PER_PAGE = 20
@@ -71,6 +111,8 @@ async def get_topics(
     sort = [("is_important", -1), ("is_sticky", -1), ("updated_at", -1)]
     skip = (page - 1) * FORUM_TOPICS_PER_PAGE
     topics = await db.forum_topics.find(query, {"_id": 0}).sort(sort).skip(skip).limit(FORUM_TOPICS_PER_PAGE).to_list(FORUM_TOPICS_PER_PAGE)
+    author_ids = [t.get("author_id") for t in topics if t.get("author_id")]
+    colors = await _get_author_display_colors(author_ids)
     out = []
     for t in topics:
         comment_count = await db.forum_comments.count_documents({"topic_id": t["id"]})
@@ -87,6 +129,8 @@ async def get_topics(
             "created_at": t.get("created_at"),
             "updated_at": t.get("updated_at"),
         }
+        if t.get("author_id") and colors.get(t["author_id"]):
+            item["author_online_color"] = colors[t["author_id"]]
         if t.get("crew_oc_family_id"):
             item["crew_oc_family_id"] = t["crew_oc_family_id"]
             fam = await db.families.find_one({"id": t["crew_oc_family_id"]}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_join_fee": 1})
@@ -110,6 +154,13 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
     )
     topic["views"] = topic.get("views", 0) + 1
     comments = await db.forum_comments.find({"topic_id": topic_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    author_ids = [topic.get("author_id")] + [c.get("author_id") for c in comments if c.get("author_id")]
+    colors = await _get_author_display_colors(author_ids)
+    if topic.get("author_id") and colors.get(topic["author_id"]):
+        topic["author_online_color"] = colors[topic["author_id"]]
+    for c in comments:
+        if c.get("author_id") and colors.get(c["author_id"]):
+            c["author_online_color"] = colors[c["author_id"]]
     # Attach like status for current user
     uid = current_user["id"]
     for c in comments:

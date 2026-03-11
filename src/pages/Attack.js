@@ -1011,7 +1011,7 @@ export default function Attack() {
       });
     }, 1000);
     return () => clearInterval(t);
-  }, [travelCountdown]);
+  }, [travelCountdown, refreshAttacks]);
 
   // Resend last submit after F5 (search or kill)
   useEffect(() => {
