@@ -376,6 +376,7 @@ export default function Boxing3D() {
   }, []);
 
   const startNpcFight = async (npc) => {
+    // Don't start another while one is already running
     if (npcFightState && !npcFightState.result) return;
     setNpcFightState({ matchId: null, npcName: npc.name });
     try {
@@ -384,6 +385,8 @@ export default function Boxing3D() {
       if (!matchId) throw new Error("No match id");
       await api.post("/boxing/matches/ready", { match_id: matchId, ready: true });
       setNpcFightState((s) => ({ ...s, matchId }));
+      // Make sure the match list updates so you can see the fight entry
+      await refreshMatches();
       const poll = () => {
         api.get(`/boxing/matches/${matchId}`).then((r) => {
           const m = r.data?.match;
@@ -400,6 +403,7 @@ export default function Boxing3D() {
       npcPollRef.current = setInterval(poll, 2000);
       poll();
     } catch (e) {
+      setMatchError(getErr(e));
       setNpcFightState({ result: "error", npcName: npc.name, message: e?.response?.data?.detail || e?.message || "Failed" });
     }
   };
@@ -1045,6 +1049,7 @@ export default function Boxing3D() {
             {liveMatches.map((m) => {
               const mine = me && (m.a_username === me.username || m.b_username === me.username);
               const canReady = mine && (m.state==="pending" || m.state==="ready");
+              const canJoin = !mine && m.is_open && !m.b_username && (m.state==="pending" || m.state==="ready");
               return (
                 <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid rgba(201,168,76,0.1)"}}>
                   <div>
@@ -1054,6 +1059,16 @@ export default function Boxing3D() {
                     <div style={{fontSize:9,color:"#6a5a3a"}}>HP {m.hp?.a ?? 0}/{m.hp?.b ?? 0} • Odds A {m.odds?.a ?? "-"} / B {m.odds?.b ?? "-"}</div>
                   </div>
                   <div style={{display:"flex",gap:4}}>
+                    {canJoin && (
+                      <button
+                        onClick={()=>handleJoinMatch(m.id)}
+                        disabled={busyAction===`join:${m.id}`}
+                        className={styles.btnPrimary}
+                        style={{padding:"2px 6px",fontSize:9,cursor:busyAction===`join:${m.id}`?"wait":"pointer"}}
+                      >
+                        Join
+                      </button>
+                    )}
                     {canReady && (
                       <button
                         onClick={()=>handleReadyMatch(m.id,true)}
