@@ -2,7 +2,7 @@
 from fastapi import Depends, HTTPException
 
 
-    def register(router):
+def register(router):
     import server as srv
 
     db = srv.db
@@ -26,7 +26,6 @@ from fastapi import Depends, HTTPException
         godfather_req = get_prestige_requirement(level) if next_level else None
 
         effective_rp = int(rank_points / mult) if mult > 1.0 else rank_points
-        # Require Godfather rank and effective RP >= next level's requirement
         can_prestige = (
             not at_max
             and rank_id >= GODFATHER_RANK_ID
@@ -38,22 +37,22 @@ from fastapi import Depends, HTTPException
 
         all_levels = []
         for lvl, cfg in PRESTIGE_CONFIGS.items():
-            # godfather_req in the table should match the effective RP needed
-            # to unlock this prestige level (i.e. requirement from previous level).
             if lvl == 1:
                 level_req = srv.get_prestige_requirement(0)
             else:
                 level_req = srv.get_prestige_requirement(lvl - 1)
-            all_levels.append({
-                "level": lvl,
-                "name": cfg["name"],
-                "godfather_req": level_req,
-                "crime_mult": cfg["crime_mult"],
-                "oc_mult": cfg["oc_mult"],
-                "gta_rare_boost": cfg["gta_rare_boost"],
-                "npc_mult": cfg["npc_mult"],
-                "mission_reward_mult": cfg.get("mission_reward_mult", 1.0),
-            })
+            all_levels.append(
+                {
+                    "level": lvl,
+                    "name": cfg["name"],
+                    "godfather_req": level_req,
+                    "crime_mult": cfg["crime_mult"],
+                    "oc_mult": cfg["oc_mult"],
+                    "gta_rare_boost": cfg["gta_rare_boost"],
+                    "npc_mult": cfg["npc_mult"],
+                    "mission_reward_mult": cfg.get("mission_reward_mult", 1.0),
+                }
+            )
 
         return {
             "prestige_level": level,
@@ -85,13 +84,15 @@ from fastapi import Depends, HTTPException
         if rank_id < GODFATHER_RANK_ID:
             raise HTTPException(status_code=400, detail="You must reach Godfather rank before prestiging")
         if godfather_req is None or godfather_req <= 0 or effective_rp < godfather_req:
-            raise HTTPException(status_code=400, detail=f"You need {godfather_req:,} effective rank points to prestige (you have {effective_rp:,})")
+            raise HTTPException(
+                status_code=400,
+                detail=f"You need {godfather_req:,} effective rank points to prestige (you have {effective_rp:,})",
+            )
 
         new_level = level + 1
         new_cfg = PRESTIGE_CONFIGS[new_level]
         new_mult = new_cfg["threshold_mult"]
 
-        # Reset missions so they can be redone; payouts scale by prestige (mission_reward_mult).
         mission_reset_unset = {
             "mission_1_crimes_baseline": "",
             "mission_2_crimes_baseline": "",
