@@ -53,21 +53,22 @@ function simulateFight(aS, bS) {
 
 // ── BUILD RING ───────────────────────────────────────────────────────────────
 function buildRing(scene) {
-  const mat = c => new THREE.MeshLambertMaterial({color:c});
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(7,0.15,7),mat(0x262020));
+  const mat = c => new THREE.MeshLambertMaterial({ color: c });
+  // Lighter mat so the ring floor is visible (noir but not black)
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(7,0.15,7),mat(0x4a4540));
   floor.receiveShadow=true; scene.add(floor);
-  const lm=new THREE.MeshBasicMaterial({color:0xd8b868,transparent:true,opacity:0.3});
+  const lm=new THREE.MeshBasicMaterial({color:0xe8d898,transparent:true,opacity:0.55});
   // Center line: flat strip along X (width 6.8, thin in Y and Z)
   const cl=new THREE.Mesh(new THREE.BoxGeometry(6.8,0.02,0.05),lm); cl.position.y=0.09; scene.add(cl);
   // Center circle: flat ring on floor (RingGeometry is horizontal by default)
   const cc=new THREE.Mesh(new THREE.RingGeometry(0.67,0.7,32),lm); cc.rotation.x=-Math.PI/2; cc.position.y=0.09; scene.add(cc);
-  const postMat=mat(0xc9a84c), capMat=mat(0xfff2aa);
+  const postMat=mat(0xd9b85c), capMat=mat(0xfff2aa);
   [[-3.2,-3.2],[3.2,-3.2],[3.2,3.2],[-3.2,3.2]].forEach(([x,z])=>{
     const p=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,3.5,8),postMat); p.position.set(x,1.75,z); p.castShadow=true; scene.add(p);
     const c=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8),capMat); c.position.set(x,3.56,z); scene.add(c);
   });
   [0.9,1.6,2.3].forEach(y=>{
-    const rm=mat(y===1.6?0x9b2a2a:0xe0c27a);
+    const rm=mat(y===1.6?0xab3a3a:0xe8d078);
     [[-3.2,-3.2,3.2,-3.2],[3.2,-3.2,3.2,3.2],[3.2,3.2,-3.2,3.2],[-3.2,3.2,-3.2,-3.2]].forEach(([x1,z1,x2,z2])=>{
       const len=Math.sqrt((x2-x1)**2+(z2-z1)**2);
       const rope=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,len,6),rm);
@@ -76,7 +77,7 @@ function buildRing(scene) {
       scene.add(rope);
     });
   });
-  const base=new THREE.Mesh(new THREE.BoxGeometry(9,0.4,9),mat(0x101014)); base.position.y=-0.27; scene.add(base);
+  const base=new THREE.Mesh(new THREE.BoxGeometry(9,0.4,9),mat(0x2a2826)); base.position.y=-0.27; scene.add(base);
 }
 
 // ── BUILD BOXER ──────────────────────────────────────────────────────────────
@@ -636,24 +637,23 @@ export default function Boxing3D() {
     renderer.shadowMap.enabled=true;
     renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     renderer.toneMapping=THREE.ReinhardToneMapping;
-    renderer.toneMappingExposure=1.9;
+    renderer.toneMappingExposure=2.4;
 
     const scene=new THREE.Scene();
-    // Slightly brighter, cooler noir backdrop to match game theme
-    scene.background=new THREE.Color(0x181822);
-    scene.fog=new THREE.FogExp2(0x090912,0.016);
+    scene.background=new THREE.Color(0x1e1e2e);
+    scene.fog=new THREE.FogExp2(0x141420,0.012);
 
     const camera=new THREE.PerspectiveCamera(52,W/H,0.1,80);
     camera.position.set(0,2.9,7.4); camera.lookAt(0,1.1,0);
 
-    scene.add(new THREE.AmbientLight(0x393530,1.4));
-    const spot=new THREE.SpotLight(0xfff7e0,6.3,28,Math.PI/3.8,0.3);
+    scene.add(new THREE.AmbientLight(0x554d48,1.9));
+    const spot=new THREE.SpotLight(0xfff8e8,8.5,32,Math.PI/3.6,0.25);
     spot.position.set(0,10,1); spot.target.position.set(0,0,0);
     spot.castShadow=true; spot.shadow.mapSize.set(1024,1024);
     scene.add(spot); scene.add(spot.target);
-    const fl1=new THREE.PointLight(0xc9a84c,1.4,20); fl1.position.set(-6,5,4); scene.add(fl1);
-    const fl2=new THREE.PointLight(0x8b2222,0.9,16); fl2.position.set(6,5,4); scene.add(fl2);
-    const fl3=new THREE.PointLight(0x3a404f,0.7,14); fl3.position.set(0,2,-5); scene.add(fl3);
+    const fl1=new THREE.PointLight(0xd9b85c,1.8,22); fl1.position.set(-6,5,4); scene.add(fl1);
+    const fl2=new THREE.PointLight(0xa03030,1.0,18); fl2.position.set(6,5,4); scene.add(fl2);
+    const fl3=new THREE.PointLight(0x5a6070,0.9,16); fl3.position.set(0,2,-5); scene.add(fl3);
 
     buildRing(scene);
 
