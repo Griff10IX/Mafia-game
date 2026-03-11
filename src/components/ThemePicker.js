@@ -240,6 +240,7 @@ export default function ThemePicker({ open, onClose }) {
     sidebarLayout: 'sidebar_layout',
     toastPosition: 'toast_position',
     toastCloseButton: 'toast_close_button',
+    killToastStyle: 'kill_toast_style',
   };
   const CHIP_MIN = 20, CHIP_MAX = 100;
   const ls = (k, fb = '') => (typeof window !== 'undefined' && localStorage.getItem(k)) || fb;
@@ -255,6 +256,7 @@ export default function ThemePicker({ open, onClose }) {
   const sidebarLayout = ls(KEYS.sidebarLayout, 'default');
   const toastPosition = ls(KEYS.toastPosition, 'bottom-center');
   const toastCloseButton = ls(KEYS.toastCloseButton) !== 'false';
+  const killToastStyle = ls(KEYS.killToastStyle, 'popup');
 
   const loadChip = (k) => {
     if (typeof window === 'undefined') return 50;
@@ -279,6 +281,7 @@ export default function ThemePicker({ open, onClose }) {
   };
   const setToastPosition = v => lsSet(KEYS.toastPosition,v,'toast-prefs-changed');
   const setToastCloseButton = v => lsSet(KEYS.toastCloseButton,v?'true':'false','toast-prefs-changed');
+  const setKillToastStyle = v => lsSet(KEYS.killToastStyle, v, 'kill-toast-style-changed');
   const setBottomDividers = v => lsSet(KEYS.bottomDividers,v?'true':'false','bottom-nav-dividers-changed');
 
   /* ── data ── */
@@ -837,6 +840,17 @@ export default function ThemePicker({ open, onClose }) {
                   options={[{ id: 'on', label: 'On' }, { id: 'off', label: 'Off' }]}
                   value={toastCloseButton ? 'on' : 'off'}
                   onChange={v => setToastCloseButton(v === 'on')}
+                />
+              </TabSection>
+
+              <TabSection title="Kill notification style" sub="Attack page: show kill result as popup or as a banner between the event and Kill User section">
+                <Pills
+                  options={[
+                    { id: 'popup', label: 'Popup' },
+                    { id: 'banner', label: 'Banner (below event)' },
+                  ]}
+                  value={killToastStyle}
+                  onChange={setKillToastStyle}
                 />
               </TabSection>
             </div>

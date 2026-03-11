@@ -78,6 +78,62 @@ const EventBanner = ({ event }) => (
   </div>
 );
 
+const KILL_TOAST_STYLE_KEY = 'kill_toast_style';
+const getKillToastStyle = () => {
+  try {
+    return localStorage.getItem(KILL_TOAST_STYLE_KEY) || 'popup';
+  } catch {
+    return 'popup';
+  }
+};
+
+/** Banner shown between event and Kill User when theme is "banner". */
+const KillNotificationBanner = ({ message, onDismiss }) => {
+  if (!message) return null;
+  const { text, type, description, action } = message;
+  const isSuccess = type === 'success';
+  const isWarning = type === 'warning';
+  const isError = type === 'error';
+  const typeClass = isSuccess
+    ? 'bg-primary/10 border-primary/30 text-primary'
+    : isWarning
+      ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400'
+      : isError
+        ? 'bg-destructive/10 border-destructive/30 text-destructive'
+        : 'bg-muted/20 border-border text-foreground';
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 8000);
+    return () => clearTimeout(t);
+  }, [onDismiss]);
+  return (
+    <div className={`atk-fade-in rounded-md border px-3 py-2 flex items-center justify-between gap-2 flex-wrap ${typeClass}`}>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-heading font-bold truncate">{text}</p>
+        {description && <p className="text-[10px] font-heading text-mutedForeground mt-0.5">{description}</p>}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {action && (
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="px-2 py-1 text-[10px] font-heading font-bold uppercase tracking-wider rounded border border-current opacity-80 hover:opacity-100 transition-opacity"
+          >
+            {action.label}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+          aria-label="Dismiss"
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const KillUserCard = ({
   killUsername,
   setKillUsername,
@@ -859,6 +915,20 @@ export default function Attack() {
   const [travelCountdown, setTravelCountdown] = useState(null);
   const [, setCountdownTick] = useState(0);
   const [pendingResend, setPendingResend] = useState(null);
+  const [killBannerMessage, setKillBannerMessage] = useState(null);
+
+  const showKillResult = (text, type, options = {}) => {
+    const { description, action } = options;
+    if (getKillToastStyle() === 'banner') {
+      setKillBannerMessage({ text, type, description, action });
+    } else if (type === 'success') {
+      toast.success(text, { description });
+    } else if (type === 'warning') {
+      toast.warning(text, { duration: 10000, action });
+    } else {
+      toast.error(text);
+    }
+  };
 
   // Tick every second so expiry countdowns update (24h → 00:00)
   useEffect(() => {
@@ -965,9 +1035,9 @@ export default function Attack() {
           const best = found.find((a) => a.can_attack);
           if (!best) {
             if (found.length > 0) {
-              toast.error('You must be in the target\'s location to attack. Travel there first.');
+              showKillResult('You must be in the target\'s location to attack. Travel there first.', 'error');
             } else {
-              toast.error('No found target for that username. Start a search first.');
+              showKillResult('No found target for that username. Start a search first.', 'error');
             }
             return;
           }
@@ -981,9 +1051,9 @@ export default function Attack() {
           refreshUser();
           fetchBullets();
           await refreshAttacks();
-          toast.success('Kill executed.');
+          showKillResult('Kill executed.', 'success');
         } catch (error) {
-          toast.error(error.response?.data?.detail || 'Failed to execute attack');
+          showKillResult(error.response?.data?.detail || 'Failed to execute attack', 'error');
         } finally {
           setLoading(false);
         }
@@ -1108,16 +1178,16 @@ export default function Attack() {
       const response = await api.post('/attack/execute', payload);
       if (response.data.success) {
         const rewardMoney = response.data.rewards?.money;
-        toast.success(response.data.message, {
+        showKillResult(response.data.message, 'success', {
           description: rewardMoney != null ? `Rewards: $${Number(rewardMoney).toLocaleString()}` : undefined,
         });
       } else if (response.data.first_bodyguard) {
         const bg = response.data.first_bodyguard;
-        toast.warning(response.data.message, {
-          duration: 10000,
+        showKillResult(response.data.message, 'warning', {
           action: {
             label: 'Search',
             onClick: async () => {
+              setKillBannerMessage(null);
               setLoading(true);
               try {
                 const note = bg.target_username ? `Bodyguard for: ${bg.target_username}` : '';
@@ -1133,13 +1203,13 @@ export default function Attack() {
           },
         });
       } else {
-        toast.error(response.data.message);
+        showKillResult(response.data.message, 'error');
       }
       refreshUser();
       fetchBullets();
       await refreshAttacks();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to execute attack');
+      showKillResult(error.response?.data?.detail || 'Failed to execute attack', 'error');
     } finally {
       setLoading(false);
     }
@@ -1260,6 +1330,13 @@ export default function Attack() {
 
       {eventsEnabled && event && (event.kill_cash !== 1 || event.rank_points !== 1) && event.name && (
         <EventBanner event={event} />
+      )}
+
+      {killBannerMessage && (
+        <KillNotificationBanner
+          message={killBannerMessage}
+          onDismiss={() => setKillBannerMessage(null)}
+        />
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
