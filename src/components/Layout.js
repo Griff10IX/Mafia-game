@@ -673,7 +673,7 @@ export default function Layout({ children }) {
         '/attack': 'combat', '/attempts': 'combat', '/hitlist': 'combat', '/bodyguards': 'combat', '/armour-weapons': 'combat',
         '/travel': 'travel', '/states': 'travel', '/my-properties': 'travel', '/booze-run': 'travel',
         '/forum': 'messaging', '/inbox': 'messaging',
-        '/bank': 'money', '/stock-market': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money',
+        '/bank': 'money', '/stock-market': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money', '/gauntlet': 'money',
         '/garage': 'money', '/sell-cars': 'money', '/buy-cars': 'money', '/crack-safe': 'money', '/casino': 'money', '/leaderboard': 'money',
         '/families': 'other', '/dead-alive': 'other', '/auto-rank': 'other',
       };
@@ -722,6 +722,7 @@ export default function Layout({ children }) {
     { path: '/casino', icon: Dice5, label: 'Casino' },
     { path: '/crack-safe', icon: Lock, label: 'Crack the Safe' },
     { path: '/daily-rewards', icon: Gift, label: 'Daily Rewards' },
+    { path: '/gauntlet', icon: Zap, label: 'The Gauntlet' },
     { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { path: '/store', icon: ShoppingBag, label: 'Store' },
     { path: '/quick-trade', icon: ArrowLeftRight, label: 'Quick Trade' },

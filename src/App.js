@@ -78,6 +78,7 @@ const LockedPage = lazy(() => import("./pages/LockedPage"));
 const IPRules = lazy(() => import("./pages/IPRules"));
 const HelpDesk = lazy(() => import("./pages/HelpDesk"));
 const IllegalBusiness = lazy(() => import("./pages/IllegalBusiness"));
+const Gauntlet = lazy(() => import("./pages/Gauntlet"));
 
 const PageLoader = () => (
   <div className="min-h-[200px] flex items-center justify-center text-primary text-sm font-heading">Loading...</div>
@@ -719,6 +720,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <DailyRewards />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/gauntlet"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Gauntlet />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
