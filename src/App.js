@@ -753,6 +753,18 @@ function App() {
             }
           />
           <Route
+            path="/boxing/arena/:matchId"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Boxing />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
             path="/armour-weapons"
             element={
               isAuthenticated ? (

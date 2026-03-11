@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import * as THREE from "three";
 import api from "../utils/api";
 import styles from "../styles/noir.module.css";
@@ -315,9 +316,51 @@ export default function Boxing3D() {
   const [league, setLeague] = useState(null);
   const [betStake, setBetStake] = useState(10000);
 
+  const { matchId: arenaMatchId } = useParams();
+  const navigate = useNavigate();
+  const [arenaMatchDetail, setArenaMatchDetail] = useState(null);
+  const [sceneReady, setSceneReady] = useState(false);
+  const [arenaServerResult, setArenaServerResult] = useState(null); // { winner, finish_reason } when server says finished
+  const arenaStartedRef = useRef(false);
+
   const flashMsg=(msg,ms=1600)=>{ setActionText(msg); setTimeout(()=>setActionText(""),ms); };
 
   const getErr = (e) => e?.response?.data?.detail || e?.message || "Something went wrong";
+
+  // When viewing arena, fetch match details
+  useEffect(() => {
+    if (!arenaMatchId) return;
+    setArenaServerResult(null);
+    arenaStartedRef.current = false;
+    api.get(`/boxing/matches/${arenaMatchId}`).then((r) => {
+      setArenaMatchDetail(r.data?.match || null);
+    }).catch(() => setArenaMatchDetail(null));
+  }, [arenaMatchId]);
+
+  // Poll match result when in arena
+  useEffect(() => {
+    if (!arenaMatchId) return;
+    const poll = () => {
+      api.get(`/boxing/matches/${arenaMatchId}`).then((r) => {
+        const m = r.data?.match;
+        if (m && m.state === "finished") setArenaServerResult({ winner: m.winner, finish_reason: m.finish_reason || "" });
+      }).catch(() => {});
+    };
+    const id = setInterval(poll, 2000);
+    poll();
+    return () => clearInterval(id);
+  }, [arenaMatchId]);
+
+  // Auto-start 3D fight when viewing arena and we have match + scene ready
+  useEffect(() => {
+    if (!arenaMatchId || !sceneReady || !refs.current.bA || !arenaMatchDetail || arenaStartedRef.current) return;
+    arenaStartedRef.current = true;
+    const opponentName = arenaMatchDetail.b_username || "";
+    const npc = (npcs || []).find((n) => n.name === opponentName) || (npcs && npcs[0]) || null;
+    startFight(npc);
+    // Only run once when scene becomes ready with match data
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arenaMatchId, sceneReady, arenaMatchDetail?.id, npcs?.length]);
 
   // Load NPCs + boxing meta (profile / gym / coach / gear)
   useEffect(() => {
@@ -385,23 +428,10 @@ export default function Boxing3D() {
       if (!matchId) throw new Error("No match id");
       await api.post("/boxing/matches/ready", { match_id: matchId, ready: true });
       setNpcFightState((s) => ({ ...s, matchId }));
-      // Make sure the match list updates so you can see the fight entry
       await refreshMatches();
-      const poll = () => {
-        api.get(`/boxing/matches/${matchId}`).then((r) => {
-          const m = r.data?.match;
-          if (!m || m.state !== "finished") return;
-          if (npcPollRef.current) clearInterval(npcPollRef.current);
-          npcPollRef.current = null;
-          const winner = m.winner;
-          const meId = r.data?.match?.a_id;
-          let result = "draw";
-          if (winner) result = winner === meId ? "win" : "loss";
-          setNpcFightState({ result, npcName: npc.name, reason: m.finish_reason || "" });
-        }).catch(() => {});
-      };
-      npcPollRef.current = setInterval(poll, 2000);
-      poll();
+      // Go to arena page to watch the fight
+      navigate(`/boxing/arena/${matchId}`);
+      return;
     } catch (e) {
       setMatchError(getErr(e));
       setNpcFightState({ result: "error", npcName: npc.name, message: e?.response?.data?.detail || e?.message || "Failed" });
@@ -593,7 +623,9 @@ export default function Boxing3D() {
   };
 
   useEffect(()=>{
+    if(!arenaMatchId) return;
     const canvas=canvasRef.current; if(!canvas) return;
+    setSceneReady(false);
     const W=canvas.clientWidth||640, H=canvas.clientHeight||440;
 
     const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
@@ -640,6 +672,7 @@ export default function Boxing3D() {
     r.renderer=renderer; r.scene=scene; r.camera=camera;
     r.bA=bA; r.bB=bB; r.crowd=crowd;
     r.clock.start();
+    setSceneReady(true);
 
     const onResize=()=>{
       const w=canvas.clientWidth,h=canvas.clientHeight;
@@ -742,12 +775,12 @@ export default function Boxing3D() {
           if(ev.bLanded) setTimeout(()=>{ r.hA={type:ev.bPunch,intensity:clamp(ev.bDmg/13,0.3,1.6),age:0}; },270);
 
           // Knockdowns
-          if(ev.aKD){ setTimeout(()=>{r.kdA=2.9;r.txA=-1.65;},200); flashMsg(`⚡ ${FIGHTERS[0].name.split(" ")[0].toUpperCase()} IS DOWN!`); }
-          if(ev.bKD){ setTimeout(()=>{r.kdB=2.9;r.txB=1.65;},200); flashMsg(`⚡ ${FIGHTERS[1].name.split(" ")[0].toUpperCase()} IS DOWN!`); }
+          if(ev.aKD){ setTimeout(()=>{r.kdA=2.9;r.txA=-1.65;},200); const na=(r.fight.nameA||FIGHTERS[0].name).split(" ")[0].toUpperCase(); flashMsg(`⚡ ${na} IS DOWN!`); }
+          if(ev.bKD){ setTimeout(()=>{r.kdB=2.9;r.txB=1.65;},200); const nb=(r.fight.nameB||FIGHTERS[1].name).split(" ")[0].toUpperCase(); flashMsg(`⚡ ${nb} IS DOWN!`); }
 
           // Big shot
-          if(!ev.aKD&&ev.aLanded&&ev.aDmg>14) flashMsg(`💥 ${FIGHTERS[0].name.split("'")[1]?.split("'")[0]} lands big!`,900);
-          else if(!ev.bKD&&ev.bLanded&&ev.bDmg>14) flashMsg(`💢 ${FIGHTERS[1].name.split("'")[1]?.split("'")[0]} fires back!`,900);
+          if(!ev.aKD&&ev.aLanded&&ev.aDmg>14) flashMsg(`💥 ${(r.fight.nameA||FIGHTERS[0].name).split("'")[1]?.split("'")[0] || (r.fight.nameA||FIGHTERS[0].name).split(" ")[0]} lands big!`,900);
+          else if(!ev.bKD&&ev.bLanded&&ev.bDmg>14) flashMsg(`💢 ${(r.fight.nameB||FIGHTERS[1].name).split("'")[1]?.split("'")[0] || (r.fight.nameB||FIGHTERS[1].name).split(" ")[0]} fires back!`,900);
 
           const kdDelay=(ev.aKD||ev.bKD)?3.1:0;
           r.evTimer=0.38+Math.random()*0.22+kdDelay;
@@ -756,7 +789,8 @@ export default function Boxing3D() {
         if(r.evIdx>=r.fight.events.length&&!r.pA&&!r.pB&&r.evTimer<=0){
           r.phase="done"; setGameState("done");
           const res=r.fight;
-          const wName=res.winner==="a"?FIGHTERS[0].name:res.winner==="b"?FIGHTERS[1].name:"";
+          const nameA=res.nameA||FIGHTERS[0].name; const nameB=res.nameB||FIGHTERS[1].name;
+          const wName=res.winner==="a"?nameA:res.winner==="b"?nameB:"";
           setWinText(res.reason==="Draw"?"DRAW":`${wName.split(" ")[0]} WINS — ${res.reason}`);
         }
       }
@@ -765,10 +799,10 @@ export default function Boxing3D() {
     };
     loop();
 
-    return()=>{cancelAnimationFrame(raf);window.removeEventListener("resize",onResize);renderer.dispose();};
-  },[]);
+    return()=>{ setSceneReady(false); cancelAnimationFrame(raf); window.removeEventListener("resize",onResize); renderer.dispose(); };
+  },[arenaMatchId]);
 
-  const startFight = () => {
+  const startFight = (npcForB) => {
     // Build sim stats from your effective profile (if available) and a generic or NPC opponent.
     const baseA = FIGHTERS[0];
     const baseB = FIGHTERS[1];
@@ -781,7 +815,7 @@ export default function Boxing3D() {
     };
 
     const youStats = effective || profile || null;
-    const npc = (npcs && npcs[0]) || null;
+    const npc = npcForB != null ? npcForB : (npcs && npcs[0]) || null;
 
     const simA = youStats ? {
       name: (me?.username ? `${me.username.toUpperCase()}` : baseA.name),
@@ -802,6 +836,8 @@ export default function Boxing3D() {
     } : baseB;
 
     const result=simulateFight(simA, simB);
+    result.nameA = simA.name;
+    result.nameB = simB.name;
     const r=refs.current;
     r.fight=result; r.phase="fighting"; r.evIdx=0; r.evTimer=0.6;
     r.pA=null; r.pB=null; r.hA=null; r.hB=null;
@@ -819,6 +855,51 @@ export default function Boxing3D() {
       <div style={{width:`${val}%`,height:"100%",background:color,borderRadius:2,transition:"width 0.3s",marginLeft:flip?"auto":undefined}}/>
     </div>
   );
+
+  // Arena view: 3D ring + HUD when viewing a match
+  if (arenaMatchId) {
+    const nameA = arenaMatchDetail?.a_username || me?.username || "You";
+    const nameB = arenaMatchDetail?.b_username || "Opponent";
+    return (
+      <div className={styles.page} style={{minHeight:"100vh",fontFamily:"'Cinzel',serif",display:"flex",flexDirection:"column"}}>
+        <div className={styles.pageContent} style={{padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--noir-border-light)"}}>
+          <Link to="/boxing" className={styles.btnGoldDarkText} style={{padding:"6px 12px",fontSize:11,textDecoration:"none"}}>← Back to gym</Link>
+          <div style={{fontSize:14,letterSpacing:"0.15em",color:gold}}>{nameA} vs {nameB}</div>
+          <div style={{width:80}}/>
+        </div>
+        <div style={{flex:1,position:"relative",minHeight:420}}>
+          <canvas
+            ref={canvasRef}
+            style={{width:"100%",height:"100%",minHeight:380,display:"block",background:"#181822"}}
+          />
+          <div style={{position:"absolute",left:0,right:0,bottom:0,padding:"8px 16px",background:"linear-gradient(transparent,rgba(0,0,0,0.85))",pointerEvents:"none"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:720,margin:"0 auto"}}>
+              <div style={{width:120,fontSize:10,color:gold}}>{nameA}</div>
+              <div style={{flex:1,padding:"0 12px"}}>
+                <Bar val={hpA} flip={false} color={gold} />
+                <div style={{fontSize:9,color:"#8a7a4a",marginTop:2}}>HP {hpA}/100</div>
+              </div>
+              <div style={{fontSize:11,color:"#c9a84c",minWidth:60,textAlign:"center"}}>R{round}/12</div>
+              <div style={{flex:1,padding:"0 12px"}}>
+                <Bar val={hpB} flip={true} color={crimson} />
+                <div style={{fontSize:9,color:"#8a7a4a",marginTop:2,textAlign:"right"}}>HP {hpB}/100</div>
+              </div>
+              <div style={{width:120,fontSize:10,color:crimson,textAlign:"right"}}>{nameB}</div>
+            </div>
+            {actionText && <div style={{fontSize:12,color:"#fff",textAlign:"center",marginTop:6}}>{actionText}</div>}
+            {gameState==="done" && winText && <div style={{fontSize:14,color:gold,textAlign:"center",marginTop:6,fontWeight:700}}>{winText}</div>}
+            {arenaServerResult && (
+              <div style={{fontSize:11,color:"#8a9a6a",textAlign:"center",marginTop:6}}>
+                Server: Match over — {arenaServerResult.finish_reason || (arenaServerResult.winner ? "Winner decided" : "Draw")}
+                <Link to="/boxing" style={{marginLeft:8,color:gold}}>Back to gym</Link>
+              </div>
+            )}
+          </div>
+        </div>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');`}</style>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.page} style={{minHeight:"100vh",fontFamily:"'Cinzel',serif",display:"flex",flexDirection:"column"}}>
@@ -1067,6 +1148,15 @@ export default function Boxing3D() {
                         style={{padding:"2px 6px",fontSize:9,cursor:busyAction===`join:${m.id}`?"wait":"pointer"}}
                       >
                         Join
+                      </button>
+                    )}
+                    {mine && m.state==="running" && (
+                      <button
+                        onClick={()=>navigate(`/boxing/arena/${m.id}`)}
+                        className={styles.btnGoldDarkText}
+                        style={{padding:"2px 6px",fontSize:9,cursor:"pointer"}}
+                      >
+                        Watch
                       </button>
                     )}
                     {canReady && (
