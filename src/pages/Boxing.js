@@ -241,11 +241,12 @@ function applyHit(bx, type, intensity, age, side) {
   bx.torsoG.rotation.y+=decay*0.2*s;
 }
 
-// Knockdown — t=0 upright, t=1 on canvas
+// Knockdown — t=0 upright, t=1 lying on canvas (not through it)
 function applyKnockdown(bx, t, side) {
   const f=clamp(t,0,1);
   bx.group.rotation.z=(side==="a"?-1:1)*f*1.45;
-  bx.group.position.y=0.08-f*0.72;
+  // Rest on canvas surface (y ~0.02) instead of sinking through
+  bx.group.position.y=0.08-f*0.06;
   bx.torsoG.rotation.x=f*0.55;
   bx.armL.rotation.x=-0.35+f*1.1;
   bx.armR.rotation.x=-0.35+f*0.8;
@@ -659,7 +660,9 @@ export default function Boxing3D() {
     const bB=buildBoxer(scene,FIGHTERS[1].color,0xb07850);
     bA.group.position.set(-1.0,0.08,0);
     bB.group.position.set(1.0,0.08,0);
-    bB.group.rotation.y=Math.PI;
+    // Face each other: A faces +X (towards B), B faces -X (towards A)
+    bA.group.rotation.y=-Math.PI/2;
+    bB.group.rotation.y=Math.PI/2;
 
     // Crowd
     const cg=new THREE.BufferGeometry();
@@ -709,7 +712,7 @@ export default function Boxing3D() {
         const getUp=r.kdA<0.7;
         const prog=getUp?1-(r.kdA/0.7):clamp((2.8-r.kdA)/0.6,0,1);
         applyKnockdown(bA,prog,"a");
-        bA.group.position.y=getUp?lerp(-0.64,0.08,1-r.kdA/0.7):-0.64+0.08;
+        bA.group.position.y=getUp?lerp(0.02,0.08,1-r.kdA/0.7):0.02;
         r.txA=-1.65;
         if(r.kdA<=0){bA.group.rotation.z=0;bA.group.position.y=0.08;r.txA=-1.3;}
       } else { bA.group.position.y=0.08; bA.group.rotation.z=0; }
@@ -719,7 +722,7 @@ export default function Boxing3D() {
         const getUp=r.kdB<0.7;
         const prog=getUp?1-(r.kdB/0.7):clamp((2.8-r.kdB)/0.6,0,1);
         applyKnockdown(bB,prog,"b");
-        bB.group.position.y=getUp?lerp(-0.64,0.08,1-r.kdB/0.7):-0.64+0.08;
+        bB.group.position.y=getUp?lerp(0.02,0.08,1-r.kdB/0.7):0.02;
         r.txB=1.65;
         if(r.kdB<=0){bB.group.rotation.z=0;bB.group.position.y=0.08;r.txB=1.3;}
       } else { bB.group.position.y=0.08; bB.group.rotation.z=0; }
@@ -842,8 +845,8 @@ export default function Boxing3D() {
     r.fight=result; r.phase="fighting"; r.evIdx=0; r.evTimer=0.6;
     r.pA=null; r.pB=null; r.hA=null; r.hB=null;
     r.kdA=0; r.kdB=0; r.xA=-1.3; r.xB=1.3; r.txA=-1.3; r.txB=1.3;
-    if(r.bA){r.bA.group.position.set(-1.0,0.08,0);r.bA.group.rotation.set(0,0,0);}
-    if(r.bB){r.bB.group.position.set(1.0,0.08,0);r.bB.group.rotation.set(0,Math.PI,0);}
+    if(r.bA){r.bA.group.position.set(-1.0,0.08,0);r.bA.group.rotation.set(0,-Math.PI/2,0);}
+    if(r.bB){r.bB.group.position.set(1.0,0.08,0);r.bB.group.rotation.set(0,Math.PI/2,0);}
     setHpA(100);setHpB(100);setStamA(100);setStamB(100);setRound(1);
     setGameState("fighting");setWinText("");setActionText("");
   };
