@@ -168,132 +168,208 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
   return {group:g, root, torsoG, headG, armL, faL, armR, faR, legL, legR, hips};
 }
 
-// ── POSES ─────────────────────────────────────────────────────────────────────
+// ── EASING HELPERS ────────────────────────────────────────────────────────────
+function easeOutCubic(t) { return 1 - Math.pow(1-t, 3); }
+function easeInOutCubic(t) { return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
+function easeOutBack(t,s=1.4) { const c3=s+1; return 1+c3*Math.pow(t-1,3)+s*Math.pow(t-1,2); }
+
+// ── ORTHODOX BOXING STANCE ────────────────────────────────────────────────────
+// A (blue) is at -X facing +X  →  s=+1  left=lead right=rear
+// B (red) is at +X facing -X   →  s=-1  left=lead right=rear
+// In orthodox stance the body is turned ~45° so lead shoulder faces opponent.
+// The model's +Z faces the opponent, so:
+//   torso.rotation.y is the TURN (positive = turn left shoulder forward for A)
+//   Arms: lead=left for both (local left arm extends toward opponent)
 function resetGuard(bx, side) {
-  const s=side==="a"?1:-1;
-  bx.torsoG.rotation.set(0, 0.12*s, 0);
-  bx.headG.rotation.set(0, -0.08*s, 0);
-  bx.armL.rotation.set(-0.35, 0.1*s, 0.24*s);
-  bx.armR.rotation.set(-0.35, -0.1*s, -0.24*s);
-  bx.faL.rotation.set(0.55, 0, 0);
-  bx.faR.rotation.set(0.55, 0, 0);
-  bx.legL.rotation.set(0,0,0);
-  bx.legR.rotation.set(0,0,0);
-  bx.root.position.set(0,0,0);
-  bx.group.rotation.z=0;
+  const s = side==="a" ? 1 : -1;
+  // Torso turned ~40° so lead shoulder points toward opponent
+  bx.torsoG.rotation.set(-0.05, 0.40*s, 0);
+  bx.headG.rotation.set(0, 0.10*s, 0);
+  bx.hips.rotation.set(0, 0.18*s, 0);
+  // Lead (left) arm: raised, elbow bent, glove at chin height
+  bx.armL.rotation.set(-0.65, 0.06*s,  0.20*s);
+  bx.faL.rotation.set(0.75, 0, 0);
+  // Rear (right) arm: tighter to chin, elbow close to body
+  bx.armR.rotation.set(-0.50, -0.08*s, -0.28*s);
+  bx.faR.rotation.set(0.85, 0, 0);
+  // Legs: lead leg forward (negative Z in local space), feet shoulder-width
+  bx.legL.rotation.set(-0.12, 0, 0);  // lead leg slightly forward
+  bx.legR.rotation.set( 0.10, 0, 0);  // rear leg slightly back
+  bx.root.position.set(0, 0, 0);
+  bx.group.rotation.z = 0;
 }
 
+// ── SMOOTH PUNCH ANIMATIONS ───────────────────────────────────────────────────
+// p = 0→1 (full cycle: wind-up → extension → retraction)
+// Punches extend toward +Z (toward opponent) in local space.
+// Step-in is handled by txA/txB in the render loop — NOT by root.position.z here,
+// to prevent the model origin from ever crossing the midpoint.
 function applyPunch(bx, type, p, side) {
-  const s=side==="a"?1:-1;
-  const e=Math.sin(p*Math.PI);         // 0→1→0 arc
-  const eIn=clamp(p*2,0,1);            // 0→1 on first half (wind-up/extend)
-  const eOut=clamp((p-0.5)*2,0,1);     // 0→1 on second half (retract)
+  const s = side==="a" ? 1 : -1;
+  // Split the cycle: first 45% extend, last 55% retract (snap out, pull back slower)
+  const extP   = clamp(p / 0.45, 0, 1);
+  const retP   = clamp((p - 0.45) / 0.55, 0, 1);
+  const ext    = p < 0.45 ? easeOutCubic(extP) : 1 - easeInOutCubic(retP);
+  // Secondary motion — body parts that lag behind (follow-through)
+  const lag    = p < 0.45 ? easeOutCubic(clamp(p/0.6,0,1)) : 1 - easeOutCubic(retP);
   resetGuard(bx, side);
+
   switch(type) {
     case "jab": {
-      // Lead (left) hand snaps forward, shoulder drives, slight lean
-      const ext = Math.sin(p*Math.PI);
-      bx.armL.rotation.x = -0.35 - ext*1.5;
-      bx.armL.rotation.y = ext*0.25*s;
-      bx.armL.rotation.z = (0.24 - ext*0.15)*s;
-      bx.faL.rotation.x = 0.55 - ext*0.5;
-      bx.torsoG.rotation.y = 0.12*s - ext*0.28*s;
-      bx.torsoG.rotation.z = ext*0.06*s;     // slight shoulder dip
-      bx.legL.rotation.x = ext*0.12;         // push off back leg
-      bx.root.position.z = -ext*0.08;        // lean into punch
+      // Lead (left) arm snaps straight forward. Shoulder rotates, chin tucks.
+      bx.armL.rotation.x  = -0.65 - ext*1.45;   // arm drives forward/up
+      bx.armL.rotation.y  =  ext*0.12*s;         // slight inward path
+      bx.armL.rotation.z  = (0.20 - ext*0.18)*s; // elbow tightens
+      bx.faL.rotation.x   =  0.75 - ext*0.68;    // forearm straightens
+      // Shoulder follows through — torso rotates slightly with jab
+      bx.torsoG.rotation.y = 0.40*s - lag*0.20*s;
+      bx.torsoG.rotation.z = lag*0.04*s;
+      // Head tucks down behind lead shoulder
+      bx.headG.rotation.x  = lag*0.08;
+      bx.headG.rotation.y  = 0.10*s - lag*0.06*s;
+      // Lead leg pushes off
+      bx.legL.rotation.x   = -0.12 - ext*0.10;
       break;
     }
     case "cross": {
-      // Rear (right) hand — full body rotation, hip drive, full extension
-      const ext = Math.sin(p*Math.PI);
-      bx.armR.rotation.x = -0.35 - ext*1.6;
-      bx.armR.rotation.y = -ext*0.3*s;
-      bx.armR.rotation.z = (-0.24 + ext*0.18)*s;
-      bx.faR.rotation.x = 0.55 - ext*0.52;
-      // Big hip + shoulder rotation
-      bx.torsoG.rotation.y = 0.12*s + ext*0.55*s;
-      bx.hips.rotation.y = ext*0.32*s;
-      bx.torsoG.rotation.x = -ext*0.08;      // slight forward lean
-      bx.torsoG.rotation.z = -ext*0.09*s;    // shoulder comes over
-      // Guard arm pulls back slightly for counter-balance
-      bx.armL.rotation.x = -0.35 + ext*0.15;
-      bx.armL.rotation.z = (0.24 - ext*0.08)*s;
-      bx.legR.rotation.x = ext*0.15;         // push off back foot
-      bx.root.position.z = -ext*0.1;
+      // Rear (right) hand — pivot from back foot, full hip+shoulder rotation
+      bx.armR.rotation.x   = -0.50 - ext*1.55;
+      bx.armR.rotation.y   = -ext*0.18*s;
+      bx.armR.rotation.z   = (-0.28 + ext*0.26)*s; // elbow clears, fist rotates
+      bx.faR.rotation.x    =  0.85 - ext*0.78;
+      // Large hip drive — the cross gets all its power from rotation
+      bx.hips.rotation.y   =  0.18*s + lag*0.38*s;
+      bx.torsoG.rotation.y =  0.40*s + lag*0.42*s; // shoulder comes forward
+      bx.torsoG.rotation.x = -lag*0.06;
+      bx.torsoG.rotation.z = -lag*0.07*s;           // shoulder dips into punch
+      // Lead (guard) arm pulls back as counterweight
+      bx.armL.rotation.x   = -0.65 + lag*0.18;
+      bx.armL.rotation.y   =  0.06*s - lag*0.05*s;
+      // Rear foot pivots
+      bx.legR.rotation.x   =  0.10 + ext*0.14;
+      bx.legR.rotation.y   =  ext*0.10*s;
       break;
     }
     case "hook": {
-      // Lead hook — horizontal arc, elbow up, torso whip
-      const ext = Math.sin(p*Math.PI);
-      bx.armL.rotation.x = -0.6 - ext*0.15;
-      bx.armL.rotation.z = (0.24 + ext*1.35)*s;
-      bx.armL.rotation.y = ext*0.5*s;
-      bx.faL.rotation.x = 0.3 + ext*0.55;
-      bx.faL.rotation.z = ext*0.2*s;
-      // Torso whips hard
-      bx.torsoG.rotation.y = 0.12*s - ext*0.65*s;
-      bx.hips.rotation.y = -ext*0.22*s;
-      bx.torsoG.rotation.z = ext*0.12*s;
-      bx.torsoG.rotation.x = ext*0.05;
-      bx.root.position.z = -ext*0.06;
+      // Lead hook — elbow rises to shoulder height, horizontal arc, hip torque
+      // Wind-up: elbow rises and body coils; Release: whip through
+      const coil   = clamp(p * 2.5, 0, 1);         // quick coil at start
+      const whip   = ext;
+      bx.armL.rotation.x   = -0.65 - whip*0.10;    // elbow level with shoulder
+      bx.armL.rotation.z   = (0.20 + whip*1.20)*s; // sweeps horizontally
+      bx.armL.rotation.y   =  whip*0.35*s;
+      bx.faL.rotation.x    =  0.75 - whip*0.55;    // forearm stays roughly horizontal
+      bx.faL.rotation.z    =  whip*0.15*s;
+      // Torso whip is the engine — rear leg drives it
+      bx.torsoG.rotation.y =  0.40*s - lag*0.62*s;
+      bx.hips.rotation.y   =  0.18*s - lag*0.28*s;
+      bx.torsoG.rotation.z =  lag*0.10*s;
+      bx.torsoG.rotation.x =  lag*0.04;
+      // Rear arm swings back for balance
+      bx.armR.rotation.z   = (-0.28 - lag*0.20)*s;
+      bx.legL.rotation.x   = -0.12 - whip*0.08;
+      bx.legR.rotation.x   =  0.10 + whip*0.12;
       break;
     }
     case "uppercut": {
-      // Crouch down on wind-up, drive upward
-      const windUp = clamp(p*2.5,0,1);       // quick dip
-      const drive  = clamp((p-0.2)*1.8,0,1); // drive up
-      const driveE = Math.sin(drive*Math.PI);
-      bx.torsoG.rotation.x = windUp*0.3 - driveE*0.28;  // dip then rise
-      bx.torsoG.rotation.y = 0.12*s + driveE*0.4*s;
-      bx.hips.rotation.y   = driveE*0.22*s;
-      bx.armR.rotation.x   = -0.35 + driveE*1.3;         // drives up
-      bx.armR.rotation.y   = driveE*0.18*s;
-      bx.faR.rotation.x    = 0.55 - driveE*1.1;          // fist faces up at peak
-      bx.armR.rotation.z   = (-0.24 + driveE*0.2)*s;
-      bx.legR.rotation.x   = -windUp*0.15 + driveE*0.2;  // push off floor
-      bx.root.position.y   = driveE*0.06;                 // slight rise on drive
-      bx.root.position.z   = -driveE*0.07;
+      // Rear uppercut — dip + drive upward, fist travels arc under guard
+      const dip    = easeOutCubic(clamp(p * 3.0, 0, 1));  // fast dip
+      const drive  = easeOutBack(clamp((p - 0.18) / 0.55, 0, 1), 0.8);
+      const driveE = clamp((p - 0.18) / 0.55, 0, 1);
+      bx.torsoG.rotation.x  =  dip*0.28 - easeInOutCubic(driveE)*0.22; // dip then rise
+      bx.torsoG.rotation.y  =  0.40*s + easeInOutCubic(driveE)*0.38*s;
+      bx.hips.rotation.y    =  0.18*s + easeInOutCubic(driveE)*0.24*s;
+      // Rear arm scoops upward — starts low, finishes high
+      bx.armR.rotation.x    = -0.50 - dip*0.45 + drive*1.65; // net: drives high
+      bx.armR.rotation.z    = (-0.28 + easeInOutCubic(driveE)*0.22)*s;
+      bx.faR.rotation.x     =  0.85 - dip*0.3 - easeInOutCubic(driveE)*0.95;
+      // Lead arm dips with body then rises for guard
+      bx.armL.rotation.x    = -0.65 - dip*0.20 + easeInOutCubic(driveE)*0.15;
+      // Rear leg explodes upward
+      bx.legR.rotation.x    =  0.10 + dip*0.18;
+      bx.root.position.y    =  easeOutBack(clamp(driveE*1.3,0,1), 0.6) * 0.07;
       break;
     }
     case "body": {
-      // Crouch and dig into body — exaggerated dip
-      const ext = Math.sin(p*Math.PI);
-      bx.torsoG.rotation.x = ext*0.52;       // big lean forward/down
-      bx.torsoG.rotation.y = 0.12*s - ext*0.3*s;
-      bx.torsoG.rotation.z = ext*0.08*s;
-      bx.hips.rotation.y   = -ext*0.15*s;
-      bx.armL.rotation.x   = -0.35 - ext*1.0;
-      bx.armL.rotation.z   = (0.24 + ext*0.5)*s;
-      bx.armL.rotation.y   = ext*0.2*s;
-      bx.faL.rotation.x    = 0.35 + ext*0.3;
-      // Knees bend — simulate with leg rotation
-      bx.legL.rotation.x   = ext*0.2;
-      bx.legR.rotation.x   = ext*0.18;
-      bx.root.position.y   = -ext*0.09;      // whole boxer dips
-      bx.root.position.z   = -ext*0.06;
+      // Body shot — deep knee bend, torso drops, hooks into the ribs
+      const dip    = easeOutCubic(clamp(p * 2.2, 0, 1));
+      const retDip = 1 - easeInOutCubic(clamp((p - 0.45) / 0.55, 0, 1));
+      const dipVal = p < 0.45 ? dip : retDip;
+      bx.torsoG.rotation.x  =  ext*0.48;            // big forward lean
+      bx.torsoG.rotation.y  =  0.40*s - ext*0.30*s;
+      bx.torsoG.rotation.z  =  ext*0.10*s;
+      bx.hips.rotation.y    =  0.18*s - ext*0.16*s;
+      // Lead arm digs low — elbow flares out
+      bx.armL.rotation.x    = -0.65 - ext*0.85;
+      bx.armL.rotation.z    = (0.20 + ext*0.55)*s;
+      bx.armL.rotation.y    =  ext*0.15*s;
+      bx.faL.rotation.x     =  0.75 - ext*0.30;
+      // Both knees bend — simulated with leg rotations
+      bx.legL.rotation.x    = -0.12 + dipVal*0.32;
+      bx.legR.rotation.x    =  0.10 + dipVal*0.30;
+      bx.root.position.y    = -dipVal * 0.11;        // whole body sinks
       break;
     }
   }
 }
 
+// ── IDLE GUARD — realistic boxing bounce with weight shift ────────────────────
 function applyIdle(bx, t, side) {
-  const s=side==="a"?1:-1;
+  const s = side==="a" ? 1 : -1;
   resetGuard(bx, side);
-  const bob=Math.sin(t*3.6)*0.042;
-  const sway=Math.sin(t*2.1)*0.022;
-  bx.root.position.y=bob;
-  bx.root.position.x=sway;
-  bx.legL.rotation.x=Math.sin(t*3.6+0.5)*0.13;
-  bx.legR.rotation.x=Math.sin(t*3.6)*0.13;
+  // Primary bounce — weight transfer between feet
+  const bounce  = Math.sin(t * 3.8) * 0.028;
+  const sway    = Math.sin(t * 2.5) * 0.018;      // lateral weight shift
+  const breathe = Math.sin(t * 1.1) * 0.008;      // slow breathing chest rise
+  bx.root.position.y = bounce;
+  bx.root.position.x = sway;
+  // Legs alternate — lead steps forward, rear pushes off
+  bx.legL.rotation.x = -0.12 + Math.sin(t * 3.8 + 0.8) * 0.10;
+  bx.legR.rotation.x =  0.10 + Math.sin(t * 3.8) * 0.10;
+  // Arms subtly move with breathing/balance
+  bx.armL.rotation.x = -0.65 + Math.sin(t * 3.8 + 0.4) * 0.04;
+  bx.armR.rotation.x = -0.50 + Math.sin(t * 3.8 + 1.2) * 0.03;
+  // Head bobs and subtly watches opponent
+  bx.headG.rotation.x = breathe * 0.5;
+  bx.torsoG.rotation.x = -0.05 + breathe;
 }
 
+// ── HIT REACTIONS — snappy snap with exponential decay ────────────────────────
 function applyHit(bx, type, intensity, age, side) {
-  const s=side==="a"?1:-1;
-  const decay=Math.exp(-age*9)*intensity;
-  bx.headG.rotation.x+=decay*0.35*(type==="uppercut"?1.2:-0.2);
-  bx.headG.rotation.y+=-decay*0.7*s*(type==="hook"?1.6:1);
-  bx.headG.rotation.z+=decay*0.3*s;
-  bx.torsoG.rotation.y+=decay*0.2*s;
+  const s = side==="a" ? 1 : -1;
+  // Fast snap then slow fade
+  const decay = Math.exp(-age * 11) * intensity;
+  const slow  = Math.exp(-age * 4)  * intensity * 0.3; // lingering sway
+  switch(type) {
+    case "jab":
+      bx.headG.rotation.y += -decay * 0.55 * s;   // head snaps away
+      bx.headG.rotation.z +=  decay * 0.22 * s;
+      bx.torsoG.rotation.y += -slow * 0.18 * s;
+      break;
+    case "cross":
+      bx.headG.rotation.y += -decay * 0.75 * s;   // bigger snap
+      bx.headG.rotation.x +=  decay * 0.20;
+      bx.headG.rotation.z +=  decay * 0.30 * s;
+      bx.torsoG.rotation.y += -slow * 0.22 * s;
+      bx.torsoG.rotation.z +=  slow * 0.08 * s;
+      break;
+    case "hook":
+      bx.headG.rotation.y += -decay * 1.0 * s;    // hard snap to side
+      bx.headG.rotation.z +=  decay * 0.45 * s;
+      bx.torsoG.rotation.y += -slow * 0.30 * s;
+      bx.torsoG.rotation.z +=  slow * 0.12 * s;
+      break;
+    case "uppercut":
+      bx.headG.rotation.x +=  decay * 0.65;        // head snaps back and up
+      bx.headG.rotation.z +=  decay * 0.15 * s;
+      bx.torsoG.rotation.x += -slow * 0.20;
+      break;
+    case "body":
+      bx.torsoG.rotation.x +=  decay * 0.50;       // body folds
+      bx.torsoG.rotation.y += -slow * 0.14 * s;
+      bx.headG.rotation.x  +=  slow  * 0.18;
+      break;
+  }
 }
 
 // ── KNOCKDOWN (get-up after ~3s) ─────────────────────────────────────────────
@@ -438,8 +514,8 @@ export default function Boxing3D() {
     hB:null,
     kdA:0,
     kdB:0,
-    xA:-0.85, xB:0.85,
-    txA:-0.85, txB:0.85,
+    xA:-0.90, xB:0.90,
+    txA:-0.90, txB:0.90,
     // KO sequence
     koPhase: null,   // null | { side:"a"|"b", t:0, stage:"fall"|"count"|"done", count:0, countTimer:0, isTKO:false }
     victoryT: 0,
@@ -807,8 +883,8 @@ export default function Boxing3D() {
 
     const bA=buildBoxer(scene,FIGHTERS[0].color,0xc8956a);
     const bB=buildBoxer(scene,FIGHTERS[1].color,0xb07850);
-    bA.group.position.set(-0.85,0.25,0);
-    bB.group.position.set(0.85,0.25,0);
+    bA.group.position.set(-0.90,0.25,0);
+    bB.group.position.set(0.90,0.25,0);
     // FIX: boxers face each other correctly
     // Boxer model faces +Z by default. A is at -X, needs to face +X → rotation.y = +PI/2
     // B is at +X, needs to face -X → rotation.y = -PI/2
@@ -834,7 +910,7 @@ export default function Boxing3D() {
     };
     window.addEventListener("resize",onResize);
 
-    const PUNCH_SPEED=3.2;
+    const PUNCH_SPEED=2.6; // smoother, more visible punches
 
     let raf;
     const loop=()=>{
@@ -927,7 +1003,7 @@ export default function Boxing3D() {
         const prog=getUp?1-(r.kdA/0.7):clamp((2.8-r.kdA)/0.6,0,1);
         applyKnockdown(bA,prog,"a");
         r.txA=-1.65;
-        if(r.kdA<=0){bA.group.rotation.z=0;bA.group.position.y=0.25;r.txA=-1.1;}
+        if(r.kdA<=0){bA.group.rotation.z=0;bA.group.position.y=0.25;r.txA=-1.05;}
       } else { bA.group.position.y=0.25; bA.group.rotation.z=0; }
 
       if(r.kdB>0){
@@ -936,7 +1012,7 @@ export default function Boxing3D() {
         const prog=getUp?1-(r.kdB/0.7):clamp((2.8-r.kdB)/0.6,0,1);
         applyKnockdown(bB,prog,"b");
         r.txB=1.65;
-        if(r.kdB<=0){bB.group.rotation.z=0;bB.group.position.y=0.25;r.txB=1.1;}
+        if(r.kdB<=0){bB.group.rotation.z=0;bB.group.position.y=0.25;r.txB=1.05;}
       } else { bB.group.position.y=0.25; bB.group.rotation.z=0; }
 
       // ── PUNCH ANIMATIONS ──
@@ -946,27 +1022,30 @@ export default function Boxing3D() {
         aPunching=true;
         r.pA.p=Math.min(1,r.pA.p+dt*PUNCH_SPEED);
         applyPunch(bA,r.pA.type,r.pA.p,"a");
-        r.txA=-0.35+Math.sin(r.pA.p*Math.PI)*0.35;
-        if(r.pA.p>=1){r.pA=null; r.txA=-0.85;}
+        // Step in but never past -0.58 — keeps ~1.16 unit gap (no headbutting)
+        const stepA = r.pA.type==="body"?0.16 : r.pA.type==="hook"?0.18 : 0.22;
+        r.txA = -0.76 + Math.sin(r.pA.p*Math.PI) * stepA;
+        if(r.pA.p>=1){r.pA=null; r.txA=-0.90;}
       }
       if(r.pB&&r.kdB<=0){
         bPunching=true;
         r.pB.p=Math.min(1,r.pB.p+dt*PUNCH_SPEED);
         applyPunch(bB,r.pB.type,r.pB.p,"b");
-        r.txB=0.35-Math.sin(r.pB.p*Math.PI)*0.35;
-        if(r.pB.p>=1){r.pB=null; r.txB=0.85;}
+        const stepB = r.pB.type==="body"?0.16 : r.pB.type==="hook"?0.18 : 0.22;
+        r.txB = 0.76 - Math.sin(r.pB.p*Math.PI) * stepB;
+        if(r.pB.p>=1){r.pB=null; r.txB=0.90;}
       }
 
       // ── HIT REACTIONS ──
       if(r.hA){
         r.hA.age+=dt;
         applyHit(bA,r.hA.type,r.hA.intensity,r.hA.age,"a");
-        if(r.hA.age>0.55) r.hA=null;
+        if(r.hA.age>0.75) r.hA=null;
       }
       if(r.hB){
         r.hB.age+=dt;
         applyHit(bB,r.hB.type,r.hB.intensity,r.hB.age,"b");
-        if(r.hB.age>0.55) r.hB=null;
+        if(r.hB.age>0.75) r.hB=null;
       }
 
       if(!aPunching&&r.kdA<=0) applyIdle(bA,t,"a");
@@ -1060,12 +1139,12 @@ export default function Boxing3D() {
     const r=refs.current;
     r.fight=result; r.phase="fighting"; r.evIdx=0; r.evTimer=0.6;
     r.pA=null; r.pB=null; r.hA=null; r.hB=null;
-    r.kdA=0; r.kdB=0; r.xA=-0.85; r.xB=0.85; r.txA=-0.85; r.txB=0.85;
+    r.kdA=0; r.kdB=0; r.xA=-0.90; r.xB=0.90; r.txA=-0.90; r.txB=0.90;
     r.koPhase=null; r.victoryT=0;
     setKoCount(null);
     // FIX: also apply corrected rotations in startFight reset
-    if(r.bA){r.bA.group.position.set(-0.85,0.25,0);r.bA.group.rotation.set(0,Math.PI/2,0);}
-    if(r.bB){r.bB.group.position.set(0.85,0.25,0);r.bB.group.rotation.set(0,-Math.PI/2,0);}
+    if(r.bA){r.bA.group.position.set(-0.90,0.25,0);r.bA.group.rotation.set(0,Math.PI/2,0);}
+    if(r.bB){r.bB.group.position.set(0.90,0.25,0);r.bB.group.rotation.set(0,-Math.PI/2,0);}
     setHpA(100);setHpB(100);setStamA(100);setStamB(100);setRound(1);
     setGameState("fighting");setWinText("");setActionText("");
   };
