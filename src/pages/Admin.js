@@ -2345,9 +2345,8 @@ export default function Admin() {
                 <span className="w-2.5 h-2.5 rounded-full border border-primary/30 shrink-0" style={{ backgroundColor: adminOnlineColor }} />
                 <span className="text-mutedForeground">Admin</span>
               </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded-full border border-primary/30 shrink-0" style={{ backgroundColor: modDefaultOnlineColor }} />
-                <span className="text-mutedForeground">Mod</span>
+              <span className="flex items-center gap-1 text-mutedForeground">
+                <span className="text-[9px]">Mod = their profile colour</span>
               </span>
             </span>
           }
@@ -2356,8 +2355,8 @@ export default function Admin() {
         />
         {!collapsed.adminDisplay && (
           <div className="p-3 space-y-2">
-            <p className="text-[10px] text-mutedForeground font-heading">Colours used for usernames and badges on the Users Online page. Mods can override their colour on their profile.</p>
-            <div className="flex flex-wrap items-center gap-4">
+            <p className="text-[10px] text-mutedForeground font-heading">Colours used for usernames and badges on the Users Online page. Admin colour is set here. Mod colour is set by each mod on their own profile (not here).</p>
+              <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
                 <input
                   type="color"
@@ -2390,7 +2389,7 @@ export default function Admin() {
                   placeholder="#1e3a5f"
                   className="w-24 font-mono text-[11px]"
                 />
-                <span className="text-[10px] text-mutedForeground font-heading">Mod</span>
+                <span className="text-[10px] text-mutedForeground font-heading">Mod default (fallback if mod has not set a colour on profile)</span>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
@@ -2431,6 +2430,60 @@ export default function Admin() {
             </BtnPrimary>
           </div>
         )}
+        </div>
+      </section>
+      )}
+
+      {/* ─── GTA pool (admin only) ─── */}
+      {isAdmin && (
+      <section id="admin-gta-pool" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <Car size={12} />
+          GTA pool
+        </h2>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Car}
+            title="Drop exclusive into GTA pool"
+            badge={
+              gtaExclusiveReleased === null ? null : (
+                <span className={`text-[10px] font-heading font-bold ${gtaExclusiveReleased ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {gtaExclusiveReleased ? 'In pool' : 'Retracted'}
+                </span>
+              )
+            }
+            isCollapsed={collapsed.gtaPool}
+            onToggle={() => {
+              toggleSection('gtaPool');
+              if (collapsed.gtaPool) fetchGtaExclusivePool();
+            }}
+          />
+          {!collapsed.gtaPool && (
+            <div className="p-3 space-y-3">
+              <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-zinc-700/50">
+                <span className="text-[10px] font-heading text-mutedForeground">Al Capone exclusive (car20) in GTA pool:</span>
+                {gtaExclusiveReleased === null ? (
+                  <span className="text-[10px] text-mutedForeground">…</span>
+                ) : (
+                  <>
+                    <span className={`text-[10px] font-heading font-bold ${gtaExclusiveReleased ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {gtaExclusiveReleased ? 'Released (very rare drop)' : 'Retracted'}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={gtaExclusiveLoading}
+                      onClick={() => handleSetGtaExclusivePool(!gtaExclusiveReleased)}
+                      className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-[10px] font-heading font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
+                    >
+                      {gtaExclusiveLoading ? '…' : gtaExclusiveReleased ? 'Retract from pool' : 'Release into pool'}
+                    </button>
+                  </>
+                )}
+              </div>
+              <p className="text-[10px] text-mutedForeground font-heading">When released, the Al Capone exclusive can drop from GTA (very rare). Only one in game at a time. GTA logs are in the &quot;GTA logs (post data)&quot; section further down.</p>
+            </div>
+          )}
         </div>
       </section>
       )}
