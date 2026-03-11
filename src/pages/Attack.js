@@ -858,6 +858,7 @@ export default function Attack() {
   const [travelSubmitLoading, setTravelSubmitLoading] = useState(false);
   const [travelCountdown, setTravelCountdown] = useState(null);
   const [, setCountdownTick] = useState(0);
+  const [pendingResend, setPendingResend] = useState(null);
 
   // Tick every second so expiry countdowns update (24h → 00:00)
   useEffect(() => {
@@ -895,6 +896,17 @@ export default function Attack() {
         setUserMolotovs(meRes.data?.molotovs ?? 0);
         setEvent(eventsRes.data?.event ?? null);
         setEventsEnabled(!!eventsRes.data?.events_enabled);
+        // If user pressed F5 after submitting search or kill, resend that request
+        try {
+          const raw = sessionStorage.getItem('attack-last-submit');
+          if (raw) {
+            sessionStorage.removeItem('attack-last-submit');
+            const data = JSON.parse(raw);
+            if (data && (data.type === 'search' || data.type === 'kill')) {
+              setPendingResend(data);
+            }
+          }
+        } catch (_) {}
       } catch (_) {}
     };
     load();
@@ -918,6 +930,67 @@ export default function Attack() {
     }, 1000);
     return () => clearInterval(t);
   }, [travelCountdown]);
+
+  // Resend last submit after F5 (search or kill)
+  useEffect(() => {
+    if (!pendingResend) return;
+    const payload = { ...pendingResend };
+    setPendingResend(null);
+
+    const run = async () => {
+      if (payload.type === 'search') {
+        setLoading(true);
+        try {
+          const response = await api.post('/attack/search', {
+            target_username: payload.target_username || '',
+            note: payload.note || '',
+          });
+          toast.success(response.data?.message || 'Search started');
+          await refreshAttacks();
+        } catch (error) {
+          toast.error(error.response?.data?.detail || 'Failed to search target');
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+      if (payload.type === 'kill') {
+        setLoading(true);
+        try {
+          const response = await api.get('/attack/list');
+          const list = response.data?.attacks || [];
+          setAttacks(list);
+          const username = (payload.killUsername || '').trim().toLowerCase();
+          const found = list.filter((a) => (a.target_username || '').toLowerCase() === username && a.status === 'found');
+          const best = found.find((a) => a.can_attack);
+          if (!best) {
+            if (found.length > 0) {
+              toast.error('You must be in the target\'s location to attack. Travel there first.');
+            } else {
+              toast.error('No found target for that username. Start a search first.');
+            }
+            return;
+          }
+          const extra = {
+            death_message: payload.deathMessage || null,
+            make_public: payload.makePublic || false,
+            bullets_to_use: payload.bulletsToUse ?? 1,
+            use_molotovs: payload.useMolotovs ?? false,
+          };
+          await api.post('/attack/execute', { attack_id: best.attack_id, ...extra });
+          refreshUser();
+          fetchBullets();
+          await refreshAttacks();
+          toast.success('Kill executed.');
+        } catch (error) {
+          toast.error(error.response?.data?.detail || 'Failed to execute attack');
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    run();
+  }, [pendingResend]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchBullets = async () => {
     try {
@@ -980,8 +1053,13 @@ export default function Attack() {
   const searchTarget = async (e) => {
     e.preventDefault();
     setLoading(true);
+    const target = (targetUsername || '').trim();
+    const noteVal = (note || '').trim();
     try {
-      const response = await api.post('/attack/search', { target_username: targetUsername, note });
+      try {
+        sessionStorage.setItem('attack-last-submit', JSON.stringify({ type: 'search', target_username: target, note: noteVal }));
+      } catch (_) {}
+      const response = await api.post('/attack/search', { target_username: target, note: noteVal });
       toast.success(response.data.message);
       setTargetUsername('');
       setNote('');
@@ -1122,6 +1200,16 @@ export default function Attack() {
       return;
     }
     const extra = { death_message: deathMessage, make_public: makePublic, bullets_to_use: bulletNum, use_molotovs: useMolotovs };
+    try {
+      sessionStorage.setItem('attack-last-submit', JSON.stringify({
+        type: 'kill',
+        killUsername: username,
+        bulletsToUse: bulletNum,
+        deathMessage,
+        makePublic,
+        useMolotovs,
+      }));
+    } catch (_) {}
     await executeAttack(best.attack_id, extra);
     await fetchInflation();
   };
