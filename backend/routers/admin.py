@@ -43,6 +43,11 @@ class TestUsersAutoRankRequest(BaseModel):
     enabled: bool
 
 
+class GTAExclusivePoolRequest(BaseModel):
+    """Release or retract the Al Capone exclusive (car20) into the GTA car pool. Only 1 in game at a time; when released, very rare drop."""
+    released: bool
+
+
 class AdminChangeEmailRequest(BaseModel):
     new_email: str
 
@@ -278,6 +283,28 @@ def register(router):
             "acquired_at": datetime.now(timezone.utc).isoformat()
         })
         return {"message": f"Added {car['name']} to {target_username}'s garage"}
+
+    GTA_EXCLUSIVE_POOL_CONFIG_ID = "gta_exclusive"
+
+    @router.get("/admin/gta/exclusive-pool")
+    async def admin_gta_exclusive_pool_get(current_user: dict = Depends(get_current_user)):
+        """Get whether the Al Capone exclusive is released into the GTA car pool. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        doc = await db.game_config.find_one({"id": GTA_EXCLUSIVE_POOL_CONFIG_ID}, {"_id": 0, "released": 1})
+        return {"released": bool(doc.get("released") if doc else False)}
+
+    @router.post("/admin/gta/exclusive-pool")
+    async def admin_gta_exclusive_pool_set(body: GTAExclusivePoolRequest, current_user: dict = Depends(get_current_user)):
+        """Release or retract the Al Capone exclusive (car20) into the GTA car pool. When released, it can drop from GTA (very rare); only 1 in game at a time. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        await db.game_config.update_one(
+            {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID},
+            {"$set": {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID, "released": body.released}},
+            upsert=True,
+        )
+        return {"message": f"Al Capone exclusive {'released into' if body.released else 'retracted from'} GTA car pool", "released": body.released}
 
     @router.post("/admin/slots/set-draw-in-minutes")
     async def admin_slots_set_draw_in_minutes(minutes: int = 1, current_user: dict = Depends(get_current_user)):

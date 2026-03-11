@@ -957,6 +957,24 @@ export default function Attack() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    // If F5 with stored submit, trigger resend immediately (don't wait for load) so it's as fast as clicking Kill
+    if (!attackResendCheckDoneThisLoad) {
+      attackResendCheckDoneThisLoad = true;
+      const navEntry = typeof performance !== 'undefined' && performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+      const isReload = navEntry && navEntry.type === 'reload';
+      if (isReload) {
+        try {
+          const raw = sessionStorage.getItem('attack-last-submit');
+          if (raw) {
+            const data = JSON.parse(raw);
+            if (data && (data.type === 'search' || data.type === 'kill')) {
+              setPendingResend(data);
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
     const load = async () => {
       try {
         const [attacksRes, inflationRes, meRes, eventsRes] = await Promise.all([
@@ -971,23 +989,6 @@ export default function Attack() {
         setUserMolotovs(meRes.data?.molotovs ?? 0);
         setEvent(eventsRes.data?.event ?? null);
         setEventsEnabled(!!eventsRes.data?.events_enabled);
-        // Only resend when page was loaded via F5 (reload), and only check once per document load (so navigate away + back doesn't resend)
-        if (!attackResendCheckDoneThisLoad) {
-          attackResendCheckDoneThisLoad = true;
-          const navEntry = typeof performance !== 'undefined' && performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
-          const isReload = navEntry && navEntry.type === 'reload';
-          if (isReload) {
-            try {
-              const raw = sessionStorage.getItem('attack-last-submit');
-              if (raw) {
-                const data = JSON.parse(raw);
-                if (data && (data.type === 'search' || data.type === 'kill')) {
-                  setPendingResend(data);
-                }
-              }
-            } catch (_) {}
-          }
-        }
       } catch (_) {}
     };
     load();

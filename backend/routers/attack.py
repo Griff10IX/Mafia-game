@@ -7,7 +7,7 @@ import uuid
 import os
 import sys
 import logging
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 
 logger = logging.getLogger(__name__)
@@ -51,6 +51,37 @@ from routers.booze_run import BOOZE_TYPES
 from routers.objectives import update_objectives_progress
 from routers.armoury import _best_weapon_for_user
 from routers.families import resolve_family_id
+
+
+def _request_meta(request: Optional[Request]) -> dict:
+    """Build dict of user_agent and client_ip for attack attempt logging."""
+    out = {}
+    if request:
+        ua = (request.headers.get("user-agent") or "").strip() or None
+        if ua:
+            out["user_agent"] = ua[:500]  # cap length
+        forwarded = (request.headers.get("x-forwarded-for") or "").strip()
+        if forwarded:
+            out["client_ip"] = forwarded.split(",")[0].strip()[:45]
+        elif getattr(request, "client", None) and getattr(request.client, "host", None):
+            out["client_ip"] = str(request.client.host)[:45]
+    return out
+
+
+async def _log_attack_error(attacker_id: str, attacker_username: str, player_message: str, req: Optional[Request] = None):
+    """Log a failed execute attempt (validation/perm error) so admin sees every click."""
+    try:
+        await db.attack_attempts.insert_one({
+            "id": str(uuid.uuid4()),
+            "attacker_id": attacker_id,
+            "attacker_username": attacker_username or "?",
+            "outcome": "error",
+            "player_message": (player_message or "")[:1000],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            **_request_meta(req),
+        })
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -540,27 +571,33 @@ async def get_attack_inflation(current_user: dict = Depends(get_current_user)):
     inflation = await _apply_kill_inflation_decay(current_user["id"])
     return {"inflation": inflation, "inflation_pct": int(round(inflation * 100))}
 
-async def execute_attack(request: AttackExecuteRequest, current_user: dict = Depends(get_current_user_verified)):
+async def execute_attack(request: AttackExecuteRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
     attack = await db.attacks.find_one(
         {"attacker_id": current_user["id"], "status": "found", "id": request.attack_id},
         {"_id": 0}
     )
     if not attack:
+        await _log_attack_error(current_user["id"], current_user.get("username"), "No active attack to execute", req)
         raise HTTPException(status_code=404, detail="No active attack to execute")
     target_location = attack.get("location_state")
     if not target_location:
+        await _log_attack_error(current_user["id"], current_user.get("username"), "Target location unknown; cannot attack.", req)
         raise HTTPException(status_code=400, detail="Target location unknown; cannot attack.")
     # Re-fetch attacker location from DB so we never use stale state (e.g. after instant travel)
     attacker_row = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "current_state": 1})
     attacker_location = (attacker_row or {}).get("current_state") or ""
     if attacker_location != target_location:
+        await _log_attack_error(current_user["id"], current_user.get("username"), "You must be in the target's location to attack or bodyguard-check. Travel there first.", req)
         raise HTTPException(status_code=400, detail="You must be in the target's location to attack or bodyguard-check. Travel there first.")
     target = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0})
     if not target:
+        await _log_attack_error(current_user["id"], current_user.get("username"), "Target not found", req)
         raise HTTPException(status_code=404, detail="Target not found")
     if target.get("is_dead"):
+        await _log_attack_error(current_user["id"], current_user.get("username"), "Target is already dead", req)
         raise HTTPException(status_code=400, detail="Target is already dead")
     if target.get("email") in ADMIN_EMAILS or _is_moderator(target):
+        await _log_attack_error(current_user["id"], current_user.get("username"), "Target cannot be attacked", req)
         raise HTTPException(status_code=403, detail="Target cannot be attacked")
     target_armour = target.get("armour_level", 0)
     attacker_rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
@@ -579,11 +616,13 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
     ).to_list(100)
     owned_weapon_ids = {w.get("weapon_id") for w in owned_weapons if w.get("weapon_id")}
     if not owned_weapon_ids:
+        await _log_attack_error(current_user["id"], current_user.get("username"), "You don't own a gun. Visit the armoury or store to buy one before you can attack.", req)
         raise HTTPException(
             status_code=400,
             detail="You don't own a gun. Visit the armoury or store to buy one before you can attack.",
         )
     if not equipped_weapon_id or equipped_weapon_id not in owned_weapon_ids:
+        await _log_attack_error(current_user["id"], current_user.get("username"), "You need to equip a gun before you can attack.", req)
         raise HTTPException(
             status_code=400,
             detail="You need to equip a gun before you can attack.",
@@ -594,6 +633,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
     bullets_base = _bullets_to_kill(target_armour, target_rank_id, best_damage, attacker_rank_id)
     bullets_required = int(math.ceil(bullets_base * (1.0 + inflation)))
     if attacker_bullets <= 0:
+        await _log_attack_error(current_user["id"], current_user.get("username"), "You need bullets to attack.", req)
         raise HTTPException(status_code=400, detail="You need bullets to attack.")
     target_bodyguards = await db.bodyguards.find({"user_id": target["id"]}, {"_id": 0}).to_list(10)
     if target_bodyguards:
@@ -610,21 +650,58 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         target_name = target["username"]
         slot_msg = f" in slot {slot_n}" if slot_n else ""
         if search_username:
+            msg = f"{target_name} has a bodyguard{slot_msg} called {display_name}. You need to kill them first."
+            try:
+                await db.attack_attempts.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "attacker_id": current_user["id"],
+                    "attacker_username": current_user.get("username") or "?",
+                    "target_id": target["id"],
+                    "target_username": target_name,
+                    "attack_id": attack.get("id"),
+                    "location_state": attack.get("location_state"),
+                    "outcome": "bodyguard",
+                    "player_message": msg,
+                    "first_bodyguard": {"display_name": display_name, "search_username": search_username, "slot_number": slot_n, "target_username": target_name},
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    **_request_meta(req),
+                })
+            except Exception:
+                pass
             return AttackExecuteResponse(
                 success=False,
-                message=f"{target_name} has a bodyguard{slot_msg} called {display_name}. You need to kill them first.",
+                message=msg,
                 rewards=None,
                 first_bodyguard={"display_name": display_name, "search_username": search_username, "slot_number": slot_n, "target_username": target_name},
             )
+        msg = f"{target_name} has a bodyguard{slot_msg}. You need to kill them first."
+        try:
+            await db.attack_attempts.insert_one({
+                "id": str(uuid.uuid4()),
+                "attacker_id": current_user["id"],
+                "attacker_username": current_user.get("username") or "?",
+                "target_id": target["id"],
+                "target_username": target_name,
+                "attack_id": attack.get("id"),
+                "location_state": attack.get("location_state"),
+                "outcome": "bodyguard",
+                "player_message": msg,
+                "first_bodyguard": {"display_name": display_name or "bodyguard", "search_username": None, "slot_number": slot_n, "target_username": target_name},
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                **_request_meta(req),
+            })
+        except Exception:
+            pass
         return AttackExecuteResponse(
             success=False,
-            message=f"{target_name} has a bodyguard{slot_msg}. You need to kill them first.",
+            message=msg,
             rewards=None,
             first_bodyguard={"display_name": display_name or "bodyguard", "search_username": None, "slot_number": slot_n, "target_username": target_name},
         )
     target_name = target["username"]
     target_health = float(target.get("health", DEFAULT_HEALTH))
     if not request.bullets_to_use or request.bullets_to_use < 1:
+        await _log_attack_error(current_user["id"], current_user.get("username"), "You must enter how many bullets to use (at least 1).", req)
         raise HTTPException(status_code=400, detail="You must enter how many bullets to use (at least 1).")
 
     requested_effective = int(request.bullets_to_use)
@@ -1138,12 +1215,14 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             await db.attack_attempts.insert_one({
                 **attempt_base,
                 "outcome": "killed",
+                "player_message": success_message,
                 "death_message": death_message or None,
                 "make_public": make_public,
                 "rewards": {"money": cash_loot, "rank_points": rank_points, "cars_taken": victim_cars_count, "properties_taken": victim_props_count},
                 "target_health_before": target_health,
                 "target_health_after": 0.0,
                 "damage_done": damage_done,
+                **_request_meta(req),
             })
         except Exception:
             pass
@@ -1169,6 +1248,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             await db.attack_attempts.insert_one({
                 **attempt_base,
                 "outcome": "failed",
+                "player_message": fail_message,
                 "death_message": None,
                 "make_public": False,
                 "rewards": None,
@@ -1177,6 +1257,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 "health_dealt_pct": float(health_dealt_pct),
                 "damage_done": damage_done,
                 "message": fail_message,
+                **_request_meta(req),
             })
         except Exception:
             pass

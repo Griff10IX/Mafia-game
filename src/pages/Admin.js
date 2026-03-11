@@ -234,6 +234,8 @@ export default function Admin() {
   const [gtaLogsLimit, setGtaLogsLimit] = useState(500);
   const [gtaLogsData, setGtaLogsData] = useState(null);
   const [gtaLogsLoading, setGtaLogsLoading] = useState(false);
+  const [gtaExclusiveReleased, setGtaExclusiveReleased] = useState(null);
+  const [gtaExclusiveLoading, setGtaExclusiveLoading] = useState(false);
   const [jailLogsUsername, setJailLogsUsername] = useState('');
   const [jailLogsLimit, setJailLogsLimit] = useState(500);
   const [jailLogsData, setJailLogsData] = useState(null);
@@ -1276,6 +1278,28 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load GTA logs');
     } finally {
       setGtaLogsLoading(false);
+    }
+  };
+
+  const fetchGtaExclusivePool = async () => {
+    try {
+      const res = await api.get('/admin/gta/exclusive-pool');
+      setGtaExclusiveReleased(!!res.data?.released);
+    } catch {
+      setGtaExclusiveReleased(false);
+    }
+  };
+
+  const handleSetGtaExclusivePool = async (released) => {
+    setGtaExclusiveLoading(true);
+    try {
+      const res = await api.post('/admin/gta/exclusive-pool', { released });
+      setGtaExclusiveReleased(!!res.data?.released);
+      toast.success(res.data?.message || (released ? 'Al Capone exclusive released into GTA pool' : 'Al Capone exclusive retracted from GTA pool'));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setGtaExclusiveLoading(false);
     }
   };
 
@@ -2955,6 +2979,9 @@ export default function Admin() {
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Attacker</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Target</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Outcome</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Player message</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">IP</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">User-Agent</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bodyguard?</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bullets</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Location</th>
@@ -2966,7 +2993,16 @@ export default function Admin() {
                           <tr key={row.id || idx} className="border-b border-zinc-700/30">
                             <td className="py-1 pr-1 text-foreground">{row.attacker_username ?? '—'}</td>
                             <td className="py-1 pr-1 text-foreground">{row.target_username ?? '—'}</td>
-                            <td className="py-1 pr-1">{row.outcome === 'killed' ? <span className="text-red-400">Killed</span> : <span className="text-amber-400">Failed</span>}</td>
+                            <td className="py-1 pr-1">
+                              {row.outcome === 'killed' && <span className="text-red-400">Killed</span>}
+                              {row.outcome === 'failed' && <span className="text-amber-400">Failed</span>}
+                              {row.outcome === 'bodyguard' && <span className="text-amber-500">Bodyguard</span>}
+                              {row.outcome === 'error' && <span className="text-orange-400">Error</span>}
+                              {!['killed','failed','bodyguard','error'].includes(row.outcome) && (row.outcome ? <span className="text-mutedForeground">{row.outcome}</span> : '—')}
+                            </td>
+                            <td className="py-1 pr-1 max-w-[200px] truncate text-mutedForeground" title={row.player_message ?? ''}>{row.player_message ?? '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground font-mono text-[9px]">{row.client_ip ?? '—'}</td>
+                            <td className="py-1 pr-1 max-w-[140px] truncate text-mutedForeground font-mono text-[8px]" title={row.user_agent ?? ''}>{row.user_agent ?? '—'}</td>
                             <td className="py-1 pr-1">{row.is_bodyguard_kill ? 'Yes' : '—'}</td>
                             <td className="py-1 pr-1">{row.bullets_used != null ? Number(row.bullets_used).toLocaleString() : '—'}</td>
                             <td className="py-1 pr-1 text-mutedForeground">{row.location_state ?? row.state ?? '—'}</td>
@@ -3060,10 +3096,33 @@ export default function Admin() {
             title="GTA logs (post data)"
             badge={gtaLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{gtaLogsData.logs.length} entries</span> : null}
             isCollapsed={collapsed.gtaLogs}
-            onToggle={() => toggleSection('gtaLogs')}
+            onToggle={() => {
+              toggleSection('gtaLogs');
+              if (collapsed.gtaLogs) fetchGtaExclusivePool();
+            }}
           />
           {!collapsed.gtaLogs && (
             <div className="p-3 space-y-3">
+              <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-zinc-700/50">
+                <span className="text-[10px] font-heading text-mutedForeground">Al Capone exclusive (car20) in GTA pool:</span>
+                {gtaExclusiveReleased === null ? (
+                  <span className="text-[10px] text-mutedForeground">…</span>
+                ) : (
+                  <>
+                    <span className={`text-[10px] font-heading font-bold ${gtaExclusiveReleased ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {gtaExclusiveReleased ? 'Released (very rare drop)' : 'Retracted'}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={gtaExclusiveLoading}
+                      onClick={() => handleSetGtaExclusivePool(!gtaExclusiveReleased)}
+                      className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-[10px] font-heading font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
+                    >
+                      {gtaExclusiveLoading ? '…' : gtaExclusiveReleased ? 'Retract from pool' : 'Release into pool'}
+                    </button>
+                  </>
+                )}
+              </div>
               <p className="text-[10px] text-mutedForeground font-heading">Search by username to load that user&apos;s GTA attempts. Full post data: option, car, success, profit, jailed.</p>
               <div className="flex flex-wrap items-center gap-2">
                 <input type="text" value={gtaLogsUsername} onChange={(e) => setGtaLogsUsername(e.target.value)} placeholder="Username" className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading" />
