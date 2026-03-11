@@ -293,11 +293,49 @@ export default function Boxing3D() {
   const [npcFightState, setNpcFightState] = useState(null); // null | { matchId, npcName } | { result: "win"|"loss"|"draw", npcName, reason }
   const npcPollRef = useRef(null);
 
+  // Backend boxing meta (profile / gym / coach / gear)
+  const [profile, setProfile] = useState(null);
+  const [effective, setEffective] = useState(null);
+  const [drills, setDrills] = useState({});
+  const [gymInfo, setGymInfo] = useState(null);
+  const [coachInfo, setCoachInfo] = useState(null); // { coaches, coach_id }
+  const [gearInfo, setGearInfo] = useState(null);   // { gear, owned_ids, equipped }
+  const [loadingMeta, setLoadingMeta] = useState(true);
+  const [metaError, setMetaError] = useState("");
+  const [busyAction, setBusyAction] = useState("");
+
   const flashMsg=(msg,ms=1600)=>{ setActionText(msg); setTimeout(()=>setActionText(""),ms); };
 
+  const getErr = (e) => e?.response?.data?.detail || e?.message || "Something went wrong";
+
+  // Load NPCs + boxing meta (profile / gym / coach / gear)
   useEffect(() => {
     let cancelled = false;
     api.get("/boxing/npcs").then((r) => { if (!cancelled) setNpcs(r.data?.npcs || []); }).catch(() => {});
+    const loadMeta = async () => {
+      try {
+        setLoadingMeta(true);
+        const [profRes, gymRes, coachRes, gearRes] = await Promise.all([
+          api.get("/boxing/profile"),
+          api.get("/boxing/gym"),
+          api.get("/boxing/coaches"),
+          api.get("/boxing/gear"),
+        ]);
+        if (cancelled) return;
+        setProfile(profRes.data?.profile || null);
+        setEffective(profRes.data?.effective || null);
+        setDrills(profRes.data?.drills || {});
+        setGymInfo(gymRes.data || null);
+        setCoachInfo(coachRes.data || null);
+        setGearInfo(gearRes.data || null);
+        setMetaError("");
+      } catch (e) {
+        if (!cancelled) setMetaError(getErr(e));
+      } finally {
+        if (!cancelled) setLoadingMeta(false);
+      }
+    };
+    loadMeta();
     return () => { cancelled = true; };
   }, []);
 
@@ -335,6 +373,117 @@ export default function Boxing3D() {
   };
 
   const clearNpcResult = () => setNpcFightState(null);
+
+  // Training / gym / coach / gear actions
+  const handleTrain = async (drillId) => {
+    setBusyAction(`train:${drillId}`);
+    try {
+      const res = await api.post("/boxing/train", { drill_id: drillId });
+      setProfile(res.data?.profile || null);
+      setEffective(res.data?.effective || null);
+      setDrills((d) => ({ ...(d || {}), ...(res.data?.drills || {}) }));
+      setMetaError("");
+    } catch (e) {
+      setMetaError(getErr(e));
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const handleGymUpgrade = async () => {
+    setBusyAction("gym_upgrade");
+    try {
+      const res = await api.post("/boxing/gym/upgrade");
+      setProfile(res.data?.profile || null);
+      setEffective(res.data?.effective || null);
+      // refresh gym info to get new level
+      const gymRes = await api.get("/boxing/gym");
+      setGymInfo(gymRes.data || null);
+      setMetaError("");
+    } catch (e) {
+      setMetaError(getErr(e));
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const handleGymMove = async (gymId) => {
+    setBusyAction(`gym_move:${gymId}`);
+    try {
+      const res = await api.post("/boxing/gym/move", { gym_id: gymId });
+      setProfile(res.data?.profile || null);
+      setEffective(res.data?.effective || null);
+      const gymRes = await api.get("/boxing/gym");
+      setGymInfo(gymRes.data || null);
+      setMetaError("");
+    } catch (e) {
+      setMetaError(getErr(e));
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const handleCoachHire = async (coachId) => {
+    setBusyAction(`coach:${coachId}`);
+    try {
+      const res = await api.post("/boxing/coach/hire", { coach_id: coachId });
+      setProfile(res.data?.profile || null);
+      setEffective(res.data?.effective || null);
+      const coachRes = await api.get("/boxing/coaches");
+      setCoachInfo(coachRes.data || null);
+      setMetaError("");
+    } catch (e) {
+      setMetaError(getErr(e));
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const handleCoachFire = async () => {
+    setBusyAction("coach_fire");
+    try {
+      const res = await api.post("/boxing/coach/fire");
+      setProfile(res.data?.profile || null);
+      setEffective(res.data?.effective || null);
+      const coachRes = await api.get("/boxing/coaches");
+      setCoachInfo(coachRes.data || null);
+      setMetaError("");
+    } catch (e) {
+      setMetaError(getErr(e));
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const handleGearBuy = async (gearId) => {
+    setBusyAction(`buy:${gearId}`);
+    try {
+      await api.post("/boxing/gear/buy", { gear_id: gearId });
+      const gearRes = await api.get("/boxing/gear");
+      setGearInfo(gearRes.data || null);
+      setMetaError("");
+    } catch (e) {
+      setMetaError(getErr(e));
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const handleGearEquip = async (slot, gearId) => {
+    setBusyAction(`equip:${slot}:${gearId || "none"}`);
+    try {
+      const res = await api.post("/boxing/gear/equip", { slot, gear_id: gearId || null });
+      setProfile(res.data?.profile || null);
+      setEffective(res.data?.effective || null);
+      const gearRes = await api.get("/boxing/gear");
+      setGearInfo(gearRes.data || null);
+      setMetaError("");
+    } catch (e) {
+      setMetaError(getErr(e));
+    } finally {
+      setBusyAction("");
+    }
+  };
 
   useEffect(()=>{
     const canvas=canvasRef.current; if(!canvas) return;
@@ -643,6 +792,163 @@ export default function Boxing3D() {
         {npcFightState?.result === "error" && (
           <div style={{fontSize:10,color:"#aa4444"}}>{npcFightState.message} <button onClick={clearNpcResult} style={{marginLeft:6,padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.3)",borderRadius:2,background:"rgba(0,0,0,0.4)",color:"#a09050",cursor:"pointer"}}>Dismiss</button></div>
         )}
+      </div>
+
+      {/* Training / Gym / Coach / Gear */}
+      <div style={{padding:"18px 20px 28px",background:"#050302",borderTop:"1px solid rgba(201,168,76,0.25)",display:"grid",gridTemplateColumns:"minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr)",gap:16}}>
+        {/* Training & Stats */}
+        <div style={{border:"1px solid rgba(201,168,76,0.25)",borderRadius:4,background:"rgba(0,0,0,0.7)",padding:12,minHeight:140}}>
+          <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>TRAINING & STATS</div>
+          {metaError && <div style={{fontSize:10,color:"#ff6666",marginBottom:6}}>{metaError}</div>}
+          {loadingMeta && !profile && (
+            <div style={{fontSize:10,color:"#9a8a5a"}}>Loading boxing profile…</div>
+          )}
+          {profile && (
+            <>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"#bba46a",marginBottom:6}}>
+                <span>Rating</span>
+                <span>{profile.rating ?? 1000}</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:4,fontSize:10,color:"#e0d0a0",marginBottom:8}}>
+                {["power","speed","stamina","defense","accuracy"].map((k)=>(
+                  <div key={k} style={{display:"flex",justifyContent:"space-between",background:"rgba(0,0,0,0.55)",padding:"4px 6px",borderRadius:2}}>
+                    <span style={{textTransform:"uppercase",fontSize:9,color:"#8a7a4a"}}>{k}</span>
+                    <span>{effective?.[k] ?? profile?.[k] ?? 1}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{fontSize:10,color:"#8a7a4a",letterSpacing:"0.08em",marginBottom:4}}>DRILLS</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {Object.entries(drills || {}).map(([id, d]) => {
+                  const conf = (profile && profile.training && profile.training[id]) || d;
+                  const lastAt = conf?.last_at;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => handleTrain(id)}
+                      disabled={busyAction===`train:${id}`}
+                      style={{padding:"4px 8px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(0,0,0,0.7)",color:"#e0d0a0",cursor:busyAction===`train:${id}`?"wait":"pointer"}}
+                    >
+                      {d.name || id.replace(/_/g," ")}
+                      {lastAt && <span style={{marginLeft:4,color:"#777"}}>• trained</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Gym & Coach */}
+        <div style={{border:"1px solid rgba(201,168,76,0.25)",borderRadius:4,background:"rgba(0,0,0,0.7)",padding:12,minHeight:140,display:"flex",flexDirection:"column",gap:10}}>
+          <div>
+            <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>GYM</div>
+            {gymInfo && (
+              <>
+                <div style={{fontSize:11,color:"#e0d0a0",marginBottom:4}}>
+                  {gymInfo.gym?.name || "Gym"} — Lv {gymInfo.gym_level ?? 0}
+                </div>
+                <button
+                  onClick={handleGymUpgrade}
+                  disabled={busyAction==="gym_upgrade"}
+                  style={{padding:"4px 9px",fontSize:9,border:"1px solid rgba(201,168,76,0.45)",borderRadius:2,background:"rgba(201,168,76,0.08)",color:"#e0d0a0",cursor:busyAction==="gym_upgrade"?"wait":"pointer"}}
+                >
+                  Upgrade gym
+                </button>
+                {gymInfo.gyms && gymInfo.gyms.length > 1 && (
+                  <div style={{marginTop:8,fontSize:9,color:"#8a7a4a"}}>
+                    Move gym:
+                    <div style={{marginTop:4,display:"flex",flexWrap:"wrap",gap:4}}>
+                      {gymInfo.gyms.map((g) => (
+                        <button
+                          key={g.id}
+                          onClick={() => handleGymMove(g.id)}
+                          disabled={busyAction===`gym_move:${g.id}` || g.id===gymInfo.gym?.id}
+                          style={{padding:"3px 7px",fontSize:9,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,background:g.id===gymInfo.gym?.id?"rgba(201,168,76,0.22)":"rgba(0,0,0,0.7)",color:"#e0d0a0",cursor:g.id===gymInfo.gym?.id?"default":"pointer"}}
+                        >
+                          {g.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          <div>
+            <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>COACH</div>
+            {coachInfo && (
+              <>
+                <div style={{fontSize:10,color:"#8a7a4a",marginBottom:4}}>Hire one coach at a time.</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                  {coachInfo.coaches?.map((c) => {
+                    const isCurrent = coachInfo.coach_id === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => isCurrent ? handleCoachFire() : handleCoachHire(c.id)}
+                        disabled={busyAction===`coach:${c.id}` || (busyAction==="coach_fire" && isCurrent)}
+                        style={{padding:"4px 8px",fontSize:9,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,background:isCurrent?"rgba(201,168,76,0.2)":"rgba(0,0,0,0.7)",color:"#e0d0a0",cursor:(busyAction && !isCurrent)?"wait":"pointer"}}
+                      >
+                        {isCurrent ? `FIRE ${c.name}` : c.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Gear */}
+        <div style={{border:"1px solid rgba(201,168,76,0.25)",borderRadius:4,background:"rgba(0,0,0,0.7)",padding:12,minHeight:140}}>
+          <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>GEAR</div>
+          {gearInfo && (
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6,fontSize:10}}>
+              {gearInfo.gear?.map((g) => {
+                const owned = (gearInfo.owned_ids || []).includes(g.id);
+                const equippedSlot = gearInfo.equipped?.[g.slot];
+                const isEquipped = equippedSlot === g.id;
+                return (
+                  <div key={g.id} style={{background:"rgba(0,0,0,0.7)",borderRadius:3,padding:"4px 6px",border:isEquipped?"1px solid rgba(201,168,76,0.7)":"1px solid rgba(201,168,76,0.25)"}}>
+                    <div style={{fontSize:10,color:"#e0d0a0"}}>{g.name}</div>
+                    <div style={{fontSize:9,color:"#8a7a4a",marginBottom:3}}>{g.slot}</div>
+                    <div style={{display:"flex",gap:4}}>
+                      {!owned && (
+                        <button
+                          onClick={() => handleGearBuy(g.id)}
+                          disabled={busyAction===`buy:${g.id}`}
+                          style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(201,168,76,0.08)",color:"#e0d0a0",cursor:busyAction===`buy:${g.id}`?"wait":"pointer"}}
+                        >
+                          Buy
+                        </button>
+                      )}
+                      {owned && !isEquipped && (
+                        <button
+                          onClick={() => handleGearEquip(g.slot, g.id)}
+                          disabled={busyAction===`equip:${g.slot}:${g.id}`}
+                          style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(0,0,0,0.8)",color:"#e0d0a0",cursor:busyAction===`equip:${g.slot}:${g.id}`?"wait":"pointer"}}
+                        >
+                          Equip
+                        </button>
+                      )}
+                      {owned && isEquipped && (
+                        <button
+                          onClick={() => handleGearEquip(g.slot, null)}
+                          disabled={busyAction===`equip:${g.slot}:none`}
+                          style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(201,168,76,0.22)",color:"#e0d0a0",cursor:busyAction===`equip:${g.slot}:none`?"wait":"pointer"}}
+                        >
+                          Unequip
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');`}</style>
