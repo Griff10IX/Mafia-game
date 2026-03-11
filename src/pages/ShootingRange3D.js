@@ -17,37 +17,120 @@ const RANGE_LENGTH = 28;
 const BACK_WALL_Z = -RANGE_LENGTH;
 const TARGET_RADIUS = 0.28;
 
+function makeBrickTexture() {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const brickW = 32;
+  const brickH = 14;
+  const mortar = 2;
+  ctx.fillStyle = "#6b5b4f";
+  ctx.fillRect(0, 0, size, size);
+  for (let row = 0; row < 20; row++) {
+    for (let col = 0; col < 10; col++) {
+      const x = col * (brickW + mortar) + (row % 2) * ((brickW + mortar) / 2);
+      const y = row * (brickH + mortar);
+      ctx.fillStyle = "#8b7355";
+      ctx.fillRect(x + mortar / 2, y + mortar / 2, brickW, brickH);
+      ctx.fillStyle = "#7a6b5a";
+      ctx.fillRect(x + mortar / 2 + 2, y + mortar / 2 + 2, brickW - 4, brickH - 4);
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 2);
+  return tex;
+}
+
+function makeTileTexture() {
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const tile = 32;
+  const light = "#c4a574";
+  const dark = "#8b7355";
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      ctx.fillStyle = (i + j) % 2 === 0 ? light : dark;
+      ctx.fillRect(i * tile, j * tile, tile, tile);
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(6, 8);
+  return tex;
+}
+
+function makeShootingRangeSignTexture() {
+  const w = 256;
+  const h = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "rgba(0,0,0,0)";
+  ctx.fillRect(0, 0, w, h);
+  ctx.font = "bold 28px Arial";
+  ctx.fillStyle = "#5c4a3a";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("SHOOTING RANGE", w / 2, h / 2);
+  const tex = new THREE.CanvasTexture(canvas);
+  return tex;
+}
+
 function createTargetMesh() {
   const group = new THREE.Group();
-  // Rim (short cylinder facing camera)
-  const backGeo = new THREE.CylinderGeometry(TARGET_RADIUS * 1.15, TARGET_RADIUS * 1.15, 0.04, 32);
-  const backMat = new THREE.MeshStandardMaterial({ color: 0x3a3834, metalness: 0.3, roughness: 0.8 });
+  const R = TARGET_RADIUS;
+  // Paper/cardboard backing
+  const backGeo = new THREE.CylinderGeometry(R * 1.08, R * 1.08, 0.03, 32);
+  const backMat = new THREE.MeshStandardMaterial({ color: 0xd4c8b8, roughness: 0.95, metalness: 0 });
   const back = new THREE.Mesh(backGeo, backMat);
-  back.rotation.x = Math.PI / 2; // axis along Z so disc faces camera
+  back.rotation.x = Math.PI / 2;
   group.add(back);
-  // Red face (facing camera – no rotation, default normal is +Z)
-  const faceGeo = new THREE.CircleGeometry(TARGET_RADIUS, 32);
-  const faceMat = new THREE.MeshBasicMaterial({ color: 0xe04040 });
-  const face = new THREE.Mesh(faceGeo, faceMat);
-  face.position.z = 0.025;
-  group.add(face);
-  // Bullseye
-  const innerGeo = new THREE.CircleGeometry(TARGET_RADIUS * 0.4, 24);
-  const innerMat = new THREE.MeshBasicMaterial({ color: 0xffe070 });
-  const inner = new THREE.Mesh(innerGeo, innerMat);
-  inner.position.z = 0.03;
-  group.add(inner);
+  let z = 0.018;
+  // Concentric rings – paper bullseye style (outer to inner)
+  const rings = [
+    { r: R, color: 0xf5f0e6 },
+    { r: R * 0.88, color: 0x1a1a1a },
+    { r: R * 0.76, color: 0xf5f0e6 },
+    { r: R * 0.64, color: 0x1a1a1a },
+    { r: R * 0.52, color: 0xf5f0e6 },
+    { r: R * 0.40, color: 0xc62828 },
+    { r: R * 0.28, color: 0x1a1a1a },
+    { r: R * 0.16, color: 0xffeb3b },
+  ];
+  rings.forEach(({ r, color }) => {
+    const geo = new THREE.CircleGeometry(r, 32);
+    const mat = new THREE.MeshBasicMaterial({ color });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.z = z;
+    z += 0.004;
+    group.add(mesh);
+  });
   return group;
 }
 
 function buildLongRangeScene(scene) {
   const floorLen = RANGE_LENGTH + 6;
   const corridorWidth = 4;
+  const textures = [];
 
-  // Floor – concrete-style
+  const brickTex = makeBrickTexture();
+  textures.push(brickTex);
+  const tileTex = makeTileTexture();
+  textures.push(tileTex);
+  const signTex = makeShootingRangeSignTexture();
+  textures.push(signTex);
+
+  // Floor – checkerboard tiles
   const floorGeo = new THREE.PlaneGeometry(corridorWidth + 1, floorLen);
   const floorMat = new THREE.MeshStandardMaterial({
-    color: 0x585a54,
+    map: tileTex,
     roughness: 0.9,
     metalness: 0.05,
   });
@@ -57,11 +140,11 @@ function buildLongRangeScene(scene) {
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // Left wall
+  // Side walls – brick
   const wallGeo = new THREE.PlaneGeometry(floorLen, 3.5);
   const wallMat = new THREE.MeshStandardMaterial({
-    color: 0x4a4d48,
-    roughness: 0.85,
+    map: brickTex,
+    roughness: 0.9,
     metalness: 0.0,
   });
   const leftWall = new THREE.Mesh(wallGeo, wallMat);
@@ -75,12 +158,36 @@ function buildLongRangeScene(scene) {
   rightWall.receiveShadow = true;
   scene.add(rightWall);
 
-  // Back wall with target board area (lighter panel)
-  const boardWidth = 3.5;
-  const boardHeight = 2.2;
+  // "SHOOTING RANGE" sign on left wall (small panel)
+  const signGeo = new THREE.PlaneGeometry(2.2, 0.5);
+  const signMat = new THREE.MeshStandardMaterial({
+    map: signTex,
+    transparent: true,
+    opacity: 0.95,
+    roughness: 0.8,
+    metalness: 0,
+    side: THREE.DoubleSide,
+  });
+  const sign = new THREE.Mesh(signGeo, signMat);
+  sign.rotation.y = -Math.PI / 2;
+  sign.position.set(-corridorWidth / 2 - 0.48, 2.4, -6);
+  scene.add(sign);
+
+  // Ceiling beams (dark metal rails)
+  const beamGeo = new THREE.BoxGeometry(floorLen + 2, 0.12, 0.2);
+  const beamMat = new THREE.MeshStandardMaterial({ color: 0x2a2a28, metalness: 0.5, roughness: 0.5 });
+  for (let i = 0; i < 5; i++) {
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    beam.position.set(0, 2.95, -floorLen / 2 - 1 + i * (floorLen / 4));
+    beam.rotation.x = Math.PI / 2;
+    beam.receiveShadow = true;
+    scene.add(beam);
+  }
+
+  // Back wall – light grey concrete
   const wallFullGeo = new THREE.PlaneGeometry(corridorWidth + 2, 4);
   const wallFullMat = new THREE.MeshStandardMaterial({
-    color: 0x3e403a,
+    color: 0x9a9a94,
     roughness: 0.9,
     metalness: 0.0,
   });
@@ -89,9 +196,12 @@ function buildLongRangeScene(scene) {
   backWall.receiveShadow = true;
   scene.add(backWall);
 
+  // Target board (paper/cardboard tone)
+  const boardWidth = 3.5;
+  const boardHeight = 2.2;
   const boardGeo = new THREE.PlaneGeometry(boardWidth, boardHeight);
   const boardMat = new THREE.MeshStandardMaterial({
-    color: 0x8a8580,
+    color: 0xb5a898,
     roughness: 0.95,
     metalness: 0.0,
   });
@@ -108,7 +218,7 @@ function buildLongRangeScene(scene) {
   });
   scene.add(target);
 
-  return { target, floor, backWall };
+  return { target, floor, backWall, textures };
 }
 
 function createBulletMesh() {
@@ -121,6 +231,50 @@ function createMuzzleFlash() {
   const geo = new THREE.SphereGeometry(0.08, 10, 10);
   const mat = new THREE.MeshBasicMaterial({ color: 0xffaa22, transparent: true, opacity: 0.9 });
   return new THREE.Mesh(geo, mat);
+}
+
+function createGunModel() {
+  const group = new THREE.Group();
+  const gunMat = new THREE.MeshStandardMaterial({
+    color: 0x2a2a2a,
+    metalness: 0.7,
+    roughness: 0.35,
+  });
+  const woodMat = new THREE.MeshStandardMaterial({
+    color: 0x4a3828,
+    metalness: 0.1,
+    roughness: 0.85,
+  });
+  const barrel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.02, 0.022, 0.5, 12),
+    gunMat
+  );
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0.35, 0, 0);
+  group.add(barrel);
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(0.08, 0.06, 0.25),
+    gunMat
+  );
+  body.position.set(0.2, -0.02, 0);
+  group.add(body);
+  const stock = new THREE.Mesh(
+    new THREE.BoxGeometry(0.06, 0.12, 0.22),
+    woodMat
+  );
+  stock.position.set(-0.08, -0.04, -0.05);
+  group.add(stock);
+  const grip = new THREE.Mesh(
+    new THREE.BoxGeometry(0.04, 0.08, 0.04),
+    gunMat
+  );
+  grip.position.set(0.15, -0.08, 0.02);
+  group.add(grip);
+  group.position.set(0.22, -0.28, -0.55);
+  group.rotation.order = "YXZ";
+  group.rotation.y = 0.02;
+  group.rotation.x = 0.05;
+  return group;
 }
 
 function randomTargetPosition() {
@@ -213,21 +367,21 @@ export default function ShootingRange3D() {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
     renderer.setSize(W, H, false);
-    renderer.setClearColor(0x2a2c28);
+    renderer.setClearColor(0x4a4c48);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x2a2c28);
-    scene.fog = new THREE.Fog(0x2a2c28, 15, 55);
+    scene.background = new THREE.Color(0x4a4c48);
+    scene.fog = new THREE.Fog(0x4a4c48, 18, 52);
 
     const camera = new THREE.PerspectiveCamera(52, W / H, 0.1, 80);
     camera.position.set(0, 1.35, 5);
     camera.lookAt(0, 1.25, -RANGE_LENGTH / 2);
 
-    const mainLight = new THREE.DirectionalLight(0xfff5e6, 2.2);
-    mainLight.position.set(0, 8, -8);
-    mainLight.target.position.set(0, 0, -15);
+    const mainLight = new THREE.DirectionalLight(0xfffaf0, 2.0);
+    mainLight.position.set(0, 10, -10);
+    mainLight.target.position.set(0, 0, -18);
     mainLight.castShadow = true;
     mainLight.shadow.mapSize.width = 1024;
     mainLight.shadow.mapSize.height = 512;
@@ -241,15 +395,15 @@ export default function ShootingRange3D() {
     scene.add(mainLight);
     scene.add(mainLight.target);
 
-    scene.add(new THREE.AmbientLight(0xa0a8a0, 0.5));
-    const fill = new THREE.PointLight(0xc8d4e0, 0.8, 35);
-    fill.position.set(2, 2, -10);
+    scene.add(new THREE.AmbientLight(0xe8e4dc, 0.85));
+    const fill = new THREE.PointLight(0xfff8ee, 0.6, 40);
+    fill.position.set(0, 2, -12);
     scene.add(fill);
-    const fill2 = new THREE.PointLight(0xc8d4e0, 0.5, 35);
-    fill2.position.set(-2, 2, -10);
-    scene.add(fill2);
 
-    const { target } = buildLongRangeScene(scene);
+    const { target, textures } = buildLongRangeScene(scene);
+    const gun = createGunModel();
+    camera.add(gun);
+
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
     const bulletGroup = new THREE.Group();
@@ -382,6 +536,7 @@ export default function ShootingRange3D() {
       canvas.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("resize", onResize);
       cancelAnimationFrame(raf);
+      textures.forEach((t) => t.dispose());
       bullets.forEach((b) => {
         bulletGroup.remove(b.mesh);
         b.mesh.geometry.dispose();
