@@ -1723,8 +1723,15 @@ async def families_wars_history(current_user: dict = Depends(get_current_user)):
         fa = family_map.get(w.get("family_a_id"), {})
         fb = family_map.get(w.get("family_b_id"), {})
         winner_id = w.get("winner_family_id")
+        loser_id = w.get("loser_family_id")
         winner_fam = family_map.get(winner_id, {}) if winner_id else {}
-        out.append({"id": w["id"], "family_a_id": w["family_a_id"], "family_b_id": w["family_b_id"], "family_a_name": fa.get("name", "?"), "family_a_tag": fa.get("tag", "?"), "family_b_name": fb.get("name", "?"), "family_b_tag": fb.get("tag", "?"), "status": w.get("status", "active"), "winner_family_id": winner_id, "winner_family_name": winner_fam.get("name", "?"), "ended_at": w.get("ended_at"), "prize_exclusive_cars": w.get("prize_exclusive_cars"), "prize_rackets": w.get("prize_rackets") or []})
+        # Use names stored on the war document when family was defeated (so we keep the name even if family later deleted)
+        family_a_name = fa.get("name") or (w.get("winner_family_name") if w.get("family_a_id") == winner_id else w.get("loser_family_name") if w.get("family_a_id") == loser_id else None) or "?"
+        family_b_name = fb.get("name") or (w.get("winner_family_name") if w.get("family_b_id") == winner_id else w.get("loser_family_name") if w.get("family_b_id") == loser_id else None) or "?"
+        family_a_tag = fa.get("tag") or "?"
+        family_b_tag = fb.get("tag") or "?"
+        winner_family_name = winner_fam.get("name") or w.get("winner_family_name") or "?"
+        out.append({"id": w["id"], "family_a_id": w["family_a_id"], "family_b_id": w["family_b_id"], "family_a_name": family_a_name, "family_a_tag": family_a_tag, "family_b_name": family_b_name, "family_b_tag": family_b_tag, "status": w.get("status", "active"), "winner_family_id": winner_id, "winner_family_name": winner_family_name, "ended_at": w.get("ended_at"), "prize_exclusive_cars": w.get("prize_exclusive_cars"), "prize_rackets": w.get("prize_rackets") or []})
     return {"wars": out}
 
 
@@ -1816,6 +1823,12 @@ async def families_war_public_stats(war_id: str, current_user: dict = Depends(ge
     fid_b = _norm_fid(war["family_b_id"])
     fam_a = await db.families.find_one({"id": fid_a}, {"_id": 0, "name": 1, "tag": 1}) or {}
     fam_b = await db.families.find_one({"id": fid_b}, {"_id": 0, "name": 1, "tag": 1}) or {}
+    winner_id = _norm_fid(war.get("winner_family_id"))
+    loser_id = _norm_fid(war.get("loser_family_id"))
+    family_a_name = fam_a.get("name") or (war.get("winner_family_name") if fid_a == winner_id else war.get("loser_family_name") if fid_a == loser_id else None) or "?"
+    family_b_name = fam_b.get("name") or (war.get("winner_family_name") if fid_b == winner_id else war.get("loser_family_name") if fid_b == loser_id else None) or "?"
+    family_a_tag = fam_a.get("tag") or "?"
+    family_b_tag = fam_b.get("tag") or "?"
 
     stats_docs = await db.family_war_stats.find({"war_id": war_id}, {"_id": 0}).to_list(500)
     by_user: dict = {}
@@ -1852,11 +1865,11 @@ async def families_war_public_stats(war_id: str, current_user: dict = Depends(ge
         "war": {
             "id": war["id"],
             "family_a_id": fid_a,
-            "family_a_name": fam_a.get("name", "?"),
-            "family_a_tag": fam_a.get("tag", "?"),
+            "family_a_name": family_a_name,
+            "family_a_tag": family_a_tag,
             "family_b_id": fid_b,
-            "family_b_name": fam_b.get("name", "?"),
-            "family_b_tag": fam_b.get("tag", "?"),
+            "family_b_name": family_b_name,
+            "family_b_tag": family_b_tag,
             "status": war.get("status"),
             "ended_at": war.get("ended_at"),
             "winner_family_id": war.get("winner_family_id"),
