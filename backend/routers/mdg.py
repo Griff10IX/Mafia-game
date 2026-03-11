@@ -172,7 +172,16 @@ def register(router):
         auto_roll_at = game.get("auto_roll_at")
         should_roll = (auto_roll_at is not None and len(new_entries) >= auto_roll_at) or len(new_entries) >= max_players
         if should_roll and len(new_entries) >= MDG_MIN_PLAYERS:
-            winner_entry = random.choice(new_entries)
+            roll = random.randint(1, 6) + random.randint(1, 6)  # 2d6: 2–12
+            entry_ids = [e["user_id"] for e in new_entries]
+            alive_users = await db.users.find(
+                {"id": {"$in": entry_ids}, "is_dead": {"$ne": True}},
+                {"_id": 0, "id": 1},
+            ).to_list(len(entry_ids))
+            alive_ids = {u["id"] for u in alive_users}
+            alive_entries = [e for e in new_entries if e["user_id"] in alive_ids]
+            pool = alive_entries if alive_entries else new_entries
+            winner_entry = random.choice(pool)
             winner_id = winner_entry["user_id"]
             await db.users.update_one(
                 {"id": winner_id},
@@ -183,7 +192,7 @@ def register(router):
             now_iso = datetime.now(timezone.utc).isoformat()
             await db.mdg_games.update_one(
                 {"id": request.game_id},
-                {"$set": {"status": "completed", "winner_id": winner_id, "winner_username": winner_username, "rolled_at": now_iso}},
+                {"$set": {"status": "completed", "winner_id": winner_id, "winner_username": winner_username, "rolled_at": now_iso, "roll": roll}},
             )
             await log_gambling(
                 winner_id,
@@ -192,7 +201,7 @@ def register(router):
                 {"action": "payout", "game_id": request.game_id, "pot_points": new_pot_pts, "pot_money": new_pot_money, "trigger": "auto_roll"},
             )
             await send_notification(winner_id, "🎲 MDG Won", f"You won the pot: {new_pot_pts} pts, ${new_pot_money:,.0f}", "reward")
-            return {"message": "Joined; game rolled. One winner takes the pot.", "winner_id": winner_id, "winner_username": winner_username, "pot_points": new_pot_pts, "pot_money": new_pot_money}
+            return {"message": "Joined; game rolled. One winner takes the pot.", "roll": roll, "winner_id": winner_id, "winner_username": winner_username, "pot_points": new_pot_pts, "pot_money": new_pot_money}
 
         return {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money}
 
@@ -208,7 +217,16 @@ def register(router):
         if len(entries) < 1:
             raise HTTPException(status_code=400, detail="No players in game")
 
-        winner_entry = random.choice(entries)
+        roll = random.randint(1, 6) + random.randint(1, 6)  # 2d6: 2–12
+        entry_ids = [e["user_id"] for e in entries]
+        alive_users = await db.users.find(
+            {"id": {"$in": entry_ids}, "is_dead": {"$ne": True}},
+            {"_id": 0, "id": 1},
+        ).to_list(len(entry_ids))
+        alive_ids = {u["id"] for u in alive_users}
+        alive_entries = [e for e in entries if e["user_id"] in alive_ids]
+        pool = alive_entries if alive_entries else entries
+        winner_entry = random.choice(pool)
         winner_id = winner_entry["user_id"]
         pot_pts = int(game.get("pot_points") or 0)
         pot_money = float(game.get("pot_money") or 0)
@@ -218,7 +236,7 @@ def register(router):
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.mdg_games.update_one(
             {"id": request.game_id},
-            {"$set": {"status": "completed", "winner_id": winner_id, "winner_username": winner_username, "rolled_at": now_iso}},
+            {"$set": {"status": "completed", "winner_id": winner_id, "winner_username": winner_username, "rolled_at": now_iso, "roll": roll}},
         )
         await log_gambling(
             winner_id,
@@ -227,4 +245,4 @@ def register(router):
             {"action": "payout", "game_id": request.game_id, "pot_points": pot_pts, "pot_money": pot_money, "trigger": "manual_roll"},
         )
         await send_notification(winner_id, "🎲 MDG Won", f"You won the pot: {pot_pts} pts, ${pot_money:,.0f}", "reward")
-        return {"message": "Roll complete. One winner takes the pot.", "winner_id": winner_id, "winner_username": winner_username, "pot_points": pot_pts, "pot_money": pot_money}
+        return {"message": "Roll complete. One winner takes the pot.", "roll": roll, "winner_id": winner_id, "winner_username": winner_username, "pot_points": pot_pts, "pot_money": pot_money}

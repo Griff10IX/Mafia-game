@@ -49,6 +49,14 @@ SECURITY_UPGRADES = [
     {"id": "alarm_wire", "name": "Alarm wire", "defence_weight": 9},
     {"id": "bribed_cop", "name": "Bribed beat cop", "defence_weight": 14},
     {"id": "thompson", "name": "Thompson in the back", "defence_weight": 18},
+    {"id": "iron_bars", "name": "Iron bars on windows", "defence_weight": 7},
+    {"id": "guard_dog", "name": "Guard dog", "defence_weight": 11},
+    {"id": "spotlight", "name": "Spotlight at the door", "defence_weight": 6},
+    {"id": "safe_room", "name": "Safe room", "defence_weight": 16},
+    {"id": "wire_taps", "name": "Wire taps (early warning)", "defence_weight": 10},
+    {"id": "armoured_desk", "name": "Armoured desk", "defence_weight": 8},
+    {"id": "back_exit", "name": "Hidden back exit", "defence_weight": 9},
+    {"id": "panic_button", "name": "Panic button to the family", "defence_weight": 13},
 ]
 # Cost for security upgrade at index i: base + step * i (gradually higher).
 SECURITY_UPGRADE_BASE_CASH = 25_000
@@ -126,8 +134,8 @@ ILLEGAL_BUSINESS_MISSIONS = [
      "how_to_complete": "Win 10 raids.",
      "requirements": {"raids_won": 10}, "rewards": {"income_mult": 1.1, "points": 10}},
     {"id": "ibm_14", "order": 14, "title": "Maximum security", "story": "Every upgrade. Nobody gets in.",
-     "how_to_complete": "Reach security level 7 (buy all upgrades).",
-     "requirements": {"security_level": 7}, "rewards": {"guard_weapon_max": 1, "income_mult": 1.1, "points": 15}},
+     "how_to_complete": "Reach security level 15 (buy all upgrades).",
+     "requirements": {"security_level": 15}, "rewards": {"guard_weapon_max": 1, "income_mult": 1.1, "points": 15}},
     {"id": "ibm_15", "order": 15, "title": "Empire", "story": "2,500 crimes in your state. You own the block.",
      "how_to_complete": "Complete 2,500 crimes in your business state.",
      "requirements": {"crimes_in_state": 2500}, "rewards": {"income_mult": 1.25, "points": 20, "cash": 100_000}},

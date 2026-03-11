@@ -35,6 +35,18 @@ function formatPot(game) {
   return parts.length ? parts.join(' + ') : '—';
 }
 
+function formatMdgResultToast(data) {
+  const roll = data?.roll ?? '?';
+  const name = (data?.winner_username || '?').toUpperCase();
+  const pts = Number(data?.pot_points ?? 0);
+  const money = Number(data?.pot_money ?? 0);
+  const parts = [];
+  if (money > 0) parts.push(formatMoney(money));
+  if (pts > 0) parts.push(`${pts.toLocaleString()} pts`);
+  const withStr = parts.length ? ` with ${parts.join(' and ')}` : '';
+  return `The dice rolled ${roll} and the winner is ${name}${withStr}!`;
+}
+
 function formatExtraPot(game) {
   const pts = Number(game.extra_pot_points ?? 0);
   const money = Number(game.extra_pot_money ?? 0);
@@ -93,9 +105,10 @@ export default function MDGPage() {
     try {
       const res = await api.post('/casino/mdg/join', { game_id: gameId });
       await refreshUser();
-      toast.success(res.data?.message || 'Joined');
-      if (res.data?.winner_username) {
-        toast.success(`Winner: ${res.data.winner_username}`);
+      if (res.data?.winner_username != null) {
+        toast.success(formatMdgResultToast(res.data));
+      } else {
+        toast.success(res.data?.message || 'Joined');
       }
       fetchGames();
     } catch (e) {
@@ -110,9 +123,10 @@ export default function MDGPage() {
     try {
       const res = await api.post('/casino/mdg/roll', { game_id: gameId });
       await refreshUser();
-      toast.success(res.data?.message || 'Roll complete');
-      if (res.data?.winner_username) {
-        toast.success(`Winner: ${res.data.winner_username}`);
+      if (res.data?.winner_username != null) {
+        toast.success(formatMdgResultToast(res.data));
+      } else {
+        toast.success(res.data?.message || 'Roll complete');
       }
       fetchGames();
     } catch (e) {

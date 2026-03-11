@@ -159,6 +159,12 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
                     Profile Preview
                   </h3>
                 </div>
+                {preview.on_hitlist && (
+                  <div className="px-2.5 py-1 bg-red-500/20 border-b border-red-500/30 flex items-center gap-1.5">
+                    <Target size={12} className="text-red-400 shrink-0" aria-hidden />
+                    <span className="text-[10px] font-heading font-bold text-red-400 uppercase">On the hitlist</span>
+                  </div>
+                )}
                 <div className="p-2 space-y-2">
                   <div className="flex gap-2">
                     <div className="w-10 h-10 rounded overflow-hidden border border-primary/20 bg-secondary flex items-center justify-center shrink-0">
@@ -181,9 +187,32 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
                           <span className="text-mutedForeground">Jailbusts</span>
                           <span className="text-foreground font-bold">{preview.jail_busts}</span>
                         </div>
+                        <div className="flex justify-between col-span-2">
+                          <span className="text-mutedForeground">Messages</span>
+                          <span className="text-foreground font-bold">{preview.messages_sent ?? 0} sent / {preview.messages_received ?? 0} recv</span>
+                        </div>
                       </div>
                     </div>
                   </div>
+                  {(preview.family || preview.owns_casino || preview.property_type) && (
+                    <div className="space-y-0.5 text-[10px] font-heading">
+                      {preview.family && (
+                        <div className="flex justify-between gap-2">
+                          <span className="text-mutedForeground">Family</span>
+                          <span className="text-foreground truncate">{preview.family}</span>
+                        </div>
+                      )}
+                      {preview.owns_casino && (
+                        <div className="text-foreground">Casino</div>
+                      )}
+                      {preview.property_type === 'airport' && (
+                        <div className="text-foreground">Airport</div>
+                      )}
+                      {preview.property_type === 'armoury' && (
+                        <div className="text-foreground">Armoury</div>
+                      )}
+                    </div>
+                  )}
                   
                   <div className="pt-2 border-t border-border text-[9px] text-mutedForeground font-heading italic text-center">
                     Click username to view full profile

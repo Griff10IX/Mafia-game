@@ -94,15 +94,79 @@ def register(router):
         username_pattern = _username_pattern(username)
         user = await db.users.find_one(
             {"username": username_pattern},
-            {"_id": 0, "username": 1, "avatar_url": 1, "total_kills": 1, "jail_busts": 1},
+            {"_id": 0, "id": 1, "username": 1, "avatar_url": 1, "total_kills": 1, "jail_busts": 1, "family_id": 1},
         )
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
+        user_id = user.get("id")
+
+        async def _hitlist_count():
+            return await db.hitlist.count_documents(
+                {"target_id": user_id, "target_type": {"$in": ["user", "bodyguards"]}}
+            )
+
+        async def _messages_received():
+            return await db.notifications.count_documents(
+                {"user_id": user_id, "notification_type": "user_message"}
+            )
+
+        async def _messages_sent():
+            return await db.notifications.count_documents({
+                "sender_id": user_id,
+                "notification_type": {"$in": ["user_message", "user_message_sent"]},
+            })
+
+        async def _family():
+            fid = user.get("family_id")
+            if not fid:
+                return None
+            fam = await db.families.find_one({"id": str(fid)}, {"_id": 0, "name": 1, "tag": 1})
+            if not fam:
+                return None
+            name = fam.get("name") or "?"
+            tag = (fam.get("tag") or "").strip()
+            return f"{name}" + (f" [{tag}]" if tag else "") if name else None
+
+        async def _owns_casino():
+            for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership", "slots_ownership", "videopoker_ownership"):
+                if await db[coll_name].count_documents({"owner_id": user_id}, limit=1):
+                    return True
+            return False
+
+        async def _property_type():
+            if await db.airport_ownership.find_one({"owner_id": user_id}, {"_id": 1}):
+                return "airport"
+            if await db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 1}):
+                return "armoury"
+            return None
+
+        (
+            hitlist_count,
+            messages_received,
+            messages_sent,
+            family_display,
+            owns_casino,
+            property_type,
+        ) = await asyncio.gather(
+            _hitlist_count(),
+            _messages_received(),
+            _messages_sent(),
+            _family(),
+            _owns_casino(),
+            _property_type(),
+        )
+
         return {
             "username": user.get("username"),
             "avatar_url": user.get("avatar_url"),
             "kills": int(user.get("total_kills") or 0),
             "jail_busts": int(user.get("jail_busts") or 0),
+            "on_hitlist": hitlist_count > 0,
+            "messages_sent": messages_sent,
+            "messages_received": messages_received,
+            "family": family_display,
+            "owns_casino": owns_casino,
+            "property_type": property_type,
         }
 
     @router.get("/users/{username}/profile")

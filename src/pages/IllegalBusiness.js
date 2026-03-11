@@ -461,7 +461,7 @@ export default function IllegalBusiness() {
             <CardHead icon={TrendingUp} title="Operation Status" />
             <div className="p-4 space-y-4">
               <BarStat label="Level"    value={business?.level ?? 1}          max={10} />
-              <BarStat label="Security" value={business?.security_level ?? 0} max={10} />
+              <BarStat label="Security" value={business?.security_level ?? 0} max={15} />
               <BarStat
                 label="Guards"
                 value={guards.length}
@@ -497,31 +497,33 @@ export default function IllegalBusiness() {
                 ) : null
               }
             />
-            <div className="p-4 space-y-2">
+            <div className="p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
               {Array.from({ length: guardSlots }).map((_, i) => {
                 const g = guards[i];
                 return g ? (
-                  <div key={g.id} className="flex items-start gap-3 p-2.5 rounded bg-primary/5 border border-primary/12">
-                    <div className="w-7 h-7 rounded-full bg-primary/15 border border-primary/25 flex items-center justify-center shrink-0">
-                      <span className="text-[10px] font-heading font-bold text-primary">{i + 1}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-heading text-zinc-500 mb-1.5">Slot {g.slot_number}</div>
-                      <div className="space-y-1">
-                        <PipRow label="Armour" filled={g.armour_level} total={3} />
-                        <PipRow label="Weapon" filled={g.weapon_level} total={3} />
+                  <div key={g.id} className="flex flex-col gap-1.5 p-2 rounded bg-primary/5 border border-primary/12 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-primary/15 border border-primary/25 flex items-center justify-center shrink-0">
+                        <span className="text-[9px] font-heading font-bold text-primary">{i + 1}</span>
                       </div>
+                      <span className="text-[9px] font-heading text-zinc-500 truncate">Slot {g.slot_number}</span>
+                    </div>
+                    <div className="space-y-0.5">
+                      <PipRow label="Armour" filled={g.armour_level} total={3} />
+                      <PipRow label="Weapon" filled={g.weapon_level} total={3} />
                     </div>
                   </div>
                 ) : (
-                  <div key={i} className="guard-empty flex items-center gap-3 p-2.5 rounded border border-primary/12">
-                    <div className="w-7 h-7 rounded-full border border-primary/12 flex items-center justify-center shrink-0">
-                      <span className="text-[10px] font-heading text-zinc-700">{i + 1}</span>
+                  <div key={i} className="guard-empty flex flex-col items-center justify-center gap-1 p-2 rounded border border-primary/12 min-h-[72px]">
+                    <div className="w-6 h-6 rounded-full border border-primary/12 flex items-center justify-center shrink-0">
+                      <span className="text-[9px] font-heading text-zinc-700">{i + 1}</span>
                     </div>
-                    <span className="text-xs font-body italic text-zinc-600">Slot vacant</span>
+                    <span className="text-[9px] font-body italic text-zinc-600">Vacant</span>
                   </div>
                 );
               })}
+              </div>
             </div>
           </div>
 
