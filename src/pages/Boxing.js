@@ -1,464 +1,619 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import api, { getApiErrorMessage, refreshUser } from '../utils/api';
-import { toast } from 'sonner';
+import { useEffect, useRef, useState, useCallback } from "react";
+import * as THREE from "three";
+import api from "../utils/api";
 
-function StatPill({ label, value }) {
-  return (
-    <div className="px-2 py-1 rounded-sm bg-[var(--noir-surface)] text-xs text-primary flex items-center justify-between gap-2">
-      <span className="opacity-80">{label}</span>
-      <span className="font-heading">{value}</span>
-    </div>
-  );
+// ── FIGHT ENGINE ─────────────────────────────────────────────────────────────
+function rand(a, b) { return a + Math.random() * (b - a); }
+function randInt(a, b) { return Math.floor(rand(a, b + 1)); }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+const PUNCH_DMG  = { jab:[4,9], cross:[9,17], hook:[11,21], uppercut:[13,23], body:[7,15] };
+const PUNCH_ACC  = { jab:0.73, cross:0.61, hook:0.57, uppercut:0.52, body:0.65 };
+const PUNCH_STAM = { jab:1.5, cross:2.5, hook:3.2, uppercut:3.5, body:2.8 };
+
+function choosePunch(f) {
+  const tired = f.stam < 30;
+  const w = { jab:tired?45:25, cross:tired?10:22, hook:tired?8:20, uppercut:tired?5:15, body:18 };
+  let r = Math.random() * Object.values(w).reduce((a,b)=>a+b,0);
+  for (const [k,v] of Object.entries(w)) { r-=v; if(r<=0) return k; }
+  return "jab";
 }
 
-export default function Boxing() {
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState(null);
-  const [effective, setEffective] = useState(null);
-  const [data, setData] = useState({ drills: {}, gyms: [], coaches: [], gear: [] });
-  const [gearOwnedIds, setGearOwnedIds] = useState(new Set());
-
-  const [opponentUsername, setOpponentUsername] = useState('');
-  const [matchId, setMatchId] = useState('');
-  const [match, setMatch] = useState(null);
-  const [liveMatches, setLiveMatches] = useState([]);
-
-  const [stake, setStake] = useState(10000);
-  const [betFighter, setBetFighter] = useState('a');
-  const [myBets, setMyBets] = useState({ open: [], closed: [] });
-  const [leagueWeekly, setLeagueWeekly] = useState([]);
-
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      const r = await api.get('/boxing/profile');
-      setProfile(r.data.profile);
-      setEffective(r.data.effective);
-      setData({ drills: r.data.drills || {}, gyms: r.data.gyms || [], coaches: r.data.coaches || [], gear: r.data.gear || [] });
-      const gear = await api.get('/boxing/gear');
-      setGearOwnedIds(new Set((gear.data.owned_ids || []).filter(Boolean)));
-      const lg = await api.get('/boxing/league', { params: { period: 'weekly' } });
-      setLeagueWeekly(lg.data.standings || []);
-      const bets = await api.get('/boxing/bets/my-bets');
-      setMyBets(bets.data || { open: [], closed: [] });
-      const live = await api.get('/boxing/matches/live');
-      setLiveMatches(live.data.matches || []);
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    } finally {
-      setLoading(false);
+function simulateFight(aS, bS) {
+  const a = {...aS, hp:100, stam:100, kds:0};
+  const b = {...bS, hp:100, stam:100, kds:0};
+  const events = [];
+  for (let round=1; round<=12; round++) {
+    for (let i=0; i<8+randInt(0,6); i++) {
+      if (a.hp<=0||b.hp<=0) break;
+      const apt=choosePunch(a), aAcc=clamp(PUNCH_ACC[apt]+(a.speed-b.defense)/400-(1-a.stam/100)*0.2,0.15,0.9);
+      const aL=Math.random()<aAcc; let aDmg=0, aKD=false;
+      if(aL){const[lo,hi]=PUNCH_DMG[apt];aDmg=rand(lo,hi)*(a.power/80);b.hp=Math.max(0,b.hp-aDmg);if(Math.random()<(aDmg/22)*(1-b.chin/100)*(1-b.stam/100)&&b.hp>0&&b.kds<3){b.kds++;b.hp=Math.max(1,b.hp-6);aKD=true;}}
+      a.stam=Math.max(0,a.stam-PUNCH_STAM[apt]*(aL?1:0.5));
+      const bpt=choosePunch(b), bAcc=clamp(PUNCH_ACC[bpt]+(b.speed-a.defense)/400-(1-b.stam/100)*0.2,0.15,0.9);
+      const bL=Math.random()<bAcc; let bDmg=0, bKD=false;
+      if(bL){const[lo,hi]=PUNCH_DMG[bpt];bDmg=rand(lo,hi)*(b.power/80);a.hp=Math.max(0,a.hp-bDmg);if(Math.random()<(bDmg/22)*(1-a.chin/100)*(1-a.stam/100)&&a.hp>0&&a.kds<3){a.kds++;a.hp=Math.max(1,a.hp-6);bKD=true;}}
+      b.stam=Math.max(0,b.stam-PUNCH_STAM[bpt]*(bL?1:0.5));
+      events.push({round,hpA:Math.round(a.hp),hpB:Math.round(b.hp),stamA:Math.round(a.stam),stamB:Math.round(b.stam),aPunch:apt,aLanded:aL,aDmg:Math.round(aDmg*10)/10,aKD,bPunch:bpt,bLanded:bL,bDmg:Math.round(bDmg*10)/10,bKD});
+      if(a.hp<=0||b.hp<=0||a.kds>=3||b.kds>=3) break;
     }
+    a.stam=Math.min(100,a.stam+15+(a.stamina/100)*15);
+    b.stam=Math.min(100,b.stam+15+(b.stamina/100)*15);
+    if(a.hp<=0||b.hp<=0||a.kds>=3||b.kds>=3) break;
+  }
+  let winner=null,reason="Decision";
+  if(a.hp<=0||a.kds>=3){winner="b";reason=a.kds>=3?"TKO":"KO";}
+  else if(b.hp<=0||b.kds>=3){winner="a";reason=b.kds>=3?"TKO":"KO";}
+  else winner="a";
+  return {events,winner,reason};
+}
+
+// ── BUILD RING ───────────────────────────────────────────────────────────────
+function buildRing(scene) {
+  const mat = c => new THREE.MeshLambertMaterial({color:c});
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(7,0.15,7),mat(0x1e1008));
+  floor.receiveShadow=true; scene.add(floor);
+  const lm=new THREE.MeshBasicMaterial({color:0xc9a84c,transparent:true,opacity:0.2});
+  const cl=new THREE.Mesh(new THREE.BoxGeometry(6.8,0.02,0.05),lm); cl.position.y=0.09; scene.add(cl);
+  const cc=new THREE.Mesh(new THREE.TorusGeometry(0.7,0.03,8,32),lm); cc.rotation.x=-Math.PI/2; cc.position.y=0.09; scene.add(cc);
+  const postMat=mat(0xc9a84c), capMat=mat(0xffe066);
+  [[-3.2,-3.2],[3.2,-3.2],[3.2,3.2],[-3.2,3.2]].forEach(([x,z])=>{
+    const p=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,3.5,8),postMat); p.position.set(x,1.75,z); p.castShadow=true; scene.add(p);
+    const c=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8),capMat); c.position.set(x,3.56,z); scene.add(c);
+  });
+  [0.9,1.6,2.3].forEach(y=>{
+    const rm=mat(y===1.6?0x8b1a1a:0xc9a84c);
+    [[-3.2,-3.2,3.2,-3.2],[3.2,-3.2,3.2,3.2],[3.2,3.2,-3.2,3.2],[-3.2,3.2,-3.2,-3.2]].forEach(([x1,z1,x2,z2])=>{
+      const len=Math.sqrt((x2-x1)**2+(z2-z1)**2);
+      const rope=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,len,6),rm);
+      rope.position.set((x1+x2)/2,y,(z1+z2)/2);
+      if(z1===z2){rope.rotation.x=Math.PI/2;}else{rope.rotation.z=Math.PI/2;}
+      scene.add(rope);
+    });
+  });
+  const base=new THREE.Mesh(new THREE.BoxGeometry(9,0.4,9),mat(0x0a0703)); base.position.y=-0.27; scene.add(base);
+}
+
+// ── BUILD BOXER ──────────────────────────────────────────────────────────────
+function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
+  const g=new THREE.Group();
+  const m=c=>new THREE.MeshLambertMaterial({color:c});
+
+  // All parts relative to g (origin = feet level)
+  const root=new THREE.Group(); g.add(root); // bob group
+
+  // Legs
+  const legL=new THREE.Group(); legL.position.set(-0.15,0.5,0); root.add(legL);
+  legL.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.22,0.58,0.22),m(0x111008)),{position:new THREE.Vector3(0,-0.29,0)}));
+  legL.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.22,0.1,0.34),m(0x2a1a0a)),{position:new THREE.Vector3(0,-0.62,0.06)}));
+
+  const legR=new THREE.Group(); legR.position.set(0.15,0.5,0); root.add(legR);
+  legR.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.22,0.58,0.22),m(0x111008)),{position:new THREE.Vector3(0,-0.29,0)}));
+  legR.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.22,0.1,0.34),m(0x2a1a0a)),{position:new THREE.Vector3(0,-0.62,0.06)}));
+
+  // Hips
+  const hips=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.28,0.3),m(colorHex)); hips.position.set(0,0.64,0); root.add(hips);
+
+  // Torso group — pivot at waist
+  const torsoG=new THREE.Group(); torsoG.position.set(0,0.9,0); root.add(torsoG);
+  const torso=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.62,0.31),m(skinHex)); torso.position.y=0.31; torso.castShadow=true; torsoG.add(torso);
+
+  // Head group — pivot at neck
+  const headG=new THREE.Group(); headG.position.set(0,0.72,0); torsoG.add(headG);
+  headG.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.12,0.16,8),m(skinHex)),{position:new THREE.Vector3(0,0.08,0)}));
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.38,0.36),m(skinHex)); head.position.y=0.29; head.castShadow=true; headG.add(head);
+  const hg=new THREE.Mesh(new THREE.SphereGeometry(0.24,10,8),m(colorHex)); hg.position.y=0.3; hg.scale.set(1,0.87,1); headG.add(hg);
+  const em=new THREE.MeshBasicMaterial({color:0x000000});
+  const eL=new THREE.Mesh(new THREE.SphereGeometry(0.042,6,6),em); eL.position.set(-0.09,0.32,0.18); headG.add(eL);
+  const eR=new THREE.Mesh(new THREE.SphereGeometry(0.042,6,6),em); eR.position.set(0.09,0.32,0.18); headG.add(eR);
+
+  // Left arm — pivot at shoulder
+  const armL=new THREE.Group(); armL.position.set(-0.4,0.54,0); torsoG.add(armL);
+  armL.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.2,0.44,0.2),m(skinHex)),{position:new THREE.Vector3(0,-0.22,0)}));
+  const faL=new THREE.Group(); faL.position.set(0,-0.47,0); armL.add(faL);
+  faL.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.18,0.4,0.18),m(skinHex)),{position:new THREE.Vector3(0,-0.2,0)}));
+  const gloveL=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.29,0.27),m(colorHex)); gloveL.position.y=-0.45; faL.add(gloveL);
+
+  // Right arm — pivot at shoulder
+  const armR=new THREE.Group(); armR.position.set(0.4,0.54,0); torsoG.add(armR);
+  armR.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.2,0.44,0.2),m(skinHex)),{position:new THREE.Vector3(0,-0.22,0)}));
+  const faR=new THREE.Group(); faR.position.set(0,-0.47,0); armR.add(faR);
+  faR.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.18,0.4,0.18),m(skinHex)),{position:new THREE.Vector3(0,-0.2,0)}));
+  const gloveR=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.29,0.27),m(colorHex)); gloveR.position.y=-0.45; faR.add(gloveR);
+
+  g.position.y=0.08;
+  scene.add(g);
+  return {group:g, root, torsoG, headG, armL, faL, armR, faR, legL, legR, hips};
+}
+
+// ── POSES ─────────────────────────────────────────────────────────────────────
+// Resets to guard stance
+function resetGuard(bx, side) {
+  const s=side==="a"?1:-1;
+  bx.torsoG.rotation.set(0, 0.12*s, 0);
+  bx.headG.rotation.set(0, -0.08*s, 0);
+  bx.armL.rotation.set(-0.35, 0.1*s, 0.24*s);
+  bx.armR.rotation.set(-0.35, -0.1*s, -0.24*s);
+  bx.faL.rotation.set(0.55, 0, 0);
+  bx.faR.rotation.set(0.55, 0, 0);
+  bx.legL.rotation.set(0,0,0);
+  bx.legR.rotation.set(0,0,0);
+  bx.root.position.set(0,0,0);
+  bx.group.rotation.z=0;
+}
+
+// Applies punch with progress p [0..1] (0=guard, 0.5=full, 1=guard again)
+function applyPunch(bx, type, p, side) {
+  const s=side==="a"?1:-1;
+  const e=Math.sin(p*Math.PI); // 0->1->0
+  resetGuard(bx, side);
+  switch(type) {
+    case "jab":
+      bx.armL.rotation.x=-0.35-e*1.35;
+      bx.armL.rotation.y=e*0.18*s;
+      bx.faL.rotation.x=0.55-e*0.45;
+      bx.torsoG.rotation.y=0.12*s-e*0.22*s;
+      break;
+    case "cross":
+      bx.armR.rotation.x=-0.35-e*1.45;
+      bx.armR.rotation.y=-e*0.22*s;
+      bx.faR.rotation.x=0.55-e*0.45;
+      bx.torsoG.rotation.y=0.12*s+e*0.4*s;
+      bx.hips.rotation.y=e*0.18*s;
+      break;
+    case "hook":
+      bx.armL.rotation.x=-0.55-e*0.25;
+      bx.armL.rotation.z=(0.24+e*1.2)*s;
+      bx.armL.rotation.y=e*0.4*s;
+      bx.faL.rotation.x=0.35+e*0.5;
+      bx.torsoG.rotation.y=0.12*s-e*0.5*s;
+      break;
+    case "uppercut":
+      bx.armR.rotation.x=-0.35+e*1.1;
+      bx.faR.rotation.x=-e*0.9;
+      bx.torsoG.rotation.y=0.12*s+e*0.3*s;
+      bx.torsoG.rotation.x=-e*0.22;
+      break;
+    case "body":
+      bx.armL.rotation.x=-0.35-e*0.9;
+      bx.armL.rotation.z=(0.24+e*0.4)*s;
+      bx.torsoG.rotation.x=e*0.38;
+      bx.torsoG.rotation.y=0.12*s-e*0.22*s;
+      break;
+  }
+}
+
+// Idle guard with bob
+function applyIdle(bx, t, side) {
+  const s=side==="a"?1:-1;
+  resetGuard(bx, side);
+  const bob=Math.sin(t*3.6)*0.042;
+  const sway=Math.sin(t*2.1)*0.022;
+  bx.root.position.y=bob;
+  bx.root.position.x=sway;
+  bx.legL.rotation.x=Math.sin(t*3.6+0.5)*0.13;
+  bx.legR.rotation.x=Math.sin(t*3.6)*0.13;
+}
+
+// Hit reaction — exponential decay snap
+function applyHit(bx, type, intensity, age, side) {
+  const s=side==="a"?1:-1;
+  const decay=Math.exp(-age*9)*intensity;
+  bx.headG.rotation.x+=decay*0.35*(type==="uppercut"?1.2:-0.2);
+  bx.headG.rotation.y+=-decay*0.7*s*(type==="hook"?1.6:1);
+  bx.headG.rotation.z+=decay*0.3*s;
+  bx.torsoG.rotation.y+=decay*0.2*s;
+}
+
+// Knockdown — t=0 upright, t=1 on canvas
+function applyKnockdown(bx, t, side) {
+  const f=clamp(t,0,1);
+  bx.group.rotation.z=(side==="a"?-1:1)*f*1.45;
+  bx.group.position.y=0.08-f*0.72;
+  bx.torsoG.rotation.x=f*0.55;
+  bx.armL.rotation.x=-0.35+f*1.1;
+  bx.armR.rotation.x=-0.35+f*0.8;
+}
+
+// ── FIGHTERS DATA ────────────────────────────────────────────────────────────
+const FIGHTERS=[
+  {name:"Tommy 'The Bull' Moran",  power:82,speed:66,stamina:74,defense:60,chin:70,color:0x1a4a9a,colorCSS:"#2a5aaa"},
+  {name:"Sal 'Switchblade' Ricci", power:68,speed:84,stamina:78,defense:76,chin:62,color:0x9a1a1a,colorCSS:"#bb2222"},
+];
+
+// ── COMPONENT ─────────────────────────────────────────────────────────────────
+export default function Boxing3D() {
+  const canvasRef = useRef(null);
+  const refs = useRef({
+    renderer:null, scene:null, camera:null,
+    bA:null, bB:null,
+    fight:null,
+    clock: new THREE.Clock(false),
+    // per-frame mutable state (not React state — updated every frame)
+    phase:"idle",
+    evIdx:0,
+    evTimer:0,
+    // A punch state
+    pA:null,   // {type, p, done} p goes 0->1
+    pB:null,
+    // hit reaction
+    hA:null,   // {type, intensity, age}
+    hB:null,
+    // knockdown
+    kdA:0,     // seconds remaining
+    kdB:0,
+    // positions
+    xA:-1.3, xB:1.3,
+    txA:-1.3, txB:1.3,
+  });
+
+  const [hpA,setHpA]=useState(100);
+  const [hpB,setHpB]=useState(100);
+  const [stamA,setStamA]=useState(100);
+  const [stamB,setStamB]=useState(100);
+  const [round,setRound]=useState(1);
+  const [gameState,setGameState]=useState("idle"); // idle|fighting|done
+  const [winText,setWinText]=useState("");
+  const [actionText,setActionText]=useState("");
+
+  const [npcs, setNpcs] = useState([]);
+  const [npcFightState, setNpcFightState] = useState(null); // null | { matchId, npcName } | { result: "win"|"loss"|"draw", npcName, reason }
+  const npcPollRef = useRef(null);
+
+  const flashMsg=(msg,ms=1600)=>{ setActionText(msg); setTimeout(()=>setActionText(""),ms); };
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get("/boxing/npcs").then((r) => { if (!cancelled) setNpcs(r.data?.npcs || []); }).catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    return () => { if (npcPollRef.current) clearInterval(npcPollRef.current); };
+  }, []);
 
-  const equipped = profile?.equipped || {};
-  const gym = useMemo(() => {
-    const g = (data.gyms || []).find((x) => x.id === profile?.gym_id);
-    return g || (data.gyms || [])[0] || null;
-  }, [data.gyms, profile?.gym_id]);
-
-  const doTrain = async (drillId) => {
+  const startNpcFight = async (npc) => {
+    if (npcFightState && !npcFightState.result) return;
+    setNpcFightState({ matchId: null, npcName: npc.name });
     try {
-      const r = await api.post('/boxing/train', { drill_id: drillId });
-      setProfile(r.data.profile);
-      setEffective(r.data.effective);
-      toast.success(r.data.message || 'Trained');
+      const createRes = await api.post("/boxing/matches/create", { opponent_username: npc.name });
+      const matchId = createRes.data?.match_id;
+      if (!matchId) throw new Error("No match id");
+      await api.post("/boxing/matches/ready", { match_id: matchId, ready: true });
+      setNpcFightState((s) => ({ ...s, matchId }));
+      const poll = () => {
+        api.get(`/boxing/matches/${matchId}`).then((r) => {
+          const m = r.data?.match;
+          if (!m || m.state !== "finished") return;
+          if (npcPollRef.current) clearInterval(npcPollRef.current);
+          npcPollRef.current = null;
+          const winner = m.winner;
+          const meId = r.data?.match?.a_id;
+          let result = "draw";
+          if (winner) result = winner === meId ? "win" : "loss";
+          setNpcFightState({ result, npcName: npc.name, reason: m.finish_reason || "" });
+        }).catch(() => {});
+      };
+      npcPollRef.current = setInterval(poll, 2000);
+      poll();
     } catch (e) {
-      toast.error(getApiErrorMessage(e));
+      setNpcFightState({ result: "error", npcName: npc.name, message: e?.response?.data?.detail || e?.message || "Failed" });
     }
   };
 
-  const upgradeGym = async () => {
-    try {
-      const r = await api.post('/boxing/gym/upgrade', {});
-      setProfile(r.data.profile);
-      setEffective(r.data.effective);
-      toast.success(r.data.message || 'Gym upgraded');
-      refreshUser();
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    }
-  };
+  const clearNpcResult = () => setNpcFightState(null);
 
-  const moveGym = async (gymId) => {
-    try {
-      const r = await api.post('/boxing/gym/move', { gym_id: gymId });
-      setProfile(r.data.profile);
-      setEffective(r.data.effective);
-      toast.success(r.data.message || 'Moved gyms');
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    }
-  };
+  useEffect(()=>{
+    const canvas=canvasRef.current; if(!canvas) return;
+    const W=canvas.clientWidth||640, H=canvas.clientHeight||440;
 
-  const hireCoach = async (coachId) => {
-    try {
-      const r = await api.post('/boxing/coach/hire', { coach_id: coachId });
-      setProfile(r.data.profile);
-      setEffective(r.data.effective);
-      toast.success(r.data.message || 'Coach hired');
-      refreshUser();
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    }
-  };
+    const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+    renderer.setSize(W,H,false);
+    renderer.shadowMap.enabled=true;
+    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.toneMapping=THREE.ReinhardToneMapping;
+    renderer.toneMappingExposure=1.15;
 
-  const fireCoach = async () => {
-    try {
-      const r = await api.post('/boxing/coach/fire', {});
-      setProfile(r.data.profile);
-      setEffective(r.data.effective);
-      toast.success(r.data.message || 'Coach fired');
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    }
-  };
+    const scene=new THREE.Scene();
+    scene.background=new THREE.Color(0x060402);
+    scene.fog=new THREE.FogExp2(0x080503,0.038);
 
-  const refreshGear = async () => {
-    try {
-      const r = await api.get('/boxing/gear');
-      setProfile((p) => ({ ...(p || {}), equipped: r.data.equipped || {} }));
-      setGearOwnedIds(new Set((r.data.owned_ids || []).filter(Boolean)));
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    }
-  };
+    const camera=new THREE.PerspectiveCamera(52,W/H,0.1,80);
+    camera.position.set(0,2.9,7.4); camera.lookAt(0,1.1,0);
 
-  const buyGear = async (gearId) => {
-    try {
-      const r = await api.post('/boxing/gear/buy', { gear_id: gearId });
-      toast.success(r.data.message || 'Bought');
-      refreshUser();
-      await load();
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    }
-  };
+    scene.add(new THREE.AmbientLight(0x221a08,0.85));
+    const spot=new THREE.SpotLight(0xfff2cc,4.5,24,Math.PI/4.2,0.3);
+    spot.position.set(0,10,1); spot.target.position.set(0,0,0);
+    spot.castShadow=true; spot.shadow.mapSize.set(1024,1024);
+    scene.add(spot); scene.add(spot.target);
+    const fl1=new THREE.PointLight(0xc9a84c,1.0,18); fl1.position.set(-6,5,4); scene.add(fl1);
+    const fl2=new THREE.PointLight(0x8b2222,0.7,14); fl2.position.set(6,5,4); scene.add(fl2);
+    const fl3=new THREE.PointLight(0x3a3020,0.4,10); fl3.position.set(0,2,-5); scene.add(fl3);
 
-  const equipGear = async (slot, gearId) => {
-    try {
-      const r = await api.post('/boxing/gear/equip', { slot, gear_id: gearId || null });
-      setProfile(r.data.profile);
-      setEffective(r.data.effective);
-      toast.success(r.data.message || 'Equipped');
-      await refreshGear();
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    }
-  };
+    buildRing(scene);
 
-  const unequipGear = async (slot) => equipGear(slot, null);
+    const bA=buildBoxer(scene,FIGHTERS[0].color,0xc8956a);
+    const bB=buildBoxer(scene,FIGHTERS[1].color,0xb07850);
+    bA.group.position.set(-1.3,0.08,0);
+    bB.group.position.set(1.3,0.08,0);
+    bB.group.rotation.y=Math.PI;
 
-  const createMatch = async () => {
-    try {
-      const r = await api.post('/boxing/matches/create', { opponent_username: opponentUsername });
-      setMatchId(r.data.match_id);
-      toast.success(r.data.message || 'Match created');
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    }
-  };
+    // Crowd
+    const cg=new THREE.BufferGeometry();
+    const cp=[]; for(let i=0;i<500;i++){const a=Math.random()*Math.PI*2,r=8+Math.random()*7;cp.push(r*Math.cos(a),1.2+Math.random()*4,r*Math.sin(a));}
+    cg.setAttribute("position",new THREE.Float32BufferAttribute(cp,3));
+    const crowd=new THREE.Points(cg,new THREE.PointsMaterial({color:0xc9a84c,size:0.14,transparent:true,opacity:0.28}));
+    scene.add(crowd);
 
-  const readyUp = async (ready) => {
-    try {
-      const r = await api.post('/boxing/matches/ready', { match_id: matchId, ready: !!ready });
-      toast.success(r.data.message || 'Ready updated');
-      await loadMatch();
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    }
-  };
+    const r=refs.current;
+    r.renderer=renderer; r.scene=scene; r.camera=camera;
+    r.bA=bA; r.bB=bB; r.crowd=crowd;
+    r.clock.start();
 
-  const loadMatch = useCallback(async () => {
-    if (!matchId) return;
-    try {
-      const r = await api.get(`/boxing/matches/${matchId}/watch`);
-      setMatch(r.data);
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    }
-  }, [matchId]);
+    const onResize=()=>{
+      const w=canvas.clientWidth,h=canvas.clientHeight;
+      renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();
+    };
+    window.addEventListener("resize",onResize);
 
-  useEffect(() => {
-    if (!matchId) return;
-    loadMatch();
-    const t = setInterval(loadMatch, 1200);
-    return () => clearInterval(t);
-  }, [matchId, loadMatch]);
+    const PUNCH_SPEED=2.8; // cycles per second (0->1 in 1/PUNCH_SPEED seconds)
 
-  const pickLiveMatch = (id) => {
-    setMatchId(id);
-    setMatch(null);
-    setTimeout(loadMatch, 0);
-  };
+    let raf;
+    const loop=()=>{
+      raf=requestAnimationFrame(loop);
+      const dt=Math.min(r.clock.getDelta(),0.05);
+      const t=r.clock.getElapsedTime();
+      if(!r.bA||!r.bB){renderer.render(scene,camera);return;}
+      const {bA,bB}=r;
 
-  const placeBet = async () => {
-    try {
-      const r = await api.post('/boxing/bets/place', { match_id: matchId, fighter: betFighter, stake: Number(stake) });
-      toast.success(r.data.message || 'Bet placed');
-      refreshUser();
-      const bets = await api.get('/boxing/bets/my-bets');
-      setMyBets(bets.data || { open: [], closed: [] });
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    }
-  };
+      crowd.rotation.y+=0.0006;
 
-  const cancelBet = async (betId) => {
-    try {
-      const r = await api.post('/boxing/bets/cancel', { bet_id: betId });
-      toast.success(r.data.message || 'Bet cancelled');
-      refreshUser();
-      const bets = await api.get('/boxing/bets/my-bets');
-      setMyBets(bets.data || { open: [], closed: [] });
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    }
-  };
+      // ── SMOOTH X POSITION ──
+      r.xA=lerp(r.xA,r.txA,dt*7);
+      r.xB=lerp(r.xB,r.txB,dt*7);
+      bA.group.position.x=r.xA;
+      bB.group.position.x=r.xB;
 
-  if (loading) {
-    return <div className="p-4 text-primary text-sm font-heading">Loading boxing...</div>;
-  }
+      if(r.phase==="idle"||r.phase==="done"){
+        applyIdle(bA,t,"a"); applyIdle(bB,t,"b");
+        renderer.render(scene,camera); return;
+      }
+
+      // ── KNOCKDOWNS ──
+      if(r.kdA>0){
+        r.kdA-=dt;
+        const getUp=r.kdA<0.7;
+        const prog=getUp?1-(r.kdA/0.7):clamp((2.8-r.kdA)/0.6,0,1);
+        applyKnockdown(bA,prog,"a");
+        bA.group.position.y=getUp?lerp(-0.64,0.08,1-r.kdA/0.7):-0.64+0.08;
+        r.txA=-1.65;
+        if(r.kdA<=0){bA.group.rotation.z=0;bA.group.position.y=0.08;r.txA=-1.3;}
+      } else { bA.group.position.y=0.08; bA.group.rotation.z=0; }
+
+      if(r.kdB>0){
+        r.kdB-=dt;
+        const getUp=r.kdB<0.7;
+        const prog=getUp?1-(r.kdB/0.7):clamp((2.8-r.kdB)/0.6,0,1);
+        applyKnockdown(bB,prog,"b");
+        bB.group.position.y=getUp?lerp(-0.64,0.08,1-r.kdB/0.7):-0.64+0.08;
+        r.txB=1.65;
+        if(r.kdB<=0){bB.group.rotation.z=0;bB.group.position.y=0.08;r.txB=1.3;}
+      } else { bB.group.position.y=0.08; bB.group.rotation.z=0; }
+
+      // ── PUNCH ANIMATIONS ──
+      let aPunching=false, bPunching=false;
+
+      if(r.pA&&r.kdA<=0){
+        aPunching=true;
+        r.pA.p=Math.min(1,r.pA.p+dt*PUNCH_SPEED);
+        applyPunch(bA,r.pA.type,r.pA.p,"a");
+        // step in
+        r.txA=-1.1+Math.sin(r.pA.p*Math.PI)*0.28;
+        if(r.pA.p>=1){r.pA=null; r.txA=-1.3;}
+      }
+      if(r.pB&&r.kdB<=0){
+        bPunching=true;
+        r.pB.p=Math.min(1,r.pB.p+dt*PUNCH_SPEED);
+        applyPunch(bB,r.pB.type,r.pB.p,"b");
+        r.txB=1.1-Math.sin(r.pB.p*Math.PI)*0.28;
+        if(r.pB.p>=1){r.pB=null; r.txB=1.3;}
+      }
+
+      // ── HIT REACTIONS (additive on top of whatever pose) ──
+      if(r.hA){
+        r.hA.age+=dt;
+        applyHit(bA,r.hA.type,r.hA.intensity,r.hA.age,"a");
+        if(r.hA.age>0.55) r.hA=null;
+      }
+      if(r.hB){
+        r.hB.age+=dt;
+        applyHit(bB,r.hB.type,r.hB.intensity,r.hB.age,"b");
+        if(r.hB.age>0.55) r.hB=null;
+      }
+
+      // ── GUARD IDLE (when not in punch animation) ──
+      if(!aPunching&&r.kdA<=0) applyIdle(bA,t,"a");
+      if(!bPunching&&r.kdB<=0) applyIdle(bB,t,"b");
+
+      // ── EVENT DISPATCH ──
+      if(r.phase==="fighting"&&r.fight){
+        r.evTimer-=dt;
+        if(r.evTimer<=0&&!r.pA&&!r.pB&&r.evIdx<r.fight.events.length){
+          const ev=r.fight.events[r.evIdx++];
+          setHpA(ev.hpA); setHpB(ev.hpB); setStamA(ev.stamA); setStamB(ev.stamB); setRound(ev.round);
+
+          // Fire both punches — B slightly delayed
+          if(r.kdA<=0) r.pA={type:ev.aPunch,p:0};
+          setTimeout(()=>{ if(r.kdB<=0) r.pB={type:ev.bPunch,p:0}; },110);
+
+          // Hit reactions
+          if(ev.aLanded) setTimeout(()=>{ r.hB={type:ev.aPunch,intensity:clamp(ev.aDmg/13,0.3,1.6),age:0}; },170);
+          if(ev.bLanded) setTimeout(()=>{ r.hA={type:ev.bPunch,intensity:clamp(ev.bDmg/13,0.3,1.6),age:0}; },270);
+
+          // Knockdowns
+          if(ev.aKD){ setTimeout(()=>{r.kdA=2.9;r.txA=-1.65;},200); flashMsg(`⚡ ${FIGHTERS[0].name.split(" ")[0].toUpperCase()} IS DOWN!`); }
+          if(ev.bKD){ setTimeout(()=>{r.kdB=2.9;r.txB=1.65;},200); flashMsg(`⚡ ${FIGHTERS[1].name.split(" ")[0].toUpperCase()} IS DOWN!`); }
+
+          // Big shot
+          if(!ev.aKD&&ev.aLanded&&ev.aDmg>14) flashMsg(`💥 ${FIGHTERS[0].name.split("'")[1]?.split("'")[0]} lands big!`,900);
+          else if(!ev.bKD&&ev.bLanded&&ev.bDmg>14) flashMsg(`💢 ${FIGHTERS[1].name.split("'")[1]?.split("'")[0]} fires back!`,900);
+
+          const kdDelay=(ev.aKD||ev.bKD)?3.1:0;
+          r.evTimer=0.38+Math.random()*0.22+kdDelay;
+        }
+
+        if(r.evIdx>=r.fight.events.length&&!r.pA&&!r.pB&&r.evTimer<=0){
+          r.phase="done"; setGameState("done");
+          const res=r.fight;
+          const wName=res.winner==="a"?FIGHTERS[0].name:res.winner==="b"?FIGHTERS[1].name:"";
+          setWinText(res.reason==="Draw"?"DRAW":`${wName.split(" ")[0]} WINS — ${res.reason}`);
+        }
+      }
+
+      renderer.render(scene,camera);
+    };
+    loop();
+
+    return()=>{cancelAnimationFrame(raf);window.removeEventListener("resize",onResize);renderer.dispose();};
+  },[]);
+
+  const startFight=useCallback(()=>{
+    const result=simulateFight(FIGHTERS[0],FIGHTERS[1]);
+    const r=refs.current;
+    r.fight=result; r.phase="fighting"; r.evIdx=0; r.evTimer=0.6;
+    r.pA=null; r.pB=null; r.hA=null; r.hB=null;
+    r.kdA=0; r.kdB=0; r.xA=-1.3; r.xB=1.3; r.txA=-1.3; r.txB=1.3;
+    if(r.bA){r.bA.group.position.set(-1.3,0.08,0);r.bA.group.rotation.set(0,0,0);}
+    if(r.bB){r.bB.group.position.set(1.3,0.08,0);r.bB.group.rotation.set(0,Math.PI,0);}
+    setHpA(100);setHpB(100);setStamA(100);setStamB(100);setRound(1);
+    setGameState("fighting");setWinText("");setActionText("");
+  },[]);
+
+  const gold="#c9a84c",crimson="#8b1a1a",bg="#0d0a05";
+
+  const Bar=({val,flip,color})=>(
+    <div style={{height:5,background:"rgba(255,255,255,0.07)",borderRadius:2,overflow:"hidden"}}>
+      <div style={{width:`${val}%`,height:"100%",background:color,borderRadius:2,transition:"width 0.3s",marginLeft:flip?"auto":undefined}}/>
+    </div>
+  );
 
   return (
-    <div className="p-3 md:p-6 space-y-4 text-primary">
-      <div className="flex items-start justify-between gap-3">
+    <div style={{minHeight:"100vh",background:bg,fontFamily:"'Cinzel',serif",color:"#e8dcc8",display:"flex",flexDirection:"column"}}>
+
+      {/* Header */}
+      <div style={{borderBottom:"1px solid rgba(201,168,76,0.15)",padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(0,0,0,0.55)"}}>
         <div>
-          <div className="text-lg font-heading">Boxing</div>
-          <div className="text-xs opacity-70">Train, upgrade your gym, challenge players, watch fights round-by-round, and climb the weekly league.</div>
+          <div style={{fontSize:16,letterSpacing:"0.2em",color:gold}}>THE UNDERGROUND RING</div>
+          <div style={{fontSize:9,color:"#3a2a10",letterSpacing:"0.12em"}}>1920s MAFIA BOXING • SIMULATION</div>
         </div>
-        <button type="button" onClick={load} className="px-3 py-1 rounded-sm bg-[var(--noir-raised)] hover:bg-[var(--noir-surface)] text-xs">Refresh</button>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <span style={{padding:"3px 8px",border:"1px solid rgba(201,168,76,0.2)",borderRadius:2,fontSize:9,color:gold}}>12 RDS</span>
+          {gameState==="fighting"&&<span style={{padding:"3px 8px",border:"1px solid rgba(180,40,40,0.5)",borderRadius:2,fontSize:9,color:"#dd4444",letterSpacing:"0.1em"}}>● LIVE</span>}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-        <StatPill label="Rating" value={profile?.rating ?? '—'} />
-        <StatPill label="Power" value={effective?.power ?? '—'} />
-        <StatPill label="Speed" value={effective?.speed ?? '—'} />
-        <StatPill label="Stamina" value={effective?.stamina ?? '—'} />
-        <StatPill label="Defense" value={effective?.defense ?? '—'} />
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-3">
-        <div className="rounded-md bg-[var(--noir-content)] p-3 space-y-2">
-          <div className="font-heading">Training</div>
-          <div className="grid grid-cols-2 gap-2">
-            {Object.entries(data.drills || {}).map(([id, d]) => (
-              <button key={id} type="button" onClick={() => doTrain(id)}
-                className="px-3 py-2 rounded-sm bg-[var(--noir-raised)] hover:bg-[var(--noir-surface)] text-left">
-                <div className="text-sm font-heading">{d.name}</div>
-                <div className="text-[11px] opacity-70">Cooldown: {Math.round((d.cooldown_seconds || 0) / 60)}m</div>
-              </button>
-            ))}
+      {/* HUD */}
+      <div style={{display:"flex",background:"rgba(0,0,0,0.65)",borderBottom:"1px solid rgba(201,168,76,0.08)"}}>
+        {/* A */}
+        <div style={{flex:1,padding:"9px 14px",borderRight:"1px solid rgba(201,168,76,0.07)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:7}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:FIGHTERS[0].colorCSS,boxShadow:`0 0 5px ${FIGHTERS[0].colorCSS}`}}/>
+            <span style={{fontSize:10,color:"#ffe0a0",letterSpacing:"0.05em"}}>{FIGHTERS[0].name}</span>
           </div>
+          <div style={{marginBottom:5}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#5a4a28",marginBottom:2}}><span>HP</span><span style={{color:hpA<30?crimson:gold}}>{hpA}</span></div>
+            <Bar val={hpA} color={hpA<30?crimson:hpA<55?"#cc7722":gold}/>
+          </div>
+          <div style={{fontSize:8,color:"#5a4a28",marginBottom:2,display:"flex",justifyContent:"space-between"}}><span>STAM</span><span style={{color:"#4a9a6a"}}>{stamA}</span></div>
+          <Bar val={stamA} color="#3a7a5a"/>
         </div>
-
-        <div className="rounded-md bg-[var(--noir-content)] p-3 space-y-2">
-          <div className="font-heading">Gym & Coach</div>
-          <div className="text-sm">Gym: <span className="font-heading">{gym?.name || '—'}</span> (level {profile?.gym_level ?? 0}/{gym?.max_level ?? 0})</div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={upgradeGym} className="px-3 py-1 rounded-sm bg-[var(--noir-raised)] hover:bg-[var(--noir-surface)] text-xs">Upgrade gym</button>
-            <div className="flex items-center gap-2 text-xs opacity-80">
-              <span>Move:</span>
-              {(data.gyms || []).map((g) => (
-                <button key={g.id} type="button" onClick={() => moveGym(g.id)} className="px-2 py-1 rounded-sm bg-[var(--noir-raised)] hover:bg-[var(--noir-surface)]">{g.name}</button>
-              ))}
-            </div>
+        {/* Round */}
+        <div style={{padding:"9px 14px",textAlign:"center",minWidth:54}}>
+          <div style={{fontSize:20,color:gold,fontWeight:700,lineHeight:1}}>{round}</div>
+          <div style={{fontSize:8,color:"#3a2a10",letterSpacing:"0.08em"}}>ROUND</div>
+        </div>
+        {/* B */}
+        <div style={{flex:1,padding:"9px 14px",borderLeft:"1px solid rgba(201,168,76,0.07)",textAlign:"right"}}>
+          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:7,justifyContent:"flex-end"}}>
+            <span style={{fontSize:10,color:"#ffe0a0",letterSpacing:"0.05em"}}>{FIGHTERS[1].name}</span>
+            <div style={{width:8,height:8,borderRadius:"50%",background:FIGHTERS[1].colorCSS,boxShadow:`0 0 5px ${FIGHTERS[1].colorCSS}`}}/>
           </div>
-          <div className="text-sm">Coach: <span className="font-heading">{profile?.coach_id || 'None'}</span></div>
-          <div className="flex flex-wrap gap-2">
-            {(data.coaches || []).map((c) => (
-              <button key={c.id} type="button" onClick={() => hireCoach(c.id)} className="px-3 py-1 rounded-sm bg-[var(--noir-raised)] hover:bg-[var(--noir-surface)] text-xs">
-                Hire {c.name}
-              </button>
-            ))}
-            <button type="button" onClick={fireCoach} className="px-3 py-1 rounded-sm bg-[var(--noir-raised)] hover:bg-[var(--noir-surface)] text-xs">Fire coach</button>
+          <div style={{marginBottom:5}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#5a4a28",marginBottom:2}}><span style={{marginLeft:"auto"}}>{hpB} HP</span></div>
+            <Bar val={hpB} flip color={hpB<30?crimson:hpB<55?"#cc7722":FIGHTERS[1].colorCSS}/>
           </div>
+          <div style={{fontSize:8,color:"#5a4a28",marginBottom:2,display:"flex",justifyContent:"flex-end"}}><span style={{color:"#4a9a6a"}}>{stamB} STAM</span></div>
+          <Bar val={stamB} flip color="#3a7a5a"/>
         </div>
       </div>
 
-      <div className="rounded-md bg-[var(--noir-content)] p-3 space-y-2">
-        <div className="font-heading">Equipment</div>
-        <div className="text-xs opacity-70">Equipped: gloves={equipped.gloves || '—'} boots={equipped.boots || '—'} mouthguard={equipped.mouthguard || '—'} headgear={equipped.headgear || '—'}</div>
-        <div className="flex flex-wrap gap-2">
-          {['gloves', 'boots', 'mouthguard', 'headgear'].map((slot) => (
-            <button
-              key={slot}
-              type="button"
-              onClick={() => unequipGear(slot)}
-              disabled={!equipped?.[slot]}
-              className="px-3 py-1 rounded-sm bg-[var(--noir-raised)] hover:bg-[var(--noir-surface)] text-xs disabled:opacity-50"
-            >
-              Unequip {slot}
-            </button>
-          ))}
-        </div>
-        <div className="grid md:grid-cols-2 gap-2">
-          {(data.gear || []).map((g) => (
-            <div key={g.id} className="p-2 rounded-sm bg-[var(--noir-raised)] flex items-center justify-between gap-2">
-              <div>
-                <div className="text-sm font-heading">{g.name}</div>
-                <div className="text-[11px] opacity-70">{g.slot} • ${Number(g.cost || 0).toLocaleString()}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => buyGear(g.id)}
-                  disabled={gearOwnedIds.has(g.id)}
-                  className="px-2 py-1 rounded-sm bg-[var(--noir-surface)] hover:bg-[var(--noir-content)] text-xs disabled:opacity-50"
-                >
-                  {gearOwnedIds.has(g.id) ? 'Owned' : 'Buy'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => equipGear(g.slot, g.id)}
-                  disabled={!gearOwnedIds.has(g.id)}
-                  className="px-2 py-1 rounded-sm bg-[var(--noir-surface)] hover:bg-[var(--noir-content)] text-xs disabled:opacity-50"
-                >
-                  Equip
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="text-xs opacity-70">Unequip buttons clear a slot instantly.</div>
+      {/* Canvas */}
+      <div style={{position:"relative",flex:1,minHeight:420}}>
+        <canvas ref={canvasRef} style={{width:"100%",height:"100%",minHeight:420,display:"block"}}/>
+
+        {/* Action flash */}
+        {actionText&&(
+          <div style={{position:"absolute",top:"15%",left:"50%",transform:"translateX(-50%)",fontSize:"clamp(13px,2.8vw,20px)",color:actionText.includes("DOWN")?"#ff6666":"#ffe066",fontWeight:700,letterSpacing:"0.1em",textAlign:"center",whiteSpace:"nowrap",textShadow:"0 0 28px rgba(0,0,0,1),0 2px 8px rgba(0,0,0,0.9)",pointerEvents:"none"}}>
+            {actionText}
+          </div>
+        )}
+
+        {/* Win overlay */}
+        {gameState==="done"&&winText&&(
+          <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(4,2,1,0.92)",border:"1px solid rgba(201,168,76,0.4)",borderRadius:4,padding:"18px 32px",textAlign:"center",pointerEvents:"none"}}>
+            <div style={{fontSize:9,color:"#5a4a28",letterSpacing:"0.2em",marginBottom:5}}>FIGHT OVER</div>
+            <div style={{fontSize:"clamp(14px,3vw,22px)",color:"#ffe066",letterSpacing:"0.1em"}}>{winText}</div>
+          </div>
+        )}
+
+        {/* Idle */}
+        {gameState==="idle"&&(
+          <div style={{position:"absolute",bottom:"22%",left:"50%",transform:"translateX(-50%)",fontSize:11,color:gold,letterSpacing:"0.18em",opacity:0.55,pointerEvents:"none"}}>PRESS START TO FIGHT</div>
+        )}
+
+        {/* Vignette */}
+        <div style={{position:"absolute",inset:0,pointerEvents:"none",background:"radial-gradient(ellipse 75% 65% at 50% 42%,transparent 22%,rgba(0,0,0,0.65) 100%)"}}/>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-3">
-        <div className="rounded-md bg-[var(--noir-content)] p-3 space-y-2">
-          <div className="font-heading">Live / Pending fights</div>
-          <div className="text-xs opacity-70">Tap a fight to watch (and bet if it hasn’t started yet).</div>
-          <div className="max-h-[260px] overflow-auto space-y-1">
-            {(liveMatches || []).map((m) => (
+      {/* Control */}
+      <div style={{padding:"12px 20px",borderTop:"1px solid rgba(201,168,76,0.1)",display:"flex",flexDirection:"column",alignItems:"center",gap:10,background:"rgba(0,0,0,0.65)"}}>
+        <button onClick={startFight} style={{background:"rgba(201,168,76,0.14)",border:"1px solid rgba(201,168,76,0.45)",borderRadius:3,color:"#ffe066",fontFamily:"'Cinzel',serif",fontSize:12,letterSpacing:"0.15em",padding:"10px 32px",cursor:"pointer",textTransform:"uppercase",fontWeight:700}}>
+          🥊 {gameState==="idle"?"Start Fight":"Rematch"}
+        </button>
+        {npcs.length > 0 && (
+          <div style={{display:"flex",flexWrap:"wrap",justifyContent:"center",gap:6,alignItems:"center"}}>
+            <span style={{fontSize:10,color:"#8a7a4a",letterSpacing:"0.08em"}}>Fight NPC:</span>
+            {npcs.map((npc) => (
               <button
-                key={m.id}
-                type="button"
-                onClick={() => pickLiveMatch(m.id)}
-                className="w-full text-left text-xs bg-[var(--noir-raised)] hover:bg-[var(--noir-surface)] rounded-sm px-2 py-2"
+                key={npc.id}
+                onClick={() => startNpcFight(npc)}
+                disabled={npcFightState && !npcFightState.result}
+                style={{padding:"6px 12px",fontSize:10,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,background:"rgba(201,168,76,0.08)",color:"#d4b858",cursor:npcFightState&&!npcFightState.result?"not-allowed":"pointer",opacity:npcFightState&&!npcFightState.result?0.6:1}}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-heading">{m.a_username}</span>
-                  <span className="opacity-70">vs</span>
-                  <span className="font-heading">{m.b_username}</span>
-                  <span className="opacity-70">• {m.state}</span>
-                </div>
-                {m.state === 'running' ? (
-                  <div className="opacity-70">Round {m.round}/{m.max_rounds} • HP {m.hp?.a}-{m.hp?.b}</div>
-                ) : (
-                  <div className="opacity-70">Odds A {m.odds?.a} / B {m.odds?.b}</div>
-                )}
+                {npc.name} <span style={{color:"#6a5a30"}}>({npc.rating})</span>
               </button>
             ))}
-            {!liveMatches?.length ? <div className="text-xs opacity-70">No live/pending fights right now.</div> : null}
           </div>
-          <button type="button" onClick={load} className="px-3 py-1 rounded-sm bg-[var(--noir-raised)] hover:bg-[var(--noir-surface)] text-xs">Refresh list</button>
-        </div>
-
-        <div className="rounded-md bg-[var(--noir-content)] p-3 space-y-2">
-          <div className="font-heading">Create / Ready Match</div>
-          <div className="flex gap-2">
-            <input value={opponentUsername} onChange={(e) => setOpponentUsername(e.target.value)} placeholder="Opponent username"
-              className="flex-1 px-3 py-2 rounded-sm bg-[var(--noir-surface)] text-sm outline-none" />
-            <button type="button" onClick={createMatch} className="px-3 py-2 rounded-sm bg-[var(--noir-raised)] hover:bg-[var(--noir-surface)] text-sm">Challenge</button>
+        )}
+        {npcFightState?.matchId && !npcFightState.result && (
+          <div style={{fontSize:10,color:"#8a9a6a"}}>Fight vs {npcFightState.npcName} in progress…</div>
+        )}
+        {npcFightState?.result && npcFightState.result !== "error" && (
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:11,color:npcFightState.result==="win"?"#6a9a4a":npcFightState.result==="loss"?"#aa4444":"#8a7a4a"}}>
+              {npcFightState.result==="win"?"You won":npcFightState.result==="loss"?"You lost":"Draw"} vs {npcFightState.npcName}{npcFightState.reason?` (${npcFightState.reason})`:""}
+            </span>
+            <button onClick={clearNpcResult} style={{padding:"2px 8px",fontSize:9,border:"1px solid rgba(201,168,76,0.3)",borderRadius:2,background:"rgba(0,0,0,0.4)",color:"#a09050",cursor:"pointer"}}>Dismiss</button>
           </div>
-          <div className="flex gap-2">
-            <input value={matchId} onChange={(e) => setMatchId(e.target.value)} placeholder="Match id to watch/ready"
-              className="flex-1 px-3 py-2 rounded-sm bg-[var(--noir-surface)] text-sm outline-none" />
-            <button type="button" onClick={loadMatch} className="px-3 py-2 rounded-sm bg-[var(--noir-raised)] hover:bg-[var(--noir-surface)] text-sm">Load</button>
-          </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={() => readyUp(true)} disabled={!matchId}
-              className="px-3 py-2 rounded-sm bg-[var(--noir-raised)] hover:bg-[var(--noir-surface)] text-sm disabled:opacity-50">Ready</button>
-            <button type="button" onClick={() => readyUp(false)} disabled={!matchId}
-              className="px-3 py-2 rounded-sm bg-[var(--noir-raised)] hover:bg-[var(--noir-surface)] text-sm disabled:opacity-50">Unready</button>
-          </div>
-        </div>
-
-        <div className="rounded-md bg-[var(--noir-content)] p-3 space-y-2">
-          <div className="font-heading">Betting (in-game)</div>
-          <div className="text-xs opacity-70">Betting is open only while match is pending/ready.</div>
-          <div className="flex gap-2 items-center">
-            <select value={betFighter} onChange={(e) => setBetFighter(e.target.value)} className="px-2 py-2 rounded-sm bg-[var(--noir-surface)] text-sm">
-              <option value="a">Fighter A</option>
-              <option value="b">Fighter B</option>
-            </select>
-            <input type="number" value={stake} onChange={(e) => setStake(e.target.value)} className="flex-1 px-3 py-2 rounded-sm bg-[var(--noir-surface)] text-sm outline-none" />
-            <button type="button" onClick={placeBet} disabled={!matchId} className="px-3 py-2 rounded-sm bg-[var(--noir-raised)] hover:bg-[var(--noir-surface)] text-sm disabled:opacity-50">Place</button>
-          </div>
-          <div className="space-y-1">
-            <div className="text-sm font-heading">My open bets</div>
-            {(myBets.open || []).slice(0, 6).map((b) => (
-              <div key={b.id} className="flex items-center justify-between text-xs bg-[var(--noir-raised)] rounded-sm px-2 py-1">
-                <span>Match {String(b.match_id).slice(0, 8)}… • {b.fighter?.toUpperCase()} • ${Number(b.stake || 0).toLocaleString()} @ {b.odds}</span>
-                <button type="button" onClick={() => cancelBet(b.id)} className="px-2 py-1 rounded-sm bg-[var(--noir-surface)] hover:bg-[var(--noir-content)]">Cancel</button>
-              </div>
-            ))}
-            {!myBets.open?.length ? <div className="text-xs opacity-70">No open bets.</div> : null}
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-md bg-[var(--noir-content)] p-3 space-y-2">
-        <div className="font-heading">Watch Match</div>
-        {!match ? (
-          <div className="text-xs opacity-70">Load a match id to watch it.</div>
-        ) : (
-          <div className="space-y-2">
-            <div className="text-sm">
-              <span className="font-heading">{match.fighters?.a?.username}</span> vs <span className="font-heading">{match.fighters?.b?.username}</span>
-              <span className="opacity-70"> • state={match.state} • round {match.round}/{match.max_rounds}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-[var(--noir-raised)] rounded-sm p-2">
-                <div className="font-heading">A</div>
-                <div>HP: {match.hp?.a}</div>
-                <div>Stam: {match.stam?.a}</div>
-                <div>Odds: {match.odds?.a}</div>
-              </div>
-              <div className="bg-[var(--noir-raised)] rounded-sm p-2">
-                <div className="font-heading">B</div>
-                <div>HP: {match.hp?.b}</div>
-                <div>Stam: {match.stam?.b}</div>
-                <div>Odds: {match.odds?.b}</div>
-              </div>
-            </div>
-            <div className="max-h-[320px] overflow-auto space-y-1">
-              {(match.rounds || []).slice().reverse().slice(0, 30).map((r) => (
-                <div key={`${r.round}-${r.at}`} className="text-xs bg-[var(--noir-raised)] rounded-sm px-2 py-1">
-                  <span className="font-heading">R{r.round}</span>{' '}
-                  A hits {r.a_hits} dmg {r.a_dmg} | B hits {r.b_hits} dmg {r.b_dmg}{' '}
-                  <span className="opacity-70">HP A {r.hp?.a} / B {r.hp?.b}</span>
-                </div>
-              ))}
-            </div>
-            {match.state === 'finished' ? (
-              <div className="text-sm">
-                Winner: <span className="font-heading">{match.winner ? match.winner : 'Draw'}</span>{' '}
-                <span className="opacity-70">({match.finish_reason})</span>
-              </div>
-            ) : null}
-          </div>
+        )}
+        {npcFightState?.result === "error" && (
+          <div style={{fontSize:10,color:"#aa4444"}}>{npcFightState.message} <button onClick={clearNpcResult} style={{marginLeft:6,padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.3)",borderRadius:2,background:"rgba(0,0,0,0.4)",color:"#a09050",cursor:"pointer"}}>Dismiss</button></div>
         )}
       </div>
 
-      <div className="rounded-md bg-[var(--noir-content)] p-3 space-y-2">
-        <div className="font-heading">Weekly League</div>
-        <div className="text-xs opacity-70">Rewards are paid weekly (Mon UTC) based on points earned from boxing matches.</div>
-        <div className="grid md:grid-cols-2 gap-2">
-          {(leagueWeekly || []).slice(0, 20).map((r) => (
-            <div key={r.user_id} className="bg-[var(--noir-raised)] rounded-sm px-2 py-1 text-xs flex items-center justify-between">
-              <span>
-                <span className="font-heading">#{r.rank}</span> {r.username} <span className="opacity-70">({r.wins}-{r.losses})</span>
-              </span>
-              <span className="font-heading">{r.points} pts</span>
-            </div>
-          ))}
-          {!leagueWeekly?.length ? <div className="text-xs opacity-70">No league data yet.</div> : null}
-        </div>
-      </div>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');`}</style>
     </div>
   );
 }
-

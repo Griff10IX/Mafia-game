@@ -56,6 +56,26 @@ GEAR: List[dict] = [
     {"id": "headgear_basic", "slot": "headgear", "name": "Headgear", "cost": 22000, "bonus": {"defense": 0.01, "accuracy": 0.005}},
 ]
 
+# NPC boxers: id, name, base stats (1-10), rating for odds/rating change
+BOXING_NPCS: List[dict] = [
+    {"id": "npc_bruiser", "name": "Street Bruiser", "power": 8, "speed": 4, "stamina": 6, "defense": 4, "accuracy": 4, "rating": 900},
+    {"id": "npc_slick", "name": "Slick Eddie", "power": 4, "speed": 8, "stamina": 5, "defense": 6, "accuracy": 7, "rating": 950},
+    {"id": "npc_tank", "name": "Iron Tank", "power": 7, "speed": 3, "stamina": 9, "defense": 8, "accuracy": 3, "rating": 1000},
+    {"id": "npc_phantom", "name": "The Phantom", "power": 6, "speed": 9, "stamina": 6, "defense": 5, "accuracy": 8, "rating": 1050},
+    {"id": "npc_champ", "name": "Back-Alley Champ", "power": 8, "speed": 7, "stamina": 7, "defense": 6, "accuracy": 7, "rating": 1150},
+]
+
+
+def _get_npc_by_id_or_name(value: str) -> Optional[dict]:
+    if not value:
+        return None
+    v = (value or "").strip().lower()
+    for n in BOXING_NPCS:
+        if (n.get("id") or "").lower() == v or (n.get("name") or "").lower() == v:
+            return n
+    return None
+
+
 DEFAULT_PROFILE = {
     "power": 1,
     "speed": 1,
@@ -202,6 +222,10 @@ async def get_boxing_profile(current_user: dict = Depends(get_current_user_verif
     prof = await _ensure_profile(current_user["id"])
     eff = _effective_stats(prof)
     return {"profile": prof, "effective": eff, "drills": DRILLS, "gyms": GYMS, "coaches": COACHES, "gear": GEAR}
+
+
+async def npcs_list(current_user: dict = Depends(get_current_user)):
+    return {"npcs": BOXING_NPCS}
 
 
 async def train(payload: TrainRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -356,6 +380,37 @@ async def matches_create(payload: MatchCreateRequest, current_user: dict = Depen
     opp_name = (payload.opponent_username or "").strip()
     if not opp_name:
         raise HTTPException(status_code=400, detail="opponent_username required")
+    npc = _get_npc_by_id_or_name(opp_name)
+    if npc:
+        # Create match vs NPC: b is NPC, already "ready"; when player readies, fight starts
+        await _ensure_profile(current_user["id"])
+        match_id = str(uuid.uuid4())
+        now = _now_iso()
+        a_prof = await db.boxing_profiles.find_one({"user_id": current_user["id"]}, {"_id": 0, "rating": 1})
+        ra = int(a_prof.get("rating") or 1000) if a_prof else 1000
+        rb = int(npc.get("rating") or 1000)
+        odds = _match_odds(ra, rb)
+        doc = {
+            "id": match_id,
+            "a_id": current_user["id"],
+            "a_username": current_user.get("username") or "?",
+            "b_id": npc["id"],
+            "b_username": npc.get("name") or "?",
+            "b_is_npc": True,
+            "state": "pending",
+            "created_at": now,
+            "ready": {"a": False, "b": True},
+            "round": 0,
+            "max_rounds": 12,
+            "hp": {"a": 100, "b": 100},
+            "stam": {"a": 100, "b": 100},
+            "odds": {"a": odds["a"], "b": odds["b"]},
+            "rounds": [],
+            "winner": None,
+            "finish_reason": None,
+        }
+        await db.boxing_matches.insert_one(doc)
+        return {"message": f"Match created vs {npc.get('name')} (NPC)", "match_id": match_id}
     opp = await db.users.find_one({"username": opp_name, "is_dead": {"$ne": True}, "is_npc": {"$ne": True}}, {"_id": 0, "id": 1, "username": 1})
     if not opp:
         raise HTTPException(status_code=404, detail="Opponent not found")
@@ -587,6 +642,11 @@ async def advance_running_matches(database) -> int:
             database.boxing_profiles.find_one({"user_id": a_id}, {"_id": 0}),
             database.boxing_profiles.find_one({"user_id": b_id}, {"_id": 0}),
         )
+        # NPCs have no DB profile; use predefined stats
+        if b_prof is None:
+            npc = next((x for x in BOXING_NPCS if x.get("id") == b_id), None)
+            if npc:
+                b_prof = {k: int(npc.get(k, 1) or 1) for k in ("power", "speed", "stamina", "defense", "accuracy")}
         a_eff = _effective_stats(a_prof or DEFAULT_PROFILE)
         b_eff = _effective_stats(b_prof or DEFAULT_PROFILE)
         hp = claim.get("hp") or {"a": 100, "b": 100}
@@ -648,14 +708,21 @@ async def _finalize_match(database, match_id: str, winner_id: Optional[str], fin
     if not m:
         return
     a_id, b_id = m.get("a_id"), m.get("b_id")
+    b_is_npc = bool(m.get("b_is_npc"))
     # idempotency: ensure we only write events/settle once
     cfg = await database.boxing_matches.update_one({"id": match_id, "finalized": {"$ne": True}}, {"$set": {"finalized": True}})
     if cfg.modified_count == 0:
         return
     a_prof = await database.boxing_profiles.find_one({"user_id": a_id}, {"_id": 0, "rating": 1})
-    b_prof = await database.boxing_profiles.find_one({"user_id": b_id}, {"_id": 0, "rating": 1})
     ra = int((a_prof or {}).get("rating") or 1000)
-    rb = int((b_prof or {}).get("rating") or 1000)
+    rb = int(1000)
+    if b_is_npc:
+        npc = next((x for x in BOXING_NPCS if x.get("id") == b_id), None)
+        if npc:
+            rb = int(npc.get("rating") or 1000)
+    else:
+        b_prof = await database.boxing_profiles.find_one({"user_id": b_id}, {"_id": 0, "rating": 1})
+        rb = int((b_prof or {}).get("rating") or 1000)
     if winner_id == a_id:
         ra2, rb2 = _rating_update(ra, rb, True)
         aw, bw = 1, 0
@@ -665,19 +732,19 @@ async def _finalize_match(database, match_id: str, winner_id: Optional[str], fin
     else:
         ra2, rb2 = ra, rb
         aw, bw = 0, 0
-    await asyncio.gather(
-        database.boxing_profiles.update_one({"user_id": a_id}, {"$set": {"rating": ra2}}, upsert=True),
-        database.boxing_profiles.update_one({"user_id": b_id}, {"$set": {"rating": rb2}}, upsert=True),
-    )
+    await database.boxing_profiles.update_one({"user_id": a_id}, {"$set": {"rating": ra2}}, upsert=True)
+    if not b_is_npc:
+        await database.boxing_profiles.update_one({"user_id": b_id}, {"$set": {"rating": rb2}}, upsert=True)
     now = _now_iso()
-    # league points: win=3, ko bonus=1
     ko_bonus = 1 if (finish_reason or "").lower() == "ko" else 0
     a_points = (3 if aw else 0) + (ko_bonus if aw else 0)
     b_points = (3 if bw else 0) + (ko_bonus if bw else 0)
-    await database.boxing_events.insert_many([
+    events = [
         {"id": str(uuid.uuid4()), "user_id": a_id, "match_id": match_id, "result": "win" if aw else "loss" if bw else "draw", "points": a_points, "at": now, "opponent_id": b_id},
-        {"id": str(uuid.uuid4()), "user_id": b_id, "match_id": match_id, "result": "win" if bw else "loss" if aw else "draw", "points": b_points, "at": now, "opponent_id": a_id},
-    ])
+    ]
+    if not b_is_npc:
+        events.append({"id": str(uuid.uuid4()), "user_id": b_id, "match_id": match_id, "result": "win" if bw else "loss" if aw else "draw", "points": b_points, "at": now, "opponent_id": a_id})
+    await database.boxing_events.insert_many(events)
     await _settle_bets(database, match_id, winner_id)
 
 
@@ -800,6 +867,7 @@ async def run_weekly_boxing_league_payout(database, test_run: bool = False):
 
 def register(router):
     router.add_api_route("/boxing/profile", get_boxing_profile, methods=["GET"])
+    router.add_api_route("/boxing/npcs", npcs_list, methods=["GET"])
     router.add_api_route("/boxing/train", train, methods=["POST"])
     router.add_api_route("/boxing/gym", get_gym, methods=["GET"])
     router.add_api_route("/boxing/gym/upgrade", gym_upgrade, methods=["POST"])
