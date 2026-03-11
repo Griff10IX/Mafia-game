@@ -100,21 +100,21 @@ api_router = APIRouter(prefix="/api")
 
 # Constants
 STATES = ["Chicago", "New York", "Las Vegas", "Atlantic City"]
-# Rank is based on rank_points only; 20x harder than original scale. Godfather is the top rank.
-# Points spread evenly so higher ranks don't feel disproportionately long (similar gaps at top).
+# Rank is based on rank_points only. Godfather is the top rank at 1.2M.
+# Rank 2 starts at 800; geometric progression (r ≈ 2.238) to 1,200,000.
 RANKS = [
     {"id": 1, "name": "Rat", "required_points": 0},
-    {"id": 2, "name": "Street Thug", "required_points": 300},
-    {"id": 3, "name": "Hustler", "required_points": 1200},
-    {"id": 4, "name": "Goon", "required_points": 3600},
-    {"id": 5, "name": "Made Man", "required_points": 7200},
-    {"id": 6, "name": "Capo", "required_points": 14500},
-    {"id": 7, "name": "Underboss", "required_points": 29000},
-    {"id": 8, "name": "Consigliere", "required_points": 60000},
-    {"id": 9, "name": "Boss", "required_points": 120000},
-    {"id": 10, "name": "Don", "required_points": 240000},
-    {"id": 11, "name": "Capo di tutti capi", "required_points": 560000},
-    {"id": 12, "name": "Boss of Bosses", "required_points": 880000},
+    {"id": 2, "name": "Street Thug", "required_points": 800},
+    {"id": 3, "name": "Hustler", "required_points": 1800},
+    {"id": 4, "name": "Goon", "required_points": 4000},
+    {"id": 5, "name": "Made Man", "required_points": 9000},
+    {"id": 6, "name": "Capo", "required_points": 20000},
+    {"id": 7, "name": "Underboss", "required_points": 45000},
+    {"id": 8, "name": "Consigliere", "required_points": 101000},
+    {"id": 9, "name": "Boss", "required_points": 225000},
+    {"id": 10, "name": "Don", "required_points": 504000},
+    {"id": 11, "name": "Capo di tutti capi", "required_points": 1128000},
+    {"id": 12, "name": "Boss of Bosses", "required_points": 1164000},
     {"id": 13, "name": "Godfather", "required_points": 1200000},
 ]
 GODFATHER_RANK_ID = RANKS[-1]["id"]  # Top rank (prestige requires this)
