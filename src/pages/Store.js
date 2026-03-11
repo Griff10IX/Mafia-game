@@ -101,7 +101,7 @@ export default function Store() {
     if (tabFromUrl && VALID_TABS.includes(tabFromUrl)) {
       setActiveTab(tabFromUrl);
     }
-  }, [tabFromUrl, VALID_TABS]);
+  }, [tabFromUrl]);
   const [pointsTransfers, setPointsTransfers] = useState([]);
   const [adminTransfers, setAdminTransfers] = useState([]);
   const [adminTransfersOpen, setAdminTransfersOpen] = useState(false);

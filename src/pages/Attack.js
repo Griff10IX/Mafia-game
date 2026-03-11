@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText, Users } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser } from '../utils/api';
@@ -950,16 +950,16 @@ export default function Attack() {
     } catch (e) {}
   };
 
-  const refreshAttacks = async () => {
+  const refreshAttacks = useCallback(async () => {
     try {
       const response = await api.get('/attack/list');
       const list = response.data.attacks || [];
       setAttacks(list);
       return list;
     } catch (error) {
-      return attacks;
+      return [];
     }
-  };
+  }, []);
 
   // Tick every second so expiry countdowns update (24h → 00:00)
   useEffect(() => {

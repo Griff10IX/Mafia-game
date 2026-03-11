@@ -154,9 +154,9 @@ class CommitCrimeResponse(BaseModel):
     prestige_bonus_earned: Optional[dict] = None
 
 
-# Extremely rare global molotov drop from any successful crime
-# 0.02% (~1 in 5,000 successful crimes) for 1 molotov
-MOLOTOV_GLOBAL_DROP_CHANCE = 0.0002
+# Global molotov drop from any successful crime
+# 0.1% (~1 in 1,000 successful crimes) for 1 molotov
+MOLOTOV_GLOBAL_DROP_CHANCE = 0.001
 MOLOTOV_GLOBAL_DROP_AMOUNT = 1
 
 # Extremely rare loot box piece drops from crimes
@@ -228,6 +228,7 @@ PRESTIGE_CRIMES = [
             "booze": {"id": "moonshine", "min": 3, "max": 8},
             "bullets": [150, 400],
             "points": [30, 80],
+            "molotovs": [1, 2],
         },
     },
     {
@@ -243,6 +244,7 @@ PRESTIGE_CRIMES = [
             "booze": {"id": "moonshine", "min": 3, "max": 8},
             "bullets": [150, 400],
             "points": [30, 80],
+            "molotovs": [2, 3],
         },
     },
 ]
