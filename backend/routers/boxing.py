@@ -701,9 +701,6 @@ def _round_exchange(a_stats: dict, b_stats: dict, a_hp: int, b_hp: int, a_stam: 
     def clamp(n, lo, hi):
         return max(lo, min(hi, int(n)))
 
-    a_chin = max(1, int(a_stats.get("chin", 1) or 1))
-    b_chin = max(1, int(b_stats.get("chin", 1) or 1))
-
     # stamina regen at start of round (only flat +6 on first round; round 2+ recovery done in caller)
     if first_round:
         a_stam = clamp(a_stam + 6, 0, 100)
@@ -736,15 +733,10 @@ def _round_exchange(a_stats: dict, b_stats: dict, a_hp: int, b_hp: int, a_stam: 
     a_stam = clamp(a_stam - a_cost, 0, 100)
     b_stam = clamp(b_stam - b_cost, 0, 100)
 
-    # Apply damage with Option B: when would go to 0, chin roll to stay at 1 HP
+    # Apply damage; when HP would go to 0 we always go to 0 so the match enters counting (referee count).
+    # Chin/recovery only affect the get-up roll after the count, not whether we show a count.
     b_hp_after = clamp(b_hp - a_dmg, 0, 100)
     a_hp_after = clamp(a_hp - b_dmg, 0, 100)
-    if b_hp_after <= 0 and b_hp > 0 and b_chin >= 1:
-        if random.random() < (b_chin / 10.0):  # Option B: survive at 1 HP
-            b_hp_after = 1
-    if a_hp_after <= 0 and a_hp > 0 and a_chin >= 1:
-        if random.random() < (a_chin / 10.0):
-            a_hp_after = 1
 
     return {"a_hits": a_hits, "b_hits": b_hits, "a_dmg": a_dmg, "b_dmg": b_dmg, "hp": {"a": a_hp_after, "b": b_hp_after}, "stam": {"a": a_stam, "b": b_stam}}
 
@@ -888,7 +880,8 @@ async def advance_counting_matches(database) -> int:
         down_eff = a_eff if down == "a" else b_eff
         recovery = max(1, int(down_eff.get("recovery") or 1))
         chin = max(1, int(down_eff.get("chin") or 1))
-        p_get_up = (recovery / 10.0) * 0.6 + (chin / 10.0) * 0.4
+        # Base 50% get-up chance so most knockdowns are not KOs; stats add up to 50% more (100% at 10/10)
+        p_get_up = min(1.0, 0.50 + (recovery / 10.0) * 0.30 + (chin / 10.0) * 0.20)
         got_up = random.random() < p_get_up
         hp = dict(claim.get("hp") or {"a": 100, "b": 100})
         stam = dict(claim.get("stam") or {"a": 100, "b": 100})

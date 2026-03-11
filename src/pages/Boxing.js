@@ -904,6 +904,7 @@ export default function Boxing3D() {
   const [arenaServerResult, setArenaServerResult] = useState(null);
   const arenaStartedRef = useRef(false);
   const prevArenaMatchIdRef = useRef(undefined);
+  const arenaMatchDetailRef = useRef(null);
 
   const flashMsg=(msg,ms=1600)=>{ setActionText(msg); setTimeout(()=>setActionText(""),ms); };
   const getErr = (e) => e?.response?.data?.detail || e?.message || "Something went wrong";
@@ -924,6 +925,7 @@ export default function Boxing3D() {
     arenaStartedRef.current = false;
     api.get(`/boxing/matches/${arenaMatchId}`).then((r) => {
       setArenaMatchDetail(r.data?.match || null);
+      arenaMatchDetailRef.current = r.data?.match || null;
     }).catch(() => setArenaMatchDetail(null));
   }, [arenaMatchId]);
 
@@ -934,6 +936,7 @@ export default function Boxing3D() {
         const m = r.data?.match;
         if (m) {
           setArenaMatchDetail(m);
+          arenaMatchDetailRef.current = m;
           if (m.state === "finished") setArenaServerResult({ winner: m.winner, finish_reason: m.finish_reason || "" });
         }
       }).catch(() => {});
@@ -1536,8 +1539,9 @@ export default function Boxing3D() {
 
       // ── EVENT DISPATCH ──
       if(r.phase==="fighting"&&r.fight){
-        r.evTimer-=dt;
-        if(r.evTimer<=0&&!r.pA&&!r.pB&&r.evIdx<r.fight.events.length){
+        const serverCounting = arenaMatchDetailRef.current?.state === "counting";
+        if (!serverCounting) r.evTimer-=dt;
+        if(r.evTimer<=0&&!r.pA&&!r.pB&&r.evIdx<r.fight.events.length && !serverCounting){
           const ev=r.fight.events[r.evIdx++];
           setHpA(ev.hpA); setHpB(ev.hpB); setStamA(ev.stamA); setStamB(ev.stamB); setRound(ev.round);
 
@@ -1716,8 +1720,9 @@ export default function Boxing3D() {
     const nextRoundAtMs = m?.next_round_at ? new Date(m.next_round_at).getTime() : 0;
     const countEndsAtMs = m?.count_ends_at ? new Date(m.count_ends_at).getTime() : 0;
     const roundNum = m?.round ?? 0;
-    const isBetweenRounds = m?.state === "running" && roundNum > 0 && nextRoundAtMs > nowMs;
-    const isCounting = m?.state === "counting" && countEndsAtMs > nowMs;
+    const matchOver = m?.state === "finished" || gameState === "done";
+    const isBetweenRounds = !matchOver && m?.state === "running" && roundNum > 0 && nextRoundAtMs > nowMs;
+    const isCounting = !matchOver && m?.state === "counting" && countEndsAtMs > nowMs;
     const secsToNextRound = isBetweenRounds ? Math.max(0, Math.ceil((nextRoundAtMs - nowMs) / 1000)) : 0;
     const secsToCountEnd = isCounting ? Math.max(0, Math.ceil((countEndsAtMs - nowMs) / 1000)) : 0;
     return (
@@ -2004,41 +2009,41 @@ export default function Boxing3D() {
         </div>
       </div>
 
-      <div className={styles.pageContent} style={{padding:"12px 20px 26px",borderTop:"1px solid var(--noir-border-light)",display:"grid",gridTemplateColumns: narrowLayout ? "1fr" : "minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,1.0fr)",gap:16}}>
-        <div className={styles.panel} style={{padding:12,minHeight:140}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-            <div style={{fontSize:11,color:gold,letterSpacing:"0.16em"}}>MATCHES</div>
-            <button onClick={refreshMatches} disabled={matchesLoading} className={styles.btnGoldDarkText} style={{padding:"2px 8px",fontSize:9,cursor:matchesLoading?"wait":"pointer"}}>Refresh</button>
+      <div className={styles.pageContent} style={{padding:"10px 16px 20px",borderTop:"1px solid var(--noir-border-light)",display:"grid",gridTemplateColumns: narrowLayout ? "1fr" : "minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,1.0fr)",gap:12}}>
+        <div className={styles.panel} style={{padding:10,minHeight:120}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+            <div style={{fontSize:10,color:gold,letterSpacing:"0.14em"}}>MATCHES</div>
+            <button onClick={refreshMatches} disabled={matchesLoading} className={styles.btnGoldDarkText} style={{padding:"2px 6px",fontSize:9,cursor:matchesLoading?"wait":"pointer"}}>Refresh</button>
           </div>
-          {matchError && <div style={{fontSize:10,color:"#ff6666",marginBottom:6}}>{matchError}</div>}
-          <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
+          {matchError && <div style={{fontSize:9,color:"#ff6666",marginBottom:4}}>{matchError}</div>}
+          <div style={{display:"flex",gap:4,marginBottom:6,flexWrap:"wrap"}}>
             <input
               value={opponentName}
               onChange={(e)=>setOpponentName(e.target.value)}
               placeholder="Challenge username (leave blank for open match)"
               className={styles.input}
-              style={{flex:"0 0 180px",minWidth:140,padding:"4px 6px",fontSize:10}}
+              style={{flex:"0 0 160px",minWidth:120,padding:"3px 6px",fontSize:9}}
             />
             <button
               onClick={handleCreateMatch}
               disabled={busyAction==="create_match"}
               className={styles.btnPrimary}
-              style={{padding:"4px 10px",fontSize:10,cursor:busyAction==="create_match"?"wait":"pointer"}}
+              style={{padding:"3px 8px",fontSize:9,cursor:busyAction==="create_match"?"wait":"pointer"}}
             >
               Start Match
             </button>
           </div>
           {npcs.length > 0 && (
-            <div style={{marginBottom:8,fontSize:9,color:"#8a7a4a"}}>
-              <div style={{marginBottom:4}}>Quick NPC fight:</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+            <div style={{marginBottom:6,fontSize:9,color:"#8a7a4a"}}>
+              <div style={{marginBottom:2}}>Quick NPC fight:</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:3}}>
                 {npcs.map((npc)=>(
                   <button
                     key={npc.id}
                     onClick={()=>startNpcFight(npc)}
                     disabled={npcFightState && !npcFightState.result}
                     className={styles.btnGoldDarkText}
-                    style={{padding:"3px 8px",fontSize:9,cursor:npcFightState && !npcFightState.result ? "wait" : "pointer"}}
+                    style={{padding:"2px 6px",fontSize:8,cursor:npcFightState && !npcFightState.result ? "wait" : "pointer"}}
                   >
                     {npc.name}
                   </button>
@@ -2058,27 +2063,27 @@ export default function Boxing3D() {
               )}
             </div>
           )}
-          <div style={{maxHeight:180,overflowY:"auto",fontSize:10}}>
+          <div style={{maxHeight:140,overflowY:"auto",fontSize:9}}>
             {liveMatches.length === 0 && <div style={{color:"#7a6a4a"}}>No pending or live fights.</div>}
             {liveMatches.map((m) => {
               const mine = me && (m.a_username === me.username || m.b_username === me.username);
               const canReady = mine && (m.state==="pending" || m.state==="ready");
               const canJoin = !mine && m.is_open && !m.b_username && (m.state==="pending" || m.state==="ready");
               return (
-                <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid rgba(201,168,76,0.1)"}}>
-                  <div>
-                    <div style={{color:mine?"#f5e8c8":"#d0c090"}}>
+                <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"3px 0",borderBottom:"1px solid rgba(201,168,76,0.08)"}}>
+                  <div style={{minWidth:0}}>
+                    <div style={{fontSize:9,color:mine?"#f5e8c8":"#d0c090"}}>
                       {m.a_username} vs {m.b_username} <span style={{color:"#7a6a4a"}}>• {m.state} R{m.round}/{m.max_rounds}</span>
                     </div>
-                    <div style={{fontSize:9,color:"#6a5a3a"}}>HP {m.hp?.a ?? 0}/{m.hp?.b ?? 0} • Odds A {m.odds?.a ?? "-"} / B {m.odds?.b ?? "-"}</div>
+                    <div style={{fontSize:8,color:"#6a5a3a"}}>HP {m.hp?.a ?? 0}/{m.hp?.b ?? 0} • Odds A {m.odds?.a ?? "-"} / B {m.odds?.b ?? "-"}</div>
                   </div>
-                  <div style={{display:"flex",gap:4}}>
+                  <div style={{display:"flex",gap:3,flexShrink:0}}>
                     {canJoin && (
                       <button
                         onClick={()=>handleJoinMatch(m.id)}
                         disabled={busyAction===`join:${m.id}`}
                         className={styles.btnPrimary}
-                        style={{padding:"2px 6px",fontSize:9,cursor:busyAction===`join:${m.id}`?"wait":"pointer"}}
+                        style={{padding:"2px 5px",fontSize:8,cursor:busyAction===`join:${m.id}`?"wait":"pointer"}}
                       >
                         Join
                       </button>
@@ -2087,7 +2092,7 @@ export default function Boxing3D() {
                       <button
                         onClick={()=>navigate(`/boxing/arena/${m.id}`)}
                         className={styles.btnGoldDarkText}
-                        style={{padding:"2px 6px",fontSize:9,cursor:"pointer"}}
+                        style={{padding:"2px 5px",fontSize:8,cursor:"pointer"}}
                       >
                         Watch
                       </button>
@@ -2097,7 +2102,7 @@ export default function Boxing3D() {
                         onClick={()=>handleReadyMatch(m.id,true)}
                         disabled={busyAction===`ready:${m.id}`}
                         className={styles.btnPrimary}
-                        style={{padding:"2px 6px",fontSize:9,cursor:busyAction===`ready:${m.id}`?"wait":"pointer"}}
+                        style={{padding:"2px 5px",fontSize:8,cursor:busyAction===`ready:${m.id}`?"wait":"pointer"}}
                       >
                         Ready
                       </button>
@@ -2107,7 +2112,7 @@ export default function Boxing3D() {
                         onClick={()=>handleReadyMatch(m.id,false)}
                         disabled={busyAction===`ready:${m.id}`}
                         className={styles.btnGoldDarkText}
-                        style={{padding:"2px 6px",fontSize:9,cursor:busyAction===`ready:${m.id}`?"wait":"pointer"}}
+                        style={{padding:"2px 5px",fontSize:8,cursor:busyAction===`ready:${m.id}`?"wait":"pointer"}}
                       >
                         Unready
                       </button>
