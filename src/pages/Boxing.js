@@ -54,11 +54,9 @@ function simulateFight(aS, bS) {
 // ── BUILD RING ───────────────────────────────────────────────────────────────
 function buildRing(scene) {
   const mat = c => new THREE.MeshLambertMaterial({ color: c });
-  // Lighter mat so the ring floor is visible (noir but not black)
   const floor = new THREE.Mesh(new THREE.BoxGeometry(7,0.15,7),mat(0x4a4540));
   floor.receiveShadow=true; scene.add(floor);
   const lm=new THREE.MeshBasicMaterial({color:0xe8d898,transparent:true,opacity:0.55});
-  // Center circle only (no center line — it was rendering as a vertical bar from some angles)
   const cc=new THREE.Mesh(new THREE.RingGeometry(0.67,0.7,32),lm); cc.rotation.x=-Math.PI/2; cc.position.y=0.09; scene.add(cc);
   const postMat=mat(0xd9b85c), capMat=mat(0xfff2aa);
   [[-3.2,-3.2],[3.2,-3.2],[3.2,3.2],[-3.2,3.2]].forEach(([x,z])=>{
@@ -67,11 +65,19 @@ function buildRing(scene) {
   });
   [0.9,1.6,2.3].forEach(y=>{
     const rm=mat(y===1.6?0xab3a3a:0xe8d078);
+    // FIX: corrected rotation logic — when z1===z2 rope runs along X-axis → needs rotation.z=PI/2
+    //                                — when x1===x2 rope runs along Z-axis → needs rotation.x=PI/2
     [[-3.2,-3.2,3.2,-3.2],[3.2,-3.2,3.2,3.2],[3.2,3.2,-3.2,3.2],[-3.2,3.2,-3.2,-3.2]].forEach(([x1,z1,x2,z2])=>{
       const len=Math.sqrt((x2-x1)**2+(z2-z1)**2);
       const rope=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,len,6),rm);
       rope.position.set((x1+x2)/2,y,(z1+z2)/2);
-      if(z1===z2){rope.rotation.x=Math.PI/2;}else{rope.rotation.z=Math.PI/2;}
+      if(z1===z2){
+        // rope runs along X-axis
+        rope.rotation.z=Math.PI/2;
+      } else {
+        // rope runs along Z-axis
+        rope.rotation.x=Math.PI/2;
+      }
       scene.add(rope);
     });
   });
@@ -83,8 +89,7 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
   const g=new THREE.Group();
   const m=c=>new THREE.MeshLambertMaterial({color:c});
 
-  // All parts relative to g (origin = feet level)
-  const root=new THREE.Group(); g.add(root); // bob group
+  const root=new THREE.Group(); g.add(root);
 
   // Legs
   const legL=new THREE.Group(); legL.position.set(-0.15,0.5,0); root.add(legL);
@@ -110,11 +115,11 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
   // Hips
   const hips=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.28,0.3),m(colorHex)); hips.position.set(0,0.64,0); root.add(hips);
 
-  // Torso group — pivot at waist
+  // Torso group
   const torsoG=new THREE.Group(); torsoG.position.set(0,0.9,0); root.add(torsoG);
   const torso=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.62,0.31),m(skinHex)); torso.position.y=0.31; torso.castShadow=true; torsoG.add(torso);
 
-  // Head group — pivot at neck
+  // Head group
   const headG=new THREE.Group(); headG.position.set(0,0.72,0); torsoG.add(headG);
   {
     const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.12,0.16,8),m(skinHex));
@@ -127,7 +132,7 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
   const eL=new THREE.Mesh(new THREE.SphereGeometry(0.042,6,6),em); eL.position.set(-0.09,0.32,0.18); headG.add(eL);
   const eR=new THREE.Mesh(new THREE.SphereGeometry(0.042,6,6),em); eR.position.set(0.09,0.32,0.18); headG.add(eR);
 
-  // Left arm — pivot at shoulder
+  // Left arm
   const armL=new THREE.Group(); armL.position.set(-0.4,0.54,0); torsoG.add(armL);
   {
     const upperArmL = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.44,0.2),m(skinHex));
@@ -142,7 +147,7 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
   }
   const gloveL=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.29,0.27),m(colorHex)); gloveL.position.y=-0.45; faL.add(gloveL);
 
-  // Right arm — pivot at shoulder
+  // Right arm
   const armR=new THREE.Group(); armR.position.set(0.4,0.54,0); torsoG.add(armR);
   {
     const upperArmR = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.44,0.2),m(skinHex));
@@ -163,7 +168,6 @@ function buildBoxer(scene, colorHex, skinHex=0xc8956a) {
 }
 
 // ── POSES ─────────────────────────────────────────────────────────────────────
-// Resets to guard stance
 function resetGuard(bx, side) {
   const s=side==="a"?1:-1;
   bx.torsoG.rotation.set(0, 0.12*s, 0);
@@ -178,10 +182,9 @@ function resetGuard(bx, side) {
   bx.group.rotation.z=0;
 }
 
-// Applies punch with progress p [0..1] (0=guard, 0.5=full, 1=guard again)
 function applyPunch(bx, type, p, side) {
   const s=side==="a"?1:-1;
-  const e=Math.sin(p*Math.PI); // 0->1->0
+  const e=Math.sin(p*Math.PI);
   resetGuard(bx, side);
   switch(type) {
     case "jab":
@@ -219,7 +222,6 @@ function applyPunch(bx, type, p, side) {
   }
 }
 
-// Idle guard with bob
 function applyIdle(bx, t, side) {
   const s=side==="a"?1:-1;
   resetGuard(bx, side);
@@ -231,7 +233,6 @@ function applyIdle(bx, t, side) {
   bx.legR.rotation.x=Math.sin(t*3.6)*0.13;
 }
 
-// Hit reaction — exponential decay snap
 function applyHit(bx, type, intensity, age, side) {
   const s=side==="a"?1:-1;
   const decay=Math.exp(-age*9)*intensity;
@@ -241,12 +242,16 @@ function applyHit(bx, type, intensity, age, side) {
   bx.torsoG.rotation.y+=decay*0.2*s;
 }
 
-// Knockdown — t=0 upright, t=1 lying on canvas (not through it)
+// FIX: Knockdown keeps boxer ON the canvas — raise y to compensate for sideways tip
+// At full tip (rotation.z=1.45 rad), the model width (~0.6) extends down by sin(1.45)*0.6≈0.6
+// So we lift the group by that amount so the model rests ON the canvas surface.
 function applyKnockdown(bx, t, side) {
   const f=clamp(t,0,1);
-  bx.group.rotation.z=(side==="a"?-1:1)*f*1.45;
-  // Rest on canvas surface (y ~0.02) instead of sinking through
-  bx.group.position.y=0.08-f*0.06;
+  const tipAngle = (side==="a"?-1:1)*f*1.45;
+  bx.group.rotation.z = tipAngle;
+  // Raise y proportional to how far we've tipped to keep boxer above canvas
+  const yLift = Math.abs(Math.sin(tipAngle)) * 0.55;
+  bx.group.position.y = 0.08 + yLift * f;
   bx.torsoG.rotation.x=f*0.55;
   bx.armL.rotation.x=-0.35+f*1.1;
   bx.armR.rotation.x=-0.35+f*0.8;
@@ -266,20 +271,15 @@ export default function Boxing3D() {
     bA:null, bB:null,
     fight:null,
     clock: new THREE.Clock(false),
-    // per-frame mutable state (not React state — updated every frame)
     phase:"idle",
     evIdx:0,
     evTimer:0,
-    // A punch state
-    pA:null,   // {type, p, done} p goes 0->1
+    pA:null,
     pB:null,
-    // hit reaction
-    hA:null,   // {type, intensity, age}
+    hA:null,
     hB:null,
-    // knockdown
-    kdA:0,     // seconds remaining
+    kdA:0,
     kdB:0,
-    // positions (start a bit closer together)
     xA:-1.0, xB:1.0,
     txA:-1.0, txB:1.0,
   });
@@ -289,26 +289,24 @@ export default function Boxing3D() {
   const [stamA,setStamA]=useState(100);
   const [stamB,setStamB]=useState(100);
   const [round,setRound]=useState(1);
-  const [gameState,setGameState]=useState("idle"); // idle|fighting|done
+  const [gameState,setGameState]=useState("idle");
   const [winText,setWinText]=useState("");
   const [actionText,setActionText]=useState("");
 
   const [npcs, setNpcs] = useState([]);
-  const [npcFightState, setNpcFightState] = useState(null); // null | { matchId, npcName } | { result: "win"|"loss"|"draw", npcName, reason }
+  const [npcFightState, setNpcFightState] = useState(null);
   const npcPollRef = useRef(null);
 
-  // Backend boxing meta (profile / gym / coach / gear)
   const [profile, setProfile] = useState(null);
   const [effective, setEffective] = useState(null);
   const [drills, setDrills] = useState({});
   const [gymInfo, setGymInfo] = useState(null);
-  const [coachInfo, setCoachInfo] = useState(null); // { coaches, coach_id }
-  const [gearInfo, setGearInfo] = useState(null);   // { gear, owned_ids, equipped }
+  const [coachInfo, setCoachInfo] = useState(null);
+  const [gearInfo, setGearInfo] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [metaError, setMetaError] = useState("");
   const [busyAction, setBusyAction] = useState("");
 
-  // PvP matches / betting / league
   const [me, setMe] = useState(null);
   const [opponentName, setOpponentName] = useState("");
   const [liveMatches, setLiveMatches] = useState([]);
@@ -322,14 +320,12 @@ export default function Boxing3D() {
   const navigate = useNavigate();
   const [arenaMatchDetail, setArenaMatchDetail] = useState(null);
   const [sceneReady, setSceneReady] = useState(false);
-  const [arenaServerResult, setArenaServerResult] = useState(null); // { winner, finish_reason } when server says finished
+  const [arenaServerResult, setArenaServerResult] = useState(null);
   const arenaStartedRef = useRef(false);
 
   const flashMsg=(msg,ms=1600)=>{ setActionText(msg); setTimeout(()=>setActionText(""),ms); };
-
   const getErr = (e) => e?.response?.data?.detail || e?.message || "Something went wrong";
 
-  // When viewing arena, fetch match details
   useEffect(() => {
     if (!arenaMatchId) return;
     setArenaServerResult(null);
@@ -339,7 +335,6 @@ export default function Boxing3D() {
     }).catch(() => setArenaMatchDetail(null));
   }, [arenaMatchId]);
 
-  // Poll match result when in arena
   useEffect(() => {
     if (!arenaMatchId) return;
     const poll = () => {
@@ -353,18 +348,15 @@ export default function Boxing3D() {
     return () => clearInterval(id);
   }, [arenaMatchId]);
 
-  // Auto-start 3D fight when viewing arena and we have match + scene ready
   useEffect(() => {
     if (!arenaMatchId || !sceneReady || !refs.current.bA || !arenaMatchDetail || arenaStartedRef.current) return;
     arenaStartedRef.current = true;
     const opponentName = arenaMatchDetail.b_username || "";
     const npc = (npcs || []).find((n) => n.name === opponentName) || (npcs && npcs[0]) || null;
     startFight(npc);
-    // Only run once when scene becomes ready with match data
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [arenaMatchId, sceneReady, arenaMatchDetail?.id, npcs?.length]);
 
-  // Load NPCs + boxing meta (profile / gym / coach / gear)
   useEffect(() => {
     let cancelled = false;
     api.get("/auth/me").then((r) => { if (!cancelled) setMe(r.data || null); }).catch(() => {});
@@ -421,7 +413,6 @@ export default function Boxing3D() {
   }, []);
 
   const startNpcFight = async (npc) => {
-    // Don't start another while one is already running
     if (npcFightState && !npcFightState.result) return;
     setNpcFightState({ matchId: null, npcName: npc.name });
     try {
@@ -431,7 +422,6 @@ export default function Boxing3D() {
       await api.post("/boxing/matches/ready", { match_id: matchId, ready: true });
       setNpcFightState((s) => ({ ...s, matchId }));
       await refreshMatches();
-      // Go to arena page to watch the fight
       navigate(`/boxing/arena/${matchId}`);
       return;
     } catch (e) {
@@ -442,7 +432,6 @@ export default function Boxing3D() {
 
   const clearNpcResult = () => setNpcFightState(null);
 
-  // Training / gym / coach / gear actions
   const handleTrain = async (drillId) => {
     setBusyAction(`train:${drillId}`);
     try {
@@ -464,7 +453,6 @@ export default function Boxing3D() {
       const res = await api.post("/boxing/gym/upgrade");
       setProfile(res.data?.profile || null);
       setEffective(res.data?.effective || null);
-      // refresh gym info to get new level
       const gymRes = await api.get("/boxing/gym");
       setGymInfo(gymRes.data || null);
       setMetaError("");
@@ -553,7 +541,6 @@ export default function Boxing3D() {
     }
   };
 
-  // PvP, bets, league actions
   const refreshMatches = async () => {
     try {
       setMatchesLoading(true);
@@ -660,9 +647,11 @@ export default function Boxing3D() {
     const bB=buildBoxer(scene,FIGHTERS[1].color,0xb07850);
     bA.group.position.set(-1.0,0.08,0);
     bB.group.position.set(1.0,0.08,0);
-    // Face each other: A faces +X (towards B), B faces -X (towards A)
-    bA.group.rotation.y=-Math.PI/2;
-    bB.group.rotation.y=Math.PI/2;
+    // FIX: boxers face each other correctly
+    // Boxer model faces +Z by default. A is at -X, needs to face +X → rotation.y = +PI/2
+    // B is at +X, needs to face -X → rotation.y = -PI/2
+    bA.group.rotation.y = Math.PI/2;
+    bB.group.rotation.y = -Math.PI/2;
 
     // Crowd
     const cg=new THREE.BufferGeometry();
@@ -683,7 +672,7 @@ export default function Boxing3D() {
     };
     window.addEventListener("resize",onResize);
 
-    const PUNCH_SPEED=2.8; // cycles per second (0->1 in 1/PUNCH_SPEED seconds)
+    const PUNCH_SPEED=2.8;
 
     let raf;
     const loop=()=>{
@@ -695,7 +684,6 @@ export default function Boxing3D() {
 
       crowd.rotation.y+=0.0006;
 
-      // ── SMOOTH X POSITION ──
       r.xA=lerp(r.xA,r.txA,dt*9);
       r.xB=lerp(r.xB,r.txB,dt*9);
       bA.group.position.x=r.xA;
@@ -712,7 +700,6 @@ export default function Boxing3D() {
         const getUp=r.kdA<0.7;
         const prog=getUp?1-(r.kdA/0.7):clamp((2.8-r.kdA)/0.6,0,1);
         applyKnockdown(bA,prog,"a");
-        bA.group.position.y=getUp?lerp(0.02,0.08,1-r.kdA/0.7):0.02;
         r.txA=-1.65;
         if(r.kdA<=0){bA.group.rotation.z=0;bA.group.position.y=0.08;r.txA=-1.3;}
       } else { bA.group.position.y=0.08; bA.group.rotation.z=0; }
@@ -722,7 +709,6 @@ export default function Boxing3D() {
         const getUp=r.kdB<0.7;
         const prog=getUp?1-(r.kdB/0.7):clamp((2.8-r.kdB)/0.6,0,1);
         applyKnockdown(bB,prog,"b");
-        bB.group.position.y=getUp?lerp(0.02,0.08,1-r.kdB/0.7):0.02;
         r.txB=1.65;
         if(r.kdB<=0){bB.group.rotation.z=0;bB.group.position.y=0.08;r.txB=1.3;}
       } else { bB.group.position.y=0.08; bB.group.rotation.z=0; }
@@ -730,11 +716,10 @@ export default function Boxing3D() {
       // ── PUNCH ANIMATIONS ──
       let aPunching=false, bPunching=false;
 
-          if(r.pA&&r.kdA<=0){
+      if(r.pA&&r.kdA<=0){
         aPunching=true;
         r.pA.p=Math.min(1,r.pA.p+dt*PUNCH_SPEED);
         applyPunch(bA,r.pA.type,r.pA.p,"a");
-        // step in closer to centre when throwing
         r.txA=-0.55+Math.sin(r.pA.p*Math.PI)*0.18;
         if(r.pA.p>=1){r.pA=null; r.txA=-1.0;}
       }
@@ -746,7 +731,7 @@ export default function Boxing3D() {
         if(r.pB.p>=1){r.pB=null; r.txB=1.0;}
       }
 
-      // ── HIT REACTIONS (additive on top of whatever pose) ──
+      // ── HIT REACTIONS ──
       if(r.hA){
         r.hA.age+=dt;
         applyHit(bA,r.hA.type,r.hA.intensity,r.hA.age,"a");
@@ -758,7 +743,6 @@ export default function Boxing3D() {
         if(r.hB.age>0.55) r.hB=null;
       }
 
-      // ── GUARD IDLE (when not in punch animation) ──
       if(!aPunching&&r.kdA<=0) applyIdle(bA,t,"a");
       if(!bPunching&&r.kdB<=0) applyIdle(bB,t,"b");
 
@@ -769,19 +753,15 @@ export default function Boxing3D() {
           const ev=r.fight.events[r.evIdx++];
           setHpA(ev.hpA); setHpB(ev.hpB); setStamA(ev.stamA); setStamB(ev.stamB); setRound(ev.round);
 
-          // Fire both punches — B slightly delayed
           if(r.kdA<=0) r.pA={type:ev.aPunch,p:0};
           setTimeout(()=>{ if(r.kdB<=0) r.pB={type:ev.bPunch,p:0}; },110);
 
-          // Hit reactions
           if(ev.aLanded) setTimeout(()=>{ r.hB={type:ev.aPunch,intensity:clamp(ev.aDmg/13,0.3,1.6),age:0}; },170);
           if(ev.bLanded) setTimeout(()=>{ r.hA={type:ev.bPunch,intensity:clamp(ev.bDmg/13,0.3,1.6),age:0}; },270);
 
-          // Knockdowns
           if(ev.aKD){ setTimeout(()=>{r.kdA=2.9;r.txA=-1.65;},200); const na=(r.fight.nameA||FIGHTERS[0].name).split(" ")[0].toUpperCase(); flashMsg(`⚡ ${na} IS DOWN!`); }
           if(ev.bKD){ setTimeout(()=>{r.kdB=2.9;r.txB=1.65;},200); const nb=(r.fight.nameB||FIGHTERS[1].name).split(" ")[0].toUpperCase(); flashMsg(`⚡ ${nb} IS DOWN!`); }
 
-          // Big shot
           if(!ev.aKD&&ev.aLanded&&ev.aDmg>14) flashMsg(`💥 ${(r.fight.nameA||FIGHTERS[0].name).split("'")[1]?.split("'")[0] || (r.fight.nameA||FIGHTERS[0].name).split(" ")[0]} lands big!`,900);
           else if(!ev.bKD&&ev.bLanded&&ev.bDmg>14) flashMsg(`💢 ${(r.fight.nameB||FIGHTERS[1].name).split("'")[1]?.split("'")[0] || (r.fight.nameB||FIGHTERS[1].name).split(" ")[0]} fires back!`,900);
 
@@ -806,14 +786,12 @@ export default function Boxing3D() {
   },[arenaMatchId]);
 
   const startFight = (npcForB) => {
-    // Build sim stats from your effective profile (if available) and a generic or NPC opponent.
     const baseA = FIGHTERS[0];
     const baseB = FIGHTERS[1];
 
     const scaleStat = (v, base) => {
       const n = Number(v || 1);
       if (!Number.isFinite(n)) return base;
-      // Map 1..20-ish -> 50..95 range
       return Math.max(45, Math.min(95, 45 + n * 3));
     };
 
@@ -826,7 +804,7 @@ export default function Boxing3D() {
       speed: scaleStat(youStats.speed, baseA.speed),
       stamina: scaleStat(youStats.stamina, baseA.stamina),
       defense: scaleStat(youStats.defense, baseA.defense),
-      chin: 65, // generic durability
+      chin: 65,
     } : baseA;
 
     const simB = npc ? {
@@ -845,8 +823,9 @@ export default function Boxing3D() {
     r.fight=result; r.phase="fighting"; r.evIdx=0; r.evTimer=0.6;
     r.pA=null; r.pB=null; r.hA=null; r.hB=null;
     r.kdA=0; r.kdB=0; r.xA=-1.3; r.xB=1.3; r.txA=-1.3; r.txB=1.3;
-    if(r.bA){r.bA.group.position.set(-1.0,0.08,0);r.bA.group.rotation.set(0,-Math.PI/2,0);}
-    if(r.bB){r.bB.group.position.set(1.0,0.08,0);r.bB.group.rotation.set(0,Math.PI/2,0);}
+    // FIX: also apply corrected rotations in startFight reset
+    if(r.bA){r.bA.group.position.set(-1.0,0.08,0);r.bA.group.rotation.set(0,Math.PI/2,0);}
+    if(r.bB){r.bB.group.position.set(1.0,0.08,0);r.bB.group.rotation.set(0,-Math.PI/2,0);}
     setHpA(100);setHpB(100);setStamA(100);setStamB(100);setRound(1);
     setGameState("fighting");setWinText("");setActionText("");
   };
@@ -859,7 +838,6 @@ export default function Boxing3D() {
     </div>
   );
 
-  // Arena view: 3D ring + HUD when viewing a match
   if (arenaMatchId) {
     const nameA = arenaMatchDetail?.a_username || me?.username || "You";
     const nameB = arenaMatchDetail?.b_username || "Opponent";
@@ -907,7 +885,6 @@ export default function Boxing3D() {
   return (
     <div className={styles.page} style={{minHeight:"100vh",fontFamily:"'Cinzel',serif",display:"flex",flexDirection:"column"}}>
 
-      {/* Header */}
       <div className={styles.pageContent} style={{borderBottom:"1px solid var(--noir-border-light)",padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div>
           <div style={{fontSize:16,letterSpacing:"0.2em",color:gold}}>BOXING GYM & LEAGUE</div>
@@ -915,9 +892,7 @@ export default function Boxing3D() {
         </div>
       </div>
 
-      {/* Training / Gym / Coach / Gear */}
       <div className={styles.pageContent} style={{padding:"18px 20px 12px",display:"grid",gridTemplateColumns:"minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr)",gap:16}}>
-        {/* Training & Stats */}
         <div className={styles.panel} style={{padding:12,minHeight:140}}>
           <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>TRAINING & STATS</div>
           {metaError && <div style={{fontSize:10,color:"#ff6666",marginBottom:6}}>{metaError}</div>}
@@ -960,7 +935,6 @@ export default function Boxing3D() {
           )}
         </div>
 
-        {/* Gym & Coach */}
         <div className={styles.panel} style={{padding:12,minHeight:140,display:"flex",flexDirection:"column",gap:10}}>
           <div>
             <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>GYM</div>
@@ -1022,7 +996,6 @@ export default function Boxing3D() {
           </div>
         </div>
 
-        {/* Gear */}
         <div className={styles.panel} style={{padding:12,minHeight:140}}>
           <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>GEAR</div>
           {gearInfo && (
@@ -1072,9 +1045,7 @@ export default function Boxing3D() {
         </div>
       </div>
 
-      {/* Matches / Bets / League */}
       <div className={styles.pageContent} style={{padding:"12px 20px 26px",borderTop:"1px solid var(--noir-border-light)",display:"grid",gridTemplateColumns:"minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,1.0fr)",gap:16}}>
-        {/* PvP Matches */}
         <div className={styles.panel} style={{padding:12,minHeight:140}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
             <div style={{fontSize:11,color:gold,letterSpacing:"0.16em"}}>MATCHES</div>
@@ -1189,7 +1160,6 @@ export default function Boxing3D() {
           </div>
         </div>
 
-        {/* Betting */}
         <div className={styles.panel} style={{padding:12,minHeight:140}}>
           <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>BETTING</div>
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
@@ -1244,7 +1214,6 @@ export default function Boxing3D() {
           </div>
         </div>
 
-        {/* League */}
         <div className={styles.panel} style={{padding:12,minHeight:140}}>
           <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>LEAGUE (WEEKLY)</div>
           {league && (
