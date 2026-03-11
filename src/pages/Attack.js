@@ -87,6 +87,9 @@ const getKillToastStyle = () => {
   }
 };
 
+// Only run the F5-resend check once per document load so navigating away and back doesn't resend
+let attackResendCheckDoneThisLoad = false;
+
 /** Banner shown between event and Kill User when theme is "banner". */
 const KillNotificationBanner = ({ message, onDismiss }) => {
   useEffect(() => {
@@ -968,19 +971,22 @@ export default function Attack() {
         setUserMolotovs(meRes.data?.molotovs ?? 0);
         setEvent(eventsRes.data?.event ?? null);
         setEventsEnabled(!!eventsRes.data?.events_enabled);
-        // Only resend when page was loaded via F5 (reload), not when navigating back to Attack via app link
-        const navEntry = typeof performance !== 'undefined' && performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
-        const isReload = navEntry && navEntry.type === 'reload';
-        if (isReload) {
-          try {
-            const raw = sessionStorage.getItem('attack-last-submit');
-            if (raw) {
-              const data = JSON.parse(raw);
-              if (data && (data.type === 'search' || data.type === 'kill')) {
-                setPendingResend(data);
+        // Only resend when page was loaded via F5 (reload), and only check once per document load (so navigate away + back doesn't resend)
+        if (!attackResendCheckDoneThisLoad) {
+          attackResendCheckDoneThisLoad = true;
+          const navEntry = typeof performance !== 'undefined' && performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+          const isReload = navEntry && navEntry.type === 'reload';
+          if (isReload) {
+            try {
+              const raw = sessionStorage.getItem('attack-last-submit');
+              if (raw) {
+                const data = JSON.parse(raw);
+                if (data && (data.type === 'search' || data.type === 'kill')) {
+                  setPendingResend(data);
+                }
               }
-            }
-          } catch (_) {}
+            } catch (_) {}
+          }
         }
       } catch (_) {}
     };

@@ -180,8 +180,8 @@ function MissionCard({ mission, onClick, delay = 0, missionIndex, missionTotal, 
               </span>
             </div>
             <div className="text-[9px] text-mutedForeground mt-0.5 italic break-words">
-              {missionTypeLabel(type)}
-              {is_boss && ' · Final Job'}
+              {missionTypeLabel(type) === 'Final Job' ? 'Boss' : missionTypeLabel(type)}
+              {is_boss && missionTypeLabel(type) !== 'Final Job' && ' · Final Job'}
             </div>
             {!unlocked && previous_mission_title && (
               <div className="text-[9px] text-amber-200/80 mt-1 flex items-center gap-1 break-words">
@@ -897,7 +897,7 @@ export default function Missions() {
               >
                 <div className="min-w-0 flex-1">
                   <div className="text-[11px] font-heading font-bold text-green-400 truncate">{m.title}</div>
-                  <div className="text-[9px] text-mutedForeground">{m.area}{m.is_boss ? ' · Final Job' : ''}</div>
+                  <div className="text-[9px] text-mutedForeground">{m.area}{m.is_boss ? ' · Boss' : ''}</div>
                 </div>
                 <ChevronRight size={12} className="text-green-400/70 shrink-0" />
               </div>
