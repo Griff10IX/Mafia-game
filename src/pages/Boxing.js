@@ -1473,6 +1473,13 @@ export default function Boxing3D() {
         r.impactVFX=still;
       }
 
+      // Sync: server says fighter got up (state "running") but client was showing KO count — clear overlay and resume
+      if(arenaMatchDetailRef.current?.state==="running"&&r.phase==="ko"){
+        r.koPhase=null;
+        r.phase="fighting";
+        setKoCount(null);
+      }
+
       if(r.phase==="idle"||r.phase==="done"){
         // In done phase: winner celebrates, loser stays on floor
         if(r.phase==="done" && r.koPhase){
@@ -2182,7 +2189,7 @@ export default function Boxing3D() {
                     <div style={{fontSize:9,color:mine?"#f5e8c8":"#d0c090"}}>
                       {m.a_username} vs {m.b_username} <span style={{color:"#7a6a4a"}}>• {m.state} R{Math.min(Number(m.round) || 0, Number(m.max_rounds) || 12)}/{m.max_rounds ?? 12}</span>
                     </div>
-                    <div style={{fontSize:8,color:"#6a5a3a"}}>HP {m.hp?.a ?? 0}/{m.hp?.b ?? 0} • Odds A {m.odds?.a ?? "-"} / B {m.odds?.b ?? "-"}</div>
+                    <div style={{fontSize:8,color:"#6a5a3a"}}>HP A {m.hp?.a ?? 0}/100 B {m.hp?.b ?? 0}/100 • Odds A {m.odds?.a ?? "-"} / B {m.odds?.b ?? "-"}</div>
                   </div>
                   <div style={{display:"flex",gap:3,flexShrink:0}}>
                     {canJoin && (

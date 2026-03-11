@@ -7,45 +7,94 @@ import { toast } from "sonner";
 import styles from "../styles/noir.module.css";
 
 const MAX_HITS_PER_SESSION = 30;
+const BULLET_SPEED = 95;
+const BULLET_MAX_DIST = 25;
+const MUZZLE_FLASH_DURATION = 0.06;
+const TARGET_RESPAWN = 0.8;
 
 function buildRangeScene(scene) {
-  const floorGeo = new THREE.PlaneGeometry(12, 8);
-  const floorMat = new THREE.MeshLambertMaterial({ color: 0x2a2826 });
+  const floorGeo = new THREE.PlaneGeometry(14, 10);
+  const floorMat = new THREE.MeshLambertMaterial({ color: 0x252220 });
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
-  floor.position.y = 0;
-  floor.position.z = -2;
+  floor.position.set(0, 0, -3);
   scene.add(floor);
 
-  const wallGeo = new THREE.PlaneGeometry(12, 6);
-  const wallMat = new THREE.MeshLambertMaterial({ color: 0x1a1816 });
+  const wallGeo = new THREE.PlaneGeometry(14, 7);
+  const wallMat = new THREE.MeshLambertMaterial({ color: 0x181614 });
   const wall = new THREE.Mesh(wallGeo, wallMat);
-  wall.position.set(0, 1.5, -5);
+  wall.position.set(0, 1.5, -5.5);
   scene.add(wall);
 
   const targets = [];
-  const targetPositions = [
-    [-2.5, 2.2], [-0.8, 2.4], [0.8, 2.4], [2.5, 2.2],
-    [-2, 1], [0, 1.2], [2, 1],
-    [-1, 0], [1, 0],
+  const targetSpecs = [
+    { x: -3, y: 2.4, move: 0 },
+    { x: -1, y: 2.5, move: 1 },
+    { x: 1, y: 2.5, move: 1 },
+    { x: 3, y: 2.4, move: 0 },
+    { x: -2.5, y: 1.2, move: 2 },
+    { x: 0, y: 1.4, move: 2 },
+    { x: 2.5, y: 1.2, move: 2 },
+    { x: -1.5, y: 0.2, move: 1 },
+    { x: 1.5, y: 0.2, move: 1 },
   ];
-  targetPositions.forEach(([x, y], i) => {
-    const geo = new THREE.CircleGeometry(0.25, 24);
-    const mat = new THREE.MeshLambertMaterial({ color: 0xc03030 });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(x, y, -4.98);
-    mesh.userData.index = i;
-    mesh.userData.respawnAt = 0;
-    scene.add(mesh);
-    targets.push(mesh);
+  const targetRadius = 0.28;
+  targetSpecs.forEach((spec, i) => {
+    const group = new THREE.Group();
+    group.position.set(spec.x, spec.y, -5.48);
+    group.userData.baseX = spec.x;
+    group.userData.baseY = spec.y;
+    group.userData.moveType = spec.move;
+    group.userData.respawnAt = 0;
+    group.userData.index = i;
+    const backGeo = new THREE.CylinderGeometry(targetRadius * 1.1, targetRadius * 1.1, 0.06, 24);
+    const backMat = new THREE.MeshLambertMaterial({ color: 0x333230 });
+    const back = new THREE.Mesh(backGeo, backMat);
+    group.add(back);
+    const faceGeo = new THREE.CircleGeometry(targetRadius, 24);
+    const faceMat = new THREE.MeshLambertMaterial({ color: 0xc03030 });
+    const face = new THREE.Mesh(faceGeo, faceMat);
+    face.rotation.x = -Math.PI / 2;
+    face.position.z = 0.04;
+    group.add(face);
+    const innerGeo = new THREE.CircleGeometry(targetRadius * 0.35, 16);
+    const innerMat = new THREE.MeshLambertMaterial({ color: 0xf0e0a0 });
+    const inner = new THREE.Mesh(innerGeo, innerMat);
+    inner.rotation.x = -Math.PI / 2;
+    inner.position.z = 0.045;
+    group.add(inner);
+    scene.add(group);
+    targets.push(group);
   });
 
   return { targets, floor, wall };
 }
 
+function createBulletMesh() {
+  const geo = new THREE.SphereGeometry(0.028, 6, 6);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xe8c040 });
+  return new THREE.Mesh(geo, mat);
+}
+
+function createMuzzleFlash() {
+  const geo = new THREE.SphereGeometry(0.12, 8, 8);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.95 });
+  return new THREE.Mesh(geo, mat);
+}
+
 export default function ShootingRange3D() {
   const canvasRef = useRef(null);
-  const refs = useRef({ scene: null, camera: null, renderer: null, targets: [], raycaster: null, mouse: new THREE.Vector2() });
+  const refs = useRef({
+    scene: null,
+    camera: null,
+    renderer: null,
+    targets: [],
+    bullets: [],
+    raycaster: null,
+    mouse: new THREE.Vector2(),
+    muzzleFlash: null,
+    muzzleFlashEnd: 0,
+  });
   const hitCountRef = useRef(0);
   const { weaponId: routeWeaponId } = useParams();
   const navigate = useNavigate();
@@ -99,31 +148,49 @@ export default function ShootingRange3D() {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
     renderer.setSize(W, H, false);
-    renderer.setClearColor(0x141414);
+    renderer.setClearColor(0x0c0c0c);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x141414);
-    scene.fog = new THREE.FogExp2(0x0c0c0c, 0.06);
+    scene.background = new THREE.Color(0x0c0c0c);
+    scene.fog = new THREE.FogExp2(0x080808, 0.055);
 
-    const camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 50);
-    camera.position.set(0, 1.4, 2.2);
-    camera.lookAt(0, 1.2, -3);
+    const camera = new THREE.PerspectiveCamera(58, W / H, 0.1, 60);
+    camera.position.set(0, 1.35, 2.5);
+    camera.lookAt(0, 1.15, -4);
 
-    scene.add(new THREE.AmbientLight(0x554d48, 1.2));
-    const spot = new THREE.SpotLight(0xfff8e8, 4, 25, Math.PI / 6, 0.3);
-    spot.position.set(0, 6, 0);
-    spot.target.position.set(0, 0, -4);
+    scene.add(new THREE.AmbientLight(0x443d38, 1.0));
+    const spot = new THREE.SpotLight(0xfff4e0, 3.5, 28, Math.PI / 5, 0.35);
+    spot.position.set(0, 5, -2);
+    spot.target.position.set(0, 0, -5);
     scene.add(spot);
     scene.add(spot.target);
-    const fill = new THREE.PointLight(0x8899aa, 0.8, 20);
-    fill.position.set(4, 2, 2);
+    const fill = new THREE.PointLight(0x6688aa, 0.6, 22);
+    fill.position.set(5, 2, 1);
     scene.add(fill);
 
     const { targets } = buildRangeScene(scene);
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
+    const bulletGroup = new THREE.Group();
+    scene.add(bulletGroup);
+    const bullets = [];
+    const muzzleFlash = createMuzzleFlash();
+    muzzleFlash.visible = false;
+    scene.add(muzzleFlash);
+    const tempVec = new THREE.Vector3();
+    const targetRadius = 0.28;
 
-    refs.current = { scene, camera, renderer, targets, raycaster, mouse };
+    refs.current = {
+      scene,
+      camera,
+      renderer,
+      targets,
+      bullets,
+      raycaster,
+      mouse,
+      muzzleFlash,
+      muzzleFlashEnd: 0,
+    };
 
     const onResize = () => {
       const w = canvas.clientWidth;
@@ -141,14 +208,19 @@ export default function ShootingRange3D() {
       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(mouse, r.camera);
-      const visibleTargets = r.targets.filter((m) => m.visible);
-      const hits = raycaster.intersectObjects(visibleTargets);
-      if (hits.length > 0) {
-        const hit = hits[0].object;
-        hit.visible = false;
-        hit.userData.respawnAt = performance.now() / 1000 + 0.6;
-        setHitCount((c) => Math.min(MAX_HITS_PER_SESSION, c + 1));
-      }
+      const dir = raycaster.ray.direction.clone().normalize();
+      const bulletMesh = createBulletMesh();
+      bulletMesh.position.copy(r.camera.position).add(dir.clone().multiplyScalar(0.4));
+      bulletGroup.add(bulletMesh);
+      bullets.push({
+        mesh: bulletMesh,
+        velocity: dir.clone().multiplyScalar(BULLET_SPEED),
+        dist: 0,
+        maxDist: BULLET_MAX_DIST,
+      });
+      muzzleFlash.visible = true;
+      muzzleFlash.position.copy(r.camera.position).add(dir.clone().multiplyScalar(0.45));
+      refs.current.muzzleFlashEnd = performance.now() / 1000 + MUZZLE_FLASH_DURATION;
     };
     canvas.addEventListener("pointerdown", onPointerDown);
 
@@ -158,12 +230,59 @@ export default function ShootingRange3D() {
       const r = refs.current;
       if (!r.scene || !r.camera || !r.renderer) return;
       const t = performance.now() / 1000;
-      r.targets.forEach((mesh) => {
-        if (!mesh.visible && mesh.userData.respawnAt && t >= mesh.userData.respawnAt) {
-          mesh.visible = true;
-          mesh.userData.respawnAt = 0;
+      const dt = Math.min(1 / 30, 0.02);
+
+      r.targets.forEach((group) => {
+        if (!group.visible && group.userData.respawnAt && t >= group.userData.respawnAt) {
+          group.visible = true;
+          group.userData.respawnAt = 0;
+        }
+        if (group.visible && group.userData.moveType) {
+          const move = group.userData.moveType;
+          const amp = move === 1 ? 0.35 : 0.25;
+          const speed = move === 1 ? 1.2 : 0.9;
+          if (move === 1) {
+            group.position.x = group.userData.baseX + Math.sin(t * speed) * amp;
+          } else {
+            group.position.y = group.userData.baseY + Math.sin(t * speed) * amp;
+          }
         }
       });
+
+      for (let i = r.bullets.length - 1; i >= 0; i--) {
+        const b = r.bullets[i];
+        b.mesh.position.addScaledVector(b.velocity, dt);
+        b.dist += BULLET_SPEED * dt;
+        let remove = b.dist >= b.maxDist;
+        if (!remove) {
+          const bp = b.mesh.position;
+          for (const tg of r.targets) {
+            if (!tg.visible) continue;
+            tg.getWorldPosition(tempVec);
+            const dx = bp.x - tempVec.x;
+            const dy = bp.y - tempVec.y;
+            const dz = bp.z - tempVec.z;
+            if (dx * dx + dy * dy + dz * dz < targetRadius * targetRadius * 1.8) {
+              tg.visible = false;
+              tg.userData.respawnAt = t + TARGET_RESPAWN;
+              setHitCount((c) => Math.min(MAX_HITS_PER_SESSION, c + 1));
+              remove = true;
+              break;
+            }
+          }
+        }
+        if (remove) {
+          bulletGroup.remove(b.mesh);
+          b.mesh.geometry.dispose();
+          b.mesh.material.dispose();
+          r.bullets.splice(i, 1);
+        }
+      }
+
+      if (r.muzzleFlash && t >= r.muzzleFlashEnd) {
+        r.muzzleFlash.visible = false;
+      }
+
       renderer.render(r.scene, r.camera);
     };
     loop();
@@ -174,6 +293,11 @@ export default function ShootingRange3D() {
       canvas.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("resize", onResize);
       cancelAnimationFrame(raf);
+      bullets.forEach((b) => {
+        bulletGroup.remove(b.mesh);
+        b.mesh.geometry.dispose();
+        b.mesh.material.dispose();
+      });
       renderer.dispose();
       scene.traverse((o) => {
         if (o.geometry) o.geometry.dispose();
@@ -226,7 +350,7 @@ export default function ShootingRange3D() {
         </h1>
       </div>
       <p className="text-[11px] text-zinc-400 font-heading mb-3">
-        Click targets to hit them. More hits = more mastery when you end the session (faster than Train 5 min). Max {MAX_HITS_PER_SESSION} hits per session.
+        Shoot the red targets. Bullets travel in 3D; some targets move. More hits = more mastery when you end the session. Max {MAX_HITS_PER_SESSION} hits per session.
       </p>
 
       {!weaponId || !canPlay ? (
@@ -267,7 +391,7 @@ export default function ShootingRange3D() {
               </div>
             )}
           </div>
-          <p className="text-[10px] text-zinc-500 mt-2">Click the red targets. End session to convert hits into mastery.</p>
+          <p className="text-[10px] text-zinc-500 mt-2">Click to shoot. Moving targets swing side-to-side or up-and-down.</p>
         </>
       )}
     </div>
