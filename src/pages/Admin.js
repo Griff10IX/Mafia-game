@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3 } from 'lucide-react';
 import api from '../utils/api';
@@ -42,6 +42,30 @@ function loadCollapsed() {
 
 function saveCollapsed(state) {
   try { localStorage.setItem(SECTIONS_KEY, JSON.stringify(state)); } catch {}
+}
+
+function formatAttackLogTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const ms = d.getMilliseconds();
+  return d.toLocaleString() + '.' + String(ms).padStart(3, '0');
+}
+
+function parseAttackLogUA(ua) {
+  if (!ua || typeof ua !== 'string') return { device: '—', bot: null };
+  const s = ua.toLowerCase();
+  let bot = null;
+  if (/\b(bot|crawler|spider|scraper)\b/i.test(ua)) bot = 'Bot';
+  else if (/python|requests|urllib|aiohttp/i.test(ua)) bot = 'Python';
+  else if (/selenium|webdriver|headless/i.test(ua)) bot = 'Selenium';
+  else if (/curl|wget|libwww|axios\//i.test(ua)) bot = 'curl/wget';
+  else if (/postman|insomnia/i.test(ua)) bot = 'API client';
+  let device = 'PC';
+  if (/ipad|tablet(?!.*mobile)/i.test(ua) || (s.includes('tablet') && !s.includes('mobile'))) device = 'Tablet';
+  else if (/iphone|ipod/i.test(ua)) device = 'iPhone';
+  else if (/android/i.test(ua)) device = /mobile/i.test(ua) && !/tablet/i.test(ua) ? 'Android' : 'Android (tablet)';
+  else if (/mobile|opera mini|blackberry|windows phone/i.test(ua)) device = 'Mobile';
+  return { device, bot };
 }
 
 const AdminInput = (props) => (
@@ -223,9 +247,13 @@ export default function Admin() {
   const [economyAnalytics, setEconomyAnalytics] = useState(null);
   const [economyAnalyticsLoading, setEconomyAnalyticsLoading] = useState(false);
   const [attackLogsUsername, setAttackLogsUsername] = useState('');
-  const [attackLogsLimit, setAttackLogsLimit] = useState(500);
+  const [attackLogsLimit, setAttackLogsLimit] = useState(200);
   const [attackLogsData, setAttackLogsData] = useState(null);
   const [attackLogsLoading, setAttackLogsLoading] = useState(false);
+  const [attackLogsLive, setAttackLogsLive] = useState(false);
+  const attackLogsDataRef = useRef(null);
+  attackLogsDataRef.current = attackLogsData;
+  const [attackLogViewRow, setAttackLogViewRow] = useState(null);
   const [crimeLogsUsername, setCrimeLogsUsername] = useState('');
   const [crimeLogsLimit, setCrimeLogsLimit] = useState(500);
   const [crimeLogsData, setCrimeLogsData] = useState(null);
@@ -1242,6 +1270,42 @@ export default function Admin() {
       setAttackLogsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!attackLogsLive || !(attackLogsUsername || '').trim()) return;
+    const un = (attackLogsUsername || '').trim();
+    const limit = attackLogsLimit;
+    const run = async () => {
+      try {
+        const prev = attackLogsDataRef.current;
+        const since = prev?.logs?.length ? prev.logs[0].created_at : null;
+        const params = { username: un, limit: since ? 100 : limit };
+        if (since) params.since = since;
+        const res = await api.get('/admin/attacks/logs', { params });
+        const data = res.data;
+        if (!data) return;
+        if (since && prev?.logs?.length && data.logs?.length) {
+          const seen = new Set(prev.logs.map((l) => l.id));
+          const added = data.logs.filter((l) => !seen.has(l.id));
+          const merged = [...added, ...prev.logs]
+            .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+            .slice(0, limit);
+          setAttackLogsData({ ...data, logs: merged });
+        } else {
+          setAttackLogsData(data);
+        }
+      } catch { /* ignore */ }
+    };
+    const t = setInterval(run, 5000);
+    run();
+    return () => clearInterval(t);
+  }, [attackLogsLive, attackLogsUsername, attackLogsLimit]);
+
+  useEffect(() => {
+    if (!attackLogViewRow?.id || !attackLogsData?.logs?.length) return;
+    const found = attackLogsData.logs.find((l) => l.id === attackLogViewRow.id);
+    if (found) setAttackLogViewRow(found);
+  }, [attackLogsData]);
 
   const handleFetchCrimeLogs = async () => {
     const un = (crimeLogsUsername || '').trim();
@@ -2966,6 +3030,18 @@ export default function Admin() {
                 <BtnPrimary onClick={handleFetchAttackLogs} disabled={attackLogsLoading}>
                   {attackLogsLoading ? 'Loading…' : 'Load attack logs'}
                 </BtnPrimary>
+                <label className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={attackLogsLive}
+                    onChange={(e) => setAttackLogsLive(e.target.checked)}
+                    className="rounded border border-input"
+                  />
+                  Live
+                </label>
+                {attackLogsLive && (attackLogsUsername || '').trim() && (
+                  <span className="text-[9px] text-primary font-heading">Refreshing every 5s</span>
+                )}
               </div>
               {attackLogsData && (
                 <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
@@ -2982,14 +3058,19 @@ export default function Admin() {
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Player message</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">IP</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">User-Agent</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Device</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bot?</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bodyguard?</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bullets</th>
                           <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Location</th>
-                          <th className="py-1 font-bold text-mutedForeground uppercase">Time</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Time</th>
+                          <th className="py-1 font-bold text-mutedForeground uppercase">View</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {attackLogsData.logs.map((row, idx) => (
+                        {attackLogsData.logs.map((row, idx) => {
+                          const { device, bot } = parseAttackLogUA(row.user_agent);
+                          return (
                           <tr key={row.id || idx} className="border-b border-zinc-700/30">
                             <td className="py-1 pr-1 text-foreground">{row.attacker_username ?? '—'}</td>
                             <td className="py-1 pr-1 text-foreground">{row.target_username ?? '—'}</td>
@@ -3003,12 +3084,24 @@ export default function Admin() {
                             <td className="py-1 pr-1 max-w-[200px] truncate text-mutedForeground" title={row.player_message ?? ''}>{row.player_message ?? '—'}</td>
                             <td className="py-1 pr-1 text-mutedForeground font-mono text-[9px]">{row.client_ip ?? '—'}</td>
                             <td className="py-1 pr-1 max-w-[140px] truncate text-mutedForeground font-mono text-[8px]" title={row.user_agent ?? ''}>{row.user_agent ?? '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground">{device}</td>
+                            <td className="py-1 pr-1">{bot ? <span className="text-amber-400 font-medium">{bot}</span> : '—'}</td>
                             <td className="py-1 pr-1">{row.is_bodyguard_kill ? 'Yes' : '—'}</td>
                             <td className="py-1 pr-1">{row.bullets_used != null ? Number(row.bullets_used).toLocaleString() : '—'}</td>
                             <td className="py-1 pr-1 text-mutedForeground">{row.location_state ?? row.state ?? '—'}</td>
-                            <td className="py-1 text-mutedForeground">{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground font-mono">{formatAttackLogTime(row.created_at)}</td>
+                            <td className="py-1">
+                              <button
+                                type="button"
+                                onClick={() => setAttackLogViewRow(row)}
+                                className="px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary text-[9px] font-heading hover:bg-primary/20"
+                              >
+                                View
+                              </button>
+                            </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   )}

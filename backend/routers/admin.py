@@ -2117,11 +2117,13 @@ def register(router):
     async def admin_attacks_logs(
         username: str = Query(..., min_length=1),
         limit: int = Query(500, ge=1, le=1000),
+        since: Optional[str] = Query(None, description="ISO created_at; return only attempts after this (for live refresh)"),
         current_user: dict = Depends(get_current_user),
     ):
         """
         Admin/moderator only. Return raw attack_attempts for a user (as attacker or target).
         Full post data: who shot whom, outcome, bodyguard, bullets, location, etc.
+        Use since= to fetch only new entries (e.g. for live refresh).
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -2139,14 +2141,14 @@ def register(router):
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         uid = user["id"]
+        q = {"$or": [{"attacker_id": uid}, {"target_id": uid}]}
+        if since:
+            q["created_at"] = {"$gt": since}
         docs = (
-            await db.attack_attempts.find(
-                {"$or": [{"attacker_id": uid}, {"target_id": uid}]},
-                {"_id": 0},
-            )
+            await db.attack_attempts.find(q, {"_id": 0})
             .sort("created_at", -1)
             .to_list(limit)
-            )
+        )
         return {"username": user.get("username"), "logs": docs}
 
     @router.get("/admin/crimes/logs")
