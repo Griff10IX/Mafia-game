@@ -131,7 +131,7 @@ export default function MyProperties() {
   const handleCasinoSell = async () => {
     const c = data.casino;
     if (!c || saving) return;
-    const pts = parseInt(String(casinoSellPoints).replace(/\D/g, ''), 10);
+    const pts = parseInt(String(casinoSellPoints).replace(/,/g, '').replace(/\D/g, ''), 10);
     if (Number.isNaN(pts) || pts < 0) { toast.error('Enter 0 or more points'); return; }
     setSaving(true);
     try {
@@ -201,7 +201,7 @@ export default function MyProperties() {
   const handleAirportSell = async () => {
     const p = data.property;
     if (!p || p.type !== 'airport' || saving) return;
-    const pts = parseInt(String(airportSellPoints).replace(/\D/g, ''), 10);
+    const pts = parseInt(String(airportSellPoints).replace(/,/g, '').replace(/\D/g, ''), 10);
     if (Number.isNaN(pts) || pts < 0) { toast.error('Enter 0 or more points'); return; }
     setSaving(true);
     try {
@@ -266,7 +266,7 @@ export default function MyProperties() {
   const handleArmourySell = async () => {
     const p = data.property;
     if (!p || p.type !== 'bullet_factory' || saving) return;
-    const pts = parseInt(String(armourySellPoints).replace(/\D/g, ''), 10);
+    const pts = parseInt(String(armourySellPoints).replace(/,/g, '').replace(/\D/g, ''), 10);
     if (Number.isNaN(pts) || pts < 0) { toast.error('Enter 0 or more points'); return; }
     setSaving(true);
     try {
@@ -372,12 +372,10 @@ export default function MyProperties() {
                 </div>
                 <div className="flex flex-wrap gap-2 items-center mb-2">
                   <span className="text-[11px] text-mutedForeground w-16 shrink-0">Sell (pts)</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
+                  <FormattedNumberInput
                     value={casinoSellPoints}
-                    onChange={(e) => setCasinoSellPoints(e.target.value)}
-                    placeholder="Points"
+                    onChange={setCasinoSellPoints}
+                    placeholder="e.g. 50,000"
                     className="flex-1 min-w-20 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
                   />
                   <button type="button" onClick={handleCasinoSell} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
@@ -453,12 +451,10 @@ export default function MyProperties() {
                 </div>
                 <div className="flex flex-wrap gap-2 items-center mb-2">
                   <span className="text-[11px] text-mutedForeground w-16 shrink-0">Sell (pts)</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
+                  <FormattedNumberInput
                     value={airportSellPoints}
-                    onChange={(e) => setAirportSellPoints(e.target.value)}
-                    placeholder="Points"
+                    onChange={setAirportSellPoints}
+                    placeholder="e.g. 50,000"
                     className="flex-1 min-w-20 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
                   />
                   <button type="button" onClick={handleAirportSell} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
@@ -529,12 +525,10 @@ export default function MyProperties() {
                 </div>
                 <div className="flex flex-wrap gap-2 items-center mb-2">
                   <span className="text-[11px] text-mutedForeground w-16 shrink-0">Sell (pts)</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
+                  <FormattedNumberInput
                     value={armourySellPoints}
-                    onChange={(e) => setArmourySellPoints(e.target.value)}
-                    placeholder="Points"
+                    onChange={setArmourySellPoints}
+                    placeholder="e.g. 50,000"
                     className="flex-1 min-w-20 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
                   />
                   <button type="button" onClick={handleArmourySell} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">

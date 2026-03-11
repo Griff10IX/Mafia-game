@@ -1481,7 +1481,17 @@ async def startup_db():
                 logging.exception("Bodyguard weekly payout ticker: %s", e)
             await asyncio.sleep(60)
     asyncio.create_task(bodyguard_payout_ticker())
-    # Telegram: register webhook (so bot receives /autorank etc.) and set command menu
+    # Weekly leaderboard payout: run once per week (check every 60s), pay top 10 per category for previous week
+    from routers import leaderboard as leaderboard_router
+    async def leaderboard_payout_ticker():
+        while True:
+            try:
+                await leaderboard_router.run_weekly_leaderboard_payout(db)
+            except Exception as e:
+                logging.exception("Weekly leaderboard payout ticker: %s", e)
+            await asyncio.sleep(60)
+    asyncio.create_task(leaderboard_payout_ticker())
+    # Telegram: register webhook
     _tg_token = getattr(security_module, "TELEGRAM_BOT_TOKEN", "") or ""
     if _tg_token:
         _webhook_base = (os.environ.get("TELEGRAM_WEBHOOK_BASE_URL") or os.environ.get("BASE_URL") or "").strip().rstrip("/")

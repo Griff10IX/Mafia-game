@@ -1,12 +1,13 @@
 # Leaderboard endpoints: single leaderboard, top N per stat (alive or dead); weekly or all-time
 import asyncio
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import List
-from pydantic import BaseModel
 
 from fastapi import Depends, Query
+from pydantic import BaseModel
 
-from server import db, get_current_user, ADMIN_EMAILS
+from server import ADMIN_EMAILS, db, get_current_user
 
 # Exclude admin accounts and moderators from leaderboards
 def _leaderboard_user_filter() -> dict:
@@ -127,7 +128,166 @@ async def _top_by_field_weekly(
     ]
 
 
-async def get_leaderboard(current_user: dict = Depends(get_current_user)):
+async def _top_by_field_for_week(
+    database,
+    collection: str,
+    user_field: str,
+    time_field: str,
+    time_is_iso: bool,
+    week_start_dt: datetime,
+    week_end_dt: datetime,
+    limit: int,
+    extra_match: dict = None,
+) -> List[dict]:
+    """Aggregate events in collection between week_start_dt and week_end_dt; return top N as [{user_id, value, rank}] for alive non-bodyguard non-npc users."""
+    limit = max(1, min(100, int(limit)))
+    match_time = (
+        {"$gte": week_start_dt.isoformat(), "$lt": week_end_dt.isoformat()}
+        if time_is_iso
+        else {"$gte": week_start_dt, "$lt": week_end_dt}
+    )
+    match_stage = {time_field: match_time}
+    if extra_match:
+        match_stage.update(extra_match)
+    pipeline = [
+        {"$match": match_stage},
+        {"$group": {"_id": f"${user_field}", "value": {"$sum": 1}}},
+        {"$sort": {"value": -1}},
+        {"$limit": limit * 2},
+    ]
+    coll = getattr(database, collection)
+    cursor = coll.aggregate(pipeline)
+    docs = await cursor.to_list(limit * 2)
+    if not docs:
+        return []
+    user_ids = [d["_id"] for d in docs if d.get("_id")]
+    q = {"id": {"$in": user_ids}}
+    q.update(_leaderboard_user_filter())
+    users_map = await database.users.find(
+        q,
+        {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1},
+    ).to_list(len(user_ids) + 1)
+    users_by_id = {u["id"]: u for u in users_map}
+    filtered = []
+    for d in docs:
+        uid = d.get("_id")
+        if not uid:
+            continue
+        u = users_by_id.get(uid)
+        if not u:
+            continue
+        if u.get("is_dead"):
+            continue
+        if u.get("is_bodyguard") or u.get("is_npc"):
+            continue
+        filtered.append({"user_id": uid, "value": int(d.get("value") or 0)})
+    filtered = filtered[:limit]
+    return [{"user_id": e["user_id"], "value": e["value"], "rank": i + 1} for i, e in enumerate(filtered)]
+
+
+LEADERBOARD_PAYOUT_CONFIG_ID = "leaderboard_weekly_payout"
+DEFAULT_TOP1_POINTS = 5000
+DEFAULT_TOP2_POINTS = 3000
+DEFAULT_TOP3_POINTS = 1000
+DEFAULT_TOP4_10_POINTS = 500
+
+
+async def run_weekly_leaderboard_payout(database, test_run: bool = False):
+    """
+    Run weekly leaderboard payout for the previous week (Monday 00:00 UTC to next Monday 00:00 UTC).
+    Uses game_config id leaderboard_weekly_payout with last_run_week_start (YYYY-MM-DD) for idempotency.
+    Rewards are read from game_config: top1_points, top2_points, top3_points, top4_10_points (defaults 5000, 3000, 1000, 500).
+    Pays points to top 10 per category (kills, crimes, gta, jail_busts) from database event collections.
+    """
+    log = logging.getLogger(__name__)
+    now = datetime.now(timezone.utc)
+    this_week_start = _week_start(now)
+    last_week_start = this_week_start - timedelta(days=7)
+    last_week_start_str = last_week_start.strftime("%Y-%m-%d")
+
+    cfg = await database.game_config.find_one(
+        {"id": LEADERBOARD_PAYOUT_CONFIG_ID},
+        {"_id": 0, "last_run_week_start": 1, "top1_points": 1, "top2_points": 1, "top3_points": 1, "top4_10_points": 1},
+    )
+    if cfg and cfg.get("last_run_week_start") == last_week_start_str and not test_run:
+        return
+
+    top1 = int(cfg.get("top1_points") or DEFAULT_TOP1_POINTS) if cfg else DEFAULT_TOP1_POINTS
+    top2 = int(cfg.get("top2_points") or DEFAULT_TOP2_POINTS) if cfg else DEFAULT_TOP2_POINTS
+    top3 = int(cfg.get("top3_points") or DEFAULT_TOP3_POINTS) if cfg else DEFAULT_TOP3_POINTS
+    top4_10 = int(cfg.get("top4_10_points") or DEFAULT_TOP4_10_POINTS) if cfg else DEFAULT_TOP4_10_POINTS
+
+    def points_for_rank(rank: int) -> int:
+        if rank == 1:
+            return top1
+        if rank == 2:
+            return top2
+        if rank == 3:
+            return top3
+        if 4 <= rank <= 10:
+            return top4_10
+        return 0
+
+    if not test_run:
+        claim_filter = {
+            "id": LEADERBOARD_PAYOUT_CONFIG_ID,
+            "$or": [
+                {"last_run_week_start": {"$ne": last_week_start_str}},
+                {"last_run_week_start": {"$exists": False}},
+            ],
+        }
+        claim_result = await database.game_config.update_one(
+            claim_filter,
+            {"$set": {"last_run_week_start": last_week_start_str}},
+            upsert=True,
+        )
+        if claim_result.modified_count == 0 and claim_result.upserted_id is None:
+            return
+
+    kills, crimes, gta, jail_busts = await asyncio.gather(
+        _top_by_field_for_week(
+            database, "attack_attempts", "attacker_id", "created_at", True,
+            last_week_start, this_week_start, 10, {"outcome": "killed"},
+        ),
+        _top_by_field_for_week(
+            database, "crime_events", "user_id", "at", False,
+            last_week_start, this_week_start, 10, None,
+        ),
+        _top_by_field_for_week(
+            database, "gta_events", "user_id", "at", False,
+            last_week_start, this_week_start, 10, None,
+        ),
+        _top_by_field_for_week(
+            database, "bust_events", "user_id", "at", False,
+            last_week_start, this_week_start, 10, None,
+        ),
+    )
+
+    user_points: dict = {}
+    for entry in kills + crimes + gta + jail_busts:
+        uid = entry.get("user_id")
+        rank = entry.get("rank", 0)
+        if not uid:
+            continue
+        user_points[uid] = user_points.get(uid, 0) + points_for_rank(rank)
+
+    if test_run:
+        log.info(
+            "Weekly leaderboard payout (test_run): week %s would pay %d users total %d points",
+            last_week_start_str, len(user_points), sum(user_points.values()),
+        )
+        return
+
+    for user_id, points in user_points.items():
+        if points <= 0:
+            continue
+        await database.users.update_one({"id": user_id}, {"$inc": {"points": points}})
+
+    if user_points:
+        log.info(
+            "Weekly leaderboard payout: week %s paid %d users total %d points",
+            last_week_start_str, len(user_points), sum(user_points.values()),
+        )
     query = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
     query.update(_leaderboard_user_filter())
     users = await db.users.find(

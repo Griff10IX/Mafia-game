@@ -449,7 +449,7 @@ async def get_properties_for_sale(current_user: dict = Depends(get_current_user)
     if _properties_cache is not None and now <= _properties_ts + _LIST_TTL_SEC:
         return _properties_cache
     try:
-        properties = await db.properties.find({"for_sale": True}).sort("created_at", -1).to_list(length=100)
+        properties = await db.properties.find({"for_sale": True, "type": {"$ne": "casino_slots"}}).sort("created_at", -1).to_list(length=100)
         result = []
         for prop in properties:
             result.append({

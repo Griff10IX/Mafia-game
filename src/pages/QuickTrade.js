@@ -25,6 +25,9 @@ export default function QuickTrade() {
   const [buyOffer, setBuyOffer] = useState('');
   const [hideNameSell, setHideNameSell] = useState(false);
   const [hideNameBuy, setHideNameBuy] = useState(false);
+  const [sellOfferCount, setSellOfferCount] = useState(1);
+  const [buyOfferCount, setBuyOfferCount] = useState(1);
+  const [creatingOffers, setCreatingOffers] = useState(false);
 
   useEffect(() => {
     fetchTrades();
@@ -69,19 +72,33 @@ export default function QuickTrade() {
       toast.error('Enter points and cost');
       return;
     }
+    const count = Math.max(1, Math.min(10, parseInt(String(sellOfferCount), 10) || 1));
+    setCreatingOffers(true);
+    let created = 0;
     try {
-      await api.post('/trade/sell-offer', {
-        points: parseInt(sellPoints),
-        cost: parseInt(sellCost),
-        hide_name: hideNameSell
-      });
-      toast.success('Sell offer created!');
+      for (let i = 0; i < count; i++) {
+        await api.post('/trade/sell-offer', {
+          points: parseInt(String(sellPoints).replace(/,/g, ''), 10) || 0,
+          cost: Math.round(parseFloat(String(sellCost).replace(/,/g, '')) || 0),
+          hide_name: hideNameSell
+        });
+        created++;
+      }
+      toast.success(created === 1 ? 'Sell offer created!' : `${created} sell offers created!`);
       setSellPoints('');
       setSellCost('');
       fetchTrades();
       refreshUser();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to create offer');
+      if (created > 0) {
+        toast.success(`${created} offer(s) created. ${e.response?.data?.detail || 'Stopped.'}`);
+        fetchTrades();
+        refreshUser();
+      } else {
+        toast.error(e.response?.data?.detail || 'Failed to create offer');
+      }
+    } finally {
+      setCreatingOffers(false);
     }
   };
 
@@ -90,19 +107,33 @@ export default function QuickTrade() {
       toast.error('Enter points and offer amount');
       return;
     }
+    const count = Math.max(1, Math.min(10, parseInt(String(buyOfferCount), 10) || 1));
+    setCreatingOffers(true);
+    let created = 0;
     try {
-      await api.post('/trade/buy-offer', {
-        points: parseInt(buyPoints),
-        offer: parseInt(buyOffer),
-        hide_name: hideNameBuy
-      });
-      toast.success('Buy offer created!');
+      for (let i = 0; i < count; i++) {
+        await api.post('/trade/buy-offer', {
+          points: parseInt(String(buyPoints).replace(/,/g, ''), 10) || 0,
+          offer: Math.round(parseFloat(String(buyOffer).replace(/,/g, '')) || 0),
+          hide_name: hideNameBuy
+        });
+        created++;
+      }
+      toast.success(created === 1 ? 'Buy offer created!' : `${created} buy offers created!`);
       setBuyPoints('');
       setBuyOffer('');
       fetchTrades();
       refreshUser();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to create offer');
+      if (created > 0) {
+        toast.success(`${created} offer(s) created. ${e.response?.data?.detail || 'Stopped.'}`);
+        fetchTrades();
+        refreshUser();
+      } else {
+        toast.error(e.response?.data?.detail || 'Failed to create offer');
+      }
+    } finally {
+      setCreatingOffers(false);
     }
   };
 
@@ -206,7 +237,7 @@ export default function QuickTrade() {
               <FormattedNumberInput
                 value={sellPoints}
                 onChange={setSellPoints}
-                placeholder="Enter points"
+                placeholder="e.g. 50,000"
                 className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
               />
             </div>
@@ -215,7 +246,8 @@ export default function QuickTrade() {
               <FormattedNumberInput
                 value={sellCost}
                 onChange={setSellCost}
-                placeholder="Price"
+                allowDecimals
+                placeholder="e.g. 50,000"
                 className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
               />
               {sellPoints && sellCost && (
@@ -240,13 +272,26 @@ export default function QuickTrade() {
               <input type="checkbox" id="hideNameSell" checked={hideNameSell} onChange={(e) => setHideNameSell(e.target.checked)} className="rounded border-zinc-600" />
               <label htmlFor="hideNameSell" className="text-[10px] text-mutedForeground font-heading cursor-pointer">Hide name</label>
             </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="sellOfferCount" className="text-[10px] text-mutedForeground font-heading whitespace-nowrap">Number of offers</label>
+              <input
+                id="sellOfferCount"
+                type="number"
+                min={1}
+                max={10}
+                value={sellOfferCount}
+                onChange={(e) => setSellOfferCount(Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 1)))}
+                className="w-16 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-sm text-foreground font-heading text-center"
+              />
+              <span className="text-[10px] text-mutedForeground font-heading">(x{sellOfferCount})</span>
+            </div>
             <button
               onClick={handleCreateSellOffer}
-              disabled={!sellPoints || !sellCost}
+              disabled={!sellPoints || !sellCost || creatingOffers}
               className="w-full px-4 py-2 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Add ${sellCost ? formatNumber(sellCost) : '0'}
-              {sellPoints && <span className="text-[10px] opacity-90 ml-1">({formatNumber(sellAfterFee)} after fee)</span>}
+              {creatingOffers ? `Adding ${sellOfferCount}…` : `Add ${sellOfferCount > 1 ? `x${sellOfferCount} ` : ''}$${sellCost ? formatNumber(sellCost) : '0'}`}
+              {!creatingOffers && sellPoints && sellOfferCount === 1 && <span className="text-[10px] opacity-90 ml-1">({formatNumber(sellAfterFee)} after fee)</span>}
             </button>
           </div>
           <div className="qt-art-line text-primary mx-3" />
@@ -267,7 +312,7 @@ export default function QuickTrade() {
               <FormattedNumberInput
                 value={buyPoints}
                 onChange={setBuyPoints}
-                placeholder="Points wanted"
+                placeholder="e.g. 50,000"
                 className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
               />
             </div>
@@ -276,7 +321,8 @@ export default function QuickTrade() {
               <FormattedNumberInput
                 value={buyOffer}
                 onChange={setBuyOffer}
-                placeholder="Your offer"
+                allowDecimals
+                placeholder="e.g. 50,000"
                 className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
               />
               {buyPoints && buyOffer && (
@@ -301,13 +347,26 @@ export default function QuickTrade() {
               <input type="checkbox" id="hideNameBuy" checked={hideNameBuy} onChange={(e) => setHideNameBuy(e.target.checked)} className="rounded border-zinc-600" />
               <label htmlFor="hideNameBuy" className="text-[10px] text-mutedForeground font-heading cursor-pointer">Hide name</label>
             </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="buyOfferCount" className="text-[10px] text-mutedForeground font-heading whitespace-nowrap">Number of offers</label>
+              <input
+                id="buyOfferCount"
+                type="number"
+                min={1}
+                max={10}
+                value={buyOfferCount}
+                onChange={(e) => setBuyOfferCount(Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 1)))}
+                className="w-16 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-sm text-foreground font-heading text-center"
+              />
+              <span className="text-[10px] text-mutedForeground font-heading">(x{buyOfferCount})</span>
+            </div>
             <button
               onClick={handleCreateBuyOffer}
-              disabled={!buyPoints || !buyOffer}
+              disabled={!buyPoints || !buyOffer || creatingOffers}
               className="w-full px-4 py-2 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Add ${buyOffer ? formatNumber(buyOffer) : '0'}
-              {buyPoints && <span className="text-[10px] opacity-90 ml-1">({formatNumber(buyAfterFee)} after fee)</span>}
+              {creatingOffers ? `Adding ${buyOfferCount}…` : `Add ${buyOfferCount > 1 ? `x${buyOfferCount} ` : ''}$${buyOffer ? formatNumber(buyOffer) : '0'}`}
+              {!creatingOffers && buyPoints && buyOfferCount === 1 && <span className="text-[10px] opacity-90 ml-1">({formatNumber(buyAfterFee)} after fee)</span>}
             </button>
           </div>
           <div className="qt-art-line text-primary mx-3" />
@@ -537,7 +596,7 @@ export default function QuickTrade() {
                     <td className="px-4 py-2 font-heading text-xs text-foreground">{prop.location}</td>
                     <td className="px-4 py-2 font-heading text-xs text-foreground">{prop.property_name}</td>
                     <td className="px-4 py-2 font-heading text-xs text-foreground">{prop.owner}</td>
-                    <td className="px-4 py-2 text-right font-heading text-xs text-primary font-bold">{prop.points?.toLocaleString()}</td>
+                    <td className="px-4 py-2 text-right font-heading text-xs text-primary font-bold">{formatNumber(prop.points)}</td>
                     <td className="px-4 py-2 text-center">
                       <button onClick={() => handleAcceptOffer(prop.id, 'property')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30">
                         Buy
@@ -561,7 +620,7 @@ export default function QuickTrade() {
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-start gap-2">
                     <span className="text-xs font-heading font-bold text-foreground">{prop.property_name}</span>
-                    <span className="text-xs font-heading text-primary font-bold">{prop.points?.toLocaleString()} pts</span>
+                    <span className="text-xs font-heading text-primary font-bold">{formatNumber(prop.points)} pts</span>
                   </div>
                   <div className="text-[10px] text-mutedForeground space-y-0.5">
                     <div>Location: <span className="text-foreground">{prop.location}</span></div>
