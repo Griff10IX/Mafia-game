@@ -1,7 +1,7 @@
 # User progress: rank progress, wealth ranks list, wealth progress
 from fastapi import Depends
 
-from server import get_current_user, get_rank_info, get_wealth_rank, RANKS, WEALTH_RANKS, PRESTIGE_CONFIGS, get_prestige_requirement
+from server import get_current_user, get_rank_info, get_wealth_rank, RANKS, WEALTH_RANKS, PRESTIGE_CONFIGS, get_prestige_requirement, GODFATHER_RANK_ID
 
 
 async def get_rank_progress(current_user: dict = Depends(get_current_user)):
@@ -14,7 +14,7 @@ async def get_rank_progress(current_user: dict = Depends(get_current_user)):
 
     current_rank_id, current_rank_name = get_rank_info(raw_points, prestige_mult)
 
-    if current_rank_id >= 11:
+    if current_rank_id >= GODFATHER_RANK_ID:
         # At Godfather — show progress toward next prestige requirement so bar matches prestige %
         next_req = get_prestige_requirement(prestige_level) if prestige_level < 5 else 0
         if next_req:

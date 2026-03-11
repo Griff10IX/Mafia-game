@@ -30,6 +30,7 @@ from server import (
     ADMIN_EMAILS,
     _is_moderator,
     CAPO_RANK_ID,
+    GODFATHER_RANK_ID,
     get_rank_info,
     get_effective_event,
     send_notification,
@@ -367,8 +368,8 @@ def _bullets_to_kill(
     attacker_rank_id: int,
 ) -> int:
     arm = min(max(0, int(target_armour_level or 0)), 6)
-    tr = min(max(1, int(target_rank_id or 1)), 11)
-    ar = min(max(1, int(attacker_rank_id or 1)), 11)
+    tr = min(max(1, int(target_rank_id or 1)), GODFATHER_RANK_ID)
+    ar = min(max(1, int(attacker_rank_id or 1)), GODFATHER_RANK_ID)
     dmg = max(5, int(attacker_weapon_damage or 5))
     base = ARMOUR_BASE_BULLETS.get(arm, MIN_BULLETS_TO_KILL)
     gap = max(0, tr - ar)
@@ -386,8 +387,8 @@ def _bullets_to_kill_breakdown(
     attacker_rank_id: int,
 ) -> dict:
     arm = min(max(0, int(target_armour_level or 0)), 6)
-    tr = min(max(1, int(target_rank_id or 1)), 11)
-    ar = min(max(1, int(attacker_rank_id or 1)), 11)
+    tr = min(max(1, int(target_rank_id or 1)), GODFATHER_RANK_ID)
+    ar = min(max(1, int(attacker_rank_id or 1)), GODFATHER_RANK_ID)
     dmg = max(5, int(attacker_weapon_damage or 5))
     base = ARMOUR_BASE_BULLETS.get(arm, MIN_BULLETS_TO_KILL)
     gap = max(0, tr - ar)

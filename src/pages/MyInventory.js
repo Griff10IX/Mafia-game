@@ -98,7 +98,7 @@ export default function MyInventory() {
     }
   };
 
-  const useToken = async (tokenType) => {
+  const activateToken = async (tokenType) => {
     setUsingToken(tokenType);
     try {
       const res = await api.post('/inventory/tokens/use', { token_type: tokenType });
@@ -243,7 +243,7 @@ export default function MyInventory() {
                     <button
                       type="button"
                       disabled={t.count < 1 || usingToken !== null}
-                      onClick={() => useToken(key)}
+                      onClick={() => activateToken(key)}
                       className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 shrink-0"
                     >
                       {usingToken === key ? '...' : 'Use'}

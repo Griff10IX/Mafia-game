@@ -2,7 +2,7 @@
 from fastapi import Depends, HTTPException
 
 
-def register(router):
+    def register(router):
     import server as srv
 
     db = srv.db
@@ -11,6 +11,7 @@ def register(router):
     PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     get_prestige_bonus = srv.get_prestige_bonus
     get_prestige_requirement = srv.get_prestige_requirement
+    GODFATHER_RANK_ID = srv.GODFATHER_RANK_ID
 
     @router.get("/prestige/info")
     async def prestige_info(current_user: dict = Depends(get_current_user)):
@@ -28,7 +29,7 @@ def register(router):
         # Require Godfather rank and effective RP >= next level's requirement
         can_prestige = (
             not at_max
-            and rank_id >= 11
+            and rank_id >= GODFATHER_RANK_ID
             and godfather_req is not None
             and effective_rp >= godfather_req
         )
@@ -81,7 +82,7 @@ def register(router):
         godfather_req = get_prestige_requirement(level)
 
         rank_id, _ = get_rank_info(rank_points, mult)
-        if rank_id < 11:
+        if rank_id < GODFATHER_RANK_ID:
             raise HTTPException(status_code=400, detail="You must reach Godfather rank before prestiging")
         if godfather_req is None or godfather_req <= 0 or effective_rp < godfather_req:
             raise HTTPException(status_code=400, detail=f"You need {godfather_req:,} effective rank points to prestige (you have {effective_rp:,})")

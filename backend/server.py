@@ -101,20 +101,23 @@ api_router = APIRouter(prefix="/api")
 # Constants
 STATES = ["Chicago", "New York", "Las Vegas", "Atlantic City"]
 # Rank is based on rank_points only; 20x harder than original scale. Godfather is the top rank.
-# Required points increased ~25% to offset XP tokens (double XP from crimes/GTA/jailbusts).
+# Points spread evenly so higher ranks don't feel disproportionately long (similar gaps at top).
 RANKS = [
     {"id": 1, "name": "Rat", "required_points": 0},
-    {"id": 2, "name": "Street Thug", "required_points": 313},
-    {"id": 3, "name": "Hustler", "required_points": 1250},
-    {"id": 4, "name": "Goon", "required_points": 3750},
-    {"id": 5, "name": "Made Man", "required_points": 7500},
-    {"id": 6, "name": "Capo", "required_points": 15000},
-    {"id": 7, "name": "Underboss", "required_points": 30000},
-    {"id": 8, "name": "Consigliere", "required_points": 62500},
-    {"id": 9, "name": "Boss", "required_points": 125000},
-    {"id": 10, "name": "Don", "required_points": 250000},
-    {"id": 11, "name": "Godfather", "required_points": 500000},
+    {"id": 2, "name": "Street Thug", "required_points": 300},
+    {"id": 3, "name": "Hustler", "required_points": 1200},
+    {"id": 4, "name": "Goon", "required_points": 3600},
+    {"id": 5, "name": "Made Man", "required_points": 7200},
+    {"id": 6, "name": "Capo", "required_points": 14500},
+    {"id": 7, "name": "Underboss", "required_points": 29000},
+    {"id": 8, "name": "Consigliere", "required_points": 60000},
+    {"id": 9, "name": "Boss", "required_points": 120000},
+    {"id": 10, "name": "Don", "required_points": 240000},
+    {"id": 11, "name": "Capo di tutti capi", "required_points": 560000},
+    {"id": 12, "name": "Boss of Bosses", "required_points": 880000},
+    {"id": 13, "name": "Godfather", "required_points": 1200000},
 ]
+GODFATHER_RANK_ID = RANKS[-1]["id"]  # Top rank (prestige requires this)
 CAPO_RANK_ID = 6  # Minimum rank to claim or hold casino/property; below-Capo owners have 3h grace then auto-relinquish
 
 # Prestige: 5 levels unlocked after reaching Godfather. Each level harder to rank through.
