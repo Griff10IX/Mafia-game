@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from bson.objectid import ObjectId
 
 from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS
+from routers.store import _store_cost_inc
 
 # 5k bullets per 24h, effectively delivered every 20 mins (72 ticks per day)
 BULLET_FACTORY_TOTAL_PER_24H = 5000
@@ -35,6 +36,10 @@ ARMOURY_MAX_STOCK_PER_ITEM = 15
 
 # Store: buy bullets with points (pack size -> points cost)
 BULLET_PACKS = {5000: 100, 10000: 175, 50000: 775, 100000: 1525}  # matches store
+
+# Consumable tokens: 1 token = 1 hour effect. Types: xp_double (double XP from crimes/GTA/jailbusts), jailbust_bonus (+10% bust success).
+TOKEN_TYPES = ("xp_double", "jailbust_bonus")
+TOKEN_DURATION_HOURS = 1
 
 
 class StateOptionalRequest(BaseModel):
@@ -68,6 +73,10 @@ class StartWeaponProductionRequest(BaseModel):
 
 class StateOptionalBody(BaseModel):
     state: Optional[str] = None
+
+
+class UseTokenRequest(BaseModel):
+    token_type: str  # "xp_double" | "jailbust_bonus"
 
 
 def _normalize_state(state: str) -> str:
@@ -780,17 +789,17 @@ async def buy_bullets(
 
 
 async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_current_user)):
-    """Buy bullets with points (store)."""
+    """Buy bullets from store: use respect points first (5 respect = 1 point), then points."""
     cost = BULLET_PACKS.get(bullets)
     if cost is None:
         raise HTTPException(status_code=400, detail=f"Invalid bullet pack. Choose from: {', '.join(str(k) for k in BULLET_PACKS)}")
-    if current_user["points"] < cost:
-        raise HTTPException(status_code=400, detail=f"Insufficient points. Need {cost}, have {current_user['points']}")
+    cost_used, inc = _store_cost_inc(current_user, cost)
+    inc["bullets"] = bullets
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -cost, "bullets": bullets}}
+        {"$inc": inc},
     )
-    return {"message": f"Bought {bullets:,} bullets for {cost} points", "bullets": bullets, "cost": cost}
+    return {"message": f"Bought {bullets:,} bullets for {cost_used} points", "bullets": bullets, "cost": cost_used}
 
 
 async def admin_add_bullets(target_username: str, bullets: int, current_user: dict = Depends(get_current_user)):
@@ -1295,8 +1304,59 @@ async def _best_weapon_for_user(user_id: str, equipped_weapon_id: str | None = N
     return best_damage, best_name
 
 
+def _tokens_from_user(user: dict) -> dict:
+    """Build tokens dict for inventory: count and active_until per token type."""
+    now = datetime.now(timezone.utc)
+    field_count = {"xp_double": "xp_double_tokens", "jailbust_bonus": "jailbust_tokens"}
+    field_until = {"xp_double": "xp_double_until", "jailbust_bonus": "jailbust_bonus_until"}
+    out = {}
+    for t in TOKEN_TYPES:
+        count = int(user.get(field_count[t]) or 0)
+        until_raw = user.get(field_until[t])
+        active_until = None
+        if until_raw:
+            try:
+                until = datetime.fromisoformat(until_raw.replace("Z", "+00:00"))
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=timezone.utc)
+                if until > now:
+                    active_until = until.isoformat()
+            except Exception:
+                pass
+        out[t] = {"count": count, "active_until": active_until}
+    return out
+
+
+async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depends(get_current_user)):
+    """Use one consumable token (e.g. xp_double, jailbust_bonus). Sets active effect for 1 hour and decrements count."""
+    if req.token_type not in TOKEN_TYPES:
+        raise HTTPException(status_code=400, detail=f"Invalid token_type. Use one of: {list(TOKEN_TYPES)}")
+    count_field = "xp_double_tokens" if req.token_type == "xp_double" else "jailbust_tokens"
+    until_field = "xp_double_until" if req.token_type == "xp_double" else "jailbust_bonus_until"
+    count = int(current_user.get(count_field) or 0)
+    if count < 1:
+        raise HTTPException(status_code=400, detail="No tokens of this type available.")
+    now = datetime.now(timezone.utc)
+    expiry = now + timedelta(hours=TOKEN_DURATION_HOURS)
+    result = await db.users.update_one(
+        {"id": current_user["id"], count_field: {"$gte": 1}},
+        {"$inc": {count_field: -1}, "$set": {until_field: expiry.isoformat()}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="No tokens of this type available or race condition.")
+    tokens = _tokens_from_user({
+        **current_user,
+        count_field: count - 1,
+        until_field: expiry.isoformat(),
+    })
+    return {
+        "message": f"Token used. Effect active for {TOKEN_DURATION_HOURS} hour(s).",
+        "tokens": tokens,
+    }
+
+
 async def get_inventory(request: Request, current_user: dict = Depends(get_current_user)):
-    """Aggregate weapons, armour, and loot exclusives for the My Inventory page."""
+    """Aggregate weapons, armour, loot exclusives, and consumable tokens for the My Inventory page."""
     weapons = await get_weapons(request, current_user)
     armour = await get_armour_options(request, current_user)
     uid = current_user["id"]
@@ -1308,6 +1368,7 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
         if cinfo and cinfo.get("rarity") in ("loot_exclusive", "exclusive"):
             exclusive_cars.append({"id": uc.get("id"), "name": cinfo.get("name", "?"), "car_id": uc.get("car_id"), "rarity": cinfo.get("rarity", "loot_exclusive")})
     speakeasy = await db.exclusive_properties.find_one({"owner_id": uid, "type": "speakeasy"}, {"_id": 1})
+    tokens = _tokens_from_user(current_user)
     return {
         "weapons": [w.model_dump() if hasattr(w, "model_dump") else w for w in weapons],
         "armour": armour,
@@ -1315,6 +1376,7 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
             "exclusive_cars": exclusive_cars,
             "has_speakeasy": speakeasy is not None,
         },
+        "tokens": tokens,
     }
 
 
@@ -1347,3 +1409,4 @@ def register(router):
     router.add_api_route("/weapons/{weapon_id}/buy", buy_weapon, methods=["POST"])
     router.add_api_route("/weapons/{weapon_id}/sell", sell_weapon, methods=["POST"])
     router.add_api_route("/inventory", get_inventory, methods=["GET"])
+    router.add_api_route("/inventory/tokens/use", use_consumable_token, methods=["POST"])

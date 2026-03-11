@@ -12,6 +12,8 @@ from server import (
     db,
     get_current_user,
     get_rank_info,
+    get_effective_event,
+    get_prestige_bonus,
     send_notification,
     STATES,
     RANKS,
@@ -57,6 +59,41 @@ SECURITY_UPGRADES = [
     {"id": "armoured_desk", "name": "Armoured desk", "defence_weight": 8},
     {"id": "back_exit", "name": "Hidden back exit", "defence_weight": 9},
     {"id": "panic_button", "name": "Panic button to the family", "defence_weight": 13},
+    # Tier 3–4 (indices 15–34)
+    {"id": "reinforced_door_2", "name": "Heavy reinforced door", "defence_weight": 10},
+    {"id": "vault_2", "name": "Secondary vault", "defence_weight": 14},
+    {"id": "lookout_2", "name": "Rooftop lookout", "defence_weight": 12},
+    {"id": "bouncers_2", "name": "Extra bouncers", "defence_weight": 16},
+    {"id": "alarm_2", "name": "Perimeter alarm", "defence_weight": 11},
+    {"id": "bribed_cop_2", "name": "Second beat cop", "defence_weight": 15},
+    {"id": "thompson_2", "name": "Second Thompson", "defence_weight": 19},
+    {"id": "iron_bars_2", "name": "Reinforced bars", "defence_weight": 8},
+    {"id": "guard_dog_2", "name": "Second guard dog", "defence_weight": 12},
+    {"id": "spotlight_2", "name": "Rear spotlight", "defence_weight": 7},
+    {"id": "safe_room_2", "name": "Reinforced safe room", "defence_weight": 18},
+    {"id": "wire_taps_2", "name": "Extended wire taps", "defence_weight": 11},
+    {"id": "armoured_desk_2", "name": "Double armoured desk", "defence_weight": 9},
+    {"id": "back_exit_2", "name": "Second back exit", "defence_weight": 10},
+    {"id": "panic_button_2", "name": "Backup panic line", "defence_weight": 14},
+    {"id": "reinforced_door_3", "name": "Bank-grade door", "defence_weight": 11},
+    {"id": "vault_3", "name": "Main vault upgrade", "defence_weight": 15},
+    {"id": "lookout_3", "name": "Street lookouts", "defence_weight": 13},
+    {"id": "bouncers_3", "name": "Elite bouncers", "defence_weight": 17},
+    {"id": "alarm_3", "name": "Full building alarm", "defence_weight": 12},
+    {"id": "bribed_cop_3", "name": "Sergeant on payroll", "defence_weight": 16},
+    {"id": "thompson_3", "name": "Thompson squad", "defence_weight": 20},
+    {"id": "iron_bars_3", "name": "Steel cage", "defence_weight": 9},
+    {"id": "guard_dog_3", "name": "K-9 unit", "defence_weight": 13},
+    {"id": "spotlight_3", "name": "Full perimeter lights", "defence_weight": 8},
+    {"id": "safe_room_3", "name": "Bunker safe room", "defence_weight": 19},
+    {"id": "wire_taps_3", "name": "City-wide taps", "defence_weight": 12},
+    {"id": "armoured_desk_3", "name": "Vault desk", "defence_weight": 10},
+    {"id": "back_exit_3", "name": "Tunnel exit", "defence_weight": 11},
+    {"id": "panic_button_3", "name": "Family rapid response", "defence_weight": 15},
+    {"id": "reinforced_door_4", "name": "Bunker door", "defence_weight": 12},
+    {"id": "vault_4", "name": "Underground vault", "defence_weight": 16},
+    {"id": "lookout_4", "name": "24/7 watch", "defence_weight": 14},
+    {"id": "bouncers_4", "name": "Armoured bouncers", "defence_weight": 18},
 ]
 # Cost for security upgrade at index i: base + step * i (gradually higher).
 SECURITY_UPGRADE_BASE_CASH = 25_000
@@ -65,16 +102,17 @@ SECURITY_UPGRADE_BASE_POINTS = 5
 SECURITY_UPGRADE_STEP_POINTS = 8
 SECURITY_UPGRADE_IDS = [u["id"] for u in SECURITY_UPGRADES]
 
-# Guard hire: cost per slot, armour/weapon 0..3 (unlocked by missions or tier). For now single tier.
+# Guard hire: cost per slot; armour/weapon 0..base_max + mission unlocks (cap at 20).
 GUARD_HIRE_COST_CASH = 10_000
 GUARD_HIRE_COST_POINTS = 5
-GUARD_SLOTS_MAX = 10
+GUARD_SLOTS_MAX = 1000
 # Cost to add one more guard slot: base * (mult ** (current_slots - GUARD_SLOTS_INITIAL)).
 GUARD_SLOT_BASE_CASH = 50_000
 GUARD_SLOT_BASE_POINTS = 10
 GUARD_SLOT_MULT = 1.5
-GUARD_ARMOUR_MAX = 3
-GUARD_WEAPON_MAX = 3
+GUARD_ARMOUR_MAX = 20
+GUARD_WEAPON_MAX = 20
+GUARD_WEAPON_BASE_MAX = 3  # missions add +1 via guard_weapon_max_unlock on business
 
 # Raid
 RAID_COOLDOWN_HOURS = 12
@@ -102,7 +140,7 @@ ILLEGAL_BUSINESS_MISSIONS = [
      "requirements": {"business_income_7d": 50_000, "security_level": 1}, "rewards": {"income_mult": 1.1, "points": 3, "cash": 5_000}},
     {"id": "ibm_3", "order": 3, "title": "Hit back", "story": "They hit you once. Show them you hit harder.",
      "how_to_complete": "Win 3 raids.",
-     "requirements": {"raids_won": 3}, "rewards": {"points": 3}},
+     "requirements": {"raids_won": 3}, "rewards": {"points": 3, "jailbust_tokens": 1}},
     {"id": "ibm_4", "order": 4, "title": "Heavy security", "story": "A vault keeps the take safe. Get one.",
      "how_to_complete": "Reach security level 3 (buy 3 upgrades).",
      "requirements": {"security_level": 3}, "rewards": {"guard_weapon_max": 1, "points": 5}},
@@ -114,7 +152,7 @@ ILLEGAL_BUSINESS_MISSIONS = [
      "requirements": {"crimes": 250}, "rewards": {"points": 4}},
     {"id": "ibm_7", "order": 7, "title": "Bigger take", "story": "The operation is growing. Show it in the books.",
      "how_to_complete": "Earn $150,000 business income in the last 7 days.",
-     "requirements": {"business_income_7d": 150_000}, "rewards": {"income_mult": 1.1, "points": 5, "cash": 10_000}},
+     "requirements": {"business_income_7d": 150_000}, "rewards": {"income_mult": 1.1, "points": 5, "cash": 10_000, "xp_double_tokens": 1}},
     {"id": "ibm_8", "order": 8, "title": "Raid veteran", "story": "You've hit enough joints to know the score.",
      "how_to_complete": "Win 5 raids.",
      "requirements": {"raids_won": 5}, "rewards": {"points": 5}},
@@ -375,13 +413,38 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
     hours = max(0.0, (now - last).total_seconds() / 3600)
     income_per_hour = int(business.get("income_per_hour") or INCOME_PER_HOUR_BASE)
     cap_hours = int(business.get("income_cap_hours") or INCOME_CAP_HOURS_BASE)
+    level = int(business.get("level") or 1)
+    level_mult = 1.0 + 0.02 * max(0, level - 1)
     boost_pct = int(current_user.get("illegal_business_income_boost_percent") or 0)
-    income_per_hour_eff = income_per_hour * (1.0 + boost_pct / 100.0)
+    income_per_hour_eff = income_per_hour * level_mult * (1.0 + boost_pct / 100.0)
     income = min(hours * income_per_hour_eff, income_per_hour_eff * cap_hours)
     income = round(income, 2)
+    ev = await get_effective_event()
+    prestige = get_prestige_bonus(current_user)
+    income = round(income * float(ev.get("racket_payout", 1.0)) * float(prestige.get("illegal_business_mult", 1.0)), 2)
     if income < 0.01:
         raise HTTPException(status_code=400, detail="No take to collect yet.")
     updates = {"last_collected_at": now.isoformat()}
+    security_level = len(business.get("security_upgrades") or []) or int(business.get("security_level") or 0)
+    ib_mult = float(prestige.get("illegal_business_mult", 1.0))
+    # Passive rewards (respect, bullets, points, loot pieces) scale with level/income; apply prestige mult
+    respect_earned = min(100, max(0, int(income * 0.001 * ib_mult)))
+    bullets_earned = max(1, int((1 + min(level + security_level, 9)) * ib_mult))
+    points_earned = int((random.randint(1, 5) if level >= 3 else 0) * ib_mult)
+    loot_pieces_earned = (random.randint(1, 2) if random.random() < 0.05 else 0)
+    inc = {"money": income}
+    if respect_earned > 0:
+        inc["respect_points"] = respect_earned
+    if bullets_earned > 0:
+        inc["bullets"] = bullets_earned
+    if points_earned > 0:
+        inc["points"] = points_earned
+    if loot_pieces_earned > 0:
+        inc["loot_box_pieces"] = loot_pieces_earned
+    if random.random() < 0.02:
+        inc["xp_double_tokens"] = inc.get("xp_double_tokens", 0) + 1
+    if random.random() < 0.02:
+        inc["jailbust_tokens"] = inc.get("jailbust_tokens", 0) + 1
     booze_earned = 0
     if business.get("type_id") == "booze_making" and business.get("booze_per_hour"):
         last_booze = business.get("last_collected_booze_at")
@@ -402,12 +465,34 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
                 {"id": current_user["id"]},
                 {"$inc": {f"booze_carrying.{default_booze_id}": booze_earned}},
             )
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": income}})
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": inc})
     await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": updates})
     msg = f"The till's been cleared. ${income:,.2f}"
     if booze_earned:
         msg += f" and {booze_earned} booze."
-    return {"message": msg, "cash": income, "booze": booze_earned}
+    xp_tokens_earned = inc.get("xp_double_tokens", 0)
+    jailbust_tokens_earned = inc.get("jailbust_tokens", 0)
+    if respect_earned or bullets_earned or points_earned or loot_pieces_earned or xp_tokens_earned or jailbust_tokens_earned:
+        extras = []
+        if respect_earned: extras.append(f"{respect_earned} respect")
+        if bullets_earned: extras.append(f"{bullets_earned} bullets")
+        if points_earned: extras.append(f"{points_earned} points")
+        if loot_pieces_earned: extras.append(f"{loot_pieces_earned} loot piece(s)")
+        if xp_tokens_earned: extras.append(f"{xp_tokens_earned} Double XP token(s)")
+        if jailbust_tokens_earned: extras.append(f"{jailbust_tokens_earned} Jailbust token(s)")
+        if extras:
+            msg += " " + ", ".join(extras) + "."
+    return {
+        "message": msg,
+        "cash": income,
+        "booze": booze_earned,
+        "respect_points": respect_earned,
+        "bullets": bullets_earned,
+        "points": points_earned,
+        "loot_box_pieces": loot_pieces_earned,
+        "xp_double_tokens": xp_tokens_earned,
+        "jailbust_tokens": jailbust_tokens_earned,
+    }
 
 
 async def get_illegal_business_missions(current_user: dict = Depends(get_current_user)):
@@ -486,6 +571,12 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
     if rewards.get("cash"):
         user_updates["$inc"] = user_updates.get("$inc") or {}
         user_updates["$inc"]["money"] = int(rewards["cash"])
+    if rewards.get("xp_double_tokens"):
+        user_updates["$inc"] = user_updates.get("$inc") or {}
+        user_updates["$inc"]["xp_double_tokens"] = int(rewards["xp_double_tokens"])
+    if rewards.get("jailbust_tokens"):
+        user_updates["$inc"] = user_updates.get("$inc") or {}
+        user_updates["$inc"]["jailbust_tokens"] = int(rewards["jailbust_tokens"])
     await db.users.update_one({"id": current_user["id"]}, user_updates)
     return {"message": mission.get("story", "Mission complete.")}
 
@@ -494,8 +585,10 @@ async def get_illegal_business_guards(current_user: dict = Depends(get_current_u
     business = await db.illegal_businesses.find_one({"user_id": current_user["id"]}, {"_id": 0})
     if not business:
         raise HTTPException(status_code=404, detail="You don't have an illegal business.")
-    guards = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).sort("slot_number", 1).to_list(20)
-    return {"guards": guards, "guard_slots": business.get("guard_slots", GUARD_SLOTS_INITIAL)}
+    slots = int(business.get("guard_slots") or GUARD_SLOTS_INITIAL)
+    limit = min(2000, max(slots + 100, 500))
+    guards = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).sort("slot_number", 1).to_list(limit)
+    return {"guards": guards, "guard_slots": slots}
 
 
 async def buy_guard_slot(current_user: dict = Depends(get_current_user)):
@@ -534,8 +627,10 @@ async def hire_illegal_business_guard(req: HireGuardRequest, current_user: dict 
         raise HTTPException(status_code=400, detail="Invalid slot.")
     if any(g.get("slot_number") == slot for g in existing):
         raise HTTPException(status_code=400, detail="Slot already filled.")
-    armour = max(0, min(GUARD_ARMOUR_MAX, req.armour_level))
-    weapon = max(0, min(GUARD_WEAPON_MAX, req.weapon_level))
+    unlock = int(business.get("guard_weapon_max_unlock") or 0)
+    effective_max = min(GUARD_WEAPON_MAX, GUARD_WEAPON_BASE_MAX + unlock)
+    armour = max(0, min(effective_max, req.armour_level))
+    weapon = max(0, min(effective_max, req.weapon_level))
     cost_cash = GUARD_HIRE_COST_CASH
     cost_points = GUARD_HIRE_COST_POINTS
     money = int(current_user.get("money") or 0)
@@ -635,7 +730,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
         raid_count_today = 0
     if raid_count_today >= RAID_DAILY_LIMIT:
         raise HTTPException(status_code=400, detail=f"Daily raid limit ({RAID_DAILY_LIMIT}) reached.")
-    guards = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).to_list(50)
+    guards = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).to_list(2000)
     defender_str = _business_defender_strength(business, guards)
     attacker_str = _attacker_strength(current_user)
     win_prob = _raid_win_probability(attacker_str, defender_str)
@@ -650,6 +745,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
     }
     loot_cash = 0
     loot_points = 0
+    loot_cash_credited = 0
     if won:
         last_c = business.get("last_collected_at")
         try:
@@ -663,8 +759,12 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
         cap = int(business.get("income_cap_hours") or INCOME_CAP_HOURS_BASE)
         available = min(hours * iph, iph * cap)
         loot_cash = int(available * RAID_LOOT_PERCENT)
+        loot_cash_credited = loot_cash
         if loot_cash > 0:
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": loot_cash}})
+            ev = await get_effective_event()
+            prestige = get_prestige_bonus(current_user)
+            loot_cash_credited = int(loot_cash * float(ev.get("racket_payout", 1.0)) * float(prestige.get("illegal_business_mult", 1.0)))
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": loot_cash_credited}})
             hours_to_skip = loot_cash / iph if iph else 0
             if hours_to_skip > 0:
                 new_last = last_dt + timedelta(hours=hours_to_skip)
@@ -673,7 +773,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
                     {"$set": {"last_collected_at": new_last.isoformat()}},
                 )
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"illegal_business_raids_won": 1}})
-        await send_notification(current_user["id"], "Raid", f"You hit the place. Took ${loot_cash:,}.", "attack", category="attacks")
+        await send_notification(current_user["id"], "Raid", f"You hit the place. Took ${loot_cash_credited:,}.", "attack", category="attacks")
         await send_notification(target_id, "Raid", f"Your joint was hit. You lost ${loot_cash:,}.", "attack", category="attacks")
     else:
         await send_notification(current_user["id"], "Raid", "They were ready—you got nothing.", "attack", category="attacks")
@@ -685,9 +785,9 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
     await db.users.update_one({"id": current_user["id"]}, {"$set": update_user})
     return {
         "success": won,
-        "loot_cash": loot_cash,
+        "loot_cash": loot_cash_credited if won else loot_cash,
         "loot_points": loot_points,
-        "message": f"You hit the place. Took ${loot_cash:,}." if won else "They were ready—you got nothing.",
+        "message": f"You hit the place. Took ${loot_cash_credited:,}." if won else "They were ready—you got nothing.",
         "target_username": target_user.get("username"),
     }
 

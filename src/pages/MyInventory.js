@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, Swords, Shield, Gift, Car, Building2 } from 'lucide-react';
+import { Package, Swords, Shield, Gift, Car, Building2, Zap, Target } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -26,6 +26,7 @@ export default function MyInventory() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [equipping, setEquipping] = useState({ weapon: null, armour: null });
+  const [usingToken, setUsingToken] = useState(null);
 
   const fetchInventory = () => {
     api
@@ -97,6 +98,21 @@ export default function MyInventory() {
     }
   };
 
+  const useToken = async (tokenType) => {
+    setUsingToken(tokenType);
+    try {
+      const res = await api.post('/inventory/tokens/use', { token_type: tokenType });
+      if (res?.data?.tokens) setData((d) => (d ? { ...d, tokens: res.data.tokens } : d));
+      toast.success(res?.data?.message || 'Token used.');
+      refreshUser();
+      fetchInventory();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to use token');
+    } finally {
+      setUsingToken(null);
+    }
+  };
+
   if (loading) return <LoadingSpinner />;
   if (!data) {
     return (
@@ -111,6 +127,12 @@ export default function MyInventory() {
   const loot = data.loot_exclusives || {};
   const exclusiveCars = loot.exclusive_cars || [];
   const hasSpeakeasy = loot.has_speakeasy === true;
+  const tokens = data.tokens || {};
+
+  const tokenLabels = {
+    xp_double: { name: 'Double XP', icon: Zap, desc: 'Double XP from crimes, GTA, jailbusts for 1h' },
+    jailbust_bonus: { name: 'Jailbust bonus', icon: Target, desc: '+10% jail bust success for 1h' },
+  };
 
   return (
     <div className={`${styles.pageContent} p-3 sm:p-4`}>
@@ -192,6 +214,46 @@ export default function MyInventory() {
             </div>
           </div>
         </div>
+
+        {/* Consumables / Tokens */}
+        {Object.keys(tokens).length > 0 && (
+          <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 inv-fade-in`} style={{ animationDelay: '0.18s' }}>
+            <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
+              <Zap size={14} className="text-primary" />
+              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Consumables</h2>
+            </div>
+            <div className="p-2.5 space-y-2">
+              {['xp_double', 'jailbust_bonus'].map((key) => {
+                const t = tokens[key] || { count: 0, active_until: null };
+                const { name, icon: Icon, desc } = tokenLabels[key] || { name: key, icon: Zap, desc: '' };
+                const active = t.active_until ? new Date(t.active_until) > new Date() : false;
+                return (
+                  <div key={key} className="inv-item flex flex-wrap items-center justify-between gap-2 py-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <Icon size={12} className="text-primary shrink-0" />
+                        <span className="text-[11px] font-heading font-medium text-foreground">{name}</span>
+                        <span className="text-[9px] text-mutedForeground">×{t.count}</span>
+                      </div>
+                      {desc && <div className="text-[9px] text-mutedForeground mt-0.5">{desc}</div>}
+                      {active && t.active_until && (
+                        <div className="text-[9px] text-primary mt-0.5">Active until {new Date(t.active_until).toLocaleString()}</div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={t.count < 1 || usingToken !== null}
+                      onClick={() => useToken(key)}
+                      className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 shrink-0"
+                    >
+                      {usingToken === key ? '...' : 'Use'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Loot Exclusives */}
         {(exclusiveCars.length > 0 || hasSpeakeasy) && (

@@ -58,7 +58,9 @@ STANDARD_REWARD_WEIGHTS = [
     ("cars", 1),
     ("bullets", 1),
     ("perk", 1),
+    ("tokens", 1),
 ]
+LOOT_BOX_TOKEN_TYPES = ["xp_double", "jailbust_bonus"]
 PERK_TYPES = [
     "property_income_10",
     "rp_10",
@@ -502,6 +504,11 @@ async def open_loot_box(
                 amount = random.randint(50, 10_000)
                 merged_inc["bullets"] = merged_inc.get("bullets", 0) + amount
                 rewards.append({"type": "bullets", "amount": amount, "rarity": "standard"})
+            elif chosen == "tokens":
+                token_type = random.choice(LOOT_BOX_TOKEN_TYPES)
+                field = "xp_double_tokens" if token_type == "xp_double" else "jailbust_tokens"
+                merged_inc[field] = merged_inc.get(field, 0) + 1
+                rewards.append({"type": "token", "token_type": token_type, "amount": 1, "rarity": "standard"})
             else:
                 perk = random.choice(PERK_TYPES)
                 if perk == "property_income_10":

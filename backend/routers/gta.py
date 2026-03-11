@@ -395,6 +395,16 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
                     rank_points = int(rank_points * 1.1)
             except Exception:
                 pass
+        xp_double_until = current_user.get("xp_double_until")
+        if xp_double_until:
+            try:
+                until = datetime.fromisoformat(xp_double_until.replace("Z", "+00:00"))
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=timezone.utc)
+                if now_utc < until:
+                    rank_points = rank_points * 2
+            except Exception:
+                pass
         gta_rare_perk = int(current_user.get("gta_rare_drop_perk_attempts_remaining") or 0)
         if gta_rare_perk > 0:
             await db.users.update_one({"id": current_user["id"]}, {"$inc": {"gta_rare_drop_perk_attempts_remaining": -1}})

@@ -7,15 +7,28 @@ from fastapi import Depends, HTTPException, Query
 
 
 def _store_cost_inc(current_user: dict, points_cost: int):
-    """Return (cost_used, $inc dict). Use respect points if user has enough (5× cost), else use points. Raises if insufficient."""
-    cost_respect = points_cost * 5
-    respect_balance = current_user.get("respect_points") or 0
-    points_balance = current_user.get("points") or 0
-    if respect_balance >= cost_respect:
-        return cost_respect, {"respect_points": -cost_respect, "lifetime_respect_points_spent": cost_respect}
-    if points_balance >= points_cost:
-        return points_cost, {"points": -points_cost, "lifetime_points_spent": points_cost}
-    raise HTTPException(status_code=400, detail=f"Insufficient balance. Need {points_cost} pts or {cost_respect} respect points.")
+    """Return (cost_used, $inc dict). Use respect points first (5 respect = 1 point), then points for the remainder. Raises if insufficient."""
+    respect_balance = int(current_user.get("respect_points") or 0)
+    points_balance = int(current_user.get("points") or 0)
+    respect_equiv = respect_balance // 5  # point-equivalents from respect
+    use_respect_equiv = min(respect_equiv, points_cost)
+    respect_decrement = use_respect_equiv * 5
+    points_decrement = points_cost - use_respect_equiv
+    if points_balance < points_decrement:
+        need_pts = points_cost
+        need_respect = points_cost * 5
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient balance. Need {need_pts} pts (or 5× in respect). Have {points_balance} pts, {respect_balance} respect.",
+        )
+    inc = {}
+    if respect_decrement > 0:
+        inc["respect_points"] = -respect_decrement
+        inc["lifetime_respect_points_spent"] = respect_decrement
+    if points_decrement > 0:
+        inc["points"] = -points_decrement
+        inc["lifetime_points_spent"] = points_decrement
+    return points_cost, inc
 
 from server import (
     db,

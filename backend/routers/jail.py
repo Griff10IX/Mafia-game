@@ -268,11 +268,32 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     total_attempts = _safe_int(current_user.get("jail_bust_attempts"), 0)
     total_successes = _safe_int(current_user.get("jail_busts"), 0)
     player_success_rate = _player_bust_success_rate(total_attempts, total_successes)
+    jailbust_bonus_until = current_user.get("jailbust_bonus_until")
+    if jailbust_bonus_until:
+        try:
+            until = datetime.fromisoformat(jailbust_bonus_until.replace("Z", "+00:00"))
+            if until.tzinfo is None:
+                until = until.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) < until:
+                player_success_rate = min(0.95, player_success_rate + 0.10)
+        except Exception:
+            pass
 
     npc = await db.jail_npcs.find_one({"username": username_ci}, {"_id": 0})
     if npc:
         success = random.random() < player_success_rate
         rank_points = 25
+        now_utc = datetime.now(timezone.utc)
+        xp_double_until = current_user.get("xp_double_until")
+        if xp_double_until:
+            try:
+                until = datetime.fromisoformat(xp_double_until.replace("Z", "+00:00"))
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=timezone.utc)
+                if now_utc < until:
+                    rank_points = rank_points * 2
+            except Exception:
+                pass
         bust_reward_cash = _safe_int(npc.get("bust_reward_cash"), 0)
         if success:
             new_consec = _safe_int(current_user.get("current_consecutive_busts"), 0) + 1
@@ -339,6 +360,16 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                     until = until.replace(tzinfo=timezone.utc)
                 if now_utc < until:
                     rank_points = int(rank_points * 1.1)
+            except Exception:
+                pass
+        xp_double_until = current_user.get("xp_double_until")
+        if xp_double_until:
+            try:
+                until = datetime.fromisoformat(xp_double_until.replace("Z", "+00:00"))
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=timezone.utc)
+                if now_utc < until:
+                    rank_points = rank_points * 2
             except Exception:
                 pass
         await db.users.update_one(
