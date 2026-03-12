@@ -691,10 +691,10 @@ export default function CircuitRaceView({
         }
       });
 
-      // Sort by position (totalLapsDone desc, then trackPos desc)
+      // Sort by position: progress = totalLapsDone + trackPos (same for everyone, including in pit)
       const sorted = [...racers].sort((a,b) => {
-        const la = a.totalLapsDone + (a.inPit ? 0 : a.trackPos);
-        const lb = b.totalLapsDone + (b.inPit ? 0 : b.trackPos);
+        const la = a.totalLapsDone + a.trackPos;
+        const lb = b.totalLapsDone + b.trackPos;
         return lb - la;
       });
       sorted.forEach((r,i)=>r.position=i+1);
@@ -720,17 +720,22 @@ export default function CircuitRaceView({
       // Draw
       drawTrackCanvas(track, cond, sorted);
 
-      // Update standings state
-      setStandings(sorted.map(r=>({
-        id:r.id, name:r.name, isPlayer:r.isPlayer,
-        color:r.color, carName:r.carName,
-        position:r.position, lapCount:r.lapCount,
-        currentTyre:r.currentTyre, tyreWear:r.tyreWear,
-        inPit:r.inPit, finished:r.finished,
-        pitStops:r.pitStops,
-        gap: sorted[0] === r ? 0 :
-          (sorted[0].totalLapsDone + sorted[0].trackPos) - (r.totalLapsDone + r.trackPos),
-      })));
+      // Update standings state (gap in fractional laps; leader progress used for all)
+      const leaderProgress = sorted[0].totalLapsDone + sorted[0].trackPos;
+      setStandings(sorted.map(r=>{
+        const progress = r.totalLapsDone + r.trackPos;
+        const gapLaps = leaderProgress - progress;
+        return {
+          id:r.id, name:r.name, isPlayer:r.isPlayer,
+          color:r.color, carName:r.carName,
+          position:r.position, lapCount:r.lapCount,
+          currentTyre:r.currentTyre, tyreWear:r.tyreWear,
+          inPit:r.inPit, finished:r.finished,
+          pitStops:r.pitStops,
+          gap: gapLaps,
+          lapsDown: Math.floor(gapLaps),
+        };
+      }));
 
       if (allDone) {
         setUiPhase("done");
@@ -1035,7 +1040,19 @@ export default function CircuitRaceView({
           {standings.map((r, i) => {
             const td = TYRE_DEFS[r.currentTyre] || TYRE_DEFS.medium;
             const wc = tyreColor(r.tyreWear);
-            const gapStr = i===0 ? "Leader" : r.inPit ? "PIT" : `+${(r.gap * selectedTrack.lapBase).toFixed(2)}s`;
+            // Overlap = laps down (leader has lapped this car). Underlap = fractional lap gap in seconds.
+            const lapsDown = r.lapsDown != null ? r.lapsDown : (r.gap != null ? Math.floor(r.gap) : 0);
+            const fracLap = r.gap != null ? r.gap - Math.floor(r.gap) : 0;
+            let gapStr = "Leader";
+            if (i > 0) {
+              if (r.inPit) gapStr = "PIT";
+              else if (lapsDown >= 1) {
+                gapStr = lapsDown === 1 ? "1 lap down" : `${lapsDown} laps down`;
+                if (fracLap > 0.001) gapStr += ` +${(fracLap * selectedTrack.lapBase).toFixed(2)}s`;
+              } else {
+                gapStr = `+${((r.gap || 0) * selectedTrack.lapBase).toFixed(2)}s`;
+              }
+            }
             return (
               <div key={r.id}
                 style={{
