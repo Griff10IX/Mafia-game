@@ -121,6 +121,7 @@ DEFAULT_PROFILE = {
     "tyre_stock_soft": TYRE_STOCK_INITIAL,
     "tyre_stock_medium": TYRE_STOCK_INITIAL,
     "tyre_stock_hard": TYRE_STOCK_INITIAL,
+    "crew_bank": 0,
 }
 
 
@@ -169,6 +170,10 @@ class ReplaceEngineRequest(BaseModel):
 class BuyTyresRequest(BaseModel):
     compound: str = "medium"  # soft, medium, hard
     quantity: int = 1
+
+
+class CompleteRaceRequest(BaseModel):
+    result_order: List[str]  # entrant ids in finish order (1st to last)
 
 
 # ---------- Helpers ----------
@@ -227,6 +232,17 @@ async def _ensure_racing_profile(user_id: str) -> dict:
     await db.racing_profiles.insert_one(doc)
     # Return a copy without _id (Motor may add _id to doc in place; ObjectId is not JSON-serializable)
     return {k: v for k, v in doc.items() if k != "_id"}
+
+
+async def _deduct_crew_bank(user_id: str, cost: int) -> None:
+    """Deduct cost from racing crew bank. Raises HTTPException if insufficient."""
+    if cost <= 0:
+        return
+    prof = await db.racing_profiles.find_one({"user_id": user_id}, {"_id": 0, "crew_bank": 1})
+    bank = int((prof or {}).get("crew_bank") or 0)
+    if bank < cost:
+        raise HTTPException(status_code=400, detail="Insufficient crew bank (race to earn more)")
+    await db.racing_profiles.update_one({"user_id": user_id}, {"$inc": {"crew_bank": -cost}})
 
 
 async def _get_user_racing_car(user_id: str, instance_id: str) -> Optional[dict]:
@@ -427,7 +443,7 @@ async def get_racing_tracks(current_user: dict = Depends(get_current_user)):
 
 async def get_racing_profile(current_user: dict = Depends(get_current_user_verified)):
     prof = await _ensure_racing_profile(current_user["id"])
-    # Ensure tyre stock exists for existing users (one-time default)
+    # Ensure tyre stock and crew_bank exist for existing users (one-time default)
     for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard"):
         if prof.get(key) is None:
             await db.racing_profiles.update_one(
@@ -435,6 +451,12 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
                 {"$set": {key: TYRE_STOCK_INITIAL}},
             )
             prof[key] = TYRE_STOCK_INITIAL
+    if prof.get("crew_bank") is None:
+        await db.racing_profiles.update_one(
+            {"user_id": current_user["id"]},
+            {"$set": {"crew_bank": 0}},
+        )
+        prof["crew_bank"] = 0
     owned = await db.user_racing_cars.find({"user_id": current_user["id"]}, {"_id": 0}).to_list(100)
     # One instance per user: if none, create one with first car (no purchase)
     if not owned:
@@ -572,10 +594,7 @@ async def upgrade_crew(body: UpgradeCrewRequest, current_user: dict = Depends(ge
     if current >= MAX_CREW_LEVEL:
         raise HTTPException(status_code=400, detail="Max level reached")
     cost = CREW_UPGRADE_COSTS[current + 1] if current + 1 < len(CREW_UPGRADE_COSTS) else CREW_UPGRADE_COSTS[-1]
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
-    if int(user.get("money") or 0) < cost:
-        raise HTTPException(status_code=400, detail="Insufficient cash")
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -cost}})
+    await _deduct_crew_bank(current_user["id"], cost)
     await db.racing_profiles.update_one({"user_id": current_user["id"]}, {"$set": {key: current + 1}}, upsert=True)
     return {"message": f"{crew_type} upgraded to level {current + 1}", "new_level": current + 1}
 
@@ -594,10 +613,7 @@ async def upgrade_car_part(body: UpgradeCarRequest, current_user: dict = Depends
             raise HTTPException(status_code=400, detail=f"Championship upgrade requires {WINS_FOR_CHAMPIONSHIP_UPGRADE}+ wins")
         if prof.get("championship_upgrade_purchased"):
             raise HTTPException(status_code=400, detail="Championship upgrade already purchased")
-        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
-        if int(user.get("money") or 0) < CHAMPIONSHIP_UPGRADE_COST:
-            raise HTTPException(status_code=400, detail="Insufficient cash")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -CHAMPIONSHIP_UPGRADE_COST}})
+        await _deduct_crew_bank(current_user["id"], CHAMPIONSHIP_UPGRADE_COST)
         await db.racing_profiles.update_one({"user_id": current_user["id"]}, {"$set": {"championship_upgrade_purchased": True}}, upsert=True)
         up = await db.racing_upgrades.find_one({"user_id": current_user["id"], "racing_car_instance_id": instance_id}, {"_id": 0})
         up_data = (up or {}).copy()
@@ -624,10 +640,7 @@ async def upgrade_car_part(body: UpgradeCarRequest, current_user: dict = Depends
         if current >= max_lvl:
             raise HTTPException(status_code=400, detail=f"Max {upgrade_type} level reached")
         cost = 40000 * (current + 1)
-        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
-        if int(user.get("money") or 0) < cost:
-            raise HTTPException(status_code=400, detail="Insufficient cash")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -cost}})
+        await _deduct_crew_bank(current_user["id"], cost)
         up_data[key] = current + 1
         await db.racing_upgrades.update_one(
             {"user_id": current_user["id"], "racing_car_instance_id": instance_id},
@@ -644,10 +657,7 @@ async def upgrade_car_part(body: UpgradeCarRequest, current_user: dict = Depends
         raise HTTPException(status_code=400, detail="Max upgrades reached")
     next_level = total_level + 1
     cost = CAR_UPGRADE_COSTS[next_level] if next_level < len(CAR_UPGRADE_COSTS) else CAR_UPGRADE_COSTS[-1]
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
-    if int(user.get("money") or 0) < cost:
-        raise HTTPException(status_code=400, detail="Insufficient cash")
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -cost}})
+    await _deduct_crew_bank(current_user["id"], cost)
     if engine <= tires:
         new_engine, new_tires = engine + 1, tires
     else:
@@ -672,10 +682,7 @@ async def repair_engine(body: RepairEngineRequest, current_user: dict = Depends(
     cost = int((current_wear - target) * ENGINE_REPAIR_COST_PER_PCT)
     if cost < 1:
         raise HTTPException(status_code=400, detail="Nothing to repair")
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
-    if int(user.get("money") or 0) < cost:
-        raise HTTPException(status_code=400, detail="Insufficient cash")
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -cost}})
+    await _deduct_crew_bank(current_user["id"], cost)
     await db.user_racing_cars.update_one(
         {"user_id": current_user["id"], "id": instance_id},
         {"$set": {"engine_wear": round(target, 1)}},
@@ -689,10 +696,7 @@ async def replace_engine(body: ReplaceEngineRequest, current_user: dict = Depend
     doc = await _get_user_racing_car(current_user["id"], instance_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Racing car not found")
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
-    if int(user.get("money") or 0) < ENGINE_REPLACE_COST:
-        raise HTTPException(status_code=400, detail="Insufficient cash")
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -ENGINE_REPLACE_COST}})
+    await _deduct_crew_bank(current_user["id"], ENGINE_REPLACE_COST)
     await db.user_racing_cars.update_one(
         {"user_id": current_user["id"], "id": instance_id},
         {"$set": {"engine_wear": 0}},
@@ -708,10 +712,7 @@ async def buy_tyres(body: BuyTyresRequest, current_user: dict = Depends(get_curr
     quantity = max(1, min(20, int(body.quantity or 1)))
     cost_map = {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD}
     cost = cost_map[compound] * quantity
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
-    if int(user.get("money") or 0) < cost:
-        raise HTTPException(status_code=400, detail="Insufficient cash")
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -cost}})
+    await _deduct_crew_bank(current_user["id"], cost)
     await _ensure_racing_profile(current_user["id"])
     from pymongo import ReturnDocument
     updated = await db.racing_profiles.find_one_and_update(
@@ -971,14 +972,11 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
             stock = int(prof.get(f"tyre_stock_{compound}") or 0)
             if stock < 1:
                 raise HTTPException(status_code=400, detail=f"Not enough {compound} tyres in stock for a participant. Buy tyres before the race.")
-    # Qualifying: one lap to set grid order, then race starts from that order
+    # Qualifying: one lap to set grid order; race runs live on client
     qualifying_order = _run_qualifying(participants, profile_by_user, upgrades_map, weather_id)
     id_to_p = {(p.get("user_id") or p.get("id")): p for p in participants}
     participants = [id_to_p[eid] for eid in qualifying_order if eid in id_to_p]
-    lap_results, result_order, pit_stops, tire_wear_after_lap, dnf_ids = _run_race_simulation_laps(
-        participants, profile_by_user, upgrades_map, num_laps, weather_id, engine_wear_by_entrant
-    )
-    # Enrich participants with effective_speed and effective_grip for replay
+    # Enrich participants with effective_speed and effective_grip for client live race
     for p in participants:
         prof = profile_by_user.get(p.get("user_id") or p.get("id")) if not p.get("is_npc") else None
         s, g = _effective_speed_and_grip_display(p, prof, upgrades_map)
@@ -986,8 +984,60 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
         p["effective_grip"] = round(g, 2)
         p["pit_level"] = int(prof.get("pit_level") or 0) if prof else 0
     now = _now_iso()
+    await db.racing_races.update_one(
+        {"id": race_id},
+        {"$set": {
+            "state": "running",
+            "participants": participants,
+            "qualifying_order": qualifying_order,
+            "laps": num_laps,
+            "weather": weather_id,
+            "weather_name": weather.get("name", "Clear"),
+            "started_at": now,
+            "result_order": None,
+            "lap_results": None,
+            "pit_stops": None,
+            "tire_wear_after_lap": None,
+            "rewards": None,
+            "dnf_ids": None,
+            "completed_at": None,
+        }},
+    )
+    race["state"] = "running"
+    race["participants"] = participants
+    race["qualifying_order"] = qualifying_order
+    race["laps"] = num_laps
+    race["weather"] = weather_id
+    race["weather_name"] = weather.get("name", "Clear")
+    race["started_at"] = now
+    race["result_order"] = None
+    race["lap_results"] = None
+    race["pit_stops"] = None
+    race["tire_wear_after_lap"] = None
+    race["rewards"] = None
+    race["dnf_ids"] = None
+    race["completed_at"] = None
+    return {"message": "Race started — run it live", "race": race}
+
+
+async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: dict = Depends(get_current_user_verified)):
+    """Called by client when the live race finishes. Applies rewards from client-submitted result_order."""
+    race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    if not race:
+        raise HTTPException(status_code=404, detail="Race not found")
+    if race.get("state") != "running":
+        raise HTTPException(status_code=400, detail="Race is not in progress")
+    participants = list(race.get("participants") or [])
+    result_order = list(body.result_order or [])
+    expected_ids = {(p.get("user_id") or p.get("id")) for p in participants}
+    if set(result_order) != expected_ids or len(result_order) != len(expected_ids):
+        raise HTTPException(status_code=400, detail="result_order must contain each participant exactly once")
+    track = _get_track(race.get("track_id") or "")
+    reward_mult = float(track.get("reward_mult", 1.0)) if track else 1.0
+    entry_fee = int(race.get("entry_fee") or 0)
     pot = entry_fee * len(participants) * REWARD_POOL_PCT
     rewards = []
+    dnf_ids: List[str] = []
     for i, entrant_id in enumerate(result_order):
         position = i + 1
         pct = REWARD_BY_POSITION[i] if i < len(REWARD_BY_POSITION) else 0
@@ -995,16 +1045,16 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
         rp = RANK_POINTS_BY_POSITION[i] if i < len(RANK_POINTS_BY_POSITION) else 0
         rep = RACING_REP_BY_POSITION[i] if i < len(RACING_REP_BY_POSITION) else 0
         entrant = next((x for x in participants if (x.get("user_id") or x.get("id")) == entrant_id), None)
-        is_dnf = entrant_id in dnf_ids
+        is_dnf = False
         if entrant:
             entrant["dnf"] = is_dnf
         if entrant and not entrant.get("is_npc"):
             uid = entrant.get("user_id")
             if not is_dnf:
-                await db.users.update_one({"id": uid}, {"$inc": {"money": cash, "rank_points": rp}})
+                await db.users.update_one({"id": uid}, {"$inc": {"rank_points": rp}})
                 await db.racing_profiles.update_one(
                     {"user_id": uid},
-                    {"$inc": {"racing_rep": rep, "races_completed": 1, "wins": 1 if position == 1 else 0}},
+                    {"$inc": {"racing_rep": rep, "races_completed": 1, "wins": 1 if position == 1 else 0, "crew_bank": cash}},
                     upsert=True,
                 )
                 try:
@@ -1018,7 +1068,6 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
                     {"$inc": {"races_completed": 1}},
                     upsert=True,
                 )
-            # Engine wear: add per race (cap at 100)
             inst_id = entrant.get("racing_car_instance_id")
             if inst_id:
                 car = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0, "engine_wear": 1})
@@ -1029,7 +1078,6 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
                         {"user_id": uid, "id": inst_id},
                         {"$set": {"engine_wear": round(new_wear, 1)}},
                     )
-            # Deduct one set of tyres for compound used
             compound = (entrant.get("tyre_compound") or "medium").strip().lower()
             await db.racing_profiles.update_one(
                 {"user_id": uid},
@@ -1037,22 +1085,30 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
                 upsert=True,
             )
         rewards.append({"entrant_id": entrant_id, "position": position, "cash": cash, "rank_points": rp, "racing_rep": rep, "dnf": is_dnf})
+    now = _now_iso()
     await db.racing_races.update_one(
         {"id": race_id},
-        {"$set": {"state": "completed", "participants": participants, "result_order": result_order, "qualifying_order": qualifying_order, "lap_results": lap_results, "pit_stops": pit_stops, "tire_wear_after_lap": tire_wear_after_lap, "laps": num_laps, "weather": weather_id, "weather_name": weather.get("name", "Clear"), "started_at": now, "completed_at": now, "rewards": rewards, "dnf_ids": dnf_ids}},
+        {"$set": {
+            "state": "completed",
+            "participants": participants,
+            "result_order": result_order,
+            "completed_at": now,
+            "rewards": rewards,
+            "dnf_ids": dnf_ids,
+            "lap_results": [],
+            "pit_stops": [],
+            "tire_wear_after_lap": {},
+        }},
     )
     race["state"] = "completed"
     race["participants"] = participants
     race["result_order"] = result_order
-    race["qualifying_order"] = qualifying_order
-    race["lap_results"] = lap_results
-    race["pit_stops"] = pit_stops
-    race["tire_wear_after_lap"] = tire_wear_after_lap
-    race["laps"] = num_laps
-    race["weather"] = weather_id
-    race["weather_name"] = weather.get("name", "Clear")
+    race["completed_at"] = now
     race["rewards"] = rewards
     race["dnf_ids"] = dnf_ids
+    race["lap_results"] = []
+    race["pit_stops"] = []
+    race["tire_wear_after_lap"] = {}
     return {"message": "Race completed", "race": race}
 
 
@@ -1156,6 +1212,7 @@ def register(router):
     router.add_api_route("/racing/races/{race_id}", get_race, methods=["GET"])
     router.add_api_route("/racing/races/{race_id}/join", join_race, methods=["POST"])
     router.add_api_route("/racing/races/{race_id}/start", start_race, methods=["POST"])
+    router.add_api_route("/racing/races/{race_id}/complete", complete_race, methods=["POST"])
     router.add_api_route("/racing/leaderboard", get_racing_leaderboard, methods=["GET"])
     router.add_api_route("/racing/comps", get_racing_comps, methods=["GET"])
     router.add_api_route("/racing/comps/{comp_id}/enter", enter_racing_comp, methods=["POST"])

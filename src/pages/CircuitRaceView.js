@@ -515,7 +515,10 @@ export default function CircuitRaceView({
       const spread = 0.009 * drawIdx;
       // When in pit: draw car at pit box (middle of pit lane) so it stays visibly in pit
       const pitPos = (track.pitEntry + track.pitExit) / 2;
-      const t = (r.inPit ? pitPos + spread * 0.5 : (r.trackPos + spread + 1)) % 1;
+      // Use progress (totalLapsDone + trackPos) for draw so order matches leaderboard: negative = back of grid → draw at 0
+      const progress = (r.totalLapsDone ?? 0) + r.trackPos;
+      const tRaw = r.inPit ? pitPos + spread * 0.5 : (progress < 0 ? 0 : ((progress % 1) + 1) % 1);
+      const t = r.inPit ? tRaw % 1 : (tRaw + spread) % 1;
       const p = track.getPoint(t);
       const p2 = track.getPoint((t + 0.006) % 1);
       const angle = Math.atan2(sy(p2.y)-sy(p.y), sx(p2.x)-sx(p.x));
@@ -795,7 +798,7 @@ export default function CircuitRaceView({
       if (allDone) {
         setUiPhase("done");
         setCommentary(rand(COMMENTARY.done));
-        // Build results
+        // Build results and pass finish order to parent (for live mode: submit to server)
         const finalOrder = [...racers].sort((a,b)=>b.totalLapsDone-a.totalLapsDone||b.trackPos-a.trackPos);
         setResults(finalOrder.map((r,i)=>({
           pos:i+1, id:r.id, name:r.name, isPlayer:r.isPlayer,
@@ -803,7 +806,8 @@ export default function CircuitRaceView({
           lapTimes:r.lapTimes,
           bestLap:r.lapTimes.length ? Math.min(...r.lapTimes) : null,
         })));
-        setTimeout(()=>onComplete?.(), 1200);
+        const resultOrderIds = finalOrder.map((r) => r.id);
+        setTimeout(()=>onComplete?.(resultOrderIds), 1200);
         return;
       }
 
@@ -814,7 +818,7 @@ export default function CircuitRaceView({
   }, [drawTrackCanvas, onComplete]);
 
   // ── REPLAY MODE ──
-  // When mode==="replay", auto-start using backend data
+  // When mode==="replay", auto-start using backend data (pre-computed result)
   useEffect(() => {
     if (mode !== "replay") return;
     if (!participants.length && !resultOrder.length) return;
@@ -879,9 +883,84 @@ export default function CircuitRaceView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- replay init: only re-run when mode / currentUserId
   }, [mode, currentUserId]);
 
-  // Draw loop during replay countdown (grid visible, no movement)
+  // ── LIVE MODE ──
+  // When mode==="live", race runs in real time; build racers from participants + qualifying_order (no backend result)
   useEffect(() => {
-    if (uiPhase !== "countdown" || mode !== "replay") return;
+    if (mode !== "live") return;
+    if (!participants.length || !(qualifying_order && qualifying_order.length)) return;
+    const seen = new Set();
+    const order = qualifying_order.filter((id) => {
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    resizeCanvas();
+    const track = TRACKS.find((t) => t.id === initialTrackId) || TRACKS[0];
+    const cond = WEATHER_MAP[weatherIdProp] || "clear";
+    const racers = order.map((id, i) => {
+      const p = participants.find((x) => (x.user_id || x.id) === id) || {};
+      const isPlayer = currentUserId != null && (id === currentUserId || p.user_id === currentUserId);
+      const effSpeed = p.effective_speed != null ? p.effective_speed : 15;
+      const effGrip = p.effective_grip != null ? p.effective_grip : 0.85;
+      const baseSpeed = effSpeed / 15;
+      const tyreId = (p.tyre_compound || "medium").toLowerCase();
+      const pitLvl = p.pit_level != null ? p.pit_level : 0;
+      return {
+        id,
+        name: p.username || p.car_name || `#${i + 1}`,
+        isPlayer,
+        color: CAR_COLORS[i % CAR_COLORS.length],
+        carName: p.car_name || "",
+        trackPos: i * -0.012,
+        lapCount: 1,
+        totalLapsDone: 0,
+        currentTyre: tyreId in TYRE_DEFS ? tyreId : "medium",
+        tyreWear: 100,
+        pitStops: 0,
+        inPit: false,
+        pitEndAt: 0,
+        pitDurationSeconds: pitDurationSeconds(pitLvl, false),
+        pitDurationEmergencySeconds: pitDurationSeconds(pitLvl, true),
+        baseSpeed,
+        baseGrip: effGrip,
+        pitStrategy: buildPitStrategy(tyreId in TYRE_DEFS ? tyreId : "medium", totalLaps),
+        finished: false,
+        visible: true,
+        position: i + 1,
+        lapTimes: [],
+        slideOffUntil: 0,
+        pitExitUntil: null,
+      };
+    });
+    stateRef.current = { racers, track, nLaps: totalLaps, wd: WEATHER_DEFS[cond] || WEATHER_DEFS.clear };
+    stateRef.current.pendingReplay = { racers, track, cond, totalLaps };
+    setUiPhase("countdown");
+    setCountdown(3);
+    setCommentary(rand(COMMENTARY.start));
+    countdownIntervalRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        const next = prev - 1;
+        if (next <= 0) {
+          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+          setUiPhase("racing");
+          const pr = stateRef.current?.pendingReplay;
+          if (pr) startRaceLoop(pr.track, pr.cond, pr.totalLaps, pr.racers);
+          return 0;
+        }
+        return next;
+      });
+    }, 1000);
+    return () => {
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- live init: participants, qualifying_order, totalLaps, etc.
+  }, [mode, currentUserId]);
+
+  // Draw loop during replay/live countdown (grid visible, no movement)
+  useEffect(() => {
+    if (uiPhase !== "countdown" || (mode !== "replay" && mode !== "live")) return;
     let rafId;
     const draw = () => {
       const { track, racers } = stateRef.current || {};
@@ -1103,6 +1182,23 @@ export default function CircuitRaceView({
       {/* ── LIVE STANDINGS (F1 Manager style) ── */}
       {standings.length > 0 && (
         <div className={styles.panel} style={{ marginBottom:"0.6rem", overflowX:"auto", overflowY:"hidden", WebkitOverflowScrolling:"touch" }}>
+          {/* Header: column labels + tyre legend */}
+          <div style={{
+            display:"flex", alignItems:"center", padding:"4px 8px 6px",
+            borderBottom:"1px solid rgba(201,164,96,.12)",
+            gap:"6px",
+            fontSize:10, fontFamily:"'Cinzel',serif", fontWeight:600, letterSpacing:".08em", textTransform:"uppercase", color:"var(--noir-muted)",
+          }}>
+            <div style={{ width:20, flexShrink:0 }} />
+            <div style={{ width:9, flexShrink:0 }} />
+            <div style={{ flex:1 }}>Driver</div>
+            <div style={{ width:80, flexShrink:0 }}>Car</div>
+            <div style={{ display:"flex", alignItems:"center", gap:4, width:55, flexShrink:0 }}>
+              <span title="Dot = compound (soft/medium/hard). Bar = tyre wear: green = good, yellow = worn, red = critical.">Tyre</span>
+              <span style={{ fontSize:9, fontWeight:400, textTransform:"none", letterSpacing:0, opacity:0.85 }} title="Dot = compound (soft/medium/hard). Bar = tyre wear: green = good, yellow = worn, red = critical.">(compound · wear)</span>
+            </div>
+            <div style={{ width:54, textAlign:"right", flexShrink:0 }}>Gap</div>
+          </div>
           {[...standings]
             .sort((a, b) => (a.position || 0) - (b.position || 0))
             .map((r, i) => {
@@ -1154,8 +1250,11 @@ export default function CircuitRaceView({
                 {/* Car name */}
                 <div style={{ fontSize:11, color:"var(--noir-muted)", width:80, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flexShrink:0 }}>{r.carName}</div>
 
-                {/* Tyre + wear */}
-                <div style={{ display:"flex", alignItems:"center", gap:4, width:55, flexShrink:0 }}>
+                {/* Tyre + wear — dot = compound (soft/med/hard), bar = wear (green→yellow→red) */}
+                <div
+                  title="Dot = compound (soft/medium/hard). Bar = tyre wear: green = good, yellow = worn, red = critical."
+                  style={{ display:"flex", alignItems:"center", gap:4, width:55, flexShrink:0 }}
+                >
                   <div style={{ width:8,height:8,borderRadius:"50%",background:td.color,flexShrink:0 }}/>
                   <div style={{ flex:1, height:3, background:"rgba(201,164,96,.1)", borderRadius:2, overflow:"hidden" }}>
                     <div style={{ height:"100%", width:`${r.tyreWear}%`, background:wc, borderRadius:2, transition:"width .5s" }}/>

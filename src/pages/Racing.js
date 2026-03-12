@@ -43,6 +43,8 @@ export default function Racing() {
   const [availableCars, setAvailableCars] = useState([]);
   const [upgradeTradeoffs, setUpgradeTradeoffs] = useState(null);
   const [upgradesByCar, setUpgradesByCar] = useState({});
+  const [crewCosts, setCrewCosts] = useState([]);
+  const [carUpgradeCosts, setCarUpgradeCosts] = useState([]);
   const [tracks, setTracks] = useState([]);
   const [openRaces, setOpenRaces] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -71,6 +73,8 @@ export default function Racing() {
       setCars(d.owned_cars || []);
       setUpgradeTradeoffs(d.upgrade_tradeoffs || null);
       setUpgradesByCar(d.upgrades || {});
+      setCrewCosts(Array.isArray(d.crew_costs) ? d.crew_costs : []);
+      setCarUpgradeCosts(Array.isArray(d.car_upgrade_costs) ? d.car_upgrade_costs : []);
     } catch (e) {
       toast.error(apiDetail(e));
     }
@@ -193,7 +197,19 @@ export default function Racing() {
       const r = await api.post(`/racing/races/${race.id}/start`);
       setActiveRace(r.data?.race);
       refreshUser();
-      toast.success("Race finished");
+      toast.success("Race started — run it live");
+    } catch (e) {
+      toast.error(apiDetail(e));
+    }
+  };
+
+  const handleCompleteRace = async (raceId, resultOrder) => {
+    try {
+      const r = await api.post(`/racing/races/${raceId}/complete`, { result_order: resultOrder });
+      setActiveRace((prev) => (prev?.id === raceId ? { ...r.data?.race, _resultsShown: true } : prev));
+      refreshUser();
+      fetchProfile();
+      toast.success("Race completed");
     } catch (e) {
       toast.error(apiDetail(e));
     }
@@ -325,38 +341,37 @@ export default function Racing() {
         <p className="text-sm text-[var(--noir-muted)] mt-1">
           Road races • Choose car • Crew upgrades • Purse by position
         </p>
+        <p className="text-xs mt-2" style={{ color: "var(--noir-primary)" }}>
+          Crew bank: {formatMoney(profile?.crew_bank ?? 0)} — race winnings for upgrades
+        </p>
       </div>
 
-      {/* ─── ACTIVE RACE: circuit view (replay mode from backend result) ─── */}
-      {activeRace?.state === "completed" && !activeRace._resultsShown && (
+      {/* ─── ACTIVE RACE: live run (state running) ─── */}
+      {activeRace?.state === "running" && (
         <div className="p-4">
           {activeRace.qualifying_order?.length > 0 && (
             <p className="text-xs font-heading uppercase tracking-wider text-[var(--noir-primary)] mb-2">
-              Race replay · Grid order set by qualifying lap
+              Live race · Grid order set by qualifying lap
             </p>
           )}
           <CircuitRaceView
-            mode="replay"
+            mode="live"
             participants={activeRace.participants || []}
-            lap_results={activeRace.lap_results || []}
-            pit_stops={activeRace.pit_stops || []}
-            qualifying_order={activeRace.qualifying_order}
-            tire_wear_after_lap={activeRace.tire_wear_after_lap}
+            qualifying_order={activeRace.qualifying_order || []}
             laps={activeRace.laps || 3}
-            resultOrder={activeRace.result_order || []}
             weather={activeRace.weather || "clear"}
             weather_name={activeRace.weather_name}
             initialTrackId={circuitTrackId}
             playerCarName={playerCarName}
             playerPitLevel={profile?.pit_level ?? 0}
             currentUserId={profile?.user_id}
-            onComplete={() => setActiveRace((r) => (r ? { ...r, _resultsShown: true } : null))}
+            onComplete={(resultOrder) => resultOrder && handleCompleteRace(activeRace.id, resultOrder)}
           />
         </div>
       )}
 
-      {/* ─── POST-RACE RESULTS (shown after animation completes) ─── */}
-      {activeRace?.state === "completed" && activeRace._resultsShown && (
+      {/* ─── POST-RACE RESULTS ─── */}
+      {activeRace?.state === "completed" && (
         <div className={styles.panel + " m-4 p-4"}>
           <h2 className="font-heading mb-3" style={{ color: "var(--noir-primary)" }}>
             Race results
@@ -379,7 +394,7 @@ export default function Racing() {
                   </span>
                   {rew && !isDnf && (
                     <span className="text-sm text-[var(--noir-muted)]">
-                      {formatMoney(rew.cash)} • {rew.rank_points} RP • {rew.racing_rep} rep
+                      {formatMoney(rew.cash)} → crew bank • {rew.rank_points} RP • {rew.racing_rep} rep
                     </span>
                   )}
                   {rew && isDnf && <span className="text-xs text-[var(--noir-muted)]">Engine / mechanical</span>}
@@ -390,7 +405,7 @@ export default function Racing() {
           <button
             type="button"
             className={styles.btnPrimary + " mt-3 min-h-[44px] touch-manipulation"}
-            onClick={() => { setActiveRace(null); navigate("/racing", { replace: true }); }}
+            onClick={() => { setActiveRace(null); fetchProfile(); navigate("/racing", { replace: true }); }}
           >
             Back to races
           </button>
@@ -559,20 +574,21 @@ export default function Racing() {
           <>
             <div className={styles.panel + " p-4 mb-4"}>
               <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Tyre stock</h3>
-              <p className="text-xs text-[var(--noir-muted)] mb-3">One set per race. Buy more below.</p>
+              <p className="text-xs text-[var(--noir-muted)] mb-3">One set per race. Buy more below (uses crew bank).</p>
               <div className="flex flex-wrap gap-4">
                 {["soft", "medium", "hard"].map((compound) => {
                   const stock = profile?.[`tyre_stock_${compound}`] ?? 0;
                   const cost = profile?.tyre_costs?.[compound] ?? 500;
+                  const bank = profile?.crew_bank ?? 0;
                   return (
                     <div key={compound} className="flex items-center gap-2 p-2 rounded border border-[var(--noir-border)] bg-[var(--noir-surface)]">
                       <span className="text-xs font-heading capitalize text-[var(--noir-primary)]">{compound}</span>
                       <span className="text-sm font-heading tabular-nums">{stock}</span>
                       <span className="text-[10px] text-[var(--noir-muted)]">sets</span>
-                      <button type="button" className={styles.btnGoldDarkText + " text-xs"} onClick={() => handleBuyTyres(compound, 1)}>
+                      <button type="button" className={styles.btnGoldDarkText + " text-xs"} disabled={bank < cost} onClick={() => handleBuyTyres(compound, 1)}>
                         Buy 1 ({formatMoney(cost)})
                       </button>
-                      <button type="button" className={styles.btnGoldDarkText + " text-xs"} onClick={() => handleBuyTyres(compound, 5)}>
+                      <button type="button" className={styles.btnGoldDarkText + " text-xs"} disabled={bank < cost * 5} onClick={() => handleBuyTyres(compound, 5)}>
                         Buy 5 ({formatMoney(cost * 5)})
                       </button>
                     </div>
@@ -638,14 +654,16 @@ export default function Racing() {
                           </div>
                           <span className="text-xs font-heading text-[var(--noir-primary)] w-10">{(c.engine_wear ?? 0).toFixed(0)}%</span>
                         </div>
-                        <p className="text-[10px] text-[var(--noir-muted)] mt-0.5">Every race adds wear. At 100% you must repair or replace. High wear risks DNF.</p>
+                        <p className="text-[10px] text-[var(--noir-muted)] mt-0.5">Every race adds wear. At 100% you must repair or replace. High wear risks DNF. Repairs use crew bank.</p>
                         {((c.engine_wear ?? 0) > 0 && (c.engine_wear ?? 0) < 100) && (
                           <div className="flex flex-wrap gap-2 mt-2">
                             <button type="button" className={styles.btnGoldDarkText + " text-xs"}
+                              disabled={(profile?.crew_bank ?? 0) < ((c.engine_wear ?? 0) * (profile?.engine_repair_cost_per_pct ?? 400))}
                               onClick={() => handleRepairEngine(c.id)}>
                               Repair to 0% ({formatMoney(((c.engine_wear ?? 0) * (profile?.engine_repair_cost_per_pct ?? 400)))})
                             </button>
                             <button type="button" className={styles.btnGoldDarkText + " text-xs"}
+                              disabled={(profile?.crew_bank ?? 0) < (profile?.engine_replace_cost ?? 75000)}
                               onClick={() => handleReplaceEngine(c.id)}>
                               New engine ({formatMoney(profile?.engine_replace_cost ?? 75000)})
                             </button>
@@ -656,7 +674,7 @@ export default function Racing() {
                         )}
                         {(c.engine_wear ?? 0) >= 100 && (
                           <div className="flex flex-wrap gap-2 mt-2">
-                            <button type="button" className={styles.btnPrimary + " text-xs"} onClick={() => handleReplaceEngine(c.id)}>
+                            <button type="button" className={styles.btnPrimary + " text-xs"} disabled={(profile?.crew_bank ?? 0) < (profile?.engine_replace_cost ?? 75000)} onClick={() => handleReplaceEngine(c.id)}>
                               Replace engine ({formatMoney(profile?.engine_replace_cost ?? 75000)})
                             </button>
                           </div>
@@ -701,22 +719,38 @@ export default function Racing() {
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
+                        {(() => {
+                          const bank = profile?.crew_bank ?? 0;
+                          const nextEngineTiresCost = engineTiresTotal < maxEngineTires && carUpgradeCosts[engineTiresTotal + 1] != null ? carUpgradeCosts[engineTiresTotal + 1] : 0;
+                          const aeroCost = canAeroRel && aero < 2 ? 40000 * (aero + 1) : 0;
+                          const relCost = canAeroRel && reliability < 2 ? 40000 * (reliability + 1) : 0;
+                          const champCost = canChamp ? (upgradeTradeoffs?.championship?.cost ?? 350000) : 0;
+                          return (
+                          <>
                         <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+4% power, −3% grip per level"
+                          disabled={engineTiresTotal >= maxEngineTires || bank < nextEngineTiresCost}
                           onClick={() => handleUpgradeCar(c.id, "engine")}>Engine+</button>
                         <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+5% grip, −2% power per level"
+                          disabled={engineTiresTotal >= maxEngineTires || bank < nextEngineTiresCost}
                           onClick={() => handleUpgradeCar(c.id, "tires")}>Tires+</button>
                         {canAeroRel && (
                           <>
                             <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+3% speed, −2% grip (1+ win)"
+                              disabled={aero >= 2 || bank < aeroCost}
                               onClick={() => handleUpgradeCar(c.id, "aero")}>Aero+</button>
                             <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="−8% tyre wear, −2% power (1+ win)"
+                              disabled={reliability >= 2 || bank < relCost}
                               onClick={() => handleUpgradeCar(c.id, "reliability")}>Rel+</button>
                           </>
                         )}
                         {canChamp && (
                           <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+2% speed & grip (3+ wins)"
+                            disabled={bank < champCost}
                             onClick={() => handleUpgradeCar(c.id, "championship")}>Championship</button>
                         )}
+                          </>
+                          );
+                        })()}
                       </div>
                     </li>
                     );
@@ -772,27 +806,35 @@ export default function Racing() {
         {tab === "crew" && (
           <div className={styles.panel + " p-4"}>
             <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Crew upgrades</h3>
-            <p className="text-sm text-[var(--noir-muted)] mb-4">
-              Spend cash to improve your mechanic and pit crew. Mechanic and Pit Crew both give a speed bonus; Pit Crew also shortens pit stop time.
+            <p className="text-sm text-[var(--noir-muted)] mb-2">
+              Race winnings go to your crew bank. Spend crew bank to improve your mechanic and pit crew. Mechanic and Pit Crew both give a speed bonus; Pit Crew also shortens pit stop time.
+            </p>
+            <p className="text-sm font-heading mb-4" style={{ color: "var(--noir-primary)" }}>
+              Crew bank: {formatMoney(profile?.crew_bank ?? 0)}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
                 { key: "mechanic_level", label: "Mechanic", type: "mechanic", desc: "+2% speed per level" },
                 { key: "pit_level", label: "Pit Crew", type: "pit", desc: "+2% speed, −0.35s pit time per level (min 1.0s)" },
-              ].map(({ key, label, type, desc }) => (
+              ].map(({ key, label, type, desc }) => {
+                const level = profile?.[key] ?? 0;
+                const nextCost = level < 5 && crewCosts[level + 1] != null ? crewCosts[level + 1] : 0;
+                const canAfford = (profile?.crew_bank ?? 0) >= nextCost;
+                return (
                 <div key={type} className="p-3 rounded surface">
                   <div className="font-heading">{label}</div>
-                  <div className="text-sm">Level {profile?.[key] ?? 0} / 5</div>
+                  <div className="text-sm">Level {level} / 5</div>
                   <div className="text-xs text-[var(--noir-muted)] mt-1">
                     {desc}
                   </div>
+                  {level < 5 && <div className="text-xs mt-1">Next: {formatMoney(nextCost)}</div>}
                   <button type="button" className={styles.btnPrimary + " mt-2 text-sm"}
-                    disabled={(profile?.[key] ?? 0) >= 5}
+                    disabled={level >= 5 || !canAfford}
                     onClick={() => handleUpgradeCrew(type)}>
                     Upgrade
                   </button>
                 </div>
-              ))}
+              );})}
             </div>
           </div>
         )}
