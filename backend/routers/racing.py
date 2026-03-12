@@ -77,6 +77,7 @@ TYRE_STOCK_INITIAL = 5
 TYRE_COST_SOFT = 800
 TYRE_COST_MEDIUM = 500
 TYRE_COST_HARD = 400
+TYRE_COST_INTER = 650
 # Trade-offs: engine +power -grip, tires +grip -power, aero +speed -grip (unlock 1+ win), reliability -wear -power (unlock 1+ win)
 ENGINE_POWER_PER_LEVEL = 0.04
 ENGINE_GRIP_PENALTY_PER_LEVEL = 0.03
@@ -152,6 +153,7 @@ TYRE_COMPOUNDS = [
     {"id": "soft", "name": "Soft", "wear_mult": 1.45, "grip_mult": 1.06},
     {"id": "medium", "name": "Medium", "wear_mult": 1.0, "grip_mult": 1.0},
     {"id": "hard", "name": "Hard", "wear_mult": 0.65, "grip_mult": 0.96},
+    {"id": "inter", "name": "Intermediate", "wear_mult": 1.1, "grip_mult": 1.02, "wet_grip_bonus": 0.12},
 ]
 
 # Weather: affects tire wear and grip/speed. Set when race starts (random).
@@ -710,7 +712,7 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         week_ends_utc = None
         season_ends_utc = None
     # Ensure tyre stock and crew_bank exist for existing users (one-time default)
-    for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard"):
+    for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard", "tyre_stock_inter"):
         if prof.get(key) is None:
             await db.racing_profiles.update_one(
                 {"user_id": current_user["id"]},
@@ -803,7 +805,8 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "tyre_stock_soft": int(prof.get("tyre_stock_soft") or TYRE_STOCK_INITIAL),
         "tyre_stock_medium": int(prof.get("tyre_stock_medium") or TYRE_STOCK_INITIAL),
         "tyre_stock_hard": int(prof.get("tyre_stock_hard") or TYRE_STOCK_INITIAL),
-        "tyre_costs": {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD},
+        "tyre_stock_inter": int(prof.get("tyre_stock_inter") or TYRE_STOCK_INITIAL),
+        "tyre_costs": {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD, "inter": TYRE_COST_INTER},
         "engine_repair_cost_per_pct": ENGINE_REPAIR_COST_PER_PCT,
         "engine_replace_cost": ENGINE_REPLACE_COST,
         "racing_team_create_cost": RACING_TEAM_CREATE_COST,
@@ -812,6 +815,7 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "racing_week_ends_utc": week_ends_utc,
         "racing_season_ends_utc": season_ends_utc,
         "free_engine_repair_available": (prof.get("free_engine_repair_used_season_start_utc") or "") != (meta.get("season_start_utc") or ""),
+        "next_automated_race_utc": _next_automated_race_utc(),
     }
 
 
@@ -1099,10 +1103,10 @@ async def replace_engine(body: ReplaceEngineRequest, current_user: dict = Depend
 async def buy_tyres(body: BuyTyresRequest, current_user: dict = Depends(get_current_user_verified)):
     """Buy tyre sets (soft, medium, hard) to add to stock."""
     compound = (body.compound or "medium").strip().lower()
-    if compound not in ("soft", "medium", "hard"):
-        raise HTTPException(status_code=400, detail="compound must be soft, medium, or hard")
+    if compound not in ("soft", "medium", "hard", "inter"):
+        raise HTTPException(status_code=400, detail="compound must be soft, medium, hard, or inter")
     quantity = max(1, min(20, int(body.quantity or 1)))
-    cost_map = {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD}
+    cost_map = {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD, "inter": TYRE_COST_INTER}
     cost = cost_map[compound] * quantity
     await _deduct_crew_bank(current_user["id"], cost)
     await _ensure_racing_profile(current_user["id"])
@@ -1266,7 +1270,7 @@ async def join_race(race_id: str, body: JoinRaceRequest, current_user: dict = De
     compound = (body.tyre_compound or "medium").strip().lower() if hasattr(body, "tyre_compound") else "medium"
     prof = await _ensure_racing_profile(current_user["id"])
     _require_racing_team(prof)
-    for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard"):
+    for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard", "tyre_stock_inter"):
         if prof.get(key) is None:
             await db.racing_profiles.update_one({"user_id": current_user["id"]}, {"$set": {key: TYRE_STOCK_INITIAL}})
             prof[key] = TYRE_STOCK_INITIAL
@@ -1939,6 +1943,32 @@ async def enter_racing_comp(comp_id: str, body: JoinRaceRequest, current_user: d
     return {"message": "Entered competition"}
 
 
+def _next_automated_race_utc() -> str:
+    """Compute the next automated race time (morning or evening, whichever is soonest)."""
+    now = datetime.now(timezone.utc)
+    candidates = []
+    for hour in (RACING_AUTOMATED_MORNING_HOUR, RACING_AUTOMATED_EVENING_HOUR):
+        slot = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+        if slot <= now:
+            slot += timedelta(days=1)
+        candidates.append(slot)
+    nxt = min(candidates)
+    return nxt.isoformat().replace("+00:00", "Z")
+
+
+async def get_latest_automated_race(current_user: dict = Depends(get_current_user_verified)):
+    """Return the user's most recent automated race (completed)."""
+    uid = current_user["id"]
+    race = await db.racing_races.find_one(
+        {"is_automated": True, "state": "completed", "participants.user_id": uid},
+        {"_id": 0},
+        sort=[("completed_at", -1)],
+    )
+    if not race:
+        return {"race": None, "next_automated_race_utc": _next_automated_race_utc()}
+    return {"race": race, "next_automated_race_utc": _next_automated_race_utc()}
+
+
 def register(router):
     router.add_api_route("/racing/cars", get_racing_cars, methods=["GET"])
     router.add_api_route("/racing/tracks", get_racing_tracks, methods=["GET"])
@@ -1959,6 +1989,7 @@ def register(router):
     router.add_api_route("/racing/leaderboard", get_racing_leaderboard, methods=["GET"])
     router.add_api_route("/racing/comps", get_racing_comps, methods=["GET"])
     router.add_api_route("/racing/comps/{comp_id}/enter", enter_racing_comp, methods=["POST"])
+    router.add_api_route("/racing/automated/latest", get_latest_automated_race, methods=["GET"])
 
     # Cron: automated daily races (same X-Cron-Secret as Auto Rank)
     cron_secret = (os.environ.get("CRON_SECRET") or "").strip()

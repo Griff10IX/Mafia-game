@@ -42,9 +42,8 @@ const WEATHER_OPTIONS = [
 ];
 // Backend only supports clear, rain, snow, very_hot — map night → clear when creating race
 const WEATHER_ID_FOR_API = (id) => (id === "night" ? "clear" : id);
-// Inter/Full wet use medium stock until backend supports them
 function effectiveTyreStock(compound, profile) {
-  if (compound === "inter" || compound === "full_wet") return profile?.tyre_stock_medium ?? 0;
+  if (compound === "full_wet") return profile?.tyre_stock_inter ?? 0;
   return profile?.[`tyre_stock_${compound}`] ?? 0;
 }
 
@@ -104,6 +103,8 @@ export default function Racing() {
   const [teamCreateName, setTeamCreateName] = useState("");
   const [teamCreateColor, setTeamCreateColor] = useState("#e8d020");
   const [teamCreating, setTeamCreating] = useState(false);
+  const [latestAutomated, setLatestAutomated] = useState(null);
+  const [nextAutoRaceUtc, setNextAutoRaceUtc] = useState(null);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -114,6 +115,7 @@ export default function Racing() {
         tyre_stock_soft: d.tyre_stock_soft,
         tyre_stock_medium: d.tyre_stock_medium,
         tyre_stock_hard: d.tyre_stock_hard,
+        tyre_stock_inter: d.tyre_stock_inter,
         tyre_costs: d.tyre_costs || {},
         engine_repair_cost_per_pct: d.engine_repair_cost_per_pct,
         engine_replace_cost: d.engine_replace_cost,
@@ -133,8 +135,19 @@ export default function Racing() {
       setUpgradesByCar(d.upgrades || {});
       setCrewCosts(Array.isArray(d.crew_costs) ? d.crew_costs : []);
       setCarUpgradeCosts(Array.isArray(d.car_upgrade_costs) ? d.car_upgrade_costs : []);
+      if (d.next_automated_race_utc) setNextAutoRaceUtc(d.next_automated_race_utc);
     } catch (e) {
       toast.error(apiDetail(e));
+    }
+  }, []);
+
+  const fetchLatestAutomated = useCallback(async () => {
+    try {
+      const r = await api.get("/racing/automated/latest");
+      setLatestAutomated(r.data?.race || null);
+      if (r.data?.next_automated_race_utc) setNextAutoRaceUtc(r.data.next_automated_race_utc);
+    } catch {
+      setLatestAutomated(null);
     }
   }, []);
 
@@ -185,9 +198,10 @@ export default function Racing() {
       await fetchOpenRaces();
       await fetchLeaderboard();
       await fetchComps();
+      await fetchLatestAutomated();
       setLoading(false);
     })();
-  }, [fetchProfile, fetchOpenRaces, fetchLeaderboard, fetchComps]);
+  }, [fetchProfile, fetchOpenRaces, fetchLeaderboard, fetchComps, fetchLatestAutomated]);
 
   useEffect(() => {
     if (!raceIdParam) return;
@@ -212,7 +226,7 @@ export default function Racing() {
         entry_fee: Number(createForm.entry_fee) || 0,
         max_grid: Number(createForm.max_grid) || 6,
         laps: Number(createForm.laps) || 3,
-        tyre_compound: (createForm.tyre_compound === "inter" || createForm.tyre_compound === "full_wet" ? "medium" : createForm.tyre_compound) || "medium",
+        tyre_compound: (createForm.tyre_compound === "full_wet" ? "inter" : createForm.tyre_compound) || "medium",
         weather_id: WEATHER_ID_FOR_API(createForm.weather_id || "clear"),
       });
       const race = r.data?.race;
@@ -622,6 +636,85 @@ export default function Racing() {
         {/* ─── RACES TAB ─── */}
         {tab === "races" && (
           <>
+            {/* ─── Automated race schedule + latest result ─── */}
+            <div className={styles.panel + " p-3 mb-3"}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span style={{ fontSize: 14 }}>&#127937;</span>
+                <h3 className="font-heading text-xs uppercase tracking-wider" style={{ color: "var(--noir-primary)" }}>
+                  DAILY AUTOMATED RACES
+                </h3>
+              </div>
+              <p className="text-xs text-[var(--noir-muted)] mb-2">
+                Two races run automatically each day (08:00 & 20:00 UTC). All team owners are auto-entered with their selected car & tyres.
+              </p>
+              {nextAutoRaceUtc && (() => {
+                const d = new Date(nextAutoRaceUtc);
+                const now = new Date();
+                const diffMs = d - now;
+                const diffH = Math.floor(diffMs / 3600000);
+                const diffM = Math.floor((diffMs % 3600000) / 60000);
+                const timeStr = diffMs > 0
+                  ? (diffH > 0 ? `${diffH}h ${diffM}m` : `${diffM}m`)
+                  : "soon";
+                return (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded mb-2" style={{ background: "rgba(201,164,96,.08)", border: "1px solid rgba(201,164,96,.2)" }}>
+                    <span className="text-xs font-heading" style={{ color: "var(--noir-primary)" }}>Next race:</span>
+                    <span className="text-xs tabular-nums" style={{ color: "var(--noir-foreground)" }}>
+                      {d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} ({timeStr})
+                    </span>
+                  </div>
+                );
+              })()}
+              {latestAutomated && (
+                <div className="mt-1">
+                  <p className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-1">Latest result</p>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span style={{ color: "var(--noir-foreground)" }}>{latestAutomated.track_name}</span>
+                    {latestAutomated.weather_name && <span className="text-[var(--noir-muted)]">{latestAutomated.weather_name}</span>}
+                  </div>
+                  {(latestAutomated.result_order || []).length > 0 && (
+                    <ul className="mt-1 space-y-0.5">
+                      {latestAutomated.result_order.slice(0, 5).map((id, i) => {
+                        const p = (latestAutomated.participants || []).find((x) => (x.user_id || x.id) === id);
+                        const rew = (latestAutomated.rewards || []).find((r) => r.entrant_id === id);
+                        const isDnf = rew?.dnf || (latestAutomated.dnf_ids || []).includes(id);
+                        const isYou = id === profile?.user_id;
+                        return (
+                          <li key={id} className="flex items-center justify-between text-xs py-0.5">
+                            <span style={{ color: isYou ? "var(--noir-primary)" : "var(--noir-foreground)", fontWeight: isYou ? 700 : 400 }}>
+                              #{i + 1} {p?.username || p?.car_name || "?"}
+                              {isYou && " (you)"}
+                              {isDnf && <span className="text-red-400 ml-1">DNF</span>}
+                            </span>
+                            {rew && !isDnf && (
+                              <span className="text-[var(--noir-muted)] text-[10px]">
+                                {formatMoney(rew.cash)} · {rew.rank_points}RP
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  {latestAutomated.completed_at && (
+                    <p className="text-[10px] text-[var(--noir-muted)] mt-1">
+                      {(() => {
+                        const d = new Date(latestAutomated.completed_at);
+                        const now = new Date();
+                        const diffH = Math.round((now - d) / 3600000);
+                        if (diffH < 1) return "Just now";
+                        if (diffH < 24) return `${diffH}h ago`;
+                        return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                      })()}
+                    </p>
+                  )}
+                </div>
+              )}
+              {!latestAutomated && (
+                <p className="text-xs text-[var(--noir-muted)]">No automated race results yet. Make sure you have a team, a car, and tyres.</p>
+              )}
+            </div>
+
             {/* Create race — live-race style setup (first so tab always looks like reference) */}
             <div className={styles.panel + " p-3 mb-3"}>
               <h3 className="font-heading text-xs uppercase tracking-wider mb-3" style={{ color: "var(--noir-primary)" }}>
@@ -711,7 +804,7 @@ export default function Racing() {
                       (createForm.tyre_compound === "full_wet" && "Heavy rain")}
                   </p>
                   <p className="text-[9px] text-[var(--noir-muted)]">
-                    Stock: {["soft", "medium", "hard"].includes(createForm.tyre_compound) ? (profile?.[`tyre_stock_${createForm.tyre_compound}`] ?? 0) : (profile?.tyre_stock_medium ?? 0)}
+                    Stock: {effectiveTyreStock(createForm.tyre_compound, profile)}
                   </p>
                 </div>
 
@@ -849,7 +942,7 @@ export default function Racing() {
                         </div>
                         <button type="button" className={styles.btnPrimary + " text-sm min-h-[44px] touch-manipulation"}
                           disabled={joiningId === race.id || !selectedInstanceId || race.participants?.some((p) => p.user_id === profile?.user_id) || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 || effectiveTyreStock(joinTyre, profile) < 1}
-                          onClick={() => handleJoinRace(race, selectedInstanceId, joinTyre === "inter" || joinTyre === "full_wet" ? "medium" : joinTyre)}>
+                          onClick={() => handleJoinRace(race, selectedInstanceId, joinTyre === "full_wet" ? "inter" : joinTyre)}>
                           {joiningId === race.id ? "Joining…" : "Join"}
                         </button>
                       </li>
@@ -868,13 +961,14 @@ export default function Racing() {
               <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Tyre stock</h3>
               <p className="text-xs text-[var(--noir-muted)] mb-3">One set per race. Buy more below (uses crew bank).</p>
               <div className="flex flex-wrap gap-4">
-                {["soft", "medium", "hard"].map((compound) => {
+                {["soft", "medium", "hard", "inter"].map((compound) => {
                   const stock = profile?.[`tyre_stock_${compound}`] ?? 0;
                   const cost = profile?.tyre_costs?.[compound] ?? 500;
                   const bank = profile?.crew_bank ?? 0;
+                  const displayName = compound === "inter" ? "Intermediate" : compound;
                   return (
                     <div key={compound} className="flex items-center gap-2 p-2 rounded border border-[var(--noir-border)] bg-[var(--noir-surface)]">
-                      <span className="text-xs font-heading capitalize text-[var(--noir-primary)]">{compound}</span>
+                      <span className="text-xs font-heading capitalize text-[var(--noir-primary)]">{displayName}</span>
                       <span className="text-sm font-heading tabular-nums">{stock}</span>
                       <span className="text-[10px] text-[var(--noir-muted)]">sets</span>
                       <button type="button" className={styles.btnGoldDarkText + " text-xs"} disabled={bank < cost} onClick={() => handleBuyTyres(compound, 1)}>

@@ -691,7 +691,7 @@ export default function ShootingRange3D() {
           const speed = 0.22 + (age / state.targetLifetime) * 0.12;
           let tx = state.targetOriginX;
           let ty = state.targetOriginY;
-          const ph = state.targetPhase + t * speed;
+          const ph = state.targetPhase + age * speed;
 
           switch (state.targetPattern) {
             case "along_horizontal":
