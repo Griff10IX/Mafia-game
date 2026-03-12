@@ -813,10 +813,12 @@ export default function CircuitRaceView({
     const racers = [];
     const playerPitSec = pitDurationSeconds(playerPitLevel, false);
     const playerPitSecEmerg = pitDurationSeconds(playerPitLevel, true);
+    const gridSpacing = 0.012;
+    const totalRacers = 8;
     racers.push({
       id:"player", name:"You", isPlayer:true,
       color:CAR_COLORS[0], carName:playerCarName,
-      trackPos:0, lapCount:1, totalLapsDone:0,
+      trackPos: totalRacers * gridSpacing, lapCount:1, totalLapsDone:0,
       currentTyre:pTyre, tyreWear:100,
       pitStops:0, inPit:false, pitEndAt:0,
       pitDurationSeconds: playerPitSec,
@@ -843,7 +845,7 @@ export default function CircuitRaceView({
       racers.push({
         id:`npc_${i}`, name:NPC_NAMES[i], isPlayer:false,
         color:CAR_COLORS[i+1], carName:NPC_CARS[carIdx],
-        trackPos: -(i+1)*0.012, lapCount:1, totalLapsDone:0,
+        trackPos: (totalRacers - (i + 1)) * gridSpacing, lapCount:1, totalLapsDone:0,
         currentTyre:t, tyreWear:100,
         pitStops:0, inPit:false, pitEndAt:0,
         pitDurationSeconds: 3.0,
@@ -1326,7 +1328,7 @@ export default function CircuitRaceView({
       return {
         id, name:p.username||p.car_name||`#${i+1}`, isPlayer,
         color:CAR_COLORS[i%CAR_COLORS.length], carName:p.car_name||"",
-        trackPos: i * (-0.012), lapCount:1, totalLapsDone:0,
+        trackPos: (rawOrder.length - i) * 0.012, lapCount:1, totalLapsDone:0,
         currentTyre: tyreId in TYRE_DEFS ? tyreId : "medium",
         tyreWear: Array.isArray(tire_wear_after_lap[id]) ? (tire_wear_after_lap[id][0] ?? 100) : 100,
         pitStops:0, inPit:false, pitEndAt:0,
@@ -1403,7 +1405,7 @@ export default function CircuitRaceView({
         isPlayer,
         color: CAR_COLORS[i % CAR_COLORS.length],
         carName: p.car_name || "",
-        trackPos: i * -0.012,
+        trackPos: (order.length - i) * 0.012,
         lapCount: 1,
         totalLapsDone: 0,
         currentTyre: tyreId in TYRE_DEFS ? tyreId : "medium",
@@ -1442,9 +1444,47 @@ export default function CircuitRaceView({
         if (next <= 0) {
           if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
           countdownIntervalRef.current = null;
-          setUiPhase("racing");
           const pr = stateRef.current?.pendingReplay;
-          if (pr) startRaceLoop(pr.track, pr.cond, pr.totalLaps, pr.racers);
+          if (pr) {
+            setUiPhase("qualifying");
+            setLapDisplay("Qualifying");
+            setCommentary("Qualifying lap — grid order set by this lap");
+            startRaceLoop(pr.track, pr.cond, 1, pr.racers, {
+              onQualifyingComplete: (sortedRacers) => {
+                const qWd = WEATHER_DEFS[pr.cond] || WEATHER_DEFS.clear;
+                const qWeatherWear = qWd.wearMult != null ? qWd.wearMult : 1;
+                const gridRacers = sortedRacers.map((r, gi) => ({
+                  ...r,
+                  trackPos: (sortedRacers.length - gi) * 0.012,
+                  totalLapsDone: 0,
+                  lapCount: 1,
+                  finished: false,
+                  finishOrder: 0,
+                  visible: true,
+                  tyreWear: 100,
+                  lapTimes: [],
+                  pitStops: 0,
+                  inPit: false,
+                  pitEndAt: 0,
+                  slideOffUntil: 0,
+                  pitExitUntil: null,
+                  position: gi + 1,
+                  pitStrategy: buildPitStrategy(r.currentTyre, pr.totalLaps, qWeatherWear, r.reliabilityWearMult || 1, r.isPlayer ? 0 : Math.floor(Math.random()*3)-1, r.strategyType || "normal"),
+                  engineHealth:100, dnf:false, dnfAtSec:0, dnfSparks:[],
+                  fuelLoad:100,
+                  sectorTimes:[null,null,null], currentSector:0, lastSectorCross:0, bestSectors:[Infinity,Infinity,Infinity], sectorDelta:null,
+                  inSlipstream:false, tyreBlister:false,
+                }));
+                setCommentary("Grid set — race start!");
+                setTimeout(() => {
+                  setUiPhase("racing");
+                  setLapDisplay(`1 / ${pr.totalLaps}`);
+                  setCommentary(rand(COMMENTARY.start));
+                  startRaceLoop(pr.track, pr.cond, pr.totalLaps, gridRacers);
+                }, 2200);
+              },
+            });
+          }
           return 0;
         }
         return next;
@@ -1495,7 +1535,7 @@ export default function CircuitRaceView({
             const weatherWear = wd.wearMult != null ? wd.wearMult : 1;
             const gridRacers = sortedRacers.map((r, i) => ({
               ...r,
-              trackPos: -i * 0.012,
+              trackPos: (sortedRacers.length - i) * 0.012,
               totalLapsDone: 0,
               lapCount: 1,
               finished: false,
