@@ -68,6 +68,20 @@ TIRE_WEAR_PER_LAP = 18
 TIRE_PIT_THRESHOLD = 35
 PIT_PENALTY_FACTOR = 0.72  # speed multiplier when pitting (lose time that lap)
 
+# Weather: affects tire wear and grip/speed. Set when race starts (random).
+WEATHER_TYPES = [
+    {"id": "clear", "name": "Clear", "tire_wear_mult": 1.0, "speed_mult": 1.0},
+    {"id": "rain", "name": "Rain", "tire_wear_mult": 1.55, "speed_mult": 0.90},
+    {"id": "snow", "name": "Snow", "tire_wear_mult": 2.0, "speed_mult": 0.82},
+    {"id": "very_hot", "name": "Very hot", "tire_wear_mult": 1.45, "speed_mult": 0.95},
+]
+
+def _get_weather(weather_id: str) -> dict:
+    for w in WEATHER_TYPES:
+        if w.get("id") == weather_id:
+            return w
+    return WEATHER_TYPES[0]
+
 DEFAULT_PROFILE = {
     "mechanic_level": 0,
     "pit_level": 0,
@@ -167,8 +181,12 @@ def _run_race_simulation_laps(
     profile_by_user: Dict[str, dict],
     upgrades_map: Dict[str, dict],
     num_laps: int,
+    weather_id: str = "clear",
 ) -> tuple:
-    """Run lap-by-lap simulation with tire wear and pit stops. Returns (lap_results, result_order, pit_stops)."""
+    """Run lap-by-lap simulation with tire wear, pit stops, and weather. Returns (lap_results, result_order, pit_stops)."""
+    weather = _get_weather(weather_id)
+    tire_wear_mult = float(weather.get("tire_wear_mult", 1.0))
+    speed_mult = float(weather.get("speed_mult", 1.0))
     ids = [e.get("user_id") or e.get("id") for e in entrants]
     tire_wear = {eid: 100.0 for eid in ids}
     lap_results: List[List[str]] = []
@@ -185,13 +203,13 @@ def _run_race_simulation_laps(
         for eid in pitting:
             pit_stops.append({"lap": lap, "entrant_id": eid})
 
-        # Lap speed: base speed * tire factor; if pitting, apply penalty
+        # Lap speed: base speed * tire factor * weather; if pitting, apply penalty
         lap_speeds = []
         for e in entrants:
             eid = e.get("user_id") or e.get("id")
             base = _effective_speed(e, profile_by_user.get(eid) or {}, upgrades_map)
             tire_factor = max(0.3, tire_wear[eid] / 100.0)
-            speed = base * tire_factor
+            speed = base * tire_factor * speed_mult
             if eid in pitting:
                 speed *= PIT_PENALTY_FACTOR
             lap_speeds.append((eid, speed))
@@ -201,12 +219,13 @@ def _run_race_simulation_laps(
         order = [x[0] for x in lap_speeds]
         lap_results.append(order)
 
-        # Update tire wear for next lap
+        # Update tire wear for next lap (weather increases wear: rain/snow/hot)
         for eid in ids:
             if eid in pitting:
                 tire_wear[eid] = 100.0
             else:
-                tire_wear[eid] = max(0, tire_wear[eid] - TIRE_WEAR_PER_LAP + random.uniform(-2, 2))
+                wear_this_lap = (TIRE_WEAR_PER_LAP + random.uniform(-2, 2)) * tire_wear_mult
+                tire_wear[eid] = max(0, tire_wear[eid] - wear_this_lap)
 
     result_order = lap_results[-1] if lap_results else ids
     return lap_results, result_order, pit_stops
@@ -483,7 +502,9 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
                 if car_doc:
                     upgrades_map[inst_id] = {"engine_level": car_doc.get("engine_level", 0), "tires_level": car_doc.get("tires_level", 0)}
     num_laps = max(NUM_LAPS_MIN, min(NUM_LAPS_MAX, int(race.get("laps") or 3)))
-    lap_results, result_order, pit_stops = _run_race_simulation_laps(participants, profile_by_user, upgrades_map, num_laps)
+    weather = random.choice(WEATHER_TYPES)
+    weather_id = weather.get("id", "clear")
+    lap_results, result_order, pit_stops = _run_race_simulation_laps(participants, profile_by_user, upgrades_map, num_laps, weather_id)
     now = _now_iso()
     pot = entry_fee * len(participants) * REWARD_POOL_PCT
     rewards = []
@@ -510,7 +531,7 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
         rewards.append({"entrant_id": entrant_id, "position": position, "cash": cash, "rank_points": rp, "racing_rep": rep})
     await db.racing_races.update_one(
         {"id": race_id},
-        {"$set": {"state": "completed", "participants": participants, "result_order": result_order, "lap_results": lap_results, "pit_stops": pit_stops, "laps": num_laps, "started_at": now, "completed_at": now, "rewards": rewards}},
+        {"$set": {"state": "completed", "participants": participants, "result_order": result_order, "lap_results": lap_results, "pit_stops": pit_stops, "laps": num_laps, "weather": weather_id, "weather_name": weather.get("name", "Clear"), "started_at": now, "completed_at": now, "rewards": rewards}},
     )
     race["state"] = "completed"
     race["participants"] = participants
@@ -518,6 +539,8 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
     race["lap_results"] = lap_results
     race["pit_stops"] = pit_stops
     race["laps"] = num_laps
+    race["weather"] = weather_id
+    race["weather_name"] = weather.get("name", "Clear")
     race["rewards"] = rewards
     return {"message": "Race completed", "race": race}
 

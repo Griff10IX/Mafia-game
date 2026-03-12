@@ -16,6 +16,13 @@ const COMMENTARY = [
 ];
 const CAR_COLORS = ["#d4af37", "#dc2626", "#2563eb", "#16a34a", "#6b7280", "#ec4899", "#f59e0b", "#8b5cf6"];
 
+const WEATHER = {
+  clear: { name: "Clear", icon: "☀️", bg: "linear-gradient(180deg, #1a2a0a 0%, #1a3a0a 50%, #0d1a05 100%)" },
+  rain: { name: "Rain", icon: "🌧️", bg: "linear-gradient(180deg, #1a2230 0%, #1a2a3a 50%, #0d1520 100%)" },
+  snow: { name: "Snow", icon: "❄️", bg: "linear-gradient(180deg, #2a2a35 0%, #1e2430 50%, #151a25 100%)" },
+  very_hot: { name: "Very hot", icon: "🔥", bg: "linear-gradient(180deg, #2a1a0a 0%, #1a1510 50%, #150d05 100%)" },
+};
+
 function formatMoney(n) {
   const num = Number(n ?? 0);
   if (Number.isNaN(num)) return "$0";
@@ -29,11 +36,13 @@ function apiDetail(e) {
   return getApiErrorMessage(e);
 }
 
-/* ─── Circuit race: laps, track shape, pit stops ─── */
-function CircuitRaceView({ participants = [], lap_results = [], pit_stops = [], laps: totalLaps = 3, resultOrder = [], onComplete }) {
+/* ─── Circuit race: laps, track shape, pit stops, weather ─── */
+function CircuitRaceView({ participants = [], lap_results = [], pit_stops = [], laps: totalLaps = 3, resultOrder = [], weather: weatherId = "clear", weather_name: weatherName, onComplete }) {
   const numLaps = Math.max(1, totalLaps);
   const lapResults = Array.isArray(lap_results) && lap_results.length > 0 ? lap_results : [resultOrder || []];
   const pitsThisLap = (lap) => (pit_stops || []).filter((p) => p.lap === lap).map((p) => p.entrant_id);
+  const weatherInfo = WEATHER[weatherId] || WEATHER.clear;
+  const displayWeatherName = weatherName || weatherInfo.name;
   const [currentLap, setCurrentLap] = useState(1);
   const [progress, setProgress] = useState(0);
   const [commentary, setCommentary] = useState("They're off!");
@@ -86,9 +95,14 @@ function CircuitRaceView({ participants = [], lap_results = [], pit_stops = [], 
     <div className={styles.panel} style={{ padding: "1rem" }}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-heading" style={{ color: "var(--noir-primary)" }}>{commentary}</span>
-        <span className="text-sm font-heading" style={{ color: "var(--noir-primary)" }}>Lap {currentLap}/{numLaps}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs px-1.5 py-0.5 rounded surface" title="Weather affects tires and grip">
+            {weatherInfo.icon} {displayWeatherName}
+          </span>
+          <span className="text-sm font-heading" style={{ color: "var(--noir-primary)" }}>Lap {currentLap}/{numLaps}</span>
+        </div>
       </div>
-      <div className="relative rounded overflow-hidden" style={{ background: "linear-gradient(180deg, #1a2a0a 0%, #1a3a0a 50%, #0d1a05 100%)" }}>
+      <div className="relative rounded overflow-hidden" style={{ background: weatherInfo.bg }}>
         <svg viewBox="0 0 400 260" className="w-full" style={{ maxHeight: 280 }}>
           <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="#2d5a12" strokeWidth="24" />
           <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="#3d6b22" strokeWidth="20" />
@@ -500,6 +514,8 @@ export default function Racing() {
               pit_stops={activeRace.pit_stops}
               laps={activeRace.laps}
               resultOrder={activeRace.result_order}
+              weather={activeRace.weather}
+              weather_name={activeRace.weather_name}
               onComplete={() => setActiveRace((r) => (r ? { ...r, _resultsShown: true } : null))}
             />
           ) : (
@@ -517,6 +533,11 @@ export default function Racing() {
           <h2 className="font-heading mb-3" style={{ color: "var(--noir-primary)" }}>
             Race results
           </h2>
+          {activeRace.weather_name && (
+            <p className="text-xs text-[var(--noir-muted)] mb-2">
+              {(WEATHER[activeRace.weather] || {}).icon || ""} Weather: {activeRace.weather_name} — affected tires and grip.
+            </p>
+          )}
           <ul className="space-y-1">
             {(activeRace.result_order || []).map((id, i) => {
               const p = (activeRace.participants || []).find((x) => (x.user_id || x.id) === id);
