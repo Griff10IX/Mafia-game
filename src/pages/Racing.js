@@ -94,6 +94,7 @@ export default function Racing() {
         max_racing_teams: d.max_racing_teams,
         racing_week_ends_utc: d.racing_week_ends_utc,
         racing_season_ends_utc: d.racing_season_ends_utc,
+        global_upgrade_cap: d.global_upgrade_cap ?? 18,
       });
       setCars(d.owned_cars || []);
       setUpgradeTradeoffs(d.upgrade_tradeoffs || null);
@@ -748,14 +749,32 @@ export default function Racing() {
                     const tires = up.tires_level ?? c.tires_level ?? 0;
                     const aero = up.aero_level ?? 0;
                     const reliability = up.reliability_level ?? 0;
+                    const brakes = up.brakes_level ?? 0;
+                    const gearbox = up.gearbox_level ?? 0;
+                    const cooling = up.cooling_level ?? 0;
+                    const weight = up.weight_level ?? 0;
+                    const fuel = up.fuel_level ?? 0;
                     const championship = up.championship_upgrade || false;
                     const wins = profile?.wins ?? 0;
                     const canAeroRel = wins >= 1;
                     const canChamp = wins >= 3 && !championship;
+                    const canWeight = wins >= 2;
                     const effSpeed = c.effective_speed ?? 0;
                     const effGrip = c.effective_grip ?? 0;
-                    const maxEngineTires = 8;
-                    const engineTiresTotal = engine + tires;
+                    const globalCap = profile?.global_upgrade_cap ?? 18;
+                    const levelsUsed = c.upgrade_levels_used ?? (engine + tires + aero + reliability + (championship ? 1 : 0) + brakes + gearbox + cooling + weight + fuel);
+                    const atGlobalCap = levelsUsed >= globalCap;
+                    const maxEngine = upgradeTradeoffs?.engine?.max ?? 4;
+                    const maxTires = upgradeTradeoffs?.tires?.max ?? 4;
+                    const maxAero = upgradeTradeoffs?.aero?.max ?? 2;
+                    const maxRel = upgradeTradeoffs?.reliability?.max ?? 2;
+                    const maxBrakes = upgradeTradeoffs?.brakes?.max ?? 3;
+                    const maxGearbox = upgradeTradeoffs?.gearbox?.max ?? 3;
+                    const maxCooling = upgradeTradeoffs?.cooling?.max ?? 2;
+                    const maxWeight = upgradeTradeoffs?.weight?.max ?? 2;
+                    const maxFuel = upgradeTradeoffs?.fuel?.max ?? 2;
+                    const nextEngineTiresTotal = engine + tires + 1;
+                    const nextEngineTiresCost = carUpgradeCosts[nextEngineTiresTotal] ?? carUpgradeCosts[carUpgradeCosts.length - 1];
                     return (
                     <li key={c.id} className="p-4 rounded-lg border border-[var(--noir-border)] bg-[var(--noir-surface)]">
                       <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
@@ -822,72 +841,131 @@ export default function Racing() {
                       </div>
                       <div className="mb-3">
                         <div className="text-[10px] font-heading uppercase text-[var(--noir-muted)] mb-1">Upgrade levels</div>
+                        <p className="text-xs text-[var(--noir-primary)] mb-2">Levels used: {levelsUsed} / {globalCap}</p>
                         <div className="flex flex-wrap gap-3 text-xs">
                           <div className="flex items-center gap-2">
                             <span className="text-[var(--noir-muted)] w-14">Engine</span>
                             <div className="w-20 h-2 rounded-full bg-[var(--noir-border)] overflow-hidden">
-                              <div className="h-full bg-amber-600 rounded-full" style={{ width: `${(engine / 4) * 100}%` }} />
+                              <div className="h-full bg-amber-600 rounded-full" style={{ width: `${(engine / maxEngine) * 100}%` }} />
                             </div>
-                            <span className="text-[var(--noir-primary)]">{engine}/4</span>
+                            <span className="text-[var(--noir-primary)]">{engine}/{maxEngine}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-[var(--noir-muted)] w-14">Tires</span>
                             <div className="w-20 h-2 rounded-full bg-[var(--noir-border)] overflow-hidden">
-                              <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${(tires / 4) * 100}%` }} />
+                              <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${(tires / maxTires) * 100}%` }} />
                             </div>
-                            <span className="text-[var(--noir-primary)]">{tires}/4</span>
+                            <span className="text-[var(--noir-primary)]">{tires}/{maxTires}</span>
                           </div>
                           {(aero > 0 || canAeroRel) && (
                             <div className="flex items-center gap-2">
                               <span className="text-[var(--noir-muted)] w-14">Aero</span>
                               <div className="w-20 h-2 rounded-full bg-[var(--noir-border)] overflow-hidden">
-                                <div className="h-full bg-sky-600 rounded-full" style={{ width: `${(aero / 2) * 100}%` }} />
+                                <div className="h-full bg-sky-600 rounded-full" style={{ width: `${(aero / maxAero) * 100}%` }} />
                               </div>
-                              <span className="text-[var(--noir-primary)]">{aero}/2</span>
+                              <span className="text-[var(--noir-primary)]">{aero}/{maxAero}</span>
                             </div>
                           )}
                           {(reliability > 0 || canAeroRel) && (
                             <div className="flex items-center gap-2">
                               <span className="text-[var(--noir-muted)] w-14">Rel</span>
                               <div className="w-20 h-2 rounded-full bg-[var(--noir-border)] overflow-hidden">
-                                <div className="h-full bg-violet-600 rounded-full" style={{ width: `${(reliability / 2) * 100}%` }} />
+                                <div className="h-full bg-violet-600 rounded-full" style={{ width: `${(reliability / maxRel) * 100}%` }} />
                               </div>
-                              <span className="text-[var(--noir-primary)]">{reliability}/2</span>
+                              <span className="text-[var(--noir-primary)]">{reliability}/{maxRel}</span>
                             </div>
                           )}
                           {championship && <span className="text-amber-500 font-heading">Championship ✓</span>}
+                          <div className="flex items-center gap-2">
+                            <span className="text-[var(--noir-muted)] w-14">Brakes</span>
+                            <div className="w-20 h-2 rounded-full bg-[var(--noir-border)] overflow-hidden">
+                              <div className="h-full bg-rose-600 rounded-full" style={{ width: `${(brakes / maxBrakes) * 100}%` }} />
+                            </div>
+                            <span className="text-[var(--noir-primary)]">{brakes}/{maxBrakes}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[var(--noir-muted)] w-14">Gearbox</span>
+                            <div className="w-20 h-2 rounded-full bg-[var(--noir-border)] overflow-hidden">
+                              <div className="h-full bg-orange-600 rounded-full" style={{ width: `${(gearbox / maxGearbox) * 100}%` }} />
+                            </div>
+                            <span className="text-[var(--noir-primary)]">{gearbox}/{maxGearbox}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[var(--noir-muted)] w-14">Cooling</span>
+                            <div className="w-20 h-2 rounded-full bg-[var(--noir-border)] overflow-hidden">
+                              <div className="h-full bg-cyan-600 rounded-full" style={{ width: `${(cooling / maxCooling) * 100}%` }} />
+                            </div>
+                            <span className="text-[var(--noir-primary)]">{cooling}/{maxCooling}</span>
+                          </div>
+                          {(weight > 0 || canWeight) && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[var(--noir-muted)] w-14">Weight</span>
+                              <div className="w-20 h-2 rounded-full bg-[var(--noir-border)] overflow-hidden">
+                                <div className="h-full bg-slate-500 rounded-full" style={{ width: `${(weight / maxWeight) * 100}%` }} />
+                              </div>
+                              <span className="text-[var(--noir-primary)]">{weight}/{maxWeight}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <span className="text-[var(--noir-muted)] w-14">Fuel</span>
+                            <div className="w-20 h-2 rounded-full bg-[var(--noir-border)] overflow-hidden">
+                              <div className="h-full bg-yellow-600 rounded-full" style={{ width: `${(fuel / maxFuel) * 100}%` }} />
+                            </div>
+                            <span className="text-[var(--noir-primary)]">{fuel}/{maxFuel}</span>
+                          </div>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {(() => {
                           const bank = profile?.crew_bank ?? 0;
-                          const nextEngineTiresCost = engineTiresTotal < maxEngineTires && carUpgradeCosts[engineTiresTotal + 1] != null ? carUpgradeCosts[engineTiresTotal + 1] : 0;
-                          const aeroCost = canAeroRel && aero < 2 ? 40000 * (aero + 1) : 0;
-                          const relCost = canAeroRel && reliability < 2 ? 40000 * (reliability + 1) : 0;
+                          const aeroCost = canAeroRel && aero < maxAero ? 40000 * (aero + 1) : 0;
+                          const relCost = canAeroRel && reliability < maxRel ? 40000 * (reliability + 1) : 0;
                           const champCost = canChamp ? (upgradeTradeoffs?.championship?.cost ?? 350000) : 0;
+                          const brakesCost = (upgradeTradeoffs?.brakes?.cost_base ?? 30000) * (brakes + 1);
+                          const gearboxCost = (upgradeTradeoffs?.gearbox?.cost_base ?? 30000) * (gearbox + 1);
+                          const coolingCost = (upgradeTradeoffs?.cooling?.cost_base ?? 25000) * (cooling + 1);
+                          const weightCost = (upgradeTradeoffs?.weight?.cost_base ?? 45000) * (weight + 1);
+                          const fuelCost = (upgradeTradeoffs?.fuel?.cost_base ?? 35000) * (fuel + 1);
                           return (
                           <>
                         <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+4% power, −3% grip per level"
-                          disabled={engineTiresTotal >= maxEngineTires || bank < nextEngineTiresCost}
+                          disabled={engine >= maxEngine || atGlobalCap || bank < (nextEngineTiresCost ?? 0)}
                           onClick={() => handleUpgradeCar(c.id, "engine")}>Engine+</button>
                         <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+5% grip, −2% power per level"
-                          disabled={engineTiresTotal >= maxEngineTires || bank < nextEngineTiresCost}
+                          disabled={tires >= maxTires || atGlobalCap || bank < (nextEngineTiresCost ?? 0)}
                           onClick={() => handleUpgradeCar(c.id, "tires")}>Tires+</button>
                         {canAeroRel && (
                           <>
                             <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+3% speed, −2% grip (1+ win)"
-                              disabled={aero >= 2 || bank < aeroCost}
+                              disabled={aero >= maxAero || atGlobalCap || bank < aeroCost}
                               onClick={() => handleUpgradeCar(c.id, "aero")}>Aero+</button>
                             <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="−8% tyre wear, −2% power (1+ win)"
-                              disabled={reliability >= 2 || bank < relCost}
+                              disabled={reliability >= maxRel || atGlobalCap || bank < relCost}
                               onClick={() => handleUpgradeCar(c.id, "reliability")}>Rel+</button>
                           </>
                         )}
                         {canChamp && (
                           <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+2% speed & grip (3+ wins)"
-                            disabled={bank < champCost}
+                            disabled={atGlobalCap || bank < champCost}
                             onClick={() => handleUpgradeCar(c.id, "championship")}>Championship</button>
                         )}
+                        <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+2% grip, −1% power per level"
+                          disabled={brakes >= maxBrakes || atGlobalCap || bank < brakesCost}
+                          onClick={() => handleUpgradeCar(c.id, "brakes")}>Brakes+</button>
+                        <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+2% speed, −1% grip per level"
+                          disabled={gearbox >= maxGearbox || atGlobalCap || bank < gearboxCost}
+                          onClick={() => handleUpgradeCar(c.id, "gearbox")}>Gearbox+</button>
+                        <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="−5% engine wear per level"
+                          disabled={cooling >= maxCooling || atGlobalCap || bank < coolingCost}
+                          onClick={() => handleUpgradeCar(c.id, "cooling")}>Cooling+</button>
+                        {canWeight && (
+                          <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+1% speed & grip per level (2+ wins)"
+                            disabled={weight >= maxWeight || atGlobalCap || bank < weightCost}
+                            onClick={() => handleUpgradeCar(c.id, "weight")}>Weight+</button>
+                        )}
+                        <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+2% power per level"
+                          disabled={fuel >= maxFuel || atGlobalCap || bank < fuelCost}
+                          onClick={() => handleUpgradeCar(c.id, "fuel")}>Fuel+</button>
                           </>
                           );
                         })()}
@@ -908,6 +986,11 @@ export default function Racing() {
                     {upgradeTradeoffs.aero && <li className="flex flex-wrap gap-x-2"><span className="font-heading text-sky-500">Aero:</span> <span className="text-green-500">{upgradeTradeoffs.aero.positive}</span> <span className="text-red-400">{upgradeTradeoffs.aero.negative}</span> <span className="text-[var(--noir-muted)]">— Unlock: {upgradeTradeoffs.aero.unlock}</span></li>}
                     {upgradeTradeoffs.reliability && <li className="flex flex-wrap gap-x-2"><span className="font-heading text-violet-500">Reliability:</span> <span className="text-green-500">{upgradeTradeoffs.reliability.positive}</span> <span className="text-red-400">{upgradeTradeoffs.reliability.negative}</span> <span className="text-[var(--noir-muted)]">— Unlock: {upgradeTradeoffs.reliability.unlock}</span></li>}
                     {upgradeTradeoffs.championship && <li className="flex flex-wrap gap-x-2"><span className="font-heading text-amber-400">Championship:</span> <span className="text-green-500">{upgradeTradeoffs.championship.positive}</span> <span className="text-[var(--noir-muted)]">— Unlock: {upgradeTradeoffs.championship.unlock}</span> {upgradeTradeoffs.championship.cost != null && <span className="text-[var(--noir-primary)]">({formatMoney(upgradeTradeoffs.championship.cost)})</span>}</li>}
+                    {upgradeTradeoffs.brakes && <li className="flex flex-wrap gap-x-2"><span className="font-heading text-rose-500">Brakes:</span> <span className="text-green-500">{upgradeTradeoffs.brakes.positive}</span> <span className="text-red-400">{upgradeTradeoffs.brakes.negative}</span> {upgradeTradeoffs.brakes.per_level && <span className="text-[var(--noir-muted)]">(per level)</span>}</li>}
+                    {upgradeTradeoffs.gearbox && <li className="flex flex-wrap gap-x-2"><span className="font-heading text-orange-500">Gearbox:</span> <span className="text-green-500">{upgradeTradeoffs.gearbox.positive}</span> <span className="text-red-400">{upgradeTradeoffs.gearbox.negative}</span> {upgradeTradeoffs.gearbox.per_level && <span className="text-[var(--noir-muted)]">(per level)</span>}</li>}
+                    {upgradeTradeoffs.cooling && <li className="flex flex-wrap gap-x-2"><span className="font-heading text-cyan-500">Cooling:</span> <span className="text-green-500">{upgradeTradeoffs.cooling.positive}</span> {upgradeTradeoffs.cooling.per_level && <span className="text-[var(--noir-muted)]">(per level)</span>}</li>}
+                    {upgradeTradeoffs.weight && <li className="flex flex-wrap gap-x-2"><span className="font-heading text-slate-400">Weight:</span> <span className="text-green-500">{upgradeTradeoffs.weight.positive}</span> <span className="text-[var(--noir-muted)]">— Unlock: {upgradeTradeoffs.weight.unlock}</span> {upgradeTradeoffs.weight.per_level && <span className="text-[var(--noir-muted)]">(per level)</span>}</li>}
+                    {upgradeTradeoffs.fuel && <li className="flex flex-wrap gap-x-2"><span className="font-heading text-yellow-500">Fuel:</span> <span className="text-green-500">{upgradeTradeoffs.fuel.positive}</span> {upgradeTradeoffs.fuel.per_level && <span className="text-[var(--noir-muted)]">(per level)</span>}</li>}
                   </ul>
                 </div>
               )}

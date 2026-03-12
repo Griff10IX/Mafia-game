@@ -374,7 +374,7 @@ export default function CircuitRaceView({
   const [commentary, setCommentary] = useState("Select track & tyres, then start");
   const [standings, setStandings] = useState([]);
   const [pitNotif, setPitNotif] = useState(null);
-  const [lapDisplay, setLapDisplay] = useState("1");
+  const [lapDisplay, setLapDisplay] = useState("—"); // "—" until race starts; then "1 / N" … "N / N" (qualifying is not lap 1)
   const [results, setResults] = useState(null);
   const pitNotifTimer = useRef(null);
   const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 640);
