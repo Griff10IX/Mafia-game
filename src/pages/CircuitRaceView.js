@@ -343,6 +343,7 @@ export default function CircuitRaceView({
   playerCarName = "Stutz Bearcat",
   playerTyreId = "medium",
   playerPitLevel = 0,
+  currentUserId = null, // in replay: mark this user as "You" and show first in standings
 }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
@@ -512,7 +513,9 @@ export default function CircuitRaceView({
     racerArr.forEach((r, drawIdx) => {
       if (!r.visible) return;
       const spread = 0.009 * drawIdx;
-      const t = (r.trackPos + spread + 1) % 1;
+      // When in pit: draw car at pit box (middle of pit lane) so it stays visibly in pit
+      const pitPos = (track.pitEntry + track.pitExit) / 2;
+      const t = (r.inPit ? pitPos + spread * 0.5 : (r.trackPos + spread + 1)) % 1;
       const p = track.getPoint(t);
       const p2 = track.getPoint((t + 0.006) % 1);
       const angle = Math.atan2(sy(p2.y)-sy(p.y), sx(p2.x)-sx(p.x));
@@ -588,7 +591,7 @@ export default function CircuitRaceView({
       pitStrategy: buildPitStrategy(pTyre, nLaps),
       finished:false, visible:true, position:1,
       lapTimes:[],
-      slideOffUntil:0,
+      slideOffUntil:0, pitExitUntil: null,
     });
     for (let i=0;i<7;i++) {
       const carIdx = i % NPC_CARS.length;
@@ -608,7 +611,7 @@ export default function CircuitRaceView({
         pitStrategy: buildPitStrategy(t, nLaps),
         finished:false, visible:true, position:i+2,
         lapTimes:[],
-        slideOffUntil:0,
+        slideOffUntil:0, pitExitUntil: null,
       });
     }
     return racers;
@@ -635,10 +638,12 @@ export default function CircuitRaceView({
         if (r.finished) return;
         allDone = false;
 
-        // Pit stop in progress
+        // Pit stop in progress — car stays in pit until pitEndAt
         if (r.inPit) {
           if (now / 1000 >= r.pitEndAt) {
             r.inPit = false; r.tyreWear = 100; r.pitStops++;
+            r.pitExitUntil = now / 1000 + 2.5; // slow take-off after exit
+            r.trackPos = track.pitExit; // rejoin at pit exit
             if (r.pitStrategy.length > 0) {
               r.currentTyre = r.pitStrategy[0].nextTyre;
               r.pitStrategy = r.pitStrategy.slice(1);
@@ -652,19 +657,28 @@ export default function CircuitRaceView({
           return; // don't move while pitting
         }
 
+        const nowSec = now / 1000;
+        // Slow take-off after pit exit (ramp speed from ~50% to 100% over ~2.5s)
+        let pitExitMult = 1.0;
+        if (r.pitExitUntil != null && nowSec < r.pitExitUntil) {
+          const exitDuration = 2.5;
+          const elapsed = exitDuration - (r.pitExitUntil - nowSec);
+          pitExitMult = Math.min(1.0, 0.5 + 0.5 * (elapsed / exitDuration));
+        }
+        if (r.pitExitUntil != null && nowSec >= r.pitExitUntil) r.pitExitUntil = null;
+
         // Tyre wear factor
         const td = TYRE_DEFS[r.currentTyre] || TYRE_DEFS.medium;
         const wearFactor = Math.max(0.4, r.tyreWear / 100);
         const wdGrip = (wd.gripMult != null) ? wd.gripMult : 1.0;
         const effectiveGrip = (r.baseGrip != null ? r.baseGrip : 0.85) * wearFactor * wdGrip;
-        const effSpeed = r.baseSpeed * td.gripMult * wd.speedMult * wearFactor;
+        const effSpeed = r.baseSpeed * td.gripMult * wd.speedMult * wearFactor * pitExitMult;
 
         // Corner-aware speed: slow in corners, fast on straights (weather + tyre grip affect cornering)
         const curvature = getCurvature(track, r.trackPos);
         const cornerMult = getCornerMult(curvature, effectiveGrip);
 
         // Slide off track: high curvature + low grip → chance to slide off; while off, crawl back on
-        const nowSec = now / 1000;
         const prevPos = r.trackPos;
         if (r.slideOffUntil > 0 && nowSec < r.slideOffUntil) {
           // Still off track — reduced advance (rejoining)
@@ -804,12 +818,20 @@ export default function CircuitRaceView({
   useEffect(() => {
     if (mode !== "replay") return;
     if (!participants.length && !resultOrder.length) return;
-    const order = (qualifying_order && qualifying_order.length) ? qualifying_order : (resultOrder.length ? resultOrder : participants.map(p => p.user_id || p.id));
+    const rawOrder = (qualifying_order && qualifying_order.length) ? qualifying_order : (resultOrder.length ? resultOrder : participants.map(p => p.user_id || p.id));
+    // Deduplicate: one racer per entrant id (keep first occurrence) so leaderboard never shows duplicate names/positions
+    const seen = new Set();
+    const order = rawOrder.filter((id) => {
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
     resizeCanvas();
     const track = TRACKS.find(t=>t.id===initialTrackId) || TRACKS[0];
     const cond = WEATHER_MAP[weatherIdProp] || "clear";
       const racers = order.map((id, i) => {
       const p = participants.find(x=>(x.user_id||x.id)===id) || {};
+      const isPlayer = (currentUserId != null && (id === currentUserId || p.user_id === currentUserId));
       const effSpeed = p.effective_speed != null ? p.effective_speed : 15;
       const effGrip = p.effective_grip != null ? p.effective_grip : 0.85;
       const baseSpeed = effSpeed / 15;
@@ -817,7 +839,7 @@ export default function CircuitRaceView({
       const pitLvl = p.pit_level != null ? p.pit_level : 0;
       const replayPitStrategy = buildReplayPitStrategy(id, pit_stops, tyreId);
       return {
-        id, name:p.username||p.car_name||`#${i+1}`, isPlayer:false,
+        id, name:p.username||p.car_name||`#${i+1}`, isPlayer,
         color:CAR_COLORS[i%CAR_COLORS.length], carName:p.car_name||"",
         trackPos: i * (-0.012), lapCount:1, totalLapsDone:0,
         currentTyre: tyreId in TYRE_DEFS ? tyreId : "medium",
@@ -827,9 +849,8 @@ export default function CircuitRaceView({
         pitDurationEmergencySeconds: pitDurationSeconds(pitLvl, true),
         baseSpeed, baseGrip: effGrip,
         pitStrategy: replayPitStrategy, finished:false, visible:true, position:i+1, lapTimes:[],
-        isPlayer: false,
         tireWearByLap: tire_wear_after_lap[id],
-        slideOffUntil: 0,
+        slideOffUntil: 0, pitExitUntil: null,
       };
     });
     stateRef.current = { racers, track, nLaps: totalLaps, wd: WEATHER_DEFS[cond] || WEATHER_DEFS.clear };
@@ -855,8 +876,8 @@ export default function CircuitRaceView({
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- replay init: only re-run when mode becomes replay
-  }, [mode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- replay init: only re-run when mode / currentUserId
+  }, [mode, currentUserId]);
 
   // Draw loop during replay countdown (grid visible, no movement)
   useEffect(() => {
@@ -1082,10 +1103,11 @@ export default function CircuitRaceView({
       {/* ── LIVE STANDINGS (F1 Manager style) ── */}
       {standings.length > 0 && (
         <div className={styles.panel} style={{ marginBottom:"0.6rem", overflowX:"auto", overflowY:"hidden", WebkitOverflowScrolling:"touch" }}>
-          {standings.map((r, i) => {
+          {[...standings]
+            .sort((a, b) => (a.position || 0) - (b.position || 0))
+            .map((r, i) => {
             const td = TYRE_DEFS[r.currentTyre] || TYRE_DEFS.medium;
             const wc = tyreColor(r.tyreWear);
-            // Overlap = laps down (leader has lapped this car). Underlap = fractional lap gap in seconds.
             const lapsDown = r.lapsDown != null ? r.lapsDown : (r.gap != null ? Math.floor(r.gap) : 0);
             const fracLap = r.gap != null ? r.gap - Math.floor(r.gap) : 0;
             let gapStr = "Leader";
@@ -1093,7 +1115,7 @@ export default function CircuitRaceView({
               gapStr = r.pitTimeRemaining != null && r.pitTimeRemaining > 0
                 ? `PIT — ${r.pitTimeRemaining.toFixed(1)}s`
                 : "PIT";
-            } else if (i > 0) {
+            } else if (r.position > 1) {
               if (lapsDown >= 1) {
                 gapStr = lapsDown === 1 ? "1 lap down" : `${lapsDown} laps down`;
                 if (fracLap > 0.001) gapStr += ` +${(fracLap * selectedTrack.lapBase).toFixed(2)}s`;
@@ -1101,23 +1123,24 @@ export default function CircuitRaceView({
                 gapStr = `+${((r.gap || 0) * selectedTrack.lapBase).toFixed(2)}s`;
               }
             }
+            const pos = r.position != null ? r.position : i + 1;
             return (
               <div key={r.id}
                 style={{
                   display:"flex", alignItems:"center", padding:"5px 8px",
                   borderBottom:"1px solid rgba(201,164,96,.06)",
-                  background: r.isPlayer ? "rgba(201,164,96,.06)" : i===0 ? "rgba(201,164,96,.03)" : "transparent",
+                  background: r.isPlayer ? "rgba(201,164,96,.06)" : pos===1 ? "rgba(201,164,96,.03)" : "transparent",
                   gap:"6px",
                 }}
               >
-                {/* Pos badge */}
+                {/* Pos badge — actual race position */}
                 <div style={{
                   width:20, height:20, display:"flex", alignItems:"center", justifyContent:"center",
                   fontFamily:"'Cinzel',serif", fontSize:10, fontWeight:700, flexShrink:0,
-                  background: i===0?"linear-gradient(135deg,#a87820,#e8c870)":i===1?"rgba(160,160,160,.2)":i===2?"rgba(140,80,20,.2)":"rgba(201,164,96,.06)",
-                  color: i===0?"#0a0c06":i===1?"#bbb":i===2?"#c07a30":"var(--noir-muted)",
-                  border: i>0?"1px solid rgba(201,164,96,.15)":"none",
-                }}>{i+1}</div>
+                  background: pos===1?"linear-gradient(135deg,#a87820,#e8c870)":pos===2?"rgba(160,160,160,.2)":pos===3?"rgba(140,80,20,.2)":"rgba(201,164,96,.06)",
+                  color: pos===1?"#0a0c06":pos===2?"#bbb":pos===3?"#c07a30":"var(--noir-muted)",
+                  border: pos>0?"1px solid rgba(201,164,96,.15)":"none",
+                }}>{pos}</div>
 
                 {/* Car color dot */}
                 <div style={{ width:9,height:9,borderRadius:"50%",background:r.color,flexShrink:0,boxShadow:`0 0 5px ${r.color}80` }}/>
@@ -1142,8 +1165,8 @@ export default function CircuitRaceView({
                 {/* Gap / Pit */}
                 <div style={{
                   fontFamily:"'Rajdhani',sans-serif", fontSize:11, width:54, textAlign:"right", flexShrink:0,
-                  color: r.inPit ? "#ff9800" : i===0 ? "var(--noir-primary)" : "var(--noir-muted)",
-                  fontWeight: r.inPit || i===0 ? 700 : 400,
+                  color: r.inPit ? "#ff9800" : pos===1 ? "var(--noir-primary)" : "var(--noir-muted)",
+                  fontWeight: r.inPit || pos===1 ? 700 : 400,
                 }}>
                   {gapStr}
                 </div>

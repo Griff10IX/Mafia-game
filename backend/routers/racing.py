@@ -325,14 +325,18 @@ def _run_race_simulation_laps(
                 dnf_ids.append(eid)
                 engine_issue_this_lap[eid] = True  # DNF
 
-        # Pit when tire below threshold (pit a lap before they'd be gone)
+        # Pit when tire below threshold — higher pit_level = pit earlier (lap before wear hurts speed)
         pitting = set()
         for eid in ids:
             if eid in dnf_ids:
                 continue
-            if tire_wear[eid] < TIRE_PIT_THRESHOLD:
+            prof = profile_by_user.get(eid) or {}
+            pit_level = min(MAX_CREW_LEVEL, int(prof.get("pit_level") or 0))
+            # Smarter team: pit at higher wear (e.g. 50 + 2.5*level → 50–62.5) so they pit before wear affects speed
+            pit_threshold = min(65, TIRE_PIT_THRESHOLD + pit_level * 2.5)
+            if tire_wear[eid] < pit_threshold:
                 pitting.add(eid)
-            elif lap > 1 and lap < num_laps and random.random() < 0.12 and tire_wear[eid] < 60:
+            elif lap > 1 and lap < num_laps and random.random() < 0.12 and tire_wear[eid] < (55 + pit_level * 2):
                 pitting.add(eid)
         for eid in pitting:
             pit_stops.append({"lap": lap, "entrant_id": eid})

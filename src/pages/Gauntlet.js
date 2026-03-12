@@ -577,23 +577,25 @@ export default function Gauntlet() {
                 GATES CLEARED
               </text>
 
-              <rect x={VIEW_W / 2 - 110} y={VIEW_H / 2} width={220} height={68} rx="6" fill="rgba(var(--noir-primary-rgb),0.08)" stroke="var(--noir-border-mid)" strokeWidth="1" />
+              <rect x={VIEW_W / 2 - 140} y={VIEW_H / 2} width={280} height={95} rx="6" fill="rgba(var(--noir-primary-rgb),0.08)" stroke="var(--noir-border-mid)" strokeWidth="1" />
 
-              <text x={VIEW_W / 2} y={VIEW_H / 2 + 22} textAnchor="middle" fill="var(--noir-primary)" fontSize="13" fontFamily="Cinzel, serif" letterSpacing="2">
-                {reward.label !== "Nobody" ? reward.label.toUpperCase() : "NOBODY"}
-              </text>
+              <foreignObject x={VIEW_W / 2 - 140} y={VIEW_H / 2} width={280} height={95} style={{ overflow: "visible" }}>
+                <div xmlns="http://www.w3.org/1999/xhtml" style={{ padding: "8px 12px", textAlign: "center", width: "100%", boxSizing: "border-box" }}>
+                  <div style={{ color: "var(--noir-primary)", fontSize: 13, letterSpacing: "0.15em", fontFamily: "Cinzel, serif", marginBottom: 4 }}>
+                    {reward.label !== "Nobody" ? reward.label.toUpperCase() : "NOBODY"}
+                  </div>
+                  <div style={{ color: claimStatus.state === "error" ? "#f87171" : claimStatus.cash > 0 || claimStatus.respect > 0 ? "var(--noir-primary-bright)" : "var(--noir-muted)", fontSize: 14, fontWeight: 700, fontFamily: "Cinzel, serif", lineHeight: 1.35, wordBreak: "break-word" }}>
+                    {claimStatus.state === "claiming" ? "CLAIMING..." : (claimStatus.message || (reward.cash > 0 || reward.respect > 0 ? `+$${reward.cash.toLocaleString()}${reward.respect > 0 ? ` & +${reward.respect} respect` : ""} EARNED` : "Score 1+ to earn"))}
+                  </div>
+                  {nextTier && (
+                    <div style={{ color: "var(--noir-muted)", fontSize: 10, letterSpacing: "0.08em", fontFamily: "Cinzel, serif", marginTop: 6, lineHeight: 1.3, wordBreak: "break-word" }}>
+                      {nextTier.label ? `REACH ${nextTier.score} FOR ${nextTier.label.toUpperCase()}` : `REACH ${nextTier.score} GATES`}{nextTier.cash != null || nextTier.respect != null ? ` (+$${nextTier.cash != null ? nextTier.cash.toLocaleString() : "0"} / +${nextTier.respect != null ? nextTier.respect : 0} resp)` : ""}
+                    </div>
+                  )}
+                </div>
+              </foreignObject>
 
-              <text x={VIEW_W / 2} y={VIEW_H / 2 + 50} textAnchor="middle" fill={claimStatus.state === "error" ? "#f87171" : claimStatus.cash > 0 || claimStatus.respect > 0 ? "var(--noir-primary-bright)" : "var(--noir-muted)"} fontSize="15" fontFamily="Cinzel, serif" fontWeight="700">
-                {claimStatus.state === "claiming" ? "CLAIMING..." : (claimStatus.message || (reward.cash > 0 || reward.respect > 0 ? `+$${reward.cash.toLocaleString()}${reward.respect > 0 ? ` & +${reward.respect} respect` : ""} EARNED` : "Score 1+ to earn"))}
-              </text>
-
-              {nextTier && (
-                <text x={VIEW_W / 2} y={VIEW_H / 2 + 88} textAnchor="middle" fill="var(--noir-muted)" fontSize="10" fontFamily="Cinzel, serif" letterSpacing="1">
-                  {nextTier.label ? `REACH ${nextTier.score} FOR ${nextTier.label.toUpperCase()}` : `REACH ${nextTier.score} GATES`} (+${nextTier.cash != null ? nextTier.cash.toLocaleString() : ""}${nextTier.respect != null ? ` / +${nextTier.respect} resp` : ""})
-                </text>
-              )}
-
-              <text x={VIEW_W / 2} y={VIEW_H / 2 + 124} textAnchor="middle" fill="var(--noir-primary)" fontSize="12" fontFamily="Cinzel, serif" letterSpacing="3" opacity="0.85">
+              <text x={VIEW_W / 2} y={VIEW_H / 2 + 132} textAnchor="middle" fill="var(--noir-primary)" fontSize="12" fontFamily="Cinzel, serif" letterSpacing="3" opacity="0.85">
                 TAP TO TRY AGAIN
               </text>
             </g>
@@ -697,27 +699,31 @@ export default function Gauntlet() {
             <div
               key={i}
               style={{
-                padding: "4px 10px",
+                padding: "6px 10px",
                 border: `1px solid ${current ? "var(--noir-primary)" : active ? "var(--noir-border-mid)" : "var(--noir-border-light)"}`,
                 borderRadius: "6px",
                 background: current ? "rgba(var(--noir-primary-rgb),0.12)" : "transparent",
                 textAlign: "center",
                 transition: "all 0.3s",
                 minWidth: 92,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              <div style={{ color: current ? "var(--noir-primary)" : "var(--noir-muted)", fontSize: "9px", letterSpacing: "0.1em" }}>{t.label.toUpperCase()}</div>
-              <div style={{ color: current ? "var(--noir-primary-bright)" : "var(--noir-foreground)", opacity: current ? 1 : 0.8, fontSize: "11px", fontWeight: "700" }}>${t.cash.toLocaleString()} / {t.respect} resp</div>
-              <div style={{ color: "var(--noir-muted)", fontSize: "8px" }}>{t.score}+ gates</div>
+              <div style={{ color: current ? "var(--noir-primary)" : "var(--noir-muted)", fontSize: "9px", letterSpacing: "0.1em", textAlign: "center" }}>{t.label.toUpperCase()}</div>
+              <div style={{ color: current ? "var(--noir-primary-bright)" : "var(--noir-foreground)", opacity: current ? 1 : 0.8, fontSize: "11px", fontWeight: "700", textAlign: "center" }}>${t.cash.toLocaleString()} / {t.respect} resp</div>
+              <div style={{ color: "var(--noir-muted)", fontSize: "8px", textAlign: "center" }}>{t.score}+ gates</div>
             </div>
           );
         })}
       </div>
 
-      <p style={{ color: "var(--noir-muted)", fontSize: "10px", marginTop: "6px", letterSpacing: "0.1em" }}>
+      <p style={{ color: "var(--noir-muted)", fontSize: "10px", marginTop: "6px", letterSpacing: "0.1em", textAlign: "center" }}>
         After 50: +$2k & +2 respect per gate. Caps: $1M / 1,000 respect
       </p>
-      <p style={{ color: "var(--noir-muted)", fontSize: "10px", marginTop: "4px", letterSpacing: "0.1em" }}>
+      <p style={{ color: "var(--noir-muted)", fontSize: "10px", marginTop: "4px", letterSpacing: "0.1em", textAlign: "center" }}>
         {isTouch ? "TAP TO FLY" : "SPACE / TAP TO FLY"}
       </p>
     </div>

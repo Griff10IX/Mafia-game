@@ -452,7 +452,7 @@ async def matches_create(payload: MatchCreateRequest, current_user: dict = Depen
         return {"message": "Open match created", "match_id": match_id}
     npc = _get_npc_by_id_or_name(opp_name)
     if npc:
-        # Create match vs NPC: scale NPC stats to player level
+        # Create match vs NPC: scale NPC to player level so matches are even
         await _ensure_profile(current_user["id"])
         match_id = str(uuid.uuid4())
         now = _now_iso()
@@ -463,10 +463,13 @@ async def matches_create(payload: MatchCreateRequest, current_user: dict = Depen
         npc_design_level = sum(int(npc.get(k, 1) or 1) for k in STAT_KEYS) / len(STAT_KEYS)
         if npc_design_level < 1:
             npc_design_level = 1
-        ratio = player_level / npc_design_level
+        # Scale so NPC average is close to player (band 0.92–1.08 for variety but still even)
+        ratio = (player_level / npc_design_level) * random.uniform(0.92, 1.08)
         b_npc_stats = {k: max(1, min(15, int(round(int(npc.get(k, 1) or 1) * ratio)))) for k in STAT_KEYS}
         ra = int(a_prof.get("rating") or 1000)
-        rb = int(npc.get("rating") or 1000)
+        # Use player rating for NPC so odds reflect an even match
+        rb = ra + random.randint(-40, 40)
+        rb = max(100, min(3000, rb))
         odds = _match_odds(ra, rb)
         doc = {
             "id": match_id,

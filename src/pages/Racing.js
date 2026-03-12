@@ -349,6 +349,7 @@ export default function Racing() {
             initialTrackId={circuitTrackId}
             playerCarName={playerCarName}
             playerPitLevel={profile?.pit_level ?? 0}
+            currentUserId={profile?.user_id}
             onComplete={() => setActiveRace((r) => (r ? { ...r, _resultsShown: true } : null))}
           />
         </div>
