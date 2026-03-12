@@ -6,6 +6,7 @@ import { getApiErrorMessage } from "../utils/api";
 import styles from "../styles/noir.module.css";
 
 const RACE_DURATION_MS = 5500;
+const LAP_MS = 3200; // per-lap animation
 const COMMENTARY = [
   "They're off!",
   "Bootleg run!",
@@ -13,6 +14,7 @@ const COMMENTARY = [
   "At the line!",
   "Checkered flag!",
 ];
+const CAR_COLORS = ["#d4af37", "#dc2626", "#2563eb", "#16a34a", "#6b7280", "#ec4899", "#f59e0b", "#8b5cf6"];
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -25,6 +27,104 @@ function apiDetail(e) {
   if (typeof d === "string") return d;
   if (Array.isArray(d) && d.length) return d.map((x) => x.msg || x.loc?.join(".")).join("; ") || "Error";
   return getApiErrorMessage(e);
+}
+
+/* ─── Circuit race: laps, track shape, pit stops ─── */
+function CircuitRaceView({ participants = [], lap_results = [], pit_stops = [], laps: totalLaps = 3, resultOrder = [], onComplete }) {
+  const numLaps = Math.max(1, totalLaps);
+  const lapResults = Array.isArray(lap_results) && lap_results.length > 0 ? lap_results : [resultOrder || []];
+  const pitsThisLap = (lap) => (pit_stops || []).filter((p) => p.lap === lap).map((p) => p.entrant_id);
+  const [currentLap, setCurrentLap] = useState(1);
+  const [progress, setProgress] = useState(0);
+  const [commentary, setCommentary] = useState("They're off!");
+
+  useEffect(() => {
+    if (!lapResults.length) {
+      onComplete?.();
+      return;
+    }
+    setCommentary("They're off!");
+    const t1 = setTimeout(() => setCommentary("Rounding the bend!"), 800);
+    const t2 = setTimeout(() => setCommentary("Pit window open"), 1200);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, []);
+
+  useEffect(() => {
+    if (currentLap > numLaps) {
+      setCommentary("Checkered flag!");
+      const t = setTimeout(() => onComplete?.(), 600);
+      return () => clearTimeout(t);
+    }
+    const start = Date.now();
+    let raf;
+    const tick = () => {
+      const elapsed = Date.now() - start;
+      const t = Math.min(1, elapsed / LAP_MS);
+      const eased = 1 - (1 - t) * (1 - t);
+      setProgress(eased);
+      if (t >= 1) {
+        if (currentLap < numLaps) {
+          setCurrentLap((c) => c + 1);
+          setProgress(0);
+        }
+      } else {
+        raf = requestAnimationFrame(tick);
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [currentLap, numLaps, onComplete]);
+
+  const order = lapResults[currentLap - 1] || lapResults[0] || [];
+  const pitSet = new Set(pitsThisLap(currentLap));
+  const cx = 200;
+  const cy = 120;
+  const rx = 160;
+  const ry = 85;
+
+  return (
+    <div className={styles.panel} style={{ padding: "1rem" }}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-heading" style={{ color: "var(--noir-primary)" }}>{commentary}</span>
+        <span className="text-sm font-heading" style={{ color: "var(--noir-primary)" }}>Lap {currentLap}/{numLaps}</span>
+      </div>
+      <div className="relative rounded overflow-hidden" style={{ background: "linear-gradient(180deg, #1a2a0a 0%, #1a3a0a 50%, #0d1a05 100%)" }}>
+        <svg viewBox="0 0 400 260" className="w-full" style={{ maxHeight: 280 }}>
+          <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="#2d5a12" strokeWidth="24" />
+          <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="#3d6b22" strokeWidth="20" />
+          <path d={`M ${cx + rx - 8} ${cy} L ${cx + rx + 45} ${cy} L ${cx + rx + 45} ${cy + 28} L ${cx + rx - 8} ${cy}`} fill="none" stroke="rgba(212,175,55,0.6)" strokeWidth="6" strokeDasharray="4 3" />
+          <text x={cx + rx + 22} y={cy + 18} fill="var(--noir-primary)" fontSize="8" textAnchor="middle" fontWeight="bold">PIT</text>
+          {order.map((entrantId, idx) => {
+            const spread = (2 * Math.PI) / Math.max(order.length, 1);
+            const angle = progress * 2 * Math.PI - idx * spread * 0.4;
+            const x = cx + rx * Math.cos(angle);
+            const y = cy + ry * Math.sin(angle);
+            const color = CAR_COLORS[idx % CAR_COLORS.length];
+            const isPitting = pitSet.has(entrantId);
+            return (
+              <g key={entrantId}>
+                <circle cx={x} cy={y} r="12" fill={color} stroke="#111" strokeWidth="2" />
+                <text x={x} y={y + 1} fill="#fff" fontSize="7" textAnchor="middle" fontWeight="bold">{idx + 1}</text>
+                {isPitting && (
+                  <text x={x} y={y - 16} fill="var(--noir-primary)" fontSize="7" textAnchor="middle">Pit</text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+        <div className="flex flex-wrap justify-center gap-2 px-2 py-1 border-t border-[var(--noir-border)]">
+          {(lapResults[currentLap - 1] || order).slice(0, 6).map((id, i) => {
+            const p = (participants || []).find((e) => (e.user_id || e.id) === id);
+            return (
+              <span key={id} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: CAR_COLORS[i % CAR_COLORS.length], color: "#fff" }}>
+                #{i + 1} {p?.username || p?.car_name || id}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* ─── 2D Race track (lanes + progress bars) ─── */
@@ -161,7 +261,7 @@ export default function Racing() {
   const [tab, setTab] = useState("races"); // races | myride | crew | leaderboard | comps
   const [creating, setCreating] = useState(false);
   const [joiningId, setJoiningId] = useState(null);
-  const [createForm, setCreateForm] = useState({ track_id: "", entry_fee: 0, max_grid: 6 });
+  const [createForm, setCreateForm] = useState({ track_id: "", entry_fee: 0, max_grid: 6, laps: 3 });
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -250,6 +350,7 @@ export default function Racing() {
         track_id: createForm.track_id,
         entry_fee: Number(createForm.entry_fee) || 0,
         max_grid: Number(createForm.max_grid) || 6,
+        laps: Number(createForm.laps) || 3,
       });
       const race = r.data?.race;
       if (race) {
@@ -392,11 +493,22 @@ export default function Racing() {
       {/* Active race: show 2D run then results */}
       {activeRace?.state === "completed" && !activeRace._resultsShown && (
         <div className="p-4">
-          <RaceRun2D
-            participants={activeRace.participants}
-            resultOrder={activeRace.result_order}
-            onComplete={() => setActiveRace((r) => (r ? { ...r, _resultsShown: true } : null))}
-          />
+          {activeRace.lap_results?.length > 0 ? (
+            <CircuitRaceView
+              participants={activeRace.participants}
+              lap_results={activeRace.lap_results}
+              pit_stops={activeRace.pit_stops}
+              laps={activeRace.laps}
+              resultOrder={activeRace.result_order}
+              onComplete={() => setActiveRace((r) => (r ? { ...r, _resultsShown: true } : null))}
+            />
+          ) : (
+            <RaceRun2D
+              participants={activeRace.participants}
+              resultOrder={activeRace.result_order}
+              onComplete={() => setActiveRace((r) => (r ? { ...r, _resultsShown: true } : null))}
+            />
+          )}
         </div>
       )}
 
@@ -589,6 +701,17 @@ export default function Racing() {
                     className={styles.input + " w-20"}
                     value={createForm.max_grid}
                     onChange={(e) => setCreateForm((f) => ({ ...f, max_grid: e.target.value }))}
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs">Laps</span>
+                  <input
+                    type="number"
+                    min={2}
+                    max={5}
+                    className={styles.input + " w-16"}
+                    value={createForm.laps}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, laps: e.target.value }))}
                   />
                 </label>
                 <button

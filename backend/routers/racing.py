@@ -62,6 +62,11 @@ CAR_UPGRADE_COSTS = [0, 20000, 50000, 100000, 200000]
 CAR_UPGRADE_BONUS_PER_LEVEL = 0.03
 MAX_CREW_LEVEL = 5
 MAX_CAR_UPGRADE_LEVEL = 4
+NUM_LAPS_MIN = 2
+NUM_LAPS_MAX = 5
+TIRE_WEAR_PER_LAP = 18
+TIRE_PIT_THRESHOLD = 35
+PIT_PENALTY_FACTOR = 0.72  # speed multiplier when pitting (lose time that lap)
 
 DEFAULT_PROFILE = {
     "mechanic_level": 0,
@@ -78,6 +83,7 @@ class CreateRaceRequest(BaseModel):
     track_id: str
     entry_fee: int = 0
     max_grid: int = 6
+    laps: int = 3
 
 
 class JoinRaceRequest(BaseModel):
@@ -154,6 +160,56 @@ def _run_race_simulation(entrants: List[dict], profile_by_user: Dict[str, dict],
     random.shuffle(pairs)
     pairs.sort(key=lambda x: -x[1])
     return [p[0] for p in pairs]
+
+
+def _run_race_simulation_laps(
+    entrants: List[dict],
+    profile_by_user: Dict[str, dict],
+    upgrades_map: Dict[str, dict],
+    num_laps: int,
+) -> tuple:
+    """Run lap-by-lap simulation with tire wear and pit stops. Returns (lap_results, result_order, pit_stops)."""
+    ids = [e.get("user_id") or e.get("id") for e in entrants]
+    tire_wear = {eid: 100.0 for eid in ids}
+    lap_results: List[List[str]] = []
+    pit_stops: List[Dict[str, Any]] = []
+
+    for lap in range(1, num_laps + 1):
+        # Decide who pits this lap (tire below threshold, or random for variety)
+        pitting = set()
+        for eid in ids:
+            if tire_wear[eid] < TIRE_PIT_THRESHOLD:
+                pitting.add(eid)
+            elif lap > 1 and lap < num_laps and random.random() < 0.15 and tire_wear[eid] < 55:
+                pitting.add(eid)
+        for eid in pitting:
+            pit_stops.append({"lap": lap, "entrant_id": eid})
+
+        # Lap speed: base speed * tire factor; if pitting, apply penalty
+        lap_speeds = []
+        for e in entrants:
+            eid = e.get("user_id") or e.get("id")
+            base = _effective_speed(e, profile_by_user.get(eid) or {}, upgrades_map)
+            tire_factor = max(0.3, tire_wear[eid] / 100.0)
+            speed = base * tire_factor
+            if eid in pitting:
+                speed *= PIT_PENALTY_FACTOR
+            lap_speeds.append((eid, speed))
+
+        random.shuffle(lap_speeds)
+        lap_speeds.sort(key=lambda x: -x[1])
+        order = [x[0] for x in lap_speeds]
+        lap_results.append(order)
+
+        # Update tire wear for next lap
+        for eid in ids:
+            if eid in pitting:
+                tire_wear[eid] = 100.0
+            else:
+                tire_wear[eid] = max(0, tire_wear[eid] - TIRE_WEAR_PER_LAP + random.uniform(-2, 2))
+
+    result_order = lap_results[-1] if lap_results else ids
+    return lap_results, result_order, pit_stops
 
 
 # ---------- Endpoints ----------
@@ -283,6 +339,7 @@ async def create_race(body: CreateRaceRequest, current_user: dict = Depends(get_
         raise HTTPException(status_code=400, detail="Invalid track")
     entry_fee = max(ENTRY_FEE_MIN, min(ENTRY_FEE_MAX, int(body.entry_fee or 0)))
     max_grid = max(MIN_GRID, min(MAX_GRID, int(body.max_grid or 6)))
+    num_laps = max(NUM_LAPS_MIN, min(NUM_LAPS_MAX, int(body.laps or 3)))
     prof = await _ensure_racing_profile(current_user["id"])
     selected_id = prof.get("selected_racing_car_id")
     if not selected_id:
@@ -319,6 +376,7 @@ async def create_race(body: CreateRaceRequest, current_user: dict = Depends(get_
         ],
         "result_order": None,
         "reward_mult": track.get("reward_mult", 1.0),
+        "laps": num_laps,
         "lobby_ends_at": (datetime.now(timezone.utc) + timedelta(seconds=RACE_LOBBY_COUNTDOWN_SEC)).isoformat().replace("+00:00", "Z"),
     }
     await db.racing_races.insert_one(doc)
@@ -424,7 +482,8 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
                 car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0})
                 if car_doc:
                     upgrades_map[inst_id] = {"engine_level": car_doc.get("engine_level", 0), "tires_level": car_doc.get("tires_level", 0)}
-    result_order = _run_race_simulation(participants, profile_by_user, upgrades_map)
+    num_laps = max(NUM_LAPS_MIN, min(NUM_LAPS_MAX, int(race.get("laps") or 3)))
+    lap_results, result_order, pit_stops = _run_race_simulation_laps(participants, profile_by_user, upgrades_map, num_laps)
     now = _now_iso()
     pot = entry_fee * len(participants) * REWARD_POOL_PCT
     rewards = []
@@ -451,11 +510,14 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
         rewards.append({"entrant_id": entrant_id, "position": position, "cash": cash, "rank_points": rp, "racing_rep": rep})
     await db.racing_races.update_one(
         {"id": race_id},
-        {"$set": {"state": "completed", "participants": participants, "result_order": result_order, "started_at": now, "completed_at": now, "rewards": rewards}},
+        {"$set": {"state": "completed", "participants": participants, "result_order": result_order, "lap_results": lap_results, "pit_stops": pit_stops, "laps": num_laps, "started_at": now, "completed_at": now, "rewards": rewards}},
     )
     race["state"] = "completed"
     race["participants"] = participants
     race["result_order"] = result_order
+    race["lap_results"] = lap_results
+    race["pit_stops"] = pit_stops
+    race["laps"] = num_laps
     race["rewards"] = rewards
     return {"message": "Race completed", "race": race}
 
