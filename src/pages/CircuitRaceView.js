@@ -725,8 +725,9 @@ export default function CircuitRaceView({
           }
         }
 
-        // Detect lap crossing (prevPos near 0.98+, new near 0.01-)
-        if (prevPos > 0.93 && r.trackPos < 0.07) {
+        // Detect lap crossing: only when we've actually completed a full lap (prevPos was on track, not start)
+        // Require prevPos > 0.3 so we never count a spurious "lap" from initial state or wrap from start line
+        if (prevPos > 0.3 && prevPos > 0.93 && r.trackPos < 0.07) {
           r.totalLapsDone++;
           r.lapCount = r.totalLapsDone + 1;
           const lt = track.lapBase / effSpeed + (Math.random() - 0.5) * 0.8;
@@ -776,17 +777,18 @@ export default function CircuitRaceView({
         }
       });
 
-      // Sort by position: progress = totalLapsDone + trackPos (same for everyone, including in pit)
-      const sorted = [...racers].sort((a,b) => {
-        const la = a.totalLapsDone + a.trackPos;
-        const lb = b.totalLapsDone + b.trackPos;
-        return lb - la;
+      // Sort by position: progress = totalLapsDone + trackPos; higher = leader. Tie-break by previous position so leader stays leader.
+      const sorted = [...racers].sort((a, b) => {
+        const progressA = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
+        const progressB = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+        if (Math.abs(progressB - progressA) > 1e-9) return progressB - progressA;
+        return (a.position ?? 99) - (b.position ?? 99);
       });
-      sorted.forEach((r,i)=>r.position=i+1);
+      sorted.forEach((r, i) => { r.position = i + 1; });
 
-      // Lap display (leader's lap)
-      const leaderLap = Math.max(...racers.map(r=>r.totalLapsDone));
-      setLapDisplay(`${Math.min(leaderLap+1, nLaps)} / ${nLaps}`);
+      // Lap display: current lap = laps completed + 1 (so we show "1 / N" at start, "2 / N" after first crossing, etc.)
+      const leaderLap = Math.max(0, ...racers.map((r) => r.totalLapsDone ?? 0));
+      setLapDisplay(`${Math.min(leaderLap + 1, nLaps)} / ${nLaps}`);
 
       // Commentary
       if (now - lastCommTime > 3200) {
@@ -828,8 +830,13 @@ export default function CircuitRaceView({
       if (allDone) {
         setUiPhase("done");
         setCommentary(rand(COMMENTARY.done));
-        // Build results and pass finish order to parent (for live mode: submit to server)
-        const finalOrder = [...racers].sort((a,b)=>b.totalLapsDone-a.totalLapsDone||b.trackPos-a.trackPos);
+        // Build results: same progress formula as during race (totalLapsDone + trackPos)
+        const finalOrder = [...racers].sort((a, b) => {
+          const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
+          const pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+          if (Math.abs(pb - pa) > 1e-9) return pb - pa;
+          return (a.position ?? 99) - (b.position ?? 99);
+        });
         setResults(finalOrder.map((r,i)=>({
           pos:i+1, id:r.id, name:r.name, isPlayer:r.isPlayer,
           color:r.color, carName:r.carName, pitStops:r.pitStops,
@@ -1208,12 +1215,15 @@ export default function CircuitRaceView({
         )}
       </div>
 
-      {/* ── LIVE STANDINGS (F1 Manager style) ── */}
+      {/* ── LEADERBOARD (live race standings) ── */}
       {standings.length > 0 && (
         <div className={styles.panel} style={{ marginBottom:"0.6rem", overflowX:"auto", overflowY:"hidden", WebkitOverflowScrolling:"touch" }}>
-          {/* Header: column labels + tyre legend */}
+          <div style={{ padding:"6px 8px 4px", borderBottom:"1px solid rgba(201,164,96,.2)", fontFamily:"'Cinzel',serif", fontSize:11, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:"var(--noir-primary)" }}>
+            Leaderboard
+          </div>
+          {/* Column headers */}
           <div style={{
-            display:"flex", alignItems:"center", padding:"4px 8px 6px",
+            display:"flex", alignItems:"center", padding:"6px 8px",
             borderBottom:"1px solid rgba(201,164,96,.12)",
             gap:"6px",
             fontSize:10, fontFamily:"'Cinzel',serif", fontWeight:600, letterSpacing:".08em", textTransform:"uppercase", color:"var(--noir-muted)",
@@ -1223,8 +1233,7 @@ export default function CircuitRaceView({
             <div style={{ flex:1 }}>Driver</div>
             <div style={{ width:80, flexShrink:0 }}>Car</div>
             <div style={{ display:"flex", alignItems:"center", gap:4, width:55, flexShrink:0 }}>
-              <span title="Dot = compound (soft/medium/hard). Bar = tyre wear: green = good, yellow = worn, red = critical.">Tyre</span>
-              <span style={{ fontSize:9, fontWeight:400, textTransform:"none", letterSpacing:0, opacity:0.85 }} title="Dot = compound (soft/medium/hard). Bar = tyre wear: green = good, yellow = worn, red = critical.">(compound · wear)</span>
+              Tyre <span style={{ fontSize:9, fontWeight:400, textTransform:"none", letterSpacing:0, opacity:0.85 }}>(compound – wear)</span>
             </div>
             <div style={{ width:54, textAlign:"right", flexShrink:0 }}>Gap</div>
           </div>

@@ -14,12 +14,23 @@ const TRACK_ID_MAP = {
   indianapolis: "indianapolis",
 };
 
+// Display info for track grid (km, corners) — backend may not return these
+const TRACK_DISPLAY = {
+  chicago_board: { km: 2.4, corners: 8 },
+  daytona_beach: { km: 3.6, corners: 4 },
+  roosevelt: { km: 2.1, corners: 12 },
+  indianapolis: { km: 4.0, corners: 4 },
+};
+
 const WEATHER_OPTIONS = [
   { id: "clear", name: "Clear", icon: "☀️" },
+  { id: "night", name: "Night", icon: "🌙" },
   { id: "rain", name: "Rain", icon: "🌧️" },
   { id: "snow", name: "Snow", icon: "❄️" },
-  { id: "very_hot", name: "Very hot", icon: "🔥" },
+  { id: "very_hot", name: "Very Hot", icon: "🔥" },
 ];
+// Backend only supports clear, rain, snow, very_hot — map night → clear when creating race
+const WEATHER_ID_FOR_API = (id) => (id === "night" ? "clear" : id);
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -95,6 +106,9 @@ export default function Racing() {
         racing_week_ends_utc: d.racing_week_ends_utc,
         racing_season_ends_utc: d.racing_season_ends_utc,
         global_upgrade_cap: d.global_upgrade_cap ?? 18,
+        crew_levels_used: d.crew_levels_used ?? 0,
+        crew_global_cap: d.crew_global_cap ?? 24,
+        crew_tradeoffs: d.crew_tradeoffs || null,
       });
       setCars(d.owned_cars || []);
       setUpgradeTradeoffs(d.upgrade_tradeoffs || null);
@@ -181,7 +195,7 @@ export default function Racing() {
         max_grid: Number(createForm.max_grid) || 6,
         laps: Number(createForm.laps) || 3,
         tyre_compound: createForm.tyre_compound || "medium",
-        weather_id: createForm.weather_id || "clear",
+        weather_id: WEATHER_ID_FOR_API(createForm.weather_id || "clear"),
       });
       const race = r.data?.race;
       if (race) {
@@ -597,66 +611,138 @@ export default function Racing() {
               </div>
             )}
 
-            {/* Create race */}
+            {/* Create race — live-race style setup */}
             <div className={styles.panel + " p-4 mb-4"}>
-              <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Create race</h3>
-              <div className="flex flex-wrap items-end gap-3 mb-2">
-                <div className="flex items-center gap-2 px-2 py-1.5 rounded border border-[var(--noir-border)] bg-[var(--noir-surface)]">
-                  <span className="text-xs text-[var(--noir-muted)]">Weather (auto):</span>
-                  <span className="text-sm font-heading text-[var(--noir-primary)]">
-                    {WEATHER_OPTIONS.find((w) => w.id === createForm.weather_id)?.icon}{" "}
-                    {WEATHER_OPTIONS.find((w) => w.id === createForm.weather_id)?.name ?? createForm.weather_id}
-                  </span>
-                  <button
-                    type="button"
-                    className="text-[10px] font-heading px-3 py-2 min-h-[44px] border border-[var(--noir-border)] rounded hover:bg-[var(--noir-primary)]/10 touch-manipulation"
-                    onClick={() => setCreateForm((f) => ({ ...f, weather_id: WEATHER_OPTIONS[Math.floor(Math.random() * WEATHER_OPTIONS.length)].id }))}
-                  >
-                    Randomise
-                  </button>
+              <h3 className="font-heading text-sm uppercase tracking-wider mb-4" style={{ color: "var(--noir-primary)" }}>
+                Live race · Grid order set by qualifying lap
+              </h3>
+
+              {/* SELECT TRACK — grid of track cards */}
+              <div className="mb-6">
+                <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">Select track</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {(tracks.length ? tracks : [{ id: "chicago_board", name: "Chicago Board Track" }, { id: "daytona_beach", name: "Daytona Beach Road Course" }, { id: "roosevelt", name: "Roosevelt Raceway" }, { id: "indianapolis", name: "Indianapolis Motor Speedway" }]).map((t) => {
+                    const info = TRACK_DISPLAY[t.id] || {};
+                    const selected = createForm.track_id === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setCreateForm((f) => ({ ...f, track_id: t.id }))}
+                        className={`p-3 rounded-lg border-2 text-left transition-all touch-manipulation ${selected ? "border-[var(--noir-primary)] bg-[var(--noir-primary)]/10" : "border-[var(--noir-border)] bg-[var(--noir-surface)] hover:border-[var(--noir-muted)]"}`}
+                      >
+                        <div className="w-full aspect-[2.2/1] rounded bg-black/30 border border-[var(--noir-border)] flex items-center justify-center mb-2">
+                          <span className="text-[8px] font-heading text-[var(--noir-muted)]" style={{ color: selected ? "var(--noir-primary)" : undefined }}>TRACK</span>
+                        </div>
+                        <div className="font-heading text-xs truncate" style={{ color: "var(--noir-primary)" }}>{t.name}</div>
+                        <div className="text-[10px] text-[var(--noir-muted)]">
+                          {info.km != null ? `${info.km}km` : ""}{info.km != null && info.corners != null ? " · " : ""}{info.corners != null ? `${info.corners}T` : ""}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              <p className="text-[10px] text-[var(--noir-muted)] mb-3">Weather affects car speed and tyre wear. Pick tyres suited to conditions.</p>
-              <div className="flex flex-wrap gap-3 items-end">
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs">Track</span>
-                  <select
-                    className={styles.input}
-                    value={createForm.track_id}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, track_id: e.target.value }))}
-                  >
-                    {tracks.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs">Entry fee</span>
-                  <input type="number" min={0} className={styles.input + " w-28"} value={createForm.entry_fee}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, entry_fee: e.target.value }))}/>
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs">Grid size</span>
-                  <input type="number" min={2} max={8} className={styles.input + " w-20"} value={createForm.max_grid}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, max_grid: e.target.value }))}/>
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs">Laps</span>
-                  <input type="number" min={2} max={20} className={styles.input + " w-16"} value={createForm.laps}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, laps: e.target.value }))}/>
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs">Tyres</span>
-                  <select className={styles.input + " w-24"} value={createForm.tyre_compound}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, tyre_compound: e.target.value }))}>
-                    <option value="soft">Soft</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
-                  </select>
-                  <span className="text-[10px] text-[var(--noir-muted)]">Stock: {profile?.[`tyre_stock_${createForm.tyre_compound}`] ?? 0}</span>
-                </label>
-                <button type="button" className={styles.btnPrimary + " min-h-[44px] touch-manipulation"}
-                  disabled={creating || !selectedInstanceId || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100} onClick={handleCreateRace}>
+
+              {/* CONDITIONS + YOUR STARTING TYRE + LAPS in one row on desktop */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
+                {/* Conditions */}
+                <div>
+                  <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">Conditions</div>
+                  <div className="flex flex-wrap gap-2">
+                    {WEATHER_OPTIONS.map((w) => {
+                      const sel = createForm.weather_id === w.id;
+                      return (
+                        <button
+                          key={w.id}
+                          type="button"
+                          onClick={() => setCreateForm((f) => ({ ...f, weather_id: w.id }))}
+                          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-heading touch-manipulation ${sel ? "border-[var(--noir-primary)] bg-[var(--noir-primary)]/15 text-[var(--noir-primary)]" : "border-[var(--noir-border)] bg-[var(--noir-surface)] text-[var(--noir-muted)] hover:bg-[var(--noir-border)]/30"}`}
+                          title={w.name}
+                        >
+                          <span>{w.icon}</span>
+                          <span>{w.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-[var(--noir-muted)] mt-1.5">
+                    {createForm.weather_id === "very_hot" || createForm.weather_id === "rain" ? "Rec: Medium, Hard" : "Pick tyres suited to conditions."}
+                  </p>
+                </div>
+
+                {/* Your starting tyre */}
+                <div>
+                  <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">Your starting tyre</div>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { id: "soft", label: "Soft", dot: "bg-red-500", desc: "Grippy, faster wear" },
+                      { id: "medium", label: "Medium", dot: "bg-amber-400", desc: "Balanced" },
+                      { id: "hard", label: "Hard", dot: "bg-gray-500", desc: "Durable, slower" },
+                    ].map((tyre) => {
+                      const sel = createForm.tyre_compound === tyre.id;
+                      return (
+                        <button
+                          key={tyre.id}
+                          type="button"
+                          onClick={() => setCreateForm((f) => ({ ...f, tyre_compound: tyre.id }))}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm touch-manipulation ${sel ? "border-[var(--noir-primary)] bg-[var(--noir-primary)]/10" : "border-[var(--noir-border)] bg-[var(--noir-surface)]"}`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${tyre.dot}`} />
+                          <span style={{ color: "var(--noir-primary)" }}>{tyre.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-[var(--noir-muted)] mt-1">
+                    {createForm.tyre_compound === "soft" && "Grippy, faster wear"}
+                    {createForm.tyre_compound === "medium" && "Balanced"}
+                    {createForm.tyre_compound === "hard" && "Durable, slower"}
+                  </p>
+                  <p className="text-[10px] text-[var(--noir-muted)]">Stock: {profile?.[`tyre_stock_${createForm.tyre_compound}`] ?? 0}</p>
+                </div>
+
+                {/* Laps + entry/grid */}
+                <div>
+                  <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">Laps</div>
+                  <input
+                    type="number"
+                    min={2}
+                    max={20}
+                    value={createForm.laps}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, laps: Math.max(2, Math.min(20, Number(e.target.value) || 2)) }))}
+                    className={styles.input + " w-20 text-lg font-heading"}
+                  />
+                  <div className="flex flex-wrap gap-3 mt-3">
+                    <label className="flex flex-col gap-0.5">
+                      <span className="text-[10px] text-[var(--noir-muted)]">Entry fee</span>
+                      <input type="number" min={0} className={styles.input + " w-24"} value={createForm.entry_fee}
+                        onChange={(e) => setCreateForm((f) => ({ ...f, entry_fee: e.target.value }))} />
+                    </label>
+                    <label className="flex flex-col gap-0.5">
+                      <span className="text-[10px] text-[var(--noir-muted)]">Grid size</span>
+                      <input type="number" min={2} max={8} className={styles.input + " w-16"} value={createForm.max_grid}
+                        onChange={(e) => setCreateForm((f) => ({ ...f, max_grid: e.target.value }))} />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Weather randomise + Create race button */}
+              <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-[var(--noir-border)]">
+                <button
+                  type="button"
+                  className="text-xs font-heading px-3 py-2 rounded border border-[var(--noir-border)] hover:bg-[var(--noir-primary)]/10 touch-manipulation"
+                  onClick={() => setCreateForm((f) => ({ ...f, weather_id: WEATHER_OPTIONS[Math.floor(Math.random() * WEATHER_OPTIONS.length)].id }))}
+                >
+                  Randomise weather
+                </button>
+                <button
+                  type="button"
+                  className={styles.btnPrimary + " min-h-[44px] touch-manipulation"}
+                  disabled={creating || !createForm.track_id || !selectedInstanceId || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 || ((profile?.[`tyre_stock_${createForm.tyre_compound}`] ?? 0) < 1)}
+                  onClick={handleCreateRace}
+                >
                   {creating ? "Creating…" : "Create race"}
                 </button>
               </div>
@@ -669,7 +755,6 @@ export default function Racing() {
               {!selectedInstanceId && (
                 <p className="text-xs text-amber-400 mt-2">Select a racing car in My ride first.</p>
               )}
-              <p className="text-[10px] text-[var(--noir-muted)] mt-2">Tyres: Soft = +grip, faster wear. Medium = balanced. Hard = −grip, slower wear. Pick per race.</p>
             </div>
 
             {/* Open races */}
@@ -1030,34 +1115,40 @@ export default function Racing() {
           <div className={styles.panel + " p-4"}>
             <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Crew upgrades</h3>
             <p className="text-sm text-[var(--noir-muted)] mb-2">
-              Race winnings go to your crew bank. Spend crew bank to improve your mechanic and pit crew. Mechanic and Pit Crew both give a speed bonus; Pit Crew also shortens pit stop time.
+              Race winnings go to your crew bank. Spend crew bank to improve your team. All crew types add +2% speed per level. Pit Crew also shortens pit stop time. You cannot max every type — total levels are capped.
             </p>
-            <p className="text-sm font-heading mb-4" style={{ color: "var(--noir-primary)" }}>
+            <p className="text-sm font-heading mb-2" style={{ color: "var(--noir-primary)" }}>
               Crew bank: {formatMoney(profile?.crew_bank ?? 0)}
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {[
-                { key: "mechanic_level", label: "Mechanic", type: "mechanic", desc: "+2% speed per level" },
-                { key: "pit_level", label: "Pit Crew", type: "pit", desc: "+2% speed, −0.35s pit time per level (min 1.0s)" },
-              ].map(({ key, label, type, desc }) => {
-                const level = profile?.[key] ?? 0;
-                const nextCost = level < 5 && crewCosts[level + 1] != null ? crewCosts[level + 1] : 0;
-                const canAfford = (profile?.crew_bank ?? 0) >= nextCost;
-                return (
-                <div key={type} className="p-3 rounded surface">
-                  <div className="font-heading">{label}</div>
-                  <div className="text-sm">Level {level} / 5</div>
-                  <div className="text-xs text-[var(--noir-muted)] mt-1">
-                    {desc}
-                  </div>
-                  {level < 5 && <div className="text-xs mt-1">Next: {formatMoney(nextCost)}</div>}
-                  <button type="button" className={styles.btnPrimary + " mt-2 text-sm"}
-                    disabled={level >= 5 || !canAfford}
-                    onClick={() => handleUpgradeCrew(type)}>
-                    Upgrade
-                  </button>
-                </div>
-              );})}
+            <p className="text-xs text-[var(--noir-muted)] mb-4">Levels used: {profile?.crew_levels_used ?? 0} / {profile?.crew_global_cap ?? 24}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(() => {
+                const tradeoffs = profile?.crew_tradeoffs || {};
+                const types = ["mechanic", "pit", ...(Object.keys(tradeoffs).filter((k) => !["mechanic", "pit"].includes(k)))];
+                return types.map((type) => {
+                  const t = tradeoffs[type];
+                  if (!t) return null;
+                  const key = type === "mechanic" ? "mechanic_level" : type === "pit" ? "pit_level" : `${type}_level`;
+                  const level = profile?.[key] ?? 0;
+                  const max = t.max ?? 5;
+                  const nextCost = t.costs ? (level < max && t.costs[level + 1] != null ? t.costs[level + 1] : 0) : (t.cost_base ? t.cost_base * (level + 1) : 0);
+                  const atCap = (profile?.crew_levels_used ?? 0) >= (profile?.crew_global_cap ?? 24);
+                  const canAfford = (profile?.crew_bank ?? 0) >= nextCost;
+                  return (
+                    <div key={type} className="p-3 rounded surface">
+                      <div className="font-heading">{t.label || type}</div>
+                      <div className="text-sm">Level {level} / {max}</div>
+                      <div className="text-xs text-[var(--noir-muted)] mt-1">{t.desc}</div>
+                      {level < max && <div className="text-xs mt-1">Next: {formatMoney(nextCost)}</div>}
+                      <button type="button" className={styles.btnPrimary + " mt-2 text-sm"}
+                        disabled={level >= max || atCap || !canAfford}
+                        onClick={() => handleUpgradeCrew(type)}>
+                        Upgrade
+                      </button>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         )}

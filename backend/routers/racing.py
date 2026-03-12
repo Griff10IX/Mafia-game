@@ -56,6 +56,8 @@ ENTRY_FEE_MIN = 0
 ENTRY_FEE_MAX = 5_000_000
 REWARD_POOL_PCT = 0.9
 REWARD_BY_POSITION = [0.40, 0.25, 0.15, 0.10, 0.05, 0.03, 0.02, 0.00]
+# When entry_fee is 0, use this base pool so crew bank still grows; scaled so ~2–3 races can afford cheapest upgrades (e.g. 20k–30k)
+RACING_BASE_CASH_POOL = 50_000
 RANK_POINTS_BY_POSITION = [15, 10, 6, 4, 2, 1, 0, 0]
 RACING_REP_BY_POSITION = [5, 3, 2, 1, 0, 0, 0, 0]
 
@@ -89,8 +91,23 @@ WINS_FOR_CHAMPIONSHIP_UPGRADE = 3
 CHAMPIONSHIP_UPGRADE_COST = 350000
 # 10 upgradable car stats total; not all can be maxed — global cap on total levels
 RACING_UPGRADE_GLOBAL_CAP = 18  # sum of all 10 upgrade levels cannot exceed this
-MAX_CREW_LEVEL = 5
-RACING_TEAM_CREATE_COST = 25_000_000  # $25M to create a racing team (name + colour)
+MAX_CREW_LEVEL = 5  # mechanic, pit
+# 12 crew upgrades total; cannot all be maxed — global cap on total levels (max possible = 34)
+RACING_CREW_GLOBAL_CAP = 24
+# New crew types: (key_suffix, max_level, cost_base for cost_base * (current_level + 1))
+CREW_EXTRA_TYPES = [
+    ("strategist", 3, 40000),
+    ("spotter", 3, 35000),
+    ("engineer", 3, 45000),
+    ("tyre_tech", 3, 38000),
+    ("fuel_tech", 2, 30000),
+    ("data_analyst", 2, 28000),
+    ("physio", 2, 25000),
+    ("logistics", 2, 26000),
+    ("morale", 2, 32000),
+    ("tactician", 2, 30000),
+]
+RACING_TEAM_CREATE_COST = 25_000_000  # $25M to create a racing team (name + colour) = 25_000_000  # $25M to create a racing team (name + colour)
 MAX_RACING_TEAMS = 18  # Only 18 teams total; kill a team owner to take their team
 MAX_CAR_UPGRADE_LEVEL = 4  # engine, tires
 MAX_AERO_LEVEL = 2
@@ -163,6 +180,8 @@ DEFAULT_PROFILE = {
     "tyre_stock_hard": TYRE_STOCK_INITIAL,
     "crew_bank": 0,
 }
+for _suffix, _max, _ in CREW_EXTRA_TYPES:
+    DEFAULT_PROFILE[f"{_suffix}_level"] = 0
 
 
 # ---------- Pydantic ----------
@@ -230,6 +249,14 @@ def _require_racing_team(prof: Optional[dict]) -> None:
         )
 
 
+def _total_crew_levels(prof: dict) -> int:
+    """Sum of all 12 crew upgrade levels for global cap."""
+    total = int(prof.get("mechanic_level") or 0) + int(prof.get("pit_level") or 0)
+    for suffix, _, _ in CREW_EXTRA_TYPES:
+        total += int(prof.get(f"{suffix}_level") or 0)
+    return total
+
+
 def _get_racing_car(car_id: str) -> Optional[dict]:
     for c in RACING_CARS:
         if c.get("id") == car_id:
@@ -294,9 +321,8 @@ def _effective_speed_and_grip_display(entrant: dict, profile: Optional[dict], up
         speed *= 1.02
         grip = min(1.0, grip * 1.02)
     if profile and not entrant.get("is_npc"):
-        mech = int(profile.get("mechanic_level") or 0)
-        pit = int(profile.get("pit_level") or 0)
-        speed *= 1.0 + (mech + pit) * CREW_BONUS_PER_LEVEL
+        crew_total = _total_crew_levels(profile)
+        speed *= 1.0 + crew_total * CREW_BONUS_PER_LEVEL
     return (max(1.0, speed), max(0.5, min(1.0, grip)))
 
 
@@ -358,7 +384,7 @@ async def _check_racing_week_and_season() -> None:
             return
         await db.racing_profiles.update_many(
             {},
-            {"$unset": {"team_name": "", "team_color": ""}, "$set": {"mechanic_level": 0, "pit_level": 0, "crew_bank": 0}},
+            {"$unset": {"team_name": "", "team_color": ""}, "$set": {"mechanic_level": 0, "pit_level": 0, "crew_bank": 0, **{f"{s}_level": 0 for s, _, _ in CREW_EXTRA_TYPES}}},
         )
         await db.user_racing_cars.update_many(
             {},
@@ -377,7 +403,7 @@ async def _check_racing_week_and_season() -> None:
             return
         await db.racing_profiles.update_many(
             {},
-            {"$set": {"mechanic_level": 0, "pit_level": 0, "crew_bank": 0}},
+            {"$set": {"mechanic_level": 0, "pit_level": 0, "crew_bank": 0, **{f"{s}_level": 0 for s, _, _ in CREW_EXTRA_TYPES}}},
         )
         await db.user_racing_cars.update_many(
             {},
@@ -446,9 +472,8 @@ def _effective_speed_and_grip(entrant: dict, profile: Optional[dict], upgrades_m
         speed *= 1.02
         grip = min(1.0, grip * 1.02)
     if profile and not entrant.get("is_npc"):
-        mech = int(profile.get("mechanic_level") or 0)
-        pit = int(profile.get("pit_level") or 0)
-        speed *= 1.0 + (mech + pit) * CREW_BONUS_PER_LEVEL
+        crew_total = _total_crew_levels(profile)
+        speed *= 1.0 + crew_total * CREW_BONUS_PER_LEVEL
     speed *= 0.97 + random.random() * 0.06
     speed = max(1.0, speed)
     grip = max(0.5, min(1.0, grip))
@@ -698,6 +723,13 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "upgrades": upgrades,
         "crew_costs": CREW_UPGRADE_COSTS,
         "max_crew_level": MAX_CREW_LEVEL,
+        "crew_levels_used": _total_crew_levels(prof),
+        "crew_global_cap": RACING_CREW_GLOBAL_CAP,
+        "crew_tradeoffs": {
+            "mechanic": {"label": "Mechanic", "max": MAX_CREW_LEVEL, "costs": CREW_UPGRADE_COSTS, "desc": "+2% speed per level"},
+            "pit": {"label": "Pit Crew", "max": MAX_CREW_LEVEL, "costs": CREW_UPGRADE_COSTS, "desc": "+2% speed, shorter pit stops"},
+            **{suffix: {"label": suffix.replace("_", " ").title(), "max": max_lvl, "cost_base": cost_base, "desc": "+2% speed per level"} for suffix, max_lvl, cost_base in CREW_EXTRA_TYPES},
+        },
         "car_upgrade_costs": CAR_UPGRADE_COSTS,
         "max_car_upgrade_level": MAX_CAR_UPGRADE_LEVEL,
         "global_upgrade_cap": RACING_UPGRADE_GLOBAL_CAP,
@@ -786,17 +818,37 @@ async def set_selected_car(body: SetSelectedCarRequest, current_user: dict = Dep
 
 async def upgrade_crew(body: UpgradeCrewRequest, current_user: dict = Depends(get_current_user_verified)):
     crew_type = (body.crew_type or "").strip().lower()
-    if crew_type not in ("mechanic", "pit"):
-        raise HTTPException(status_code=400, detail="crew_type must be mechanic or pit")
     prof = await _ensure_racing_profile(current_user["id"])
-    key = "mechanic_level" if crew_type == "mechanic" else "pit_level"
-    current = int(prof.get(key) or 0)
-    if current >= MAX_CREW_LEVEL:
-        raise HTTPException(status_code=400, detail="Max level reached")
-    cost = CREW_UPGRADE_COSTS[current + 1] if current + 1 < len(CREW_UPGRADE_COSTS) else CREW_UPGRADE_COSTS[-1]
-    await _deduct_crew_bank(current_user["id"], cost)
-    await db.racing_profiles.update_one({"user_id": current_user["id"]}, {"$set": {key: current + 1}}, upsert=True)
-    return {"message": f"{crew_type} upgraded to level {current + 1}", "new_level": current + 1}
+
+    if crew_type in ("mechanic", "pit"):
+        key = "mechanic_level" if crew_type == "mechanic" else "pit_level"
+        current = int(prof.get(key) or 0)
+        if current >= MAX_CREW_LEVEL:
+            raise HTTPException(status_code=400, detail="Max level reached")
+        if _total_crew_levels(prof) >= RACING_CREW_GLOBAL_CAP:
+            raise HTTPException(status_code=400, detail=f"Crew cap reached ({RACING_CREW_GLOBAL_CAP} total levels)")
+        cost = CREW_UPGRADE_COSTS[current + 1] if current + 1 < len(CREW_UPGRADE_COSTS) else CREW_UPGRADE_COSTS[-1]
+        await _deduct_crew_bank(current_user["id"], cost)
+        await db.racing_profiles.update_one({"user_id": current_user["id"]}, {"$set": {key: current + 1}}, upsert=True)
+        return {"message": f"{crew_type} upgraded to level {current + 1}", "new_level": current + 1}
+
+    for suffix, max_lvl, cost_base in CREW_EXTRA_TYPES:
+        if crew_type == suffix:
+            key = f"{suffix}_level"
+            current = int(prof.get(key) or 0)
+            if current >= max_lvl:
+                raise HTTPException(status_code=400, detail=f"Max {suffix} level reached")
+            if _total_crew_levels(prof) >= RACING_CREW_GLOBAL_CAP:
+                raise HTTPException(status_code=400, detail=f"Crew cap reached ({RACING_CREW_GLOBAL_CAP} total levels)")
+            cost = cost_base * (current + 1)
+            await _deduct_crew_bank(current_user["id"], cost)
+            await db.racing_profiles.update_one({"user_id": current_user["id"]}, {"$set": {key: current + 1}}, upsert=True)
+            return {"message": f"{suffix} upgraded to level {current + 1}", "new_level": current + 1}
+
+    raise HTTPException(
+        status_code=400,
+        detail="crew_type must be mechanic, pit, strategist, spotter, engineer, tyre_tech, fuel_tech, data_analyst, physio, logistics, morale, or tactician",
+    )
 
 
 async def upgrade_car_part(body: UpgradeCarRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -1539,6 +1591,8 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
     reward_mult = float(track.get("reward_mult", 1.0)) if track else 1.0
     entry_fee = int(race.get("entry_fee") or 0)
     pot = entry_fee * len(participants) * REWARD_POOL_PCT
+    if pot < RACING_BASE_CASH_POOL:
+        pot = RACING_BASE_CASH_POOL
     rewards = []
     dnf_ids: List[str] = []
     for i, entrant_id in enumerate(result_order):
