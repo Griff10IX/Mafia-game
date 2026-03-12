@@ -94,6 +94,10 @@ class ShootingRangeTrainRequest(BaseModel):
     hits: Optional[int] = None  # for mode=live: number of hits in session (1..MASTERY_LIVE_HITS_MAX_PER_REQUEST)
 
 
+class ShootingRangeScoreRequest(BaseModel):
+    score: int
+
+
 def _normalize_state(state: str) -> str:
     if not state or not (state or "").strip():
         return STATES[0] if STATES else ""
@@ -1401,6 +1405,32 @@ async def train_shooting_range(request: ShootingRangeTrainRequest, current_user:
     return {"message": msg, "mastery_pct": current_pct + add_pct, "next_train_at": next_train_at}
 
 
+async def submit_shooting_range_score(request: ShootingRangeScoreRequest, current_user: dict = Depends(get_current_user)):
+    """Record a shooting range run score for the leaderboard."""
+    score = int(request.score) if request.score is not None else 0
+    if score < 0:
+        raise HTTPException(status_code=400, detail="score must be >= 0.")
+    now = datetime.now(timezone.utc)
+    doc = {
+        "user_id": current_user["id"],
+        "username": current_user.get("username") or "?",
+        "score": score,
+        "created_at": now.isoformat(),
+    }
+    await db.shooting_range_scores.insert_one(doc)
+    return {"message": "Score recorded.", "score": score}
+
+
+async def get_shooting_range_leaderboard(current_user: dict = Depends(get_current_user)):
+    """Return top 10 shooting range scores (highest first, then earliest for ties)."""
+    cursor = db.shooting_range_scores.find(
+        {},
+        {"_id": 0, "username": 1, "score": 1, "created_at": 1},
+    ).sort([("score", -1), ("created_at", 1)]).limit(10)
+    rows = await cursor.to_list(10)
+    return {"leaderboard": [{"rank": i + 1, "username": r.get("username", "?"), "score": r.get("score", 0)} for i, r in enumerate(rows)]}
+
+
 def _tokens_from_user(user: dict) -> dict:
     """Build tokens dict for inventory: count and active_until per token type."""
     now = datetime.now(timezone.utc)
@@ -1507,5 +1537,7 @@ def register(router):
     router.add_api_route("/weapons/{weapon_id}/sell", sell_weapon, methods=["POST"])
     router.add_api_route("/shooting-range/mastery", get_shooting_range_mastery, methods=["GET"])
     router.add_api_route("/shooting-range/train", train_shooting_range, methods=["POST"])
+    router.add_api_route("/shooting-range/score", submit_shooting_range_score, methods=["POST"])
+    router.add_api_route("/shooting-range/leaderboard", get_shooting_range_leaderboard, methods=["GET"])
     router.add_api_route("/inventory", get_inventory, methods=["GET"])
     router.add_api_route("/inventory/tokens/use", use_consumable_token, methods=["POST"])

@@ -19,6 +19,7 @@ const TARGET_WARN_AT      = 0.9;    // seconds left when it starts pulsing red
 const RANGE_LENGTH        = 28;
 const BACK_WALL_Z         = -RANGE_LENGTH;
 const MAX_AMMO            = 8;
+const CLIPS_TOTAL        = 3;
 const RELOAD_SECS         = 1.4;
 const MUZZLE_FLASH_DUR    = 0.06;
 
@@ -31,8 +32,8 @@ const ZONES = [
   { frac: 1.00, pts:  1, label: "Outer Ring",    popColor: "#a08040" },
 ];
 
-// Target movement patterns
-const MOVE_PATTERNS = ["pendulum", "drift", "figure8", "circle"];
+// Target movement: along the back wall only (slower horizontal/vertical/diagonal drift)
+const MOVE_PATTERNS = ["along_horizontal", "along_vertical", "along_diagonal"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PROCEDURAL TEXTURES
@@ -231,11 +232,11 @@ function buildScene(scene, mobile, woodTex, brickTex, cobbleTex) {
 
   // Ambient haze particles
   const hazeArr = [];
-  for (let i = 0; i < (mobile ? 80 : 200); i++)
+  for (let i = 0; i < (mobile ? 60 : 120); i++)
     hazeArr.push((Math.random()-0.5)*5, 0.2+Math.random()*2.8, -Math.random()*RANGE_LENGTH);
   const hazeGeo = new THREE.BufferGeometry();
   hazeGeo.setAttribute("position", new THREE.Float32BufferAttribute(hazeArr, 3));
-  const hazeMesh = new THREE.Points(hazeGeo, new THREE.PointsMaterial({ color: 0xc0a880, size: 0.08, transparent: true, opacity: 0.10 }));
+  const hazeMesh = new THREE.Points(hazeGeo, new THREE.PointsMaterial({ color: 0xc0a880, size: 0.06, transparent: true, opacity: 0.06 }));
   scene.add(hazeMesh);
 
   return { hazeMesh };
@@ -260,6 +261,7 @@ export default function ShootingRange3D() {
     phase: "idle",          // idle | playing | done
     score: 0,
     ammo: MAX_AMMO,
+    clipsRemaining: CLIPS_TOTAL,
     isReloading: false,
     reloadEnd: 0,
     roundEndAt: 0,
@@ -286,6 +288,7 @@ export default function ShootingRange3D() {
   const [score, setScore]               = useState(0);
   const [timeLeft, setTimeLeft]         = useState(ROUND_DURATION_SEC);
   const [ammoState, setAmmoState]       = useState(MAX_AMMO);
+  const [clipsRemainingState, setClipsRemainingState] = useState(CLIPS_TOTAL);
   const [isReloading, setIsReloading]   = useState(false);
   const [sceneReady, setSceneReady]     = useState(false);
   const [sceneError, setSceneError]     = useState(null);
@@ -293,6 +296,7 @@ export default function ShootingRange3D() {
   const [zoneLabel, setZoneLabel]       = useState(null);
   const [reloadAnim, setReloadAnim]     = useState(false);
   const [targetUrgent, setTargetUrgent] = useState(false);
+  const [leaderboard, setLeaderboard]   = useState([]);
 
   const gamePhaseRef = useRef("idle");
   useEffect(() => { gamePhaseRef.current = gamePhase; }, [gamePhase]);
@@ -302,7 +306,17 @@ export default function ShootingRange3D() {
     catch { setMasteryData(null); }
   }, []);
 
+  const fetchLeaderboard = useCallback(async () => {
+    try {
+      const res = await api.get("/shooting-range/leaderboard");
+      setLeaderboard(Array.isArray(res.data?.leaderboard) ? res.data.leaderboard : []);
+    } catch {
+      setLeaderboard([]);
+    }
+  }, []);
+
   useEffect(() => { fetchMastery(); }, [fetchMastery]);
+  useEffect(() => { fetchLeaderboard(); }, [fetchLeaderboard]);
 
   useEffect(() => {
     let cancelled = false;
@@ -333,6 +347,7 @@ export default function ShootingRange3D() {
   const doReload = useCallback(() => {
     const state = r.current;
     if (state.isReloading || state.ammo >= MAX_AMMO) return;
+    if (state.clipsRemaining <= 0) return; // no clips left
     state.isReloading = true;
     state.reloadEnd = performance.now()/1000 + RELOAD_SECS;
     setIsReloading(true);
@@ -343,7 +358,9 @@ export default function ShootingRange3D() {
   const finishReload = useCallback(() => {
     const state = r.current;
     state.isReloading = false;
+    state.clipsRemaining--;
     state.ammo = MAX_AMMO;
+    setClipsRemainingState(state.clipsRemaining);
     setAmmoState(MAX_AMMO);
     setIsReloading(false);
     setTimeout(() => setReloadAnim(false), 50);
@@ -412,11 +429,11 @@ export default function ShootingRange3D() {
     const state = r.current;
     if (state.phase !== "playing") return;
     if (state.isReloading) return;
-    if (state.ammo <= 0) { doReload(); return; }
+    if (state.ammo <= 0) { if (state.clipsRemaining > 0) doReload(); return; }
 
     state.ammo--;
     setAmmoState(state.ammo);
-    if (state.ammo === 0) setTimeout(doReload, 300);
+    if (state.ammo === 0 && state.clipsRemaining > 0) setTimeout(doReload, 300);
 
     const canvas = canvasRef.current;
     if (!canvas || !state.camera) return;
@@ -471,13 +488,14 @@ export default function ShootingRange3D() {
     state.phase = "playing";
     state.score = 0;
     state.ammo = MAX_AMMO;
+    state.clipsRemaining = CLIPS_TOTAL;
     state.isReloading = false;
     state.roundEndAt = performance.now()/1000 + ROUND_DURATION_SEC;
     state.nextSpawnAt = 0;
     state.holeCount = 0;
     if (state.holeGroup) { while (state.holeGroup.children.length) { const c = state.holeGroup.children[0]; c.geometry?.dispose(); c.material?.dispose(); state.holeGroup.remove(c); } }
     setGamePhase("playing"); gamePhaseRef.current = "playing";
-    setScore(0); setTimeLeft(ROUND_DURATION_SEC); setAmmoState(MAX_AMMO);
+    setScore(0); setTimeLeft(ROUND_DURATION_SEC); setAmmoState(MAX_AMMO); setClipsRemainingState(CLIPS_TOTAL);
     setIsReloading(false); setReloadAnim(false); setTargetUrgent(false);
     spawnTarget();
   }, [spawnTarget]);
@@ -503,11 +521,11 @@ export default function ShootingRange3D() {
       renderer.shadowMap.enabled = !mobile;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.4;
+      renderer.toneMappingExposure = 1.7;
 
       scene = new THREE.Scene();
-      scene.fog = new THREE.Fog(0x1a0e08, 18, 40);
-      scene.background = new THREE.Color(0x1a0e08);
+      scene.fog = new THREE.Fog(0x2a1810, 22, 45);
+      scene.background = new THREE.Color(0x251810);
 
       camera = new THREE.PerspectiveCamera(mobile ? 62 : 54, W/H, 0.1, 80);
       camera.position.set(0, 1.35, 5);
@@ -519,12 +537,12 @@ export default function ShootingRange3D() {
       const cobbleTex  = makeCobblestoneTex(mobile);
       textures = [woodTex, brickTex, cobbleTex];
 
-      // Lights
-      scene.add(new THREE.AmbientLight(0x1a0e06, 1.6));
+      // Lights — brighter so range isn't too dark
+      scene.add(new THREE.AmbientLight(0x3a2818, 2.8));
       const lampPositions = [[-1.2,2.7,-4],[1.2,2.7,-4],[0,2.7,-12],[0,2.7,-20]];
       const lampLights = [];
       lampPositions.forEach(([x,y,z]) => {
-        const l = new THREE.PointLight(0xd4780c, 4.0, 10, 1.8);
+        const l = new THREE.PointLight(0xe8a030, 6.5, 12, 1.6);
         l.position.set(x,y,z);
         if (!mobile) { l.castShadow = true; l.shadow.mapSize.set(512,512); l.shadow.radius = 6; }
         scene.add(l); lampLights.push(l);
@@ -590,6 +608,7 @@ export default function ShootingRange3D() {
       state.phase       = "idle";
       state.score       = 0;
       state.ammo        = MAX_AMMO;
+      state.clipsRemaining = CLIPS_TOTAL;
       state.isReloading = false;
       state.targetVisible = false;
 
@@ -605,7 +624,7 @@ export default function ShootingRange3D() {
 
         // Lamp flicker
         state.lampLights.forEach((l, i) => {
-          l.intensity = 3.8 + Math.sin(t*(1.2+i*0.3))*0.22 + (Math.random()>0.992 ? -1.2 : 0);
+          l.intensity = 6.2 + Math.sin(t*(1.2+i*0.3))*0.3 + (Math.random()>0.992 ? -1.5 : 0);
         });
 
         // Haze
@@ -637,35 +656,34 @@ export default function ShootingRange3D() {
           const age = t - state.targetSpawnedAt;
           const remaining = state.targetLifetime - age;
 
-          // Movement
-          const speed = 0.65 + (age / state.targetLifetime) * 0.45; // speeds up near end
+          // Movement — slower, along the back wall only (x/y drift, z stays at back wall)
+          const speed = 0.22 + (age / state.targetLifetime) * 0.12;
           let tx = state.targetOriginX;
           let ty = state.targetOriginY;
           const ph = state.targetPhase + t * speed;
 
           switch (state.targetPattern) {
-            case "pendulum":
-              tx = state.targetOriginX + Math.sin(ph * 1.2) * 0.75;
+            case "along_horizontal":
+              tx = state.targetOriginX + Math.sin(ph * 0.6) * 1.0;
               break;
-            case "drift":
-              tx = state.targetOriginX + Math.sin(ph * 0.8) * 0.5;
-              ty = state.targetOriginY + Math.cos(ph * 0.55) * 0.35;
+            case "along_vertical":
+              ty = state.targetOriginY + Math.sin(ph * 0.5) * 0.5;
               break;
-            case "figure8":
-              tx = state.targetOriginX + Math.sin(ph * 1.0) * 0.7;
-              ty = state.targetOriginY + Math.sin(ph * 2.0) * 0.28;
+            case "along_diagonal":
+              tx = state.targetOriginX + Math.sin(ph * 0.45) * 0.85;
+              ty = state.targetOriginY + Math.cos(ph * 0.45) * 0.4;
               break;
-            case "circle":
-              tx = state.targetOriginX + Math.cos(ph * 0.9) * 0.55;
-              ty = state.targetOriginY + Math.sin(ph * 0.9) * 0.28;
+            default:
+              tx = state.targetOriginX + Math.sin(ph * 0.5) * 0.8;
               break;
           }
 
-          // Clamp to corridor
+          // Keep target on the back wall (z already set at spawn)
           tx = Math.max(-2.0, Math.min(2.0, tx));
           ty = Math.max(0.5, Math.min(2.4, ty));
           state.target.position.x = tx;
           state.target.position.y = ty;
+          state.target.position.z = BACK_WALL_Z + 0.20;
 
           // Urgency: pulse scale + warn UI when nearly expired
           if (remaining <= TARGET_WARN_AT) {
@@ -697,6 +715,11 @@ export default function ShootingRange3D() {
                 .catch(e => toast.error(e.response?.data?.detail || "Submit failed."));
             } else if (finalScore > 0) {
               toast.info(`Round over! Score: ${finalScore}`);
+            }
+            if (finalScore >= 0) {
+              api.post("/shooting-range/score", { score: finalScore })
+                .then(() => fetchLeaderboard())
+                .catch(() => {});
             }
             fetchMastery();
           }
@@ -860,7 +883,7 @@ export default function ShootingRange3D() {
                 {/* Centre: ammo */}
                 <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
                   <div style={{ fontFamily:"'Cinzel',serif", fontSize:7, letterSpacing:"0.24em", textTransform:"uppercase", color:"#6a4e28" }}>
-                    {isReloading ? "Reloading…" : "Ammo"}
+                    {isReloading ? "Reloading…" : `Clip ${Math.min(CLIPS_TOTAL, CLIPS_TOTAL - clipsRemainingState + 1)}/${CLIPS_TOTAL}`}
                   </div>
                   <div style={{ display:"flex", gap:3, alignItems:"flex-end", flexWrap:"wrap", justifyContent:"center", maxWidth:140 }}>
                     {Array.from({ length: MAX_AMMO }, (_, i) => (
@@ -985,7 +1008,8 @@ export default function ShootingRange3D() {
                 <div style={{ fontFamily:"'Crimson Text',serif", fontSize:"clamp(11px,3vw,14px)", fontStyle:"italic", color:"#c9a460", textShadow:"0 0 12px rgba(201,164,96,.4)", flex:1 }}>
                   {gamePhase === "idle" && "Step up to the line, friend."}
                   {gamePhase === "playing" && isReloading && "Reloading…"}
-                  {gamePhase === "playing" && !isReloading && ammoState === 0 && "Empty — reloading…"}
+                  {gamePhase === "playing" && !isReloading && ammoState === 0 && clipsRemainingState > 0 && "Empty — reloading…"}
+                  {gamePhase === "playing" && !isReloading && ammoState === 0 && clipsRemainingState === 0 && "Out of ammo."}
                   {gamePhase === "done" && (() => {
                     const s = r.current.score;
                     return s >= 60 ? `${s} pts — you shoot like the devil himself.`
@@ -1026,6 +1050,26 @@ export default function ShootingRange3D() {
             </div>
           ))}
           <div className="text-[10px] font-heading ml-2" style={{ color:"#4a3520" }}>· Targets vanish after {TARGET_LIFETIME}s</div>
+        </div>
+      )}
+
+      {/* Leaderboard — top 10 */}
+      {canPlay && (
+        <div className="mt-4 rounded-lg border border-zinc-700/50 bg-zinc-900/40 p-3 max-w-md">
+          <div className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: "#6a4e28" }}>Top 10 — Shooting Range</div>
+          {leaderboard.length === 0 ? (
+            <p className="text-[11px] text-zinc-500 font-heading">No scores yet. Be the first.</p>
+          ) : (
+            <ul className="space-y-1">
+              {leaderboard.map((e) => (
+                <li key={`${e.rank}-${e.username}-${e.score}`} className="flex items-center justify-between text-[11px] font-heading">
+                  <span style={{ color: "#8a7a5a", minWidth: 20 }}>#{e.rank}</span>
+                  <span className="truncate flex-1 mx-2" style={{ color: "#c9a460" }}>{e.username}</span>
+                  <span style={{ color: "#a08050", fontWeight: 700 }}>{e.score}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
