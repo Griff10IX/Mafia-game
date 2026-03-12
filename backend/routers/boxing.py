@@ -269,15 +269,25 @@ async def train(payload: TrainRequest, current_user: dict = Depends(get_current_
             raise
         except Exception:
             pass
+    # Training stamina pool: 100/day, resets at midnight UTC
+    stam_cost = int(drill.get("stamina_cost") or 0)
+    stam_date = (prof.get("training_stamina_date") or "")[:10]
+    today_str = now.strftime("%Y-%m-%d")
+    current_stam = int(prof.get("training_stamina") or 100)
+    if stam_date != today_str:
+        current_stam = 100
+    if stam_cost > 0 and current_stam < stam_cost:
+        raise HTTPException(status_code=400, detail=f"Not enough training stamina ({current_stam}/{stam_cost}). Resets daily.")
     inc: Dict[str, int] = {}
     for stat, gain in (drill.get("gains") or {}).items():
         inc[stat] = int(gain or 0)
     if not inc:
         raise HTTPException(status_code=400, detail="Drill misconfigured")
-    update = {"$inc": inc, "$set": {f"training.{drill_id}.last_at": _now_iso()}}
+    new_stam = max(0, current_stam - stam_cost)
+    update = {"$inc": inc, "$set": {f"training.{drill_id}.last_at": _now_iso(), "training_stamina": new_stam, "training_stamina_date": today_str}}
     await db.boxing_profiles.update_one({"user_id": current_user["id"]}, update, upsert=True)
     prof2 = await _ensure_profile(current_user["id"])
-    return {"message": f"Trained: {drill.get('name')}", "profile": prof2, "effective": _effective_stats(prof2)}
+    return {"message": f"Trained: {drill.get('name')}", "profile": prof2, "effective": _effective_stats(prof2), "drills": DRILLS, "training_stamina": new_stam}
 
 
 async def get_gym(current_user: dict = Depends(get_current_user_verified)):
@@ -753,6 +763,12 @@ def _round_exchange(a_stats: dict, b_stats: dict, a_hp: int, b_hp: int, a_stam: 
 
 async def advance_running_matches(database) -> int:
     now = _now_iso()
+    # Auto-cancel stale pending matches older than 30 minutes
+    stale_cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    await database.boxing_matches.update_many(
+        {"state": {"$in": ["pending", "ready"]}, "created_at": {"$lte": stale_cutoff}},
+        {"$set": {"state": "cancelled", "finished_at": now}},
+    )
     # Claim one match due for next round (simple lock to avoid double-advance)
     claim = await database.boxing_matches.find_one_and_update(
         {
@@ -1035,16 +1051,17 @@ async def _finalize_match(database, match_id: str, winner_id: Optional[str], fin
     ko_bonus = 1 if (finish_reason or "").lower() == "ko" else 0
     a_points = (3 if aw else 0) + (ko_bonus if aw else 0)
     b_points = (3 if bw else 0) + (ko_bonus if bw else 0)
+    is_draw = winner_id is None
     events = [
-        {"id": str(uuid.uuid4()), "user_id": a_id, "match_id": match_id, "result": "win" if aw else "loss" if bw else "draw", "points": a_points, "at": now, "opponent_id": b_id},
+        {"id": str(uuid.uuid4()), "user_id": a_id, "match_id": match_id, "result": "win" if aw else "loss" if bw else "draw", "points": a_points, "at": now, "opponent_id": b_id, "is_draw": is_draw},
     ]
     if not b_is_npc:
-        events.append({"id": str(uuid.uuid4()), "user_id": b_id, "match_id": match_id, "result": "win" if bw else "loss" if aw else "draw", "points": b_points, "at": now, "opponent_id": a_id})
+        events.append({"id": str(uuid.uuid4()), "user_id": b_id, "match_id": match_id, "result": "win" if bw else "loss" if aw else "draw", "points": b_points, "at": now, "opponent_id": a_id, "is_draw": is_draw})
     await database.boxing_events.insert_many(events)
-    await _settle_bets(database, match_id, winner_id)
+    await _settle_bets(database, match_id, winner_id, is_draw=is_draw)
 
 
-async def _settle_bets(database, match_id: str, winner_id: Optional[str]):
+async def _settle_bets(database, match_id: str, winner_id: Optional[str], is_draw: bool = False):
     m = await database.boxing_matches.find_one({"id": match_id}, {"_id": 0, "a_id": 1, "b_id": 1})
     if not m:
         return
@@ -1056,17 +1073,27 @@ async def _settle_bets(database, match_id: str, winner_id: Optional[str]):
     now = _now_iso()
     bets = await database.boxing_bets.find({"match_id": match_id, "status": "open"}, {"_id": 0}).to_list(2000)
     for b in bets:
-        won = win_side is not None and (b.get("fighter") == win_side)
-        new_status = "won" if won else "lost"
-        res = await database.boxing_bets.update_one({"id": b["id"], "status": "open"}, {"$set": {"status": new_status, "settled_at": now}})
-        if res.modified_count == 0:
-            continue
-        if won:
+        if is_draw:
+            # Refund stakes on draws
+            new_status = "refunded"
+            res = await database.boxing_bets.update_one({"id": b["id"], "status": "open"}, {"$set": {"status": new_status, "settled_at": now}})
+            if res.modified_count == 0:
+                continue
             stake = int(b.get("stake") or 0)
-            odds = float(b.get("odds") or 1.0)
-            payout = int(stake * odds)
-            if payout > 0:
-                await database.users.update_one({"id": b.get("user_id")}, {"$inc": {"money": payout}})
+            if stake > 0:
+                await database.users.update_one({"id": b.get("user_id")}, {"$inc": {"money": stake}})
+        else:
+            won = win_side is not None and (b.get("fighter") == win_side)
+            new_status = "won" if won else "lost"
+            res = await database.boxing_bets.update_one({"id": b["id"], "status": "open"}, {"$set": {"status": new_status, "settled_at": now}})
+            if res.modified_count == 0:
+                continue
+            if won:
+                stake = int(b.get("stake") or 0)
+                odds = float(b.get("odds") or 1.0)
+                payout = int(stake * odds)
+                if payout > 0:
+                    await database.users.update_one({"id": b.get("user_id")}, {"$inc": {"money": payout}})
         u = await database.users.find_one({"id": b.get("user_id")}, {"_id": 0, "username": 1})
         await log_gambling(b.get("user_id"), (u.get("username") if u else "?"), "boxing_bet", {"bet_id": b.get("id"), "match_id": match_id, "stake": b.get("stake"), "odds": b.get("odds"), "status": new_status, "settled_at": now})
 
@@ -1158,7 +1185,31 @@ async def run_weekly_boxing_league_payout(database, test_run: bool = False):
             continue
         pts = points_for_rank(i + 1)
         if pts > 0:
-            await database.users.update_one({"id": uid}, {"$inc": {"points": pts}})
+            await database.users.update_one({"id": uid}, {"$inc": {"money": pts}})
+
+
+async def fight_history(current_user: dict = Depends(get_current_user)):
+    uid = current_user["id"]
+    matches = await db.boxing_matches.find(
+        {"state": "finished", "$or": [{"a_id": uid}, {"b_id": uid}]},
+        {"_id": 0, "id": 1, "a_id": 1, "b_id": 1, "a_username": 1, "b_username": 1, "winner": 1, "finish_reason": 1, "round": 1, "max_rounds": 1, "finished_at": 1},
+    ).sort("finished_at", -1).to_list(20)
+    out = []
+    for m in matches:
+        is_a = m.get("a_id") == uid
+        opponent = m.get("b_username") if is_a else m.get("a_username")
+        won = m.get("winner") == uid
+        draw = m.get("winner") is None
+        result = "draw" if draw else ("win" if won else "loss")
+        out.append({
+            "match_id": m.get("id"),
+            "opponent": opponent or "Unknown",
+            "result": result,
+            "finish_reason": (m.get("finish_reason") or "decision").replace("_", " "),
+            "rounds": min(int(m.get("round") or 0), int(m.get("max_rounds") or 12)),
+            "date": m.get("finished_at"),
+        })
+    return {"history": out}
 
 
 def register(router):
@@ -1184,4 +1235,5 @@ def register(router):
     router.add_api_route("/boxing/bets/cancel", bets_cancel, methods=["POST"])
     router.add_api_route("/boxing/bets/my-bets", bets_my, methods=["GET"])
     router.add_api_route("/boxing/league", league, methods=["GET"])
+    router.add_api_route("/boxing/history", fight_history, methods=["GET"])
 

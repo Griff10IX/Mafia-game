@@ -44,85 +44,86 @@ function choosePunch(f) {
 }
 
 function simulateFight(aS, bS) {
-  // ── FIGHTER INITIALISATION ──────────────────────────────────────────────────
   const init = (s) => ({
     ...s,
     hp: 100, stam: 100, kds: 0,
-    // Personality: ranges 0–1
     aggression:  clamp((s.power  - s.defense)  / 60 + 0.42 + rand(-0.12, 0.12), 0.08, 0.95),
     pressure:    clamp((s.speed  - s.defense)  / 80 + 0.38 + rand(-0.1,  0.1),  0.08, 0.90),
     counterpunch:clamp((s.defense - s.power)   / 70 + 0.35 + rand(-0.1,  0.1),  0.05, 0.85),
-    // Cut susceptibility: lower defense & chin = more likely to bleed
     cutSus:      clamp(1 - (s.defense||60)/130 + (1-(s.chin||65)/100)*0.3, 0.15, 0.85),
-    // Active cuts: null | { loc, severity 0-1 }
-    cut: null,
-    cutRound: null,   // round first cut opened
-    // cumulative cut worsening flag — cuts worsening can cause doctor stoppage
-    docStopRisk: 0,
-    // momentum: positive = this fighter winning recent exchanges
-    momentum: 0,
+    cut: null, cutRound: null, docStopRisk: 0, momentum: 0,
+    totalDmgDealt: 0, totalHits: 0, totalThrown: 0,
+    consecutiveHits: 0,
   });
 
   const a = init(aS);
   const b = init(bS);
   const events = [];
+  const scorecard = { a: [], b: [] };
 
-  // Per-round fight logic
   for (let round=1; round<=12; round++) {
-    // More exchanges early (feeling-out rounds), fewer deep in a long fight
+    let roundDmgA = 0, roundDmgB = 0, roundKdA = 0, roundKdB = 0;
     const baseEx = round <= 3 ? 9 : round <= 6 ? 8 : 7;
     const exchanges = baseEx + randInt(-1, 3);
 
     for (let i=0; i<exchanges; i++) {
       if (a.hp<=0 || b.hp<=0) break;
 
-      // ── FIGHTER A ATTACKS ────────────────────────────────────────────────
+      // Clinch: when both fighters are exhausted, chance of clinch
+      if (a.stam < 25 && b.stam < 25 && Math.random() < 0.25) {
+        a.stam = Math.min(100, a.stam + 3);
+        b.stam = Math.min(100, b.stam + 3);
+        events.push({
+          type: "clinch", round,
+          hpA: Math.round(a.hp), hpB: Math.round(b.hp),
+          stamA: Math.round(a.stam), stamB: Math.round(b.stam),
+          cutStateA: a.cut ? {...a.cut} : null, cutStateB: b.cut ? {...b.cut} : null,
+        });
+        continue;
+      }
+
       const apt = choosePunch(a);
-      // Accuracy: stat-based (accuracy), speed vs defense, fatigue, momentum (backend: base_acc + accuracy*0.012 + speed*0.003; def_avoid + defense*0.012)
       const aAcc = clamp(
         PUNCH_ACC[apt]
-        + ((a.accuracy != null ? a.accuracy : 70) - 70) / 400   // accuracy stat (scale 45–95): training/gear matter
+        + ((a.accuracy != null ? a.accuracy : 70) - 70) / 400
         + (a.speed - b.defense) / 520
-        - (1 - a.stam/100) * 0.28        // fatigue tanks accuracy more
-        + a.momentum * 0.04              // on a roll = sharper
+        - (1 - a.stam/100) * 0.28
+        + a.momentum * 0.04
         + (a.aggression - 0.5) * 0.06,
         0.10, 0.88
       );
       const aL = Math.random() < aAcc;
       let aDmg = 0, aKD = false, aCutEv = null;
+      a.totalThrown++;
 
       if (aL) {
         const [lo, hi] = PUNCH_DMG[apt];
-        // Damage: power, opponent's remaining stamina, momentum
-        const baseDmg = rand(lo, hi);
-        aDmg = baseDmg * (a.power / 76)
-             * (1 + (1 - b.stam/100) * 0.22)   // tired fighters absorb harder
-             * (1 + a.momentum * 0.06);
+        aDmg = rand(lo, hi) * (a.power / 76) * (1 + (1 - b.stam/100) * 0.22) * (1 + a.momentum * 0.06);
+        a.consecutiveHits++;
+        // Combo bonus: 3+ consecutive hits deal extra damage
+        if (a.consecutiveHits >= 3) aDmg *= 1.15;
         b.hp = Math.max(0, b.hp - aDmg);
+        a.totalHits++;
+        a.totalDmgDealt += aDmg;
+        roundDmgA += aDmg;
 
-        // Body shots: more stamina drain, less hp damage
         if (apt === "body") {
           b.stam = Math.max(0, b.stam - aDmg * 0.55);
-          b.hp = Math.min(100, b.hp + aDmg * 0.25); // give back some hp for body
+          b.hp = Math.min(100, b.hp + aDmg * 0.25);
         }
 
-        // Knockdown: power shots to the head, low chin, low stamina, on the chin
         const kdChance = apt !== "body"
           ? (aDmg / 26) * (1 - b.chin/100) * Math.pow(1 - b.stam/100, 0.7) * (1 + a.power/220)
           : 0;
         if (Math.random() < kdChance && b.hp > 0 && b.kds < 3) {
-          b.kds++;
-          b.hp = Math.max(1, b.hp - 4);
-          aKD = true;
+          b.kds++; b.hp = Math.max(1, b.hp - 4); aKD = true; roundKdA++;
           a.momentum = Math.min(1, a.momentum + 0.4);
           b.momentum = Math.max(-1, b.momentum - 0.4);
         }
 
-        // Cuts: hooks & crosses to the eye/cheek, worsening existing cuts
         if (apt !== "body") {
           const cutBase = PUNCH_CUT[apt] * b.cutSus;
-          const cutBoost = b.cut ? 1.8 : 1.0;   // existing cuts re-open more easily
-          if (Math.random() < cutBase * cutBoost) {
+          if (Math.random() < cutBase * (b.cut ? 1.8 : 1.0)) {
             const loc = CUT_LOCS[apt];
             if (b.cut && b.cut.loc === loc) {
               b.cut.severity = Math.min(1, b.cut.severity + rand(0.12, 0.32));
@@ -134,21 +135,18 @@ function simulateFight(aS, bS) {
             aCutEv = { target:"b", loc, severity: b.cut.severity };
           }
         }
-
         a.momentum = clamp(a.momentum + 0.08, -1, 1);
         b.momentum = clamp(b.momentum - 0.08, -1, 1);
       } else {
-        // Miss: slight stamina cost, opponent momentum boost
+        a.consecutiveHits = 0;
         a.momentum = clamp(a.momentum - 0.03, -1, 1);
       }
-
       a.stam = Math.max(0, a.stam - PUNCH_STAM[apt] * (aL ? 1.0 : 0.38));
 
-      // ── FIGHTER B ATTACKS ────────────────────────────────────────────────
       const bpt = choosePunch(b);
       const bAcc = clamp(
         PUNCH_ACC[bpt]
-        + ((b.accuracy != null ? b.accuracy : 70) - 70) / 400   // accuracy stat: training/gear matter
+        + ((b.accuracy != null ? b.accuracy : 70) - 70) / 400
         + (b.speed - a.defense) / 520
         - (1 - b.stam/100) * 0.28
         + b.momentum * 0.04
@@ -157,14 +155,17 @@ function simulateFight(aS, bS) {
       );
       const bL = Math.random() < bAcc;
       let bDmg = 0, bKD = false, bCutEv = null;
+      b.totalThrown++;
 
       if (bL) {
         const [lo, hi] = PUNCH_DMG[bpt];
-        const baseDmg = rand(lo, hi);
-        bDmg = baseDmg * (b.power / 76)
-             * (1 + (1 - a.stam/100) * 0.22)
-             * (1 + b.momentum * 0.06);
+        bDmg = rand(lo, hi) * (b.power / 76) * (1 + (1 - a.stam/100) * 0.22) * (1 + b.momentum * 0.06);
+        b.consecutiveHits++;
+        if (b.consecutiveHits >= 3) bDmg *= 1.15;
         a.hp = Math.max(0, a.hp - bDmg);
+        b.totalHits++;
+        b.totalDmgDealt += bDmg;
+        roundDmgB += bDmg;
 
         if (bpt === "body") {
           a.stam = Math.max(0, a.stam - bDmg * 0.55);
@@ -175,17 +176,14 @@ function simulateFight(aS, bS) {
           ? (bDmg / 26) * (1 - a.chin/100) * Math.pow(1 - a.stam/100, 0.7) * (1 + b.power/220)
           : 0;
         if (Math.random() < kdChance && a.hp > 0 && a.kds < 3) {
-          a.kds++;
-          a.hp = Math.max(1, a.hp - 4);
-          bKD = true;
+          a.kds++; a.hp = Math.max(1, a.hp - 4); bKD = true; roundKdB++;
           b.momentum = Math.min(1, b.momentum + 0.4);
           a.momentum = Math.max(-1, a.momentum - 0.4);
         }
 
         if (bpt !== "body") {
           const cutBase = PUNCH_CUT[bpt] * a.cutSus;
-          const cutBoost = a.cut ? 1.8 : 1.0;
-          if (Math.random() < cutBase * cutBoost) {
+          if (Math.random() < cutBase * (a.cut ? 1.8 : 1.0)) {
             const loc = CUT_LOCS[bpt];
             if (a.cut && a.cut.loc === loc) {
               a.cut.severity = Math.min(1, a.cut.severity + rand(0.12, 0.32));
@@ -197,100 +195,117 @@ function simulateFight(aS, bS) {
             bCutEv = { target:"a", loc, severity: a.cut.severity };
           }
         }
-
         b.momentum = clamp(b.momentum + 0.08, -1, 1);
         a.momentum = clamp(a.momentum - 0.08, -1, 1);
       } else {
+        b.consecutiveHits = 0;
         b.momentum = clamp(b.momentum - 0.03, -1, 1);
       }
-
       b.stam = Math.max(0, b.stam - PUNCH_STAM[bpt] * (bL ? 1.0 : 0.38));
 
-      // ── DOCTOR STOPPAGE — severe cut ends fight ─────────────────────────
-      // Only outside the first round, only at round breaks (simulated as after exchange bursts)
       const docStop = i === exchanges - 1 && round > 1 && (
         (a.cut && a.cut.severity > 0.78 && a.docStopRisk > 1.4) ||
         (b.cut && b.cut.severity > 0.78 && b.docStopRisk > 1.4)
       );
       if (docStop && !aKD && !bKD) {
-        // Determine who gets stopped by cut
-        const aCutBad = a.cut && a.cut.severity > 0.78 && a.docStopRisk > 1.4;
-        const bCutBad = b.cut && b.cut.severity > 0.78 && b.docStopRisk > 1.4;
-        if (aCutBad) a.hp = 0;
-        if (bCutBad) b.hp = 0;
+        if (a.cut && a.cut.severity > 0.78 && a.docStopRisk > 1.4) a.hp = 0;
+        if (b.cut && b.cut.severity > 0.78 && b.docStopRisk > 1.4) b.hp = 0;
       }
 
       const isFinal = a.hp<=0 || b.hp<=0 || a.kds>=3 || b.kds>=3;
+      const isCombo = (aL && a.consecutiveHits >= 3) || (bL && b.consecutiveHits >= 3);
 
       events.push({
         round,
-        hpA: Math.round(a.hp),    hpB: Math.round(b.hp),
+        hpA: Math.round(a.hp), hpB: Math.round(b.hp),
         stamA: Math.round(a.stam), stamB: Math.round(b.stam),
         aPunch: apt, aLanded: aL, aDmg: Math.round(aDmg*10)/10, aKD,
         bPunch: bpt, bLanded: bL, bDmg: Math.round(bDmg*10)/10, bKD,
-        // cut events this exchange (null if no cut)
-        cutA: bCutEv || null,   // cut opened ON fighter A (by B's punch)
-        cutB: aCutEv || null,   // cut opened ON fighter B (by A's punch)
-        // current cut severity snapshot for renderer
-        cutStateA: a.cut ? {...a.cut} : null,
-        cutStateB: b.cut ? {...b.cut} : null,
-        isFinal,
+        cutA: bCutEv || null, cutB: aCutEv || null,
+        cutStateA: a.cut ? {...a.cut} : null, cutStateB: b.cut ? {...b.cut} : null,
+        isFinal, isCombo,
+        comboSide: aL && a.consecutiveHits >= 3 ? "a" : bL && b.consecutiveHits >= 3 ? "b" : null,
+        comboCount: aL && a.consecutiveHits >= 3 ? a.consecutiveHits : bL && b.consecutiveHits >= 3 ? b.consecutiveHits : 0,
       });
 
       if (isFinal) break;
     }
 
-    // ── BETWEEN ROUNDS ────────────────────────────────────────────────────
-    // Stamina & HP recovery: align with backend (stamina + recovery stats matter)
+    // 10-point must scoring for this round
+    let scoreA = 10, scoreB = 10;
+    if (roundDmgA > roundDmgB * 1.2) scoreB = 9;
+    else if (roundDmgB > roundDmgA * 1.2) scoreA = 9;
+    else if (roundDmgA > roundDmgB) scoreB = 9;
+    else if (roundDmgB > roundDmgA) scoreA = 9;
+    else { scoreA = 10; scoreB = 10; }
+    if (roundKdA > 0) scoreB = Math.max(7, scoreB - roundKdA);
+    if (roundKdB > 0) scoreA = Math.max(7, scoreA - roundKdB);
+    scorecard.a.push(scoreA);
+    scorecard.b.push(scoreB);
+
+    // Corner advice event
+    const cornerAdvice = [];
+    if (b.stam < 30) cornerAdvice.push("Work the body, he's tiring");
+    else if (a.hp < 40) cornerAdvice.push("Stay behind that jab, be smart");
+    if (a.cut && a.cut.severity > 0.5) cornerAdvice.push("Protect that cut");
+    if (b.cut && b.cut.severity > 0.4) cornerAdvice.push("Go after that cut");
+    const totalScoreA = scorecard.a.reduce((s,v)=>s+v,0);
+    const totalScoreB = scorecard.b.reduce((s,v)=>s+v,0);
+    if (totalScoreA > totalScoreB) cornerAdvice.push("You're ahead on the cards");
+    else if (totalScoreB > totalScoreA && round > 3) cornerAdvice.push("You need this round");
+    const advice = cornerAdvice.length ? cornerAdvice[Math.floor(Math.random()*cornerAdvice.length)] : null;
+
+    events.push({
+      type: "roundEnd", round,
+      hpA: Math.round(a.hp), hpB: Math.round(b.hp),
+      stamA: Math.round(a.stam), stamB: Math.round(b.stam),
+      cutStateA: a.cut ? {...a.cut} : null, cutStateB: b.cut ? {...b.cut} : null,
+      scoreA, scoreB, cornerAdvice: advice,
+    });
+
+    // Between-round recovery (no duplicates)
     const aRec = 6 + ((a.stamina != null ? a.stamina : 62) / 100) * 12 + ((a.recovery != null ? a.recovery : 62) / 100) * 8;
     const bRec = 6 + ((b.stamina != null ? b.stamina : 62) / 100) * 12 + ((b.recovery != null ? b.recovery : 62) / 100) * 8;
     a.stam = Math.min(100, a.stam + aRec);
     b.stam = Math.min(100, b.stam + bRec);
-    const aHpRec = 2 + ((a.recovery != null ? a.recovery : 62) / 100) * 5;
-    const bHpRec = 2 + ((b.recovery != null ? b.recovery : 62) / 100) * 5;
-    a.hp = Math.min(100, a.hp + aHpRec);
-    b.hp = Math.min(100, b.hp + bHpRec);
-    // Momentum decays toward neutral between rounds
+    a.hp = Math.min(100, a.hp + 2 + ((a.recovery != null ? a.recovery : 62) / 100) * 5);
+    b.hp = Math.min(100, b.hp + 2 + ((b.recovery != null ? b.recovery : 62) / 100) * 5);
     a.momentum *= 0.5;
     b.momentum *= 0.5;
-    // Cuts swell between rounds — corner can slow it slightly
-    if (a.cut) a.cut.severity = Math.min(1, a.cut.severity + 0.04);
-    if (b.cut) b.cut.severity = Math.min(1, b.cut.severity + 0.04);
-    // Momentum decays toward neutral between rounds
-    a.momentum *= 0.5;
-    b.momentum *= 0.5;
-    // Cuts swell between rounds — corner can slow it slightly
     if (a.cut) a.cut.severity = Math.min(1, a.cut.severity + 0.04);
     if (b.cut) b.cut.severity = Math.min(1, b.cut.severity + 0.04);
 
     if (a.hp<=0 || b.hp<=0 || a.kds>=3 || b.kds>=3) break;
   }
 
-  // ── RESULT ────────────────────────────────────────────────────────────────
   let winner=null, reason="Decision";
   if (a.hp<=0 || a.kds>=3) {
     winner="b";
-    // Doctor stoppage for cuts uses TKO ruling
     reason = a.kds>=3 ? "TKO" : (a.cut && a.cut.severity > 0.78 ? "TKO" : "KO");
   } else if (b.hp<=0 || b.kds>=3) {
     winner="a";
     reason = b.kds>=3 ? "TKO" : (b.cut && b.cut.severity > 0.78 ? "TKO" : "KO");
   } else {
-    // Decision: mirror server logic — total damage, then total hits, then random
-    let totalADmg = 0, totalBDmg = 0, hitsA = 0, hitsB = 0;
-    for (const ev of events) {
-      totalADmg += ev.aDmg || 0;
-      totalBDmg += ev.bDmg || 0;
-      if (ev.aLanded) hitsA++;
-      if (ev.bLanded) hitsB++;
-    }
-    if (totalADmg > totalBDmg) { winner = "a"; reason = "Decision"; }
-    else if (totalBDmg > totalADmg) { winner = "b"; reason = "Decision"; }
-    else if (hitsA > hitsB) { winner = "a"; reason = "Decision"; }
-    else if (hitsB > hitsA) { winner = "b"; reason = "Decision"; }
-    else { winner = Math.random() < 0.5 ? "a" : "b"; reason = "Split decision"; }
+    // 10-point must decision with 3 virtual judges
+    const totalA = scorecard.a.reduce((s,v)=>s+v,0);
+    const totalB = scorecard.b.reduce((s,v)=>s+v,0);
+    const jitter = () => randInt(-1, 1);
+    const j1a = totalA + jitter(), j1b = totalB + jitter();
+    const j2a = totalA + jitter(), j2b = totalB + jitter();
+    const j3a = totalA + jitter(), j3b = totalB + jitter();
+    const winsA = (j1a > j1b ? 1 : 0) + (j2a > j2b ? 1 : 0) + (j3a > j3b ? 1 : 0);
+    const winsB = (j1b > j1a ? 1 : 0) + (j2b > j2a ? 1 : 0) + (j3b > j3a ? 1 : 0);
+    if (winsA >= 2) { winner = "a"; reason = winsA === 3 ? "Unanimous decision" : "Split decision"; }
+    else if (winsB >= 2) { winner = "b"; reason = winsB === 3 ? "Unanimous decision" : "Split decision"; }
+    else { winner = a.totalDmgDealt > b.totalDmgDealt ? "a" : "b"; reason = "Majority decision"; }
   }
-  return {events, winner, reason};
+  return {
+    events, winner, reason, scorecard,
+    stats: {
+      a: { thrown: a.totalThrown, landed: a.totalHits, dmg: Math.round(a.totalDmgDealt), kds: a.kds },
+      b: { thrown: b.totalThrown, landed: b.totalHits, dmg: Math.round(b.totalDmgDealt), kds: b.kds },
+    },
+  };
 }
 
 // ── FIGHTERS DATA ────────────────────────────────────────────────────────────
@@ -298,6 +313,223 @@ const FIGHTERS=[
   {name:"Tommy 'The Bull' Moran",  power:82,speed:66,stamina:74,defense:60,accuracy:65,chin:70,recovery:62,color:0x1a4a9a,colorCSS:"#2a5aaa"},
   {name:"Sal 'Switchblade' Ricci", power:68,speed:84,stamina:78,defense:76,accuracy:72,chin:62,recovery:60,color:0x9a1a1a,colorCSS:"#bb2222"},
 ];
+
+// ── CANVAS FIGHT RENDERER ────────────────────────────────────────────────────
+function drawRing(ctx, W, H) {
+  const cx = W / 2, cy = H * 0.55;
+  const rw = W * 0.82, rh = H * 0.46;
+  const rl = cx - rw/2, rt = cy - rh/2, rr = cx + rw/2, rb = cy + rh/2;
+
+  // Crowd silhouette strip
+  const crowdH = rt - 4;
+  if (crowdH > 10) {
+    ctx.fillStyle = "#0e0e14";
+    ctx.fillRect(0, 0, W, crowdH);
+    for (let i = 0; i < 40; i++) {
+      const sx = (i / 40) * W + Math.sin(i * 1.7) * 6;
+      const sh = 8 + Math.sin(i * 2.3) * 4;
+      ctx.fillStyle = `rgba(${30+i%20},${25+i%15},${35+i%10},0.7)`;
+      ctx.beginPath();
+      ctx.arc(sx, crowdH - sh/2, 3 + (i%3), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(sx - 2, crowdH - sh/2 + 2, 4, sh/2);
+    }
+  }
+
+  // Ring floor
+  ctx.fillStyle = "#2a2218";
+  ctx.fillRect(rl, rt, rw, rh);
+  ctx.fillStyle = "#352e20";
+  ctx.fillRect(rl + 10, rt + 10, rw - 20, rh - 20);
+
+  // Ropes
+  for (let i = 0; i < 3; i++) {
+    const ry = rt + rh * (0.12 + i * 0.38);
+    ctx.strokeStyle = i === 1 ? "rgba(201,168,76,0.6)" : "rgba(138,122,90,0.4)";
+    ctx.lineWidth = i === 1 ? 2 : 1.5;
+    ctx.beginPath(); ctx.moveTo(rl - 3, ry); ctx.lineTo(rr + 3, ry); ctx.stroke();
+  }
+
+  // Corner posts
+  const posts = [[rl, rt], [rr, rt], [rl, rb], [rr, rb]];
+  const pc = ["#c9a84c", "#bb2222", "#bb2222", "#c9a84c"];
+  posts.forEach(([x, y], i) => {
+    ctx.fillStyle = pc[i]; ctx.fillRect(x-3, y-3, 6, 6);
+  });
+
+  ctx.strokeStyle = "rgba(201,168,76,0.2)"; ctx.lineWidth = 1;
+  ctx.strokeRect(rl, rt, rw, rh);
+  return { rl, rt, rr, rb, rw, rh, cx, cy };
+}
+
+function drawFighter(ctx, x, y, facing, anim, progress, color, hp) {
+  ctx.save();
+  ctx.translate(x, y);
+  const s = facing === "right" ? 1 : -1;
+  ctx.scale(s, 1);
+
+  const bob = Math.sin(performance.now() / 280) * 2;
+  const isIdle = anim === "idle";
+  const isHit = anim === "hit";
+  const isPunch = ["jab","cross","hook","uppercut","body"].includes(anim);
+  const isDown = anim === "down" || anim === "ko";
+  const hitShake = isHit ? Math.sin(progress * 20) * 3 : 0;
+  const downAngle = isDown ? Math.min(1, progress * 2) * (Math.PI / 3) : 0;
+
+  if (isDown) {
+    ctx.translate(0, 0);
+    ctx.rotate(downAngle);
+  }
+
+  // Body
+  const bodyY = isIdle ? bob : isHit ? bob + hitShake : 0;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  const bx = -8, by = -24 + bodyY, bw = 16, bh = 28, br = 3;
+  ctx.moveTo(bx+br, by); ctx.lineTo(bx+bw-br, by); ctx.quadraticCurveTo(bx+bw, by, bx+bw, by+br);
+  ctx.lineTo(bx+bw, by+bh-br); ctx.quadraticCurveTo(bx+bw, by+bh, bx+bw-br, by+bh);
+  ctx.lineTo(bx+br, by+bh); ctx.quadraticCurveTo(bx, by+bh, bx, by+bh-br);
+  ctx.lineTo(bx, by+br); ctx.quadraticCurveTo(bx, by, bx+br, by);
+  ctx.closePath();
+  ctx.fill();
+
+  // Head
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(0, -32 + bodyY, 8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cut indicator
+  if (hp < 50) {
+    ctx.fillStyle = "rgba(200,40,40,0.6)";
+    ctx.beginPath(); ctx.arc(5, -34 + bodyY, 2, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Legs
+  ctx.strokeStyle = color; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(-4, 4 + bodyY); ctx.lineTo(-6, 20 + bodyY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(4, 4 + bodyY); ctx.lineTo(6, 20 + bodyY); ctx.stroke();
+
+  // Arms & gloves
+  const gloveColor = facing === "right" ? "#d4a832" : "#cc3333";
+  if (isPunch && progress < 1) {
+    const ext = Math.sin(progress * Math.PI);
+    let gx = 12, gy = -18 + bodyY;
+    if (anim === "jab") { gx = 12 + ext * 22; gy = -20 + bodyY; }
+    else if (anim === "cross") { gx = 10 + ext * 26; gy = -18 + bodyY; }
+    else if (anim === "hook") { gx = 10 + ext * 18; gy = -22 + bodyY - ext * 4; }
+    else if (anim === "uppercut") { gx = 10 + ext * 14; gy = -18 + bodyY - ext * 16; }
+    else if (anim === "body") { gx = 10 + ext * 20; gy = -10 + bodyY; }
+    // Lead arm (punching)
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(6, -18 + bodyY); ctx.lineTo(gx, gy); ctx.stroke();
+    ctx.fillStyle = gloveColor;
+    ctx.beginPath(); ctx.arc(gx, gy, 4, 0, Math.PI * 2); ctx.fill();
+    // Rear arm (guard)
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(-4, -18 + bodyY); ctx.lineTo(-6, -26 + bodyY); ctx.stroke();
+    ctx.fillStyle = gloveColor;
+    ctx.beginPath(); ctx.arc(-6, -26 + bodyY, 3.5, 0, Math.PI * 2); ctx.fill();
+  } else {
+    // Guard position
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(6, -18 + bodyY); ctx.lineTo(10, -26 + bodyY); ctx.stroke();
+    ctx.fillStyle = gloveColor;
+    ctx.beginPath(); ctx.arc(10, -26 + bodyY, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-4, -18 + bodyY); ctx.lineTo(-2, -28 + bodyY); ctx.stroke();
+    ctx.fillStyle = gloveColor;
+    ctx.beginPath(); ctx.arc(-2, -28 + bodyY, 3.5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Hit flash
+  if (isHit && progress < 0.3) {
+    ctx.fillStyle = `rgba(255,255,255,${0.6 * (1 - progress/0.3)})`;
+    ctx.beginPath(); ctx.arc(0, -20 + bodyY, 14, 0, Math.PI * 2); ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawHitParticles(ctx, particles, now) {
+  particles.forEach(p => {
+    const age = (now - p.born) / 1000;
+    if (age > p.life) return;
+    const frac = age / p.life;
+    const px = p.x + p.vx * age;
+    const py = p.y + p.vy * age + 40 * age * age;
+    ctx.fillStyle = `rgba(255,${200 + Math.floor(Math.random()*55)},100,${1-frac})`;
+    ctx.beginPath(); ctx.arc(px, py, 2*(1-frac), 0, Math.PI*2); ctx.fill();
+  });
+}
+
+function drawRoundCard(ctx, W, H, roundNum, progress) {
+  if (progress <= 0 || progress > 1) return;
+  const alpha = progress < 0.15 ? progress/0.15 : progress > 0.85 ? (1-progress)/0.15 : 1;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  ctx.fillRect(W * 0.3, H * 0.35, W * 0.4, H * 0.18);
+  ctx.strokeStyle = "rgba(201,168,76,0.6)";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(W * 0.3, H * 0.35, W * 0.4, H * 0.18);
+  ctx.fillStyle = "#c9a84c";
+  ctx.font = "bold 18px Cinzel,serif";
+  ctx.textAlign = "center";
+  ctx.fillText(`ROUND ${roundNum}`, W/2, H * 0.35 + H * 0.12);
+  ctx.restore();
+}
+
+function drawKOCountdown(ctx, W, H, count) {
+  if (count == null || count <= 0) return;
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.fillRect(0, 0, W, H);
+  const pulse = 1 + Math.sin(performance.now() / 150) * 0.08;
+  ctx.translate(W/2, H * 0.42);
+  ctx.scale(pulse, pulse);
+  ctx.fillStyle = "#ff4444";
+  ctx.font = "bold 48px Cinzel,serif";
+  ctx.textAlign = "center";
+  ctx.fillText(String(count), 0, 0);
+  ctx.font = "12px Cinzel,serif";
+  ctx.fillStyle = "#e0d0b0";
+  ctx.fillText("DOWN!", 0, 22);
+  ctx.restore();
+}
+
+function drawCanvasBars(ctx, W, H, state, nameA, nameB) {
+  const barW = W * 0.32, barH = 6, gap = 10;
+  const y = H - 30;
+
+  // Fighter A bars (left)
+  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  ctx.fillRect(gap, y, barW, barH);
+  ctx.fillStyle = state.hpA > 30 ? "#c9a84c" : "#cc4444";
+  ctx.fillRect(gap, y, barW * (state.hpA / 100), barH);
+  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  ctx.fillRect(gap, y + barH + 2, barW, 4);
+  ctx.fillStyle = "#3a8aaa";
+  ctx.fillRect(gap, y + barH + 2, barW * (state.stamA / 100), 4);
+  ctx.fillStyle = "#c9a84c"; ctx.font = "bold 9px Cinzel,serif"; ctx.textAlign = "left";
+  ctx.fillText(nameA, gap, y - 4);
+
+  // Fighter B bars (right)
+  const rx = W - gap - barW;
+  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  ctx.fillRect(rx, y, barW, barH);
+  ctx.fillStyle = state.hpB > 30 ? "#bb3333" : "#cc4444";
+  ctx.fillRect(rx + barW * (1 - state.hpB / 100), y, barW * (state.hpB / 100), barH);
+  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  ctx.fillRect(rx, y + barH + 2, barW, 4);
+  ctx.fillStyle = "#3a8aaa";
+  ctx.fillRect(rx + barW * (1 - state.stamB / 100), y + barH + 2, barW * (state.stamB / 100), 4);
+  ctx.fillStyle = "#bb3333"; ctx.font = "bold 9px Cinzel,serif"; ctx.textAlign = "right";
+  ctx.fillText(nameB, W - gap, y - 4);
+
+  // Round
+  ctx.fillStyle = "#c9a84c"; ctx.font = "bold 11px Cinzel,serif"; ctx.textAlign = "center";
+  ctx.fillText(`R${state.round}/12`, W/2, y + 4);
+}
 
 // ── COMPONENT ─────────────────────────────────────────────────────────────────
 export default function Boxing3D() {
@@ -350,6 +582,18 @@ export default function Boxing3D() {
   const arenaStartedRef = useRef(false);
   const prevArenaMatchIdRef = useRef(undefined);
   const arenaMatchDetailRef = useRef(null);
+
+  const canvasRef = useRef(null);
+  const animFrameRef = useRef(null);
+  const fightStateRef = useRef({
+    fighterA: { anim: "idle", animStart: 0, punchType: null, landed: false },
+    fighterB: { anim: "idle", animStart: 0, punchType: null, landed: false },
+    hpA: 100, hpB: 100, stamA: 100, stamB: 100, round: 1,
+    showRoundCard: false, roundCardNum: 0, roundCardStart: 0,
+    koCountdown: null, hitParticles: [], finished: false,
+  });
+  const [speedMult, setSpeedMult] = useState(1);
+  const speedMultRef = useRef(1);
 
   const flashMsg=(msg,ms=1600)=>{ setActionText(msg); setTimeout(()=>setActionText(""),ms); };
   const getErr = (e) => e?.response?.data?.detail || e?.message || "Something went wrong";
@@ -730,8 +974,6 @@ export default function Boxing3D() {
   const gold = "var(--noir-primary)";
   const crimson = "#b5463c"; // opponent accent (contrast)
 
-  // Build detailed text log from simulated fight events
-  // Build detailed text log from simulated fight events (with ev on each line for live bar updates)
   const commentaryLinesToStream = useMemo(() => {
     const res = arenaFightResult;
     if (!res || !res.events || !res.events.length) return [];
@@ -744,32 +986,60 @@ export default function Boxing3D() {
     for (let idx = 0; idx < events.length; idx++) {
       const ev = events[idx];
       const nextEv = events[idx + 1];
-      const isLastExchangeOfRound = !nextEv || nextEv.round !== ev.round;
+
+      // Clinch events
+      if (ev.type === "clinch") {
+        if (ev.round !== lastRound) { lastRound = ev.round; lines.push({ type: "round", text: `Round ${ev.round}`, round: ev.round, ev }); }
+        lines.push({ type: "clinch", text: "They clinch in the center of the ring. Ref breaks them apart.", ev });
+        continue;
+      }
+      // Round-end events (scorecard + corner)
+      if (ev.type === "roundEnd") {
+        const scoreStr = `${ev.scoreA}-${ev.scoreB}`;
+        lines.push({ type: "roundEnd", text: `— End of Round ${ev.round} (${scoreStr}) —`, ev });
+        if (ev.cornerAdvice) lines.push({ type: "corner", text: `Corner: "${ev.cornerAdvice}"`, ev });
+        // Cut warnings between rounds
+        if (ev.cutStateA && ev.cutStateA.severity > 0.5) {
+          const sev = ev.cutStateA.severity > 0.7 ? "getting worse — doctor may check it" : "swelling up";
+          lines.push({ type: "cutWarn", text: `Cut over ${nameA}'s ${ev.cutStateA.loc} is ${sev}.`, ev });
+        }
+        if (ev.cutStateB && ev.cutStateB.severity > 0.5) {
+          const sev = ev.cutStateB.severity > 0.7 ? "getting worse — doctor may check it" : "swelling up";
+          lines.push({ type: "cutWarn", text: `Cut over ${nameB}'s ${ev.cutStateB.loc} is ${sev}.`, ev });
+        }
+        continue;
+      }
 
       if (ev.round !== lastRound) {
         lastRound = ev.round;
         lines.push({ type: "round", text: `Round ${ev.round}`, round: ev.round, ev });
       }
+
       if (ev.aLanded) {
         lines.push({ type: "exchange", text: `${nameA} lands a ${cap(ev.aPunch)} for ${ev.aDmg} damage.`, side: "a", ev });
       } else {
         lines.push({ type: "exchange", text: `${nameA} misses with a ${cap(ev.aPunch)}.`, side: "a", ev });
+      }
+      if (ev.isCombo && ev.comboSide === "a") {
+        lines.push({ type: "combo", text: `Beautiful ${ev.comboCount}-punch combo from ${nameA}!`, side: "a", ev });
       }
       if (ev.bLanded) {
         lines.push({ type: "exchange", text: `${nameB} lands a ${cap(ev.bPunch)} for ${ev.bDmg} damage.`, side: "b", ev });
       } else {
         lines.push({ type: "exchange", text: `${nameB} misses with a ${cap(ev.bPunch)}.`, side: "b", ev });
       }
-      if (ev.aKD) lines.push({ type: "kd", text: `Knockdown! ${nameA} takes a knee.`, side: "a", ev });
-      if (ev.bKD) lines.push({ type: "kd", text: `Knockdown! ${nameB} takes a knee.`, side: "b", ev });
-      if (ev.cutA) lines.push({ type: "cut", text: `Cut opened over ${nameA}'s ${ev.cutA.loc}.`, side: "a", ev });
-      if (ev.cutB) lines.push({ type: "cut", text: `Cut opened over ${nameB}'s ${ev.cutB.loc}.`, side: "b", ev });
-      if (isLastExchangeOfRound) {
-        lines.push({
-          type: "roundEnd",
-          text: `— End of Round ${ev.round} — ${nameA}: ${ev.hpA} HP, ${ev.stamA} Stamina | ${nameB}: ${ev.hpB} HP, ${ev.stamB} Stamina`,
-          ev,
-        });
+      if (ev.isCombo && ev.comboSide === "b") {
+        lines.push({ type: "combo", text: `Beautiful ${ev.comboCount}-punch combo from ${nameB}!`, side: "b", ev });
+      }
+      if (ev.aKD) lines.push({ type: "kd", text: `KNOCKDOWN! ${nameB} puts ${nameA} on the canvas!`, side: "a", ev });
+      if (ev.bKD) lines.push({ type: "kd", text: `KNOCKDOWN! ${nameA} drops ${nameB}!`, side: "b", ev });
+      if (ev.cutA) {
+        const sev = ev.cutA.severity > 0.6 ? "Bad cut" : "Cut";
+        lines.push({ type: "cut", text: `${sev} opened over ${nameA}'s ${ev.cutA.loc}!`, side: "a", ev });
+      }
+      if (ev.cutB) {
+        const sev = ev.cutB.severity > 0.6 ? "Bad cut" : "Cut";
+        lines.push({ type: "cut", text: `${sev} opened over ${nameB}'s ${ev.cutB.loc}!`, side: "b", ev });
       }
     }
     const winnerName = res.winner === "a" ? nameA : res.winner === "b" ? nameB : "";
@@ -777,29 +1047,65 @@ export default function Boxing3D() {
     return lines;
   }, [arenaFightResult]);
 
-  // Stream commentary line-by-line (live commentary feel) and update HP/stamina bars as we go
+  // Keep speedMultRef in sync
+  useEffect(() => { speedMultRef.current = speedMult; }, [speedMult]);
+
+  // Stream commentary line-by-line and drive canvas animations
   useEffect(() => {
     if (!arenaFightResult?.events?.length || commentaryLinesToStream.length === 0) return;
     setLiveCommentary([]);
-    setHpA(100);
-    setHpB(100);
-    setStamA(100);
-    setStamB(100);
-    setRound(1);
-    const delays = { round: 220, exchange: 75, roundEnd: 90, kd: 180, cut: 180, result: 550 };
+    setHpA(100); setHpB(100); setStamA(100); setStamB(100); setRound(1);
+    fightStateRef.current = {
+      fighterA: { anim: "idle", animStart: 0 }, fighterB: { anim: "idle", animStart: 0 },
+      hpA: 100, hpB: 100, stamA: 100, stamB: 100, round: 1,
+      showRoundCard: false, roundCardNum: 0, roundCardStart: 0,
+      koCountdown: null, hitParticles: [], finished: false,
+    };
+    const baseDelays = { round: 320, exchange: 90, roundEnd: 140, kd: 280, cut: 200, result: 650, clinch: 220, corner: 260, combo: 200, cutWarn: 200 };
     let i = 0;
     const schedule = () => {
       if (i >= commentaryLinesToStream.length) return;
       const line = commentaryLinesToStream[i];
-      const ms = delays[line.type] ?? 80;
+      const baseMs = baseDelays[line.type] ?? 90;
+      const ms = Math.max(20, baseMs / speedMultRef.current);
       const t = setTimeout(() => {
         setLiveCommentary((prev) => [...prev, line]);
+        const fs = fightStateRef.current;
+        const now = performance.now();
         if (line.ev) {
-          setHpA(line.ev.hpA);
-          setHpB(line.ev.hpB);
-          setStamA(line.ev.stamA);
-          setStamB(line.ev.stamB);
+          fs.hpA = line.ev.hpA; fs.hpB = line.ev.hpB;
+          fs.stamA = line.ev.stamA ?? fs.stamA; fs.stamB = line.ev.stamB ?? fs.stamB;
+          fs.round = line.ev.round;
+          setHpA(line.ev.hpA); setHpB(line.ev.hpB);
+          setStamA(line.ev.stamA ?? fs.stamA); setStamB(line.ev.stamB ?? fs.stamB);
           setRound(line.ev.round);
+        }
+        // Drive canvas fighter animations
+        if (line.type === "exchange" && line.side === "a" && line.ev) {
+          fs.fighterA = { anim: line.ev.aPunch, animStart: now, landed: line.ev.aLanded };
+          if (line.ev.aLanded) fs.fighterB = { anim: "hit", animStart: now };
+          if (line.ev.aLanded) {
+            for (let k=0;k<4;k++) fs.hitParticles.push({ x: canvasRef.current ? canvasRef.current.width * 0.62 : 400, y: canvasRef.current ? canvasRef.current.height * 0.38 : 200, vx: (Math.random()-0.5)*60, vy: -20-Math.random()*30, life: 0.4+Math.random()*0.3, born: now });
+          }
+        } else if (line.type === "exchange" && line.side === "b" && line.ev) {
+          fs.fighterB = { anim: line.ev.bPunch, animStart: now, landed: line.ev.bLanded };
+          if (line.ev.bLanded) fs.fighterA = { anim: "hit", animStart: now };
+          if (line.ev.bLanded) {
+            for (let k=0;k<4;k++) fs.hitParticles.push({ x: canvasRef.current ? canvasRef.current.width * 0.38 : 250, y: canvasRef.current ? canvasRef.current.height * 0.38 : 200, vx: (Math.random()-0.5)*60, vy: -20-Math.random()*30, life: 0.4+Math.random()*0.3, born: now });
+          }
+        } else if (line.type === "kd") {
+          const side = line.side;
+          if (side === "a") { fs.fighterA = { anim: "down", animStart: now }; fs.koCountdown = { side: "a", count: 0, start: now }; }
+          if (side === "b") { fs.fighterB = { anim: "down", animStart: now }; fs.koCountdown = { side: "b", count: 0, start: now }; }
+        } else if (line.type === "round") {
+          fs.showRoundCard = true; fs.roundCardNum = line.round; fs.roundCardStart = now;
+          fs.fighterA = { anim: "idle", animStart: now }; fs.fighterB = { anim: "idle", animStart: now };
+          fs.koCountdown = null;
+          setTimeout(() => { fs.showRoundCard = false; }, 1200 / speedMultRef.current);
+        } else if (line.type === "result") {
+          fs.finished = true;
+          if (arenaFightResult.winner === "a") fs.fighterB = { anim: "ko", animStart: now };
+          else if (arenaFightResult.winner === "b") fs.fighterA = { anim: "ko", animStart: now };
         }
         i++;
         schedule();
@@ -807,11 +1113,57 @@ export default function Boxing3D() {
       streamTimeoutsRef.current.push(t);
     };
     schedule();
-    return () => {
-      streamTimeoutsRef.current.forEach(clearTimeout);
-      streamTimeoutsRef.current = [];
+    return () => { streamTimeoutsRef.current.forEach(clearTimeout); streamTimeoutsRef.current = []; };
+  }, [arenaFightResult, commentaryLinesToStream]);
+
+  // Canvas animation loop
+  useEffect(() => {
+    if (!arenaMatchId) return;
+    const render = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) { animFrameRef.current = requestAnimationFrame(render); return; }
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+      const now = performance.now();
+      const fs = fightStateRef.current;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#12121a"; ctx.fillRect(0, 0, W, H);
+
+      const ring = drawRing(ctx, W, H);
+      const fAx = ring.rl + ring.rw * 0.30, fAy = ring.rt + ring.rh * 0.55;
+      const fBx = ring.rl + ring.rw * 0.70, fBy = ring.rt + ring.rh * 0.55;
+
+      // Fighter animations
+      const animDur = 350;
+      const progA = fs.fighterA.animStart ? Math.min(1, (now - fs.fighterA.animStart) / animDur) : 1;
+      const progB = fs.fighterB.animStart ? Math.min(1, (now - fs.fighterB.animStart) / animDur) : 1;
+      const animA = progA >= 1 ? "idle" : fs.fighterA.anim;
+      const animB = progB >= 1 ? "idle" : fs.fighterB.anim;
+
+      drawFighter(ctx, fAx, fAy, "right", animA, progA, "rgba(180,155,90,0.85)", fs.hpA);
+      drawFighter(ctx, fBx, fBy, "left", animB, progB, "rgba(180,60,50,0.85)", fs.hpB);
+      drawHitParticles(ctx, fs.hitParticles, now);
+      fs.hitParticles = fs.hitParticles.filter(p => (now - p.born)/1000 < p.life);
+
+      const nameA = arenaMatchDetail?.a_username || me?.username || "You";
+      const nameB = arenaMatchDetail?.b_username || "Opponent";
+      drawCanvasBars(ctx, W, H, fs, nameA, nameB);
+
+      if (fs.showRoundCard) {
+        const rp = Math.min(1, (now - fs.roundCardStart) / 1200);
+        drawRoundCard(ctx, W, H, fs.roundCardNum, rp);
+      }
+      if (fs.koCountdown) {
+        const elapsed = (now - fs.koCountdown.start) / 1000;
+        const count = Math.min(10, Math.floor(elapsed * 1.2) + 1);
+        drawKOCountdown(ctx, W, H, count);
+      }
+
+      animFrameRef.current = requestAnimationFrame(render);
     };
-  }, [arenaFightResult]);
+    animFrameRef.current = requestAnimationFrame(render);
+    return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); };
+  }, [arenaMatchId, arenaMatchDetail, me]);
 
   // Auto-scroll commentary to bottom as new lines appear
   useEffect(() => {
@@ -820,80 +1172,102 @@ export default function Boxing3D() {
 
   const fightLogLines = liveCommentary.length > 0 ? liveCommentary : null;
 
-  const Bar=({val,flip,color})=>(
-    <div style={{height:5,background:"rgba(255,255,255,0.07)",borderRadius:2,overflow:"hidden"}}>
-      <div style={{width:`${val}%`,height:"100%",background:color,borderRadius:2,transition:"width 0.3s",marginLeft:flip?"auto":undefined}}/>
-    </div>
-  );
-
   if (arenaMatchId) {
     const nameA = arenaMatchDetail?.a_username || me?.username || "You";
     const nameB = arenaMatchDetail?.b_username || "Opponent";
     const m = arenaMatchDetail;
-    const nowMs = Date.now();
-    const nextRoundAtMs = m?.next_round_at ? new Date(m.next_round_at).getTime() : 0;
-    const countEndsAtMs = m?.count_ends_at ? new Date(m.count_ends_at).getTime() : 0;
-    const roundNum = m?.round ?? 0;
     const matchOver = m?.state === "finished" || gameState === "done";
-    const isBetweenRounds = !matchOver && m?.state === "running" && roundNum > 0 && nextRoundAtMs > nowMs;
-    const isCounting = !matchOver && m?.state === "counting" && countEndsAtMs > nowMs;
-    const secsToNextRound = isBetweenRounds ? Math.max(0, Math.ceil((nextRoundAtMs - nowMs) / 1000)) : 0;
-    const secsToCountEnd = isCounting ? Math.max(0, Math.ceil((countEndsAtMs - nowMs) / 1000)) : 0;
+    const showPostFight = matchOver && arenaFightResult && liveCommentary.length > 0;
+    const statsA = arenaFightResult?.stats?.a;
+    const statsB = arenaFightResult?.stats?.b;
+    const sc = arenaFightResult?.scorecard;
     return (
       <div className={styles.page} style={{height:"100vh",overflow:"hidden",fontFamily:"'Cinzel',serif",display:"flex",flexDirection:"column"}}>
-        <div className={styles.pageContent} style={{padding:"8px 12px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--noir-border-light)",minHeight:44}}>
-          <Link to="/boxing" className={styles.btnGoldDarkText} style={{padding:"10px 14px",minHeight:44,fontSize:10,textDecoration:"none",touchAction:"manipulation"}}>← Back to gym</Link>
-          <div style={{fontSize:12,letterSpacing:"0.12em",color:gold}}>{nameA} vs {nameB}</div>
-          <div style={{width:70}}/>
+        <div className={styles.pageContent} style={{padding:"6px 10px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--noir-border-light)",minHeight:40}}>
+          <Link to="/boxing" className={styles.btnGoldDarkText} style={{padding:"8px 12px",minHeight:40,fontSize:10,textDecoration:"none",touchAction:"manipulation"}}>← Back</Link>
+          <div style={{fontSize:11,letterSpacing:"0.12em",color:gold}}>{nameA} vs {nameB}</div>
+          <div style={{display:"flex",gap:3}}>
+            {[1,2,4].map(s=>(
+              <button key={s} onClick={()=>setSpeedMult(s)} style={{
+                padding:"6px 10px",minHeight:36,fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,
+                background: speedMult===s ? "rgba(201,168,76,0.25)" : "rgba(255,255,255,0.03)",
+                color: speedMult===s ? "#f0e0b0" : "#8a7a5a", cursor:"pointer", touchAction:"manipulation",
+              }}>x{s}</button>
+            ))}
+          </div>
         </div>
-        <div style={{flex:1,minHeight:0,position:"relative",display:"flex",flexDirection:"column",touchAction:"manipulation",background:"#181822"}}>
-          <div style={{flex:1,overflow:"auto",padding:"12px 14px",fontSize:11,lineHeight:1.5,color:"#e0d0b0"}}>
-            {!arenaFightResult && (
-              <div style={{textAlign:"center",color:"var(--noir-muted)",paddingTop:24}}>Simulating fight…</div>
-            )}
-            {arenaFightResult && liveCommentary.length === 0 && (
-              <div style={{textAlign:"center",color:"var(--noir-muted)",paddingTop:24}}>Live commentary…</div>
-            )}
+        <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",background:"#12121a"}}>
+          <div style={{position:"relative",width:"100%",maxWidth:720,margin:"0 auto",aspectRatio:"16/9",flexShrink:0}}>
+            <canvas ref={canvasRef} width={640} height={360}
+              style={{width:"100%",height:"100%",display:"block",borderBottom:"1px solid rgba(201,168,76,0.15)"}}
+            />
+          </div>
+          <div style={{flex:1,overflow:"auto",padding:"8px 12px",fontSize:10,lineHeight:1.5,color:"#e0d0b0",minHeight:0}}>
+            {!arenaFightResult && <div style={{textAlign:"center",color:"var(--noir-muted)",paddingTop:12}}>Simulating fight…</div>}
+            {arenaFightResult && liveCommentary.length === 0 && <div style={{textAlign:"center",color:"var(--noir-muted)",paddingTop:12}}>Live commentary…</div>}
             {fightLogLines && fightLogLines.map((item, i) => (
-              <div
-                key={i}
-                style={{
-                  marginBottom: item.type === "round" ? 8 : 2,
-                  fontWeight: item.type === "round" ? 700 : 400,
-                  color: item.type === "round" ? gold : item.type === "kd" ? "#ff8888" : item.type === "cut" ? "#cc6666" : item.type === "result" ? gold : "#c8b898",
-                  fontSize: item.type === "round" ? 12 : item.type === "result" ? 12 : 11,
-                }}
-              >
-                {item.text}
-              </div>
+              <div key={i} style={{
+                marginBottom: item.type === "round" ? 6 : 1,
+                fontWeight: item.type === "round" ? 700 : 400,
+                color: item.type === "round" ? gold
+                  : item.type === "kd" ? "#ff8888"
+                  : item.type === "cut" || item.type === "cutWarn" ? "#cc6666"
+                  : item.type === "combo" ? "#ffcc44"
+                  : item.type === "clinch" ? "#88aacc"
+                  : item.type === "corner" ? "#8aaa6a"
+                  : item.type === "roundEnd" ? "#aa9a6a"
+                  : item.type === "result" ? gold
+                  : "#c8b898",
+                fontSize: item.type === "round" ? 11 : item.type === "result" ? 11 : 10,
+                fontStyle: item.type === "corner" ? "italic" : undefined,
+              }}>{item.text}</div>
             ))}
             <div ref={commentaryEndRef} />
           </div>
-          <div style={{padding:"8px 10px 10px",paddingBottom:"max(10px, env(safe-area-inset-bottom))",background:"linear-gradient(transparent,rgba(0,0,0,0.92))",flexShrink:0,borderTop:"1px solid var(--noir-border-light)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:640,margin:"0 auto",gap:8}}>
-              <div style={{width:90,fontSize:9,color:gold}}>{nameA}</div>
-              <div style={{flex:1,padding:"0 8px",minWidth:0}}>
-                <Bar val={hpA} flip={false} color={gold} />
-                <div style={{fontSize:8,color:"var(--noir-muted)",marginTop:1}}>HP {hpA}/100</div>
-              </div>
-              <div style={{fontSize:10,color:"var(--noir-primary)",minWidth:44,textAlign:"center"}}>R{round}/12</div>
-              <div style={{flex:1,padding:"0 8px",minWidth:0}}>
-                <Bar val={hpB} flip={true} color={crimson} />
-                <div style={{fontSize:8,color:"var(--noir-muted)",marginTop:1,textAlign:"right"}}>HP {hpB}/100</div>
-              </div>
-              <div style={{width:90,fontSize:9,color:crimson,textAlign:"right"}}>{nameB}</div>
-            </div>
-            {winText && <div style={{fontSize:11,color:gold,textAlign:"center",marginTop:4,fontWeight:700}}>{winText}</div>}
-            {matchOver && arenaServerResult && (() => {
-              const winnerName = arenaServerResult.winner === m?.a_id ? nameA : nameB;
-              const reasonStr = (arenaServerResult.finish_reason || "decision").replace(/_/g, " ");
-              return (
-                <div style={{fontSize:10,color:"#a09070",textAlign:"center",marginTop:2}}>
-                  Official result: {winnerName} wins by {reasonStr}
+          {showPostFight && (
+            <div style={{flexShrink:0,padding:"10px 14px",paddingBottom:"max(10px, env(safe-area-inset-bottom))",borderTop:"1px solid rgba(201,168,76,0.2)",background:"rgba(0,0,0,0.6)"}}>
+              {winText && <div style={{fontSize:12,color:gold,textAlign:"center",fontWeight:700,marginBottom:6}}>{winText}</div>}
+              {matchOver && arenaServerResult && (() => {
+                const wn = arenaServerResult.winner === m?.a_id ? nameA : nameB;
+                const rs = (arenaServerResult.finish_reason || "decision").replace(/_/g, " ");
+                return <div style={{fontSize:9,color:"#a09070",textAlign:"center",marginBottom:6}}>Official: {wn} wins by {rs}</div>;
+              })()}
+              {statsA && statsB && (
+                <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:4,fontSize:9,color:"#d0c090",maxWidth:420,margin:"0 auto"}}>
+                  <div style={{textAlign:"right"}}>{statsA.landed}/{statsA.thrown} ({statsA.thrown?Math.round(statsA.landed/statsA.thrown*100):0}%)</div>
+                  <div style={{textAlign:"center",color:"#7a6a4a"}}>Punches</div>
+                  <div>{statsB.landed}/{statsB.thrown} ({statsB.thrown?Math.round(statsB.landed/statsB.thrown*100):0}%)</div>
+                  <div style={{textAlign:"right"}}>{statsA.dmg}</div>
+                  <div style={{textAlign:"center",color:"#7a6a4a"}}>Total Dmg</div>
+                  <div>{statsB.dmg}</div>
+                  <div style={{textAlign:"right"}}>{statsA.kds}</div>
+                  <div style={{textAlign:"center",color:"#7a6a4a"}}>Knockdowns</div>
+                  <div>{statsB.kds}</div>
                 </div>
-              );
-            })()}
-          </div>
+              )}
+              {sc && sc.a.length > 0 && (
+                <div style={{marginTop:6,maxWidth:420,margin:"6px auto 0"}}>
+                  <div style={{fontSize:9,color:"#7a6a4a",textAlign:"center",marginBottom:2}}>Scorecard</div>
+                  <div style={{display:"flex",justifyContent:"center",gap:4,flexWrap:"wrap",fontSize:9}}>
+                    {sc.a.map((sa, ri) => (
+                      <div key={ri} style={{textAlign:"center",padding:"2px 4px",background:"rgba(255,255,255,0.03)",borderRadius:2,minWidth:28}}>
+                        <div style={{color:"#7a6a4a"}}>R{ri+1}</div>
+                        <div style={{color:sa > sc.b[ri] ? gold : sa < sc.b[ri] ? crimson : "#888"}}>{sa}-{sc.b[ri]}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{textAlign:"center",fontSize:10,color:gold,marginTop:4}}>
+                    {sc.a.reduce((s,v)=>s+v,0)} - {sc.b.reduce((s,v)=>s+v,0)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {!showPostFight && winText && (
+            <div style={{flexShrink:0,padding:"6px 10px",paddingBottom:"max(6px, env(safe-area-inset-bottom))",borderTop:"1px solid rgba(201,168,76,0.2)",background:"rgba(0,0,0,0.5)",textAlign:"center"}}>
+              <div style={{fontSize:11,color:gold,fontWeight:700}}>{winText}</div>
+            </div>
+          )}
         </div>
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');

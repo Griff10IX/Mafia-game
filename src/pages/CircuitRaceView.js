@@ -1053,13 +1053,15 @@ export default function CircuitRaceView({
           const lapTime = track.lapBase / effSpeed;
           const advance = (1.0 / lapTime) * dt * 0.18;
           r.trackPos = (r.trackPos + advance + 1) % 1;
-          r.currentSpeedKmh = track.km && track.lapBase ? (3600 * track.km * 0.18 * effSpeed) / track.lapBase : null;
+          const rawKmh = track.km && track.lapBase ? (3600 * track.km * 0.18 * effSpeed) / track.lapBase : null;
+          r.currentSpeedKmh = rawKmh == null ? null : Math.max(0, Math.min(410, rawKmh));
         } else {
           r.slideOffUntil = 0;
           const lapTime = track.lapBase / effSpeed;
           const advance = (1.0 / lapTime) * dt * cornerMult;
           r.trackPos = (r.trackPos + advance + 1) % 1;
-          r.currentSpeedKmh = track.km && track.lapBase ? (3600 * track.km * cornerMult * effSpeed) / track.lapBase : null;
+          const rawKmh = track.km && track.lapBase ? (3600 * track.km * cornerMult * effSpeed) / track.lapBase : null;
+          r.currentSpeedKmh = rawKmh == null ? null : Math.max(0, Math.min(410, rawKmh));
           if (curvature > 0.10 && effectiveGrip < 0.82 && Math.random() < dt * 2.2 * (0.85 - effectiveGrip) * Math.min(1, curvature / 0.18)) {
             r.slideOffUntil = nowSec + 0.5 + Math.random() * 0.6;
             addIncident(`${r.name} off track!`);
