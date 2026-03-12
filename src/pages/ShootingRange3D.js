@@ -6,343 +6,307 @@ import api from "../utils/api";
 import { toast } from "sonner";
 import styles from "../styles/noir.module.css";
 
-const ROUND_DURATION_SEC = 60;
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────────────────────────────────────
+const ROUND_DURATION_SEC  = 60;
 const MAX_HITS_FOR_MASTERY = 30;
-const BULLET_SPEED = 120;
-const BULLET_MAX_DIST = 35;
-const MUZZLE_FLASH_DURATION = 0.06;
-const TARGET_SPAWN_DELAY_MIN = 0.4;
-const TARGET_SPAWN_DELAY_MAX = 1.4;
-const RANGE_LENGTH = 28;
-const BACK_WALL_Z = -RANGE_LENGTH;
-const TARGET_RADIUS = 0.42;
+const BULLET_SPEED        = 110;
+const BULLET_MAX_DIST     = 36;
+const TARGET_RADIUS       = 0.80;   // big enough to be satisfying
+const TARGET_LIFETIME     = 2.8;    // seconds before it vanishes
+const TARGET_WARN_AT      = 0.9;    // seconds left when it starts pulsing red
+const RANGE_LENGTH        = 28;
+const BACK_WALL_Z         = -RANGE_LENGTH;
+const MAX_AMMO            = 8;
+const RELOAD_SECS         = 1.4;
+const MUZZLE_FLASH_DUR    = 0.06;
 
-function makeBrickTexture() {
-  const size = 512;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  const brickW = 64;
-  const brickH = 24;
-  const mortar = 3;
-  ctx.fillStyle = "#7a6f65";
-  ctx.fillRect(0, 0, size, size);
-  for (let row = 0; row < 22; row++) {
-    for (let col = 0; col < 10; col++) {
-      const x = col * (brickW + mortar) + (row % 2) * ((brickW + mortar) / 2);
-      const y = row * (brickH + mortar);
-      ctx.fillStyle = "#b8956e";
-      ctx.fillRect(x + mortar / 2, y + mortar / 2, brickW, brickH);
-      ctx.fillStyle = "#a08060";
-      ctx.fillRect(x + mortar / 2 + 4, y + mortar / 2 + 4, brickW - 8, brickH - 8);
+// Scoring zones — inner → outer
+const ZONES = [
+  { frac: 0.14, pts: 10, label: "✦ Bullseye!",  popColor: "#ffe04a" },
+  { frac: 0.30, pts:  7, label: "Inner Ring",    popColor: "#ff8844" },
+  { frac: 0.50, pts:  5, label: "Centre",        popColor: "#ee5544" },
+  { frac: 0.70, pts:  3, label: "Mid Ring",       popColor: "#c9a460" },
+  { frac: 1.00, pts:  1, label: "Outer Ring",    popColor: "#a08040" },
+];
+
+// Target movement patterns
+const MOVE_PATTERNS = ["pendulum", "drift", "figure8", "circle"];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROCEDURAL TEXTURES
+// ─────────────────────────────────────────────────────────────────────────────
+function makeBrickTex(mobile) {
+  const sz = mobile ? 256 : 512;
+  const c = document.createElement("canvas"); c.width = c.height = sz;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#3a2518"; ctx.fillRect(0, 0, sz, sz);
+  const bw = 56, bh = 22, mt = 3;
+  for (let row = 0; row < 26; row++) {
+    for (let col = 0; col < 11; col++) {
+      const x = col*(bw+mt) + (row%2)*((bw+mt)/2), y = row*(bh+mt);
+      const sh = Math.floor(Math.random()*28);
+      ctx.fillStyle = `rgb(${118+sh},${72+sh},${46+sh})`;
+      ctx.fillRect(x+mt/2, y+mt/2, bw, bh);
+      ctx.fillStyle = "rgba(0,0,0,0.13)";
+      ctx.fillRect(x+mt/2, y+mt/2+bh-3, bw, 3);
     }
   }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(1.5, 0.8);
-  if (typeof tex.colorSpace !== 'undefined') tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2.5, 1.6);
+  return t;
 }
 
-function makeTileTexture() {
-  const size = 128;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  const tile = 32;
-  const light = "#e8dcc8";
-  const dark = "#8b7355";
-  for (let i = 0; i < 4; i++) {
-    for (let j = 0; j < 4; j++) {
-      ctx.fillStyle = (i + j) % 2 === 0 ? light : dark;
-      ctx.fillRect(i * tile, j * tile, tile, tile);
-    }
+function makeCobblestoneTex(mobile) {
+  const sz = mobile ? 128 : 256;
+  const c = document.createElement("canvas"); c.width = c.height = sz;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#2a221a"; ctx.fillRect(0, 0, sz, sz);
+  for (let i = 0; i < 80; i++) {
+    const x = Math.random()*sz, y = Math.random()*sz;
+    const rx = 12+Math.random()*7, ry = 9+Math.random()*5;
+    ctx.beginPath(); ctx.ellipse(x,y,rx,ry,Math.random()*Math.PI,0,Math.PI*2);
+    const s = 95+Math.floor(Math.random()*38);
+    ctx.fillStyle = `rgb(${s},${s-10},${s-18})`; ctx.fill();
+    ctx.strokeStyle = "rgba(28,18,10,0.8)"; ctx.lineWidth = 1.4; ctx.stroke();
   }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(5, 7);
-  if (typeof tex.colorSpace !== 'undefined') tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 5);
+  return t;
 }
 
-function makeShootingRangeSignTexture() {
-  const w = 512;
-  const h = 128;
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  ctx.fillStyle = "#e8e0d4";
-  ctx.fillRect(0, 0, w, h);
-  ctx.font = "bold 48px Arial";
-  ctx.fillStyle = "#5c4a3a";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("SHOOTING RANGE", w / 2, h / 2);
-  const tex = new THREE.CanvasTexture(canvas);
-  if (typeof tex.colorSpace !== 'undefined') tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+function makeWoodTex() {
+  const sz = 256;
+  const c = document.createElement("canvas"); c.width = c.height = sz;
+  const ctx = c.getContext("2d");
+  const g = ctx.createLinearGradient(0,0,sz,0);
+  g.addColorStop(0,"#5a3a1a"); g.addColorStop(0.5,"#7a5028"); g.addColorStop(1,"#5a3a1a");
+  ctx.fillStyle = g; ctx.fillRect(0,0,sz,sz);
+  for (let i = 0; i < 28; i++) {
+    ctx.strokeStyle = `rgba(28,12,4,${0.06+Math.random()*0.08})`; ctx.lineWidth = 1+Math.random()*2;
+    ctx.beginPath(); ctx.moveTo(0, i*(sz/28));
+    ctx.bezierCurveTo(sz/3,(i+.5)*(sz/28), 2*sz/3,(i+.4)*(sz/28), sz, i*(sz/28));
+    ctx.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 3);
+  return t;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TARGET MESH BUILDER
+// ─────────────────────────────────────────────────────────────────────────────
 function createTargetMesh() {
-  const group = new THREE.Group();
+  const g = new THREE.Group();
   const R = TARGET_RADIUS;
-  // Paper/cardboard backing
-  const backGeo = new THREE.CylinderGeometry(R * 1.08, R * 1.08, 0.03, 32);
-  const backMat = new THREE.MeshStandardMaterial({ color: 0xd4c8b8, roughness: 0.95, metalness: 0 });
-  const back = new THREE.Mesh(backGeo, backMat);
-  back.rotation.x = Math.PI / 2;
-  group.add(back);
+
+  // Cardboard backing
+  const back = new THREE.Mesh(
+    new THREE.CylinderGeometry(R*1.10, R*1.10, 0.03, 32),
+    new THREE.MeshStandardMaterial({ color: 0xd4c8a8, roughness: 0.95 })
+  );
+  back.rotation.x = Math.PI/2; g.add(back);
+
+  // Zone rings outer→inner
+  const zoneColors = [0x1a1208, 0xf0e8d0, 0xcc3322, 0xff6a2a, 0xffe04a];
   let z = 0.018;
-  // Concentric rings – paper bullseye style (outer to inner)
-  const rings = [
-    { r: R, color: 0xfaf6ed },
-    { r: R * 0.88, color: 0x1a1a1a },
-    { r: R * 0.76, color: 0xfaf6ed },
-    { r: R * 0.64, color: 0x1a1a1a },
-    { r: R * 0.52, color: 0xfaf6ed },
-    { r: R * 0.40, color: 0xd32f2f },
-    { r: R * 0.28, color: 0x1a1a1a },
-    { r: R * 0.16, color: 0xffeb3b },
-  ];
-  rings.forEach(({ r, color }) => {
-    const geo = new THREE.CircleGeometry(r, 32);
-    const mat = new THREE.MeshBasicMaterial({ color });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.z = z;
-    z += 0.004;
-    group.add(mesh);
+  zoneColors.forEach((color, i) => {
+    const frac = ZONES[ZONES.length-1-i].frac;
+    const m = new THREE.Mesh(
+      new THREE.CircleGeometry(R * frac, 40),
+      new THREE.MeshBasicMaterial({ color })
+    );
+    m.position.z = z; z += 0.005; g.add(m);
   });
-  return group;
+
+  // Subtle white ring dividers
+  [0.30, 0.50, 0.70, 1.00].forEach(frac => {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(R*frac-0.012, R*frac, 36),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.22, side: THREE.DoubleSide })
+    );
+    ring.position.z = z; z += 0.001; g.add(ring);
+  });
+
+  // Gold outer border
+  const border = new THREE.Mesh(
+    new THREE.RingGeometry(R*1.02, R*1.10, 36),
+    new THREE.MeshBasicMaterial({ color: 0xc9a030, transparent: true, opacity: 0.65 })
+  );
+  border.position.z = 0.015; g.add(border);
+
+  // Mounting rod
+  const rod = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.018, 0.018, 0.65, 6),
+    new THREE.MeshPhongMaterial({ color: 0x3a2810, shininess: 20 })
+  );
+  rod.position.set(0, -(R+0.32), 0.02); g.add(rod);
+
+  return g;
 }
 
-function buildLongRangeScene(scene) {
-  const floorLen = RANGE_LENGTH + 6;
-  const corridorWidth = 4;
-  const textures = [];
+// ─────────────────────────────────────────────────────────────────────────────
+// GUN MODEL
+// ─────────────────────────────────────────────────────────────────────────────
+function createGunModel(woodTex) {
+  const g = new THREE.Group();
+  const gM = new THREE.MeshStandardMaterial({ color: 0x1e1e1e, metalness: 0.75, roughness: 0.3 });
+  const wM = new THREE.MeshStandardMaterial({ color: 0x4a3020, metalness: 0.05, roughness: 0.9, map: woodTex });
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.020, 0.52, 12), gM);
+  barrel.rotation.x = Math.PI/2; barrel.position.set(0.32, 0, 0); g.add(barrel);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.055, 0.26), gM); body.position.set(0.18, -0.018, 0); g.add(body);
+  const stck = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.11, 0.24), wM); stck.position.set(-0.06, -0.04, -0.04); g.add(stck);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.075, 0.04), gM); grip.position.set(0.14, -0.08, 0.02); g.add(grip);
+  const fs = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.018, 0.008), gM); fs.position.set(0.37, 0.022, 0); g.add(fs);
+  g.position.set(0.22, -0.28, -0.54);
+  g.rotation.order = "YXZ"; g.rotation.y = 0.022; g.rotation.x = 0.05;
+  return g;
+}
 
-  const brickTex = makeBrickTexture();
-  if (brickTex) textures.push(brickTex);
-  const tileTex = makeTileTexture();
-  if (tileTex) textures.push(tileTex);
-  const signTex = makeShootingRangeSignTexture();
-  if (signTex) textures.push(signTex);
+// ─────────────────────────────────────────────────────────────────────────────
+// BUILD SCENE
+// ─────────────────────────────────────────────────────────────────────────────
+function buildScene(scene, mobile, woodTex, brickTex, cobbleTex) {
+  const ph  = (c, s=15, map=null) => new THREE.MeshPhongMaterial({ color:c, shininess:s, ...(map?{map}:{}) });
+  const lmt = (c) => new THREE.MeshLambertMaterial({ color:c });
 
-  // Floor – checkerboard tiles
-  const floorGeo = new THREE.PlaneGeometry(corridorWidth + 1, floorLen);
-  const floorMat = new THREE.MeshStandardMaterial({
-    ...(tileTex && { map: tileTex }),
-    color: 0x585a54,
-    roughness: 0.9,
-    metalness: 0.05,
+  // Floor
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(5.5, RANGE_LENGTH+6), ph(0x5a4a38, 4, cobbleTex));
+  floor.rotation.x = -Math.PI/2; floor.position.set(0, 0, -RANGE_LENGTH/2-1);
+  floor.receiveShadow = true; scene.add(floor);
+
+  // Side walls
+  const wallMat = ph(0x7a5a40, 6, brickTex);
+  const wallL = new THREE.Mesh(new THREE.PlaneGeometry(RANGE_LENGTH+2, 3.4), wallMat);
+  wallL.rotation.y = Math.PI/2; wallL.position.set(-2.6, 1.7, -RANGE_LENGTH/2); wallL.receiveShadow = true; scene.add(wallL);
+  const wallR = wallL.clone(); wallR.rotation.y = -Math.PI/2; wallR.position.x = 2.6; scene.add(wallR);
+
+  // Ceiling
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(5.5, RANGE_LENGTH+6), ph(0x2a1a0c, 3, woodTex));
+  ceil.rotation.x = Math.PI/2; ceil.position.set(0, 3.1, -RANGE_LENGTH/2-1); scene.add(ceil);
+
+  // Back wall
+  const backWall = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 3.4), ph(0xa09070, 8));
+  backWall.position.set(0, 1.7, BACK_WALL_Z); backWall.receiveShadow = true; scene.add(backWall);
+
+  // Target frame
+  const frPostM = ph(0x5a3c1e, 8, woodTex);
+  [-1.2, 1.2].forEach(x => {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(0.09, 2.6, 0.09), frPostM);
+    p.position.set(x, 1.3, BACK_WALL_Z+0.12); if (!mobile) p.castShadow = true; scene.add(p);
   });
-  const floor = new THREE.Mesh(floorGeo, floorMat);
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(0, 0, -floorLen / 2 - 1);
-  floor.receiveShadow = true;
-  scene.add(floor);
+  const crossbar = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.09, 0.09), frPostM);
+  crossbar.position.set(0, 2.5, BACK_WALL_Z+0.12); scene.add(crossbar);
 
-  // Side walls – brick
-  const wallGeo = new THREE.PlaneGeometry(floorLen, 3.5);
-  const wallMat = new THREE.MeshStandardMaterial({
-    ...(brickTex && { map: brickTex }),
-    color: 0x6a6d68,
-    roughness: 0.9,
-    metalness: 0.0,
+  // Rope pulleys
+  const brassM = new THREE.MeshPhongMaterial({ color: 0x8a6a30, shininess: 60 });
+  [-1.2, 1.2].forEach(x => {
+    const pul = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.016, 8, 20), brassM);
+    pul.rotation.x = Math.PI/2; pul.position.set(x, 2.5, BACK_WALL_Z+0.14); scene.add(pul);
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.9, 4), lmt(0x5a4020));
+    rope.position.set(x, 2.0, BACK_WALL_Z+0.12); scene.add(rope);
   });
-  const leftWall = new THREE.Mesh(wallGeo, wallMat);
-  leftWall.rotation.y = Math.PI / 2;
-  leftWall.position.set(-corridorWidth / 2 - 0.5, 1.4, -floorLen / 2 - 1);
-  leftWall.receiveShadow = true;
-  scene.add(leftWall);
-  const rightWall = new THREE.Mesh(wallGeo, wallMat);
-  rightWall.rotation.y = -Math.PI / 2;
-  rightWall.position.set(corridorWidth / 2 + 0.5, 1.4, -floorLen / 2 - 1);
-  rightWall.receiveShadow = true;
-  scene.add(rightWall);
 
-  // "SHOOTING RANGE" sign on left wall (small panel)
-  if (signTex) {
-    const signGeo = new THREE.PlaneGeometry(2.2, 0.5);
-    const signMat = new THREE.MeshStandardMaterial({
-      map: signTex,
-      transparent: true,
-      opacity: 0.95,
-      roughness: 0.8,
-      metalness: 0,
-      side: THREE.DoubleSide,
-    });
-    const sign = new THREE.Mesh(signGeo, signMat);
-    sign.rotation.y = -Math.PI / 2;
-    sign.position.set(-corridorWidth / 2 - 0.48, 2.4, -6);
-    scene.add(sign);
-  }
+  // Target board backing
+  const targetBoard = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 2.2), ph(0xd8ceb0, 5));
+  targetBoard.position.set(0, 1.3, BACK_WALL_Z+0.15); scene.add(targetBoard);
 
-  // Ceiling beams (dark metal rails)
-  const beamGeo = new THREE.BoxGeometry(floorLen + 2, 0.12, 0.2);
-  const beamMat = new THREE.MeshStandardMaterial({ color: 0x2a2a28, metalness: 0.5, roughness: 0.5 });
+  // Ceiling beams
   for (let i = 0; i < 5; i++) {
-    const beam = new THREE.Mesh(beamGeo, beamMat);
-    beam.position.set(0, 2.95, -floorLen / 2 - 1 + i * (floorLen / 4));
-    beam.rotation.x = Math.PI / 2;
-    beam.receiveShadow = true;
-    scene.add(beam);
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.14, 0.14), ph(0x2a1a0a, 5, woodTex));
+    beam.position.set(0, 3.04, -RANGE_LENGTH/2 + i*(RANGE_LENGTH/4));
+    if (!mobile) beam.castShadow = true; scene.add(beam);
   }
 
-  // Back wall – light grey concrete (like reference)
-  const wallFullGeo = new THREE.PlaneGeometry(corridorWidth + 2, 4);
-  const wallFullMat = new THREE.MeshStandardMaterial({
-    color: 0xb8b8b0,
-    roughness: 0.85,
-    metalness: 0.0,
+  // Barrel prop
+  const barrelG = new THREE.Group();
+  const barBody = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.52, 16), ph(0x5a3a18, 8, woodTex));
+  barrelG.add(barBody);
+  [-0.16, 0.16].forEach(y => {
+    const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.018, 8, 24), new THREE.MeshPhongMaterial({ color: 0x5a4018, shininess: 40 }));
+    hoop.rotation.x = Math.PI/2; hoop.position.y = y; barrelG.add(hoop);
   });
-  const backWall = new THREE.Mesh(wallFullGeo, wallFullMat);
-  backWall.position.set(0, 1.5, BACK_WALL_Z);
-  backWall.receiveShadow = true;
-  scene.add(backWall);
+  barrelG.position.set(-2.1, 0.26, -3); scene.add(barrelG);
 
-  // Target board (paper/cardboard – cream tone)
-  const boardWidth = 3.5;
-  const boardHeight = 2.2;
-  const boardGeo = new THREE.PlaneGeometry(boardWidth, boardHeight);
-  const boardMat = new THREE.MeshStandardMaterial({
-    color: 0xd8d0c0,
-    roughness: 0.9,
-    metalness: 0.0,
-  });
-  const targetBoard = new THREE.Mesh(boardGeo, boardMat);
-  targetBoard.position.set(0, 1.5, BACK_WALL_Z + 0.02);
-  targetBoard.receiveShadow = true;
-  scene.add(targetBoard);
+  // Ambient haze particles
+  const hazeArr = [];
+  for (let i = 0; i < (mobile ? 80 : 200); i++)
+    hazeArr.push((Math.random()-0.5)*5, 0.2+Math.random()*2.8, -Math.random()*RANGE_LENGTH);
+  const hazeGeo = new THREE.BufferGeometry();
+  hazeGeo.setAttribute("position", new THREE.Float32BufferAttribute(hazeArr, 3));
+  const hazeMesh = new THREE.Points(hazeGeo, new THREE.PointsMaterial({ color: 0xc0a880, size: 0.08, transparent: true, opacity: 0.10 }));
+  scene.add(hazeMesh);
 
-  const target = createTargetMesh();
-  target.visible = false;
-  target.position.z = BACK_WALL_Z + 0.12;
-  target.children.forEach((c) => {
-    if (c.isMesh) c.castShadow = true;
-  });
-  scene.add(target);
-
-  return { target, floor, backWall, textures };
+  return { hazeMesh };
 }
 
-function createBulletMesh() {
-  const geo = new THREE.SphereGeometry(0.018, 8, 8);
-  const mat = new THREE.MeshStandardMaterial({ color: 0xc9a227, metalness: 0.6, roughness: 0.4 });
-  return new THREE.Mesh(geo, mat);
-}
-
-function createMuzzleFlash() {
-  const geo = new THREE.SphereGeometry(0.08, 10, 10);
-  const mat = new THREE.MeshBasicMaterial({ color: 0xffaa22, transparent: true, opacity: 0.9 });
-  return new THREE.Mesh(geo, mat);
-}
-
-function createGunModel() {
-  const group = new THREE.Group();
-  const gunMat = new THREE.MeshStandardMaterial({
-    color: 0x2a2a2a,
-    metalness: 0.7,
-    roughness: 0.35,
-  });
-  const woodMat = new THREE.MeshStandardMaterial({
-    color: 0x4a3828,
-    metalness: 0.1,
-    roughness: 0.85,
-  });
-  const barrel = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.02, 0.022, 0.5, 12),
-    gunMat
-  );
-  barrel.rotation.x = Math.PI / 2;
-  barrel.position.set(0.35, 0, 0);
-  group.add(barrel);
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(0.08, 0.06, 0.25),
-    gunMat
-  );
-  body.position.set(0.2, -0.02, 0);
-  group.add(body);
-  const stock = new THREE.Mesh(
-    new THREE.BoxGeometry(0.06, 0.12, 0.22),
-    woodMat
-  );
-  stock.position.set(-0.08, -0.04, -0.05);
-  group.add(stock);
-  const grip = new THREE.Mesh(
-    new THREE.BoxGeometry(0.04, 0.08, 0.04),
-    gunMat
-  );
-  grip.position.set(0.15, -0.08, 0.02);
-  group.add(grip);
-  group.position.set(0.22, -0.28, -0.55);
-  group.rotation.order = "YXZ";
-  group.rotation.y = 0.02;
-  group.rotation.x = 0.05;
-  return group;
-}
-
-function randomTargetPosition() {
-  return {
-    x: -1.4 + Math.random() * 2.8,
-    y: 0.6 + Math.random() * 1.6,
-  };
-}
-
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPONENT
+// ─────────────────────────────────────────────────────────────────────────────
 export default function ShootingRange3D() {
   const canvasRef = useRef(null);
-  const refs = useRef({
-    scene: null,
-    camera: null,
-    renderer: null,
-    target: null,
-    bullets: [],
-    raycaster: null,
-    mouse: new THREE.Vector2(),
-    muzzleFlash: null,
-    muzzleFlashEnd: 0,
-    nextSpawnAt: 0,
+
+  // Three.js refs — never trigger re-renders
+  const r = useRef({
+    renderer: null, scene: null, camera: null,
+    target: null, gun: null,
+    bullets: [], bulletGroup: null,
+    muzzleFlash: null, muzzleLight: null,
+    lampLights: [],
+    hazeMesh: null, smokePts: null, smokeGeo: null, SMOKE_COUNT: 0,
+    holeGroup: null, holeCount: 0,
+    // game state (mutable, read in rAF)
+    phase: "idle",          // idle | playing | done
+    score: 0,
+    ammo: MAX_AMMO,
+    isReloading: false,
+    reloadEnd: 0,
     roundEndAt: 0,
+    flashEnd: 0,
+    // target movement
+    targetVisible: false,
+    targetSpawnedAt: 0,
+    targetLifetime: TARGET_LIFETIME,
+    targetPattern: "pendulum",
+    targetOriginX: 0,
+    targetOriginY: 0,
+    targetPhase: 0,
+    nextSpawnAt: 0,
+    raf: null,
   });
-  const scoreRef = useRef(0);
+
+  // React state — only what drives re-renders
   const { weaponId: routeWeaponId } = useParams();
   const navigate = useNavigate();
+  const [masteryData, setMasteryData]   = useState(null);
+  const [weaponsList, setWeaponsList]   = useState([]);
+  const [weaponId, setWeaponId]         = useState(routeWeaponId || "");
+  const [gamePhase, setGamePhase]       = useState("idle");
+  const [score, setScore]               = useState(0);
+  const [timeLeft, setTimeLeft]         = useState(ROUND_DURATION_SEC);
+  const [ammoState, setAmmoState]       = useState(MAX_AMMO);
+  const [isReloading, setIsReloading]   = useState(false);
+  const [sceneReady, setSceneReady]     = useState(false);
+  const [sceneError, setSceneError]     = useState(null);
+  const [popInfo, setPopInfo]           = useState(null); // { pts, label, color, key }
+  const [zoneLabel, setZoneLabel]       = useState(null);
+  const [reloadAnim, setReloadAnim]     = useState(false);
+  const [targetUrgent, setTargetUrgent] = useState(false);
 
-  const [masteryData, setMasteryData] = useState(null);
-  const [weaponsList, setWeaponsList] = useState([]);
-  const [weaponId, setWeaponId] = useState(routeWeaponId || "");
-  const [gamePhase, setGamePhase] = useState("idle");
-  const [timeLeft, setTimeLeft] = useState(ROUND_DURATION_SEC);
-  const [score, setScore] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [sceneReady, setSceneReady] = useState(false);
-  const [sceneError, setSceneError] = useState(null);
-  const gamePhaseRef = useRef(gamePhase);
-  useEffect(() => {
-    gamePhaseRef.current = gamePhase;
-  }, [gamePhase]);
+  const gamePhaseRef = useRef("idle");
+  useEffect(() => { gamePhaseRef.current = gamePhase; }, [gamePhase]);
 
   const fetchMastery = useCallback(async () => {
-    try {
-      const res = await api.get("/shooting-range/mastery");
-      setMasteryData(res.data);
-    } catch {
-      setMasteryData(null);
-    }
+    try { const res = await api.get("/shooting-range/mastery"); setMasteryData(res.data); }
+    catch { setMasteryData(null); }
   }, []);
 
-  useEffect(() => {
-    fetchMastery();
-  }, [fetchMastery]);
+  useEffect(() => { fetchMastery(); }, [fetchMastery]);
 
   useEffect(() => {
     let cancelled = false;
-    api.get("/weapons").then((res) => {
+    api.get("/weapons").then(res => {
       if (!cancelled && Array.isArray(res.data)) setWeaponsList(res.data);
     }).catch(() => { if (!cancelled) setWeaponsList([]); });
     return () => { cancelled = true; };
@@ -352,250 +316,482 @@ export default function ShootingRange3D() {
     if (routeWeaponId && !weaponId) setWeaponId(routeWeaponId);
   }, [routeWeaponId, weaponId]);
 
-  useEffect(() => {
-    scoreRef.current = score;
-  }, [score]);
+  const ownedGuns = masteryData?.weapons?.filter(w =>
+    w.id !== "weapon1" && weaponsList.some(x => x.id === w.id && x.owned)
+  ) || [];
+  const canPlay = ownedGuns.some(w => w.id === weaponId);
 
-  const ownedGuns = masteryData?.weapons?.filter((w) => w.id !== "weapon1" && weaponsList.some((x) => x.id === w.id && x.owned)) || [];
-
-  const startRound = useCallback(() => {
-    setGamePhase("playing");
-    gamePhaseRef.current = "playing";
-    setTimeLeft(ROUND_DURATION_SEC);
-    setScore(0);
-    const r = refs.current;
-    r.roundEndAt = performance.now() / 1000 + ROUND_DURATION_SEC;
-    r.nextSpawnAt = 0;
-    if (r.target) {
-      const pos = randomTargetPosition();
-      r.target.position.x = pos.x;
-      r.target.position.y = pos.y;
-      r.target.visible = true;
-      r.nextSpawnAt = performance.now() / 1000 + TARGET_SPAWN_DELAY_MIN + Math.random() * (TARGET_SPAWN_DELAY_MAX - TARGET_SPAWN_DELAY_MIN);
-    }
+  // ── SCORE POP ────────────────────────────────────────────────────────────────
+  const showScorePop = useCallback((pts, zone) => {
+    setPopInfo({ pts, label: zone.label, color: zone.popColor, key: Date.now() });
+    setZoneLabel({ text: `${zone.label}  +${pts}`, color: zone.popColor, key: Date.now() });
+    setTimeout(() => setPopInfo(null), 900);
+    setTimeout(() => setZoneLabel(null), 1100);
   }, []);
 
-  useEffect(() => {
-    if (!weaponId || !canvasRef.current || ownedGuns.every((w) => w.id !== weaponId)) return;
-    setSceneError(null);
+  // ── RELOAD ───────────────────────────────────────────────────────────────────
+  const doReload = useCallback(() => {
+    const state = r.current;
+    if (state.isReloading || state.ammo >= MAX_AMMO) return;
+    state.isReloading = true;
+    state.reloadEnd = performance.now()/1000 + RELOAD_SECS;
+    setIsReloading(true);
+    setReloadAnim(true);
+    if (state.gun) { state.gun.rotation.x = 0.18; setTimeout(() => { if (state.gun) state.gun.rotation.x = 0.05; }, 400); }
+  }, []);
+
+  const finishReload = useCallback(() => {
+    const state = r.current;
+    state.isReloading = false;
+    state.ammo = MAX_AMMO;
+    setAmmoState(MAX_AMMO);
+    setIsReloading(false);
+    setTimeout(() => setReloadAnim(false), 50);
+  }, []);
+
+  // ── SPAWN TARGET ─────────────────────────────────────────────────────────────
+  const spawnTarget = useCallback(() => {
+    const state = r.current;
+    if (!state.target) return;
+    const mobile = window.innerWidth < 700;
+    const xRange = mobile ? 1.6 : 2.0;
+    const ox = -(xRange/2) + Math.random() * xRange;
+    const oy = 0.72 + Math.random() * 1.3;
+    state.targetOriginX = ox;
+    state.targetOriginY = oy;
+    state.targetPattern = MOVE_PATTERNS[Math.floor(Math.random() * MOVE_PATTERNS.length)];
+    state.targetPhase = Math.random() * Math.PI * 2;
+    state.target.position.set(ox, oy, BACK_WALL_Z + 0.20);
+    state.target.scale.set(0.01, 0.01, 0.01);
+    state.target.visible = true;
+    state.targetVisible = true;
+    state.targetSpawnedAt = performance.now()/1000;
+    setTargetUrgent(false);
+    // Pop-in
+    const popIn = () => {
+      if (!state.target || !state.target.visible) return;
+      state.target.scale.x = Math.min(1, state.target.scale.x + 0.15);
+      state.target.scale.y = Math.min(1, state.target.scale.y + 0.15);
+      state.target.scale.z = Math.min(1, state.target.scale.z + 0.15);
+      if (state.target.scale.x < 1) requestAnimationFrame(popIn);
+    };
+    requestAnimationFrame(popIn);
+  }, []);
+
+  const hideTarget = useCallback((scored) => {
+    const state = r.current;
+    if (!state.target) return;
+    state.target.visible = false;
+    state.targetVisible = false;
+    setTargetUrgent(false);
+    if (!scored) {
+      // Miss-disappear: briefly show a "Gone!" flash? just set next spawn
+    }
+    state.nextSpawnAt = performance.now()/1000 + 0.35 + Math.random() * 0.55;
+  }, []);
+
+  // ── ADD BULLET HOLE ──────────────────────────────────────────────────────────
+  const addBulletHole = useCallback((x, y) => {
+    const state = r.current;
+    if (!state.holeGroup || state.holeCount > 40) return;
+    state.holeCount++;
+    const hole = new THREE.Mesh(
+      new THREE.CircleGeometry(0.022 + Math.random()*0.014, 8),
+      new THREE.MeshBasicMaterial({ color: 0x0a0604 })
+    );
+    hole.position.set(x, y, BACK_WALL_Z+0.16); state.holeGroup.add(hole);
+    const spall = new THREE.Mesh(
+      new THREE.RingGeometry(0.022, 0.048, 12),
+      new THREE.MeshBasicMaterial({ color: 0x6a5030, transparent: true, opacity: 0.5 })
+    );
+    spall.position.set(x, y, BACK_WALL_Z+0.165); state.holeGroup.add(spall);
+  }, []);
+
+  // ── SHOOT ────────────────────────────────────────────────────────────────────
+  const shoot = useCallback((clientX, clientY) => {
+    const state = r.current;
+    if (state.phase !== "playing") return;
+    if (state.isReloading) return;
+    if (state.ammo <= 0) { doReload(); return; }
+
+    state.ammo--;
+    setAmmoState(state.ammo);
+    if (state.ammo === 0) setTimeout(doReload, 300);
+
     const canvas = canvasRef.current;
-    setSceneReady(false);
-    let textures = [];
-    let renderer = null;
-    let scene = null;
-    let raf = null;
-    let bulletGroup = null;
-    let bullets = [];
-    let onPointerDown = null;
-    let onResize = null;
-    try {
-    const W = Math.max(320, canvas.clientWidth || 640);
-    const H = Math.max(200, canvas.clientHeight || 400);
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
+    if (!canvas || !state.camera) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const my = -((clientY - rect.top) / rect.height) * 2 + 1;
 
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
-    renderer.setSize(W, H, false);
-    renderer.setClearColor(0x5a5c58);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(mx, my), state.camera);
+    const dir = ray.ray.direction.clone().normalize();
 
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x5a5c58);
-    scene.fog = new THREE.Fog(0x6a6c68, 20, 50);
+    const bm = new THREE.Mesh(
+      new THREE.SphereGeometry(0.016, 6, 6),
+      new THREE.MeshStandardMaterial({ color: 0xc9a020, metalness: 0.6, roughness: 0.4, emissive: 0xaa8010, emissiveIntensity: 0.4 })
+    );
+    bm.position.copy(state.camera.position).add(dir.clone().multiplyScalar(0.35));
+    state.bulletGroup.add(bm);
+    state.bullets.push({ mesh: bm, vel: dir.clone().multiplyScalar(BULLET_SPEED), dist: 0 });
 
-    const camera = new THREE.PerspectiveCamera(52, W / H, 0.1, 80);
-    camera.position.set(0, 1.35, 5);
-    camera.lookAt(0, 1.25, -RANGE_LENGTH / 2);
-
-    const mainLight = new THREE.DirectionalLight(0xfffaf0, 2.4);
-    mainLight.position.set(0, 12, -8);
-    mainLight.target.position.set(0, 0, -20);
-    mainLight.castShadow = true;
-    mainLight.shadow.mapSize.width = 1024;
-    mainLight.shadow.mapSize.height = 512;
-    mainLight.shadow.camera.near = 1;
-    mainLight.shadow.camera.far = 60;
-    mainLight.shadow.camera.left = -10;
-    mainLight.shadow.camera.right = 10;
-    mainLight.shadow.camera.top = 5;
-    mainLight.shadow.camera.bottom = -5;
-    mainLight.shadow.bias = -0.0002;
-    scene.add(mainLight);
-    scene.add(mainLight.target);
-
-    scene.add(new THREE.AmbientLight(0xf0ece4, 1.0));
-    const fill = new THREE.PointLight(0xfff8f0, 0.8, 45);
-    fill.position.set(0, 2, -12);
-    scene.add(fill);
-
-    const { target, textures: sceneTextures } = buildLongRangeScene(scene);
-    textures = sceneTextures || [];
-    const gun = createGunModel();
-    camera.add(gun);
-
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-    const bulletGroupLocal = new THREE.Group();
-    scene.add(bulletGroupLocal);
-    bulletGroup = bulletGroupLocal;
-    bullets = [];
-    const muzzleFlash = createMuzzleFlash();
-    muzzleFlash.visible = false;
-    scene.add(muzzleFlash);
-    const tempVec = new THREE.Vector3();
-
-    refs.current = {
-      scene,
-      camera,
-      renderer,
-      target,
-      bullets,
-      raycaster,
-      mouse,
-      muzzleFlash,
-      muzzleFlashEnd: 0,
-      nextSpawnAt: 0,
-      roundEndAt: 0,
-    };
-
-    const onResizeLocal = () => {
-      const w = Math.max(320, canvas.clientWidth || 640);
-      const h = Math.max(200, canvas.clientHeight || 400);
-      renderer.setSize(w, h, false);
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-    };
-    onResize = onResizeLocal;
-    window.addEventListener("resize", onResize);
-
-    onPointerDown = (e) => {
-        const r = refs.current;
-        if (!r.camera || r.target?.visible === false || gamePhaseRef.current !== "playing") return;
-      const rect = canvas.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(mouse, r.camera);
-      const dir = raycaster.ray.direction.clone().normalize();
-      const bulletMesh = createBulletMesh();
-      bulletMesh.position.copy(r.camera.position).add(dir.clone().multiplyScalar(0.35));
-      bulletGroup.add(bulletMesh);
-      bullets.push({
-        mesh: bulletMesh,
-        velocity: dir.clone().multiplyScalar(BULLET_SPEED),
-        dist: 0,
-        maxDist: BULLET_MAX_DIST,
-      });
-      muzzleFlash.visible = true;
-      muzzleFlash.position.copy(r.camera.position).add(dir.clone().multiplyScalar(0.4));
-      refs.current.muzzleFlashEnd = performance.now() / 1000 + MUZZLE_FLASH_DURATION;
-    };
-    canvas.addEventListener("pointerdown", onPointerDown);
-
-    const loop = () => {
-      raf = requestAnimationFrame(loop);
-      const r = refs.current;
-      if (!r.scene || !r.camera || !r.renderer) return;
-      const t = performance.now() / 1000;
-      const dt = Math.min(1 / 30, 0.02);
-
-      if (gamePhaseRef.current === "playing") {
-        const remaining = Math.max(0, Math.ceil((r.roundEndAt - t)));
-        setTimeLeft(remaining);
-        if (t >= r.roundEndAt) {
-          setGamePhase("done");
-          gamePhaseRef.current = "done";
-          const finalScore = scoreRef.current;
-          const toSubmit = Math.min(finalScore, MAX_HITS_FOR_MASTERY);
-          if (toSubmit > 0 && weaponId) {
-            api.post("/shooting-range/train", { weapon_id: weaponId, mode: "live", hits: toSubmit })
-              .then((res) => toast.success(res.data?.message || `Score: ${finalScore}. +${toSubmit}% mastery.`))
-              .catch((e) => toast.error(e.response?.data?.detail || "Submit failed."));
-          } else if (finalScore > 0) {
-            toast.info(`Round over! Score: ${finalScore}`);
-          }
-          fetchMastery();
-        }
-      }
-
-      if (r.target) {
-        if (gamePhaseRef.current === "playing" && t >= r.nextSpawnAt) {
-          const pos = randomTargetPosition();
-          r.target.position.x = pos.x;
-          r.target.position.y = pos.y;
-          r.target.visible = true;
-          r.nextSpawnAt = t + TARGET_SPAWN_DELAY_MIN + Math.random() * (TARGET_SPAWN_DELAY_MAX - TARGET_SPAWN_DELAY_MIN);
-        }
-        if (gamePhaseRef.current !== "playing") r.target.visible = false;
-      }
-
-      for (let i = r.bullets.length - 1; i >= 0; i--) {
-        const b = r.bullets[i];
-        b.mesh.position.addScaledVector(b.velocity, dt);
-        b.dist += BULLET_SPEED * dt;
-        let remove = b.dist >= b.maxDist;
-        if (!remove && r.target?.visible) {
-          r.target.getWorldPosition(tempVec);
-          const bp = b.mesh.position;
-          const dx = bp.x - tempVec.x;
-          const dy = bp.y - tempVec.y;
-          const dz = bp.z - tempVec.z;
-          if (dx * dx + dy * dy + dz * dz < TARGET_RADIUS * TARGET_RADIUS * 2.2) {
-            r.target.visible = false;
-            setScore((c) => c + 1);
-            r.nextSpawnAt = t + TARGET_SPAWN_DELAY_MIN + Math.random() * (TARGET_SPAWN_DELAY_MAX - TARGET_SPAWN_DELAY_MIN);
-            remove = true;
-          }
-        }
-        if (remove) {
-          bulletGroup.remove(b.mesh);
-          b.mesh.geometry.dispose();
-          b.mesh.material.dispose();
-          r.bullets.splice(i, 1);
-        }
-      }
-
-      if (r.muzzleFlash && t >= r.muzzleFlashEnd) r.muzzleFlash.visible = false;
-
-      renderer.render(r.scene, r.camera);
-    };
-    loop();
-    setSceneReady(true);
-    } catch (err) {
-      setSceneError(err?.message || String(err));
-      setSceneReady(false);
+    // Muzzle flash
+    if (state.muzzleFlash) {
+      state.muzzleFlash.visible = true;
+      state.muzzleFlash.position.copy(state.camera.position).add(dir.clone().multiplyScalar(0.4));
+      state.flashEnd = performance.now()/1000 + MUZZLE_FLASH_DUR;
+      if (state.muzzleLight) { state.muzzleLight.intensity = 4.5; state.muzzleLight.position.copy(state.muzzleFlash.position); }
     }
 
-    return () => {
-      setSceneReady(false);
-      if (onResize) window.removeEventListener("resize", onResize);
-      if (onPointerDown) canvas.removeEventListener("pointerdown", onPointerDown);
-      if (raf != null) cancelAnimationFrame(raf);
-      textures.forEach((t) => t && t.dispose && t.dispose());
-      if (bulletGroup && Array.isArray(bullets)) {
-        bullets.forEach((b) => {
-          bulletGroup.remove(b.mesh);
-          b.mesh.geometry.dispose();
-          b.mesh.material.dispose();
+    // Camera kick
+    state.camera.rotation.x -= 0.016;
+    setTimeout(() => { if (state.camera) state.camera.rotation.x += 0.016; }, 75);
+
+    // Smoke puff
+    if (state.smokePts && state.muzzleFlash) {
+      const si = Math.floor(Math.random() * state.SMOKE_COUNT) * 3;
+      state.smokePts[si]   = state.muzzleFlash.position.x + (Math.random()-0.5)*0.05;
+      state.smokePts[si+1] = state.muzzleFlash.position.y + (Math.random()-0.5)*0.05;
+      state.smokePts[si+2] = state.muzzleFlash.position.z;
+      if (state.smokeGeo) state.smokeGeo.attributes.position.needsUpdate = true;
+    }
+  }, [doReload]);
+
+  const onPointerDown = useCallback((e) => {
+    e.preventDefault();
+    const touches = e.touches;
+    if (touches && touches.length > 0) shoot(touches[0].clientX, touches[0].clientY);
+    else shoot(e.clientX, e.clientY);
+  }, [shoot]);
+
+  // ── START ROUND ──────────────────────────────────────────────────────────────
+  const startRound = useCallback(() => {
+    const state = r.current;
+    state.phase = "playing";
+    state.score = 0;
+    state.ammo = MAX_AMMO;
+    state.isReloading = false;
+    state.roundEndAt = performance.now()/1000 + ROUND_DURATION_SEC;
+    state.nextSpawnAt = 0;
+    state.holeCount = 0;
+    if (state.holeGroup) { while (state.holeGroup.children.length) { const c = state.holeGroup.children[0]; c.geometry?.dispose(); c.material?.dispose(); state.holeGroup.remove(c); } }
+    setGamePhase("playing"); gamePhaseRef.current = "playing";
+    setScore(0); setTimeLeft(ROUND_DURATION_SEC); setAmmoState(MAX_AMMO);
+    setIsReloading(false); setReloadAnim(false); setTargetUrgent(false);
+    spawnTarget();
+  }, [spawnTarget]);
+
+  // ── THREE.JS SCENE SETUP ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!weaponId || !canvasRef.current || !canPlay) return;
+
+    setSceneError(null); setSceneReady(false);
+    const state = r.current;
+    const canvas = canvasRef.current;
+    const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 700;
+
+    let renderer, scene, camera, textures = [];
+
+    try {
+      const W = Math.max(320, canvas.clientWidth || 640);
+      const H = Math.max(200, canvas.clientHeight || 400);
+
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: !mobile, powerPreference: "high-performance" });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.5 : 2));
+      renderer.setSize(W, H, false);
+      renderer.shadowMap.enabled = !mobile;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.4;
+
+      scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0x1a0e08, 18, 40);
+      scene.background = new THREE.Color(0x1a0e08);
+
+      camera = new THREE.PerspectiveCamera(mobile ? 62 : 54, W/H, 0.1, 80);
+      camera.position.set(0, 1.35, 5);
+      camera.lookAt(0, 1.3, -10);
+
+      // Textures
+      const woodTex    = makeWoodTex();
+      const brickTex   = makeBrickTex(mobile);
+      const cobbleTex  = makeCobblestoneTex(mobile);
+      textures = [woodTex, brickTex, cobbleTex];
+
+      // Lights
+      scene.add(new THREE.AmbientLight(0x1a0e06, 1.6));
+      const lampPositions = [[-1.2,2.7,-4],[1.2,2.7,-4],[0,2.7,-12],[0,2.7,-20]];
+      const lampLights = [];
+      lampPositions.forEach(([x,y,z]) => {
+        const l = new THREE.PointLight(0xd4780c, 4.0, 10, 1.8);
+        l.position.set(x,y,z);
+        if (!mobile) { l.castShadow = true; l.shadow.mapSize.set(512,512); l.shadow.radius = 6; }
+        scene.add(l); lampLights.push(l);
+        // Lamp cage
+        const lmpGeo = new THREE.SphereGeometry(0.14, 8, 6, 0, Math.PI*2, 0, Math.PI*0.6);
+        const lmpMat = new THREE.MeshPhongMaterial({ color:0xffc040, emissive:0xffa020, emissiveIntensity:0.9, transparent:true, opacity:0.85, side:THREE.DoubleSide, wireframe:true });
+        const lmp = new THREE.Mesh(lmpGeo, lmpMat); lmp.position.set(x,y+0.04,z); scene.add(lmp);
+        const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.005,0.005,0.25,4), new THREE.MeshBasicMaterial({color:0x2a1a08}));
+        cord.position.set(x,y+0.25,z); scene.add(cord);
+      });
+
+      const muzzleLight = new THREE.PointLight(0xff8820, 0, 2.5); scene.add(muzzleLight);
+      const muzzleFlash = new THREE.Mesh(
+        new THREE.SphereGeometry(0.08, 8, 8),
+        new THREE.MeshBasicMaterial({ color:0xffaa22, transparent:true, opacity:0.9 })
+      );
+      muzzleFlash.visible = false; scene.add(muzzleFlash);
+
+      // Scene
+      const { hazeMesh } = buildScene(scene, mobile, woodTex, brickTex, cobbleTex);
+
+      // Smoke
+      const SMOKE_COUNT = mobile ? 20 : 40;
+      const smokePts = new Float32Array(SMOKE_COUNT * 3);
+      for (let i=0; i<SMOKE_COUNT; i++) { smokePts[i*3]=0; smokePts[i*3+1]=-100; smokePts[i*3+2]=0; }
+      const smokeGeo = new THREE.BufferGeometry();
+      smokeGeo.setAttribute("position", new THREE.Float32BufferAttribute(smokePts, 3));
+      const smokeMesh = new THREE.Points(smokeGeo, new THREE.PointsMaterial({color:0xb0a090, size:0.12, transparent:true, opacity:0.22}));
+      scene.add(smokeMesh);
+
+      // Bullet holes group
+      const holeGroup = new THREE.Group(); scene.add(holeGroup);
+
+      // Target
+      const target = createTargetMesh();
+      target.visible = false;
+      scene.add(target);
+
+      // Gun
+      const gun = createGunModel(woodTex);
+      camera.add(gun); scene.add(camera);
+
+      // Bullet group
+      const bulletGroup = new THREE.Group(); scene.add(bulletGroup);
+
+      // Store refs
+      state.renderer    = renderer;
+      state.scene       = scene;
+      state.camera      = camera;
+      state.target      = target;
+      state.gun         = gun;
+      state.bullets     = [];
+      state.bulletGroup = bulletGroup;
+      state.muzzleFlash = muzzleFlash;
+      state.muzzleLight = muzzleLight;
+      state.lampLights  = lampLights;
+      state.hazeMesh    = hazeMesh;
+      state.smokePts    = smokePts;
+      state.smokeGeo    = smokeGeo;
+      state.SMOKE_COUNT = SMOKE_COUNT;
+      state.holeGroup   = holeGroup;
+      state.holeCount   = 0;
+      state.phase       = "idle";
+      state.score       = 0;
+      state.ammo        = MAX_AMMO;
+      state.isReloading = false;
+      state.targetVisible = false;
+
+      const tempVec = new THREE.Vector3();
+
+      // ── MAIN LOOP ──────────────────────────────────────────────────────────
+      const loop = () => {
+        state.raf = requestAnimationFrame(loop);
+        if (!state.renderer || !state.scene || !state.camera) return;
+
+        const t = performance.now()/1000;
+        const dt = Math.min(0.05, 1/60);
+
+        // Lamp flicker
+        state.lampLights.forEach((l, i) => {
+          l.intensity = 3.8 + Math.sin(t*(1.2+i*0.3))*0.22 + (Math.random()>0.992 ? -1.2 : 0);
         });
+
+        // Haze
+        if (state.hazeMesh) {
+          const hp = state.hazeMesh.geometry.attributes.position.array;
+          for (let i=0; i<hp.length; i+=3) { hp[i]+=Math.sin(t*0.3+i)*0.003; hp[i+1]+=dt*0.022; if(hp[i+1]>3.2)hp[i+1]=0.2; }
+          state.hazeMesh.geometry.attributes.position.needsUpdate = true;
+        }
+
+        // Smoke drift
+        if (state.smokePts) {
+          for (let i=0; i<state.smokePts.length; i+=3) {
+            if (state.smokePts[i+1]>-50) { state.smokePts[i+1]+=dt*0.12; state.smokePts[i]*=0.99; }
+          }
+          if (state.smokeGeo) state.smokeGeo.attributes.position.needsUpdate = true;
+        }
+
+        // Muzzle decay
+        if (t >= state.flashEnd) {
+          if (state.muzzleFlash) state.muzzleFlash.visible = false;
+          if (state.muzzleLight) state.muzzleLight.intensity = Math.max(0, state.muzzleLight.intensity - dt*22);
+        }
+
+        // Reload
+        if (state.isReloading && t >= state.reloadEnd) finishReload();
+
+        // ── TARGET MOVEMENT + EXPIRY ─────────────────────────────────────
+        if (state.targetVisible && state.target && state.target.visible) {
+          const age = t - state.targetSpawnedAt;
+          const remaining = state.targetLifetime - age;
+
+          // Movement
+          const speed = 0.65 + (age / state.targetLifetime) * 0.45; // speeds up near end
+          let tx = state.targetOriginX;
+          let ty = state.targetOriginY;
+          const ph = state.targetPhase + t * speed;
+
+          switch (state.targetPattern) {
+            case "pendulum":
+              tx = state.targetOriginX + Math.sin(ph * 1.2) * 0.75;
+              break;
+            case "drift":
+              tx = state.targetOriginX + Math.sin(ph * 0.8) * 0.5;
+              ty = state.targetOriginY + Math.cos(ph * 0.55) * 0.35;
+              break;
+            case "figure8":
+              tx = state.targetOriginX + Math.sin(ph * 1.0) * 0.7;
+              ty = state.targetOriginY + Math.sin(ph * 2.0) * 0.28;
+              break;
+            case "circle":
+              tx = state.targetOriginX + Math.cos(ph * 0.9) * 0.55;
+              ty = state.targetOriginY + Math.sin(ph * 0.9) * 0.28;
+              break;
+          }
+
+          // Clamp to corridor
+          tx = Math.max(-2.0, Math.min(2.0, tx));
+          ty = Math.max(0.5, Math.min(2.4, ty));
+          state.target.position.x = tx;
+          state.target.position.y = ty;
+
+          // Urgency: pulse scale + warn UI when nearly expired
+          if (remaining <= TARGET_WARN_AT) {
+            setTargetUrgent(true);
+            const pulse = 1 + Math.sin(t * 14) * 0.055 * (1 - remaining/TARGET_WARN_AT);
+            state.target.scale.setScalar(pulse);
+          }
+
+          // Expire
+          if (remaining <= 0) {
+            hideTarget(false);
+          }
+        }
+
+        // ── ROUND TIMER ───────────────────────────────────────────────────
+        if (state.phase === "playing") {
+          const rem = Math.ceil(Math.max(0, state.roundEndAt - t));
+          setTimeLeft(rem);
+          if (t >= state.roundEndAt) {
+            state.phase = "done";
+            if (state.target) state.target.visible = false;
+            state.targetVisible = false;
+            setGamePhase("done"); gamePhaseRef.current = "done";
+            const finalScore = state.score;
+            const toSubmit = Math.min(finalScore, MAX_HITS_FOR_MASTERY);
+            if (toSubmit > 0 && weaponId) {
+              api.post("/shooting-range/train", { weapon_id: weaponId, mode: "live", hits: toSubmit })
+                .then(res => toast.success(res.data?.message || `Score: ${finalScore}. +${toSubmit}% mastery.`))
+                .catch(e => toast.error(e.response?.data?.detail || "Submit failed."));
+            } else if (finalScore > 0) {
+              toast.info(`Round over! Score: ${finalScore}`);
+            }
+            fetchMastery();
+          }
+        }
+
+        // ── BULLETS ───────────────────────────────────────────────────────
+        for (let i = state.bullets.length-1; i >= 0; i--) {
+          const b = state.bullets[i];
+          b.mesh.position.addScaledVector(b.vel, dt);
+          b.dist += BULLET_SPEED * dt;
+          let remove = b.dist >= BULLET_MAX_DIST;
+
+          if (!remove && state.targetVisible && state.target?.visible) {
+            tempVec.set(state.target.position.x, state.target.position.y, state.target.position.z);
+            const dx = b.mesh.position.x - tempVec.x;
+            const dy = b.mesh.position.y - tempVec.y;
+            const dz = b.mesh.position.z - tempVec.z;
+
+            if (dx*dx + dy*dy + dz*dz < TARGET_RADIUS * TARGET_RADIUS * 1.5) {
+              const lateralDist = Math.sqrt(dx*dx + dy*dy);
+              let hitZone = ZONES[ZONES.length-1];
+              for (const zone of ZONES) {
+                if (lateralDist <= TARGET_RADIUS * zone.frac) { hitZone = zone; break; }
+              }
+              hideTarget(true);
+              state.score += hitZone.pts;
+              setScore(state.score);
+              showScorePop(hitZone.pts, hitZone);
+              addBulletHole(tempVec.x + dx*0.6, tempVec.y + dy*0.6);
+              remove = true;
+            }
+          }
+
+          if (!remove && b.mesh.position.z <= BACK_WALL_Z + 0.22) {
+            addBulletHole(b.mesh.position.x, b.mesh.position.y); remove = true;
+          }
+
+          if (remove) {
+            state.bulletGroup.remove(b.mesh);
+            b.mesh.geometry.dispose(); b.mesh.material.dispose();
+            state.bullets.splice(i, 1);
+          }
+        }
+
+        // ── SPAWN NEXT TARGET ─────────────────────────────────────────────
+        if (state.phase === "playing" && t >= state.nextSpawnAt && !state.targetVisible) {
+          spawnTarget();
+        }
+
+        // Subtle camera breathe
+        state.camera.position.x = Math.sin(t * 0.004) * 0.04;
+
+        renderer.render(scene, camera);
+      };
+
+      loop();
+      setSceneReady(true);
+
+    } catch (err) {
+      setSceneError(err?.message || String(err));
+    }
+
+    // Resize
+    const onResize = () => {
+      const w = Math.max(320, canvas.clientWidth || 640);
+      const h = Math.max(200, canvas.clientHeight || 400);
+      if (state.renderer) { state.renderer.setSize(w, h, false); }
+      if (state.camera) { state.camera.aspect = w/h; state.camera.updateProjectionMatrix(); }
+    };
+    window.addEventListener("resize", onResize);
+
+    return () => {
+      window.removeEventListener("resize", onResize);
+      if (state.raf) cancelAnimationFrame(state.raf);
+      textures.forEach(t => t?.dispose?.());
+      if (state.bullets && state.bulletGroup) {
+        state.bullets.forEach(b => { state.bulletGroup.remove(b.mesh); b.mesh.geometry.dispose(); b.mesh.material.dispose(); });
       }
       if (renderer && scene) {
         renderer.dispose();
-        scene.traverse((o) => {
+        scene.traverse(o => {
           if (o.geometry) o.geometry.dispose();
-          if (o.material) {
-            if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
-            else o.material.dispose();
-          }
+          if (o.material) { Array.isArray(o.material) ? o.material.forEach(m => m.dispose()) : o.material.dispose(); }
         });
       }
+      state.renderer = null; state.scene = null; state.camera = null;
     };
-  }, [weaponId]);
+  }, [weaponId, canPlay]); // eslint-disable-line
 
-  const canPlay = ownedGuns.some((w) => w.id === weaponId);
+  // ── RENDER ───────────────────────────────────────────────────────────────────
+  const isMobileView = typeof window !== "undefined" && window.innerWidth < 700;
 
   return (
     <div className={styles.pageContent} style={{ padding: "1rem", maxWidth: 900 }}>
+      {/* Breadcrumb */}
       <div className="flex items-center gap-2 mb-3">
         <Link to="/shooting-range" className="text-[10px] font-heading uppercase tracking-wider" style={{ color: "var(--noir-primary)" }}>
           ← Shooting range
@@ -604,82 +800,252 @@ export default function ShootingRange3D() {
       <div className="flex items-center gap-2 mb-2">
         <Crosshair size={22} style={{ color: "var(--noir-primary)" }} />
         <h1 className="text-lg font-heading font-bold uppercase tracking-wider" style={{ color: "var(--noir-primary)" }}>
-          3D range
+          3D Range
         </h1>
       </div>
       <p className="text-[11px] text-zinc-400 font-heading mb-3">
-        One target at a time pops up down the range. Hit as many as you can in 60 seconds. Score = hits. Mastery (max +{MAX_HITS_FOR_MASTERY}%) is applied when the round ends.
+        Moving targets vanish after {TARGET_LIFETIME}s — aim fast. Bullseye pays <strong className="text-amber-400">10 pts</strong>, outer ring pays 1.
+        Max <strong className="text-amber-400">+{MAX_HITS_FOR_MASTERY}%</strong> mastery per round.
       </p>
 
-      {!weaponId || !canPlay ? (
+      {/* Weapon select */}
+      {(!weaponId || !canPlay) ? (
         <div className="rounded-lg p-4 bg-zinc-800/50 border border-zinc-700/40">
           <label className="block text-[10px] font-heading uppercase text-zinc-500 mb-2">Weapon</label>
           <select
             value={weaponId}
-            onChange={(e) => setWeaponId(e.target.value)}
+            onChange={e => setWeaponId(e.target.value)}
             className="w-full max-w-xs rounded border border-zinc-600 bg-zinc-800/80 px-3 py-2 text-sm font-heading text-foreground"
           >
             <option value="">Select a gun you own</option>
-            {ownedGuns.map((w) => (
-              <option key={w.id} value={w.id}>{w.name}</option>
-            ))}
+            {ownedGuns.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>
           {ownedGuns.length === 0 && masteryData && (
             <p className="text-[11px] text-amber-500 mt-2">You need to own a gun to play the 3D range.</p>
           )}
         </div>
+      ) : sceneError ? (
+        <div className="rounded-lg p-4 bg-amber-500/10 border border-amber-500/40">
+          <p className="text-sm font-heading text-amber-200 mb-2">Something went wrong loading the 3D range.</p>
+          <p className="text-xs text-zinc-400 font-mono mb-3">{sceneError}</p>
+          <Link to="/shooting-range" className="text-sm font-heading font-bold uppercase tracking-wider" style={{ color: "var(--noir-primary)" }}>← Back</Link>
+        </div>
       ) : (
-        <>
-          {sceneError ? (
-            <div className="rounded-lg p-4 bg-amber-500/10 border border-amber-500/40">
-              <p className="text-sm font-heading text-amber-200 mb-2">Something went wrong loading the 3D range.</p>
-              <p className="text-xs text-zinc-400 font-mono mb-3">{sceneError}</p>
-              <Link to="/shooting-range" className="text-sm font-heading font-bold uppercase tracking-wider" style={{ color: "var(--noir-primary)" }}>← Back to Shooting range</Link>
-            </div>
-          ) : (
-          <>
-          <div
-            className="relative rounded-lg overflow-hidden border border-zinc-700/50 bg-black"
-            style={{ aspectRatio: "16/10", maxHeight: "60vh", minHeight: 320 }}
-          >
-            <canvas
-              ref={canvasRef}
-              style={{ width: "100%", height: "100%", display: "block", cursor: "crosshair" }}
-            />
-            {sceneReady && (
-              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between gap-2 rounded bg-black/70 px-3 py-2 text-[11px] font-heading">
-                <span className="text-zinc-300">
-                  Score: <span className="tabular-nums text-primary font-bold">{score}</span>
-                  {gamePhase === "playing" && (
-                    <> · Time: <span className="tabular-nums font-bold">{timeLeft}s</span></>
-                  )}
-                </span>
-                {gamePhase === "idle" && (
+        <div
+          className="relative rounded-lg overflow-hidden border border-zinc-700/50 bg-black select-none"
+          style={{ aspectRatio: "16/10", maxHeight: "68vh", minHeight: 280 }}
+        >
+          <canvas
+            ref={canvasRef}
+            style={{ width: "100%", height: "100%", display: "block", cursor: "crosshair", touchAction: "none" }}
+            onPointerDown={onPointerDown}
+            onTouchStart={onPointerDown}
+          />
+
+          {/* ── OVERLAY HUD ── */}
+          {sceneReady && (
+            <>
+              {/* Top bar */}
+              <div
+                className="absolute top-0 left-0 right-0 flex items-start justify-between gap-2 px-3 pt-2 pb-3"
+                style={{ background: "linear-gradient(to bottom,rgba(8,5,3,.95),transparent)", pointerEvents: "none" }}
+              >
+                {/* Score */}
+                <div>
+                  <div style={{ fontFamily:"'Cinzel',serif", fontSize:7, letterSpacing:"0.28em", textTransform:"uppercase", color:"#6a4e28", marginBottom:2 }}>Score</div>
+                  <div style={{ fontFamily:"'Cinzel',serif", fontWeight:700, fontSize:"clamp(22px,5vw,34px)", color:"#c9a460", lineHeight:1, textShadow:"0 0 22px rgba(201,164,96,.45),0 2px 0 rgba(0,0,0,.9)" }}>
+                    {score}
+                  </div>
+                </div>
+                {/* Centre: ammo */}
+                <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                  <div style={{ fontFamily:"'Cinzel',serif", fontSize:7, letterSpacing:"0.24em", textTransform:"uppercase", color:"#6a4e28" }}>
+                    {isReloading ? "Reloading…" : "Ammo"}
+                  </div>
+                  <div style={{ display:"flex", gap:3, alignItems:"flex-end", flexWrap:"wrap", justifyContent:"center", maxWidth:140 }}>
+                    {Array.from({ length: MAX_AMMO }, (_, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          width: 5, height: 13,
+                          borderRadius: "3px 3px 1px 1px",
+                          background: i < ammoState
+                            ? "linear-gradient(to bottom,#e8c870,#b89040)"
+                            : "#2a1a04",
+                          opacity: i < ammoState ? 0.9 : 0.12,
+                          boxShadow: i < ammoState ? "0 0 4px rgba(201,164,96,.3)" : "none",
+                          transition: "all 0.25s",
+                          animationDelay: reloadAnim && i >= 0 ? `${i * 0.07}s` : "0s",
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                {/* Time */}
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontFamily:"'Cinzel',serif", fontSize:7, letterSpacing:"0.28em", textTransform:"uppercase", color:"#6a4e28", marginBottom:2 }}>Time</div>
+                  <div style={{
+                    fontFamily:"'Cinzel',serif", fontWeight:700, fontSize:"clamp(20px,4.5vw,30px)", lineHeight:1,
+                    color: timeLeft <= 10 ? "#ff4444" : "#c9a460",
+                    textShadow: timeLeft <= 10 ? "0 0 18px rgba(255,68,68,.6)" : "0 0 18px rgba(201,164,96,.4)",
+                    transition: "color 0.3s",
+                  }}>
+                    {timeLeft}
+                  </div>
+                </div>
+              </div>
+
+              {/* Decorative rule */}
+              <div style={{ position:"absolute", top:60, left:0, right:0, height:1, background:"linear-gradient(90deg,transparent,rgba(201,164,96,.28),transparent)", pointerEvents:"none" }} />
+
+              {/* Desktop crosshair */}
+              {!isMobileView && (
+                <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", pointerEvents:"none", opacity:0.55 }}>
+                  <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+                    <circle cx="22" cy="22" r="10" stroke="#c9a460" strokeWidth="1" opacity=".7"/>
+                    <line x1="22" y1="2" x2="22" y2="11" stroke="#c9a460" strokeWidth="1.2"/>
+                    <line x1="22" y1="33" x2="22" y2="42" stroke="#c9a460" strokeWidth="1.2"/>
+                    <line x1="2" y1="22" x2="11" y2="22" stroke="#c9a460" strokeWidth="1.2"/>
+                    <line x1="33" y1="22" x2="42" y2="22" stroke="#c9a460" strokeWidth="1.2"/>
+                    <circle cx="22" cy="22" r="1.6" fill="#c9a460" opacity=".9"/>
+                  </svg>
+                </div>
+              )}
+
+              {/* Target urgency border pulse */}
+              {targetUrgent && (
+                <div style={{
+                  position:"absolute", inset:0, pointerEvents:"none",
+                  boxShadow:"inset 0 0 40px rgba(220,60,40,.35)",
+                  animation:"urgentPulse 0.4s ease-in-out infinite alternate",
+                }} />
+              )}
+
+              {/* Score pop */}
+              {popInfo && (
+                <div
+                  key={popInfo.key}
+                  style={{
+                    position:"absolute", top:"42%", left:"50%",
+                    transform:"translate(-50%,-50%)",
+                    pointerEvents:"none", zIndex:30,
+                    fontFamily:"'Cinzel',serif", fontWeight:700,
+                    fontSize:"clamp(26px,7vw,48px)",
+                    color: popInfo.color,
+                    textShadow: `0 0 28px ${popInfo.color}`,
+                    whiteSpace:"nowrap",
+                    animation:"scorePop 0.7s cubic-bezier(.2,.8,.4,1) forwards",
+                  }}
+                >
+                  +{popInfo.pts}
+                </div>
+              )}
+
+              {/* Zone label */}
+              {zoneLabel && (
+                <div
+                  key={zoneLabel.key}
+                  style={{
+                    position:"absolute", bottom:"24%", left:"50%",
+                    transform:"translateX(-50%)",
+                    pointerEvents:"none", zIndex:28,
+                    fontFamily:"'Crimson Text',serif", fontStyle:"italic",
+                    fontSize:"clamp(13px,3.5vw,18px)",
+                    color: zoneLabel.color,
+                    textShadow: `0 0 12px ${zoneLabel.color}80`,
+                    whiteSpace:"nowrap",
+                    animation:"zoneFade 1s forwards",
+                  }}
+                >
+                  {zoneLabel.text}
+                </div>
+              )}
+
+              {/* Reload banner */}
+              {isReloading && (
+                <div style={{
+                  position:"absolute", top:"50%", left:"50%",
+                  transform:"translate(-50%,-50%)",
+                  pointerEvents:"none", zIndex:28,
+                  fontFamily:"'Cinzel',serif", fontWeight:700,
+                  fontSize:"clamp(11px,3.5vw,17px)",
+                  letterSpacing:"0.25em", textTransform:"uppercase",
+                  color:"#c9a460",
+                  textShadow:"0 0 20px rgba(201,164,96,.6)",
+                }}>
+                  — Reloading —
+                </div>
+              )}
+
+              {/* Bottom bar */}
+              <div
+                className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-3 px-3 pb-3 pt-5"
+                style={{ background:"linear-gradient(to top,rgba(8,5,3,.96),transparent)", pointerEvents:"none" }}
+              >
+                <div style={{ fontFamily:"'Crimson Text',serif", fontSize:"clamp(11px,3vw,14px)", fontStyle:"italic", color:"#c9a460", textShadow:"0 0 12px rgba(201,164,96,.4)", flex:1 }}>
+                  {gamePhase === "idle" && "Step up to the line, friend."}
+                  {gamePhase === "playing" && isReloading && "Reloading…"}
+                  {gamePhase === "playing" && !isReloading && ammoState === 0 && "Empty — reloading…"}
+                  {gamePhase === "done" && (() => {
+                    const s = r.current.score;
+                    return s >= 60 ? `${s} pts — you shoot like the devil himself.`
+                      : s >= 30 ? `${s} pts — not bad, not bad at all.`
+                      : `${s} pts — keep practising, friend.`;
+                  })()}
+                </div>
+                {(gamePhase === "idle" || gamePhase === "done") && (
                   <button
                     type="button"
                     onClick={startRound}
-                    className="px-3 py-1.5 rounded border border-primary/50 bg-primary/20 text-primary font-bold hover:bg-primary/30"
+                    style={{
+                      pointerEvents:"all", fontFamily:"'Cinzel',serif",
+                      fontSize:"clamp(9px,2.5vw,11px)", fontWeight:700, letterSpacing:"0.16em",
+                      padding:"9px 18px", border:"1px solid rgba(201,164,96,.55)",
+                      background:"rgba(201,164,96,.12)", color:"#c9a460", cursor:"pointer",
+                      clipPath:"polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%)",
+                      textShadow:"0 0 12px rgba(201,164,96,.4)", whiteSpace:"nowrap",
+                    }}
                   >
-                    Start 60s round
-                  </button>
-                )}
-                {gamePhase === "done" && (
-                  <button
-                    type="button"
-                    onClick={startRound}
-                    className="px-3 py-1.5 rounded border border-primary/50 bg-primary/20 text-primary font-bold hover:bg-primary/30"
-                  >
-                    Play again
+                    {gamePhase === "done" ? "Play Again" : "Fire at Will"}
                   </button>
                 )}
               </div>
-            )}
-          </div>
-          <p className="text-[10px] text-zinc-500 mt-2">Click to shoot. Watch your bullets travel; hit the red target before the next one appears.</p>
-          </>
+            </>
           )}
-        </>
+        </div>
       )}
+
+      {/* Scoring guide */}
+      {canPlay && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {ZONES.map(z => (
+            <div key={z.frac} className="flex items-center gap-1.5 text-[10px] font-heading" style={{ color: "#6a4e28" }}>
+              <div style={{ width:10, height:10, borderRadius:"50%", background:z.popColor, opacity:0.8, flexShrink:0 }} />
+              <span style={{ color:"#c9a460" }}>{z.label}</span>
+              <span style={{ color:"#4a3520" }}>+{z.pts}</span>
+            </div>
+          ))}
+          <div className="text-[10px] font-heading ml-2" style={{ color:"#4a3520" }}>· Targets vanish after {TARGET_LIFETIME}s</div>
+        </div>
+      )}
+
+      {/* Animations */}
+      <style>{`
+        @keyframes scorePop {
+          0%   { opacity:1; transform:translate(-50%,-40%); }
+          80%  { opacity:.9; transform:translate(-50%,-66%); }
+          100% { opacity:0; transform:translate(-50%,-78%); filter:blur(2px); }
+        }
+        @keyframes zoneFade {
+          0%  { opacity:1; }
+          70% { opacity:.9; }
+          100%{ opacity:0; }
+        }
+        @keyframes urgentPulse {
+          from { box-shadow: inset 0 0 30px rgba(220,60,40,.28); }
+          to   { box-shadow: inset 0 0 55px rgba(220,60,40,.50); }
+        }
+      `}</style>
     </div>
   );
 }
