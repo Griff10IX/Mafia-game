@@ -13,7 +13,7 @@ const SPEED_STEP = 4;     // ms faster per package collected
 const MIN_SPEED = 60;     // fastest possible
 const CANVAS_SIZE = GRID * CELL;
 
-// Package types — in-game rewards (keys match backend: cash, respect, rank_points, bullets, points, booze, jail)
+// Package types — in-game rewards (keys match backend: cash, respect, rank_points, bullets, booze, jail)
 const PACKAGES = [
   // Booze (common)
   { type: "whiskey",   label: "🥃", points: 10, color: "#c9a460", prob: 0.18, reward: "booze",    rewardAmt: 1,   desc: "Whiskey"    },
@@ -25,14 +25,31 @@ const PACKAGES = [
   // Respect points
   { type: "respect",   label: "⭐", points: 40, color: "#e8c870", prob: 0.12, reward: "respect",  rewardAmt: 5,   desc: "Respect"    },
   // Rank points
-  { type: "rank_pts",  label: "📈", points: 35, color: "#a87820", prob: 0.08, reward: "rank_points", rewardAmt: 3, desc: "Rank points" },
+  { type: "rank_pts",  label: "📈", points: 35, color: "#a87820", prob: 0.10, reward: "rank_points", rewardAmt: 3, desc: "Rank points" },
   // Bullets
-  { type: "bullets",   label: "🔫", points: 30, color: "#6a6a8a", prob: 0.06, reward: "bullets",  rewardAmt: 10,  desc: "Bullets"   },
-  // XP / points (spendable)
-  { type: "xp",        label: "📜", points: 50, color: "#60a8dc", prob: 0.06, reward: "points",   rewardAmt: 10,  desc: "XP Token"   },
+  { type: "bullets",   label: "🔫", points: 30, color: "#6a6a8a", prob: 0.08, reward: "bullets",  rewardAmt: 10,  desc: "Bullets"   },
   // Jail token — NEGATIVE, avoid it
   { type: "jail",      label: "🔒", points: -30, color: "#dc2626", prob: 0.06, reward: "jail",     rewardAmt: 1,   desc: "Jail Token", danger: true },
 ];
+
+// Rewards and rules — single source for display and API alignment
+const SNAKE_REWARDS_AND_RULES = {
+  rewards: [
+    { key: "cash", label: "Cash", desc: "In-game money", example: "$500 per pickup" },
+    { key: "respect", label: "Respect", desc: "Respect points", example: "+5 per pickup" },
+    { key: "rank_points", label: "Rank points", desc: "Progress toward rank", example: "+3 per pickup" },
+    { key: "bullets", label: "Bullets", desc: "Ammo", example: "+10 per pickup" },
+    { key: "booze", label: "Booze", desc: "Speakeasy whiskey (Booze Run)", example: "+1 per pickup" },
+    { key: "jail", label: "Jail token", desc: "Trap — avoid; sends you to jail", example: "30 seconds jail per token" },
+  ],
+  rules: [
+    "Move with WASD or arrow keys. Collect packages to grow and earn rewards.",
+    "Submit your score when you die to credit rewards (cash, respect, rank points, bullets, booze) to your account.",
+    "Avoid the jail token (🔒) — it reduces your score and adds jail time.",
+    "Cops (🚔) appear after 100 points. Don't hit them or you're pinched.",
+    "Speed increases as you collect. Max 15 runs per hour.",
+  ],
+};
 
 // Cops — spawn as obstacles after score threshold
 const COP_THRESHOLD = 100;
@@ -324,7 +341,6 @@ export default function Snake() {
         : pkgData.reward === "respect" ? `+${pkgData.rewardAmt} Respect`
         : pkgData.reward === "rank_points" ? `+${pkgData.rewardAmt} Rank pts`
         : pkgData.reward === "bullets" ? `+${pkgData.rewardAmt} Bullets`
-        : pkgData.reward === "points" ? `+${pkgData.rewardAmt} XP`
         : pkgData.desc;
       setLastPkg({ label: pkgData.label, points: pts, rewardLabel, x: newHead[0], y: newHead[1] });
       setPkgFade(1);
@@ -694,8 +710,31 @@ export default function Snake() {
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 8, fontSize: 10, color: "var(--noir-muted)", fontFamily: "'Crimson Text',serif", fontStyle: "italic" }}>
-          🚔 Cops appear after {COP_THRESHOLD} points. Speed increases as you collect.
+      </div>
+
+      <div className={styles.panel} style={{ margin: "0 16px 20px", padding: "12px 14px" }}>
+        <div style={{ fontFamily: "'Cinzel',serif", fontSize: 9, letterSpacing: ".25em", textTransform: "uppercase", color: "var(--noir-muted)", marginBottom: 10 }}>
+          Rewards & rules
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 9, letterSpacing: ".15em", color: "var(--noir-primary)", marginBottom: 6 }}>Rewards (key)</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {SNAKE_REWARDS_AND_RULES.rewards.map((r) => (
+              <div key={r.key} style={{ fontSize: 11, fontFamily: "'Crimson Text',serif" }}>
+                <span style={{ fontWeight: 600, color: "var(--noir-foreground)" }}>{r.label}</span>
+                <span style={{ color: "var(--noir-muted)", marginLeft: 4 }}>— {r.desc}</span>
+                <span style={{ display: "block", fontSize: 10, color: "var(--noir-muted)", fontStyle: "italic", marginTop: 1 }}>{r.example}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9, letterSpacing: ".15em", color: "var(--noir-primary)", marginBottom: 6 }}>Rules</div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11, color: "var(--noir-foreground)", fontFamily: "'Crimson Text',serif", lineHeight: 1.5 }}>
+            {SNAKE_REWARDS_AND_RULES.rules.map((rule, i) => (
+              <li key={i} style={{ marginBottom: 4 }}>{rule}</li>
+            ))}
+          </ul>
         </div>
       </div>
 

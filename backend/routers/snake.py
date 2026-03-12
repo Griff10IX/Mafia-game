@@ -18,7 +18,6 @@ REWARD_CAPS = {
     "respect": 500,
     "rank_points": 200,
     "bullets": 200,
-    "points": 500,
     "booze": 50,
 }
 # Default booze type for Package Run (Booze Run uses booze_carrying.{booze_id})
@@ -64,12 +63,6 @@ async def _apply_rewards(user_id: str, rewards: Dict[str, Any]) -> Dict[str, Any
         if v:
             inc["bullets"] = v
 
-    # points (spendable)
-    if "points" in rewards:
-        v = max(0, min(REWARD_CAPS["points"], int(rewards.get("points") or 0)))
-        if v:
-            inc["points"] = v
-
     # booze -> booze_carrying.speakeasy_whiskey
     if "booze" in rewards:
         v = max(0, min(REWARD_CAPS["booze"], int(rewards.get("booze") or 0)))
@@ -100,6 +93,32 @@ async def _apply_rewards(user_id: str, rewards: Dict[str, Any]) -> Dict[str, Any
 
 
 def register(router):
+    # Config: rewards key and rules (for frontend display / single source of truth)
+    REWARDS_AND_RULES = {
+        "rewards": [
+            {"key": "cash", "label": "Cash", "desc": "In-game money", "example": "$500 per pickup"},
+            {"key": "respect", "label": "Respect", "desc": "Respect points", "example": "+5 per pickup"},
+            {"key": "rank_points", "label": "Rank points", "desc": "Progress toward rank", "example": "+3 per pickup"},
+            {"key": "bullets", "label": "Bullets", "desc": "Ammo", "example": "+10 per pickup"},
+            {"key": "booze", "label": "Booze", "desc": "Speakeasy whiskey (Booze Run)", "example": "+1 per pickup"},
+            {"key": "jail", "label": "Jail token", "desc": "Trap — avoid; sends you to jail", "example": "30 seconds jail per token"},
+        ],
+        "rules": [
+            "Move with WASD or arrow keys. Collect packages to grow and earn rewards.",
+            "Submit your score when you die to credit rewards (cash, respect, rank points, bullets, booze) to your account.",
+            "Avoid the jail token — it reduces your score and adds jail time.",
+            "Cops appear after 100 points. Don't hit them or you're pinched.",
+            "Speed increases as you collect. Max 15 runs per hour.",
+        ],
+        "max_score_accepted": MAX_SCORE_ACCEPTED,
+        "max_plays_per_hour": MAX_PLAYS_PER_HOUR,
+    }
+
+    @router.get("/snake/config")
+    async def snake_config(current_user: dict = Depends(get_current_user)):
+        """Returns rewards key and rules for the Package Run game."""
+        return REWARDS_AND_RULES
+
     @router.get("/snake/leaderboard")
     async def snake_leaderboard(current_user: dict = Depends(get_current_user)):
         cursor = db.snake_scores.find(
