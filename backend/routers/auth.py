@@ -607,53 +607,61 @@ def register(router):
         raw = (body.email or "").strip()
         if not raw:
             return {"message": "If an account exists with that email, a new verification link has been sent."}
-        pattern = re.compile("^" + re.escape(raw) + "$", re.IGNORECASE)
-        user = await db.users.find_one(
-            {"$or": [{"email": pattern}, {"username": pattern}]},
-            {"_id": 0, "id": 1, "email": 1, "username": 1, "email_verified": 1, "last_verification_email_sent_at": 1},
-        )
-        if not user:
-            return {"message": "If an account exists with that email, a new verification link has been sent."}
-        if user.get("email_verified") is True:
-            return {"message": "That account is already verified. You can log in."}
-        # 2-minute cooldown per account
-        now_utc = datetime.now(timezone.utc)
-        last_sent = user.get("last_verification_email_sent_at")
-        if last_sent:
-            if isinstance(last_sent, str):
+        try:
+            pattern = re.compile("^" + re.escape(raw) + "$", re.IGNORECASE)
+            user = await db.users.find_one(
+                {"$or": [{"email": pattern}, {"username": pattern}]},
+                {"_id": 0, "id": 1, "email": 1, "username": 1, "email_verified": 1, "last_verification_email_sent_at": 1},
+            )
+            if not user:
+                return {"message": "If an account exists with that email, a new verification link has been sent."}
+            if user.get("email_verified") is True:
+                return {"message": "That account is already verified. You can log in."}
+            # 2-minute cooldown per account
+            now_utc = datetime.now(timezone.utc)
+            last_sent = user.get("last_verification_email_sent_at")
+            if last_sent:
+                if isinstance(last_sent, str):
+                    try:
+                        last_sent = datetime.fromisoformat(last_sent.replace("Z", "+00:00"))
+                    except (ValueError, TypeError):
+                        last_sent = None
+                if last_sent is not None:
+                    if last_sent.tzinfo is None:
+                        last_sent = last_sent.replace(tzinfo=timezone.utc)
+                    if (now_utc - last_sent) < timedelta(minutes=2):
+                        raise HTTPException(
+                            status_code=429,
+                            detail="Please wait 2 minutes before requesting another verification email.",
+                        )
+            await db.email_verifications.delete_many({"user_id": user["id"]})
+            verification_token = str(uuid.uuid4())
+            expires_at = now_utc + timedelta(hours=24)
+            await db.email_verifications.insert_one({
+                "token": verification_token,
+                "user_id": user["id"],
+                "email": user["email"],
+                "username": user["username"],
+                "created_at": now_utc.isoformat(),
+                "expires_at": expires_at.isoformat(),
+            })
+            import threading
+            from email_sender import send_verification_email
+            def _resend_in_background():
                 try:
-                    last_sent = datetime.fromisoformat(last_sent.replace("Z", "+00:00"))
-                except (ValueError, TypeError):
-                    last_sent = None
-            if last_sent and (now_utc - last_sent) < timedelta(minutes=2):
-                raise HTTPException(
-                    status_code=429,
-                    detail="Please wait 2 minutes before requesting another verification email.",
-                )
-        # Delete any old verification for this user
-        await db.email_verifications.delete_many({"user_id": user["id"]})
-        verification_token = str(uuid.uuid4())
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
-        await db.email_verifications.insert_one({
-            "token": verification_token,
-            "user_id": user["id"],
-            "email": user["email"],
-            "username": user["username"],
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "expires_at": expires_at.isoformat(),
-        })
-        import threading
-        from email_sender import send_verification_email
-        def _resend_in_background():
-            try:
-                send_verification_email(user["email"], user["username"], verification_token)
-            except Exception as e:
-                logging.warning("Background resend verification email failed: %s", e)
-        threading.Thread(target=_resend_in_background, daemon=True).start()
-        await db.users.update_one({"id": user["id"]}, {"$set": {"last_verification_email_sent_at": now_utc}})
-        return {
-            "message": "If an account exists with that email, a new verification link has been sent.",
-        }
+                    send_verification_email(user["email"], user["username"], verification_token)
+                except Exception as e:
+                    logging.exception("Background resend verification email failed for %s: %s", user.get("email"), e)
+            threading.Thread(target=_resend_in_background, daemon=True).start()
+            await db.users.update_one({"id": user["id"]}, {"$set": {"last_verification_email_sent_at": now_utc.isoformat()}})
+            return {
+                "message": "If an account exists with that email, a new verification link has been sent.",
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.exception("resend-verification failed for input=%s: %s", raw, e)
+            raise HTTPException(status_code=500, detail="Failed to resend verification email. Please try again.")
 
     def _safe_int(val, default=0):
         if val is None:

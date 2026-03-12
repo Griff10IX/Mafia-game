@@ -852,15 +852,33 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         if not target.get("is_dead"):
             raise HTTPException(status_code=400, detail="That account is not dead")
+        current_state = target.get("current_state")
+        if not current_state or current_state not in STATES:
+            current_state = STATES[0]
         await db.users.update_one(
             {"id": target["id"]},
-            {"$set": {
-                "is_dead": False,
-                "dead_at": None,
-                "health": DEFAULT_HEALTH,
-                "money": 1000,
-            }}
+            {
+                "$set": {
+                    "is_dead": False,
+                    "dead_at": None,
+                    "health": DEFAULT_HEALTH,
+                    "money": 1000,
+                    "current_state": current_state,
+                    "in_jail": False,
+                },
+                "$unset": {
+                    "killed_by_username": "",
+                    "killed_by_user_id": "",
+                    "killed_by_family_name": "",
+                    "points_at_death": "",
+                    "money_at_death": "",
+                    "traveling_to": "",
+                    "travel_arrives_at": "",
+                    "jail_until": "",
+                },
+            },
         )
+        await db.attacks.delete_many({"attacker_id": target["id"]})
         return {"message": f"Revived {target_username}. They can log in again."}
 
     @router.post("/admin/change-email")

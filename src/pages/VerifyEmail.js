@@ -78,7 +78,10 @@ export default function VerifyEmail({ setIsAuthenticated }) {
       setResendCooldownSeconds(120);
     } catch (err) {
       const detail = err.response?.data?.detail;
-      toast.error(typeof detail === 'string' ? detail : 'Failed to resend.');
+      const msg = typeof detail === 'string' ? detail
+        : Array.isArray(detail) ? detail.map(d => d.msg || d.loc?.join('.')).join('; ')
+        : `Failed to resend (${err.response?.status || 'network error'}).`;
+      toast.error(msg);
       if (err.response?.status === 429) setResendCooldownSeconds(120);
     } finally {
       setResendLoading(false);
