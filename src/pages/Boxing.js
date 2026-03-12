@@ -1492,6 +1492,37 @@ export default function Boxing3D() {
         setKoCount(null);
       }
 
+      // Server-driven count: when server is "counting", enter koPhase and drive count from count_ends_at
+      const mForCount = arenaMatchDetailRef.current;
+      const countEndsAtMs = mForCount?.count_ends_at ? new Date(mForCount.count_ends_at).getTime() : 0;
+      const nowMsCount = Date.now();
+      const isServerCounting = mForCount?.state === "counting" && countEndsAtMs > nowMsCount;
+      const downFighter = mForCount?.down_fighter; // "a" | "b"
+      if (isServerCounting && downFighter && (r.phase !== "ko" || r.koPhase?.side !== downFighter)) {
+        r.phase = "ko";
+        r.koPhase = { side: downFighter, stage: "count", count: 0, countTimer: 0, isTKO: false, serverDriven: true };
+        r.pA = null; r.pB = null; r.pendingHitOnA = null; r.pendingHitOnB = null; r.pendingKDA = false; r.pendingKDB = false;
+        const downBx = downFighter === "a" ? bA : bB;
+        const upBx = downFighter === "a" ? bB : bA;
+        applyKOFloor(downBx, downFighter);
+        if (downFighter === "a") { r.txA = -1.8; r.txB = 1.6; } else { r.txB = 1.8; r.txA = -1.6; }
+        applyIdle(upBx, t, downFighter === "a" ? "b" : "a");
+      }
+      // When server finishes with KO while we're in server-driven count, transition to done
+      if (mForCount?.state === "finished" && r.phase === "ko" && r.koPhase?.serverDriven) {
+        r.koPhase.stage = "done";
+        setKoCount(null);
+        r.phase = "done";
+        r.victoryT = 0;
+        setGameState("done");
+        const winnerId = mForCount.winner;
+        const nameA = r.fight?.nameA || FIGHTERS[0].name;
+        const nameB = r.fight?.nameB || FIGHTERS[1].name;
+        const winName = (winnerId === mForCount.a_id ? nameA : nameB) || "Winner";
+        const reason = (mForCount.finish_reason || "ko").replace(/_/g, " ");
+        setWinText(`${winName.split(" ")[0]} WINS — ${reason.toUpperCase()}`);
+      }
+
       if(r.phase==="idle"||r.phase==="done"){
         // In done phase: winner celebrates, loser stays on floor
         if(r.phase==="done" && r.koPhase){
@@ -1537,6 +1568,16 @@ export default function Boxing3D() {
         } else if(ko.stage==="count"){
           applyKOFloor(downBx, ko.side);
           applyIdle(upBx, t, ko.side==="a"?"b":"a");
+          if (ko.serverDriven && arenaMatchDetailRef.current?.state === "counting") {
+            const countEndsAt = arenaMatchDetailRef.current?.count_ends_at ? new Date(arenaMatchDetailRef.current.count_ends_at).getTime() : 0;
+            const secsRemaining = countEndsAt > 0 ? (countEndsAt - Date.now()) / 1000 : 0;
+            const COUNT_DURATION = 9;
+            const countFromServer = Math.max(1, Math.min(10, 10 - Math.ceil(secsRemaining / (COUNT_DURATION / 10))));
+            ko.count = countFromServer;
+            setKoCount({ count: countFromServer, side: ko.side,
+              name: (ko.side==="a" ? r.fight?.nameA : r.fight?.nameB) || "FIGHTER",
+              tko: ko.isTKO });
+          } else {
           ko.countTimer -= dt;
           if(ko.countTimer <= 0){
             ko.count++;
@@ -1562,6 +1603,7 @@ export default function Boxing3D() {
               const slow = ko.count >= 7 ? 1.3 : 1.0;
               ko.countTimer = slow;
             }
+          }
           }
         }
         renderer.render(scene,camera);
@@ -1595,8 +1637,8 @@ export default function Boxing3D() {
         aPunching=true;
         r.pA.p=Math.min(1,r.pA.p+dt*PUNCH_SPEED);
         applyPunch(bA,r.pA.type,r.pA.p,"a");
-        // Step in but never past -0.58 — keeps ~1.16 unit gap (no headbutting)
-        const stepA = r.pA.type==="body"?0.16 : r.pA.type==="hook"?0.18 : 0.22;
+        // Step in so punch reaches contact range at PUNCH_CONTACT; keeps plausible gap
+        const stepA = r.pA.type==="body"?0.20 : r.pA.type==="hook"?0.22 : 0.26;
         r.txA = -0.76 + Math.sin(r.pA.p*Math.PI) * stepA;
         if(r.pA.p>=1){r.pA=null; r.txA=-0.90;}
       }
@@ -1604,7 +1646,7 @@ export default function Boxing3D() {
         bPunching=true;
         r.pB.p=Math.min(1,r.pB.p+dt*PUNCH_SPEED);
         applyPunch(bB,r.pB.type,r.pB.p,"b");
-        const stepB = r.pB.type==="body"?0.16 : r.pB.type==="hook"?0.18 : 0.22;
+        const stepB = r.pB.type==="body"?0.20 : r.pB.type==="hook"?0.22 : 0.26;
         r.txB = 0.76 - Math.sin(r.pB.p*Math.PI) * stepB;
         if(r.pB.p>=1){r.pB=null; r.txB=0.90;}
       }
@@ -1830,7 +1872,8 @@ export default function Boxing3D() {
     setGameState("fighting");setWinText("");setActionText("");
   };
 
-  const gold="#d4af37",crimson="#b5463c";
+  const gold = "var(--noir-primary)";
+  const crimson = "#b5463c"; // opponent accent (contrast)
 
   const Bar=({val,flip,color})=>(
     <div style={{height:5,background:"rgba(255,255,255,0.07)",borderRadius:2,overflow:"hidden"}}>
@@ -1868,19 +1911,19 @@ export default function Boxing3D() {
               <div style={{width:90,fontSize:9,color:gold}}>{nameA}</div>
               <div style={{flex:1,padding:"0 8px",minWidth:0}}>
                 <Bar val={hpA} flip={false} color={gold} />
-                <div style={{fontSize:8,color:"#8a7a4a",marginTop:1}}>HP {hpA}/100</div>
+                <div style={{fontSize:8,color:"var(--noir-muted)",marginTop:1}}>HP {hpA}/100</div>
               </div>
-              <div style={{fontSize:10,color:"#c9a84c",minWidth:44,textAlign:"center"}}>R{round}/12</div>
+              <div style={{fontSize:10,color:"var(--noir-primary)",minWidth:44,textAlign:"center"}}>R{round}/12</div>
               <div style={{flex:1,padding:"0 8px",minWidth:0}}>
                 <Bar val={hpB} flip={true} color={crimson} />
-                <div style={{fontSize:8,color:"#8a7a4a",marginTop:1,textAlign:"right"}}>HP {hpB}/100</div>
+                <div style={{fontSize:8,color:"var(--noir-muted)",marginTop:1,textAlign:"right"}}>HP {hpB}/100</div>
               </div>
               <div style={{width:90,fontSize:9,color:crimson,textAlign:"right"}}>{nameB}</div>
             </div>
             {actionText && <div style={{fontSize:10,color:"#fff",textAlign:"center",marginTop:3}}>{actionText}</div>}
-            {isBetweenRounds && <div style={{fontSize:10,color:"#c9a84c",textAlign:"center",marginTop:3}}>Between rounds – next in {secsToNextRound}s</div>}
-            {isBetweenRounds && <div style={{fontSize:9,color:"#8a7a4a",textAlign:"center",marginTop:1}}>Recovering…</div>}
-            {isCounting && <div style={{fontSize:10,color:"#e0b050",textAlign:"center",marginTop:3}}>Referee count – {secsToCountEnd}s</div>}
+            {isBetweenRounds && <div style={{fontSize:10,color:"var(--noir-primary)",textAlign:"center",marginTop:3}}>Between rounds – next in {secsToNextRound}s</div>}
+            {isBetweenRounds && <div style={{fontSize:9,color:"var(--noir-muted)",textAlign:"center",marginTop:1}}>Recovering…</div>}
+            {isCounting && <div style={{fontSize:10,color:"var(--noir-primary)",textAlign:"center",marginTop:3}}>Referee count – {secsToCountEnd}s</div>}
             {gameState==="done" && winText && <div style={{fontSize:12,color:gold,textAlign:"center",marginTop:3,fontWeight:700}}>{winText}</div>}
             {matchOver && arenaServerResult && (() => {
               const winnerName = arenaServerResult.winner === m?.a_id ? nameA : nameB;
@@ -1906,7 +1949,7 @@ export default function Boxing3D() {
                 animation:"koCountPulse 0.18s ease-out",
               }}>
                 <div style={{
-                  fontSize:"clamp(18px,4vw,28px)", letterSpacing:"0.35em", color:"#c9a84c",
+                  fontSize:"clamp(18px,4vw,28px)", letterSpacing:"0.35em", color: "var(--noir-primary)",
                   fontFamily:"'Cinzel',serif", textShadow:"0 0 18px rgba(201,168,76,0.7)",
                   marginBottom:4,
                 }}>
@@ -1954,14 +1997,16 @@ export default function Boxing3D() {
 
       <div className={styles.pageContent} style={{borderBottom:"1px solid var(--noir-border-light)",padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div>
-          <div style={{fontSize:16,letterSpacing:"0.2em",color:gold}}>BOXING GYM & LEAGUE</div>
-          <div style={{fontSize:9,color:"#6a5a3a",letterSpacing:"0.12em"}}>TRAIN • UPGRADE • FIGHT • BET</div>
+          <div style={{fontSize:16,letterSpacing:"0.2em",color:"var(--noir-primary)"}}>BOXING GYM & LEAGUE</div>
+          <div style={{fontSize:9,color:"var(--noir-muted)",letterSpacing:"0.12em"}}>TRAIN • UPGRADE • FIGHT • BET</div>
         </div>
       </div>
 
       <div className={styles.pageContent} style={{padding:"18px 20px 12px",display:"grid",gridTemplateColumns: narrowLayout ? "1fr" : "minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr)",gap:16}}>
         <div className={styles.panel} style={{padding:12,minHeight:140}}>
-          <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>TRAINING & STATS</div>
+          <div className={styles.panelHeader} style={{padding:"6px 0",marginBottom:6}}>
+            <div style={{fontSize:11,color:"var(--noir-primary)",letterSpacing:"0.16em"}}>TRAINING & STATS</div>
+          </div>
           {metaError && <div style={{fontSize:10,color:"#ff6666",marginBottom:6}}>{metaError}</div>}
           {loadingMeta && !profile && (
             <div style={{fontSize:10,color:"#9a8a5a"}}>Loading boxing profile…</div>
@@ -1975,12 +2020,12 @@ export default function Boxing3D() {
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:4,fontSize:10,color:"#e0d0a0",marginBottom:8}}>
                 {["power","speed","stamina","defense","accuracy","chin","recovery"].map((k)=>(
                   <div key={k} style={{display:"flex",justifyContent:"space-between",background:"rgba(0,0,0,0.18)",padding:"4px 6px",borderRadius:2}}>
-                    <span style={{textTransform:"uppercase",fontSize:9,color:"#8a7a4a"}}>{k}</span>
+                    <span style={{textTransform:"uppercase",fontSize:9,color:"var(--noir-muted)"}}>{k}</span>
                     <span>{effective?.[k] ?? profile?.[k] ?? 1}</span>
                   </div>
                 ))}
               </div>
-              <div style={{fontSize:10,color:"#8a7a4a",letterSpacing:"0.08em",marginBottom:4}}>DRILLS</div>
+              <div style={{fontSize:10,color:"var(--noir-muted)",letterSpacing:"0.08em",marginBottom:4}}>DRILLS</div>
               <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                 {Object.entries(drills || {}).map(([id, d]) => {
                   const conf = (profile && profile.training && profile.training[id]) || d;
@@ -2026,7 +2071,7 @@ export default function Boxing3D() {
 
         <div className={styles.panel} style={{padding:12,minHeight:140,display:"flex",flexDirection:"column",gap:10}}>
           <div>
-            <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>GYM</div>
+            <div style={{fontSize:11,color:"var(--noir-primary)",letterSpacing:"0.16em",marginBottom:6}}>GYM</div>
             {gymInfo && (
               <>
                 <div style={{fontSize:11,color:"#e0d0a0",marginBottom:4}}>
@@ -2040,7 +2085,7 @@ export default function Boxing3D() {
                   Upgrade gym
                 </button>
                 {gymInfo.gyms && gymInfo.gyms.length > 1 && (
-                  <div style={{marginTop:8,fontSize:9,color:"#8a7a4a"}}>
+                  <div style={{marginTop:8,fontSize:9,color:"var(--noir-muted)"}}>
                     Move gym:
                     <div style={{marginTop:4,display:"flex",flexWrap:"wrap",gap:4}}>
                       {gymInfo.gyms.map((g) => (
@@ -2061,10 +2106,10 @@ export default function Boxing3D() {
           </div>
 
           <div>
-            <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>COACH</div>
+            <div style={{fontSize:11,color:"var(--noir-primary)",letterSpacing:"0.16em",marginBottom:6}}>COACH</div>
             {coachInfo && (
               <>
-                <div style={{fontSize:10,color:"#8a7a4a",marginBottom:4}}>Hire one coach at a time.</div>
+                <div style={{fontSize:10,color:"var(--noir-muted)",marginBottom:4}}>Hire one coach at a time.</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
                   {coachInfo.coaches?.map((c) => {
                     const isCurrent = coachInfo.coach_id === c.id;
@@ -2086,11 +2131,13 @@ export default function Boxing3D() {
         </div>
 
         <div className={styles.panel} style={{padding:12,minHeight:140}}>
-          <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>GEAR</div>
+          <div className={styles.panelHeader} style={{padding:"6px 0",marginBottom:6}}>
+            <div style={{fontSize:11,color:"var(--noir-primary)",letterSpacing:"0.16em"}}>GEAR</div>
+          </div>
           {gearInfo && (
             <>
               {typeof gearInfo.total_wins === "number" && (
-                <div style={{fontSize:10,color:"#8a7a4a",marginBottom:6}}>Wins: {gearInfo.total_wins}</div>
+                <div style={{fontSize:10,color:"var(--noir-muted)",marginBottom:6}}>Wins: {gearInfo.total_wins}</div>
               )}
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(100px,1fr))",gap:6,fontSize:10}}>
                 {(gearInfo.gear || []).map((g) => {
@@ -2104,7 +2151,7 @@ export default function Boxing3D() {
                   return (
                     <div key={g.id} style={{background: unlocked ? "rgba(255,255,255,0.02)" : "rgba(80,60,40,0.2)",borderRadius:3,padding:"6px 8px",border:isEquipped?"1px solid rgba(201,168,76,0.7)":"1px solid rgba(201,168,76,0.25)",minHeight:72,overflow:"hidden",display:"flex",flexDirection:"column",gap:4}}>
                       <div style={{fontSize:10,color:unlocked ? "#e0d0a0" : "#6a5a4a",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}} title={nameLine}>{nameLine}</div>
-                      <div style={{fontSize:9,color:"#8a7a4a",flexShrink:0}}>{g.slot}</div>
+                      <div style={{fontSize:9,color:"var(--noir-muted)",flexShrink:0}}>{g.slot}</div>
                       {!unlocked && winsReq != null && <div style={{fontSize:9,color:"#9a7a4a",flexShrink:0}}>Unlock at {winsReq} wins</div>}
                       <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:"auto"}}>
                         {!owned && (
@@ -2147,7 +2194,7 @@ export default function Boxing3D() {
       <div className={styles.pageContent} style={{padding:"10px 16px 20px",borderTop:"1px solid var(--noir-border-light)",display:"grid",gridTemplateColumns: narrowLayout ? "1fr" : "minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,1.0fr)",gap:12}}>
         <div className={styles.panel} style={{padding:10,minHeight:120}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-            <div style={{fontSize:10,color:gold,letterSpacing:"0.14em"}}>MATCHES</div>
+            <div style={{fontSize:10,color:"var(--noir-primary)",letterSpacing:"0.14em"}}>MATCHES</div>
             <button onClick={refreshMatches} disabled={matchesLoading} className={styles.btnGoldDarkText} style={{padding:"2px 6px",fontSize:9,cursor:matchesLoading?"wait":"pointer"}}>Refresh</button>
           </div>
           {matchError && <div style={{fontSize:9,color:"#ff6666",marginBottom:4}}>{matchError}</div>}
@@ -2169,7 +2216,7 @@ export default function Boxing3D() {
             </button>
           </div>
           {npcs.length > 0 && (
-            <div style={{marginBottom:6,fontSize:9,color:"#8a7a4a"}}>
+            <div style={{marginBottom:6,fontSize:9,color:"var(--noir-muted)"}}>
               <div style={{marginBottom:2}}>Quick NPC fight:</div>
               <div style={{display:"flex",flexWrap:"wrap",gap:3}}>
                 {npcs.map((npc)=>(
@@ -2188,7 +2235,7 @@ export default function Boxing3D() {
                 <div style={{marginTop:4,color:"#8a9a6a"}}>Fight vs {npcFightState.npcName} in progress…</div>
               )}
               {npcFightState?.result && npcFightState.result !== "error" && (
-                <div style={{marginTop:4,color:npcFightState.result==="win"?"#6a9a4a":npcFightState.result==="loss"?"#aa4444":"#8a7a4a"}}>
+                <div style={{marginTop:4,color:npcFightState.result==="win"?"#6a9a4a":npcFightState.result==="loss"?"#aa4444":"var(--noir-muted)"}}>
                   {npcFightState.result==="win"?"You won":npcFightState.result==="loss"?"You lost":"Draw"} vs {npcFightState.npcName}{npcFightState.reason?` (${npcFightState.reason})`:""}
                   <button onClick={clearNpcResult} style={{marginLeft:6,padding:"1px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(255,255,255,0.03)",color:"#d4c890",cursor:"pointer"}}>OK</button>
                 </div>
@@ -2210,7 +2257,7 @@ export default function Boxing3D() {
                     <div style={{fontSize:9,color:mine?"#f5e8c8":"#d0c090"}}>
                       {m.a_username} vs {m.b_username} <span style={{color:"#7a6a4a"}}>• {m.state} R{Math.min(Number(m.round) || 0, Number(m.max_rounds) || 12)}/{m.max_rounds ?? 12}</span>
                     </div>
-                    <div style={{fontSize:8,color:"#6a5a3a"}}>HP A {m.hp?.a ?? 0}/100 B {m.hp?.b ?? 0}/100 • Odds A {m.odds?.a ?? "-"} / B {m.odds?.b ?? "-"}</div>
+                    <div style={{fontSize:8,color:"var(--noir-muted)"}}>HP A {m.hp?.a ?? 0}/100 B {m.hp?.b ?? 0}/100 • Odds A {m.odds?.a ?? "-"} / B {m.odds?.b ?? "-"}</div>
                   </div>
                   <div style={{display:"flex",gap:3,flexShrink:0}}>
                     {canJoin && (
@@ -2260,9 +2307,11 @@ export default function Boxing3D() {
         </div>
 
         <div className={styles.panel} style={{padding:12,minHeight:140}}>
-          <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>BETTING</div>
+          <div className={styles.panelHeader} style={{padding:"6px 0",marginBottom:6}}>
+          <div style={{fontSize:11,color:"var(--noir-primary)",letterSpacing:"0.16em"}}>BETTING</div>
+          </div>
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-            <span style={{fontSize:9,color:"#8a7a4a"}}>Stake</span>
+            <span style={{fontSize:9,color:"var(--noir-muted)"}}>Stake</span>
             <input
               type="number"
               value={betStake}
@@ -2301,20 +2350,22 @@ export default function Boxing3D() {
               </div>
             ))}
           </div>
-          <div style={{fontSize:9,color:"#8a7a4a",marginBottom:4}}>My bets</div>
+          <div style={{fontSize:9,color:"var(--noir-muted)",marginBottom:4}}>My bets</div>
           <div style={{maxHeight:90,overflowY:"auto",fontSize:10}}>
             {bets.length === 0 && <div style={{color:"#7a6a4a"}}>No open or settled bets.</div>}
             {bets.map((b)=>(
               <div key={b.id} style={{display:"flex",justifyContent:"space-between",padding:"2px 0"}}>
                 <span style={{color:"#d0c090"}}>#{b.match_id.slice(0,6)} • {b.fighter.toUpperCase()}</span>
-                <span style={{color:b.status==="won"?"#6a9a4a":b.status==="lost"?"#aa4444":"#8a7a4a"}}>{b.status} ${b.stake}</span>
+                <span style={{color:b.status==="won"?"#6a9a4a":b.status==="lost"?"#aa4444":"var(--noir-muted)"}}>{b.status} ${b.stake}</span>
               </div>
             ))}
           </div>
         </div>
 
         <div className={styles.panel} style={{padding:12,minHeight:140}}>
-          <div style={{fontSize:11,color:gold,letterSpacing:"0.16em",marginBottom:6}}>LEAGUE (WEEKLY)</div>
+          <div className={styles.panelHeader} style={{padding:"6px 0",marginBottom:6}}>
+          <div style={{fontSize:11,color:"var(--noir-primary)",letterSpacing:"0.16em"}}>LEAGUE (WEEKLY)</div>
+          </div>
           {league && (
             <div style={{maxHeight:210,overflowY:"auto",fontSize:10}}>
               {league.standings?.slice(0,10).map((row)=>(
