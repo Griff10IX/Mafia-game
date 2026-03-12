@@ -1331,6 +1331,8 @@ async def _get_weapon_mastery_pct(user_id: str, weapon_id: str | None) -> int:
         {"user_id": user_id, "weapon_id": weapon_id},
         {"_id": 0, "mastery_pct": 1},
     )
+    if not doc:
+        return 0
     return min(100, max(0, int(doc.get("mastery_pct", 0) or 0)))
 
 
