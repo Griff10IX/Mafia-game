@@ -112,11 +112,12 @@ function simulateFight(aS, bS) {
           b.hp = Math.min(100, b.hp + aDmg * 0.25);
         }
 
+        const hurtMultB = b.hp < 30 ? 2.0 : b.hp < 50 ? 1.4 : 1.0;
         const kdChance = apt !== "body"
-          ? (aDmg / 26) * (1 - b.chin/100) * Math.pow(1 - b.stam/100, 0.7) * (1 + a.power/220)
+          ? (aDmg / 16) * (1 - b.chin/120) * (0.25 + 0.75 * (1 - b.stam/100)) * (1 + a.power/180) * hurtMultB
           : 0;
         if (Math.random() < kdChance && b.hp > 0 && b.kds < 3) {
-          b.kds++; b.hp = Math.max(1, b.hp - 4); aKD = true; roundKdA++;
+          b.kds++; b.hp = Math.max(1, b.hp - 6); aKD = true; roundKdA++;
           a.momentum = Math.min(1, a.momentum + 0.4);
           b.momentum = Math.max(-1, b.momentum - 0.4);
         }
@@ -172,11 +173,12 @@ function simulateFight(aS, bS) {
           a.hp = Math.min(100, a.hp + bDmg * 0.25);
         }
 
+        const hurtMultA = a.hp < 30 ? 2.0 : a.hp < 50 ? 1.4 : 1.0;
         const kdChance = bpt !== "body"
-          ? (bDmg / 26) * (1 - a.chin/100) * Math.pow(1 - a.stam/100, 0.7) * (1 + b.power/220)
+          ? (bDmg / 16) * (1 - a.chin/120) * (0.25 + 0.75 * (1 - a.stam/100)) * (1 + b.power/180) * hurtMultA
           : 0;
         if (Math.random() < kdChance && a.hp > 0 && a.kds < 3) {
-          a.kds++; a.hp = Math.max(1, a.hp - 4); bKD = true; roundKdB++;
+          a.kds++; a.hp = Math.max(1, a.hp - 6); bKD = true; roundKdB++;
           b.momentum = Math.min(1, b.momentum + 0.4);
           a.momentum = Math.max(-1, a.momentum - 0.4);
         }
@@ -263,13 +265,13 @@ function simulateFight(aS, bS) {
       scoreA, scoreB, cornerAdvice: advice,
     });
 
-    // Between-round recovery (no duplicates)
-    const aRec = 6 + ((a.stamina != null ? a.stamina : 62) / 100) * 12 + ((a.recovery != null ? a.recovery : 62) / 100) * 8;
-    const bRec = 6 + ((b.stamina != null ? b.stamina : 62) / 100) * 12 + ((b.recovery != null ? b.recovery : 62) / 100) * 8;
+    // Between-round recovery
+    const aRec = 4 + ((a.stamina != null ? a.stamina : 62) / 100) * 8 + ((a.recovery != null ? a.recovery : 62) / 100) * 6;
+    const bRec = 4 + ((b.stamina != null ? b.stamina : 62) / 100) * 8 + ((b.recovery != null ? b.recovery : 62) / 100) * 6;
     a.stam = Math.min(100, a.stam + aRec);
     b.stam = Math.min(100, b.stam + bRec);
-    a.hp = Math.min(100, a.hp + 2 + ((a.recovery != null ? a.recovery : 62) / 100) * 5);
-    b.hp = Math.min(100, b.hp + 2 + ((b.recovery != null ? b.recovery : 62) / 100) * 5);
+    a.hp = Math.min(100, a.hp + 1 + ((a.recovery != null ? a.recovery : 62) / 100) * 2);
+    b.hp = Math.min(100, b.hp + 1 + ((b.recovery != null ? b.recovery : 62) / 100) * 2);
     a.momentum *= 0.5;
     b.momentum *= 0.5;
     if (a.cut) a.cut.severity = Math.min(1, a.cut.severity + 0.04);
@@ -1061,7 +1063,7 @@ export default function Boxing3D() {
       showRoundCard: false, roundCardNum: 0, roundCardStart: 0,
       koCountdown: null, hitParticles: [], finished: false,
     };
-    const baseDelays = { round: 320, exchange: 90, roundEnd: 140, kd: 280, cut: 200, result: 650, clinch: 220, corner: 260, combo: 200, cutWarn: 200 };
+    const baseDelays = { round: 320, exchange: 90, roundEnd: 140, kd: 1800, cut: 200, result: 650, clinch: 220, corner: 260, combo: 200, cutWarn: 200 };
     let i = 0;
     const schedule = () => {
       if (i >= commentaryLinesToStream.length) return;
@@ -1085,13 +1087,13 @@ export default function Boxing3D() {
           fs.fighterA = { anim: line.ev.aPunch, animStart: now, landed: line.ev.aLanded };
           if (line.ev.aLanded) fs.fighterB = { anim: "hit", animStart: now };
           if (line.ev.aLanded) {
-            for (let k=0;k<4;k++) fs.hitParticles.push({ x: canvasRef.current ? canvasRef.current.width * 0.62 : 400, y: canvasRef.current ? canvasRef.current.height * 0.38 : 200, vx: (Math.random()-0.5)*60, vy: -20-Math.random()*30, life: 0.4+Math.random()*0.3, born: now });
+            for (let k=0;k<5;k++) fs.hitParticles.push({ x: canvasRef.current ? canvasRef.current.width * 0.57 : 365, y: canvasRef.current ? canvasRef.current.height * 0.38 : 200, vx: (Math.random()-0.5)*80, vy: -25-Math.random()*35, life: 0.5+Math.random()*0.3, born: now });
           }
         } else if (line.type === "exchange" && line.side === "b" && line.ev) {
           fs.fighterB = { anim: line.ev.bPunch, animStart: now, landed: line.ev.bLanded };
           if (line.ev.bLanded) fs.fighterA = { anim: "hit", animStart: now };
           if (line.ev.bLanded) {
-            for (let k=0;k<4;k++) fs.hitParticles.push({ x: canvasRef.current ? canvasRef.current.width * 0.38 : 250, y: canvasRef.current ? canvasRef.current.height * 0.38 : 200, vx: (Math.random()-0.5)*60, vy: -20-Math.random()*30, life: 0.4+Math.random()*0.3, born: now });
+            for (let k=0;k<5;k++) fs.hitParticles.push({ x: canvasRef.current ? canvasRef.current.width * 0.43 : 275, y: canvasRef.current ? canvasRef.current.height * 0.38 : 200, vx: (Math.random()-0.5)*80, vy: -25-Math.random()*35, life: 0.5+Math.random()*0.3, born: now });
           }
         } else if (line.type === "kd") {
           const side = line.side;
@@ -1130,13 +1132,17 @@ export default function Boxing3D() {
       ctx.fillStyle = "#12121a"; ctx.fillRect(0, 0, W, H);
 
       const ring = drawRing(ctx, W, H);
-      const fAx = ring.rl + ring.rw * 0.30, fAy = ring.rt + ring.rh * 0.55;
-      const fBx = ring.rl + ring.rw * 0.70, fBy = ring.rt + ring.rh * 0.55;
+      const fAx = ring.rl + ring.rw * 0.40, fAy = ring.rt + ring.rh * 0.55;
+      const fBx = ring.rl + ring.rw * 0.60, fBy = ring.rt + ring.rh * 0.55;
 
-      // Fighter animations
-      const animDur = 350;
-      const progA = fs.fighterA.animStart ? Math.min(1, (now - fs.fighterA.animStart) / animDur) : 1;
-      const progB = fs.fighterB.animStart ? Math.min(1, (now - fs.fighterB.animStart) / animDur) : 1;
+      // Fighter animations — down/ko hold much longer than punches
+      const punchDur = 350;
+      const downDur = 2800;
+      const koDur = 99999;
+      const durA = (fs.fighterA.anim === "down") ? downDur : (fs.fighterA.anim === "ko") ? koDur : punchDur;
+      const durB = (fs.fighterB.anim === "down") ? downDur : (fs.fighterB.anim === "ko") ? koDur : punchDur;
+      const progA = fs.fighterA.animStart ? Math.min(1, (now - fs.fighterA.animStart) / durA) : 1;
+      const progB = fs.fighterB.animStart ? Math.min(1, (now - fs.fighterB.animStart) / durB) : 1;
       const animA = progA >= 1 ? "idle" : fs.fighterA.anim;
       const animB = progB >= 1 ? "idle" : fs.fighterB.anim;
 
@@ -1155,8 +1161,9 @@ export default function Boxing3D() {
       }
       if (fs.koCountdown) {
         const elapsed = (now - fs.koCountdown.start) / 1000;
-        const count = Math.min(10, Math.floor(elapsed * 1.2) + 1);
-        drawKOCountdown(ctx, W, H, count);
+        const count = Math.min(10, Math.floor(elapsed * 3.5) + 1);
+        if (elapsed < 3.2) drawKOCountdown(ctx, W, H, count);
+        else fs.koCountdown = null;
       }
 
       animFrameRef.current = requestAnimationFrame(render);
