@@ -1020,7 +1020,10 @@ export default function ShootingRange3D() {
               {/* Bottom bar */}
               <div
                 className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-3 px-3 pb-3 pt-5"
-                style={{ background:"linear-gradient(to top,rgba(8,5,3,.96),transparent)", pointerEvents:"none" }}
+                style={{
+                  background: "linear-gradient(to top,rgba(8,5,3,.96),transparent)",
+                  pointerEvents: gamePhase === "playing" ? "none" : "auto",
+                }}
               >
                 <div style={{ fontFamily:"'Crimson Text',serif", fontSize:"clamp(11px,3vw,14px)", fontStyle:"italic", color:"#c9a460", textShadow:"0 0 12px rgba(201,164,96,.4)", flex:1 }}>
                   {gamePhase === "idle" && "Step up to the line, friend."}
