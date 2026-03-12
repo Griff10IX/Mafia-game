@@ -131,6 +131,7 @@ class CreateRaceRequest(BaseModel):
     max_grid: int = 6
     laps: int = 3
     tyre_compound: str = "medium"  # soft, medium, hard
+    weather_id: Optional[str] = None  # clear, rain, snow, very_hot; if omitted, random at create
 
 
 class JoinRaceRequest(BaseModel):
@@ -748,6 +749,13 @@ async def create_race(body: CreateRaceRequest, current_user: dict = Depends(get_
             raise HTTPException(status_code=400, detail="Insufficient cash for entry fee")
     race_id = str(uuid.uuid4())
     now = _now_iso()
+    # Weather: use provided or random (set once so creator can see it when selecting tyres)
+    if body.weather_id and any(w.get("id") == body.weather_id for w in WEATHER_TYPES):
+        weather = _get_weather(body.weather_id)
+    else:
+        weather = random.choice(WEATHER_TYPES)
+    weather_id = weather.get("id", "clear")
+    weather_name = weather.get("name", "Clear")
     doc = {
         "id": race_id,
         "track_id": track_id,
@@ -759,6 +767,8 @@ async def create_race(body: CreateRaceRequest, current_user: dict = Depends(get_
         "created_at": now,
         "started_at": None,
         "completed_at": None,
+        "weather": weather_id,
+        "weather_name": weather_name,
         "participants": [
             {
                 "user_id": current_user["id"],
@@ -927,7 +937,11 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
                 if car_doc:
                     upgrades_map[inst_id] = {"engine_level": car_doc.get("engine_level", 0), "tires_level": car_doc.get("tires_level", 0)}
     num_laps = max(NUM_LAPS_MIN, min(NUM_LAPS_MAX, int(race.get("laps") or 3)))
-    weather = random.choice(WEATHER_TYPES)
+    # Use weather set at race creation so it matches what was shown when selecting tyres
+    if race.get("weather") and any(w.get("id") == race.get("weather") for w in WEATHER_TYPES):
+        weather = _get_weather(race["weather"])
+    else:
+        weather = random.choice(WEATHER_TYPES)
     weather_id = weather.get("id", "clear")
     # Pre-check: engine wear < 100 and tyre stock for each human
     engine_wear_by_entrant: Dict[str, float] = {}

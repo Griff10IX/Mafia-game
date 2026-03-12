@@ -11,19 +11,19 @@ const CAR_COLORS = [
 ];
 
 const TYRE_DEFS = {
-  soft:   { id:"soft",   label:"Soft",     color:"#e82020", wearPerSec:0.55, gripMult:1.08, minWear:5,  desc:"Fastest, wears in ~25s" },
-  medium: { id:"medium", label:"Medium",   color:"#e8d020", wearPerSec:0.35, gripMult:1.02, minWear:5,  desc:"Balanced, wears in ~45s" },
-  hard:   { id:"hard",   label:"Hard",     color:"#d0d0c0", wearPerSec:0.20, gripMult:0.96, minWear:5,  desc:"Durable, slower" },
+  soft:   { id:"soft",   label:"Soft",     color:"#e82020", wearPerSec:0.65, gripMult:1.08, minWear:5,  desc:"Fastest, wears in ~25s" },
+  medium: { id:"medium", label:"Medium",   color:"#e8d020", wearPerSec:0.42, gripMult:1.02, minWear:5,  desc:"Balanced, wears in ~45s" },
+  hard:   { id:"hard",   label:"Hard",     color:"#d0d0c0", wearPerSec:0.24, gripMult:0.96, minWear:5,  desc:"Durable, slower" },
   inter:  { id:"inter",  label:"Inter",    color:"#20a840", wearPerSec:0.30, gripMult:1.04, minWear:5,  desc:"Damp / light rain" },
   wet:    { id:"wet",    label:"Full Wet", color:"#2080e8", wearPerSec:0.18, gripMult:1.08, minWear:5,  desc:"Heavy rain / snow" },
 };
 
 const WEATHER_DEFS = {
-  clear:    { label:"Clear",     icon:"☀️",  bg1:"#0e1a06", bg2:"#0a1204", speedMult:1.00, wearMult:1.00, tyreRec:["soft","medium","hard"] },
-  night:    { label:"Night",     icon:"🌙", bg1:"#050810", bg2:"#080c14", speedMult:0.97, wearMult:1.05, tyreRec:["medium","hard"] },
-  rain:     { label:"Rain",      icon:"🌧️", bg1:"#0a1020", bg2:"#060c18", speedMult:0.90, wearMult:1.55, tyreRec:["inter","wet"] },
-  snow:     { label:"Snow",      icon:"❄️",  bg1:"#18182a", bg2:"#10101e", speedMult:0.82, wearMult:2.00, tyreRec:["wet"] },
-  very_hot: { label:"Very Hot",  icon:"🔥", bg1:"#1e0e04", bg2:"#120a02", speedMult:0.95, wearMult:1.45, tyreRec:["medium","hard"] },
+  clear:    { label:"Clear",     icon:"☀️",  bg1:"#0e1a06", bg2:"#0a1204", speedMult:1.00, wearMult:1.00, gripMult:1.00, tyreRec:["soft","medium","hard"] },
+  night:    { label:"Night",     icon:"🌙", bg1:"#050810", bg2:"#080c14", speedMult:0.97, wearMult:1.05, gripMult:0.98, tyreRec:["medium","hard"] },
+  rain:     { label:"Rain",      icon:"🌧️", bg1:"#0a1020", bg2:"#060c18", speedMult:0.90, wearMult:1.55, gripMult:0.88, tyreRec:["inter","wet"] },
+  snow:     { label:"Snow",      icon:"❄️",  bg1:"#18182a", bg2:"#10101e", speedMult:0.82, wearMult:2.00, gripMult:0.82, tyreRec:["wet"] },
+  very_hot: { label:"Very Hot",  icon:"🔥", bg1:"#1e0e04", bg2:"#120a02", speedMult:0.95, wearMult:1.45, gripMult:0.95, tyreRec:["medium","hard"] },
 };
 
 // Map weather IDs from backend → our keys
@@ -308,9 +308,16 @@ function tyreColor(wear) {
 
 function buildPitStrategy(tyreId, numLaps) {
   if (numLaps <= 2) return [];
-  const pitLap = Math.floor(numLaps / 2);
+  const pitLap = Math.max(1, Math.floor(numLaps / 2));
   const next = tyreId === "soft" ? "medium" : tyreId === "medium" ? "hard" : "medium";
   return [{ lap: pitLap, nextTyre: next }];
+}
+
+/** Build pit strategy for replay from backend pit_stops (list of { lap, entrant_id }). */
+function buildReplayPitStrategy(entrantId, pitStopsList, defaultTyre = "medium") {
+  const stops = (pitStopsList || []).filter((ps) => ps.entrant_id === entrantId);
+  if (!stops.length) return [];
+  return stops.map((ps) => ({ lap: ps.lap, nextTyre: defaultTyre }));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -391,7 +398,7 @@ export default function CircuitRaceView({
   }, []);
 
   // ── DRAW TRACK ──
-  const drawTrackCanvas = useCallback((track, cond, racerArr) => {
+  const drawTrackCanvas = useCallback((track, cond, racerArr, nowSec = 0) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -503,7 +510,10 @@ export default function CircuitRaceView({
       const p = track.getPoint(t);
       const p2 = track.getPoint((t + 0.006) % 1);
       const angle = Math.atan2(sy(p2.y)-sy(p.y), sx(p2.x)-sx(p.x));
-      const px = sx(p.x), py = sy(p.y);
+      const offTrack = r.slideOffUntil > 0 && nowSec < r.slideOffUntil;
+      const offs = offTrack ? 14 : 0;
+      const px = sx(p.x) + Math.cos(angle + Math.PI/2) * offs;
+      const py = sy(p.y) + Math.sin(angle + Math.PI/2) * offs;
 
       // Speed glow
       const grd = ctx.createRadialGradient(px,py,0,px,py,18);
@@ -546,6 +556,10 @@ export default function CircuitRaceView({
         ctx.fillStyle="#ff9800"; ctx.font="bold 8px Cinzel,serif"; ctx.textAlign="center";
         ctx.fillText("PIT", px, py+16);
       }
+      if (offTrack) {
+        ctx.fillStyle="#e74c3c"; ctx.font="bold 7px Cinzel,serif"; ctx.textAlign="center";
+        ctx.fillText("OFF", px, py+16);
+      }
     });
   }, [getScale]);
 
@@ -568,6 +582,7 @@ export default function CircuitRaceView({
       pitStrategy: buildPitStrategy(pTyre, nLaps),
       finished:false, visible:true, position:1,
       lapTimes:[],
+      slideOffUntil:0,
     });
     for (let i=0;i<7;i++) {
       const carIdx = i % NPC_CARS.length;
@@ -587,6 +602,7 @@ export default function CircuitRaceView({
         pitStrategy: buildPitStrategy(t, nLaps),
         finished:false, visible:true, position:i+2,
         lapTimes:[],
+        slideOffUntil:0,
       });
     }
     return racers;
@@ -633,18 +649,33 @@ export default function CircuitRaceView({
         // Tyre wear factor
         const td = TYRE_DEFS[r.currentTyre] || TYRE_DEFS.medium;
         const wearFactor = Math.max(0.4, r.tyreWear / 100);
+        const wdGrip = (wd.gripMult != null) ? wd.gripMult : 1.0;
+        const effectiveGrip = (r.baseGrip != null ? r.baseGrip : 0.85) * wearFactor * wdGrip;
         const effSpeed = r.baseSpeed * td.gripMult * wd.speedMult * wearFactor;
 
-        // Corner-aware speed: slow in corners, fast on straights
+        // Corner-aware speed: slow in corners, fast on straights (weather + tyre grip affect cornering)
         const curvature = getCurvature(track, r.trackPos);
-        const baseGrip = r.baseGrip != null ? r.baseGrip : 0.85;
-        const cornerMult = getCornerMult(curvature, baseGrip);
+        const cornerMult = getCornerMult(curvature, effectiveGrip);
 
-        // Advance: full lap = lapBase seconds, reduced in corners
-        const lapTime = track.lapBase / effSpeed;
-        const advance = (1.0 / lapTime) * dt * cornerMult;
+        // Slide off track: high curvature + low grip → chance to slide off; while off, crawl back on
+        const nowSec = now / 1000;
         const prevPos = r.trackPos;
-        r.trackPos = (r.trackPos + advance + 1) % 1;
+        if (r.slideOffUntil > 0 && nowSec < r.slideOffUntil) {
+          // Still off track — reduced advance (rejoining)
+          const lapTime = track.lapBase / effSpeed;
+          const advance = (1.0 / lapTime) * dt * 0.18;
+          r.trackPos = (r.trackPos + advance + 1) % 1;
+        } else {
+          r.slideOffUntil = 0;
+          // Normal advance
+          const lapTime = track.lapBase / effSpeed;
+          const advance = (1.0 / lapTime) * dt * cornerMult;
+          r.trackPos = (r.trackPos + advance + 1) % 1;
+          // Chance to slide off in sharp corners with low grip
+          if (curvature > 0.10 && effectiveGrip < 0.82 && Math.random() < dt * 2.2 * (0.85 - effectiveGrip) * Math.min(1, curvature / 0.18)) {
+            r.slideOffUntil = nowSec + 0.5 + Math.random() * 0.6;
+          }
+        }
 
         // Detect lap crossing (prevPos near 0.98+, new near 0.01-)
         if (prevPos > 0.93 && r.trackPos < 0.07) {
@@ -663,13 +694,14 @@ export default function CircuitRaceView({
         else
           r.tyreWear = Math.max(td.minWear, r.tyreWear - td.wearPerSec * wd.wearMult * dt);
 
-        // Pit decision
+        // Pit decision: pit when we're on or past the planned lap and tyre wear is low enough, and we're near pit entry
         if (!r.inPit && r.pitStrategy.length > 0) {
           const next = r.pitStrategy[0];
-          const shouldPit = r.totalLapsDone >= next.lap && r.tyreWear < 45;
+          const currentLap = r.totalLapsDone + 1;
+          const shouldPit = currentLap >= next.lap && r.tyreWear < 45;
           if (shouldPit) {
             const distToPit = Math.abs(((r.trackPos - track.pitEntry) + 1) % 1);
-            if (distToPit < 0.06) {
+            if (distToPit < 0.12) {
               r.inPit = true;
               const dur = (r.pitDurationSeconds != null ? r.pitDurationSeconds : 3.0);
               r.pitEndAt = now / 1000 + dur;
@@ -682,7 +714,7 @@ export default function CircuitRaceView({
         // Emergency pit on critically worn tyres
         if (!r.inPit && r.tyreWear <= td.minWear + 1) {
           const dist = Math.abs(((r.trackPos - track.pitEntry) + 1) % 1);
-          if (dist < 0.06) {
+          if (dist < 0.12) {
             r.inPit = true;
             const durEmerg = (r.pitDurationEmergencySeconds != null ? r.pitDurationEmergencySeconds : 3.8);
             r.pitEndAt = now / 1000 + durEmerg;
@@ -718,13 +750,15 @@ export default function CircuitRaceView({
       }
 
       // Draw
-      drawTrackCanvas(track, cond, sorted);
+      drawTrackCanvas(track, cond, sorted, now / 1000);
 
       // Update standings state (gap in fractional laps; leader progress used for all)
       const leaderProgress = sorted[0].totalLapsDone + sorted[0].trackPos;
+      const nowSec = now / 1000;
       setStandings(sorted.map(r=>{
         const progress = r.totalLapsDone + r.trackPos;
         const gapLaps = leaderProgress - progress;
+        const pitTimeRemaining = r.inPit && r.pitEndAt ? Math.max(0, r.pitEndAt - nowSec) : 0;
         return {
           id:r.id, name:r.name, isPlayer:r.isPlayer,
           color:r.color, carName:r.carName,
@@ -732,6 +766,7 @@ export default function CircuitRaceView({
           currentTyre:r.currentTyre, tyreWear:r.tyreWear,
           inPit:r.inPit, finished:r.finished,
           pitStops:r.pitStops,
+          pitTimeRemaining,
           gap: gapLaps,
           lapsDown: Math.floor(gapLaps),
         };
@@ -767,13 +802,14 @@ export default function CircuitRaceView({
     resizeCanvas();
     const track = TRACKS.find(t=>t.id===initialTrackId) || TRACKS[0];
     const cond = WEATHER_MAP[weatherIdProp] || "clear";
-    const racers = order.map((id, i) => {
+      const racers = order.map((id, i) => {
       const p = participants.find(x=>(x.user_id||x.id)===id) || {};
       const effSpeed = p.effective_speed != null ? p.effective_speed : 15;
       const effGrip = p.effective_grip != null ? p.effective_grip : 0.85;
       const baseSpeed = effSpeed / 15;
       const tyreId = (p.tyre_compound || "medium").toLowerCase();
       const pitLvl = p.pit_level != null ? p.pit_level : 0;
+      const replayPitStrategy = buildReplayPitStrategy(id, pit_stops, tyreId);
       return {
         id, name:p.username||p.car_name||`#${i+1}`, isPlayer:false,
         color:CAR_COLORS[i%CAR_COLORS.length], carName:p.car_name||"",
@@ -784,9 +820,10 @@ export default function CircuitRaceView({
         pitDurationSeconds: pitDurationSeconds(pitLvl, false),
         pitDurationEmergencySeconds: pitDurationSeconds(pitLvl, true),
         baseSpeed, baseGrip: effGrip,
-        pitStrategy: [], finished:false, visible:true, position:i+1, lapTimes:[],
+        pitStrategy: replayPitStrategy, finished:false, visible:true, position:i+1, lapTimes:[],
         isPlayer: false,
         tireWearByLap: tire_wear_after_lap[id],
+        slideOffUntil: 0,
       };
     });
     stateRef.current = { racers, track, nLaps: totalLaps, wd: WEATHER_DEFS[cond] || WEATHER_DEFS.clear };
@@ -1044,9 +1081,12 @@ export default function CircuitRaceView({
             const lapsDown = r.lapsDown != null ? r.lapsDown : (r.gap != null ? Math.floor(r.gap) : 0);
             const fracLap = r.gap != null ? r.gap - Math.floor(r.gap) : 0;
             let gapStr = "Leader";
-            if (i > 0) {
-              if (r.inPit) gapStr = "PIT";
-              else if (lapsDown >= 1) {
+            if (r.inPit) {
+              gapStr = r.pitTimeRemaining != null && r.pitTimeRemaining > 0
+                ? `PIT — ${r.pitTimeRemaining.toFixed(1)}s`
+                : "PIT";
+            } else if (i > 0) {
+              if (lapsDown >= 1) {
                 gapStr = lapsDown === 1 ? "1 lap down" : `${lapsDown} laps down`;
                 if (fracLap > 0.001) gapStr += ` +${(fracLap * selectedTrack.lapBase).toFixed(2)}s`;
               } else {

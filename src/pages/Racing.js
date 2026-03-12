@@ -14,6 +14,13 @@ const TRACK_ID_MAP = {
   indianapolis: "indianapolis",
 };
 
+const WEATHER_OPTIONS = [
+  { id: "clear", name: "Clear", icon: "☀️" },
+  { id: "rain", name: "Rain", icon: "🌧️" },
+  { id: "snow", name: "Snow", icon: "❄️" },
+  { id: "very_hot", name: "Very hot", icon: "🔥" },
+];
+
 function formatMoney(n) {
   const num = Number(n ?? 0);
   if (Number.isNaN(num)) return "$0";
@@ -46,7 +53,7 @@ export default function Racing() {
   const [creating, setCreating] = useState(false);
   const [joiningId, setJoiningId] = useState(null);
   const [joinTyre, setJoinTyre] = useState("medium");
-  const [createForm, setCreateForm] = useState({ track_id: "", entry_fee: 0, max_grid: 6, laps: 3, tyre_compound: "medium" });
+  const [createForm, setCreateForm] = useState({ track_id: "", entry_fee: 0, max_grid: 6, laps: 3, tyre_compound: "medium", weather_id: "clear" });
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -144,6 +151,7 @@ export default function Racing() {
         max_grid: Number(createForm.max_grid) || 6,
         laps: Number(createForm.laps) || 3,
         tyre_compound: createForm.tyre_compound || "medium",
+        weather_id: createForm.weather_id || "clear",
       });
       const race = r.data?.race;
       if (race) {
@@ -416,6 +424,9 @@ export default function Racing() {
                 <p className="text-sm text-[var(--noir-muted)]">
                   {activeRace.participants?.length ?? 0} / {activeRace.max_grid} on grid.
                   Entry fee: {formatMoney(activeRace.entry_fee)}.
+                  {activeRace.weather_name || (WEATHER_OPTIONS.find((w) => w.id === activeRace.weather)?.name) ? (
+                    <> Weather: {activeRace.weather_name ?? WEATHER_OPTIONS.find((w) => w.id === activeRace.weather)?.name ?? activeRace.weather}</>
+                  ) : null}
                 </p>
                 {canStartRace && (
                   <button
@@ -432,6 +443,23 @@ export default function Racing() {
             {/* Create race */}
             <div className={styles.panel + " p-4 mb-4"}>
               <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Create race</h3>
+              <div className="flex flex-wrap items-end gap-3 mb-2">
+                <div className="flex items-center gap-2 px-2 py-1.5 rounded border border-[var(--noir-border)] bg-[var(--noir-surface)]">
+                  <span className="text-xs text-[var(--noir-muted)]">Weather (auto):</span>
+                  <span className="text-sm font-heading text-[var(--noir-primary)]">
+                    {WEATHER_OPTIONS.find((w) => w.id === createForm.weather_id)?.icon}{" "}
+                    {WEATHER_OPTIONS.find((w) => w.id === createForm.weather_id)?.name ?? createForm.weather_id}
+                  </span>
+                  <button
+                    type="button"
+                    className="text-[10px] font-heading px-1.5 py-0.5 border border-[var(--noir-border)] rounded hover:bg-[var(--noir-primary)]/10"
+                    onClick={() => setCreateForm((f) => ({ ...f, weather_id: WEATHER_OPTIONS[Math.floor(Math.random() * WEATHER_OPTIONS.length)].id }))}
+                  >
+                    Randomise
+                  </button>
+                </div>
+              </div>
+              <p className="text-[10px] text-[var(--noir-muted)] mb-3">Weather affects car speed and tyre wear. Pick tyres suited to conditions.</p>
               <div className="flex flex-wrap gap-3 items-end">
                 <label className="flex flex-col gap-1">
                   <span className="text-xs">Track</span>
@@ -497,6 +525,7 @@ export default function Racing() {
                   <option value="medium">Medium</option>
                   <option value="hard">Hard</option>
                 </select>
+                <span className="text-[10px] text-[var(--noir-muted)]">Weather shown per race; pick tyres for conditions.</span>
               </div>
               {openRaces.length === 0 ? (
                 <p className="text-sm text-[var(--noir-muted)]">No open races. Create one above.</p>
@@ -508,6 +537,7 @@ export default function Racing() {
                         <span className="font-heading">{race.track_name}</span>
                         <span className="text-xs text-[var(--noir-muted)] ml-2">
                           {race.participants?.length ?? 0}/{race.max_grid} • {formatMoney(race.entry_fee)} entry
+                          {race.weather_name || race.weather ? ` • ${race.weather_name ?? WEATHER_OPTIONS.find((w) => w.id === race.weather)?.name ?? race.weather}` : ""}
                         </span>
                       </div>
                       <button type="button" className={styles.btnPrimary + " text-sm"}
