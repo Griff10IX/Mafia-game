@@ -729,11 +729,13 @@ export default function ShootingRange3D() {
           }
         }
 
-        // ── ROUND TIMER ───────────────────────────────────────────────────
+        // ── ROUND TIMER (or out of clips = round over) ─────────────────────
         if (state.phase === "playing") {
           const rem = Math.ceil(Math.max(0, state.roundEndAt - t));
           setTimeLeft(rem);
-          if (t >= state.roundEndAt) {
+          const timeUp = t >= state.roundEndAt;
+          const clipsOut = state.ammo === 0 && state.clipsRemaining === 0;
+          if (timeUp || clipsOut) {
             state.phase = "done";
             if (state.target) state.target.visible = false;
             state.targetVisible = false;

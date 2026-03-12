@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import api, { refreshUser } from "../utils/api";
 import { getApiErrorMessage } from "../utils/api";
 import styles from "../styles/noir.module.css";
-import CircuitRaceView from "./CircuitRaceView";
+import CircuitRaceView, { TRACKS as CIRCUIT_TRACKS, TrackThumb } from "./CircuitRaceView";
 
 // ─── track_id → circuit id mapping (backend IDs → CircuitRaceView track ids)
 const TRACK_ID_MAP = {
@@ -21,6 +21,17 @@ const TRACK_DISPLAY = {
   roosevelt: { km: 2.1, corners: 12 },
   indianapolis: { km: 4.0, corners: 4 },
 };
+// 8 tracks for create form: circuitId for TrackThumb, track_id for API (first 4 = backend; extra 4 map for display only)
+const TRACKS_FOR_CREATE = [
+  { circuitId: "chicago", track_id: "chicago_board", name: "Chicago Board Track", km: 2.4, corners: 8 },
+  { circuitId: "daytona", track_id: "daytona_beach", name: "Daytona Beach", km: 3.6, corners: 4 },
+  { circuitId: "indianapolis", track_id: "indianapolis", name: "Indianapolis Motor Speedway", km: 4.0, corners: 4 },
+  { circuitId: "roosevelt", track_id: "roosevelt", name: "Roosevelt Raceway", km: 2.1, corners: 12 },
+  { circuitId: "boardwalk", track_id: "roosevelt", name: "Boardwalk Circuit", km: 2.8, corners: 16 },
+  { circuitId: "lakeside", track_id: "daytona_beach", name: "Lakeside Park", km: 3.2, corners: 10 },
+  { circuitId: "harbor", track_id: "chicago_board", name: "Harbor Front", km: 2.5, corners: 20 },
+  { circuitId: "mountain", track_id: "indianapolis", name: "Mountain Pass", km: 4.2, corners: 18 },
+];
 
 const WEATHER_OPTIONS = [
   { id: "clear", name: "Clear", icon: "☀️" },
@@ -31,6 +42,11 @@ const WEATHER_OPTIONS = [
 ];
 // Backend only supports clear, rain, snow, very_hot — map night → clear when creating race
 const WEATHER_ID_FOR_API = (id) => (id === "night" ? "clear" : id);
+// Inter/Full wet use medium stock until backend supports them
+function effectiveTyreStock(compound, profile) {
+  if (compound === "inter" || compound === "full_wet") return profile?.tyre_stock_medium ?? 0;
+  return profile?.[`tyre_stock_${compound}`] ?? 0;
+}
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -83,7 +99,7 @@ export default function Racing() {
   const [creating, setCreating] = useState(false);
   const [joiningId, setJoiningId] = useState(null);
   const [joinTyre, setJoinTyre] = useState("medium");
-  const [createForm, setCreateForm] = useState({ track_id: "", entry_fee: 0, max_grid: 6, laps: 3, tyre_compound: "medium", weather_id: "clear" });
+  const [createForm, setCreateForm] = useState({ track_id: "", circuitId: "", entry_fee: 0, max_grid: 6, laps: 3, tyre_compound: "medium", weather_id: "clear" });
   const [teamCreateName, setTeamCreateName] = useState("");
   const [teamCreateColor, setTeamCreateColor] = useState("#e8d020");
   const [teamCreating, setTeamCreating] = useState(false);
@@ -194,7 +210,7 @@ export default function Racing() {
         entry_fee: Number(createForm.entry_fee) || 0,
         max_grid: Number(createForm.max_grid) || 6,
         laps: Number(createForm.laps) || 3,
-        tyre_compound: createForm.tyre_compound || "medium",
+        tyre_compound: (createForm.tyre_compound === "inter" || createForm.tyre_compound === "full_wet" ? "medium" : createForm.tyre_compound) || "medium",
         weather_id: WEATHER_ID_FOR_API(createForm.weather_id || "clear"),
       });
       const race = r.data?.race;
@@ -521,6 +537,7 @@ export default function Racing() {
             playerPitLevel={profile?.pit_level ?? 0}
             currentUserId={profile?.user_id}
             onComplete={(resultOrder) => resultOrder && handleCompleteRace(activeRace.id, resultOrder)}
+            onReset={() => { setActiveRace(null); fetchOpenRaces(); }}
           />
         </div>
       )}
@@ -586,58 +603,31 @@ export default function Racing() {
         {/* ─── RACES TAB ─── */}
         {tab === "races" && (
           <>
-            {/* Active open race panel */}
-            {activeRace?.state === "open" && (
-              <div className={styles.panel + " p-4 mb-4"}>
-                <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>
-                  Your race: {activeRace.track_name}
-                </h3>
-                <p className="text-sm text-[var(--noir-muted)]">
-                  {activeRace.participants?.length ?? 0} / {activeRace.max_grid} on grid.
-                  Entry fee: {formatMoney(activeRace.entry_fee)}.
-                  {activeRace.weather_name || (WEATHER_OPTIONS.find((w) => w.id === activeRace.weather)?.name) ? (
-                    <> Weather: {activeRace.weather_name ?? WEATHER_OPTIONS.find((w) => w.id === activeRace.weather)?.name ?? activeRace.weather}</>
-                  ) : null}
-                </p>
-                {canStartRace && (
-                  <button
-                    type="button"
-                    className={styles.btnPrimary + " mt-3 min-h-[44px] touch-manipulation"}
-                    onClick={() => handleStartRace(activeRace)}
-                  >
-                    Start race (fill with NPCs)
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Create race — live-race style setup */}
+            {/* Create race — live-race style setup (first so tab always looks like reference) */}
             <div className={styles.panel + " p-4 mb-4"}>
               <h3 className="font-heading text-sm uppercase tracking-wider mb-4" style={{ color: "var(--noir-primary)" }}>
-                Live race · Grid order set by qualifying lap
+                LIVE RACE - GRID ORDER SET BY QUALIFYING LAP
               </h3>
 
-              {/* SELECT TRACK — grid of track cards */}
+              {/* SELECT TRACK — 8 tracks in 2×4 grid with outline thumbnails */}
               <div className="mb-6">
-                <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">Select track</div>
+                <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">SELECT TRACK</div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {(tracks.length ? tracks : [{ id: "chicago_board", name: "Chicago Board Track" }, { id: "daytona_beach", name: "Daytona Beach Road Course" }, { id: "roosevelt", name: "Roosevelt Raceway" }, { id: "indianapolis", name: "Indianapolis Motor Speedway" }]).map((t) => {
-                    const info = TRACK_DISPLAY[t.id] || {};
-                    const selected = createForm.track_id === t.id;
+                  {TRACKS_FOR_CREATE.map((t) => {
+                    const circuit = CIRCUIT_TRACKS[t.circuitId];
+                    const selected = createForm.circuitId === t.circuitId;
                     return (
                       <button
-                        key={t.id}
+                        key={t.circuitId}
                         type="button"
-                        onClick={() => setCreateForm((f) => ({ ...f, track_id: t.id }))}
+                        onClick={() => setCreateForm((f) => ({ ...f, track_id: t.track_id, circuitId: t.circuitId }))}
                         className={`p-3 rounded-lg border-2 text-left transition-all touch-manipulation ${selected ? "border-[var(--noir-primary)] bg-[var(--noir-primary)]/10" : "border-[var(--noir-border)] bg-[var(--noir-surface)] hover:border-[var(--noir-muted)]"}`}
                       >
-                        <div className="w-full aspect-[2.2/1] rounded bg-black/30 border border-[var(--noir-border)] flex items-center justify-center mb-2">
-                          <span className="text-[8px] font-heading text-[var(--noir-muted)]" style={{ color: selected ? "var(--noir-primary)" : undefined }}>TRACK</span>
+                        <div className="w-full aspect-[2.2/1] rounded flex items-center justify-center mb-2 overflow-hidden" style={{ background: "var(--noir-surface)", border: "1px solid var(--noir-border)" }}>
+                          {circuit ? <TrackThumb track={circuit} active={selected} /> : <span className="text-[8px] font-heading text-[var(--noir-muted)]">TRACK</span>}
                         </div>
                         <div className="font-heading text-xs truncate" style={{ color: "var(--noir-primary)" }}>{t.name}</div>
-                        <div className="text-[10px] text-[var(--noir-muted)]">
-                          {info.km != null ? `${info.km}km` : ""}{info.km != null && info.corners != null ? " · " : ""}{info.corners != null ? `${info.corners}T` : ""}
-                        </div>
+                        <div className="text-[10px] text-[var(--noir-muted)]">{t.km}km · {t.corners}T</div>
                       </button>
                     );
                   })}
@@ -648,7 +638,7 @@ export default function Racing() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
                 {/* Conditions */}
                 <div>
-                  <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">Conditions</div>
+                  <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">CONDITIONS</div>
                   <div className="flex flex-wrap gap-2">
                     {WEATHER_OPTIONS.map((w) => {
                       const sel = createForm.weather_id === w.id;
@@ -671,14 +661,16 @@ export default function Racing() {
                   </p>
                 </div>
 
-                {/* Your starting tyre */}
+                {/* Your starting tyre — 5 options */}
                 <div>
-                  <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">Your starting tyre</div>
+                  <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">YOUR STARTING TYRE</div>
                   <div className="flex flex-wrap gap-2">
                     {[
                       { id: "soft", label: "Soft", dot: "bg-red-500", desc: "Grippy, faster wear" },
                       { id: "medium", label: "Medium", dot: "bg-amber-400", desc: "Balanced" },
                       { id: "hard", label: "Hard", dot: "bg-gray-500", desc: "Durable, slower" },
+                      { id: "inter", label: "Inter", dot: "bg-cyan-400", desc: "Wet conditions" },
+                      { id: "full_wet", label: "Full Wet", dot: "bg-blue-600", desc: "Heavy rain" },
                     ].map((tyre) => {
                       const sel = createForm.tyre_compound === tyre.id;
                       return (
@@ -695,16 +687,18 @@ export default function Racing() {
                     })}
                   </div>
                   <p className="text-[10px] text-[var(--noir-muted)] mt-1">
-                    {createForm.tyre_compound === "soft" && "Grippy, faster wear"}
-                    {createForm.tyre_compound === "medium" && "Balanced"}
-                    {createForm.tyre_compound === "hard" && "Durable, slower"}
+                    {(["soft", "medium", "hard"].includes(createForm.tyre_compound) && { soft: "Grippy, faster wear", medium: "Balanced", hard: "Durable, slower" }[createForm.tyre_compound]) ||
+                      (createForm.tyre_compound === "inter" && "Wet conditions") ||
+                      (createForm.tyre_compound === "full_wet" && "Heavy rain")}
                   </p>
-                  <p className="text-[10px] text-[var(--noir-muted)]">Stock: {profile?.[`tyre_stock_${createForm.tyre_compound}`] ?? 0}</p>
+                  <p className="text-[10px] text-[var(--noir-muted)]">
+                    Stock: {["soft", "medium", "hard"].includes(createForm.tyre_compound) ? (profile?.[`tyre_stock_${createForm.tyre_compound}`] ?? 0) : (profile?.tyre_stock_medium ?? 0)}
+                  </p>
                 </div>
 
                 {/* Laps + entry/grid */}
                 <div>
-                  <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">Laps</div>
+                  <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">LAPS</div>
                   <input
                     type="number"
                     min={2}
@@ -740,7 +734,7 @@ export default function Racing() {
                 <button
                   type="button"
                   className={styles.btnPrimary + " min-h-[44px] touch-manipulation"}
-                  disabled={creating || !createForm.track_id || !selectedInstanceId || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 || ((profile?.[`tyre_stock_${createForm.tyre_compound}`] ?? 0) < 1)}
+                  disabled={creating || !createForm.track_id || !selectedInstanceId || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 || (effectiveTyreStock(createForm.tyre_compound, profile) < 1)}
                   onClick={handleCreateRace}
                 >
                   {creating ? "Creating…" : "Create race"}
@@ -749,13 +743,38 @@ export default function Racing() {
               {(cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 && (
                 <p className="text-xs text-amber-400 mt-2">Engine at 100% wear. Repair or replace in My ride.</p>
               )}
-              {((profile?.[`tyre_stock_${createForm.tyre_compound}`] ?? 0) < 1) && (
+              {effectiveTyreStock(createForm.tyre_compound, profile) < 1 && (
                 <p className="text-xs text-amber-400 mt-2">No {createForm.tyre_compound} tyres in stock. Buy in My ride.</p>
               )}
               {!selectedInstanceId && (
                 <p className="text-xs text-amber-400 mt-2">Select a racing car in My ride first.</p>
               )}
             </div>
+
+            {/* Active open race panel — after create form */}
+            {activeRace?.state === "open" && (
+              <div className={styles.panel + " p-4 mb-4"}>
+                <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>
+                  Your race: {activeRace.track_name}
+                </h3>
+                <p className="text-sm text-[var(--noir-muted)]">
+                  {activeRace.participants?.length ?? 0} / {activeRace.max_grid} on grid.
+                  Entry fee: {formatMoney(activeRace.entry_fee)}.
+                  {activeRace.weather_name || (WEATHER_OPTIONS.find((w) => w.id === activeRace.weather)?.name) ? (
+                    <> Weather: {activeRace.weather_name ?? WEATHER_OPTIONS.find((w) => w.id === activeRace.weather)?.name ?? activeRace.weather}</>
+                  ) : null}
+                </p>
+                {canStartRace && (
+                  <button
+                    type="button"
+                    className={styles.btnPrimary + " mt-3 min-h-[44px] touch-manipulation"}
+                    onClick={() => handleStartRace(activeRace)}
+                  >
+                    Start race (fill with NPCs)
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Open races */}
             <div className={styles.panel + " p-4"}>

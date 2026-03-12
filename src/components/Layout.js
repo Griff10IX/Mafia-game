@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
 import { setCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -42,6 +42,17 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/hitlist', label: 'Hitlist' },
         { path: '/bodyguards', label: 'Bodyguards' },
         { path: '/armour-weapons', label: 'Armoury' },
+      ],
+    },
+    {
+      type: 'group',
+      id: 'minigames',
+      icon: Gamepad2,
+      label: 'Mini games',
+      items: [
+        { path: '/racing', label: 'Racing' },
+        { path: '/boxing', label: 'Boxing' },
+        { path: '/flappygangster', label: 'Flappy Gangster' },
         { path: '/shooting-range', label: 'Shooting range' },
       ],
     },
@@ -117,7 +128,6 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/users-online', label: 'Users Online' },
         { path: '/families', label: 'Families' },
         { path: '/daily-rewards', label: 'Daily Rewards' },
-        { path: '/flappygangster', label: 'Flappy Gangster' },
         { path: '/leaderboard', label: 'Leaderboard' },
         { path: '/store', label: 'Store' },
         { path: '/quick-trade', label: 'Quick Trade' },
@@ -255,6 +265,7 @@ export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [casinoOpen, setCasinoOpen] = useState(false);
+  const [miniGamesOpen, setMiniGamesOpen] = useState(false);
   const [mobileBottomMenuOpen, setMobileBottomMenuOpen] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
@@ -666,6 +677,7 @@ export default function Layout({ children }) {
         '/bank': 'money', '/stock-market': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money',
         '/garage': 'money', '/sell-cars': 'money', '/buy-cars': 'money', '/crack-safe': 'money', '/casino': 'money', '/loot-box': 'money',
         '/families': 'other', '/dead-alive': 'other', '/auto-rank': 'other',
+        '/mini-games': 'minigames',
       }
     : {
         '/dashboard': 'information', '/verify-email': 'information', '/objectives': 'information', '/missions': 'information',
@@ -678,14 +690,17 @@ export default function Layout({ children }) {
         '/bank': 'money', '/stock-market': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money', '/flappygangster': 'money',
         '/garage': 'money', '/sell-cars': 'money', '/buy-cars': 'money', '/crack-safe': 'money', '/casino': 'money', '/leaderboard': 'money',
         '/families': 'other', '/dead-alive': 'other', '/auto-rank': 'other',
+        '/mini-games': 'minigames',
       };
   const SIDEBAR_CATEGORIES = isCategorizedClassic
     ? [
         { id: 'information', label: 'INFORMATION' }, { id: 'ranking', label: 'RANKING' }, { id: 'combat', label: 'COMBAT' },
+        { id: 'minigames', label: 'MINI GAMES' },
         { id: 'travel', label: 'TRAVEL' }, { id: 'messaging', label: 'MESSAGING' }, { id: 'money', label: 'MONEY' }, { id: 'other', label: 'OTHER' },
       ]
     : [
         { id: 'information', label: 'You' }, { id: 'ranking', label: 'Ranking' }, { id: 'combat', label: 'Combat' },
+        { id: 'minigames', label: 'Mini games' },
         { id: 'travel', label: 'Travel' }, { id: 'messaging', label: 'Messages' }, { id: 'money', label: 'Money' }, { id: 'other', label: 'Other' },
       ];
 
@@ -721,13 +736,10 @@ export default function Layout({ children }) {
     { path: '/buy-cars', icon: ShoppingBag, label: 'Buy Cars' },
     { path: '/properties', icon: Building, label: 'Properties' },
     { path: '/armour-weapons', icon: Sword, label: 'Armoury' },
-    { path: '/shooting-range', icon: Crosshair, label: 'Shooting range' },
+    { path: '/mini-games', icon: Gamepad2, label: 'Mini games' },
     { path: '/casino', icon: Dice5, label: 'Casino' },
     { path: '/crack-safe', icon: Lock, label: 'Crack the Safe' },
     { path: '/daily-rewards', icon: Gift, label: 'Daily Rewards' },
-    { path: '/flappygangster', icon: Zap, label: 'Flappy Gangster' },
-    { path: '/boxing', icon: Heart, label: 'Boxing' },
-    { path: '/racing', icon: Car, label: 'Racing' },
     { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { path: '/store', icon: ShoppingBag, label: 'Store' },
     { path: '/quick-trade', icon: ArrowLeftRight, label: 'Quick Trade' },
@@ -836,10 +848,43 @@ export default function Layout({ children }) {
     </div>
   );
 
+  const miniGamesNavBlock = (
+    <div className="space-y-0.5">
+      <button type="button" data-testid="nav-minigames-group" onClick={() => setMiniGamesOpen((v) => !v)}
+        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/racing' || location.pathname === '/boxing' || location.pathname === '/flappygangster' || location.pathname === '/shooting-range' || location.pathname.startsWith('/boxing/')) ? styles.navItemActive : styles.sidebarNavLink}`}
+        style={(location.pathname === '/racing' || location.pathname === '/boxing' || location.pathname === '/flappygangster' || location.pathname === '/shooting-range' || location.pathname.startsWith('/boxing/')) ? sidebarActiveGroupStyle : undefined}>
+        <Gamepad2 size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
+        <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Mini games</span>
+        {miniGamesOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
+      </button>
+      {miniGamesOpen && (
+        <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
+          {[
+            { to: '/racing', label: 'Racing', testId: 'nav-racing' },
+            { to: '/boxing', label: 'Boxing', testId: 'nav-boxing', matchPrefix: true },
+            { to: '/flappygangster', label: 'Flappy Gangster', testId: 'nav-flappygangster' },
+            { to: '/shooting-range', label: 'Shooting range', testId: 'nav-shooting-range', matchPrefix: true },
+          ].map((item, idx) => {
+            const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;
+            return (
+              <Fragment key={item.to}>
+                {showSidebarDividers && idx > 0 && navDividerEl(`mg${idx}`)}
+                <Link to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
+                  <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
+                </Link>
+              </Fragment>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
   const renderNavItem = (item, showDivider) => {
     const navDivider = showDivider ? navDividerEl(`div-${item.path}`) : null;
     if (item.path === '/ranking') return <Fragment key="nav-ranking-group">{navDivider}{rankingNavBlock}</Fragment>;
     if (item.path === '/casino') return <Fragment key="nav-casino-group">{navDivider}{casinoNavBlock}</Fragment>;
+    if (item.path === '/mini-games') return <Fragment key="nav-minigames-group">{navDivider}{miniGamesNavBlock}</Fragment>;
     const Icon = item.icon;
     const isActive = location.pathname === item.path;
     const isFamiliesAtWar = item.path === '/families' && atWar;

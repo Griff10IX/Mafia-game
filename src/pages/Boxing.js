@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../utils/api";
 import styles from "../styles/noir.module.css";
@@ -303,6 +303,9 @@ const FIGHTERS=[
 export default function Boxing3D() {
   const refs = useRef({ fight: null });
   const [arenaFightResult, setArenaFightResult] = useState(null);
+  const [liveCommentary, setLiveCommentary] = useState([]);
+  const commentaryEndRef = useRef(null);
+  const streamTimeoutsRef = useRef([]);
 
   const [hpA,setHpA]=useState(100);
   const [hpB,setHpB]=useState(100);
@@ -442,11 +445,7 @@ export default function Boxing3D() {
     result.nameA = simA.name;
     result.nameB = simB.name;
     setArenaFightResult(result);
-    setHpA(result.events.length ? result.events[result.events.length - 1].hpA : 100);
-    setHpB(result.events.length ? result.events[result.events.length - 1].hpB : 100);
-    setStamA(result.events.length ? result.events[result.events.length - 1].stamA : 100);
-    setStamB(result.events.length ? result.events[result.events.length - 1].stamB : 100);
-    setRound(result.events.length ? result.events[result.events.length - 1].round : 1);
+    // Bars and round will be driven by live commentary stream
     setGameState("done");
     const wName = result.winner === "a" ? result.nameA : result.winner === "b" ? result.nameB : "";
     setWinText(result.reason === "Draw" ? "DRAW" : `${wName.split(" ")[0]} WINS — ${result.reason}`);
@@ -732,9 +731,10 @@ export default function Boxing3D() {
   const crimson = "#b5463c"; // opponent accent (contrast)
 
   // Build detailed text log from simulated fight events
-  const fightLogLines = (() => {
+  // Build detailed text log from simulated fight events (with ev on each line for live bar updates)
+  const commentaryLinesToStream = useMemo(() => {
     const res = arenaFightResult;
-    if (!res || !res.events || !res.events.length) return null;
+    if (!res || !res.events || !res.events.length) return [];
     const nameA = res.nameA || "Fighter A";
     const nameB = res.nameB || "Fighter B";
     const cap = (s) => (s && s[0].toUpperCase() + s.slice(1)) || s;
@@ -748,22 +748,22 @@ export default function Boxing3D() {
 
       if (ev.round !== lastRound) {
         lastRound = ev.round;
-        lines.push({ type: "round", text: `Round ${ev.round}`, round: ev.round });
+        lines.push({ type: "round", text: `Round ${ev.round}`, round: ev.round, ev });
       }
       if (ev.aLanded) {
-        lines.push({ type: "exchange", text: `${nameA} lands a ${cap(ev.aPunch)} for ${ev.aDmg} damage.`, side: "a" });
+        lines.push({ type: "exchange", text: `${nameA} lands a ${cap(ev.aPunch)} for ${ev.aDmg} damage.`, side: "a", ev });
       } else {
-        lines.push({ type: "exchange", text: `${nameA} misses with a ${cap(ev.aPunch)}.`, side: "a" });
+        lines.push({ type: "exchange", text: `${nameA} misses with a ${cap(ev.aPunch)}.`, side: "a", ev });
       }
       if (ev.bLanded) {
-        lines.push({ type: "exchange", text: `${nameB} lands a ${cap(ev.bPunch)} for ${ev.bDmg} damage.`, side: "b" });
+        lines.push({ type: "exchange", text: `${nameB} lands a ${cap(ev.bPunch)} for ${ev.bDmg} damage.`, side: "b", ev });
       } else {
-        lines.push({ type: "exchange", text: `${nameB} misses with a ${cap(ev.bPunch)}.`, side: "b" });
+        lines.push({ type: "exchange", text: `${nameB} misses with a ${cap(ev.bPunch)}.`, side: "b", ev });
       }
-      if (ev.aKD) lines.push({ type: "kd", text: `Knockdown! ${nameA} takes a knee.`, side: "a" });
-      if (ev.bKD) lines.push({ type: "kd", text: `Knockdown! ${nameB} takes a knee.`, side: "b" });
-      if (ev.cutA) lines.push({ type: "cut", text: `Cut opened over ${nameA}'s ${ev.cutA.loc}.`, side: "a" });
-      if (ev.cutB) lines.push({ type: "cut", text: `Cut opened over ${nameB}'s ${ev.cutB.loc}.`, side: "b" });
+      if (ev.aKD) lines.push({ type: "kd", text: `Knockdown! ${nameA} takes a knee.`, side: "a", ev });
+      if (ev.bKD) lines.push({ type: "kd", text: `Knockdown! ${nameB} takes a knee.`, side: "b", ev });
+      if (ev.cutA) lines.push({ type: "cut", text: `Cut opened over ${nameA}'s ${ev.cutA.loc}.`, side: "a", ev });
+      if (ev.cutB) lines.push({ type: "cut", text: `Cut opened over ${nameB}'s ${ev.cutB.loc}.`, side: "b", ev });
       if (isLastExchangeOfRound) {
         lines.push({
           type: "roundEnd",
@@ -775,7 +775,50 @@ export default function Boxing3D() {
     const winnerName = res.winner === "a" ? nameA : res.winner === "b" ? nameB : "";
     lines.push({ type: "result", text: res.reason === "Draw" ? "Draw." : `Fight over. ${winnerName} wins by ${res.reason}.` });
     return lines;
-  })();
+  }, [arenaFightResult]);
+
+  // Stream commentary line-by-line (live commentary feel) and update HP/stamina bars as we go
+  useEffect(() => {
+    if (!arenaFightResult?.events?.length || commentaryLinesToStream.length === 0) return;
+    setLiveCommentary([]);
+    setHpA(100);
+    setHpB(100);
+    setStamA(100);
+    setStamB(100);
+    setRound(1);
+    const delays = { round: 220, exchange: 75, roundEnd: 90, kd: 180, cut: 180, result: 550 };
+    let i = 0;
+    const schedule = () => {
+      if (i >= commentaryLinesToStream.length) return;
+      const line = commentaryLinesToStream[i];
+      const ms = delays[line.type] ?? 80;
+      const t = setTimeout(() => {
+        setLiveCommentary((prev) => [...prev, line]);
+        if (line.ev) {
+          setHpA(line.ev.hpA);
+          setHpB(line.ev.hpB);
+          setStamA(line.ev.stamA);
+          setStamB(line.ev.stamB);
+          setRound(line.ev.round);
+        }
+        i++;
+        schedule();
+      }, ms);
+      streamTimeoutsRef.current.push(t);
+    };
+    schedule();
+    return () => {
+      streamTimeoutsRef.current.forEach(clearTimeout);
+      streamTimeoutsRef.current = [];
+    };
+  }, [arenaFightResult]);
+
+  // Auto-scroll commentary to bottom as new lines appear
+  useEffect(() => {
+    commentaryEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [liveCommentary]);
+
+  const fightLogLines = liveCommentary.length > 0 ? liveCommentary : null;
 
   const Bar=({val,flip,color})=>(
     <div style={{height:5,background:"rgba(255,255,255,0.07)",borderRadius:2,overflow:"hidden"}}>
@@ -808,6 +851,9 @@ export default function Boxing3D() {
             {!arenaFightResult && (
               <div style={{textAlign:"center",color:"var(--noir-muted)",paddingTop:24}}>Simulating fight…</div>
             )}
+            {arenaFightResult && liveCommentary.length === 0 && (
+              <div style={{textAlign:"center",color:"var(--noir-muted)",paddingTop:24}}>Live commentary…</div>
+            )}
             {fightLogLines && fightLogLines.map((item, i) => (
               <div
                 key={i}
@@ -821,6 +867,7 @@ export default function Boxing3D() {
                 {item.text}
               </div>
             ))}
+            <div ref={commentaryEndRef} />
           </div>
           <div style={{padding:"8px 10px 10px",paddingBottom:"max(10px, env(safe-area-inset-bottom))",background:"linear-gradient(transparent,rgba(0,0,0,0.92))",flexShrink:0,borderTop:"1px solid var(--noir-border-light)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:640,margin:"0 auto",gap:8}}>

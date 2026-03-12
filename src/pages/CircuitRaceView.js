@@ -350,6 +350,7 @@ export default function CircuitRaceView({
   weather: weatherIdProp = "clear",
   weather_name: weatherNameProp,
   onComplete,
+  onReset, // when provided (e.g. live mode from Racing.js), Reset returns to parent instead of going to setup
   // Props for standalone / pre-race mode (new usage)
   mode = "replay", // "replay" | "live"
   initialTrackId = "chicago",
@@ -365,7 +366,7 @@ export default function CircuitRaceView({
   const countdownIntervalRef = useRef(null);
 
   // ── UI STATE ──
-  const [uiPhase, setUiPhase] = useState("setup"); // setup | countdown | racing | done
+  const [uiPhase, setUiPhase] = useState("setup"); // setup | countdown | qualifying | racing | done
   const [selectedTrack, setSelectedTrack] = useState(() => TRACKS.find(t=>t.id===initialTrackId)||TRACKS[0]);
   const [condition, setCondition] = useState(initialCondition);
   const [chosenTyre, setChosenTyre] = useState(playerTyreId);
@@ -640,7 +641,8 @@ export default function CircuitRaceView({
   }, [playerCarName, playerPitLevel]);
 
   // ── RACE LOOP ──
-  const startRaceLoop = useCallback((track, cond, nLaps, racerArr) => {
+  const startRaceLoop = useCallback((track, cond, nLaps, racerArr, options = {}) => {
+    const { onQualifyingComplete } = options;
     const wd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
     let lastFrameTime = performance.now();
     let lastCommTime = performance.now();
@@ -682,6 +684,7 @@ export default function CircuitRaceView({
               pitNotifTimer.current = setTimeout(() => setPitNotif(null), 2500);
             }
           }
+          r.currentSpeedKmh = 0;
           return; // don't move while pitting
         }
 
@@ -713,12 +716,14 @@ export default function CircuitRaceView({
           const lapTime = track.lapBase / effSpeed;
           const advance = (1.0 / lapTime) * dt * 0.18;
           r.trackPos = (r.trackPos + advance + 1) % 1;
+          r.currentSpeedKmh = track.km && track.lapBase ? (3600 * track.km * 0.18 * effSpeed) / track.lapBase : null;
         } else {
           r.slideOffUntil = 0;
           // Normal advance
           const lapTime = track.lapBase / effSpeed;
           const advance = (1.0 / lapTime) * dt * cornerMult;
           r.trackPos = (r.trackPos + advance + 1) % 1;
+          r.currentSpeedKmh = track.km && track.lapBase ? (3600 * track.km * cornerMult * effSpeed) / track.lapBase : null;
           // Chance to slide off in sharp corners with low grip
           if (curvature > 0.10 && effectiveGrip < 0.82 && Math.random() < dt * 2.2 * (0.85 - effectiveGrip) * Math.min(1, curvature / 0.18)) {
             r.slideOffUntil = nowSec + 0.5 + Math.random() * 0.6;
@@ -788,7 +793,7 @@ export default function CircuitRaceView({
 
       // Lap display: current lap = laps completed + 1 (so we show "1 / N" at start, "2 / N" after first crossing, etc.)
       const leaderLap = Math.max(0, ...racers.map((r) => r.totalLapsDone ?? 0));
-      setLapDisplay(`${Math.min(leaderLap + 1, nLaps)} / ${nLaps}`);
+      setLapDisplay(nLaps === 1 ? "Qualifying" : `${Math.min(leaderLap + 1, nLaps)} / ${nLaps}`);
 
       // Commentary
       if (now - lastCommTime > 3200) {
@@ -824,10 +829,22 @@ export default function CircuitRaceView({
           pitTimeRemaining,
           gap: gapLaps,
           lapsDown: Math.floor(gapLaps),
+          currentSpeedKmh: r.currentSpeedKmh != null ? Math.round(r.currentSpeedKmh) : null,
         };
       }));
 
       if (allDone) {
+        // Qualifying finished: report grid order and let caller start the race
+        if (nLaps === 1 && onQualifyingComplete) {
+          const finalOrder = [...racers].sort((a, b) => {
+            const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
+            const pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+            if (Math.abs(pb - pa) > 1e-9) return pb - pa;
+            return (a.position ?? 99) - (b.position ?? 99);
+          });
+          onQualifyingComplete(finalOrder);
+          return;
+        }
         setUiPhase("done");
         setCommentary(rand(COMMENTARY.done));
         // Build results: same progress formula as during race (totalLapsDone + trackPos)
@@ -1029,21 +1046,55 @@ export default function CircuitRaceView({
       setCountdown(c);
       if (c <= 0) {
         clearInterval(cdInterval);
-        setUiPhase("racing");
-        setCommentary(rand(COMMENTARY.start));
-        startRaceLoop(track, cond, numLaps, racers);
+        setUiPhase("qualifying");
+        setLapDisplay("Qualifying");
+        setCommentary("Qualifying lap — grid order set by this lap");
+        startRaceLoop(track, cond, 1, racers, {
+          onQualifyingComplete: (sortedRacers) => {
+            const wd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
+            const weatherWear = wd.wearMult != null ? wd.wearMult : 1;
+            const gridRacers = sortedRacers.map((r, i) => ({
+              ...r,
+              trackPos: -i * 0.012,
+              totalLapsDone: 0,
+              lapCount: 1,
+              finished: false,
+              visible: true,
+              tyreWear: 100,
+              lapTimes: [],
+              pitStops: 0,
+              inPit: false,
+              pitEndAt: 0,
+              slideOffUntil: 0,
+              pitExitUntil: null,
+              position: i + 1,
+              pitStrategy: buildPitStrategy(r.currentTyre, numLaps, weatherWear, r.reliabilityWearMult || 1),
+            }));
+            setCommentary("Grid set — race start!");
+            setTimeout(() => {
+              setUiPhase("racing");
+              setLapDisplay(`1 / ${numLaps}`);
+              setCommentary(rand(COMMENTARY.start));
+              startRaceLoop(track, cond, numLaps, gridRacers);
+            }, 2200);
+          },
+        });
       }
     }, 1000);
   }, [uiPhase, selectedTrack, effectiveCondition, numLaps, chosenTyre, buildRacers, resizeCanvas, startRaceLoop]);
 
   const handleReset = useCallback(() => {
+    if (onReset) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      onReset();
+      return;
+    }
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    setUiPhase("setup"); setResults(null); setStandings([]);
+    setUiPhase("setup"); setResults(null); setStandings([]); setLapDisplay("—");
     setCommentary("Select track & tyres, then start");
     resizeCanvas();
-    // Draw static preview
     requestAnimationFrame(() => drawTrackCanvas(selectedTrack, effectiveCondition, []));
-  }, [selectedTrack, effectiveCondition, drawTrackCanvas, resizeCanvas]);
+  }, [selectedTrack, effectiveCondition, drawTrackCanvas, resizeCanvas, onReset]);
 
   // ── RESIZE ──
   useEffect(() => {
@@ -1178,8 +1229,21 @@ export default function CircuitRaceView({
 
         {/* HUD: top bar */}
         <div style={{ position:"absolute", top:0, left:0, right:0, display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"6px 8px", background:"linear-gradient(to bottom,rgba(0,0,0,.75),transparent)", pointerEvents:"none" }}>
-          <div style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(9px,2vw,11px)", letterSpacing:".18em", color:"var(--noir-primary)", background:"rgba(0,0,0,.6)", border:"1px solid rgba(201,164,96,.2)", padding:"2px 7px" }}>
-            Lap {lapDisplay}
+          <div style={{ display:"flex", alignItems:"center", gap:"10px", flexWrap:"wrap" }}>
+            <div style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(9px,2vw,11px)", letterSpacing:".18em", color:"var(--noir-primary)", background:"rgba(0,0,0,.6)", border:"1px solid rgba(201,164,96,.2)", padding:"2px 7px" }}>
+              Lap {lapDisplay}
+            </div>
+            {(uiPhase === "qualifying" || uiPhase === "racing") && (() => {
+              const playerStanding = standings.find(s => s.isPlayer);
+              const speedKmh = playerStanding?.currentSpeedKmh;
+              if (speedKmh == null) return null;
+              const speedMph = Math.round(speedKmh * 0.621371);
+              return (
+                <div style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(9px,2vw,11px)", letterSpacing:".12em", color:"#94a890", background:"rgba(0,0,0,.6)", border:"1px solid rgba(201,164,96,.15)", padding:"2px 7px" }}>
+                  Speed {speedMph} mph
+                </div>
+              );
+            })()}
           </div>
           <div style={{ display:"flex", gap:"5px", flexWrap:"wrap" }}>
             <span style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(8px,1.8vw,10px)", letterSpacing:".14em", color:"var(--noir-foreground)", background:"rgba(0,0,0,.6)", border:"1px solid rgba(201,164,96,.15)", padding:"2px 7px" }}>
@@ -1322,7 +1386,7 @@ export default function CircuitRaceView({
               Start Race
             </button>
           )}
-          {(uiPhase === "racing" || uiPhase === "done") && (
+          {(uiPhase === "qualifying" || uiPhase === "racing" || uiPhase === "done") && (
             <button type="button" onClick={handleReset}
               style={{ fontFamily:"'Cinzel',serif", fontSize:"9px", letterSpacing:".2em", textTransform:"uppercase", padding:"10px 16px", minHeight:44, border:"1px solid var(--noir-border)", background:"rgba(201,164,96,.07)", color:"var(--noir-primary)", cursor:"pointer", touchAction:"manipulation" }}>
               Reset
@@ -1403,3 +1467,6 @@ function TrackThumb({ track, active }) {
   }, [track, active]);
   return <canvas ref={ref} width={120} height={44} style={{ width:"100%", height:40, display:"block" }}/>;
 }
+
+export { TRACKS, TrackThumb };
+
