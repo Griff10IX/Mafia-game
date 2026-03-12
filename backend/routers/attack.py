@@ -1110,6 +1110,27 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             await cancel_offers_on_death(victim_id)
         except Exception as e:
             logging.exception("Quick trade offers on death: %s", e)
+        # Transfer victim's racing team to killer (if victim had one and killer doesn't)
+        try:
+            victim_racing = await db.racing_profiles.find_one({"user_id": victim_id}, {"_id": 0, "team_name": 1, "team_color": 1})
+            if victim_racing and (victim_racing.get("team_name") or "").strip():
+                killer_racing = await db.racing_profiles.find_one({"user_id": killer_id}, {"_id": 0, "team_name": 1})
+                if not (killer_racing or {}).get("team_name") or not ((killer_racing.get("team_name") or "").strip()):
+                    await db.racing_profiles.update_one({"user_id": victim_id}, {"$unset": {"team_name": "", "team_color": ""}})
+                    await db.racing_profiles.update_one(
+                        {"user_id": killer_id},
+                        {"$set": {"team_name": victim_racing["team_name"], "team_color": victim_racing.get("team_color") or "#e8d020"}, "$setOnInsert": {"user_id": killer_id}},
+                        upsert=True,
+                    )
+                    await send_notification(
+                        killer_id,
+                        "Racing team taken",
+                        f"You took {target_name}'s racing team: {victim_racing['team_name']}. You can now race.",
+                        "attack",
+                        category="attacks",
+                    )
+        except Exception as e:
+            logging.exception("Racing team transfer on kill: %s", e)
         # Transfer victim's casino ownership to killer (or release if killer already has one)
         killer_owns_casino = await _user_owns_any_casino(killer_id)
         casino_colls = [

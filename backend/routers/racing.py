@@ -1,12 +1,20 @@
 # Racing: bootleg runs / road races (1920s-30s). Choose from historical cars, create/join races, fill with NPCs, simulate, rewards, leaderboard, comps.
+#
+# System design:
+# - Max 18 racing teams; create for $25M (name + colour) or kill a team owner to take theirs.
+# - Each day: 2 automated races (morning + evening) with your team/car/upgrades; you get a notification before they start and can watch live. (Scheduler/cron TBD.)
+# - 7-day weeks: after 7 days, top 5 teams get good rewards, rest get lesser; then full reset (upgrades, crew bank). Leaderboard winner gets +5% bonus per repeat win, capped at 20%.
+# - Seasons last 2 months: after a season, total reset of everything racing (teams cleared, all progress reset).
 from datetime import datetime, timezone, timedelta
+import asyncio
+import os
 import random
 import uuid
 from typing import Optional, List, Dict, Any
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Header
 from pydantic import BaseModel
 
-from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up
+from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, send_notification
 
 # ---------- Constants ----------
 def _now_iso() -> str:
@@ -80,6 +88,8 @@ WINS_FOR_AERO_RELIABILITY = 1
 WINS_FOR_CHAMPIONSHIP_UPGRADE = 3
 CHAMPIONSHIP_UPGRADE_COST = 350000
 MAX_CREW_LEVEL = 5
+RACING_TEAM_CREATE_COST = 25_000_000  # $25M to create a racing team (name + colour)
+MAX_RACING_TEAMS = 18  # Only 18 teams total; kill a team owner to take their team
 MAX_CAR_UPGRADE_LEVEL = 4
 MAX_AERO_LEVEL = 2
 MAX_RELIABILITY_LEVEL = 2
@@ -89,6 +99,14 @@ TIRE_WEAR_PER_LAP = 18
 # Pit a lap before tires are gone: ~18 wear/lap → pit when below 50 so next lap wouldn't kill tires
 TIRE_PIT_THRESHOLD = 50
 PIT_PENALTY_FACTOR = 0.72  # speed multiplier when pitting (lose time that lap)
+
+# Season/week: 2 races per day (morning/evening), 7-day weeks, top 5 get good rewards, then full reset; leaderboard winner +5% per repeat win (cap 20%). Seasons = 2 months, then total reset.
+RACING_SEASON_DURATION_DAYS = 60
+RACING_WEEK_DURATION_DAYS = 7
+RACING_TOP_TEAMS_GOOD_REWARDS = 5
+RACING_LEADERBOARD_WINNER_BONUS_PCT = 0.05
+RACING_LEADERBOARD_WINNER_BONUS_CAP_PCT = 0.20
+RACING_AUTOMATED_RACES_PER_DAY = 2  # morning + evening (cron/scheduler)
 
 # Tyre compounds: wear_mult (per lap), grip_mult (lap score)
 TYRE_COMPOUNDS = [
@@ -176,7 +194,20 @@ class CompleteRaceRequest(BaseModel):
     result_order: List[str]  # entrant ids in finish order (1st to last)
 
 
-# ---------- Helpers ----------
+class CreateRacingTeamRequest(BaseModel):
+    name: str
+    color: str  # hex e.g. "#e82020" or "e82020"
+
+
+def _require_racing_team(prof: Optional[dict]) -> None:
+    """Raise 403 if profile has no racing team (team_name)."""
+    if not prof or not (prof.get("team_name") or "").strip():
+        raise HTTPException(
+            status_code=403,
+            detail=f"Create a racing team first. Cost: ${RACING_TEAM_CREATE_COST:,}. Name your team and choose a colour.",
+        )
+
+
 def _get_racing_car(car_id: str) -> Optional[dict]:
     for c in RACING_CARS:
         if c.get("id") == car_id:
@@ -222,6 +253,85 @@ def _get_track(track_id: str) -> Optional[dict]:
         if t.get("id") == track_id:
             return t
     return None
+
+
+RACING_META_ID = "global"
+
+# Automated daily races: same pattern as Auto Rank (in-process ticker or cron with X-Cron-Secret)
+RACING_AUTOMATED_MORNING_HOUR = 8   # UTC
+RACING_AUTOMATED_EVENING_HOUR = 20  # UTC
+RACING_NOTIFY_MINUTES_BEFORE = 5
+RACING_TICKER_SLEEP_SECONDS = 60
+
+
+async def _ensure_racing_meta() -> dict:
+    """Get or create the single racing_meta doc (season/week boundaries, leaderboard winner bonus)."""
+    meta = await db.racing_meta.find_one({"id": RACING_META_ID}, {"_id": 0})
+    if meta:
+        return meta
+    now = datetime.now(timezone.utc)
+    doc = {
+        "id": RACING_META_ID,
+        "season_start_utc": now.isoformat().replace("+00:00", "Z"),
+        "week_start_utc": now.isoformat().replace("+00:00", "Z"),
+        "last_week_winner_id": None,
+        "leaderboard_bonus_pct": 0.0,
+        "last_automated_notify_slot_utc": None,
+        "last_automated_race_slot_utc": None,
+    }
+    await db.racing_meta.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+async def _check_racing_week_and_season() -> None:
+    """If season or week has ended, run reset and advance boundaries. Called from get_racing_profile."""
+    meta = await _ensure_racing_meta()
+    now = datetime.now(timezone.utc)
+    try:
+        season_start = datetime.fromisoformat(meta["season_start_utc"].replace("Z", "+00:00"))
+        week_start = datetime.fromisoformat(meta["week_start_utc"].replace("Z", "+00:00"))
+    except (KeyError, ValueError):
+        return
+    season_end = season_start + timedelta(days=RACING_SEASON_DURATION_DAYS)
+    week_end = week_start + timedelta(days=RACING_WEEK_DURATION_DAYS)
+
+    if now >= season_end:
+        # Atomic advance: only one request wins
+        now_iso = now.isoformat().replace("+00:00", "Z")
+        res = await db.racing_meta.update_one(
+            {"id": RACING_META_ID, "season_start_utc": meta["season_start_utc"]},
+            {"$set": {"season_start_utc": now_iso, "week_start_utc": now_iso, "last_week_winner_id": None, "leaderboard_bonus_pct": 0.0}},
+        )
+        if res.modified_count == 0:
+            return
+        await db.racing_profiles.update_many(
+            {},
+            {"$unset": {"team_name": "", "team_color": ""}, "$set": {"mechanic_level": 0, "pit_level": 0, "crew_bank": 0}},
+        )
+        await db.user_racing_cars.update_many(
+            {},
+            {"$set": {"engine_level": 0, "tires_level": 0, "engine_wear": 0}},
+        )
+        await db.racing_upgrades.delete_many({})
+        return
+
+    if now >= week_end:
+        now_iso = now.isoformat().replace("+00:00", "Z")
+        res = await db.racing_meta.update_one(
+            {"id": RACING_META_ID, "week_start_utc": meta["week_start_utc"]},
+            {"$set": {"week_start_utc": now_iso}},
+        )
+        if res.modified_count == 0:
+            return
+        await db.racing_profiles.update_many(
+            {},
+            {"$set": {"mechanic_level": 0, "pit_level": 0, "crew_bank": 0}},
+        )
+        await db.user_racing_cars.update_many(
+            {},
+            {"$set": {"engine_level": 0, "tires_level": 0, "engine_wear": 0}},
+        )
+        await db.racing_upgrades.delete_many({})
 
 
 async def _ensure_racing_profile(user_id: str) -> dict:
@@ -442,7 +552,17 @@ async def get_racing_tracks(current_user: dict = Depends(get_current_user)):
 
 
 async def get_racing_profile(current_user: dict = Depends(get_current_user_verified)):
+    await _check_racing_week_and_season()
     prof = await _ensure_racing_profile(current_user["id"])
+    meta = await _ensure_racing_meta()
+    try:
+        _ws = datetime.fromisoformat(meta["week_start_utc"].replace("Z", "+00:00"))
+        _ss = datetime.fromisoformat(meta["season_start_utc"].replace("Z", "+00:00"))
+        week_ends_utc = (_ws + timedelta(days=RACING_WEEK_DURATION_DAYS)).isoformat().replace("+00:00", "Z")
+        season_ends_utc = (_ss + timedelta(days=RACING_SEASON_DURATION_DAYS)).isoformat().replace("+00:00", "Z")
+    except (KeyError, ValueError):
+        week_ends_utc = None
+        season_ends_utc = None
     # Ensure tyre stock and crew_bank exist for existing users (one-time default)
     for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard"):
         if prof.get(key) is None:
@@ -526,6 +646,11 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "tyre_costs": {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD},
         "engine_repair_cost_per_pct": ENGINE_REPAIR_COST_PER_PCT,
         "engine_replace_cost": ENGINE_REPLACE_COST,
+        "racing_team_create_cost": RACING_TEAM_CREATE_COST,
+        "max_racing_teams": MAX_RACING_TEAMS,
+        "racing_team_count": await db.racing_profiles.count_documents({"team_name": {"$exists": True, "$ne": None, "$ne": ""}}),
+        "racing_week_ends_utc": week_ends_utc,
+        "racing_season_ends_utc": season_ends_utc,
     }
 
 
@@ -726,6 +851,43 @@ async def buy_tyres(body: BuyTyresRequest, current_user: dict = Depends(get_curr
     return {"message": f"Bought {quantity} {compound} tyre set(s)", "tyre_stock": new_stock, "cost": cost}
 
 
+async def create_racing_team(body: CreateRacingTeamRequest, current_user: dict = Depends(get_current_user_verified)):
+    """Create a racing team for $25M: name + colour. Required before creating/joining/starting races. Max 18 teams; if cap reached, kill a team owner to take theirs."""
+    prof = await _ensure_racing_profile(current_user["id"])
+    if (prof.get("team_name") or "").strip():
+        raise HTTPException(status_code=400, detail="You already have a racing team")
+    # Cap: only 18 teams total
+    team_count = await db.racing_profiles.count_documents({"team_name": {"$exists": True, "$ne": None, "$ne": ""}})
+    if team_count >= MAX_RACING_TEAMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum {MAX_RACING_TEAMS} racing teams. Kill a team owner to take their team.",
+        )
+    name = (body.name or "").strip()[:50]
+    if not name:
+        raise HTTPException(status_code=400, detail="Team name is required")
+    raw = (body.color or "").strip()
+    if raw.startswith("#"):
+        raw = raw[1:]
+    if len(raw) != 6 or not all(c in "0123456789abcdefABCDEF" for c in raw):
+        raise HTTPException(status_code=400, detail="Colour must be a hex code (e.g. #e82020 or e82020)")
+    color = "#" + raw.upper()
+    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
+    user_money = int(user.get("money") or 0)
+    if user_money < RACING_TEAM_CREATE_COST:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You need ${RACING_TEAM_CREATE_COST:,} to create a racing team. You have ${user_money:,}.",
+        )
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -RACING_TEAM_CREATE_COST}})
+    await db.racing_profiles.update_one(
+        {"user_id": current_user["id"]},
+        {"$set": {"team_name": name, "team_color": color}},
+        upsert=True,
+    )
+    return {"message": "Racing team created", "team_name": name, "team_color": color}
+
+
 async def create_race(body: CreateRaceRequest, current_user: dict = Depends(get_current_user_verified)):
     track_id = (body.track_id or "").strip()
     track = _get_track(track_id)
@@ -735,6 +897,7 @@ async def create_race(body: CreateRaceRequest, current_user: dict = Depends(get_
     max_grid = max(MIN_GRID, min(MAX_GRID, int(body.max_grid or 6)))
     num_laps = max(NUM_LAPS_MIN, min(NUM_LAPS_MAX, int(body.laps or 3)))
     prof = await _ensure_racing_profile(current_user["id"])
+    _require_racing_team(prof)
     selected_id = prof.get("selected_racing_car_id")
     if not selected_id:
         raise HTTPException(status_code=400, detail="Select a racing car first")
@@ -835,6 +998,7 @@ async def join_race(race_id: str, body: JoinRaceRequest, current_user: dict = De
         raise HTTPException(status_code=400, detail="Engine at 100% wear. Repair or replace engine before racing.")
     compound = (body.tyre_compound or "medium").strip().lower() if hasattr(body, "tyre_compound") else "medium"
     prof = await _ensure_racing_profile(current_user["id"])
+    _require_racing_team(prof)
     for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard"):
         if prof.get(key) is None:
             await db.racing_profiles.update_one({"user_id": current_user["id"]}, {"$set": {key: TYRE_STOCK_INITIAL}})
@@ -865,7 +1029,8 @@ async def join_race(race_id: str, body: JoinRaceRequest, current_user: dict = De
     return {"message": "Joined race", "participants": participants}
 
 
-async def start_race(race_id: str, current_user: dict = Depends(get_current_user_verified)):
+async def _start_race_internal(race_id: str) -> dict:
+    """Fill NPCs, run qualifying, set state running. Used by start_race and by automated daily races. Caller must ensure race exists and state is 'open'."""
     race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
     if not race:
         raise HTTPException(status_code=404, detail="Race not found")
@@ -876,7 +1041,6 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
     track = _get_track(race.get("track_id") or "")
     reward_mult = float(track.get("reward_mult", 1.0)) if track else 1.0
     entry_fee = int(race.get("entry_fee") or 0)
-    # Player tier for similar-level NPCs (first human participant)
     player_tier = 0
     player_engine = 0
     player_tires = 0
@@ -891,18 +1055,15 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
                 player_engine = int(car_doc.get("engine_level") or 0)
                 player_tires = int(car_doc.get("tires_level") or 0)
         break
-    # Build a competitive spread of NPC speed offsets so the field isn't all slow (not a 1-person race)
     npcs_to_add = max_grid - len(participants)
     competitive_offsets = [-1, 0, 0, 0, 1, 1, 1, 2, 2][: max(1, npcs_to_add)]
     while len(competitive_offsets) < npcs_to_add:
         competitive_offsets.append(random.choice([0, 1, 2]))
     random.shuffle(competitive_offsets)
     initial_count = len(participants)
-
     while len(participants) < max_grid:
         npc = random.choice(RACING_NPCS)
         offset = competitive_offsets[len(participants) - initial_count]
-        # Pick car from same or adjacent tier
         tier = max(0, min(len(RACING_CARS) - 1, player_tier + random.randint(-1, 1)))
         car_def = RACING_CARS[tier]
         engine_level = max(0, min(MAX_CAR_UPGRADE_LEVEL, player_engine + random.randint(-1, 1)))
@@ -942,47 +1103,46 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
                 if car_doc:
                     upgrades_map[inst_id] = {"engine_level": car_doc.get("engine_level", 0), "tires_level": car_doc.get("tires_level", 0)}
     num_laps = max(NUM_LAPS_MIN, min(NUM_LAPS_MAX, int(race.get("laps") or 3)))
-    # Use weather set at race creation so it matches what was shown when selecting tyres
     if race.get("weather") and any(w.get("id") == race.get("weather") for w in WEATHER_TYPES):
         weather = _get_weather(race["weather"])
     else:
         weather = random.choice(WEATHER_TYPES)
     weather_id = weather.get("id", "clear")
-    # Pre-check: engine wear < 100 and tyre stock for each human
-    engine_wear_by_entrant: Dict[str, float] = {}
-    for p in participants:
-        if p.get("is_npc"):
-            continue
-        uid = p.get("user_id")
-        inst_id = p.get("racing_car_instance_id")
-        if not inst_id:
-            continue
-        car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0, "engine_wear": 1})
-        wear = float(car_doc.get("engine_wear") or 0) if car_doc else 0
-        engine_wear_by_entrant[uid] = wear
-        if wear >= ENGINE_WEAR_MAX:
-            raise HTTPException(status_code=400, detail="A participant's engine is at 100% wear. They must repair or replace before the race.")
-        compound = (p.get("tyre_compound") or "medium").strip().lower()
-        prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0})
-        if prof is not None:
-            for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard"):
-                if prof.get(key) is None:
-                    await db.racing_profiles.update_one({"user_id": uid}, {"$set": {key: TYRE_STOCK_INITIAL}})
-                    prof[key] = TYRE_STOCK_INITIAL
-            stock = int(prof.get(f"tyre_stock_{compound}") or 0)
-            if stock < 1:
-                raise HTTPException(status_code=400, detail=f"Not enough {compound} tyres in stock for a participant. Buy tyres before the race.")
-    # Qualifying: one lap to set grid order; race runs live on client
+    if not race.get("is_automated"):
+        engine_wear_by_entrant: Dict[str, float] = {}
+        for p in participants:
+            if p.get("is_npc"):
+                continue
+            uid = p.get("user_id")
+            inst_id = p.get("racing_car_instance_id")
+            if not inst_id:
+                continue
+            car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0, "engine_wear": 1})
+            wear = float(car_doc.get("engine_wear") or 0) if car_doc else 0
+            engine_wear_by_entrant[uid] = wear
+            if wear >= ENGINE_WEAR_MAX:
+                raise HTTPException(status_code=400, detail="A participant's engine is at 100% wear. They must repair or replace before the race.")
+            compound = (p.get("tyre_compound") or "medium").strip().lower()
+            prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0})
+            if prof is not None:
+                for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard"):
+                    if prof.get(key) is None:
+                        await db.racing_profiles.update_one({"user_id": uid}, {"$set": {key: TYRE_STOCK_INITIAL}})
+                        prof[key] = TYRE_STOCK_INITIAL
+                stock = int(prof.get(f"tyre_stock_{compound}") or 0)
+                if stock < 1:
+                    raise HTTPException(status_code=400, detail=f"Not enough {compound} tyres in stock for a participant. Buy tyres before the race.")
     qualifying_order = _run_qualifying(participants, profile_by_user, upgrades_map, weather_id)
     id_to_p = {(p.get("user_id") or p.get("id")): p for p in participants}
     participants = [id_to_p[eid] for eid in qualifying_order if eid in id_to_p]
-    # Enrich participants with effective_speed and effective_grip for client live race
     for p in participants:
         prof = profile_by_user.get(p.get("user_id") or p.get("id")) if not p.get("is_npc") else None
         s, g = _effective_speed_and_grip_display(p, prof, upgrades_map)
         p["effective_speed"] = round(s, 2)
         p["effective_grip"] = round(g, 2)
         p["pit_level"] = int(prof.get("pit_level") or 0) if prof else 0
+        up = upgrades_map.get(p.get("racing_car_instance_id") or p.get("id"))
+        p["reliability_level"] = int(up.get("reliability_level") or 0) if up else 0
     now = _now_iso()
     await db.racing_races.update_one(
         {"id": race_id},
@@ -1017,7 +1177,166 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
     race["rewards"] = None
     race["dnf_ids"] = None
     race["completed_at"] = None
+    return race
+
+
+async def start_race(race_id: str, current_user: dict = Depends(get_current_user_verified)):
+    race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    if not race:
+        raise HTTPException(status_code=404, detail="Race not found")
+    prof = await _ensure_racing_profile(current_user["id"])
+    _require_racing_team(prof)
+    if race.get("state") != "open":
+        raise HTTPException(status_code=400, detail="Race already started or completed")
+    race = await _start_race_internal(race_id)
     return {"message": "Race started — run it live", "race": race}
+
+
+async def _create_automated_race(slot_label: str) -> Optional[str]:
+    """Create one automated race with all team owners as participants, fill NPCs, start. Returns race_id or None if not enough participants."""
+    profiles_cursor = db.racing_profiles.find(
+        {"team_name": {"$exists": True, "$ne": None, "$ne": ""}},
+        {"_id": 0, "user_id": 1, "selected_racing_car_id": 1, "tyre_stock_soft": 1, "tyre_stock_medium": 1, "tyre_stock_hard": 1},
+    )
+    profiles = await profiles_cursor.to_list(MAX_RACING_TEAMS)
+    participants = []
+    for prof in profiles:
+        uid = prof.get("user_id")
+        if not uid:
+            continue
+        user = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
+        username = (user or {}).get("username") or "?"
+        car_id = prof.get("selected_racing_car_id")
+        if not car_id:
+            car_doc = await db.user_racing_cars.find_one({"user_id": uid}, {"_id": 0})
+            if not car_doc:
+                continue
+            car_id = car_doc.get("id")
+        car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": car_id}, {"_id": 0})
+        if not car_doc or float(car_doc.get("engine_wear") or 0) >= ENGINE_WEAR_MAX:
+            continue
+        compound = "medium"
+        for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard"):
+            if prof.get(key) is not None and int(prof.get(key) or 0) >= 1:
+                compound = key.replace("tyre_stock_", "")
+                break
+        stock = int(prof.get(f"tyre_stock_{compound}") or 0)
+        if stock < 1:
+            continue
+        car_name = next((c.get("name") for c in RACING_CARS if c.get("id") == car_doc.get("racing_car_id")), "?")
+        participants.append({
+            "user_id": uid,
+            "username": username,
+            "racing_car_id": car_doc.get("racing_car_id"),
+            "racing_car_instance_id": car_doc.get("id"),
+            "car_name": car_name,
+            "is_npc": False,
+            "tyre_compound": compound,
+        })
+    if len(participants) < MIN_GRID:
+        return None
+    track = random.choice(TRACKS)
+    weather = random.choice(WEATHER_TYPES)
+    num_laps = max(NUM_LAPS_MIN, min(NUM_LAPS_MAX, 5))
+    race_id = str(uuid.uuid4())
+    now = _now_iso()
+    created_by = participants[0]["user_id"]
+    doc = {
+        "id": race_id,
+        "track_id": track.get("id"),
+        "track_name": track.get("name"),
+        "entry_fee": 0,
+        "max_grid": MAX_GRID,
+        "state": "open",
+        "created_by": created_by,
+        "created_at": now,
+        "started_at": None,
+        "completed_at": None,
+        "weather": weather.get("id", "clear"),
+        "weather_name": weather.get("name", "Clear"),
+        "participants": participants,
+        "result_order": None,
+        "reward_mult": track.get("reward_mult", 1.0),
+        "laps": num_laps,
+        "lobby_ends_at": now,
+        "is_automated": True,
+    }
+    await db.racing_races.insert_one(doc)
+    await _start_race_internal(race_id)
+    return race_id
+
+
+async def run_racing_automated_races_once() -> dict:
+    """Single pass: send 'racing in 5 min' notifications and/or create+start morning/evening races. Used by in-process ticker or cron."""
+    meta = await _ensure_racing_meta()
+    now = datetime.now(timezone.utc)
+    slots = [
+        ("morning", RACING_AUTOMATED_MORNING_HOUR),
+        ("evening", RACING_AUTOMATED_EVENING_HOUR),
+    ]
+    for slot_name, hour in slots:
+        slot_dt = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+        slot_iso = slot_dt.isoformat().replace("+00:00", "Z")
+        notify_dt = slot_dt - timedelta(minutes=RACING_NOTIFY_MINUTES_BEFORE)
+        if now >= notify_dt and ((meta.get("last_automated_notify_slot_utc") or "") or " ") < slot_iso:
+            cursor = db.racing_profiles.find(
+                {"team_name": {"$exists": True, "$ne": None, "$ne": ""}},
+                {"_id": 0, "user_id": 1},
+            )
+            team_user_ids = [p["user_id"] for p in await cursor.to_list(MAX_RACING_TEAMS) if p.get("user_id")]
+            for uid in team_user_ids:
+                try:
+                    await send_notification(
+                        uid,
+                        "🏁 Racing in 5 minutes",
+                        f"The {slot_name} automated race starts in 5 minutes. Open Racing to watch live.",
+                        "system",
+                        category="racing",
+                    )
+                except Exception:
+                    pass
+            await db.racing_meta.update_one(
+                {"id": RACING_META_ID},
+                {"$set": {"last_automated_notify_slot_utc": slot_iso}},
+            )
+            meta["last_automated_notify_slot_utc"] = slot_iso
+        if now >= slot_dt and ((meta.get("last_automated_race_slot_utc") or "") or " ") < slot_iso:
+            created_race_id = await _create_automated_race(slot_name)
+            if created_race_id:
+                race_doc = await db.racing_races.find_one({"id": created_race_id}, {"_id": 0, "participants": 1})
+                parts = (race_doc or {}).get("participants") or []
+                for p in parts:
+                    if p.get("is_npc"):
+                        continue
+                    uid = p.get("user_id")
+                    try:
+                        await send_notification(
+                            uid,
+                            f"🏁 {slot_name.capitalize()} race started",
+                            "Your automated race is live. Open Racing to watch.",
+                            "system",
+                            category="racing",
+                        )
+                    except Exception:
+                        pass
+            await db.racing_meta.update_one(
+                {"id": RACING_META_ID},
+                {"$set": {"last_automated_race_slot_utc": slot_iso}},
+            )
+            meta["last_automated_race_slot_utc"] = slot_iso
+    return {"ok": True}
+
+
+async def run_racing_automated_race_ticker():
+    """Background loop: every minute run automated races pass (notify + create races at configured times)."""
+    import logging
+    log = logging.getLogger(__name__)
+    while True:
+        try:
+            await run_racing_automated_races_once()
+        except Exception as e:
+            log.exception("Racing automated ticker: %s", e)
+        await asyncio.sleep(RACING_TICKER_SLEEP_SECONDS)
 
 
 async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -1202,6 +1521,7 @@ def register(router):
     router.add_api_route("/racing/tracks", get_racing_tracks, methods=["GET"])
     router.add_api_route("/racing/profile", get_racing_profile, methods=["GET"])
     router.add_api_route("/racing/profile/select-car", set_selected_car, methods=["POST"])
+    router.add_api_route("/racing/team/create", create_racing_team, methods=["POST"])
     router.add_api_route("/racing/crew/upgrade", upgrade_crew, methods=["POST"])
     router.add_api_route("/racing/car/upgrade", upgrade_car_part, methods=["POST"])
     router.add_api_route("/racing/engine/repair", repair_engine, methods=["POST"])
@@ -1216,3 +1536,18 @@ def register(router):
     router.add_api_route("/racing/leaderboard", get_racing_leaderboard, methods=["GET"])
     router.add_api_route("/racing/comps", get_racing_comps, methods=["GET"])
     router.add_api_route("/racing/comps/{comp_id}/enter", enter_racing_comp, methods=["POST"])
+
+    # Cron: automated daily races (same X-Cron-Secret as Auto Rank)
+    cron_secret = (os.environ.get("CRON_SECRET") or "").strip()
+
+    async def verify_racing_cron_secret(x_cron_secret: Optional[str] = Header(None, alias="X-Cron-Secret")):
+        if not cron_secret:
+            return
+        if (x_cron_secret or "").strip() != cron_secret:
+            raise HTTPException(status_code=403, detail="Invalid cron secret")
+
+    async def cron_automated_races(_: None = Depends(verify_racing_cron_secret)):
+        """Cron endpoint: run automated races pass (notify + create morning/evening races). Call every minute when RACING_USE_CRON=1. Header: X-Cron-Secret: <CRON_SECRET>."""
+        return await run_racing_automated_races_once()
+
+    router.add_api_route("/racing/cron/automated-races", cron_automated_races, methods=["POST"])

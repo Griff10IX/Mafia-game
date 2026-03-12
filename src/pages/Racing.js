@@ -27,6 +27,23 @@ function formatMoney(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
+function formatRacingEndTime(iso) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+    const now = new Date();
+    const days = Math.ceil((d - now) / (24 * 60 * 60 * 1000));
+    if (days < 0) return "ended";
+    if (days === 0) return "today";
+    if (days === 1) return "tomorrow";
+    if (days < 7) return `in ${days} days`;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  } catch (_) {
+    return iso?.slice(0, 10) || "";
+  }
+}
+
 function apiDetail(e) {
   const d = e.response?.data?.detail;
   if (typeof d === "string") return d;
@@ -56,6 +73,9 @@ export default function Racing() {
   const [joiningId, setJoiningId] = useState(null);
   const [joinTyre, setJoinTyre] = useState("medium");
   const [createForm, setCreateForm] = useState({ track_id: "", entry_fee: 0, max_grid: 6, laps: 3, tyre_compound: "medium", weather_id: "clear" });
+  const [teamCreateName, setTeamCreateName] = useState("");
+  const [teamCreateColor, setTeamCreateColor] = useState("#e8d020");
+  const [teamCreating, setTeamCreating] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -69,6 +89,11 @@ export default function Racing() {
         tyre_costs: d.tyre_costs || {},
         engine_repair_cost_per_pct: d.engine_repair_cost_per_pct,
         engine_replace_cost: d.engine_replace_cost,
+        racing_team_create_cost: d.racing_team_create_cost,
+        racing_team_count: d.racing_team_count,
+        max_racing_teams: d.max_racing_teams,
+        racing_week_ends_utc: d.racing_week_ends_utc,
+        racing_season_ends_utc: d.racing_season_ends_utc,
       });
       setCars(d.owned_cars || []);
       setUpgradeTradeoffs(d.upgrade_tradeoffs || null);
@@ -215,6 +240,28 @@ export default function Racing() {
     }
   };
 
+  const handleCreateTeam = async (e) => {
+    e?.preventDefault();
+    const name = (teamCreateName || "").trim();
+    let color = (teamCreateColor || "").trim();
+    if (!name) { toast.error("Enter a team name"); return; }
+    if (color.startsWith("#")) color = color.slice(1);
+    if (!/^[0-9a-fA-F]{6}$/.test(color)) { toast.error("Colour must be a 6-character hex code (e.g. e82020)"); return; }
+    setTeamCreating(true);
+    try {
+      await api.post("/racing/team/create", { name, color: "#" + color });
+      setTeamCreateName("");
+      setTeamCreateColor("#e8d020");
+      await fetchProfile();
+      refreshUser();
+      toast.success("Racing team created");
+    } catch (err) {
+      toast.error(apiDetail(err));
+    } finally {
+      setTeamCreating(false);
+    }
+  };
+
   const handleSelectCar = async (instanceId) => {
     try {
       await api.post("/racing/profile/select-car", { racing_car_instance_id: instanceId });
@@ -324,6 +371,83 @@ export default function Racing() {
     );
   }
 
+  const hasTeam = !!(profile?.team_name || "").trim();
+  const teamCreateCost = profile?.racing_team_create_cost ?? 25_000_000;
+
+  if (!hasTeam) {
+    return (
+      <div className={styles.page + " overflow-x-hidden"} style={{ minHeight: "100%", WebkitOverflowScrolling: "touch" }}>
+        <div className={styles.panelHeader + " px-4 py-3"}>
+          <h1 className="text-xl font-heading" style={{ color: "var(--noir-primary)" }}>
+            Bootleg runs
+          </h1>
+          <p className="text-sm text-[var(--noir-muted)] mt-1">
+            Create a racing team to enter races. Name your team and choose a colour.
+          </p>
+        </div>
+        <div className="p-4 max-w-md">
+          <div className={styles.panel + " p-4"}>
+            <h2 className="font-heading mb-3" style={{ color: "var(--noir-primary)" }}>Create your racing team</h2>
+            <p className="text-sm text-[var(--noir-muted)] mb-4">
+              Cost: <strong style={{ color: "var(--noir-primary)" }}>{formatMoney(teamCreateCost)}</strong> — paid from your cash. You need a team before you can create or join races.
+              {typeof profile?.racing_team_count === "number" && profile?.max_racing_teams != null && (
+                <span className="block mt-1">
+                  Teams: <strong>{profile.racing_team_count} / {profile.max_racing_teams}</strong>
+                  {profile.racing_team_count >= profile.max_racing_teams && " — at cap. Kill a team owner to take their team."}
+                </span>
+              )}
+            </p>
+            <form onSubmit={handleCreateTeam} className="space-y-4">
+              <label className="block">
+                <span className="text-xs font-heading uppercase tracking-wider text-[var(--noir-muted)]">Team name</span>
+                <input
+                  type="text"
+                  className={styles.input + " w-full mt-1"}
+                  placeholder="e.g. Midnight Runners"
+                  value={teamCreateName}
+                  onChange={(e) => setTeamCreateName(e.target.value)}
+                  maxLength={50}
+                  autoComplete="off"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-heading uppercase tracking-wider text-[var(--noir-muted)]">Colour key</span>
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="color"
+                    className="h-10 w-14 rounded border border-[var(--noir-border)] cursor-pointer"
+                    value={teamCreateColor.startsWith("#") ? teamCreateColor : teamCreateColor ? "#" + teamCreateColor : "#e8d020"}
+                    onChange={(e) => setTeamCreateColor(e.target.value)}
+                    title="Team colour"
+                  />
+                  <input
+                    type="text"
+                    className={styles.input + " flex-1 font-mono"}
+                    placeholder="#e82020"
+                    value={teamCreateColor}
+                    onChange={(e) => setTeamCreateColor(e.target.value)}
+                    maxLength={7}
+                    autoComplete="off"
+                  />
+                </div>
+                <p className="text-[10px] text-[var(--noir-muted)] mt-1">Hex colour for your team (e.g. #e82020 or e82020)</p>
+              </label>
+              <button
+                type="submit"
+                className={styles.btnPrimary + " w-full min-h-[44px] touch-manipulation"}
+                disabled={teamCreating || !(teamCreateName || "").trim() || (profile?.racing_team_count >= (profile?.max_racing_teams ?? 18))}
+              >
+                {profile?.racing_team_count >= (profile?.max_racing_teams ?? 18)
+                  ? `At cap (${profile?.racing_team_count ?? 0}/${profile?.max_racing_teams ?? 18} teams)`
+                  : teamCreating ? "Creating…" : `Create team (${formatMoney(teamCreateCost)})`}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const tabs = [
     { id: "races", label: "Races" },
     { id: "myride", label: "My ride" },
@@ -343,7 +467,23 @@ export default function Racing() {
         </p>
         <p className="text-xs mt-2" style={{ color: "var(--noir-primary)" }}>
           Crew bank: {formatMoney(profile?.crew_bank ?? 0)} — race winnings for upgrades
+          {profile?.team_name && (
+            <span className="ml-3">
+              Team: <span style={{ color: profile?.team_color || "var(--noir-primary)" }}>●</span> {profile.team_name}
+            </span>
+          )}
         </p>
+        {(profile?.racing_week_ends_utc || profile?.racing_season_ends_utc) && (
+          <p className="text-[10px] text-[var(--noir-muted)] mt-1">
+            {profile.racing_week_ends_utc && (
+              <span>Week ends: {formatRacingEndTime(profile.racing_week_ends_utc)}</span>
+            )}
+            {profile.racing_week_ends_utc && profile.racing_season_ends_utc && " • "}
+            {profile.racing_season_ends_utc && (
+              <span>Season ends: {formatRacingEndTime(profile.racing_season_ends_utc)}</span>
+            )}
+          </p>
+        )}
       </div>
 
       {/* ─── ACTIVE RACE: live run (state running) ─── */}

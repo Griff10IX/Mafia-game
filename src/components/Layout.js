@@ -1496,7 +1496,7 @@ export default function Layout({ children }) {
                         onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.05)'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
                         <span className="shrink-0" style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
-                        <span className={`shrink min-w-0 truncate max-w-[72px] text-right ${row.className || ''}`} style={row.className ? undefined : { color: 'var(--noir-primary)' }} title={row.value}>{row.value}</span>
+                        <span className={`shrink min-w-0 text-right ${row.truncate ? 'truncate max-w-[72px]' : 'truncate'} ${row.className || ''}`} style={row.className ? undefined : { color: 'var(--noir-primary)' }} title={row.value}>{row.value}</span>
                       </Link>
                     );
                   }

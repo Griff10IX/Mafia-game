@@ -1474,6 +1474,15 @@ async def startup_db():
         logging.getLogger(__name__).info(
             "Auto Rank: using cron only (AUTO_RANK_USE_CRON=1). Call POST /api/auto-rank/cron and POST /api/auto-rank/cron-bust every 5s. Header: X-Cron-Secret: <CRON_SECRET>"
         )
+    # Racing: 2 automated races per day (morning/evening UTC); in-process ticker or cron
+    from routers import racing as racing_router
+    racing_use_cron = (os.environ.get("RACING_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+    if not racing_use_cron:
+        asyncio.create_task(racing_router.run_racing_automated_race_ticker())
+    else:
+        logging.getLogger(__name__).info(
+            "Racing: using cron only (RACING_USE_CRON=1). Call POST /api/racing/cron/automated-races every minute. Header: X-Cron-Secret: <CRON_SECRET>"
+        )
     from routers import gta as gta_router
     asyncio.create_task(gta_router.run_dealer_replenish_loop())
     # Slots: run lottery draw on schedule (every 5s check) so draws happen at next_draw_at even if no one is on the page

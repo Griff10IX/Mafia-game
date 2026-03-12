@@ -1,0 +1,9 @@
+# Racing automated daily races (morning + evening UTC)
+# When RACING_USE_CRON=1, the server does not run the in-process ticker; call this every minute.
+# Replace YOUR_CRON_SECRET with the value from backend/.env (CRON_SECRET). Same secret as Auto Rank.
+
+# Every minute (recommended so 08:00 and 20:00 slots are hit):
+* * * * * curl -s -X POST -H "X-Cron-Secret: YOUR_CRON_SECRET" -H "Content-Type: application/json" http://127.0.0.1:8000/api/racing/cron/automated-races
+
+# Or call your public URL if cron runs elsewhere:
+# * * * * * curl -s -X POST -H "X-Cron-Secret: YOUR_CRON_SECRET" -H "Content-Type: application/json" https://your-domain.com/api/racing/cron/automated-races

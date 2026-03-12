@@ -2039,11 +2039,12 @@ export default function Boxing3D() {
         </div>
       </div>
 
-      <div className={styles.pageContent} style={{padding:"18px 20px 12px",display:"grid",gridTemplateColumns: narrowLayout ? "1fr" : "minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr)",gap:16}}>
-        <div className={styles.panel} style={{padding:12,minHeight:140}}>
-          <div className={styles.panelHeader} style={{padding:"6px 0",marginBottom:6}}>
-            <div style={{fontSize:11,color:"var(--noir-primary)",letterSpacing:"0.16em"}}>TRAINING & STATS</div>
+      <div className={styles.pageContent} style={{padding:"12px 16px 14px",display:"grid",gridTemplateColumns: narrowLayout ? "1fr" : "minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr)",gap:16}}>
+        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90`} style={{minHeight:140}}>
+          <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
+            <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">Training & stats</h2>
           </div>
+          <div className="p-2.5 sm:p-3">
           {metaError && <div style={{fontSize:10,color:"#ff6666",marginBottom:6}}>{metaError}</div>}
           {loadingMeta && !profile && (
             <div style={{fontSize:10,color:"#9a8a5a"}}>Loading boxing profile…</div>
@@ -2105,11 +2106,15 @@ export default function Boxing3D() {
               </div>
             </>
           )}
+          </div>
         </div>
 
-        <div className={styles.panel} style={{padding:12,minHeight:140,display:"flex",flexDirection:"column",gap:10}}>
+        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90`} style={{minHeight:140,display:"flex",flexDirection:"column"}}>
+          <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
+            <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">Gym</h2>
+          </div>
+          <div className="p-2.5 sm:p-3 flex-1 flex flex-col gap-3">
           <div>
-            <div style={{fontSize:11,color:"var(--noir-primary)",letterSpacing:"0.16em",marginBottom:6}}>GYM</div>
             {gymInfo && (
               <>
                 <div style={{fontSize:11,color:"#e0d0a0",marginBottom:4}}>
@@ -2166,12 +2171,14 @@ export default function Boxing3D() {
               </>
             )}
           </div>
+          </div>
         </div>
 
-        <div className={styles.panel} style={{padding:12,minHeight:140}}>
-          <div className={styles.panelHeader} style={{padding:"6px 0",marginBottom:6}}>
-            <div style={{fontSize:11,color:"var(--noir-primary)",letterSpacing:"0.16em"}}>GEAR</div>
+        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90`} style={{minHeight:140}}>
+          <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
+            <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">Gear</h2>
           </div>
+          <div className="p-2.5 sm:p-3">
           {gearInfo && (
             <>
               {typeof gearInfo.total_wins === "number" && (
@@ -2226,15 +2233,17 @@ export default function Boxing3D() {
               </div>
             </>
           )}
+          </div>
         </div>
       </div>
 
-      <div className={styles.pageContent} style={{padding:"10px 16px 20px",borderTop:"1px solid var(--noir-border-light)",display:"grid",gridTemplateColumns: narrowLayout ? "1fr" : "minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,1.0fr)",gap:12}}>
-        <div className={styles.panel} style={{padding:10,minHeight:120}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-            <div style={{fontSize:10,color:"var(--noir-primary)",letterSpacing:"0.14em"}}>MATCHES</div>
-            <button onClick={refreshMatches} disabled={matchesLoading} className={styles.btnGoldDarkText} style={{padding:narrowLayout?"10px 12px":"6px 10px",minHeight:44,fontSize:narrowLayout?11:9,cursor:matchesLoading?"wait":"pointer",touchAction:"manipulation"}}>Refresh</button>
+      <div className={styles.pageContent} style={{padding:"12px 16px 20px",borderTop:"1px solid var(--noir-border-light)",display:"grid",gridTemplateColumns: narrowLayout ? "1fr" : "minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,1.0fr)",gap:16}}>
+        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90`} style={{minHeight:120}}>
+          <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20 flex items-center justify-between">
+            <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">Matches</h2>
+            <button onClick={refreshMatches} disabled={matchesLoading} className={styles.btnGoldDarkText} style={{padding:narrowLayout?"10px 12px":"6px 10px",minHeight:36,fontSize:narrowLayout?11:9,cursor:matchesLoading?"wait":"pointer",touchAction:"manipulation"}}>Refresh</button>
           </div>
+          <div className="p-2.5 sm:p-3">
           {matchError && <div style={{fontSize:9,color:"#ff6666",marginBottom:4}}>{matchError}</div>}
           <div style={{display:"flex",gap:4,marginBottom:6,flexWrap:"wrap"}}>
             <input
@@ -2342,12 +2351,14 @@ export default function Boxing3D() {
               );
             })}
           </div>
+          </div>
         </div>
 
-        <div className={styles.panel} style={{padding:12,minHeight:140}}>
-          <div className={styles.panelHeader} style={{padding:"6px 0",marginBottom:6}}>
-          <div style={{fontSize:11,color:"var(--noir-primary)",letterSpacing:"0.16em"}}>BETTING</div>
+        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90`} style={{minHeight:140}}>
+          <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
+            <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">Betting</h2>
           </div>
+          <div className="p-2.5 sm:p-3">
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
             <span style={{fontSize:9,color:"var(--noir-muted)"}}>Stake</span>
             <input
@@ -2398,12 +2409,14 @@ export default function Boxing3D() {
               </div>
             ))}
           </div>
+          </div>
         </div>
 
-        <div className={styles.panel} style={{padding:12,minHeight:140}}>
-          <div className={styles.panelHeader} style={{padding:"6px 0",marginBottom:6}}>
-          <div style={{fontSize:11,color:"var(--noir-primary)",letterSpacing:"0.16em"}}>LEAGUE (WEEKLY)</div>
+        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90`} style={{minHeight:140}}>
+          <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
+            <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">League (weekly)</h2>
           </div>
+          <div className="p-2.5 sm:p-3">
           {league && (
             <div style={{maxHeight:210,overflowY:"auto",fontSize:10}}>
               {league.standings?.slice(0,10).map((row)=>(
@@ -2415,6 +2428,7 @@ export default function Boxing3D() {
             </div>
           )}
           {!league && <div style={{fontSize:10,color:"#7a6a4a"}}>League table will appear after fights are recorded.</div>}
+          </div>
         </div>
       </div>
 

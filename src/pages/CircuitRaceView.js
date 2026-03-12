@@ -11,11 +11,11 @@ const CAR_COLORS = [
 ];
 
 const TYRE_DEFS = {
-  soft:   { id:"soft",   label:"Soft",     color:"#e82020", wearPerSec:0.65, gripMult:1.08, minWear:5,  desc:"Fastest, wears in ~25s" },
-  medium: { id:"medium", label:"Medium",   color:"#e8d020", wearPerSec:0.42, gripMult:1.02, minWear:5,  desc:"Balanced, wears in ~45s" },
-  hard:   { id:"hard",   label:"Hard",     color:"#d0d0c0", wearPerSec:0.24, gripMult:0.96, minWear:5,  desc:"Durable, slower" },
-  inter:  { id:"inter",  label:"Inter",    color:"#20a840", wearPerSec:0.30, gripMult:1.04, minWear:5,  desc:"Damp / light rain" },
-  wet:    { id:"wet",    label:"Full Wet", color:"#2080e8", wearPerSec:0.18, gripMult:1.08, minWear:5,  desc:"Heavy rain / snow" },
+  soft:   { id:"soft",   label:"Soft",     color:"#e82020", wearPerSec:0.65, gripMult:1.08, minWear:5,  lapsPerStintBase:2, desc:"Fastest, pit every ~2 laps" },
+  medium: { id:"medium", label:"Medium",   color:"#e8d020", wearPerSec:0.42, gripMult:1.02, minWear:5,  lapsPerStintBase:3, desc:"Balanced, pit every ~3 laps" },
+  hard:   { id:"hard",   label:"Hard",     color:"#d0d0c0", wearPerSec:0.24, gripMult:0.96, minWear:5,  lapsPerStintBase:4, desc:"Durable, pit every ~4 laps" },
+  inter:  { id:"inter",  label:"Inter",    color:"#20a840", wearPerSec:0.30, gripMult:1.04, minWear:5,  lapsPerStintBase:2.5, desc:"Damp / light rain" },
+  wet:    { id:"wet",    label:"Full Wet", color:"#2080e8", wearPerSec:0.18, gripMult:1.08, minWear:5,  lapsPerStintBase:3, desc:"Heavy rain / snow" },
 };
 
 const WEATHER_DEFS = {
@@ -306,11 +306,25 @@ function tyreColor(wear) {
   return "#e74c3c";
 }
 
-function buildPitStrategy(tyreId, numLaps) {
+/** Stint length in laps (2–4) from tyre, weather and reliability. Used for pit strategy and wear. */
+function getEffectiveStintLaps(tyreId, weatherWearMult, reliabilityWearMult) {
+  const td = TYRE_DEFS[tyreId] || TYRE_DEFS.medium;
+  const base = td.lapsPerStintBase != null ? td.lapsPerStintBase : 3;
+  const mult = (weatherWearMult || 1) * (reliabilityWearMult || 1);
+  const laps = base / mult;
+  return Math.max(2, Math.min(4, Math.round(laps)));
+}
+
+/** Build pit strategy: pit every 2–4 laps (tyre/weather/reliability dependent). */
+function buildPitStrategy(tyreId, numLaps, weatherWearMult = 1, reliabilityWearMult = 1) {
   if (numLaps <= 2) return [];
-  const pitLap = Math.max(1, Math.floor(numLaps / 2));
-  const next = tyreId === "soft" ? "medium" : tyreId === "medium" ? "hard" : "medium";
-  return [{ lap: pitLap, nextTyre: next }];
+  const stintLaps = getEffectiveStintLaps(tyreId, weatherWearMult, reliabilityWearMult);
+  const nextTyre = tyreId === "soft" ? "medium" : tyreId === "medium" ? "hard" : "medium";
+  const stops = [];
+  for (let lap = stintLaps; lap < numLaps; lap += stintLaps) {
+    stops.push({ lap, nextTyre });
+  }
+  return stops;
 }
 
 /** Build pit strategy for replay from backend pit_stops (list of { lap, entrant_id }). */
@@ -370,8 +384,8 @@ export default function CircuitRaceView({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // In replay mode, derive condition from weather prop
-  const effectiveCondition = mode === "replay"
+  // In replay mode, derive condition from weather prop; in live mode weather is automatic (from race)
+  const effectiveCondition = mode === "replay" || mode === "live"
     ? (WEATHER_MAP[weatherIdProp] || "clear")
     : condition;
   const wDef = WEATHER_DEFS[effectiveCondition] || WEATHER_DEFS.clear;
@@ -510,7 +524,9 @@ export default function CircuitRaceView({
     // ── CARS ──
     if (!racerArr || racerArr.length === 0) return;
 
-    racerArr.forEach((r, drawIdx) => {
+    // Draw back to front so leader (last in reversed order) appears at the front; use r.position for car number
+    const drawOrder = [...racerArr].reverse();
+    drawOrder.forEach((r, drawIdx) => {
       if (!r.visible) return;
       const spread = 0.009 * drawIdx;
       // When in pit: draw car at pit box (middle of pit lane) so it stays visibly in pit
@@ -547,14 +563,15 @@ export default function CircuitRaceView({
       ctx.beginPath(); ctx.ellipse(1,0,3.5,2.5,0,0,Math.PI*2); ctx.fill();
       ctx.restore();
 
-      // Car number circle (F1 Manager style)
+      // Car number circle (F1 Manager style) — use race position so leader shows 1 and appears at front
       const isPlayer = r.isPlayer;
+      const carNumber = r.position != null ? r.position : drawIdx + 1;
       ctx.fillStyle = isPlayer ? "#e8c870" : r.color;
       ctx.beginPath(); ctx.arc(px,py-13,7,0,Math.PI*2); ctx.fill();
       ctx.strokeStyle = isPlayer ? "#0a0c06" : "rgba(0,0,0,0.6)"; ctx.lineWidth=1.2; ctx.stroke();
       ctx.fillStyle = isPlayer ? "#0a0c06" : "#fff";
       ctx.font = `bold 7px Rajdhani,sans-serif`; ctx.textAlign="center"; ctx.textBaseline="middle";
-      ctx.fillText(drawIdx+1, px, py-13);
+      ctx.fillText(carNumber, px, py-13);
       ctx.textBaseline = "alphabetic";
 
       // Tyre compound dot
@@ -578,8 +595,8 @@ export default function CircuitRaceView({
   // ── BUILD RACER ARRAY ──
   const buildRacers = useCallback((track, cond, nLaps, pTyre) => {
     const wd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
+    const weatherWear = wd.wearMult != null ? wd.wearMult : 1;
     const racers = [];
-    // Player first (normalized speed ~1, grip from backend if ever passed)
     const playerPitSec = pitDurationSeconds(playerPitLevel, false);
     const playerPitSecEmerg = pitDurationSeconds(playerPitLevel, true);
     racers.push({
@@ -591,7 +608,8 @@ export default function CircuitRaceView({
       pitDurationSeconds: playerPitSec,
       pitDurationEmergencySeconds: playerPitSecEmerg,
       baseSpeed:1.0, baseGrip:0.85,
-      pitStrategy: buildPitStrategy(pTyre, nLaps),
+      reliabilityWearMult: 1,
+      pitStrategy: buildPitStrategy(pTyre, nLaps, weatherWear, 1),
       finished:false, visible:true, position:1,
       lapTimes:[],
       slideOffUntil:0, pitExitUntil: null,
@@ -611,7 +629,8 @@ export default function CircuitRaceView({
         pitDurationEmergencySeconds: 3.8,
         baseSpeed: stats.baseSpeed + (Math.random()-0.5)*0.06,
         baseGrip: stats.baseGrip,
-        pitStrategy: buildPitStrategy(t, nLaps),
+        reliabilityWearMult: 1,
+        pitStrategy: buildPitStrategy(t, nLaps, weatherWear, 1),
         finished:false, visible:true, position:i+2,
         lapTimes:[],
         slideOffUntil:0, pitExitUntil: null,
@@ -627,11 +646,17 @@ export default function CircuitRaceView({
     let lastCommTime = performance.now();
     let commPhase = "start";
     let commQueue = [...COMMENTARY.start];
+    let firstFrame = true;
 
     stateRef.current = { racers: racerArr, track, nLaps, wd };
 
     const loop = (now) => {
-      const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+      let dt = (now - lastFrameTime) / 1000;
+      if (firstFrame) {
+        firstFrame = false;
+        dt = 0;
+      }
+      dt = Math.min(0.05, dt);
       lastFrameTime = now;
 
       const { racers } = stateRef.current;
@@ -711,11 +736,16 @@ export default function CircuitRaceView({
           }
         }
 
-        // Tyre wear
+        // Tyre wear: per-lap wear so you pit every 2–4 laps (tyre/weather/reliability)
         if (r.tireWearByLap && r.tireWearByLap.length)
           r.tyreWear = r.tireWearByLap[Math.min(r.totalLapsDone, r.tireWearByLap.length - 1)];
-        else
-          r.tyreWear = Math.max(td.minWear, r.tyreWear - td.wearPerSec * wd.wearMult * dt);
+        else {
+          const stintLaps = getEffectiveStintLaps(r.currentTyre, wd.wearMult, r.reliabilityWearMult);
+          const wearPerLap = 85 / stintLaps;
+          const lapTimeSec = track.lapBase / effSpeed;
+          const wearPerSec = lapTimeSec > 0 ? wearPerLap / lapTimeSec : wearPerLap / 22;
+          r.tyreWear = Math.max(td.minWear, r.tyreWear - wearPerSec * dt);
+        }
 
         // Pit decision: pit when we're on or past the planned lap and tyre wear is low enough, and we're near pit entry
         if (!r.inPit && r.pitStrategy.length > 0) {
@@ -897,6 +927,8 @@ export default function CircuitRaceView({
     resizeCanvas();
     const track = TRACKS.find((t) => t.id === initialTrackId) || TRACKS[0];
     const cond = WEATHER_MAP[weatherIdProp] || "clear";
+    const wd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
+    const weatherWear = wd.wearMult != null ? wd.wearMult : 1;
     const racers = order.map((id, i) => {
       const p = participants.find((x) => (x.user_id || x.id) === id) || {};
       const isPlayer = currentUserId != null && (id === currentUserId || p.user_id === currentUserId);
@@ -905,6 +937,8 @@ export default function CircuitRaceView({
       const baseSpeed = effSpeed / 15;
       const tyreId = (p.tyre_compound || "medium").toLowerCase();
       const pitLvl = p.pit_level != null ? p.pit_level : 0;
+      const relLevel = p.reliability_level != null ? p.reliability_level : 0;
+      const reliabilityWearMult = 1 - 0.08 * relLevel;
       return {
         id,
         name: p.username || p.car_name || `#${i + 1}`,
@@ -923,7 +957,8 @@ export default function CircuitRaceView({
         pitDurationEmergencySeconds: pitDurationSeconds(pitLvl, true),
         baseSpeed,
         baseGrip: effGrip,
-        pitStrategy: buildPitStrategy(tyreId in TYRE_DEFS ? tyreId : "medium", totalLaps),
+        reliabilityWearMult,
+        pitStrategy: buildPitStrategy(tyreId in TYRE_DEFS ? tyreId : "medium", totalLaps, weatherWear, reliabilityWearMult),
         finished: false,
         visible: true,
         position: i + 1,
@@ -977,7 +1012,7 @@ export default function CircuitRaceView({
     if (uiPhase === "racing") return;
     resizeCanvas();
     const track = selectedTrack;
-    const cond = condition;
+    const cond = effectiveCondition;
     const racers = buildRacers(track, cond, numLaps, chosenTyre);
     setUiPhase("countdown");
     setCountdown(3);
@@ -992,7 +1027,7 @@ export default function CircuitRaceView({
         startRaceLoop(track, cond, numLaps, racers);
       }
     }, 1000);
-  }, [uiPhase, selectedTrack, condition, numLaps, chosenTyre, buildRacers, resizeCanvas, startRaceLoop]);
+  }, [uiPhase, selectedTrack, effectiveCondition, numLaps, chosenTyre, buildRacers, resizeCanvas, startRaceLoop]);
 
   const handleReset = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -1000,25 +1035,25 @@ export default function CircuitRaceView({
     setCommentary("Select track & tyres, then start");
     resizeCanvas();
     // Draw static preview
-    requestAnimationFrame(() => drawTrackCanvas(selectedTrack, condition, []));
-  }, [selectedTrack, condition, drawTrackCanvas, resizeCanvas]);
+    requestAnimationFrame(() => drawTrackCanvas(selectedTrack, effectiveCondition, []));
+  }, [selectedTrack, effectiveCondition, drawTrackCanvas, resizeCanvas]);
 
   // ── RESIZE ──
   useEffect(() => {
     const onResize = () => {
       resizeCanvas();
-      if (uiPhase === "setup") drawTrackCanvas(selectedTrack, condition, []);
+      if (uiPhase === "setup") drawTrackCanvas(selectedTrack, effectiveCondition, []);
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- resize: stable deps intended
-  }, [resizeCanvas, drawTrackCanvas, selectedTrack, condition, uiPhase]);
+  }, [resizeCanvas, drawTrackCanvas, selectedTrack, effectiveCondition, uiPhase]);
 
   // ── INITIAL DRAW ──
   useEffect(() => {
     if (mode !== "live") return;
     resizeCanvas();
-    drawTrackCanvas(selectedTrack, condition, []);
+    drawTrackCanvas(selectedTrack, effectiveCondition, []);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initial draw once on mount (live mode)
   }, []);
 
@@ -1026,9 +1061,9 @@ export default function CircuitRaceView({
   useEffect(() => {
     if (uiPhase !== "setup") return;
     resizeCanvas();
-    drawTrackCanvas(selectedTrack, condition, []);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setup preview: selectedTrack, condition, uiPhase are the triggers
-  }, [selectedTrack, condition, uiPhase]);
+    drawTrackCanvas(selectedTrack, effectiveCondition, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setup preview: selectedTrack, effectiveCondition, uiPhase are the triggers
+  }, [selectedTrack, effectiveCondition, uiPhase]);
 
   // ── CLEANUP ──
   useEffect(() => {
@@ -1071,28 +1106,22 @@ export default function CircuitRaceView({
         </div>
       )}
 
-      {/* ── LIVE MODE: Conditions + Tyres ── */}
+      {/* ── LIVE MODE: Conditions (auto) + Tyres ── */}
       {isLive && uiPhase === "setup" && (
         <div style={{ display:"flex", gap:"0.6rem", flexWrap:"wrap", marginBottom:"0.75rem", alignItems:"flex-start" }}>
-          {/* Conditions */}
+          {/* Weather (auto) — read-only, same style as Create race */}
           <div className={styles.panel} style={{ padding:"0.6rem", flex:"0 0 auto" }}>
-            <div className="font-heading" style={{ fontSize:"8px", letterSpacing:".22em", textTransform:"uppercase", color:"var(--noir-muted)", marginBottom:"4px" }}>Conditions</div>
-            <div style={{ display:"flex", gap:"3px", flexWrap:"wrap" }}>
-              {Object.entries(WEATHER_DEFS).map(([k,w])=>(
-                <button key={k} type="button" onClick={()=>setCondition(k)}
-                  style={{
-                    fontFamily:"'Cinzel',serif", fontSize:"8px", letterSpacing:".15em",
-                    padding:"8px 10px", minHeight:44, border:`1px solid ${condition===k?"var(--noir-primary)":"var(--noir-border)"}`,
-                    background:condition===k?"rgba(201,164,96,.1)":"transparent",
-                    color:condition===k?"var(--noir-primary)":"var(--noir-muted)", cursor:"pointer",
-                    touchAction:"manipulation",
-                  }}
-                >{w.icon} {w.label}</button>
-              ))}
+            <div className="font-heading" style={{ fontSize:"8px", letterSpacing:".22em", textTransform:"uppercase", color:"var(--noir-muted)", marginBottom:"4px" }}>Weather (auto)</div>
+            <div style={{ display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
+              <span className="font-heading" style={{ fontSize:"12px", color:"var(--noir-primary)" }}>
+                {wDef.icon} {weatherNameProp || wDef.label}
+              </span>
             </div>
-            {/* Tyre recommendation */}
+            <p style={{ fontSize:"10px", color:"var(--noir-muted)", marginTop:"5px", marginBottom:"0", maxWidth:260 }}>
+              Weather affects car speed and tyre wear. Pick tyres suited to conditions.
+            </p>
             {wDef.tyreRec && (
-              <div style={{ fontSize:"10px", color:"var(--noir-muted)", marginTop:"5px", fontStyle:"italic" }}>
+              <div style={{ fontSize:"10px", color:"var(--noir-muted)", marginTop:"4px", fontStyle:"italic" }}>
                 Rec: {wDef.tyreRec.map(t=>TYRE_DEFS[t]?.label).join(", ")}
               </div>
             )}
