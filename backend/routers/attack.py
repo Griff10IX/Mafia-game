@@ -472,7 +472,7 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
     await db.attacks.insert_one({
         "id": attack_id,
         "attacker_id": current_user["id"],
-        "attacker_username": current_user["username"],
+        "attacker_username": current_user.get("username") or "?",
         "target_id": target["id"],
         "target_username": target["username"],
         "note": note,
@@ -883,7 +883,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     attempt_base = {
         "id": str(uuid.uuid4()),
         "attacker_id": current_user["id"],
-        "attacker_username": current_user["username"],
+        "attacker_username": current_user.get("username") or "?",
         "target_id": target["id"],
         "target_username": target_name,
         "attack_id": attack["id"],
@@ -1335,7 +1335,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 await db.public_kills.insert_one({
                     "id": str(uuid.uuid4()),
                     "killer_id": current_user["id"],
-                    "killer_username": current_user["username"],
+                    "killer_username": current_user.get("username") or "?",
                     "victim_id": victim_id,
                     "victim_username": target_name,
                     "death_message": death_message or None,

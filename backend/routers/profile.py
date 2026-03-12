@@ -755,6 +755,12 @@ def register(router):
         if not (raw.startswith("#") and len(raw) in (4, 7) and all(c in "0123456789AaBbCcDdEeFf" for c in raw[1:])):
             raw = MOD_ONLINE_COLOR_DEFAULT
         await db.users.update_one({"id": current_user["id"]}, {"$set": {"mod_online_color": raw}})
+        # Also update the global Mod role colour so ROLE COLOURS (Admin / Users Online) stay in sync
+        await db.game_settings.update_one(
+            {"key": "mod_default_online_color"},
+            {"$set": {"value": raw}},
+            upsert=True,
+        )
         return {"message": "Mod online colour updated", "mod_online_color": raw}
 
     @router.get("/profile/cars-preferences")

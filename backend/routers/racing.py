@@ -233,6 +233,7 @@ class BuyTyresRequest(BaseModel):
 
 class CompleteRaceRequest(BaseModel):
     result_order: List[str]  # entrant ids in finish order (1st to last)
+    dnf_ids: Optional[List[str]] = None  # entrant ids that did not finish (mechanical failure, fuel, etc.)
 
 
 class CreateRacingTeamRequest(BaseModel):
@@ -758,6 +759,7 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "racing_team_count": await db.racing_profiles.count_documents({"team_name": {"$exists": True, "$ne": None, "$ne": ""}}),
         "racing_week_ends_utc": week_ends_utc,
         "racing_season_ends_utc": season_ends_utc,
+        "free_engine_repair_available": (prof.get("free_engine_repair_used_season_start_utc") or "") != (meta.get("season_start_utc") or ""),
     }
 
 
@@ -993,7 +995,7 @@ async def upgrade_car_part(body: UpgradeCarRequest, current_user: dict = Depends
 
 
 async def repair_engine(body: RepairEngineRequest, current_user: dict = Depends(get_current_user_verified)):
-    """Repair engine wear down to target_wear (default 0) for a fee."""
+    """Repair engine wear down to target_wear (default 0). One free repair per season; after that, cost from crew bank."""
     instance_id = (body.racing_car_instance_id or "").strip()
     doc = await _get_user_racing_car(current_user["id"], instance_id)
     if not doc:
@@ -1005,12 +1007,27 @@ async def repair_engine(body: RepairEngineRequest, current_user: dict = Depends(
     cost = int((current_wear - target) * ENGINE_REPAIR_COST_PER_PCT)
     if cost < 1:
         raise HTTPException(status_code=400, detail="Nothing to repair")
-    await _deduct_crew_bank(current_user["id"], cost)
+
+    meta = await _ensure_racing_meta()
+    prof = await _ensure_racing_profile(current_user["id"])
+    season_start = meta.get("season_start_utc") or ""
+    free_used_season = prof.get("free_engine_repair_used_season_start_utc")
+    free_repair_available = free_used_season != season_start
+
+    if free_repair_available:
+        cost = 0
+        await db.racing_profiles.update_one(
+            {"user_id": current_user["id"]},
+            {"$set": {"free_engine_repair_used_season_start_utc": season_start}},
+        )
+    else:
+        await _deduct_crew_bank(current_user["id"], cost)
+
     await db.user_racing_cars.update_one(
         {"user_id": current_user["id"], "id": instance_id},
         {"$set": {"engine_wear": round(target, 1)}},
     )
-    return {"message": "Engine repaired", "engine_wear": target, "cost": cost}
+    return {"message": "Engine repaired", "engine_wear": target, "cost": cost, "free_repair": free_repair_available}
 
 
 async def replace_engine(body: ReplaceEngineRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -1259,14 +1276,16 @@ async def _start_race_internal(race_id: str) -> dict:
         competitive_offsets.append(random.choice([0, 1, 2]))
     random.shuffle(competitive_offsets)
     initial_count = len(participants)
+    npc_slot = 0
+    shuffled_npcs = list(RACING_NPCS)
+    random.shuffle(shuffled_npcs)
     while len(participants) < max_grid:
-        npc = random.choice(RACING_NPCS)
+        npc = shuffled_npcs[npc_slot % len(shuffled_npcs)]
         offset = competitive_offsets[len(participants) - initial_count]
         tier = max(0, min(len(RACING_CARS) - 1, player_tier + random.randint(-1, 1)))
         car_def = RACING_CARS[tier]
         engine_level = max(0, min(MAX_CAR_UPGRADE_LEVEL, player_engine + random.randint(-1, 1)))
         tires_level = max(0, min(MAX_CAR_UPGRADE_LEVEL, player_tires + random.randint(-1, 1)))
-        # NPCs get random levels for other upgrades (within per-type max and global cap)
         used = engine_level + tires_level
         cap_left = max(0, RACING_UPGRADE_GLOBAL_CAP - used)
         aero_level = min(MAX_AERO_LEVEL, random.randint(0, min(MAX_AERO_LEVEL, cap_left)))
@@ -1288,8 +1307,9 @@ async def _start_race_internal(race_id: str) -> dict:
         used += weight_level
         cap_left = max(0, RACING_UPGRADE_GLOBAL_CAP - used)
         fuel_level = min(MAX_FUEL_LEVEL, random.randint(0, min(MAX_FUEL_LEVEL, cap_left)))
-        npc_id = npc["id"]
+        npc_id = f"{npc['id']}_{npc_slot}"
         tyre = random.choice(["soft", "medium", "hard"])
+        npc_slot += 1
         participants.append({
             "id": npc_id,
             "username": npc.get("name"),
@@ -1498,7 +1518,55 @@ async def _create_automated_race(slot_label: str) -> Optional[str]:
         "is_automated": True,
     }
     await db.racing_races.insert_one(doc)
-    await _start_race_internal(race_id)
+    race = await _start_race_internal(race_id)
+    # Run backend simulation and auto-complete for automated races
+    participants_after = list(race.get("participants") or [])
+    weather_id = race.get("weather") or "clear"
+    actual_laps = int(race.get("laps") or num_laps)
+    profile_by_user = {}
+    upgrades_map = {}
+    engine_wear_by_entrant: Dict[str, float] = {}
+    for p in participants_after:
+        eid = p.get("user_id") or p.get("id")
+        if p.get("is_npc"):
+            upgrades_map[eid] = {
+                "engine_level": p.get("engine_level", 0),
+                "tires_level": p.get("tires_level", 0),
+                "aero_level": p.get("aero_level", 0),
+                "reliability_level": p.get("reliability_level", 0),
+                "brakes_level": p.get("brakes_level", 0),
+                "gearbox_level": p.get("gearbox_level", 0),
+                "cooling_level": p.get("cooling_level", 0),
+                "weight_level": p.get("weight_level", 0),
+                "fuel_level": p.get("fuel_level", 0),
+            }
+        else:
+            uid = p.get("user_id")
+            prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0})
+            if prof:
+                profile_by_user[uid] = prof
+            inst_id = p.get("racing_car_instance_id")
+            if inst_id:
+                up = await db.racing_upgrades.find_one({"user_id": uid, "racing_car_instance_id": inst_id}, {"_id": 0})
+                car_d = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0})
+                base = {"engine_level": (car_d or {}).get("engine_level", 0), "tires_level": (car_d or {}).get("tires_level", 0)}
+                if up:
+                    base.update(up)
+                upgrades_map[inst_id] = base
+                engine_wear_by_entrant[uid] = float((car_d or {}).get("engine_wear") or 0)
+    lap_results, sim_result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids = _run_race_simulation_laps(
+        participants_after, profile_by_user, upgrades_map, actual_laps, weather_id, engine_wear_by_entrant,
+    )
+    body = CompleteRaceRequest(result_order=sim_result_order, dnf_ids=sim_dnf_ids)
+    # Build a minimal mock user for the complete_race call
+    creator = next((p for p in participants_after if not p.get("is_npc")), participants_after[0])
+    mock_user = {"id": creator.get("user_id") or creator.get("id"), "username": creator.get("username", "?")}
+    await complete_race(race_id, body, mock_user)
+    # Store simulation detail for replay
+    await db.racing_races.update_one(
+        {"id": race_id},
+        {"$set": {"lap_results": lap_results, "pit_stops": pit_stops, "tire_wear_after_lap": tire_wear_after_lap}},
+    )
     return race_id
 
 
@@ -1594,17 +1662,17 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
     if pot < RACING_BASE_CASH_POOL:
         pot = RACING_BASE_CASH_POOL
     rewards = []
-    dnf_ids: List[str] = []
+    dnf_ids: List[str] = list(body.dnf_ids or [])
     for i, entrant_id in enumerate(result_order):
         position = i + 1
-        pct = REWARD_BY_POSITION[i] if i < len(REWARD_BY_POSITION) else 0
-        cash = int(pot * pct * reward_mult)
-        rp = RANK_POINTS_BY_POSITION[i] if i < len(RANK_POINTS_BY_POSITION) else 0
-        rep = RACING_REP_BY_POSITION[i] if i < len(RACING_REP_BY_POSITION) else 0
         entrant = next((x for x in participants if (x.get("user_id") or x.get("id")) == entrant_id), None)
-        is_dnf = False
+        is_dnf = entrant_id in dnf_ids
         if entrant:
             entrant["dnf"] = is_dnf
+        pct = REWARD_BY_POSITION[i] if i < len(REWARD_BY_POSITION) else 0
+        cash = 0 if is_dnf else int(pot * pct * reward_mult)
+        rp = 0 if is_dnf else (RANK_POINTS_BY_POSITION[i] if i < len(RANK_POINTS_BY_POSITION) else 0)
+        rep = 0 if is_dnf else (RACING_REP_BY_POSITION[i] if i < len(RACING_REP_BY_POSITION) else 0)
         if entrant and not entrant.get("is_npc"):
             uid = entrant.get("user_id")
             if not is_dnf:

@@ -595,20 +595,51 @@ export default function Snake() {
                 </h2>
                 <p style={{
                   fontFamily: "'Crimson Text',serif", fontStyle: "italic",
-                  fontSize: "clamp(11px,2.8vw,14px)", color: "rgba(201,164,96,0.85)", marginTop: 6,
+                  fontSize: "clamp(11px,2.8vw,14px)",
+                  lineHeight: 1.35,
+                  color: "rgba(201,164,96,0.85)",
+                  margin: "6px 0 0",
                 }}>
                   Move the package through the streets
                 </p>
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 10px", justifyContent: "center", maxWidth: 320 }}>
+              <div style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "6px 10px",
+                justifyContent: "center",
+                maxWidth: "min(520px, 100%)",
+                marginTop: 2,
+              }}>
                 {PACKAGES.map(p => (
-                  <div key={p.type} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "clamp(9px,2.2vw,11px)", color: "var(--noir-muted)" }}>
+                  <div
+                    key={p.type}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: "clamp(9px,2.2vw,11px)",
+                      color: "var(--noir-muted)",
+                      lineHeight: 1.25,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     <span aria-hidden>{p.label}</span>
                     <span style={{ color: "var(--noir-primary)" }}>+{p.points}</span>
                     <span style={{ opacity: 0.9 }}>{p.desc}</span>
                   </div>
                 ))}
-                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "clamp(9px,2.2vw,11px)", color: "#dc2626", width: "100%", justifyContent: "center" }}>
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  fontSize: "clamp(9px,2.2vw,11px)",
+                  color: "#dc2626",
+                  width: "100%",
+                  justifyContent: "center",
+                  lineHeight: 1.25,
+                  marginTop: 2,
+                }}>
                   <span aria-hidden>🚔</span><span>= Dead</span>
                 </div>
               </div>

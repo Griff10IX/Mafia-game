@@ -99,6 +99,7 @@ export default function Racing() {
   const [creating, setCreating] = useState(false);
   const [joiningId, setJoiningId] = useState(null);
   const [joinTyre, setJoinTyre] = useState("medium");
+  const [trackFilter, setTrackFilter] = useState("all");
   const [createForm, setCreateForm] = useState({ track_id: "", circuitId: "", entry_fee: 0, max_grid: 6, laps: 3, tyre_compound: "medium", weather_id: "clear" });
   const [teamCreateName, setTeamCreateName] = useState("");
   const [teamCreateColor, setTeamCreateColor] = useState("#e8d020");
@@ -122,6 +123,7 @@ export default function Racing() {
         racing_week_ends_utc: d.racing_week_ends_utc,
         racing_season_ends_utc: d.racing_season_ends_utc,
         global_upgrade_cap: d.global_upgrade_cap ?? 18,
+        free_engine_repair_available: !!d.free_engine_repair_available,
         crew_levels_used: d.crew_levels_used ?? 0,
         crew_global_cap: d.crew_global_cap ?? 24,
         crew_tradeoffs: d.crew_tradeoffs || null,
@@ -193,7 +195,7 @@ export default function Racing() {
       try {
         const r = await api.get(`/racing/races/${raceIdParam}`);
         const race = r.data?.race;
-        if (race?.state === "open" || race?.state === "completed") {
+        if (race?.state === "open" || race?.state === "completed" || race?.state === "running") {
           setActiveRace(race);
           setTab("races");
         }
@@ -221,6 +223,7 @@ export default function Racing() {
         refreshUser();
         toast.success("Race created");
         navigate(`/racing?race=${race.id}`, { replace: true });
+        window.scrollTo({ top: 0, behavior: "smooth" });
       }
     } catch (e) {
       toast.error(apiDetail(e));
@@ -259,9 +262,9 @@ export default function Racing() {
     }
   };
 
-  const handleCompleteRace = async (raceId, resultOrder) => {
+  const handleCompleteRace = async (raceId, resultOrder, dnfIds) => {
     try {
-      const r = await api.post(`/racing/races/${raceId}/complete`, { result_order: resultOrder });
+      const r = await api.post(`/racing/races/${raceId}/complete`, { result_order: resultOrder, dnf_ids: dnfIds || [] });
       setActiveRace((prev) => (prev?.id === raceId ? { ...r.data?.race, _resultsShown: true } : prev));
       refreshUser();
       fetchProfile();
@@ -337,10 +340,10 @@ export default function Racing() {
 
   const handleRepairEngine = async (instanceId) => {
     try {
-      await api.post("/racing/engine/repair", { racing_car_instance_id: instanceId });
+      const res = await api.post("/racing/engine/repair", { racing_car_instance_id: instanceId });
       await fetchProfile();
       refreshUser();
-      toast.success("Engine repaired");
+      toast.success(res.data?.free_repair ? "Engine repaired (free this season)" : "Engine repaired");
     } catch (e) {
       toast.error(apiDetail(e));
     }
@@ -496,14 +499,30 @@ export default function Racing() {
         <p className="text-sm text-[var(--noir-muted)] mt-1">
           Road races • Choose car • Crew upgrades • Purse by position
         </p>
-        <p className="text-xs mt-2" style={{ color: "var(--noir-primary)" }}>
-          Crew bank: {formatMoney(profile?.crew_bank ?? 0)} — race winnings for upgrades
+        <div className="flex flex-wrap items-center gap-3 mt-2">
+          <div className="flex items-center gap-2" style={{ minWidth: 180 }}>
+            <span className="text-xs" style={{ color: "var(--noir-primary)" }}>Crew bank:</span>
+            <div style={{ flex:1, maxWidth:120, height:8, background:"rgba(201,164,96,.12)", borderRadius:4, overflow:"hidden", border:"1px solid rgba(201,164,96,.15)" }}>
+              <div style={{ height:"100%", width:`${Math.min(100, ((profile?.crew_bank ?? 0)/10000000)*100)}%`, background:"linear-gradient(90deg,#a87820,#e8c870)", borderRadius:4, transition:"width .5s" }}/>
+            </div>
+            <span className="text-xs font-heading" style={{ color: "var(--noir-primary)" }}>{formatMoney(profile?.crew_bank ?? 0)}</span>
+          </div>
           {profile?.team_name && (
-            <span className="ml-3">
-              Team: <span style={{ color: profile?.team_color || "var(--noir-primary)" }}>●</span> {profile.team_name}
+            <span className="text-xs" style={{ color: "var(--noir-muted)" }}>
+              Team: <span style={{ color: profile?.team_color || "var(--noir-primary)" }}>&#9679;</span> {profile.team_name}
             </span>
           )}
-        </p>
+        </div>
+        {leaderboard.length > 0 && (
+          <div className="flex flex-wrap gap-3 mt-1.5 text-[10px] text-[var(--noir-muted)]">
+            {leaderboard.slice(0,3).map((row,i)=>(
+              <span key={row.user_id}>
+                <span style={{color:i===0?"#e8c870":i===1?"#bbb":"#c07a30",fontWeight:700}}>#{i+1}</span>{" "}
+                {row.username} ({row.wins}W)
+              </span>
+            ))}
+          </div>
+        )}
         {(profile?.racing_week_ends_utc || profile?.racing_season_ends_utc) && (
           <p className="text-[10px] text-[var(--noir-muted)] mt-1">
             {profile.racing_week_ends_utc && (
@@ -536,7 +555,7 @@ export default function Racing() {
             playerCarName={playerCarName}
             playerPitLevel={profile?.pit_level ?? 0}
             currentUserId={profile?.user_id}
-            onComplete={(resultOrder) => resultOrder && handleCompleteRace(activeRace.id, resultOrder)}
+            onComplete={(resultOrder, dnfIds) => resultOrder && handleCompleteRace(activeRace.id, resultOrder, dnfIds)}
             onReset={() => { setActiveRace(null); fetchOpenRaces(); }}
           />
         </div>
@@ -604,30 +623,30 @@ export default function Racing() {
         {tab === "races" && (
           <>
             {/* Create race — live-race style setup (first so tab always looks like reference) */}
-            <div className={styles.panel + " p-4 mb-4"}>
-              <h3 className="font-heading text-sm uppercase tracking-wider mb-4" style={{ color: "var(--noir-primary)" }}>
+            <div className={styles.panel + " p-3 mb-3"}>
+              <h3 className="font-heading text-xs uppercase tracking-wider mb-3" style={{ color: "var(--noir-primary)" }}>
                 LIVE RACE - GRID ORDER SET BY QUALIFYING LAP
               </h3>
 
               {/* SELECT TRACK — 8 tracks in 2×4 grid with outline thumbnails */}
-              <div className="mb-6">
-                <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">SELECT TRACK</div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="mb-4">
+                <div className="text-[9px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-1.5">SELECT TRACK</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {TRACKS_FOR_CREATE.map((t) => {
-                    const circuit = CIRCUIT_TRACKS[t.circuitId];
+                    const circuit = CIRCUIT_TRACKS.find((tr) => tr.id === t.circuitId);
                     const selected = createForm.circuitId === t.circuitId;
                     return (
                       <button
                         key={t.circuitId}
                         type="button"
                         onClick={() => setCreateForm((f) => ({ ...f, track_id: t.track_id, circuitId: t.circuitId }))}
-                        className={`p-3 rounded-lg border-2 text-left transition-all touch-manipulation ${selected ? "border-[var(--noir-primary)] bg-[var(--noir-primary)]/10" : "border-[var(--noir-border)] bg-[var(--noir-surface)] hover:border-[var(--noir-muted)]"}`}
+                        className={`p-2 rounded border-2 text-left transition-all touch-manipulation ${selected ? "border-[var(--noir-primary)] bg-[var(--noir-primary)]/10" : "border-[var(--noir-border)] bg-[var(--noir-surface)] hover:border-[var(--noir-muted)]"}`}
                       >
-                        <div className="w-full aspect-[2.2/1] rounded flex items-center justify-center mb-2 overflow-hidden" style={{ background: "var(--noir-surface)", border: "1px solid var(--noir-border)" }}>
+                        <div className="w-full aspect-[2.2/1] rounded flex items-center justify-center mb-1 overflow-hidden min-h-[36px]" style={{ background: "var(--noir-surface)", border: "1px solid var(--noir-border)" }}>
                           {circuit ? <TrackThumb track={circuit} active={selected} /> : <span className="text-[8px] font-heading text-[var(--noir-muted)]">TRACK</span>}
                         </div>
-                        <div className="font-heading text-xs truncate" style={{ color: "var(--noir-primary)" }}>{t.name}</div>
-                        <div className="text-[10px] text-[var(--noir-muted)]">{t.km}km · {t.corners}T</div>
+                        <div className="font-heading text-[11px] truncate" style={{ color: "var(--noir-primary)" }}>{t.name}</div>
+                        <div className="text-[9px] text-[var(--noir-muted)]">{t.km}km · {t.corners}T</div>
                       </button>
                     );
                   })}
@@ -635,11 +654,11 @@ export default function Racing() {
               </div>
 
               {/* CONDITIONS + YOUR STARTING TYRE + LAPS in one row on desktop */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                 {/* Conditions */}
                 <div>
-                  <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">CONDITIONS</div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="text-[9px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-1.5">CONDITIONS</div>
+                  <div className="flex flex-wrap gap-1.5">
                     {WEATHER_OPTIONS.map((w) => {
                       const sel = createForm.weather_id === w.id;
                       return (
@@ -647,7 +666,7 @@ export default function Racing() {
                           key={w.id}
                           type="button"
                           onClick={() => setCreateForm((f) => ({ ...f, weather_id: w.id }))}
-                          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-heading touch-manipulation ${sel ? "border-[var(--noir-primary)] bg-[var(--noir-primary)]/15 text-[var(--noir-primary)]" : "border-[var(--noir-border)] bg-[var(--noir-surface)] text-[var(--noir-muted)] hover:bg-[var(--noir-border)]/30"}`}
+                          className={`flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-heading touch-manipulation ${sel ? "border-[var(--noir-primary)] bg-[var(--noir-primary)]/15 text-[var(--noir-primary)]" : "border-[var(--noir-border)] bg-[var(--noir-surface)] text-[var(--noir-muted)] hover:bg-[var(--noir-border)]/30"}`}
                           title={w.name}
                         >
                           <span>{w.icon}</span>
@@ -656,15 +675,15 @@ export default function Racing() {
                       );
                     })}
                   </div>
-                  <p className="text-[10px] text-[var(--noir-muted)] mt-1.5">
+                  <p className="text-[9px] text-[var(--noir-muted)] mt-1">
                     {createForm.weather_id === "very_hot" || createForm.weather_id === "rain" ? "Rec: Medium, Hard" : "Pick tyres suited to conditions."}
                   </p>
                 </div>
 
                 {/* Your starting tyre — 5 options */}
                 <div>
-                  <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">YOUR STARTING TYRE</div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="text-[9px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-1.5">YOUR STARTING TYRE</div>
+                  <div className="flex flex-wrap gap-1.5">
                     {[
                       { id: "soft", label: "Soft", dot: "bg-red-500", desc: "Grippy, faster wear" },
                       { id: "medium", label: "Medium", dot: "bg-amber-400", desc: "Balanced" },
@@ -678,44 +697,44 @@ export default function Racing() {
                           key={tyre.id}
                           type="button"
                           onClick={() => setCreateForm((f) => ({ ...f, tyre_compound: tyre.id }))}
-                          className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm touch-manipulation ${sel ? "border-[var(--noir-primary)] bg-[var(--noir-primary)]/10" : "border-[var(--noir-border)] bg-[var(--noir-surface)]"}`}
+                          className={`flex items-center gap-1.5 px-2 py-1.5 rounded border text-xs touch-manipulation ${sel ? "border-[var(--noir-primary)] bg-[var(--noir-primary)]/10" : "border-[var(--noir-border)] bg-[var(--noir-surface)]"}`}
                         >
-                          <span className={`w-2 h-2 rounded-full ${tyre.dot}`} />
+                          <span className={`w-1.5 h-1.5 rounded-full ${tyre.dot}`} />
                           <span style={{ color: "var(--noir-primary)" }}>{tyre.label}</span>
                         </button>
                       );
                     })}
                   </div>
-                  <p className="text-[10px] text-[var(--noir-muted)] mt-1">
+                  <p className="text-[9px] text-[var(--noir-muted)] mt-0.5">
                     {(["soft", "medium", "hard"].includes(createForm.tyre_compound) && { soft: "Grippy, faster wear", medium: "Balanced", hard: "Durable, slower" }[createForm.tyre_compound]) ||
                       (createForm.tyre_compound === "inter" && "Wet conditions") ||
                       (createForm.tyre_compound === "full_wet" && "Heavy rain")}
                   </p>
-                  <p className="text-[10px] text-[var(--noir-muted)]">
+                  <p className="text-[9px] text-[var(--noir-muted)]">
                     Stock: {["soft", "medium", "hard"].includes(createForm.tyre_compound) ? (profile?.[`tyre_stock_${createForm.tyre_compound}`] ?? 0) : (profile?.tyre_stock_medium ?? 0)}
                   </p>
                 </div>
 
                 {/* Laps + entry/grid */}
                 <div>
-                  <div className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-2">LAPS</div>
+                  <div className="text-[9px] font-heading uppercase tracking-wider text-[var(--noir-muted)] mb-1.5">LAPS</div>
                   <input
                     type="number"
                     min={2}
                     max={20}
                     value={createForm.laps}
                     onChange={(e) => setCreateForm((f) => ({ ...f, laps: Math.max(2, Math.min(20, Number(e.target.value) || 2)) }))}
-                    className={styles.input + " w-20 text-lg font-heading"}
+                    className={styles.input + " w-14 text-sm font-heading"}
                   />
-                  <div className="flex flex-wrap gap-3 mt-3">
+                  <div className="flex flex-wrap gap-2 mt-2">
                     <label className="flex flex-col gap-0.5">
-                      <span className="text-[10px] text-[var(--noir-muted)]">Entry fee</span>
-                      <input type="number" min={0} className={styles.input + " w-24"} value={createForm.entry_fee}
+                      <span className="text-[9px] text-[var(--noir-muted)]">Entry fee</span>
+                      <input type="number" min={0} className={styles.input + " w-20 text-sm"} value={createForm.entry_fee}
                         onChange={(e) => setCreateForm((f) => ({ ...f, entry_fee: e.target.value }))} />
                     </label>
                     <label className="flex flex-col gap-0.5">
-                      <span className="text-[10px] text-[var(--noir-muted)]">Grid size</span>
-                      <input type="number" min={2} max={8} className={styles.input + " w-16"} value={createForm.max_grid}
+                      <span className="text-[9px] text-[var(--noir-muted)]">Grid size</span>
+                      <input type="number" min={2} max={8} className={styles.input + " w-12 text-sm"} value={createForm.max_grid}
                         onChange={(e) => setCreateForm((f) => ({ ...f, max_grid: e.target.value }))} />
                     </label>
                   </div>
@@ -723,17 +742,17 @@ export default function Racing() {
               </div>
 
               {/* Weather randomise + Create race button */}
-              <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-[var(--noir-border)]">
+              <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-[var(--noir-border)]">
                 <button
                   type="button"
-                  className="text-xs font-heading px-3 py-2 rounded border border-[var(--noir-border)] hover:bg-[var(--noir-primary)]/10 touch-manipulation"
+                  className="text-[11px] font-heading px-2 py-1.5 rounded border border-[var(--noir-border)] hover:bg-[var(--noir-primary)]/10 touch-manipulation"
                   onClick={() => setCreateForm((f) => ({ ...f, weather_id: WEATHER_OPTIONS[Math.floor(Math.random() * WEATHER_OPTIONS.length)].id }))}
                 >
                   Randomise weather
                 </button>
                 <button
                   type="button"
-                  className={styles.btnPrimary + " min-h-[44px] touch-manipulation"}
+                  className={styles.btnPrimary + " min-h-[38px] text-sm touch-manipulation px-3 py-1.5"}
                   disabled={creating || !createForm.track_id || !selectedInstanceId || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 || (effectiveTyreStock(createForm.tyre_compound, profile) < 1)}
                   onClick={handleCreateRace}
                 >
@@ -741,23 +760,23 @@ export default function Racing() {
                 </button>
               </div>
               {(cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 && (
-                <p className="text-xs text-amber-400 mt-2">Engine at 100% wear. Repair or replace in My ride.</p>
+                <p className="text-[11px] text-amber-400 mt-1.5">Engine at 100% wear. Repair or replace in My ride.</p>
               )}
               {effectiveTyreStock(createForm.tyre_compound, profile) < 1 && (
-                <p className="text-xs text-amber-400 mt-2">No {createForm.tyre_compound} tyres in stock. Buy in My ride.</p>
+                <p className="text-[11px] text-amber-400 mt-1.5">No {createForm.tyre_compound} tyres in stock. Buy in My ride.</p>
               )}
               {!selectedInstanceId && (
-                <p className="text-xs text-amber-400 mt-2">Select a racing car in My ride first.</p>
+                <p className="text-[11px] text-amber-400 mt-1.5">Select a racing car in My ride first.</p>
               )}
             </div>
 
             {/* Active open race panel — after create form */}
             {activeRace?.state === "open" && (
-              <div className={styles.panel + " p-4 mb-4"}>
-                <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>
+              <div className={styles.panel + " p-3 mb-3"}>
+                <h3 className="font-heading text-sm mb-1.5" style={{ color: "var(--noir-primary)" }}>
                   Your race: {activeRace.track_name}
                 </h3>
-                <p className="text-sm text-[var(--noir-muted)]">
+                <p className="text-xs text-[var(--noir-muted)]">
                   {activeRace.participants?.length ?? 0} / {activeRace.max_grid} on grid.
                   Entry fee: {formatMoney(activeRace.entry_fee)}.
                   {activeRace.weather_name || (WEATHER_OPTIONS.find((w) => w.id === activeRace.weather)?.name) ? (
@@ -767,7 +786,7 @@ export default function Racing() {
                 {canStartRace && (
                   <button
                     type="button"
-                    className={styles.btnPrimary + " mt-3 min-h-[44px] touch-manipulation"}
+                    className={styles.btnPrimary + " mt-2 min-h-[36px] text-sm touch-manipulation py-1.5"}
                     onClick={() => handleStartRace(activeRace)}
                   >
                     Start race (fill with NPCs)
@@ -777,39 +796,67 @@ export default function Racing() {
             )}
 
             {/* Open races */}
-            <div className={styles.panel + " p-4"}>
-              <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Open races</h3>
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                <span className="text-xs text-[var(--noir-muted)]">Tyres when joining:</span>
-                <select className={styles.input + " w-24 text-sm"} value={joinTyre} onChange={(e) => setJoinTyre(e.target.value)}>
-                  <option value="soft">Soft</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
-                </select>
-                <span className="text-[10px] text-[var(--noir-muted)]">Weather shown per race; pick tyres for conditions.</span>
-              </div>
-              {openRaces.length === 0 ? (
-                <p className="text-sm text-[var(--noir-muted)]">No open races. Create one above.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {openRaces.map((race) => (
-                    <li key={race.id} className="flex items-center justify-between p-2 rounded surface">
-                      <div>
-                        <span className="font-heading">{race.track_name}</span>
-                        <span className="text-xs text-[var(--noir-muted)] ml-2">
-                          {race.participants?.length ?? 0}/{race.max_grid} • {formatMoney(race.entry_fee)} entry
-                          {race.weather_name || race.weather ? ` • ${race.weather_name ?? WEATHER_OPTIONS.find((w) => w.id === race.weather)?.name ?? race.weather}` : ""}
-                        </span>
-                      </div>
-                      <button type="button" className={styles.btnPrimary + " text-sm min-h-[44px] touch-manipulation"}
-                        disabled={joiningId === race.id || !selectedInstanceId || race.participants?.some((p) => p.user_id === profile?.user_id) || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 || (profile?.[`tyre_stock_${joinTyre}`] ?? 0) < 1}
-                        onClick={() => handleJoinRace(race, selectedInstanceId, joinTyre)}>
-                        {joiningId === race.id ? "Joining…" : "Join"}
+            <div className={styles.panel + " p-3"}>
+              <h3 className="font-heading text-sm mb-1.5" style={{ color: "var(--noir-primary)" }}>Open races</h3>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="text-xs text-[var(--noir-muted)]">Tyres:</span>
+                <div className="flex gap-1 flex-wrap">
+                  {[
+                    { id:"soft", label:"Soft", color:"#e82020" },
+                    { id:"medium", label:"Med", color:"#e8d020" },
+                    { id:"hard", label:"Hard", color:"#d0d0c0" },
+                    { id:"inter", label:"Inter", color:"#20a840" },
+                    { id:"full_wet", label:"Wet", color:"#2080e8" },
+                  ].map(td=>{
+                    const stock = effectiveTyreStock(td.id, profile);
+                    return (
+                      <button key={td.id} type="button" onClick={()=>setJoinTyre(td.id)}
+                        className="flex items-center gap-1 px-2 py-1 text-xs rounded border touch-manipulation"
+                        style={{
+                          borderColor: joinTyre===td.id?"var(--noir-primary)":"var(--noir-border)",
+                          background: joinTyre===td.id?"rgba(201,164,96,.1)":"transparent",
+                          color: joinTyre===td.id?"var(--noir-foreground)":"var(--noir-muted)",
+                        }}>
+                        <span style={{width:7,height:7,borderRadius:"50%",background:td.color,display:"inline-block"}}/>
+                        {td.label}
+                        <span style={{fontSize:9,color:stock<1?"#e74c3c":"var(--noir-muted)"}}>({stock})</span>
                       </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="text-xs text-[var(--noir-muted)]">Track:</span>
+                <select className={styles.input + " w-32 text-sm"} value={trackFilter} onChange={(e)=>setTrackFilter(e.target.value)}>
+                  <option value="all">All Tracks</option>
+                  {TRACKS_FOR_CREATE.map(t=><option key={t.circuitId} value={t.track_id}>{t.name}</option>)}
+                </select>
+              </div>
+              {(() => {
+                const filtered = trackFilter === "all" ? openRaces : openRaces.filter(r=>r.track_id===trackFilter);
+                return filtered.length === 0 ? (
+                  <p className="text-sm text-[var(--noir-muted)]">No open races{trackFilter!=="all"?" for this track":""}. Create one above.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {filtered.map((race) => (
+                      <li key={race.id} className="flex items-center justify-between p-2 rounded surface">
+                        <div>
+                          <span className="font-heading">{race.track_name}</span>
+                          <span className="text-xs text-[var(--noir-muted)] ml-2">
+                            {race.participants?.length ?? 0}/{race.max_grid} • {formatMoney(race.entry_fee)} entry
+                            {race.weather_name || race.weather ? ` • ${race.weather_name ?? WEATHER_OPTIONS.find((w) => w.id === race.weather)?.name ?? race.weather}` : ""}
+                          </span>
+                        </div>
+                        <button type="button" className={styles.btnPrimary + " text-sm min-h-[44px] touch-manipulation"}
+                          disabled={joiningId === race.id || !selectedInstanceId || race.participants?.some((p) => p.user_id === profile?.user_id) || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 || effectiveTyreStock(joinTyre, profile) < 1}
+                          onClick={() => handleJoinRace(race, selectedInstanceId, joinTyre === "inter" || joinTyre === "full_wet" ? "medium" : joinTyre)}>
+                          {joiningId === race.id ? "Joining…" : "Join"}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()}
             </div>
           </>
         )}
@@ -879,6 +926,7 @@ export default function Racing() {
                     const maxFuel = upgradeTradeoffs?.fuel?.max ?? 2;
                     const nextEngineTiresTotal = engine + tires + 1;
                     const nextEngineTiresCost = carUpgradeCosts[nextEngineTiresTotal] ?? carUpgradeCosts[carUpgradeCosts.length - 1];
+                    const repairCost = Math.round((c.engine_wear ?? 0) * (profile?.engine_repair_cost_per_pct ?? 400));
                     return (
                     <li key={c.id} className="p-4 rounded-lg border border-[var(--noir-border)] bg-[var(--noir-surface)]">
                       <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
@@ -917,13 +965,13 @@ export default function Racing() {
                           </div>
                           <span className="text-xs font-heading text-[var(--noir-primary)] w-10">{(c.engine_wear ?? 0).toFixed(0)}%</span>
                         </div>
-                        <p className="text-[10px] text-[var(--noir-muted)] mt-0.5">Every race adds wear. At 100% you must repair or replace. High wear risks DNF. Repairs use crew bank.</p>
+                        <p className="text-[10px] text-[var(--noir-muted)] mt-0.5">Every race adds wear. At 100% you must repair or replace. High wear risks DNF. 1 free engine repair per season; further repairs use crew bank.</p>
                         {((c.engine_wear ?? 0) > 0 && (c.engine_wear ?? 0) < 100) && (
                           <div className="flex flex-wrap gap-2 mt-2">
                             <button type="button" className={styles.btnGoldDarkText + " text-xs"}
-                              disabled={(profile?.crew_bank ?? 0) < ((c.engine_wear ?? 0) * (profile?.engine_repair_cost_per_pct ?? 400))}
+                              disabled={!profile?.free_engine_repair_available && (profile?.crew_bank ?? 0) < (repairCost)}
                               onClick={() => handleRepairEngine(c.id)}>
-                              Repair to 0% ({formatMoney(((c.engine_wear ?? 0) * (profile?.engine_repair_cost_per_pct ?? 400)))})
+                              {profile?.free_engine_repair_available ? "Repair to 0% (Free — 1 per season)" : `Repair to 0% (${formatMoney(repairCost)})`}
                             </button>
                             <button type="button" className={styles.btnGoldDarkText + " text-xs"}
                               disabled={(profile?.crew_bank ?? 0) < (profile?.engine_replace_cost ?? 75000)}
@@ -937,6 +985,11 @@ export default function Racing() {
                         )}
                         {(c.engine_wear ?? 0) >= 100 && (
                           <div className="flex flex-wrap gap-2 mt-2">
+                            {profile?.free_engine_repair_available && (
+                              <button type="button" className={styles.btnPrimary + " text-xs"} onClick={() => handleRepairEngine(c.id)}>
+                                Repair to 0% (Free — 1 per season)
+                              </button>
+                            )}
                             <button type="button" className={styles.btnPrimary + " text-xs"} disabled={(profile?.crew_bank ?? 0) < (profile?.engine_replace_cost ?? 75000)} onClick={() => handleReplaceEngine(c.id)}>
                               Replace engine ({formatMoney(profile?.engine_replace_cost ?? 75000)})
                             </button>
@@ -1126,6 +1179,40 @@ export default function Racing() {
                 })}
               </div>
             </div>
+            {cars.length > 1 && (
+              <div className={styles.panel + " p-4 mb-4"}>
+                <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Car comparison</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-[var(--noir-border)]">
+                        <th className="text-left py-1.5 pr-3">Car</th>
+                        <th className="text-right py-1.5 px-2">Speed</th>
+                        <th className="text-right py-1.5 px-2">Grip</th>
+                        <th className="text-right py-1.5 px-2">Eng Wear</th>
+                        <th className="text-right py-1.5 px-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cars.map(c => {
+                        const ups = upgradesByCar[c.id] || {};
+                        const isSelected = c.id === selectedInstanceId;
+                        return (
+                          <tr key={c.id} className="border-b border-[var(--noir-border)]"
+                            style={isSelected ? { background:"rgba(201,164,96,.06)" } : undefined}>
+                            <td className="py-1.5 pr-3 font-heading" style={{color: isSelected ? "var(--noir-primary)" : "var(--noir-foreground)"}}>{c.car_name}</td>
+                            <td className="py-1.5 px-2 text-right tabular-nums">{((ups.engine_level||0)*2 + (ups.aero_level||0)*1.5 + 10).toFixed(1)}</td>
+                            <td className="py-1.5 px-2 text-right tabular-nums">{((ups.tires_level||0)*2 + (ups.brakes_level||0)*1 + 8).toFixed(1)}</td>
+                            <td className="py-1.5 px-2 text-right tabular-nums" style={{color:(c.engine_wear??0)>=75?"#e74c3c":"var(--noir-muted)"}}>{c.engine_wear ?? 0}%</td>
+                            <td className="py-1.5 px-2 text-right">{isSelected ? <span style={{color:"var(--noir-primary)"}}>Active</span> : "—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -1190,15 +1277,19 @@ export default function Racing() {
                   </tr>
                 </thead>
                 <tbody>
-                  {leaderboard.map((row) => (
-                    <tr key={row.user_id} className="border-b border-[var(--noir-border)]">
-                      <td className="py-2">{row.rank}</td>
-                      <td className="py-2">{row.username}</td>
-                      <td className="py-2 text-right">{row.wins}</td>
-                      <td className="py-2 text-right">{row.racing_rep}</td>
-                      <td className="py-2 text-right">{row.races_completed}</td>
-                    </tr>
-                  ))}
+                  {leaderboard.map((row) => {
+                    const isYou = row.user_id === profile?.user_id;
+                    return (
+                      <tr key={row.user_id} className="border-b border-[var(--noir-border)]"
+                        style={isYou ? { background:"rgba(201,164,96,.08)" } : undefined}>
+                        <td className="py-2">{row.rank}</td>
+                        <td className="py-2">{row.username}{isYou && <span style={{color:"var(--noir-primary)",fontSize:10,marginLeft:4}}>(You)</span>}</td>
+                        <td className="py-2 text-right">{row.wins}</td>
+                        <td className="py-2 text-right">{row.racing_rep}</td>
+                        <td className="py-2 text-right">{row.races_completed}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
