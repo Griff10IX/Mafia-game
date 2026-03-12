@@ -8,10 +8,23 @@ import styles from "../styles/noir.module.css";
 // ─────────────────────────────────────────────────────────────────────────────
 const GRID = 20;          // cells across/down
 const CELL = 24;          // px per cell (scales on mobile)
-const BASE_SPEED = 140;   // ms per tick (lower = faster)
+const BASE_SPEED = 115;   // ms per tick (lower = faster; smoother input response)
 const SPEED_STEP = 4;     // ms faster per package collected
-const MIN_SPEED = 60;     // fastest possible
+const MIN_SPEED = 55;     // fastest possible
 const CANVAS_SIZE = GRID * CELL;
+
+// Level presets: Classic = walls kill; Wrap = walls wrap to other side
+const SNAKE_LEVELS = [
+  { id: "classic", name: "Classic", wrapWalls: false, desc: "Hit a wall and you're pinched." },
+  { id: "wrap", name: "Wrap", wrapWalls: true, desc: "Come out the other side." },
+];
+
+// Difficulty: affects speed and cops (faster base = less laggy feel)
+const SNAKE_DIFFICULTIES = [
+  { id: "easy", name: "Easy", baseSpeed: 140, minSpeed: 70, speedStep: 2, copThreshold: 150, maxCops: 4, copSpawnInterval: 200 },
+  { id: "medium", name: "Medium", baseSpeed: 100, minSpeed: 50, speedStep: 4, copThreshold: 100, maxCops: 6, copSpawnInterval: 150 },
+  { id: "hard", name: "Hard", baseSpeed: 80, minSpeed: 42, speedStep: 5, copThreshold: 60, maxCops: 8, copSpawnInterval: 100 },
+];
 
 // Package types — in-game rewards (keys match backend: cash, respect, rank_points, bullets, booze, jail)
 const PACKAGES = [
@@ -51,7 +64,7 @@ const SNAKE_REWARDS_AND_RULES = {
   ],
 };
 
-// Cops — spawn as obstacles after score threshold
+// Cops — defaults (overridden by difficulty)
 const COP_THRESHOLD = 100;
 const COP_SPAWN_INTERVAL = 150;
 const MAX_COPS = 6;
@@ -231,6 +244,7 @@ export default function Snake() {
   const rafRef = useRef(null);
   const lastTickRef = useRef(0);
   const tRef = useRef(0);
+  const dirQueueRef = useRef([]); // up to 2 pending directions for smoother WASD
 
   const [phase, setPhase] = useState("menu");
   const [score, setScore] = useState(0);
@@ -240,6 +254,8 @@ export default function Snake() {
   const [cellSize, setCellSize] = useState(CELL);
   const [leaderboard, setLeaderboard] = useState([]);
   const [loadingLB, setLoadingLB] = useState(false);
+  const [levelId, setLevelId] = useState("classic");
+  const [difficultyId, setDifficultyId] = useState("medium");
 
   useEffect(() => {
     const calc = () => {
@@ -262,7 +278,9 @@ export default function Snake() {
 
   useEffect(() => { fetchLB(); }, [fetchLB]);
 
-  const initState = useCallback(() => {
+  const initState = useCallback((level = "classic", difficulty = "medium") => {
+    const levelConfig = SNAKE_LEVELS.find(l => l.id === level) || SNAKE_LEVELS[0];
+    const diffConfig = SNAKE_DIFFICULTIES.find(d => d.id === difficulty) || SNAKE_DIFFICULTIES[1];
     const mid = Math.floor(GRID / 2);
     return {
       snake: [[mid, mid], [mid - 1, mid], [mid - 2, mid]],
@@ -271,7 +289,14 @@ export default function Snake() {
       pkg: { pos: randCell([[mid,mid],[mid-1,mid],[mid-2,mid]]), data: pickPackage() },
       cops: [],
       score: 0,
-      speed: BASE_SPEED,
+      speed: diffConfig.baseSpeed,
+      baseSpeed: diffConfig.baseSpeed,
+      minSpeed: diffConfig.minSpeed,
+      speedStep: diffConfig.speedStep,
+      copThreshold: diffConfig.copThreshold,
+      maxCops: diffConfig.maxCops,
+      copSpawnInterval: diffConfig.copSpawnInterval,
+      wrapWalls: levelConfig.wrapWalls,
       phase: "playing",
       copTimer: 0,
     };
@@ -281,15 +306,26 @@ export default function Snake() {
     const s = stateRef.current;
     if (!s || s.phase !== "playing") return;
 
+    // Apply queued direction first so rapid WASD applies in order
+    const queue = dirQueueRef.current;
+    if (queue.length > 0) {
+      const next = queue.shift();
+      if (next[0] !== -s.dir[0] || next[1] !== -s.dir[1]) s.nextDir = next;
+    }
     s.dir = s.nextDir;
     const [dx, dy] = s.dir;
     const head = s.snake[0];
-    const newHead = [head[0] + dx, head[1] + dy];
+    let newHead = [head[0] + dx, head[1] + dy];
 
-    if (newHead[0] < 0 || newHead[0] >= GRID || newHead[1] < 0 || newHead[1] >= GRID) {
-      s.phase = "dead";
-      setPhase("dead");
-      return;
+    if (s.wrapWalls) {
+      newHead[0] = (newHead[0] + GRID) % GRID;
+      newHead[1] = (newHead[1] + GRID) % GRID;
+    } else {
+      if (newHead[0] < 0 || newHead[0] >= GRID || newHead[1] < 0 || newHead[1] >= GRID) {
+        s.phase = "dead";
+        setPhase("dead");
+        return;
+      }
     }
 
     const bodyCheck = s.snake.slice(0, -1);
@@ -329,7 +365,7 @@ export default function Snake() {
 
       const newScore = s.score + pts;
       s.score = newScore;
-      s.speed = Math.max(MIN_SPEED, BASE_SPEED - Math.floor(newScore / 10) * SPEED_STEP);
+      s.speed = Math.max(s.minSpeed, s.baseSpeed - Math.floor(newScore / 10) * s.speedStep);
       setScore(newScore);
       setHiScore(h => Math.max(h, newScore));
 
@@ -349,7 +385,7 @@ export default function Snake() {
       s.pkg = { pos: randCell(occupied), data: pickPackage() };
 
       s.copTimer += pts;
-      if (s.copTimer >= COP_SPAWN_INTERVAL && s.cops.length < MAX_COPS && newScore >= COP_THRESHOLD) {
+      if (s.copTimer >= s.copSpawnInterval && s.cops.length < s.maxCops && newScore >= s.copThreshold) {
         s.copTimer = 0;
         const copPos = randCell([...newSnake, ...s.cops]);
         s.cops = [...s.cops, copPos];
@@ -385,8 +421,9 @@ export default function Snake() {
   }, [tick]);
 
   const startGame = useCallback(() => {
-    const s = initState();
+    const s = initState(levelId, difficultyId);
     stateRef.current = s;
+    dirQueueRef.current = [];
     setScore(0);
     setPhase("playing");
     setLastPkg(null);
@@ -395,7 +432,7 @@ export default function Snake() {
     tRef.current = 0;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(renderLoop);
-  }, [initState, renderLoop]);
+  }, [initState, renderLoop, levelId, difficultyId]);
 
   const submitScore = useCallback(async (finalScore) => {
     if (finalScore <= 0) return;
@@ -414,6 +451,7 @@ export default function Snake() {
 
   useEffect(() => {
     const onKey = (e) => {
+      if (e.repeat) return;
       const s = stateRef.current;
       if (!s) return;
 
@@ -437,7 +475,13 @@ export default function Snake() {
       if (!nd) return;
       e.preventDefault();
       if (nd[0] === -cx && nd[1] === -cy) return;
-      if (nd[0] !== cx || nd[1] !== cy) s.nextDir = nd;
+      if (nd[0] !== cx || nd[1] !== cy) {
+        s.nextDir = nd;
+        const queue = dirQueueRef.current;
+        if (queue.length < 2) queue.push(nd);
+        // Eager tick: schedule next move on following frame so turn feels instant
+        lastTickRef.current = performance.now() - s.speed;
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -465,14 +509,14 @@ export default function Snake() {
   const canvasW = GRID * C;
 
   return (
-    <div className={styles.page} style={{ fontFamily: "'Cinzel', serif" }}>
+    <div className={styles.page} style={{ fontFamily: "'Cinzel', serif", maxWidth: 480, margin: "0 auto", minHeight: "100vh", paddingBottom: 24 }}>
 
-      <div className={styles.panelHeader} style={{ padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div className={styles.panelHeader} style={{ padding: "clamp(8px,3vw,12px) clamp(12px,4vw,16px)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div>
-          <h1 className="font-heading" style={{ color: "var(--noir-primary)", fontSize: "clamp(14px,4vw,22px)", letterSpacing: ".25em", textTransform: "uppercase" }}>
+          <h1 className="font-heading" style={{ color: "var(--noir-primary)", fontSize: "clamp(14px,4vw,22px)", letterSpacing: "0.12em", textTransform: "uppercase", lineHeight: 1.2 }}>
             The Package Run
           </h1>
-          <p style={{ fontSize: 10, color: "var(--noir-muted)", letterSpacing: ".15em", marginTop: 2 }}>
+          <p style={{ fontSize: "clamp(9px,2.5vw,11px)", color: "var(--noir-muted)", letterSpacing: ".1em", marginTop: 2 }}>
             Collect contraband · Dodge the feds
           </p>
         </div>
@@ -486,7 +530,7 @@ export default function Snake() {
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "12px 0", position: "relative" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "clamp(8px,2vw,12px) 0", position: "relative" }}>
 
         <div style={{
           position: "relative",
@@ -537,34 +581,85 @@ export default function Snake() {
 
           {phase === "menu" && (
             <div style={{
-              position: "absolute", inset: 0, background: "rgba(0,0,0,0.82)",
+              position: "absolute", inset: 0, background: "rgba(0,0,0,0.88)",
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              gap: 16,
+              gap: "clamp(12px,3vw,18px)", padding: "clamp(12px,4vw,20px)", overflowY: "auto",
             }}>
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "clamp(22px,6vw,38px)", fontWeight: 900, color: "var(--noir-primary)", letterSpacing: ".25em", textShadow: "0 0 30px rgba(201,164,96,0.5)" }}>
+                <h2 style={{
+                  fontFamily: "'Cinzel',serif", fontWeight: 700, color: "var(--noir-primary)",
+                  fontSize: "clamp(18px,5vw,28px)", letterSpacing: "0.08em", lineHeight: 1.25,
+                  textShadow: "0 0 20px rgba(201,164,96,0.4)", margin: 0,
+                }}>
                   THE PACKAGE RUN
-                </div>
-                <div style={{ fontFamily: "'Crimson Text',serif", fontStyle: "italic", fontSize: "clamp(12px,3vw,16px)", color: "rgba(201,164,96,0.6)", marginTop: 6 }}>
+                </h2>
+                <p style={{
+                  fontFamily: "'Crimson Text',serif", fontStyle: "italic",
+                  fontSize: "clamp(11px,2.8vw,14px)", color: "rgba(201,164,96,0.85)", marginTop: 6,
+                }}>
                   Move the package through the streets
-                </div>
+                </p>
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", maxWidth: 280 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 10px", justifyContent: "center", maxWidth: 320 }}>
                 {PACKAGES.map(p => (
-                  <div key={p.type} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "var(--noir-muted)", letterSpacing: ".1em" }}>
-                    <span>{p.label}</span>
+                  <div key={p.type} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "clamp(9px,2.2vw,11px)", color: "var(--noir-muted)" }}>
+                    <span aria-hidden>{p.label}</span>
                     <span style={{ color: "var(--noir-primary)" }}>+{p.points}</span>
+                    <span style={{ opacity: 0.9 }}>{p.desc}</span>
                   </div>
                 ))}
-                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "#dc2626", letterSpacing: ".1em" }}>
-                  <span>🚔</span><span>= Dead</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "clamp(9px,2.2vw,11px)", color: "#dc2626", width: "100%", justifyContent: "center" }}>
+                  <span aria-hidden>🚔</span><span>= Dead</span>
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 300 }}>
+                <div>
+                  <div style={{ fontSize: "clamp(9px,2.2vw,10px)", letterSpacing: ".15em", color: "var(--noir-muted)", marginBottom: 6 }}>LEVEL</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {SNAKE_LEVELS.map((l) => (
+                      <button
+                        key={l.id}
+                        onClick={() => setLevelId(l.id)}
+                        style={{
+                          flex: 1, minHeight: 44, fontFamily: "'Cinzel',serif", fontSize: "clamp(10px,2.5vw,11px)", letterSpacing: ".1em",
+                          padding: "10px 12px", border: levelId === l.id ? "2px solid var(--noir-primary)" : "1px solid var(--noir-border)",
+                          background: levelId === l.id ? "rgba(201,164,96,0.15)" : "transparent",
+                          color: levelId === l.id ? "var(--noir-primary)" : "var(--noir-muted)", cursor: "pointer",
+                        }}
+                      >
+                        {l.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: "clamp(9px,2vw,10px)", color: "var(--noir-muted)", fontStyle: "italic", marginTop: 4 }}>
+                    {SNAKE_LEVELS.find(l => l.id === levelId)?.desc}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "clamp(9px,2.2vw,10px)", letterSpacing: ".15em", color: "var(--noir-muted)", marginBottom: 6 }}>DIFFICULTY</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {SNAKE_DIFFICULTIES.map((d) => (
+                      <button
+                        key={d.id}
+                        onClick={() => setDifficultyId(d.id)}
+                        style={{
+                          flex: 1, minHeight: 44, fontFamily: "'Cinzel',serif", fontSize: "clamp(9px,2.2vw,10px)", letterSpacing: ".08em",
+                          padding: "8px 6px", border: difficultyId === d.id ? "2px solid var(--noir-primary)" : "1px solid var(--noir-border)",
+                          background: difficultyId === d.id ? "rgba(201,164,96,0.15)" : "transparent",
+                          color: difficultyId === d.id ? "var(--noir-primary)" : "var(--noir-muted)", cursor: "pointer",
+                        }}
+                      >
+                        {d.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
               <button
                 onClick={startGame}
                 style={{
-                  fontFamily: "'Cinzel',serif", fontSize: 11, fontWeight: 700, letterSpacing: ".3em",
-                  textTransform: "uppercase", padding: "10px 28px",
+                  fontFamily: "'Cinzel',serif", fontSize: "clamp(11px,2.8vw,13px)", fontWeight: 700, letterSpacing: ".2em",
+                  textTransform: "uppercase", padding: "clamp(12px,3vw,14px) clamp(20px,5vw,28px)", minHeight: 48,
                   background: "linear-gradient(135deg,#6a4010,#c9a460)",
                   border: "none", color: "#0a0c06", cursor: "pointer",
                   boxShadow: "0 0 20px rgba(201,164,96,0.3)",
@@ -572,8 +667,8 @@ export default function Snake() {
               >
                 Start Run
               </button>
-              <div style={{ fontSize: 9, color: "var(--noir-muted)", letterSpacing: ".15em" }}>
-                WASD / ARROWS — PRESS ENTER TO START
+              <div style={{ fontSize: "clamp(9px,2.2vw,11px)", color: "var(--noir-muted)", letterSpacing: ".1em" }}>
+                WASD / Arrows — or tap to start
               </div>
             </div>
           )}
@@ -582,24 +677,24 @@ export default function Snake() {
             <div style={{
               position: "absolute", inset: 0, background: "rgba(0,0,0,0.88)",
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              gap: 14,
+              gap: 14, padding: "clamp(12px,4vw,20px)",
             }}>
-              <div style={{ fontFamily: "'Cinzel',serif", fontSize: "clamp(16px,4vw,26px)", fontWeight: 900, color: "#dc2626", letterSpacing: ".3em", textShadow: "0 0 20px rgba(220,38,38,0.6)" }}>
+              <div style={{ fontFamily: "'Cinzel',serif", fontSize: "clamp(16px,4vw,26px)", fontWeight: 700, color: "#dc2626", letterSpacing: "0.12em", textShadow: "0 0 20px rgba(220,38,38,0.6)", lineHeight: 1.2 }}>
                 PINCHED
               </div>
               <div style={{ fontFamily: "'Crimson Text',serif", fontStyle: "italic", fontSize: "clamp(11px,3vw,14px)", color: "var(--noir-muted)" }}>
                 The feds got you, boss
               </div>
-              <div style={{ fontFamily: "'Cinzel',serif", fontSize: "clamp(28px,8vw,52px)", fontWeight: 900, color: "var(--noir-primary)", textShadow: "0 0 30px rgba(201,164,96,0.5)", lineHeight: 1 }}>
+              <div style={{ fontFamily: "'Cinzel',serif", fontSize: "clamp(28px,8vw,52px)", fontWeight: 700, color: "var(--noir-primary)", textShadow: "0 0 30px rgba(201,164,96,0.5)", lineHeight: 1 }}>
                 {score}
               </div>
-              <div style={{ fontSize: 9, letterSpacing: ".2em", color: "var(--noir-muted)" }}>POINTS</div>
+              <div style={{ fontSize: "clamp(9px,2.2vw,11px)", letterSpacing: ".2em", color: "var(--noir-muted)" }}>POINTS</div>
               {score > 0 && phase !== "submitting" && (
                 <button
                   onClick={() => submitScore(score)}
                   style={{
-                    fontFamily: "'Cinzel',serif", fontSize: 10, fontWeight: 700, letterSpacing: ".25em",
-                    textTransform: "uppercase", padding: "8px 22px",
+                    fontFamily: "'Cinzel',serif", fontSize: "clamp(10px,2.5vw,11px)", fontWeight: 700, letterSpacing: ".2em",
+                    textTransform: "uppercase", padding: "clamp(10px,2.5vw,12px) 22px", minHeight: 44,
                     background: "linear-gradient(135deg,#6a4010,#c9a460)",
                     border: "none", color: "#0a0c06", cursor: "pointer",
                     boxShadow: "0 0 16px rgba(201,164,96,0.25)",
@@ -609,23 +704,34 @@ export default function Snake() {
                 </button>
               )}
               {phase === "submitting" && (
-                <div style={{ fontSize: 10, color: "var(--noir-muted)", letterSpacing: ".15em" }}>Submitting…</div>
+                <div style={{ fontSize: "clamp(10px,2.5vw,11px)", color: "var(--noir-muted)", letterSpacing: ".15em" }}>Submitting…</div>
               )}
               <button
                 onClick={startGame}
                 style={{
-                  fontFamily: "'Cinzel',serif", fontSize: 10, letterSpacing: ".2em",
-                  padding: "7px 18px", border: "1px solid var(--noir-border)",
+                  fontFamily: "'Cinzel',serif", fontSize: "clamp(10px,2.5vw,11px)", letterSpacing: ".15em",
+                  padding: "clamp(10px,2.5vw,12px) 18px", minHeight: 44, border: "1px solid var(--noir-border)",
                   background: "rgba(201,164,96,0.07)", color: "var(--noir-primary)", cursor: "pointer",
                 }}
               >
                 Run Again
               </button>
+              <button
+                type="button"
+                onClick={() => setPhase("menu")}
+                style={{
+                  fontFamily: "'Cinzel',serif", fontSize: "clamp(9px,2.2vw,10px)", letterSpacing: ".1em",
+                  background: "none", border: "none", color: "var(--noir-muted)", cursor: "pointer", textDecoration: "underline",
+                  padding: 8, minHeight: 44,
+                }}
+              >
+                Change settings
+              </button>
             </div>
           )}
         </div>
 
-        <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "48px 48px 48px", gridTemplateRows: "48px 48px", gap: 4 }}>
+        <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "repeat(3, minmax(44px, 56px))", gridTemplateRows: "repeat(2, minmax(44px, 56px))", gap: 6, justifyContent: "center" }}>
           {[
             { label: "▲", dir: "UP",    col: 2, row: 1 },
             { label: "◀", dir: "LEFT",  col: 1, row: 2 },
@@ -637,8 +743,9 @@ export default function Snake() {
               onPointerDown={(e) => { e.preventDefault(); dpad(dir); }}
               style={{
                 gridColumn: col, gridRow: row,
+                minHeight: 44, minWidth: 44,
                 background: "rgba(201,164,96,0.08)", border: "1px solid rgba(201,164,96,0.3)",
-                color: "var(--noir-primary)", fontSize: 18, cursor: "pointer",
+                color: "var(--noir-primary)", fontSize: "clamp(16px,4vw,22px)", cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontFamily: "sans-serif", userSelect: "none", WebkitUserSelect: "none",
                 touchAction: "none",
@@ -650,7 +757,7 @@ export default function Snake() {
         </div>
       </div>
 
-      <div className={styles.panel} style={{ margin: "12px 16px", padding: "12px 14px" }}>
+      <div className={styles.panel} style={{ margin: "clamp(8px,2vw,12px) clamp(12px,4vw,16px)", padding: "clamp(10px,2.5vw,14px)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <div style={{ fontFamily: "'Cinzel',serif", fontSize: 10, letterSpacing: ".25em", textTransform: "uppercase", color: "var(--noir-primary)" }}>
             Top Runners
@@ -691,8 +798,8 @@ export default function Snake() {
         )}
       </div>
 
-      <div className={styles.panel} style={{ margin: "0 16px 20px", padding: "10px 14px" }}>
-        <div style={{ fontFamily: "'Cinzel',serif", fontSize: 9, letterSpacing: ".25em", textTransform: "uppercase", color: "var(--noir-muted)", marginBottom: 8 }}>
+      <div className={styles.panel} style={{ margin: "0 clamp(12px,4vw,16px) 20px", padding: "clamp(10px,2.5vw,14px)" }}>
+        <div style={{ fontFamily: "'Cinzel',serif", fontSize: "clamp(9px,2.2vw,10px)", letterSpacing: ".25em", textTransform: "uppercase", color: "var(--noir-muted)", marginBottom: 8 }}>
           Contraband
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -712,8 +819,8 @@ export default function Snake() {
         </div>
       </div>
 
-      <div className={styles.panel} style={{ margin: "0 16px 20px", padding: "12px 14px" }}>
-        <div style={{ fontFamily: "'Cinzel',serif", fontSize: 9, letterSpacing: ".25em", textTransform: "uppercase", color: "var(--noir-muted)", marginBottom: 10 }}>
+      <div className={styles.panel} style={{ margin: "0 clamp(12px,4vw,16px) 20px", padding: "clamp(10px,2.5vw,14px)" }}>
+        <div style={{ fontFamily: "'Cinzel',serif", fontSize: "clamp(9px,2.2vw,10px)", letterSpacing: ".25em", textTransform: "uppercase", color: "var(--noir-muted)", marginBottom: 10 }}>
           Rewards & rules
         </div>
         <div style={{ marginBottom: 12 }}>

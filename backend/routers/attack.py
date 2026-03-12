@@ -726,8 +726,12 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         await _log_attack_error(current_user["id"], current_user.get("username"), "Target not found", req)
         raise HTTPException(status_code=404, detail="Target not found")
     if target.get("is_dead"):
+        await db.attacks.delete_one({"id": request.attack_id, "attacker_id": current_user["id"]})
         await _log_attack_error(current_user["id"], current_user.get("username"), "Target is already dead", req)
-        raise HTTPException(status_code=400, detail="Target is already dead")
+        raise HTTPException(
+            status_code=400,
+            detail="Target is already dead. This search has been removed — refresh your list and search for another target if needed.",
+        )
     if target.get("email") in ADMIN_EMAILS or _is_moderator(target):
         await _log_attack_error(current_user["id"], current_user.get("username"), "Target cannot be attacked", req)
         raise HTTPException(status_code=403, detail="Target cannot be attacked")

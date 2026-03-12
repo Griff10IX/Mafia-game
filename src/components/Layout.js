@@ -272,6 +272,7 @@ export default function Layout({ children }) {
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
+  const [gtaExclusiveInPool, setGtaExclusiveInPool] = useState(false);
   const [ocStatus, setOcStatus] = useState(null);
   const [atWar, setAtWar] = useState(false);
   const [autoRankPrefs, setAutoRankPrefs] = useState({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false, auto_rank_booze: false });
@@ -612,12 +613,18 @@ export default function Layout({ children }) {
 
   const fetchRankingCounts = async () => {
     try {
-      const [crimesRes, gtaRes, jailPlayersRes] = await Promise.all([api.get('/crimes'), api.get('/gta/options'), api.get('/jail/players')]);
+      const [crimesRes, gtaRes, jailPlayersRes, exclusiveRes] = await Promise.all([
+        api.get('/crimes'),
+        api.get('/gta/options'),
+        api.get('/jail/players'),
+        api.get('/gta/exclusive-pool-status').catch(() => ({ data: { exclusive_in_pool: false } })),
+      ]);
       const now = new Date();
       const crimesAvailable = Array.isArray(crimesRes.data) ? crimesRes.data.filter((c) => c?.can_commit).length : 0;
       const gtaAvailable = Array.isArray(gtaRes.data) ? gtaRes.data.filter((o) => { if (!o?.unlocked) return false; if (!o?.cooldown_until) return true; const t = new Date(o.cooldown_until); return !Number.isNaN(t.getTime()) && t <= now; }).length : 0;
       const jailCount = Array.isArray(jailPlayersRes.data?.players) ? jailPlayersRes.data.players.length : 0;
       setRankingCounts({ crimes: crimesAvailable, gta: gtaAvailable, jail: jailCount });
+      setGtaExclusiveInPool(!!exclusiveRes?.data?.exclusive_in_pool);
     } catch (error) { }
   };
 
@@ -793,9 +800,19 @@ export default function Layout({ children }) {
             {rankingCounts.crimes > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30">{rankingCounts.crimes}</span>}
           </Link>
           {showSidebarDividers && navDividerEl('rd1')}
-          <Link to="/gta" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/gta' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/gta' ? sidebarActiveStyle : undefined} data-testid="nav-gta">
+          <Link
+            to="/gta"
+            onClick={() => setSidebarOpen(false)}
+            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/gta' ? styles.navItemActivePage : styles.sidebarNavLink} ${gtaExclusiveInPool ? 'gta-exclusive-flash' : ''}`}
+            style={gtaExclusiveInPool
+              ? { background: 'var(--noir-raised)', backgroundImage: 'none', borderLeft: '3px solid #a78bfa', color: '#a78bfa' }
+              : (location.pathname === '/gta' ? sidebarActiveStyle : undefined)}
+            data-testid="nav-gta"
+            title={gtaExclusiveInPool ? 'Exclusive car in GTA pool!' : undefined}
+          >
             <span className="uppercase tracking-widest font-heading flex-1">GTA</span>
             {rankingCounts.gta > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30">{rankingCounts.gta}</span>}
+            {gtaExclusiveInPool && <span className="text-[9px] text-violet-400 font-bold shrink-0" title="Exclusive in pool">★</span>}
           </Link>
           {showSidebarDividers && navDividerEl('rd2')}
           <Link to="/jail" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/jail' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/jail' ? sidebarActiveStyle : undefined} data-testid="nav-jail">
@@ -1046,6 +1063,15 @@ export default function Layout({ children }) {
 
   return (
     <div className={`min-h-screen ${styles.page} ${styles.themeGangsterModern}`}>
+      <style>{`
+        @keyframes gtaExclusivePulse {
+          0%, 100% { border-left-color: #a78bfa; color: #a78bfa; }
+          50% { border-left-color: #c4b5fd; color: #e9d5ff; }
+        }
+        .gta-exclusive-flash {
+          animation: gtaExclusivePulse 1.6s ease-in-out infinite;
+        }
+      `}</style>
       {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
       <div
         className={`fixed left-0 top-0 h-full w-48 ${styles.sidebar} z-50 transform transition-transform duration-300 ${mobileNavStyle === 'bottom' ? 'hidden md:translate-x-0 md:block' : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}`}

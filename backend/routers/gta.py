@@ -1291,8 +1291,15 @@ async def run_dealer_replenish_loop():
         await asyncio.sleep(delay)
 
 
+async def get_gta_exclusive_pool_status(current_user: dict = Depends(get_current_user)):
+    """Return whether the Al Capone exclusive is currently in the GTA car pool (any authenticated user)."""
+    doc = await db.game_config.find_one({"id": GTA_EXCLUSIVE_POOL_CONFIG_ID}, {"_id": 0, "released": 1})
+    return {"exclusive_in_pool": bool(doc.get("released") if doc else False)}
+
+
 def register(router):
     router.add_api_route("/gta/options", get_gta_options, methods=["GET"])
+    router.add_api_route("/gta/exclusive-pool-status", get_gta_exclusive_pool_status, methods=["GET"])
     router.add_api_route("/gta/car/{car_id}", get_car, methods=["GET"])
     router.add_api_route(
         "/gta/attempt",
