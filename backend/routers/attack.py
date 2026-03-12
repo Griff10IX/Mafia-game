@@ -704,6 +704,7 @@ async def get_attack_inflation(current_user: dict = Depends(get_current_user)):
     return {"inflation": inflation, "inflation_pct": int(round(inflation * 100))}
 
 async def execute_attack(request: AttackExecuteRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
+  try:
     attack = await db.attacks.find_one(
         {"attacker_id": current_user["id"], "status": "found", "id": request.attack_id},
         {"_id": 0}
@@ -1473,6 +1474,19 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         except Exception:
             pass
         return AttackExecuteResponse(success=False, message=fail_message, rewards=None)
+  except HTTPException:
+    raise
+  except Exception as e:
+    uid = current_user.get("id", "?") if current_user else "?"
+    uname = current_user.get("username", "?") if current_user else "?"
+    logger.exception(
+        "execute_attack UNHANDLED ERROR user=%s (%s) attack_id=%s: %s",
+        uname, uid, getattr(request, "attack_id", "?"), e,
+    )
+    raise HTTPException(
+        status_code=500,
+        detail=f"Attack failed due to a server error. Please report this. (debug: {type(e).__name__}: {e})",
+    )
 
 async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
     docs = await db.attack_attempts.find(
