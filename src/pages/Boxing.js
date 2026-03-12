@@ -1008,6 +1008,7 @@ export default function Boxing3D() {
       setNpcFightState(null);
       refreshMatches();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only run when leaving arena (arenaMatchId clears)
   }, [arenaMatchId]);
 
   useEffect(() => {
@@ -1113,7 +1114,8 @@ export default function Boxing3D() {
   }, []);
 
   useEffect(() => {
-    return () => { if (npcPollRef.current) clearInterval(npcPollRef.current); };
+    const ref = npcPollRef;
+    return () => { if (ref.current) clearInterval(ref.current); };
   }, []);
 
   useEffect(() => {

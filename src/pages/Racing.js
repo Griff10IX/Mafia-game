@@ -97,8 +97,9 @@ export default function Racing() {
         ]);
         setAvailableCars(carsRes.data?.cars || []);
         setTracks(tracksRes.data?.tracks || []);
-        if (tracksRes.data?.tracks?.length && !createForm.track_id)
-          setCreateForm((f) => ({ ...f, track_id: tracksRes.data.tracks[0].id }));
+        if (tracksRes.data?.tracks?.length) {
+          setCreateForm((f) => (f.track_id ? f : { ...f, track_id: tracksRes.data.tracks[0].id }));
+        }
       } catch (e) {
         toast.error(apiDetail(e));
       }
@@ -297,6 +298,7 @@ export default function Racing() {
             weather_name={activeRace.weather_name}
             initialTrackId={circuitTrackId}
             playerCarName={playerCarName}
+            playerPitLevel={profile?.pit_level ?? 0}
             onComplete={() => setActiveRace((r) => (r ? { ...r, _resultsShown: true } : null))}
           />
         </div>
@@ -625,18 +627,18 @@ export default function Racing() {
           <div className={styles.panel + " p-4"}>
             <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Crew upgrades</h3>
             <p className="text-sm text-[var(--noir-muted)] mb-4">
-              Spend cash to improve your mechanic and pit crew. Bonus applies to every race.
+              Spend cash to improve your mechanic and pit crew. Mechanic and Pit Crew both give a speed bonus; Pit Crew also shortens pit stop time.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
-                { key: "mechanic_level", label: "Mechanic", type: "mechanic" },
-                { key: "pit_level", label: "Pit Crew", type: "pit" },
-              ].map(({ key, label, type }) => (
+                { key: "mechanic_level", label: "Mechanic", type: "mechanic", desc: "+2% speed per level" },
+                { key: "pit_level", label: "Pit Crew", type: "pit", desc: "+2% speed, −0.35s pit time per level (min 1.0s)" },
+              ].map(({ key, label, type, desc }) => (
                 <div key={type} className="p-3 rounded surface">
                   <div className="font-heading">{label}</div>
                   <div className="text-sm">Level {profile?.[key] ?? 0} / 5</div>
                   <div className="text-xs text-[var(--noir-muted)] mt-1">
-                    +{((profile?.[key] ?? 0) * 2)}% speed bonus
+                    {desc}
                   </div>
                   <button type="button" className={styles.btnPrimary + " mt-2 text-sm"}
                     disabled={(profile?.[key] ?? 0) >= 5}

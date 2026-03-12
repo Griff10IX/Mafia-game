@@ -710,8 +710,17 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
                 player_engine = int(car_doc.get("engine_level") or 0)
                 player_tires = int(car_doc.get("tires_level") or 0)
         break
+    # Build a competitive spread of NPC speed offsets so the field isn't all slow (not a 1-person race)
+    npcs_to_add = max_grid - len(participants)
+    competitive_offsets = [-1, 0, 0, 0, 1, 1, 1, 2, 2][: max(1, npcs_to_add)]
+    while len(competitive_offsets) < npcs_to_add:
+        competitive_offsets.append(random.choice([0, 1, 2]))
+    random.shuffle(competitive_offsets)
+    initial_count = len(participants)
+
     while len(participants) < max_grid:
         npc = random.choice(RACING_NPCS)
+        offset = competitive_offsets[len(participants) - initial_count]
         # Pick car from same or adjacent tier
         tier = max(0, min(len(RACING_CARS) - 1, player_tier + random.randint(-1, 1)))
         car_def = RACING_CARS[tier]
@@ -726,7 +735,7 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
             "racing_car_instance_id": None,
             "car_name": car_def.get("name"),
             "is_npc": True,
-            "npc_speed_offset": int(npc.get("base_speed_offset") or 0),
+            "npc_speed_offset": int(offset),
             "engine_level": engine_level,
             "tires_level": tires_level,
             "tyre_compound": tyre,
@@ -765,6 +774,7 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
         s, g = _effective_speed_and_grip_display(p, prof, upgrades_map)
         p["effective_speed"] = round(s, 2)
         p["effective_grip"] = round(g, 2)
+        p["pit_level"] = int(prof.get("pit_level") or 0) if prof else 0
     now = _now_iso()
     pot = entry_fee * len(participants) * REWARD_POOL_PCT
     rewards = []

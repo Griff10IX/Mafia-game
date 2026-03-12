@@ -29,6 +29,14 @@ const WEATHER_DEFS = {
 // Map weather IDs from backend → our keys
 const WEATHER_MAP = { clear:"clear", rain:"rain", snow:"snow", very_hot:"very_hot" };
 
+/** Pit stop duration in seconds: base minus pit_level * 0.35 (min 1.0 normal, 1.2 emergency). */
+function pitDurationSeconds(pitLevel, emergency = false) {
+  const base = emergency ? 3.8 : 3.0;
+  const minSec = emergency ? 1.2 : 1.0;
+  const level = Math.max(0, Math.min(5, pitLevel || 0));
+  return Math.max(minSec, base - level * 0.35);
+}
+
 const COMMENTARY = {
   start: ["They're off!","Bootleg run underway!","Green flag — go!","Engines roar — race on!"],
   mid:   ["Close battle through the chicane!","Tire wear becoming a factor!","The gap is closing lap by lap!","Pit window starting to open!","Flat out on the back straight!","Wheel to wheel into turn three!"],
@@ -40,12 +48,16 @@ const COMMENTARY = {
 const NPC_NAMES = ["Smokey Joe","Ace Johnson","The Phantom","Lucky Lou","Fast Eddie","Duke Malone","Slick Sam","Rusty Wheeler"];
 // Mirror backend 4–5 historical cars for live mode
 const NPC_CARS = ["Ford Model T Racer","Packard 734","Stutz Bearcat","Miller 91","Duesenberg Model J"];
+// Similar difficulty to player (baseSpeed ~1.0): tight band so it's not a 1-person race
 const NPC_CAR_STATS = [
-  { baseSpeed: 0.38, baseGrip: 0.92 },
-  { baseSpeed: 0.54, baseGrip: 0.88 },
-  { baseSpeed: 0.69, baseGrip: 0.85 },
-  { baseSpeed: 0.85, baseGrip: 0.78 },
-  { baseSpeed: 1.0, baseGrip: 0.82 },
+  { baseSpeed: 0.92, baseGrip: 0.86 },
+  { baseSpeed: 0.95, baseGrip: 0.85 },
+  { baseSpeed: 0.97, baseGrip: 0.84 },
+  { baseSpeed: 1.0,  baseGrip: 0.85 },
+  { baseSpeed: 1.02, baseGrip: 0.83 },
+  { baseSpeed: 1.04, baseGrip: 0.84 },
+  { baseSpeed: 1.06, baseGrip: 0.82 },
+  { baseSpeed: 0.94, baseGrip: 0.86 },
 ];
 const NPC_TYRE_POOL = ["soft","medium","medium","hard","medium","hard","soft","medium"];
 
@@ -323,10 +335,12 @@ export default function CircuitRaceView({
   initialCondition = "clear",
   playerCarName = "Stutz Bearcat",
   playerTyreId = "medium",
+  playerPitLevel = 0,
 }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
   const stateRef = useRef(null); // mutable race state (avoids closure staleness)
+  const countdownIntervalRef = useRef(null);
 
   // ── UI STATE ──
   const [uiPhase, setUiPhase] = useState("setup"); // setup | countdown | racing | done
@@ -540,12 +554,16 @@ export default function CircuitRaceView({
     const wd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
     const racers = [];
     // Player first (normalized speed ~1, grip from backend if ever passed)
+    const playerPitSec = pitDurationSeconds(playerPitLevel, false);
+    const playerPitSecEmerg = pitDurationSeconds(playerPitLevel, true);
     racers.push({
       id:"player", name:"You", isPlayer:true,
       color:CAR_COLORS[0], carName:playerCarName,
       trackPos:0, lapCount:1, totalLapsDone:0,
       currentTyre:pTyre, tyreWear:100,
       pitStops:0, inPit:false, pitEndAt:0,
+      pitDurationSeconds: playerPitSec,
+      pitDurationEmergencySeconds: playerPitSecEmerg,
       baseSpeed:1.0, baseGrip:0.85,
       pitStrategy: buildPitStrategy(pTyre, nLaps),
       finished:false, visible:true, position:1,
@@ -553,7 +571,8 @@ export default function CircuitRaceView({
     });
     for (let i=0;i<7;i++) {
       const carIdx = i % NPC_CARS.length;
-      const stats = NPC_CAR_STATS[carIdx] || NPC_CAR_STATS[0];
+      const statsIdx = i % NPC_CAR_STATS.length;
+      const stats = NPC_CAR_STATS[statsIdx] || NPC_CAR_STATS[0];
       const t = NPC_TYRE_POOL[i] in TYRE_DEFS ? NPC_TYRE_POOL[i] : "medium";
       racers.push({
         id:`npc_${i}`, name:NPC_NAMES[i], isPlayer:false,
@@ -561,6 +580,8 @@ export default function CircuitRaceView({
         trackPos: -(i+1)*0.012, lapCount:1, totalLapsDone:0,
         currentTyre:t, tyreWear:100,
         pitStops:0, inPit:false, pitEndAt:0,
+        pitDurationSeconds: 3.0,
+        pitDurationEmergencySeconds: 3.8,
         baseSpeed: stats.baseSpeed + (Math.random()-0.5)*0.06,
         baseGrip: stats.baseGrip,
         pitStrategy: buildPitStrategy(t, nLaps),
@@ -569,7 +590,7 @@ export default function CircuitRaceView({
       });
     }
     return racers;
-  }, [playerCarName]);
+  }, [playerCarName, playerPitLevel]);
 
   // ── RACE LOOP ──
   const startRaceLoop = useCallback((track, cond, nLaps, racerArr) => {
@@ -650,7 +671,8 @@ export default function CircuitRaceView({
             const distToPit = Math.abs(((r.trackPos - track.pitEntry) + 1) % 1);
             if (distToPit < 0.06) {
               r.inPit = true;
-              r.pitEndAt = now / 1000 + 3.0; // 3 second stop
+              const dur = (r.pitDurationSeconds != null ? r.pitDurationSeconds : 3.0);
+              r.pitEndAt = now / 1000 + dur;
               if (r.isPlayer) {
                 setPitNotif("🔧 PIT STOP — Changing tyres…");
               }
@@ -662,7 +684,8 @@ export default function CircuitRaceView({
           const dist = Math.abs(((r.trackPos - track.pitEntry) + 1) % 1);
           if (dist < 0.06) {
             r.inPit = true;
-            r.pitEndAt = now / 1000 + 3.8;
+            const durEmerg = (r.pitDurationEmergencySeconds != null ? r.pitDurationEmergencySeconds : 3.8);
+            r.pitEndAt = now / 1000 + durEmerg;
             if (r.isPlayer) setPitNotif("⚠️ Emergency pit — tyres critical!");
           }
         }
@@ -741,11 +764,11 @@ export default function CircuitRaceView({
     const cond = WEATHER_MAP[weatherIdProp] || "clear";
     const racers = order.map((id, i) => {
       const p = participants.find(x=>(x.user_id||x.id)===id) || {};
-      const isPit = (pit_stops||[]).some(ps=>ps.entrant_id===id);
       const effSpeed = p.effective_speed != null ? p.effective_speed : 15;
       const effGrip = p.effective_grip != null ? p.effective_grip : 0.85;
       const baseSpeed = effSpeed / 15;
       const tyreId = (p.tyre_compound || "medium").toLowerCase();
+      const pitLvl = p.pit_level != null ? p.pit_level : 0;
       return {
         id, name:p.username||p.car_name||`#${i+1}`, isPlayer:false,
         color:CAR_COLORS[i%CAR_COLORS.length], carName:p.car_name||"",
@@ -753,17 +776,53 @@ export default function CircuitRaceView({
         currentTyre: tyreId in TYRE_DEFS ? tyreId : "medium",
         tyreWear: Array.isArray(tire_wear_after_lap[id]) ? (tire_wear_after_lap[id][0] ?? 100) : 100,
         pitStops:0, inPit:false, pitEndAt:0,
+        pitDurationSeconds: pitDurationSeconds(pitLvl, false),
+        pitDurationEmergencySeconds: pitDurationSeconds(pitLvl, true),
         baseSpeed, baseGrip: effGrip,
         pitStrategy: [], finished:false, visible:true, position:i+1, lapTimes:[],
         isPlayer: false,
         tireWearByLap: tire_wear_after_lap[id],
       };
     });
-    setUiPhase("racing");
+    stateRef.current = { racers, track, nLaps: totalLaps, wd: WEATHER_DEFS[cond] || WEATHER_DEFS.clear };
+    stateRef.current.pendingReplay = { racers, track, cond, totalLaps };
+    setUiPhase("countdown");
+    setCountdown(3);
     setCommentary(rand(COMMENTARY.start));
-    startRaceLoop(track, cond, totalLaps, racers);
-    return () => { if(rafRef.current) cancelAnimationFrame(rafRef.current); };
+    countdownIntervalRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        const next = prev - 1;
+        if (next <= 0) {
+          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+          setUiPhase("racing");
+          const pr = stateRef.current?.pendingReplay;
+          if (pr) startRaceLoop(pr.track, pr.cond, pr.totalLaps, pr.racers);
+          return 0;
+        }
+        return next;
+      });
+    }, 1000);
+    return () => {
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- replay init: only re-run when mode becomes replay
   }, [mode]);
+
+  // Draw loop during replay countdown (grid visible, no movement)
+  useEffect(() => {
+    if (uiPhase !== "countdown" || mode !== "replay") return;
+    let rafId;
+    const draw = () => {
+      const { track, racers } = stateRef.current || {};
+      if (track && racers?.length) drawTrackCanvas(track, effectiveCondition, racers);
+      rafId = requestAnimationFrame(draw);
+    };
+    rafId = requestAnimationFrame(draw);
+    return () => { if (rafId) cancelAnimationFrame(rafId); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- countdown draw loop: deps are read from stateRef
+  }, [uiPhase, mode, effectiveCondition, drawTrackCanvas]);
 
   // ── HANDLE START (live mode) ──
   const handleStart = useCallback(() => {
@@ -804,6 +863,7 @@ export default function CircuitRaceView({
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resize: stable deps intended
   }, [resizeCanvas, drawTrackCanvas, selectedTrack, condition, uiPhase]);
 
   // ── INITIAL DRAW ──
@@ -811,6 +871,7 @@ export default function CircuitRaceView({
     if (mode !== "live") return;
     resizeCanvas();
     drawTrackCanvas(selectedTrack, condition, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial draw once on mount (live mode)
   }, []);
 
   // Redraw preview on track/condition change (setup phase only)
@@ -818,6 +879,7 @@ export default function CircuitRaceView({
     if (uiPhase !== "setup") return;
     resizeCanvas();
     drawTrackCanvas(selectedTrack, condition, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setup preview: selectedTrack, condition, uiPhase are the triggers
   }, [selectedTrack, condition, uiPhase]);
 
   // ── CLEANUP ──
