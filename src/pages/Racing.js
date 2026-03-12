@@ -279,6 +279,11 @@ export default function Racing() {
       {/* ─── ACTIVE RACE: circuit view (replay mode from backend result) ─── */}
       {activeRace?.state === "completed" && !activeRace._resultsShown && (
         <div className="p-4">
+          {activeRace.qualifying_order?.length > 0 && (
+            <p className="text-xs font-heading uppercase tracking-wider text-[var(--noir-primary)] mb-2">
+              Race replay · Grid order set by qualifying lap
+            </p>
+          )}
           <CircuitRaceView
             mode="replay"
             participants={activeRace.participants || []}
@@ -403,7 +408,7 @@ export default function Racing() {
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className="text-xs">Laps</span>
-                  <input type="number" min={2} max={5} className={styles.input + " w-16"} value={createForm.laps}
+                  <input type="number" min={2} max={20} className={styles.input + " w-16"} value={createForm.laps}
                     onChange={(e) => setCreateForm((f) => ({ ...f, laps: e.target.value }))}/>
                 </label>
                 <label className="flex flex-col gap-1">
@@ -423,6 +428,7 @@ export default function Racing() {
               {!selectedInstanceId && (
                 <p className="text-xs text-amber-400 mt-2">Select a racing car in My ride first.</p>
               )}
+              <p className="text-[10px] text-[var(--noir-muted)] mt-2">Tyres: Soft = +grip, faster wear. Medium = balanced. Hard = −grip, slower wear. Pick per race.</p>
             </div>
 
             {/* Open races */}
@@ -469,7 +475,7 @@ export default function Racing() {
               {cars.length === 0 ? (
                 <p className="text-sm text-[var(--noir-muted)]">Choose a car below. You have one racing car slot.</p>
               ) : (
-                <ul className="space-y-2">
+                <ul className="space-y-4">
                   {cars.map((c) => {
                     const up = upgradesByCar[c.id] || {};
                     const engine = up.engine_level ?? c.engine_level ?? 0;
@@ -480,28 +486,82 @@ export default function Racing() {
                     const wins = profile?.wins ?? 0;
                     const canAeroRel = wins >= 1;
                     const canChamp = wins >= 3 && !championship;
+                    const effSpeed = c.effective_speed ?? 0;
+                    const effGrip = c.effective_grip ?? 0;
+                    const maxEngineTires = 8;
+                    const engineTiresTotal = engine + tires;
                     return (
-                    <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 p-2 rounded surface">
-                      <span>{c.car_name || c.racing_car_id}</span>
-                      <span className="text-xs text-[var(--noir-muted)]">
-                        Engine {engine} / Tyres {tires}
-                        {(aero > 0 || reliability > 0) && ` · Aero ${aero} / Rel ${reliability}`}
-                        {championship && " · Championship ✓"}
-                      </span>
-                      <div className="flex flex-wrap gap-2 items-center">
+                    <li key={c.id} className="p-4 rounded-lg border border-[var(--noir-border)] bg-[var(--noir-surface)]">
+                      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                        <div>
+                          <h4 className="font-heading text-[var(--noir-primary)]">{c.car_name || c.racing_car_id}</h4>
+                          <p className="text-xs text-[var(--noir-muted)] mt-0.5">Current performance (with upgrades & crew)</p>
+                        </div>
                         <button type="button" className={styles.btnPrimary + " text-xs"}
                           disabled={selectedInstanceId === c.id} onClick={() => handleSelectCar(c.id)}>
                           {selectedInstanceId === c.id ? "Selected" : "Select"}
                         </button>
-                        <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+power −grip"
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="p-2 rounded bg-black/20">
+                          <div className="text-[10px] font-heading uppercase text-[var(--noir-muted)]">Speed</div>
+                          <div className="text-lg font-heading text-[var(--noir-primary)]">{effSpeed}</div>
+                          <div className="text-[10px] text-[var(--noir-muted)]">Higher = faster straights</div>
+                        </div>
+                        <div className="p-2 rounded bg-black/20">
+                          <div className="text-[10px] font-heading uppercase text-[var(--noir-muted)]">Grip</div>
+                          <div className="text-lg font-heading text-[var(--noir-primary)]">{effGrip}%</div>
+                          <div className="text-[10px] text-[var(--noir-muted)]">Higher = better in corners</div>
+                        </div>
+                      </div>
+                      <div className="mb-3">
+                        <div className="text-[10px] font-heading uppercase text-[var(--noir-muted)] mb-1">Upgrade levels</div>
+                        <div className="flex flex-wrap gap-3 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[var(--noir-muted)] w-14">Engine</span>
+                            <div className="w-20 h-2 rounded-full bg-[var(--noir-border)] overflow-hidden">
+                              <div className="h-full bg-amber-600 rounded-full" style={{ width: `${(engine / 4) * 100}%` }} />
+                            </div>
+                            <span className="text-[var(--noir-primary)]">{engine}/4</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[var(--noir-muted)] w-14">Tires</span>
+                            <div className="w-20 h-2 rounded-full bg-[var(--noir-border)] overflow-hidden">
+                              <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${(tires / 4) * 100}%` }} />
+                            </div>
+                            <span className="text-[var(--noir-primary)]">{tires}/4</span>
+                          </div>
+                          {(aero > 0 || canAeroRel) && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[var(--noir-muted)] w-14">Aero</span>
+                              <div className="w-20 h-2 rounded-full bg-[var(--noir-border)] overflow-hidden">
+                                <div className="h-full bg-sky-600 rounded-full" style={{ width: `${(aero / 2) * 100}%` }} />
+                              </div>
+                              <span className="text-[var(--noir-primary)]">{aero}/2</span>
+                            </div>
+                          )}
+                          {(reliability > 0 || canAeroRel) && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[var(--noir-muted)] w-14">Rel</span>
+                              <div className="w-20 h-2 rounded-full bg-[var(--noir-border)] overflow-hidden">
+                                <div className="h-full bg-violet-600 rounded-full" style={{ width: `${(reliability / 2) * 100}%` }} />
+                              </div>
+                              <span className="text-[var(--noir-primary)]">{reliability}/2</span>
+                            </div>
+                          )}
+                          {championship && <span className="text-amber-500 font-heading">Championship ✓</span>}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+4% power, −3% grip per level"
                           onClick={() => handleUpgradeCar(c.id, "engine")}>Engine+</button>
-                        <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+grip −power"
+                        <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+5% grip, −2% power per level"
                           onClick={() => handleUpgradeCar(c.id, "tires")}>Tires+</button>
                         {canAeroRel && (
                           <>
-                            <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+speed −grip (1+ win)"
+                            <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+3% speed, −2% grip (1+ win)"
                               onClick={() => handleUpgradeCar(c.id, "aero")}>Aero+</button>
-                            <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="−wear −power (1+ win)"
+                            <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="−8% tyre wear, −2% power (1+ win)"
                               onClick={() => handleUpgradeCar(c.id, "reliability")}>Rel+</button>
                           </>
                         )}
@@ -515,20 +575,24 @@ export default function Racing() {
                   })}
                 </ul>
               )}
-              {upgradeTradeoffs ? (
-                <p className="text-xs text-[var(--noir-muted)] mt-3">
-                  Engine: {upgradeTradeoffs.engine?.positive} {upgradeTradeoffs.engine?.negative} —
-                  Tires: {upgradeTradeoffs.tires?.positive} {upgradeTradeoffs.tires?.negative}
-                </p>
-              ) : (
-                <p className="text-xs text-[var(--noir-muted)] mt-3">
-                  Engine: +power −grip — Tires: +grip −power
-                </p>
+              {/* Trade-offs explainer */}
+              {upgradeTradeoffs && (
+                <div className="mt-4 p-4 rounded-lg border border-[var(--noir-border)] bg-black/10">
+                  <h4 className="font-heading text-sm text-[var(--noir-primary)] mb-2">How trade-offs work</h4>
+                  <p className="text-xs text-[var(--noir-muted)] mb-3">Each upgrade improves one stat and reduces another. Balance for your track and tyre strategy.</p>
+                  <ul className="space-y-2 text-xs">
+                    <li className="flex flex-wrap gap-x-2"><span className="font-heading text-amber-500">Engine:</span> <span className="text-green-500">{upgradeTradeoffs.engine?.positive}</span> <span className="text-red-400">{upgradeTradeoffs.engine?.negative}</span> {upgradeTradeoffs.engine?.per_level && <span className="text-[var(--noir-muted)]">(per level)</span>}</li>
+                    <li className="flex flex-wrap gap-x-2"><span className="font-heading text-emerald-500">Tires:</span> <span className="text-green-500">{upgradeTradeoffs.tires?.positive}</span> <span className="text-red-400">{upgradeTradeoffs.tires?.negative}</span> {upgradeTradeoffs.tires?.per_level && <span className="text-[var(--noir-muted)]">(per level)</span>}</li>
+                    {upgradeTradeoffs.aero && <li className="flex flex-wrap gap-x-2"><span className="font-heading text-sky-500">Aero:</span> <span className="text-green-500">{upgradeTradeoffs.aero.positive}</span> <span className="text-red-400">{upgradeTradeoffs.aero.negative}</span> <span className="text-[var(--noir-muted)]">— Unlock: {upgradeTradeoffs.aero.unlock}</span></li>}
+                    {upgradeTradeoffs.reliability && <li className="flex flex-wrap gap-x-2"><span className="font-heading text-violet-500">Reliability:</span> <span className="text-green-500">{upgradeTradeoffs.reliability.positive}</span> <span className="text-red-400">{upgradeTradeoffs.reliability.negative}</span> <span className="text-[var(--noir-muted)]">— Unlock: {upgradeTradeoffs.reliability.unlock}</span></li>}
+                    {upgradeTradeoffs.championship && <li className="flex flex-wrap gap-x-2"><span className="font-heading text-amber-400">Championship:</span> <span className="text-green-500">{upgradeTradeoffs.championship.positive}</span> <span className="text-[var(--noir-muted)]">— Unlock: {upgradeTradeoffs.championship.unlock}</span> {upgradeTradeoffs.championship.cost != null && <span className="text-[var(--noir-primary)]">({formatMoney(upgradeTradeoffs.championship.cost)})</span>}</li>}
+                  </ul>
+                </div>
               )}
             </div>
             <div className={styles.panel + " p-4"}>
               <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Choose car</h3>
-              <p className="text-xs text-[var(--noir-muted)] mb-3">Pick one of the historical race cars. Each has different speed and grip.</p>
+              <p className="text-xs text-[var(--noir-muted)] mb-3">Pick one of the historical race cars. Each has different base speed and grip; upgrades add trade-offs on top.</p>
               <div className="grid gap-2">
                 {availableCars.map((car) => {
                   const isSelected = cars.some((c) => c.racing_car_id === car.id);

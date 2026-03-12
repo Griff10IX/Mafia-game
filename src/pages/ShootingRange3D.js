@@ -14,7 +14,10 @@ const MAX_HITS_FOR_MASTERY = 30;
 const BULLET_SPEED        = 110;
 const BULLET_MAX_DIST     = 36;
 const TARGET_RADIUS       = 0.80;   // big enough to be satisfying
-const TARGET_LIFETIME     = 2.8;    // seconds before it vanishes
+const TARGET_LIFETIME     = 2.8;    // seconds before it vanishes (desktop)
+const TARGET_LIFETIME_TOUCH = 4.2;  // longer on touch so players have time to aim
+const TARGET_TOUCH_HIT_MULT = 1.28; // count hit if within this × radius (touch forgiveness)
+const TARGET_TOUCH_ZONE_MULT = 1.18; // each ring 18% more forgiving on touch
 const TARGET_WARN_AT      = 0.9;    // seconds left when it starts pulsing red
 const RANGE_LENGTH        = 28;
 const BACK_WALL_Z         = -RANGE_LENGTH;
@@ -298,6 +301,11 @@ export default function ShootingRange3D() {
   const [targetUrgent, setTargetUrgent] = useState(false);
   const [leaderboard, setLeaderboard]   = useState([]);
   const [cooldownSecondsLeft, setCooldownSecondsLeft] = useState(0);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+
+  useEffect(() => {
+    setIsTouchDevice(typeof window !== "undefined" && (window.innerWidth < 700 || "ontouchstart" in window));
+  }, []);
 
   const gamePhaseRef = useRef("idle");
   useEffect(() => { gamePhaseRef.current = gamePhase; }, [gamePhase]);
@@ -350,7 +358,7 @@ export default function ShootingRange3D() {
   }, [routeWeaponId, weaponId]);
 
   const ownedGuns = masteryData?.weapons?.filter(w =>
-    w.id !== "weapon1" && weaponsList.some(x => x.id === w.id && x.owned)
+    w.id !== "weapon1" && weaponsList.some(x => x.id === w.id && x.owned) && (masteryData.mastery?.[w.id]?.can_train !== false)
   ) || [];
   const canPlay = ownedGuns.some(w => w.id === weaponId);
 
@@ -631,6 +639,9 @@ export default function ShootingRange3D() {
       state.clipsRemaining = CLIPS_TOTAL;
       state.isReloading = false;
       state.targetVisible = false;
+      const touchFriendly = typeof window !== "undefined" && (window.innerWidth < 700 || "ontouchstart" in window);
+      state.touchFriendly = touchFriendly;
+      state.targetLifetime = touchFriendly ? TARGET_LIFETIME_TOUCH : TARGET_LIFETIME;
 
       const tempVec = new THREE.Vector3();
 
@@ -757,12 +768,13 @@ export default function ShootingRange3D() {
             const dx = b.mesh.position.x - tempVec.x;
             const dy = b.mesh.position.y - tempVec.y;
             const dz = b.mesh.position.z - tempVec.z;
-
-            if (dx*dx + dy*dy + dz*dz < TARGET_RADIUS * TARGET_RADIUS * 1.5) {
+            const hitRad = state.touchFriendly ? TARGET_RADIUS * TARGET_TOUCH_HIT_MULT : TARGET_RADIUS;
+            const zoneMult = state.touchFriendly ? TARGET_TOUCH_ZONE_MULT : 1.0;
+            if (dx*dx + dy*dy + dz*dz < hitRad * hitRad * 1.5) {
               const lateralDist = Math.sqrt(dx*dx + dy*dy);
               let hitZone = ZONES[ZONES.length-1];
               for (const zone of ZONES) {
-                if (lateralDist <= TARGET_RADIUS * zone.frac) { hitZone = zone; break; }
+                if (lateralDist <= TARGET_RADIUS * Math.min(1, zone.frac * zoneMult)) { hitZone = zone; break; }
               }
               hideTarget(true);
               state.score += hitZone.pts;
@@ -855,7 +867,8 @@ export default function ShootingRange3D() {
           </h1>
         </div>
         <p className="text-[10px] text-mutedForeground font-heading italic mt-1">
-          Moving targets vanish after {TARGET_LIFETIME}s — aim fast. Bullseye pays <strong className="text-primary">10 pts</strong>, outer ring pays 1.
+          Moving targets vanish after {isTouchDevice ? TARGET_LIFETIME_TOUCH : TARGET_LIFETIME}s — aim fast. Bullseye pays <strong className="text-primary">10 pts</strong>, outer ring pays 1.
+          {isTouchDevice && " Extra time & bigger hit area on touch."}
           Max <strong className="text-primary">+{MAX_HITS_FOR_MASTERY}%</strong> mastery per round.
         </p>
       </div>
@@ -1094,7 +1107,7 @@ export default function ShootingRange3D() {
                 <span className="text-primary">+{z.pts}</span>
               </div>
             ))}
-            <span className="text-[10px] font-heading text-mutedForeground">· Targets vanish after {TARGET_LIFETIME}s</span>
+            <span className="text-[10px] font-heading text-mutedForeground">· Targets vanish after {isTouchDevice ? TARGET_LIFETIME_TOUCH : TARGET_LIFETIME}s</span>
           </div>
           <div className="sr-art-line text-primary mx-3" />
         </div>

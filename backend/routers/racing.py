@@ -71,7 +71,7 @@ MAX_CAR_UPGRADE_LEVEL = 4
 MAX_AERO_LEVEL = 2
 MAX_RELIABILITY_LEVEL = 2
 NUM_LAPS_MIN = 2
-NUM_LAPS_MAX = 5
+NUM_LAPS_MAX = 20
 TIRE_WEAR_PER_LAP = 18
 # Pit a lap before tires are gone: ~18 wear/lap → pit when below 50 so next lap wouldn't kill tires
 TIRE_PIT_THRESHOLD = 50
@@ -397,6 +397,11 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
                 upgrades[uid] = up
             else:
                 upgrades[uid] = {"engine_level": o.get("engine_level", 0), "tires_level": o.get("tires_level", 0)}
+    for o in owned:
+        entrant = {"racing_car_id": o.get("racing_car_id"), "racing_car_instance_id": o.get("id")}
+        s, g = _effective_speed_and_grip_display(entrant, prof, upgrades)
+        o["effective_speed"] = round(s, 1)
+        o["effective_grip"] = round(g * 100, 0)
     return {
         "profile": prof,
         "owned_cars": owned,
@@ -406,10 +411,10 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "car_upgrade_costs": CAR_UPGRADE_COSTS,
         "max_car_upgrade_level": MAX_CAR_UPGRADE_LEVEL,
         "upgrade_tradeoffs": {
-            "engine": {"positive": "+power", "negative": "−grip"},
-            "tires": {"positive": "+grip", "negative": "−power"},
-            "aero": {"positive": "+top speed", "negative": "−grip", "unlock": f"{WINS_FOR_AERO_RELIABILITY}+ win(s)"},
-            "reliability": {"positive": "−tyre wear", "negative": "−power", "unlock": f"{WINS_FOR_AERO_RELIABILITY}+ win(s)"},
+            "engine": {"positive": "+4% power", "negative": "−3% grip", "per_level": True},
+            "tires": {"positive": "+5% grip", "negative": "−2% power", "per_level": True},
+            "aero": {"positive": "+3% top speed", "negative": "−2% grip", "unlock": f"{WINS_FOR_AERO_RELIABILITY}+ win(s)", "per_level": True},
+            "reliability": {"positive": "−8% tyre wear", "negative": "−2% power", "unlock": f"{WINS_FOR_AERO_RELIABILITY}+ win(s)", "per_level": True},
             "championship": {"positive": "+2% speed & grip", "negative": "—", "unlock": f"{WINS_FOR_CHAMPIONSHIP_UPGRADE}+ wins", "cost": CHAMPIONSHIP_UPGRADE_COST},
         },
         "tyre_compounds": TYRE_COMPOUNDS,

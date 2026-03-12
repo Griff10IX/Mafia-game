@@ -333,7 +333,7 @@ export default function CircuitRaceView({
   const [selectedTrack, setSelectedTrack] = useState(() => TRACKS.find(t=>t.id===initialTrackId)||TRACKS[0]);
   const [condition, setCondition] = useState(initialCondition);
   const [chosenTyre, setChosenTyre] = useState(playerTyreId);
-  const [numLaps, setNumLaps] = useState(Math.max(2, Math.min(5, totalLaps)));
+  const [numLaps, setNumLaps] = useState(() => Math.max(2, Math.min(20, totalLaps)));
   const [countdown, setCountdown] = useState(3);
   const [commentary, setCommentary] = useState("Select track & tyres, then start");
   const [standings, setStandings] = useState([]);
@@ -916,7 +916,7 @@ export default function CircuitRaceView({
           {/* Laps */}
           <div className={styles.panel} style={{ padding:"0.6rem", flex:"0 0 auto" }}>
             <div className="font-heading" style={{ fontSize:"8px", letterSpacing:".22em", textTransform:"uppercase", color:"var(--noir-muted)", marginBottom:"4px" }}>Laps</div>
-            <input type="number" min={2} max={5} value={numLaps}
+            <input type="number" min={2} max={20} value={numLaps}
               onChange={e=>setNumLaps(Math.max(2,Math.min(5,parseInt(e.target.value)||3)))}
               style={{ width:56, background:"transparent", border:"1px solid var(--noir-border)", color:"var(--noir-foreground)", fontFamily:"'Rajdhani',sans-serif", fontSize:14, padding:"3px 6px", textAlign:"center" }}
             />

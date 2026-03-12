@@ -59,7 +59,7 @@ export default function ShootingRange() {
         </h1>
       </div>
       <p className="text-[11px] text-zinc-400 font-heading mb-4">
-        Master a weapon here to reduce bullets needed when attacking with it (up to 10% at full mastery). Train guns you own.
+        Master a weapon here to reduce bullets needed when attacking with it (up to 10% at full mastery). Train guns you own. Master one weapon (100%) before you can train the next.
       </p>
       <div className="flex gap-2 mb-4">
         <Link
@@ -82,8 +82,10 @@ export default function ShootingRange() {
                   if (w.id === 'weapon1') return null;
                   const info = masteryData.mastery?.[w.id] || { mastery_pct: 0 };
                   const pct = Number(info.mastery_pct) || 0;
+                  const canTrain = info.can_train !== false;
                   const owned = weaponsList.some((x) => x.id === w.id && x.owned);
                   const training = trainingWeaponId === w.id;
+                  const disabled = !owned || training || pct >= 100 || !canTrain;
                   return (
                     <div key={w.id} className="flex flex-wrap items-center gap-2 py-1.5 border-b border-zinc-700/30 last:border-0">
                       <span className="text-[10px] sm:text-[11px] font-heading text-foreground min-w-[100px] sm:min-w-[120px]">
@@ -99,11 +101,12 @@ export default function ShootingRange() {
                       <span className="text-[9px] sm:text-[10px] text-zinc-500 tabular-nums w-8">{pct}%</span>
                       <button
                         type="button"
-                        disabled={!owned || training || pct >= 100}
+                        disabled={disabled}
+                        title={!canTrain ? 'Master the previous weapon first (100%)' : undefined}
                         onClick={() => trainWeapon(w.id)}
                         className="px-2 py-1 rounded text-[9px] sm:text-[10px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                       >
-                        {training ? 'Training...' : pct >= 100 ? 'Mastered' : 'Train 5 min'}
+                        {training ? 'Training...' : pct >= 100 ? 'Mastered' : !canTrain ? 'Master previous first' : 'Train 5 min'}
                       </button>
                     </div>
                   );
