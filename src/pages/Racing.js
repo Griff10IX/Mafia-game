@@ -36,16 +36,36 @@ function apiDetail(e) {
   return getApiErrorMessage(e);
 }
 
-/* ─── Circuit race: laps, track shape, pit stops, weather ─── */
+/* ─── Circuit race: proper track shape (straights + corners), continuous laps, pit stops, weather ─── */
 function CircuitRaceView({ participants = [], lap_results = [], pit_stops = [], laps: totalLaps = 3, resultOrder = [], weather: weatherId = "clear", weather_name: weatherName, onComplete }) {
   const numLaps = Math.max(1, totalLaps);
   const lapResults = Array.isArray(lap_results) && lap_results.length > 0 ? lap_results : [resultOrder || []];
   const pitsThisLap = (lap) => (pit_stops || []).filter((p) => p.lap === lap).map((p) => p.entrant_id);
   const weatherInfo = WEATHER[weatherId] || WEATHER.clear;
   const displayWeatherName = weatherName || weatherInfo.name;
-  const [currentLap, setCurrentLap] = useState(1);
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(0); // 0 to numLaps continuous – no reset per lap
   const [commentary, setCommentary] = useState("They're off!");
+  const currentLap = Math.min(numLaps, Math.floor(progress) + 1);
+
+  // Track shape: stadium (two long straights + two curved ends) – matches SVG path below
+  const getPointOnTrack = (t) => {
+    const T = ((t % 1) + 1) % 1;
+    const x0 = 50, x1 = 350, y0 = 50, y1 = 210;
+    const cxR = 372, cyR = 130, rR = 82;  // right curve
+    const cxL = 28, cyL = 130, rL = 82;   // left curve
+    if (T < 0.25) {
+      return { x: x0 + (x1 - x0) * (T / 0.25), y: y0 };
+    }
+    if (T < 0.5) {
+      const angle = -Math.PI / 2 + (Math.PI * (T - 0.25)) / 0.25;
+      return { x: cxR + rR * Math.cos(angle), y: cyR + rR * Math.sin(angle) };
+    }
+    if (T < 0.75) {
+      return { x: x1 - (x1 - x0) * ((T - 0.5) / 0.25), y: y1 };
+    }
+    const angle = Math.PI / 2 - (Math.PI * (T - 0.75)) / 0.25;
+    return { x: cxL + rL * Math.cos(angle), y: cyL + rL * Math.sin(angle) };
+  };
 
   useEffect(() => {
     if (!lapResults.length) {
@@ -53,43 +73,35 @@ function CircuitRaceView({ participants = [], lap_results = [], pit_stops = [], 
       return;
     }
     setCommentary("They're off!");
-    const t1 = setTimeout(() => setCommentary("Rounding the bend!"), 800);
+    const t1 = setTimeout(() => setCommentary("Rounding the bend!"), 600);
     const t2 = setTimeout(() => setCommentary("Pit window open"), 1200);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
   useEffect(() => {
-    if (currentLap > numLaps) {
-      setCommentary("Checkered flag!");
-      const t = setTimeout(() => onComplete?.(), 600);
-      return () => clearTimeout(t);
-    }
+    const totalDurationMs = LAP_MS * numLaps;
     const start = Date.now();
     let raf;
     const tick = () => {
       const elapsed = Date.now() - start;
-      const t = Math.min(1, elapsed / LAP_MS);
-      const eased = 1 - (1 - t) * (1 - t);
-      setProgress(eased);
-      if (t >= 1) {
-        if (currentLap < numLaps) {
-          setCurrentLap((c) => c + 1);
-          setProgress(0);
-        }
-      } else {
-        raf = requestAnimationFrame(tick);
+      const raw = elapsed / totalDurationMs;
+      if (raw >= 1) {
+        setProgress(numLaps);
+        setCommentary("Checkered flag!");
+        const t = setTimeout(() => onComplete?.(), 600);
+        return () => clearTimeout(t);
       }
+      const eased = 1 - (1 - raw) * (1 - raw);
+      setProgress(eased * numLaps);
+      raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [currentLap, numLaps, onComplete]);
+  }, [numLaps, onComplete]);
 
-  const order = lapResults[currentLap - 1] || lapResults[0] || [];
+  const order = lapResults[Math.min(currentLap - 1, lapResults.length - 1)] || lapResults[0] || [];
   const pitSet = new Set(pitsThisLap(currentLap));
-  const cx = 200;
-  const cy = 120;
-  const rx = 160;
-  const ry = 85;
+  const baseT = progress % 1;
 
   return (
     <div className={styles.panel} style={{ padding: "1rem" }}>
@@ -104,23 +116,37 @@ function CircuitRaceView({ participants = [], lap_results = [], pit_stops = [], 
       </div>
       <div className="relative rounded overflow-hidden" style={{ background: weatherInfo.bg }}>
         <svg viewBox="0 0 400 260" className="w-full" style={{ maxHeight: 280 }}>
-          <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="#2d5a12" strokeWidth="24" />
-          <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="#3d6b22" strokeWidth="20" />
-          <path d={`M ${cx + rx - 8} ${cy} L ${cx + rx + 45} ${cy} L ${cx + rx + 45} ${cy + 28} L ${cx + rx - 8} ${cy}`} fill="none" stroke="rgba(212,175,55,0.6)" strokeWidth="6" strokeDasharray="4 3" />
-          <text x={cx + rx + 22} y={cy + 18} fill="var(--noir-primary)" fontSize="8" textAnchor="middle" fontWeight="bold">PIT</text>
+          {/* Stadium circuit: two straights + two curved ends (not a circle) */}
+          <path
+            d="M 50 50 L 350 50 Q 395 50 395 130 Q 395 210 350 210 L 50 210 Q 5 210 5 130 Q 5 50 50 50"
+            fill="none"
+            stroke="#2d5a12"
+            strokeWidth="28"
+          />
+          <path
+            d="M 50 50 L 350 50 Q 395 50 395 130 Q 395 210 350 210 L 50 210 Q 5 210 5 130 Q 5 50 50 50"
+            fill="none"
+            stroke="#3d6b22"
+            strokeWidth="22"
+          />
+          {/* Start/finish line */}
+          <line x1="198" y1="50" x2="202" y2="50" stroke="var(--noir-primary)" strokeWidth="3" />
+          {/* Pit lane */}
+          <path d="M 350 95 L 395 95 L 395 165 L 350 165" fill="none" stroke="rgba(212,175,55,0.6)" strokeWidth="6" strokeDasharray="4 3" />
+          <text x="372" y="132" fill="var(--noir-primary)" fontSize="8" textAnchor="middle" fontWeight="bold">PIT</text>
+          {/* Cars: continuous motion along track, no slowdown between laps */}
           {order.map((entrantId, idx) => {
-            const spread = (2 * Math.PI) / Math.max(order.length, 1);
-            const angle = progress * 2 * Math.PI - idx * spread * 0.4;
-            const x = cx + rx * Math.cos(angle);
-            const y = cy + ry * Math.sin(angle);
+            const spread = 0.06;
+            const t = (baseT - idx * spread + 1) % 1;
+            const { x, y } = getPointOnTrack(t);
             const color = CAR_COLORS[idx % CAR_COLORS.length];
             const isPitting = pitSet.has(entrantId);
             return (
               <g key={entrantId}>
-                <circle cx={x} cy={y} r="12" fill={color} stroke="#111" strokeWidth="2" />
-                <text x={x} y={y + 1} fill="#fff" fontSize="7" textAnchor="middle" fontWeight="bold">{idx + 1}</text>
+                <circle cx={x} cy={y} r="10" fill={color} stroke="#111" strokeWidth="2" />
+                <text x={x} y={y + 1} fill="#fff" fontSize="6" textAnchor="middle" fontWeight="bold">{idx + 1}</text>
                 {isPitting && (
-                  <text x={x} y={y - 16} fill="var(--noir-primary)" fontSize="7" textAnchor="middle">Pit</text>
+                  <text x={x} y={y - 14} fill="var(--noir-primary)" fontSize="6" textAnchor="middle">Pit</text>
                 )}
               </g>
             );
