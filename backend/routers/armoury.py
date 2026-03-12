@@ -1375,6 +1375,20 @@ async def train_shooting_range(request: ShootingRangeTrainRequest, current_user:
         hits = request.hits if request.hits is not None else 0
         if not (1 <= hits <= MASTERY_LIVE_HITS_MAX_PER_REQUEST):
             raise HTTPException(status_code=400, detail=f"hits must be 1–{MASTERY_LIVE_HITS_MAX_PER_REQUEST} for live mode.")
+        # Same 5-min cooldown as auto_sim (one 3D round per weapon per 5 min)
+        last = doc.get("last_trained_at") if doc else None
+        if last:
+            try:
+                last_dt = datetime.fromisoformat(last.replace("Z", "+00:00")) if isinstance(last, str) else last
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                if (now - last_dt).total_seconds() < MASTERY_COOLDOWN_MINUTES * 60:
+                    wait_sec = MASTERY_COOLDOWN_MINUTES * 60 - int((now - last_dt).total_seconds())
+                    raise HTTPException(status_code=429, detail=f"Wait {max(1, wait_sec // 60)} min before playing the 3D range again (same as Train 5 min).")
+            except HTTPException:
+                raise
+            except Exception:
+                pass
         add_pct = min(hits * MASTERY_PCT_PER_LIVE_HIT, 100 - current_pct)
     else:
         last = doc.get("last_trained_at") if doc else None
@@ -1400,7 +1414,7 @@ async def train_shooting_range(request: ShootingRangeTrainRequest, current_user:
         {"$set": {"mastery_pct": current_pct + add_pct, "last_trained_at": now_iso}, "$setOnInsert": {"user_id": current_user["id"], "weapon_id": weapon_id}},
         upsert=True,
     )
-    next_train_at = (now + timedelta(minutes=MASTERY_COOLDOWN_MINUTES)).isoformat() if request.mode == "auto_sim" else None
+    next_train_at = (now + timedelta(minutes=MASTERY_COOLDOWN_MINUTES)).isoformat() if request.mode in ("auto_sim", "live") else None
     msg = f"+{add_pct}% mastery ({weapon.get('name', weapon_id)})." if request.mode == "auto_sim" else f"+{add_pct}% mastery from {request.hits} hits ({weapon.get('name', weapon_id)})."
     return {"message": msg, "mastery_pct": current_pct + add_pct, "next_train_at": next_train_at}
 

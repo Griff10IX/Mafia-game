@@ -46,7 +46,7 @@ export default function ShootingRange() {
   };
 
   return (
-    <div className={styles.pageContent} style={{ padding: '1rem', maxWidth: 640 }}>
+    <div className={`${styles.pageContent} mx-auto`} style={{ padding: '1rem', maxWidth: 640 }}>
       <div className="flex items-center gap-2 mb-4">
         <Link to="/armour-weapons" className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>
           ← Armoury

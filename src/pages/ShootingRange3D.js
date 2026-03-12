@@ -22,6 +22,7 @@ const MAX_AMMO            = 8;
 const CLIPS_TOTAL        = 3;
 const RELOAD_SECS         = 1.4;
 const MUZZLE_FLASH_DUR    = 0.06;
+const RANGE_COOLDOWN_MINUTES = 5; // same as Train 5 min — one 3D round per weapon per 5 min
 
 // Scoring zones — inner → outer
 const ZONES = [
@@ -296,6 +297,7 @@ export default function ShootingRange3D() {
   const [reloadAnim, setReloadAnim]     = useState(false);
   const [targetUrgent, setTargetUrgent] = useState(false);
   const [leaderboard, setLeaderboard]   = useState([]);
+  const [cooldownSecondsLeft, setCooldownSecondsLeft] = useState(0);
 
   const gamePhaseRef = useRef("idle");
   useEffect(() => { gamePhaseRef.current = gamePhase; }, [gamePhase]);
@@ -316,6 +318,24 @@ export default function ShootingRange3D() {
 
   useEffect(() => { fetchMastery(); }, [fetchMastery]);
   useEffect(() => { fetchLeaderboard(); }, [fetchLeaderboard]);
+
+  // 5-min cooldown: derive from mastery last_trained_at for selected weapon
+  useEffect(() => {
+    if (!weaponId || !masteryData?.mastery?.[weaponId]?.last_trained_at) {
+      setCooldownSecondsLeft(0);
+      return;
+    }
+    const last = masteryData.mastery[weaponId].last_trained_at;
+    const lastMs = new Date(last).getTime();
+    const cooldownEndMs = lastMs + RANGE_COOLDOWN_MINUTES * 60 * 1000;
+    const update = () => {
+      const left = Math.max(0, Math.ceil((cooldownEndMs - Date.now()) / 1000));
+      setCooldownSecondsLeft(left);
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [weaponId, masteryData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -483,6 +503,7 @@ export default function ShootingRange3D() {
 
   // ── START ROUND ──────────────────────────────────────────────────────────────
   const startRound = useCallback(() => {
+    if (cooldownSecondsLeft > 0) return;
     const state = r.current;
     state.phase = "playing";
     state.score = 0;
@@ -497,7 +518,7 @@ export default function ShootingRange3D() {
     setScore(0); setTimeLeft(ROUND_DURATION_SEC); setAmmoState(MAX_AMMO); setClipsRemainingState(CLIPS_TOTAL);
     setIsReloading(false); setReloadAnim(false); setTargetUrgent(false);
     spawnTarget();
-  }, [spawnTarget]);
+  }, [spawnTarget, cooldownSecondsLeft]);
 
   // ── THREE.JS SCENE SETUP ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -812,7 +833,7 @@ export default function ShootingRange3D() {
   const isMobileView = typeof window !== "undefined" && window.innerWidth < 700;
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} style={{ maxWidth: 900 }}>
+    <div className={`space-y-4 ${styles.pageContent} mx-auto`} style={{ maxWidth: 900 }}>
       <style>{`
         .sr-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
       `}</style>
@@ -1019,33 +1040,39 @@ export default function ShootingRange3D() {
 
               {/* Bottom bar */}
               <div
-                className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-3 px-3 pb-3 pt-5"
+                className="absolute bottom-0 left-0 right-0 flex items-center gap-3 px-3 pb-3 pt-5"
                 style={{
                   background: "linear-gradient(to top,rgba(8,5,3,.96),transparent)",
                   pointerEvents: gamePhase === "playing" ? "none" : "auto",
                 }}
               >
-                <div style={{ fontFamily:"'Crimson Text',serif", fontSize:"clamp(11px,3vw,14px)", fontStyle:"italic", color:"#c9a460", textShadow:"0 0 12px rgba(201,164,96,.4)", flex:1 }}>
-                  {gamePhase === "idle" && "Step up to the line, friend."}
+                <div style={{ fontFamily:"'Crimson Text',serif", fontSize:"clamp(11px,3vw,14px)", fontStyle:"italic", color:"#c9a460", textShadow:"0 0 12px rgba(201,164,96,.4)", flex:1, textAlign:"left" }}>
+                  {gamePhase === "idle" && (cooldownSecondsLeft > 0 ? `Next play in ${Math.ceil(cooldownSecondsLeft / 60)} min` : "Step up to the line, friend.")}
                   {gamePhase === "playing" && isReloading && "Reloading…"}
                   {gamePhase === "playing" && !isReloading && ammoState === 0 && clipsRemainingState > 0 && "Empty — reloading…"}
                   {gamePhase === "playing" && !isReloading && ammoState === 0 && clipsRemainingState === 0 && "Out of ammo."}
                   {gamePhase === "done" && (() => {
+                    if (cooldownSecondsLeft > 0) return `Next play in ${Math.ceil(cooldownSecondsLeft / 60)} min (1 round every 5 min)`;
                     const s = r.current.score;
                     return s >= 60 ? `${s} pts — you shoot like the devil himself.`
                       : s >= 30 ? `${s} pts — not bad, not bad at all.`
                       : `${s} pts — keep practising, friend.`;
                   })()}
                 </div>
-                {(gamePhase === "idle" || gamePhase === "done") && (
-                  <button
-                    type="button"
-                    onClick={startRound}
-                    className={`${styles.btnGoldDarkText} font-heading text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-4 py-2 cursor-pointer`}
-                  >
-                    {gamePhase === "done" ? "Play Again" : "Fire at Will"}
-                  </button>
-                )}
+                <div className="flex-1 flex justify-center shrink-0">
+                  {(gamePhase === "idle" || gamePhase === "done") && (
+                    <button
+                      type="button"
+                      onClick={startRound}
+                      disabled={cooldownSecondsLeft > 0}
+                      className={`${styles.btnGoldDarkText} font-heading text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-4 py-2 cursor-pointer`}
+                      style={cooldownSecondsLeft > 0 ? { opacity: 0.6, cursor: "not-allowed" } : {}}
+                    >
+                      {cooldownSecondsLeft > 0 ? `Wait ${Math.ceil(cooldownSecondsLeft / 60)} min` : (gamePhase === "done" ? "Play Again" : "Fire at Will")}
+                    </button>
+                  )}
+                </div>
+                <div className="flex-1" />
               </div>
             </>
           )}
