@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import * as THREE from "three";
 import { Crosshair } from "lucide-react";
 import api from "../utils/api";
@@ -280,7 +280,6 @@ export default function ShootingRange3D() {
 
   // React state — only what drives re-renders
   const { weaponId: routeWeaponId } = useParams();
-  const navigate = useNavigate();
   const [masteryData, setMasteryData]   = useState(null);
   const [weaponsList, setWeaponsList]   = useState([]);
   const [weaponId, setWeaponId]         = useState(routeWeaponId || "");
@@ -813,49 +812,67 @@ export default function ShootingRange3D() {
   const isMobileView = typeof window !== "undefined" && window.innerWidth < 700;
 
   return (
-    <div className={styles.pageContent} style={{ padding: "1rem", maxWidth: 900 }}>
+    <div className={`space-y-4 ${styles.pageContent}`} style={{ maxWidth: 900 }}>
+      <style>{`
+        .sr-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+      `}</style>
+
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 mb-3">
-        <Link to="/shooting-range" className="text-[10px] font-heading uppercase tracking-wider" style={{ color: "var(--noir-primary)" }}>
+      <div className="relative">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Armoury</p>
+        <Link to="/shooting-range" className="text-[10px] font-heading uppercase tracking-wider text-primary hover:opacity-90">
           ← Shooting range
         </Link>
       </div>
-      <div className="flex items-center gap-2 mb-2">
-        <Crosshair size={22} style={{ color: "var(--noir-primary)" }} />
-        <h1 className="text-lg font-heading font-bold uppercase tracking-wider" style={{ color: "var(--noir-primary)" }}>
-          3D Range
-        </h1>
-      </div>
-      <p className="text-[11px] text-zinc-400 font-heading mb-3">
-        Moving targets vanish after {TARGET_LIFETIME}s — aim fast. Bullseye pays <strong className="text-amber-400">10 pts</strong>, outer ring pays 1.
-        Max <strong className="text-amber-400">+{MAX_HITS_FOR_MASTERY}%</strong> mastery per round.
-      </p>
 
-      {/* Weapon select */}
+      {/* Header — match Crimes/Casino */}
+      <div className="relative">
+        <div className="flex items-center gap-2 mb-1">
+          <Crosshair size={22} className="text-primary" />
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
+            3D Range
+          </h1>
+        </div>
+        <p className="text-[10px] text-mutedForeground font-heading italic mt-1">
+          Moving targets vanish after {TARGET_LIFETIME}s — aim fast. Bullseye pays <strong className="text-primary">10 pts</strong>, outer ring pays 1.
+          Max <strong className="text-primary">+{MAX_HITS_FOR_MASTERY}%</strong> mastery per round.
+        </p>
+      </div>
+
+      {/* Weapon select — panel like Casino */}
       {(!weaponId || !canPlay) ? (
-        <div className="rounded-lg p-4 bg-zinc-800/50 border border-zinc-700/40">
-          <label className="block text-[10px] font-heading uppercase text-zinc-500 mb-2">Weapon</label>
-          <select
-            value={weaponId}
-            onChange={e => setWeaponId(e.target.value)}
-            className="w-full max-w-xs rounded border border-zinc-600 bg-zinc-800/80 px-3 py-2 text-sm font-heading text-foreground"
-          >
-            <option value="">Select a gun you own</option>
-            {ownedGuns.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-          </select>
-          {ownedGuns.length === 0 && masteryData && (
-            <p className="text-[11px] text-amber-500 mt-2">You need to own a gun to play the 3D range.</p>
-          )}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Weapon</h2>
+          </div>
+          <div className="p-3">
+            <select
+              value={weaponId}
+              onChange={e => setWeaponId(e.target.value)}
+              className={`w-full max-w-xs px-3 py-2 text-sm font-heading ${styles.input}`}
+            >
+              <option value="">Select a gun you own</option>
+              {ownedGuns.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+            {ownedGuns.length === 0 && masteryData && (
+              <p className="text-[11px] text-primary mt-2">You need to own a gun to play the 3D range.</p>
+            )}
+          </div>
+          <div className="sr-art-line text-primary mx-3" />
         </div>
       ) : sceneError ? (
-        <div className="rounded-lg p-4 bg-amber-500/10 border border-amber-500/40">
-          <p className="text-sm font-heading text-amber-200 mb-2">Something went wrong loading the 3D range.</p>
-          <p className="text-xs text-zinc-400 font-mono mb-3">{sceneError}</p>
-          <Link to="/shooting-range" className="text-sm font-heading font-bold uppercase tracking-wider" style={{ color: "var(--noir-primary)" }}>← Back</Link>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="p-4">
+            <p className="text-sm font-heading text-foreground mb-2">Something went wrong loading the 3D range.</p>
+            <p className="text-xs text-mutedForeground font-mono mb-3">{sceneError}</p>
+            <Link to="/shooting-range" className="text-sm font-heading font-bold uppercase tracking-wider text-primary hover:opacity-90">← Back</Link>
+          </div>
         </div>
       ) : (
         <div
-          className="relative rounded-lg overflow-hidden border border-zinc-700/50 bg-black select-none"
+          className="relative rounded-lg overflow-hidden border border-primary/20 bg-black select-none"
           style={{ aspectRatio: "16/10", maxHeight: "68vh", minHeight: 280 }}
         >
           <canvas
@@ -1021,14 +1038,7 @@ export default function ShootingRange3D() {
                   <button
                     type="button"
                     onClick={startRound}
-                    style={{
-                      pointerEvents:"all", fontFamily:"'Cinzel',serif",
-                      fontSize:"clamp(9px,2.5vw,11px)", fontWeight:700, letterSpacing:"0.16em",
-                      padding:"9px 18px", border:"1px solid rgba(201,164,96,.55)",
-                      background:"rgba(201,164,96,.12)", color:"#c9a460", cursor:"pointer",
-                      clipPath:"polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%)",
-                      textShadow:"0 0 12px rgba(201,164,96,.4)", whiteSpace:"nowrap",
-                    }}
+                    className={`${styles.btnGoldDarkText} font-heading text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-4 py-2 cursor-pointer`}
                   >
                     {gamePhase === "done" ? "Play Again" : "Fire at Will"}
                   </button>
@@ -1039,37 +1049,50 @@ export default function ShootingRange3D() {
         </div>
       )}
 
-      {/* Scoring guide */}
+      {/* Scoring guide — theme panel */}
       {canPlay && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {ZONES.map(z => (
-            <div key={z.frac} className="flex items-center gap-1.5 text-[10px] font-heading" style={{ color: "#6a4e28" }}>
-              <div style={{ width:10, height:10, borderRadius:"50%", background:z.popColor, opacity:0.8, flexShrink:0 }} />
-              <span style={{ color:"#c9a460" }}>{z.label}</span>
-              <span style={{ color:"#4a3520" }}>+{z.pts}</span>
-            </div>
-          ))}
-          <div className="text-[10px] font-heading ml-2" style={{ color:"#4a3520" }}>· Targets vanish after {TARGET_LIFETIME}s</div>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
+            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Scoring</h2>
+          </div>
+          <div className="p-2 flex flex-wrap gap-x-4 gap-y-1 items-center">
+            {ZONES.map(z => (
+              <div key={z.frac} className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground">
+                <div style={{ width:10, height:10, borderRadius:"50%", background:z.popColor, opacity:0.8, flexShrink:0 }} />
+                <span className="text-foreground">{z.label}</span>
+                <span className="text-primary">+{z.pts}</span>
+              </div>
+            ))}
+            <span className="text-[10px] font-heading text-mutedForeground">· Targets vanish after {TARGET_LIFETIME}s</span>
+          </div>
+          <div className="sr-art-line text-primary mx-3" />
         </div>
       )}
 
       {/* Leaderboard — top 10 */}
       {canPlay && (
-        <div className="mt-4 rounded-lg border border-zinc-700/50 bg-zinc-900/40 p-3 max-w-md">
-          <div className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: "#6a4e28" }}>Top 10 — Shooting Range</div>
-          {leaderboard.length === 0 ? (
-            <p className="text-[11px] text-zinc-500 font-heading">No scores yet. Be the first.</p>
-          ) : (
-            <ul className="space-y-1">
-              {leaderboard.map((e) => (
-                <li key={`${e.rank}-${e.username}-${e.score}`} className="flex items-center justify-between text-[11px] font-heading">
-                  <span style={{ color: "#8a7a5a", minWidth: 20 }}>#{e.rank}</span>
-                  <span className="truncate flex-1 mx-2" style={{ color: "#c9a460" }}>{e.username}</span>
-                  <span style={{ color: "#a08050", fontWeight: 700 }}>{e.score}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
+            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Top 10 — Shooting Range</h2>
+          </div>
+          <div className="p-3">
+            {leaderboard.length === 0 ? (
+              <p className="text-[11px] text-mutedForeground font-heading">No scores yet. Be the first.</p>
+            ) : (
+              <ul className="space-y-1">
+                {leaderboard.map((e) => (
+                  <li key={`${e.rank}-${e.username}-${e.score}`} className="flex items-center justify-between text-[11px] font-heading">
+                    <span className="text-mutedForeground min-w-[20px]">#{e.rank}</span>
+                    <span className="truncate flex-1 mx-2 text-foreground">{e.username}</span>
+                    <span className="text-primary font-bold">{e.score}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="sr-art-line text-primary mx-3" />
         </div>
       )}
 
