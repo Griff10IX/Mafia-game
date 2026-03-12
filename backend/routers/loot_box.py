@@ -19,7 +19,7 @@ from server import (
     CARS,
     ARMOUR_BASE_BULLETS,
 )
-from routers.armoury import _invalidate_weapons_cache
+from routers.armoury import _invalidate_weapons_cache, TOKEN_CONFIG, TOKEN_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ STANDARD_REWARD_WEIGHTS = [
     ("perk", 1),
     ("tokens", 1),
 ]
-LOOT_BOX_TOKEN_TYPES = ["xp_double", "jailbust_bonus"]
+LOOT_BOX_TOKEN_TYPES = list(TOKEN_TYPES)
 PERK_TYPES = [
     "property_income_10",
     "rp_10",
@@ -506,7 +506,7 @@ async def open_loot_box(
                 rewards.append({"type": "bullets", "amount": amount, "rarity": "standard"})
             elif chosen == "tokens":
                 token_type = random.choice(LOOT_BOX_TOKEN_TYPES)
-                field = "xp_double_tokens" if token_type == "xp_double" else "jailbust_tokens"
+                field = TOKEN_CONFIG[token_type]["count_field"]
                 merged_inc[field] = merged_inc.get(field, 0) + 1
                 rewards.append({"type": "token", "token_type": token_type, "amount": 1, "rarity": "standard"})
             else:

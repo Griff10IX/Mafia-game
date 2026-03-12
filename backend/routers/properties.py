@@ -243,6 +243,16 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
                 income = income * 1.1
         except Exception:
             pass
+    properties_until = current_user.get("properties_until")
+    if properties_until:
+        try:
+            until = datetime.fromisoformat(properties_until.replace("Z", "+00:00"))
+            if until.tzinfo is None:
+                until = until.replace(tzinfo=timezone.utc)
+            if now_utc < until:
+                income = income * 3
+        except Exception:
+            pass
     # Streak bonus: +1% income per consecutive day (up to MAX_STREAK_DAYS)
     streak_days = int(user_prop.get("collection_streak_days") or 0)
     # First ever collection: start streak at 1

@@ -285,6 +285,16 @@ async def _start_travel_impl(
                     airport_price = max(1, round(airport_price * 0.9))
             except Exception:
                 pass
+        travel_until = user.get("travel_until")
+        if travel_until:
+            try:
+                until = datetime.fromisoformat(travel_until.replace("Z", "+00:00"))
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=timezone.utc)
+                if now_utc < until:
+                    airport_price = max(1, round(airport_price * 0.9))
+            except Exception:
+                pass
         owner_id = airport_doc.get("owner_id")
         if user.get("points", 0) < airport_price:
             raise HTTPException(status_code=400, detail=f"Insufficient points for airport ({airport_price} pts)")
@@ -334,6 +344,18 @@ async def _start_travel_impl(
             car_to_damage = None
         else:
             car_to_damage = user_car
+
+    if travel_method != "airport" and travel_time > 0:
+        travel_until = user.get("travel_until")
+        if travel_until:
+            try:
+                until = datetime.fromisoformat(travel_until.replace("Z", "+00:00"))
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=timezone.utc)
+                if now_utc < until:
+                    travel_time = max(1, int(travel_time * 0.98))
+            except Exception:
+                pass
 
     # Only count airport travel against the hourly limit; car travel is unlimited
     inc_travels = {} if booze_run or travel_method != "airport" else {"travels_this_hour": 1}

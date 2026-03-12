@@ -587,6 +587,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
     tribute_bank = int(current_user.get("tribute_bank") or 0)
     tribute_bullets = int(current_user.get("tribute_bullets") or 0)
     tribute_loot_box_pieces = int(current_user.get("tribute_loot_box_pieces") or 0)
+    tribute_respect = int(current_user.get("tribute_respect") or 0)
     tribute_doc = await db.game_config.find_one({"id": TRIBUTE_DEPOSIT_CONFIG_ID}, {"_id": 0, "deposit_utc_hour": 1})
     deposit_hour = int(tribute_doc.get("deposit_utc_hour") or TRIBUTE_DEPOSIT_UTC_HOUR) % 24 if tribute_doc else TRIBUTE_DEPOSIT_UTC_HOUR
     next_deposit_iso, deposit_time_label = _next_tribute_deposit_utc(deposit_hour)
@@ -602,6 +603,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         "tribute_bank": tribute_bank,
         "tribute_bullets": tribute_bullets,
         "tribute_loot_box_pieces": tribute_loot_box_pieces,
+        "tribute_respect": tribute_respect,
         "tribute_deposit_daily_at": deposit_time_label,
         "next_tribute_deposit_at": next_deposit_iso,
         "daily_tribute_cash_base": DAILY_TRIBUTE_AMOUNT,
@@ -757,15 +759,16 @@ async def complete_mission(
 
 
 async def collect_tribute(current_user: dict = Depends(get_current_user)):
-    """Collect accumulated tribute bank (cash), tribute bullets, and tribute loot box pieces into balance."""
+    """Collect accumulated tribute (cash, bullets, loot box pieces, respect) into balance. All daily rewards stack until collected."""
     user_id = current_user["id"]
     bank = int(current_user.get("tribute_bank") or 0)
     bullets = int(current_user.get("tribute_bullets") or 0)
     loot_pieces = int(current_user.get("tribute_loot_box_pieces") or 0)
-    if bank <= 0 and bullets <= 0 and loot_pieces <= 0:
+    respect = int(current_user.get("tribute_respect") or 0)
+    if bank <= 0 and bullets <= 0 and loot_pieces <= 0 and respect <= 0:
         return {
-            "collected": 0, "collected_bullets": 0, "collected_loot_box_pieces": 0,
-            "tribute_bank": 0, "tribute_bullets": 0, "tribute_loot_box_pieces": 0,
+            "collected": 0, "collected_bullets": 0, "collected_loot_box_pieces": 0, "collected_respect": 0,
+            "tribute_bank": 0, "tribute_bullets": 0, "tribute_loot_box_pieces": 0, "tribute_respect": 0,
             "message": "No tribute to collect",
         }
     update = {"$set": {}}
@@ -781,6 +784,10 @@ async def collect_tribute(current_user: dict = Depends(get_current_user)):
         update["$inc"] = update.get("$inc", {})
         update["$inc"]["loot_box_pieces"] = loot_pieces
         update["$set"]["tribute_loot_box_pieces"] = 0
+    if respect > 0:
+        update["$inc"] = update.get("$inc", {})
+        update["$inc"]["respect_points"] = respect
+        update["$set"]["tribute_respect"] = 0
     await db.users.update_one({"id": user_id}, update)
     msg = []
     if bank > 0:
@@ -789,13 +796,17 @@ async def collect_tribute(current_user: dict = Depends(get_current_user)):
         msg.append(f"{bullets:,} bullets")
     if loot_pieces > 0:
         msg.append(f"{loot_pieces} loot box piece(s)")
+    if respect > 0:
+        msg.append(f"{respect} respect")
     return {
         "collected": bank,
         "collected_bullets": bullets,
         "collected_loot_box_pieces": loot_pieces,
+        "collected_respect": respect,
         "tribute_bank": 0,
         "tribute_bullets": 0,
         "tribute_loot_box_pieces": 0,
+        "tribute_respect": 0,
         "message": f"Collected {' and '.join(msg)}",
     }
 
@@ -867,9 +878,10 @@ async def run_daily_tribute_deposit():
     claim_result = await db.game_config.update_one(claim_filter, {"$set": {"last_run_utc_date": today}}, upsert=True)
     if claim_result.modified_count == 0 and claim_result.upserted_id is None:
         return  # already ran today
+    # All daily rewards stack in tribute buckets until user collects (cash, bullets, respect, loot)
     result = await db.users.update_many(
         {},
-        {"$inc": {"tribute_bank": DAILY_TRIBUTE_AMOUNT, "loot_box_pieces": DAILY_TRIBUTE_LOOT_BOX_PIECES}},
+        {"$inc": {"tribute_bank": DAILY_TRIBUTE_AMOUNT, "tribute_loot_box_pieces": DAILY_TRIBUTE_LOOT_BOX_PIECES}},
     )
     counts = {}
     for m in MISSIONS:
@@ -881,11 +893,11 @@ async def run_daily_tribute_deposit():
         if cash:
             inc["tribute_bank"] = cash
         if respect:
-            inc["respect_points"] = respect
+            inc["tribute_respect"] = respect
         if bullets:
             inc["tribute_bullets"] = bullets
         if mid == "m_second":
-            inc["loot_box_pieces"] = MISSION_2_DAILY_LOOT_BOX_PIECES
+            inc["tribute_loot_box_pieces"] = MISSION_2_DAILY_LOOT_BOX_PIECES
         if not inc:
             continue
         r = await db.users.update_many(

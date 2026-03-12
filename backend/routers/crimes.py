@@ -531,10 +531,10 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                     rank_points = int(rank_points * 1.1)
             except Exception:
                 pass
-        xp_double_until = current_user.get("xp_double_until")
-        if xp_double_until:
+        xp_crimes_until = current_user.get("xp_crimes_until")
+        if xp_crimes_until:
             try:
-                until = datetime.fromisoformat(xp_double_until.replace("Z", "+00:00"))
+                until = datetime.fromisoformat(xp_crimes_until.replace("Z", "+00:00"))
                 if until.tzinfo is None:
                     until = until.replace(tzinfo=timezone.utc)
                 if now_utc < until:

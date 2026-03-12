@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown, HelpCircle } from 'lucide-react';
+import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown, HelpCircle, Zap } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../components/FormattedNumberInput';
@@ -16,7 +16,10 @@ export default function QuickTrade() {
   const [loading, setLoading] = useState(true);
   const [sellOffers, setSellOffers] = useState([]);
   const [buyOffers, setBuyOffers] = useState([]);
+  const [tokenOffers, setTokenOffers] = useState([]);
   const [properties, setProperties] = useState([]);
+
+  const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus'];
   
   // Create offer form
   const [sellPoints, setSellPoints] = useState('');
@@ -28,6 +31,10 @@ export default function QuickTrade() {
   const [sellOfferCount, setSellOfferCount] = useState(1);
   const [buyOfferCount, setBuyOfferCount] = useState(1);
   const [creatingOffers, setCreatingOffers] = useState(false);
+  const [tokenType, setTokenType] = useState('xp_crimes');
+  const [tokenQuantity, setTokenQuantity] = useState('1');
+  const [tokenPrice, setTokenPrice] = useState('');
+  const [creatingToken, setCreatingToken] = useState(false);
 
   useEffect(() => {
     fetchTrades();
@@ -36,14 +43,16 @@ export default function QuickTrade() {
   const fetchTrades = async () => {
     setLoading(true);
     try {
-      const [sellRes, buyRes, propRes] = await Promise.all([
+      const [sellRes, buyRes, tokenRes, propRes] = await Promise.all([
         api.get('/trade/sell-offers').catch(() => ({ data: [] })),
         api.get('/trade/buy-offers').catch(() => ({ data: [] })),
+        api.get('/trade/token-offers').catch(() => ({ data: [] })),
         api.get('/trade/properties').catch(() => ({ data: [] }))
       ]);
       
       setSellOffers(sellRes.data || []);
       setBuyOffers(buyRes.data || []);
+      setTokenOffers(tokenRes.data || []);
       setProperties(propRes.data || []);
     } catch (e) {
       toast.error('Failed to load trades');
@@ -177,6 +186,51 @@ export default function QuickTrade() {
       refreshUser();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to cancel offer');
+    }
+  };
+
+  const handleCreateTokenOffer = async () => {
+    const qty = Math.max(1, parseInt(String(tokenQuantity).replace(/,/g, ''), 10) || 1;
+    const price = Math.max(1, parseInt(String(tokenPrice).replace(/,/g, ''), 10) || 0;
+    if (!price) {
+      toast.error('Enter price in points');
+      return;
+    }
+    setCreatingToken(true);
+    try {
+      await api.post('/trade/token-offer', { token_type: tokenType, quantity: qty, price_points: price });
+      toast.success('Token offer created!');
+      setTokenQuantity('1');
+      setTokenPrice('');
+      fetchTrades();
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to create token offer');
+    } finally {
+      setCreatingToken(false);
+    }
+  };
+
+  const handleAcceptTokenOffer = async (offerId) => {
+    try {
+      await api.post(`/trade/token-offer/${offerId}/accept`);
+      toast.success('Token trade completed!');
+      fetchTrades();
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Trade failed');
+    }
+  };
+
+  const handleCancelTokenOffer = async (offerId) => {
+    if (!window.confirm('Cancel this token offer? Tokens will be returned.')) return;
+    try {
+      await api.post(`/trade/token-offer/${offerId}/cancel`);
+      toast.success('Token offer cancelled.');
+      fetchTrades();
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to cancel');
     }
   };
 
@@ -385,6 +439,106 @@ export default function QuickTrade() {
               {creatingOffers ? `Adding ${buyOfferCount}…` : `Add ${buyOfferCount > 1 ? `x${buyOfferCount} ` : ''}$${buyOffer ? formatNumber(buyOffer) : '0'}`}
               {!creatingOffers && buyPoints && buyOfferCount === 1 && <span className="text-[10px] opacity-90 ml-1">({formatNumber(buyAfterFee)} after fee)</span>}
             </button>
+          </div>
+          <div className="qt-art-line text-primary mx-3" />
+        </section>
+      </div>
+
+      {/* Token offers: sell tokens for points only */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+            <div className="flex items-center gap-2">
+              <Zap className="w-5 h-5 text-primary" />
+              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell tokens (points only)</h2>
+            </div>
+          </div>
+          <div className="p-4 space-y-2.5">
+            <div>
+              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Token type</label>
+              <select
+                value={tokenType}
+                onChange={(e) => setTokenType(e.target.value)}
+                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+              >
+                {TOKEN_TYPES.map((t) => (
+                  <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Quantity</label>
+              <FormattedNumberInput
+                value={tokenQuantity}
+                onChange={setTokenQuantity}
+                placeholder="1"
+                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Price (points)</label>
+              <FormattedNumberInput
+                value={tokenPrice}
+                onChange={setTokenPrice}
+                placeholder="e.g. 100"
+                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+              />
+            </div>
+            <button
+              onClick={handleCreateTokenOffer}
+              disabled={!tokenPrice || creatingToken}
+              className="w-full px-4 py-2 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {creatingToken ? 'Creating…' : `List ${tokenQuantity || '0'} ${tokenType.replace(/_/g, ' ')} for ${tokenPrice ? formatNumber(tokenPrice) : '0'} pts`}
+            </button>
+          </div>
+          <div className="qt-art-line text-primary mx-3" />
+        </section>
+        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+            <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Token offers</h3>
+          </div>
+          <div className="divide-y divide-zinc-700/30 max-h-96 overflow-y-auto">
+            {tokenOffers.length === 0 ? (
+              <div className="p-6 text-center">
+                <Zap size={28} className="mx-auto text-primary/30 mb-2" />
+                <p className="text-xs text-mutedForeground font-heading">No token offers</p>
+              </div>
+            ) : (
+              tokenOffers.map((offer) => (
+                <div key={offer.id} className={`px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-zinc-800/30 ${offer.is_own ? 'bg-primary/5' : ''}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-heading font-bold text-foreground">
+                        {offer.is_own ? 'You' : (offer.username && offer.username !== 'Anonymous' ? <Link to={`/profile/${encodeURIComponent(offer.username)}`} className="text-primary hover:underline">{offer.username}</Link> : offer.username || '[Anonymous]')}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-mutedForeground mt-0.5">
+                      <span className="text-primary font-bold">{offer.quantity}</span> {offer.token_type?.replace(/_/g, ' ')} · <span className="text-foreground font-bold">{formatNumber(offer.price_points)}</span> pts
+                    </div>
+                  </div>
+                  <div className="shrink-0">
+                    {offer.is_own ? (
+                      <button
+                        onClick={() => handleCancelTokenOffer(offer.id)}
+                        className="px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30"
+                      >
+                        Cancel
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleAcceptTokenOffer(offer.id)}
+                        className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30"
+                      >
+                        Accept
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
           <div className="qt-art-line text-primary mx-3" />
         </section>

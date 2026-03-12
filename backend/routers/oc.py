@@ -162,10 +162,20 @@ async def buy_oc_timer(current_user: dict = Depends(get_current_user)):
     return {"message": "OC timer reduced! Heist cooldown is now 4 hours.", "cost": OC_TIMER_COST_POINTS}
 
 
+def _oc_reduced_active(user: dict) -> bool:
+    """True if oc_reduced token is active (shorter cooldown, lower setup cost, higher payout)."""
+    until_raw = user.get("oc_reduced_until")
+    if not until_raw:
+        return False
+    until = _parse_iso_datetime(until_raw)
+    return until is not None and datetime.now(timezone.utc) < until
+
+
 async def get_oc_status(current_user: dict = Depends(get_current_user)):
     """Return cooldown, timer upgrade, and pending heist/invites (creator)."""
     has_timer_upgrade = bool(current_user.get("oc_timer_reduced", False))
-    cooldown_hours = OC_COOLDOWN_HOURS_REDUCED if has_timer_upgrade else OC_COOLDOWN_HOURS
+    oc_reduced = _oc_reduced_active(current_user)
+    cooldown_hours = OC_COOLDOWN_HOURS_REDUCED if (has_timer_upgrade or oc_reduced) else OC_COOLDOWN_HOURS
     cooldown_until = current_user.get("oc_cooldown_until")
     now = datetime.now(timezone.utc)
     if cooldown_until:
@@ -469,7 +479,8 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     if not current_user:
         return {"success": False, "message": "User not found", "cooldown_until": None}
     has_timer_upgrade = bool(current_user.get("oc_timer_reduced", False))
-    cooldown_hours = OC_COOLDOWN_HOURS_REDUCED if has_timer_upgrade else OC_COOLDOWN_HOURS
+    oc_reduced = _oc_reduced_active(current_user)
+    cooldown_hours = OC_COOLDOWN_HOURS_REDUCED if (has_timer_upgrade or oc_reduced) else OC_COOLDOWN_HOURS
     cooldown_until = current_user.get("oc_cooldown_until")
     if cooldown_until:
         until = _parse_iso_datetime(cooldown_until)
@@ -480,6 +491,8 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     selected_id = (user_oc or {}).get("selected_equipment", "basic")
     equip = OC_EQUIPMENT_BY_ID.get(selected_id, OC_EQUIPMENT_BY_ID["basic"])
     total_cost = OC_SETUP_COST + equip["cost"]
+    if oc_reduced:
+        total_cost = int(total_cost * 0.8)
     creator_money = int(current_user.get("money") or 0)
     if creator_money < total_cost:
         return {
@@ -526,6 +539,9 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     total_shares = num_humans * 1.0 + num_npcs * NPC_PAYOUT_MULTIPLIER
     cash_pool = int(job["cash"] * (total_shares / 4.0) * cash_mult)
     rp_pool = int(job["rp"] * (total_shares / 4.0) * rank_mult)
+    if oc_reduced:
+        cash_pool = int(cash_pool * 1.1)
+        rp_pool = int(rp_pool * 1.1)
     # Prestige bonus: boost OC cash payout for the initiating user
     from server import get_prestige_bonus
     _prestige_user = await db.users.find_one({"id": uid}, {"_id": 0, "prestige_level": 1})
@@ -579,7 +595,7 @@ async def run_oc_heist_npc_only(user_id: str, selected_equipment_override: Optio
     """Run one OC heist with self + 3 NPCs if timer is ready and user can afford a job. For Auto Rank. Returns {ran, success, message, cooldown_until, skipped_afford}. When selected_equipment_override is set (e.g. from OC loop), skip user_organised_crime lookup."""
     user = await db.users.find_one(
         {"id": user_id},
-        {"_id": 0, "id": 1, "oc_cooldown_until": 1, "money": 1, "oc_timer_reduced": 1},
+        {"_id": 0, "id": 1, "oc_cooldown_until": 1, "money": 1, "oc_timer_reduced": 1, "oc_reduced_until": 1},
     )
     if not user:
         return {"ran": False, "success": False, "message": "User not found", "skipped_afford": False}
@@ -589,6 +605,7 @@ async def run_oc_heist_npc_only(user_id: str, selected_equipment_override: Optio
         until = _parse_iso_datetime(cooldown_until)
         if until and until > now:
             return {"ran": False, "success": False, "message": "Cooldown active", "cooldown_until": cooldown_until, "skipped_afford": False}
+    oc_reduced = _oc_reduced_active(user)
     if selected_equipment_override is not None:
         selected_id = selected_equipment_override
     else:
@@ -599,6 +616,8 @@ async def run_oc_heist_npc_only(user_id: str, selected_equipment_override: Optio
     best_job = None
     for job in reversed(OC_JOBS):
         total_cost = OC_SETUP_COST + equip["cost"]
+        if oc_reduced:
+            total_cost = int(total_cost * 0.8)
         if money >= total_cost:
             best_job = job
             break

@@ -8,31 +8,36 @@ from fastapi import Depends, HTTPException
 from bson.objectid import ObjectId
 
 from server import db, get_current_user, get_rank_info, log_activity, CAPO_RANK_ID, _user_owns_any_property
+from routers.armoury import TOKEN_CONFIG, TOKEN_TYPES
 
 # Cache for list endpoints (short TTL; invalidate on any mutation)
 _sell_offers_cache: Optional[tuple] = None
 _sell_offers_ts: float = 0
 _buy_offers_cache: Optional[tuple] = None
 _buy_offers_ts: float = 0
+_token_offers_cache: Optional[tuple] = None
+_token_offers_ts: float = 0
 _properties_cache: Optional[tuple] = None
 _properties_ts: float = 0
 _LIST_TTL_SEC = 5
 
 
 def _invalidate_trade_caches():
-    global _sell_offers_cache, _sell_offers_ts, _buy_offers_cache, _buy_offers_ts, _properties_cache, _properties_ts
+    global _sell_offers_cache, _sell_offers_ts, _buy_offers_cache, _buy_offers_ts, _token_offers_cache, _token_offers_ts, _properties_cache, _properties_ts
     _sell_offers_cache = None
     _sell_offers_ts = 0
     _buy_offers_cache = None
     _buy_offers_ts = 0
+    _token_offers_cache = None
+    _token_offers_ts = 0
     _properties_cache = None
     _properties_ts = 0
 
 
 async def cancel_offers_on_death(user_id: str):
     """
-    When a user dies: cancel all their active sell and buy offers.
-    No refunds — points (sell) and money (buy) are removed from the game economy.
+    When a user dies: cancel all their active sell, buy, and token offers.
+    No refunds — points (sell), money (buy), and tokens (token offers) are removed from the game economy.
     """
     now = datetime.now(timezone.utc)
     await db.trade_sell_offers.update_many(
@@ -40,6 +45,15 @@ async def cancel_offers_on_death(user_id: str):
         {"$set": {"status": "cancelled", "cancelled_at": now}},
     )
     await db.trade_buy_offers.update_many(
+        {"user_id": user_id, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": now}},
+    )
+    token_offers = await db.trade_token_offers.find({"user_id": user_id, "status": "active"}).to_list(100)
+    for offer in token_offers:
+        field = TOKEN_CONFIG.get(offer["token_type"], {}).get("count_field")
+        if field:
+            await db.users.update_one({"id": user_id}, {"$inc": {field: offer["quantity"]}})
+    await db.trade_token_offers.update_many(
         {"user_id": user_id, "status": "active"},
         {"$set": {"status": "cancelled", "cancelled_at": now}},
     )
@@ -56,6 +70,12 @@ class CreateBuyOffer(BaseModel):
     points: int
     offer: int
     hide_name: bool = False
+
+
+class CreateTokenOffer(BaseModel):
+    token_type: str
+    quantity: int
+    price_points: int
 
 
 # ----- Sell offers -----
@@ -263,6 +283,115 @@ async def cancel_sell_offer_post(offer_id: str, current_user: dict = Depends(get
     except Exception:
         pass
     return {"message": f"Offer cancelled. {original_points} points refunded (including fee)"}
+
+
+# ----- Token offers (points only: seller lists tokens, buyer pays points) -----
+async def get_token_offers(current_user: dict = Depends(get_current_user)):
+    """List active token sell offers. Buyer pays points and receives tokens."""
+    global _token_offers_cache, _token_offers_ts
+    now = time.monotonic()
+    if _token_offers_cache is not None and now <= _token_offers_ts + _LIST_TTL_SEC:
+        raw_list = _token_offers_cache
+    else:
+        try:
+            raw_list = await db.trade_token_offers.find({"status": "active"}).sort("created_at", -1).to_list(length=100)
+            _token_offers_cache = raw_list
+            _token_offers_ts = now
+        except Exception as e:
+            print(f"Error fetching token offers: {e}")
+            return []
+    result = []
+    for offer in raw_list:
+        result.append({
+            "id": str(offer["_id"]),
+            "username": offer.get("username", "Anonymous"),
+            "token_type": offer["token_type"],
+            "quantity": offer["quantity"],
+            "price_points": offer["price_points"],
+            "created_at": offer.get("created_at"),
+            "is_own": offer.get("user_id") == current_user["id"],
+        })
+    return result
+
+
+async def create_token_offer(offer: CreateTokenOffer, current_user: dict = Depends(get_current_user)):
+    """Create a token sell offer. Deducts tokens from seller; buyer will pay points and receive tokens."""
+    user_id = current_user["id"]
+    username = current_user.get("username", "Unknown")
+    if offer.token_type not in TOKEN_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid token type")
+    if offer.quantity <= 0 or offer.price_points <= 0:
+        raise HTTPException(status_code=400, detail="Quantity and price must be positive")
+    active_token_offers = await db.trade_token_offers.count_documents({"user_id": user_id, "status": "active"})
+    if active_token_offers >= 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 token offers at once")
+    field = TOKEN_CONFIG[offer.token_type]["count_field"]
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, field: 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    have = int(user.get(field) or 0)
+    if have < offer.quantity:
+        raise HTTPException(status_code=400, detail=f"Insufficient {offer.token_type} tokens (have {have})")
+    await db.users.update_one({"id": user_id}, {"$inc": {field: -offer.quantity}})
+    new_offer = {
+        "user_id": user_id,
+        "username": username,
+        "token_type": offer.token_type,
+        "quantity": offer.quantity,
+        "price_points": offer.price_points,
+        "status": "active",
+        "created_at": datetime.now(timezone.utc),
+    }
+    result = await db.trade_token_offers.insert_one(new_offer)
+    _invalidate_trade_caches()
+    await log_activity(user_id, username, "quicktrade_token_offer", {"token_type": offer.token_type, "quantity": offer.quantity, "price_points": offer.price_points})
+    return {"message": f"Token offer created: {offer.quantity} {offer.token_type} for {offer.price_points} points", "offer_id": str(result.inserted_id)}
+
+
+async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
+    """Buyer pays points and receives tokens; seller receives points."""
+    buyer_id = current_user["id"]
+    buyer_username = current_user.get("username", "Unknown")
+    offer = await db.trade_token_offers.find_one({"_id": ObjectId(offer_id), "status": "active"})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or already completed")
+    if offer["user_id"] == buyer_id:
+        raise HTTPException(status_code=400, detail="Cannot accept your own offer")
+    buyer = await db.users.find_one({"id": buyer_id})
+    if not buyer or buyer.get("points", 0) < offer["price_points"]:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    token_type = offer["token_type"]
+    field = TOKEN_CONFIG[token_type]["count_field"]
+    await db.users.update_one({"id": buyer_id}, {"$inc": {"points": -offer["price_points"], field: offer["quantity"]}})
+    await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": offer["price_points"]}})
+    await db.trade_token_offers.update_one(
+        {"_id": ObjectId(offer_id)},
+        {"$set": {"status": "completed", "buyer_id": buyer_id, "buyer_username": buyer_username, "completed_at": datetime.now(timezone.utc)}},
+    )
+    _invalidate_trade_caches()
+    await log_activity(
+        buyer_id,
+        buyer_username,
+        "quicktrade_accept_token",
+        {"seller_id": offer["user_id"], "token_type": token_type, "quantity": offer["quantity"], "points_paid": offer["price_points"], "offer_id": offer_id},
+    )
+    return {"message": "Trade completed", "token_type": token_type, "quantity": offer["quantity"], "points_paid": offer["price_points"]}
+
+
+async def cancel_token_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
+    """Cancel token offer and return tokens to seller."""
+    user_id = current_user["id"]
+    offer = await db.trade_token_offers.find_one({"_id": ObjectId(offer_id), "user_id": user_id, "status": "active"})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or already completed")
+    field = TOKEN_CONFIG[offer["token_type"]]["count_field"]
+    await db.users.update_one({"id": user_id}, {"$inc": {field: offer["quantity"]}})
+    await db.trade_token_offers.update_one(
+        {"_id": ObjectId(offer_id)},
+        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}},
+    )
+    _invalidate_trade_caches()
+    return {"message": f"Offer cancelled. {offer['quantity']} {offer['token_type']} token(s) returned."}
 
 
 # ----- Buy offers -----
@@ -600,3 +729,7 @@ def register(router):
     router.add_api_route("/trade/property/{property_id}/accept", buy_property, methods=["POST"])
     router.add_api_route("/trade/sell-offer/{offer_id}/cancel", cancel_sell_offer_post, methods=["POST"])
     router.add_api_route("/trade/buy-offer/{offer_id}/cancel", cancel_buy_offer_post, methods=["POST"])
+    router.add_api_route("/trade/token-offers", get_token_offers, methods=["GET"])
+    router.add_api_route("/trade/token-offer", create_token_offer, methods=["POST"])
+    router.add_api_route("/trade/token-offer/{offer_id}/accept", accept_token_offer, methods=["POST"])
+    router.add_api_route("/trade/token-offer/{offer_id}/cancel", cancel_token_offer, methods=["POST"])

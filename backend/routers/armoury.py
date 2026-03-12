@@ -37,9 +37,23 @@ ARMOURY_MAX_STOCK_PER_ITEM = 15
 # Store: buy bullets with points (pack size -> points cost)
 BULLET_PACKS = {5000: 100, 10000: 175, 50000: 775, 100000: 1525}  # matches store
 
-# Consumable tokens: 1 token = 1 hour effect. Types: xp_double (double XP from crimes/GTA/jailbusts), jailbust_bonus (+10% bust success).
-TOKEN_TYPES = ("xp_double", "jailbust_bonus")
+# Consumable tokens: 1 token = 1 hour effect. Stackable up to max_stack_hours per type.
 TOKEN_DURATION_HOURS = 1
+TOKEN_TYPES = (
+    "xp_crimes", "xp_gta", "melt", "oc_reduced", "booze", "racket", "travel", "properties", "jailbust_bonus"
+)
+# count_field: user doc key for token count; until_field: expiry ISO; max_stack_hours: cap when stacking
+TOKEN_CONFIG = {
+    "xp_crimes":     {"count_field": "xp_crimes_tokens",     "until_field": "xp_crimes_until",     "max_stack_hours": 6},
+    "xp_gta":        {"count_field": "xp_gta_tokens",        "until_field": "xp_gta_until",        "max_stack_hours": 6},
+    "melt":          {"count_field": "melt_tokens",          "until_field": "melt_until",          "max_stack_hours": 6},
+    "oc_reduced":    {"count_field": "oc_reduced_tokens",    "until_field": "oc_reduced_until",    "max_stack_hours": 6},
+    "booze":         {"count_field": "booze_tokens",         "until_field": "booze_until",         "max_stack_hours": 6},
+    "racket":        {"count_field": "racket_tokens",        "until_field": "racket_until",        "max_stack_hours": 6},
+    "travel":        {"count_field": "travel_tokens",        "until_field": "travel_until",        "max_stack_hours": 2},
+    "properties":    {"count_field": "properties_tokens",    "until_field": "properties_until",    "max_stack_hours": 3},
+    "jailbust_bonus": {"count_field": "jailbust_tokens",     "until_field": "jailbust_bonus_until", "max_stack_hours": 6},
+}
 
 # Shooting range: weapon mastery 0-100%; at 100% = up to MASTERY_MAX_BULLET_REDUCTION_PCT fewer bullets in attack.
 MASTERY_MAX_BULLET_REDUCTION_PCT = 10
@@ -85,7 +99,7 @@ class StateOptionalBody(BaseModel):
 
 
 class UseTokenRequest(BaseModel):
-    token_type: str  # "xp_double" | "jailbust_bonus"
+    token_type: str  # one of TOKEN_TYPES (xp_crimes, xp_gta, melt, oc_reduced, booze, racket, travel, properties, jailbust_bonus)
 
 
 class ShootingRangeTrainRequest(BaseModel):
@@ -1475,12 +1489,15 @@ async def get_shooting_range_leaderboard(current_user: dict = Depends(get_curren
 def _tokens_from_user(user: dict) -> dict:
     """Build tokens dict for inventory: count and active_until per token type."""
     now = datetime.now(timezone.utc)
-    field_count = {"xp_double": "xp_double_tokens", "jailbust_bonus": "jailbust_tokens"}
-    field_until = {"xp_double": "xp_double_until", "jailbust_bonus": "jailbust_bonus_until"}
     out = {}
     for t in TOKEN_TYPES:
-        count = int(user.get(field_count[t]) or 0)
-        until_raw = user.get(field_until[t])
+        cfg = TOKEN_CONFIG.get(t)
+        if not cfg:
+            continue
+        count_field = cfg["count_field"]
+        until_field = cfg["until_field"]
+        count = int(user.get(count_field) or 0)
+        until_raw = user.get(until_field)
         active_until = None
         if until_raw:
             try:
@@ -1495,30 +1512,56 @@ def _tokens_from_user(user: dict) -> dict:
     return out
 
 
+def _parse_until(iso_str):
+    """Parse ISO datetime; return timezone-aware datetime or None."""
+    if not iso_str:
+        return None
+    if hasattr(iso_str, "year"):
+        dt = iso_str
+    else:
+        try:
+            dt = datetime.fromisoformat(str(iso_str).strip().replace("Z", "+00:00"))
+        except Exception:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depends(get_current_user)):
-    """Use one consumable token (e.g. xp_double, jailbust_bonus). Sets active effect for 1 hour and decrements count."""
+    """Use one consumable token. Adds 1h effect (stackable up to max_stack_hours per type). Decrements count."""
     if req.token_type not in TOKEN_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid token_type. Use one of: {list(TOKEN_TYPES)}")
-    count_field = "xp_double_tokens" if req.token_type == "xp_double" else "jailbust_tokens"
-    until_field = "xp_double_until" if req.token_type == "xp_double" else "jailbust_bonus_until"
+    cfg = TOKEN_CONFIG[req.token_type]
+    count_field = cfg["count_field"]
+    until_field = cfg["until_field"]
+    max_stack_hours = cfg["max_stack_hours"]
     count = int(current_user.get(count_field) or 0)
     if count < 1:
         raise HTTPException(status_code=400, detail="No tokens of this type available.")
     now = datetime.now(timezone.utc)
-    expiry = now + timedelta(hours=TOKEN_DURATION_HOURS)
+    current_until = _parse_until(current_user.get(until_field))
+    if current_until and current_until > now:
+        # Stack: new expiry = min(current + 1h, now + max_stack_hours)
+        add_until = current_until + timedelta(hours=TOKEN_DURATION_HOURS)
+        cap_until = now + timedelta(hours=max_stack_hours)
+        new_until = min(add_until, cap_until)
+    else:
+        new_until = now + timedelta(hours=min(TOKEN_DURATION_HOURS, max_stack_hours))
+    new_until_iso = new_until.isoformat()
     result = await db.users.update_one(
         {"id": current_user["id"], count_field: {"$gte": 1}},
-        {"$inc": {count_field: -1}, "$set": {until_field: expiry.isoformat()}},
+        {"$inc": {count_field: -1}, "$set": {until_field: new_until_iso}},
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="No tokens of this type available or race condition.")
     tokens = _tokens_from_user({
         **current_user,
         count_field: count - 1,
-        until_field: expiry.isoformat(),
+        until_field: new_until_iso,
     })
     return {
-        "message": f"Token used. Effect active for {TOKEN_DURATION_HOURS} hour(s).",
+        "message": f"Token used. Effect active until {new_until_iso} (up to {max_stack_hours}h stack).",
         "tokens": tokens,
     }
 

@@ -395,10 +395,10 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
                     rank_points = int(rank_points * 1.1)
             except Exception:
                 pass
-        xp_double_until = current_user.get("xp_double_until")
-        if xp_double_until:
+        xp_gta_until = current_user.get("xp_gta_until")
+        if xp_gta_until:
             try:
-                until = datetime.fromisoformat(xp_double_until.replace("Z", "+00:00"))
+                until = datetime.fromisoformat(xp_gta_until.replace("Z", "+00:00"))
                 if until.tzinfo is None:
                     until = until.replace(tzinfo=timezone.utc)
                 if now_utc < until:
@@ -691,9 +691,11 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
     if action == "bullets":
         user_doc = await db.users.find_one(
             {"id": user["id"]},
-            {"_id": 0, "melt_bullets_cooldown_until": 1},
+            {"_id": 0, "melt_bullets_cooldown_until": 1, "melt_until": 1},
         )
         cooldown_until = _parse_melt_cooldown((user_doc or {}).get("melt_bullets_cooldown_until"))
+        melt_until = _parse_melt_cooldown((user_doc or {}).get("melt_until"))
+        melt_token_active = bool(melt_until and now < melt_until)
         if cooldown_until and now < cooldown_until:
             secs = int((cooldown_until - now).total_seconds())
             return {"success": False, "cooldown": True, "detail": f"Melt for bullets on cooldown. Next melt in {secs}s."}
@@ -757,7 +759,8 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                 processed += 1
     if deleted_count > 0:
         if action == "bullets":
-            cooldown_seconds = MELT_BULLETS_COOLDOWN_SECONDS * deleted_count
+            base_cooldown = int(MELT_BULLETS_COOLDOWN_SECONDS * 0.5) if melt_token_active else MELT_BULLETS_COOLDOWN_SECONDS
+            cooldown_seconds = base_cooldown * deleted_count
             cooldown_until = now + timedelta(seconds=cooldown_seconds)
             await db.users.update_one(
                 {"id": user["id"]},

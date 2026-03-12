@@ -19,6 +19,7 @@ from server import (
     RANKS,
     CAPO_RANK_ID,
 )
+from routers.armoury import TOKEN_CONFIG, TOKEN_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +153,7 @@ ILLEGAL_BUSINESS_MISSIONS = [
      "requirements": {"crimes": 250}, "rewards": {"points": 4}},
     {"id": "ibm_7", "order": 7, "title": "Bigger take", "story": "The operation is growing. Show it in the books.",
      "how_to_complete": "Earn $150,000 business income in the last 7 days.",
-     "requirements": {"business_income_7d": 150_000}, "rewards": {"income_mult": 1.1, "points": 5, "cash": 10_000, "xp_double_tokens": 1}},
+     "requirements": {"business_income_7d": 150_000}, "rewards": {"income_mult": 1.1, "points": 5, "cash": 10_000, "xp_crimes_tokens": 1}},
     {"id": "ibm_8", "order": 8, "title": "Raid veteran", "story": "You've hit enough joints to know the score.",
      "how_to_complete": "Win 5 raids.",
      "requirements": {"raids_won": 5}, "rewards": {"points": 5}},
@@ -422,6 +423,16 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
     ev = await get_effective_event()
     prestige = get_prestige_bonus(current_user)
     income = round(income * float(ev.get("racket_payout", 1.0)) * float(prestige.get("illegal_business_mult", 1.0)), 2)
+    racket_until = current_user.get("racket_until")
+    if racket_until:
+        try:
+            until = datetime.fromisoformat(racket_until.replace("Z", "+00:00"))
+            if until.tzinfo is None:
+                until = until.replace(tzinfo=timezone.utc)
+            if now < until:
+                income = round(income * 1.2, 2)
+        except Exception:
+            pass
     if income < 0.01:
         raise HTTPException(status_code=400, detail="No take to collect yet.")
     updates = {"last_collected_at": now.isoformat()}
@@ -442,9 +453,9 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
     if loot_pieces_earned > 0:
         inc["loot_box_pieces"] = loot_pieces_earned
     if random.random() < 0.02:
-        inc["xp_double_tokens"] = inc.get("xp_double_tokens", 0) + 1
-    if random.random() < 0.02:
-        inc["jailbust_tokens"] = inc.get("jailbust_tokens", 0) + 1
+        token_type = random.choice(TOKEN_TYPES)
+        field = TOKEN_CONFIG[token_type]["count_field"]
+        inc[field] = inc.get(field, 0) + 1
     booze_earned = 0
     if business.get("type_id") == "booze_making" and business.get("booze_per_hour"):
         last_booze = business.get("last_collected_booze_at")
@@ -470,16 +481,18 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
     msg = f"The till's been cleared. ${income:,.2f}"
     if booze_earned:
         msg += f" and {booze_earned} booze."
-    xp_tokens_earned = inc.get("xp_double_tokens", 0)
-    jailbust_tokens_earned = inc.get("jailbust_tokens", 0)
-    if respect_earned or bullets_earned or points_earned or loot_pieces_earned or xp_tokens_earned or jailbust_tokens_earned:
+    token_earned = {t: inc.get(TOKEN_CONFIG[t]["count_field"], 0) for t in TOKEN_TYPES}
+    any_tokens = sum(token_earned.values())
+    if respect_earned or bullets_earned or points_earned or loot_pieces_earned or any_tokens:
         extras = []
         if respect_earned: extras.append(f"{respect_earned} respect")
         if bullets_earned: extras.append(f"{bullets_earned} bullets")
         if points_earned: extras.append(f"{points_earned} points")
         if loot_pieces_earned: extras.append(f"{loot_pieces_earned} loot piece(s)")
-        if xp_tokens_earned: extras.append(f"{xp_tokens_earned} Double XP token(s)")
-        if jailbust_tokens_earned: extras.append(f"{jailbust_tokens_earned} Jailbust token(s)")
+        for t in TOKEN_TYPES:
+            n = token_earned.get(t, 0)
+            if n:
+                extras.append(f"{n} {t.replace('_', ' ').title()} token(s)")
         if extras:
             msg += " " + ", ".join(extras) + "."
     return {
@@ -490,8 +503,7 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
         "bullets": bullets_earned,
         "points": points_earned,
         "loot_box_pieces": loot_pieces_earned,
-        "xp_double_tokens": xp_tokens_earned,
-        "jailbust_tokens": jailbust_tokens_earned,
+        "tokens_earned": token_earned,
     }
 
 
@@ -571,12 +583,11 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
     if rewards.get("cash"):
         user_updates["$inc"] = user_updates.get("$inc") or {}
         user_updates["$inc"]["money"] = int(rewards["cash"])
-    if rewards.get("xp_double_tokens"):
-        user_updates["$inc"] = user_updates.get("$inc") or {}
-        user_updates["$inc"]["xp_double_tokens"] = int(rewards["xp_double_tokens"])
-    if rewards.get("jailbust_tokens"):
-        user_updates["$inc"] = user_updates.get("$inc") or {}
-        user_updates["$inc"]["jailbust_tokens"] = int(rewards["jailbust_tokens"])
+    for token_type in TOKEN_TYPES:
+        field = TOKEN_CONFIG[token_type]["count_field"]
+        if rewards.get(field):
+            user_updates["$inc"] = user_updates.get("$inc") or {}
+            user_updates["$inc"][field] = int(rewards[field])
     await db.users.update_one({"id": current_user["id"]}, user_updates)
     return {"message": mission.get("story", "Mission complete.")}
 

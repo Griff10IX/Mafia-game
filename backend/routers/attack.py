@@ -1493,10 +1493,20 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
         {"$or": [{"attacker_id": current_user["id"]}, {"target_id": current_user["id"]}]},
         {"_id": 0}
     ).sort("created_at", -1).to_list(200)
+    filtered = []
     for d in docs:
         d["direction"] = "outgoing" if d.get("attacker_id") == current_user["id"] else "incoming"
-        # bodyguard_owner_username is kept so My Attempts can show "Protecting [owner]"
-    return {"attempts": docs}
+        if d["direction"] == "incoming":
+            outcome = d.get("outcome")
+            if outcome == "bodyguard":
+                continue
+            if outcome == "failed":
+                if (d.get("damage_done") or 0) <= 0:
+                    continue
+            if outcome == "error":
+                continue
+        filtered.append(d)
+    return {"attempts": filtered}
 
 
 def register(router):

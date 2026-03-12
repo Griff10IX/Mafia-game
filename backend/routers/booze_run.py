@@ -191,6 +191,16 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int) -> dict:
     booze_index = booze_ids.index(booze_id)
     prices_map = _booze_prices_for_rotation()
     price = prices_map.get((loc_index, booze_index), 400)
+    booze_until = user.get("booze_until")
+    if booze_until:
+        try:
+            until = datetime.fromisoformat(booze_until.replace("Z", "+00:00"))
+            if until.tzinfo is None:
+                until = until.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) < until:
+                price = max(1, int(price * 0.9))
+        except Exception:
+            pass
     cost = price * amount
     if user.get("money", 0) < cost:
         raise HTTPException(status_code=400, detail="Insufficient money")

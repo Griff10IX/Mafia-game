@@ -51,11 +51,18 @@ const LoadingSpinner = () => (
 const AttemptRow = ({ attempt }) => {
   const outgoingRow = attempt.direction === 'outgoing';
   const killed = attempt.outcome === 'killed';
+  const incomingKilled = !outgoingRow && killed;
   const DirIcon = outgoingRow ? ArrowUpRight : ArrowDownLeft;
   const otherUser = outgoingRow ? attempt.target_username : attempt.attacker_username;
   const rewardMoney = attempt.rewards?.money;
   const isBodyguardKill = attempt.is_bodyguard_kill;
   const bgOwner = attempt.bodyguard_owner_username;
+
+  const statusLabel = incomingKilled
+    ? `Killed by ${attempt.attacker_username || '?'}`
+    : killed
+      ? 'Killed'
+      : 'Failed';
 
   return (
     <div className="atmp-row px-2 py-1.5 border-b border-zinc-700/30">
@@ -80,7 +87,7 @@ const AttemptRow = ({ attempt }) => {
                 : 'bg-secondary text-mutedForeground border border-border'
             }`}>
               {killed ? <Skull size={9} /> : <Crosshair size={9} />}
-              {killed ? 'Killed' : 'Failed'}
+              {statusLabel}
             </span>
             
             {isBodyguardKill && (

@@ -129,9 +129,17 @@ export default function MyInventory() {
   const hasSpeakeasy = loot.has_speakeasy === true;
   const tokens = data.tokens || {};
 
+  const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus'];
   const tokenLabels = {
-    xp_double: { name: 'Double XP', icon: Zap, desc: 'Double XP from crimes, GTA, jailbusts for 1h' },
-    jailbust_bonus: { name: 'Jailbust bonus', icon: Target, desc: '+10% jail bust success for 1h' },
+    xp_crimes: { name: 'Crimes XP', icon: Zap, desc: 'Double XP from crimes, 1h per token (stack up to 6h)' },
+    xp_gta: { name: 'GTA XP', icon: Zap, desc: 'Double XP from GTA, 1h per token (stack up to 6h)' },
+    melt: { name: 'Melt', icon: Zap, desc: 'Reduced melt (bullets) cooldown, 1h per token (stack up to 6h)' },
+    oc_reduced: { name: 'OC Reduced', icon: Zap, desc: 'Reduced OC cooldown, setup cost & higher payout, 1h per token (6h)' },
+    booze: { name: 'Booze', icon: Zap, desc: 'Booze costs less to buy, 1h per token (6h)' },
+    racket: { name: 'Racket', icon: Zap, desc: 'Increased racket (illegal business) profit, 1h per token (6h)' },
+    travel: { name: 'Travel', icon: Zap, desc: 'Lower airport cost & 2% car travel time reduction, 1h per token (2h)' },
+    properties: { name: 'Properties', icon: Building2, desc: '3× property income, 1h per token (stack up to 3h)' },
+    jailbust_bonus: { name: 'Jailbust bonus', icon: Target, desc: '+10% jail bust success, less chance of jail on fail, 1h (6h)' },
   };
 
   return (
@@ -216,14 +224,14 @@ export default function MyInventory() {
         </div>
 
         {/* Consumables / Tokens */}
-        {Object.keys(tokens).length > 0 && (
+        {TOKEN_TYPES.some((k) => (tokens[k]?.count ?? 0) > 0 || tokens[k]?.active_until) && (
           <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 inv-fade-in`} style={{ animationDelay: '0.18s' }}>
             <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
               <Zap size={14} className="text-primary" />
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Consumables</h2>
             </div>
             <div className="p-2.5 space-y-2">
-              {['xp_double', 'jailbust_bonus'].map((key) => {
+              {TOKEN_TYPES.filter((key) => (tokens[key]?.count ?? 0) > 0 || tokens[key]?.active_until).map((key) => {
                 const t = tokens[key] || { count: 0, active_until: null };
                 const { name, icon: Icon, desc } = tokenLabels[key] || { name: key, icon: Zap, desc: '' };
                 const active = t.active_until ? new Date(t.active_until) > new Date() : false;

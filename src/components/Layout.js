@@ -811,8 +811,8 @@ export default function Layout({ children }) {
             title={gtaExclusiveInPool ? 'Exclusive car in GTA pool!' : undefined}
           >
             <span className="uppercase tracking-widest font-heading flex-1">GTA</span>
-            {rankingCounts.gta > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30">{rankingCounts.gta}</span>}
             {gtaExclusiveInPool && <span className="text-[9px] text-violet-400 font-bold shrink-0" title="Exclusive in pool">★</span>}
+            {rankingCounts.gta > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30">{rankingCounts.gta}</span>}
           </Link>
           {showSidebarDividers && navDividerEl('rd2')}
           <Link to="/jail" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/jail' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/jail' ? sidebarActiveStyle : undefined} data-testid="nav-jail">
@@ -1716,6 +1716,7 @@ export default function Layout({ children }) {
                       : sub.path === '/forum' ? location.pathname === '/forum' && !location.search?.includes('tab=entertainer') && !location.search?.includes('tab=designer')
                       : location.pathname === sub.path || location.pathname.startsWith(sub.path + '/');
                     const prefetchCrimes = sub.path === '/crimes' ? () => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); } : undefined;
+                    const isGtaExclusive = sub.path === '/gta' && gtaExclusiveInPool;
                     return (
                       <Link key={sub.path ? `${sub.path}-${sub.label}` : idx} to={to}
                         onClick={() => setMobileBottomMenuOpen(null)}
@@ -1724,7 +1725,9 @@ export default function Layout({ children }) {
                         className="flex items-center justify-center text-center px-1 py-3 rounded-md border font-heading text-[9px] uppercase tracking-wider transition-all gap-1 min-h-[44px] touch-manipulation"
                         style={isActive
                           ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.5)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.14)', color: 'var(--noir-primary)' }
-                          : { borderColor: 'rgba(var(--noir-primary-rgb), 0.12)', backgroundColor: 'rgba(26,26,26,0.8)', color: 'var(--noir-foreground)' }}>
+                          : { borderColor: 'rgba(var(--noir-primary-rgb), 0.12)', backgroundColor: 'rgba(26,26,26,0.8)', color: 'var(--noir-foreground)' }}
+                        title={isGtaExclusive ? 'Exclusive car in GTA pool!' : undefined}>
+                        {isGtaExclusive && <span className="text-violet-400 font-bold shrink-0" aria-hidden>★</span>}
                         <span className="leading-tight">{sub.label}</span>
                         {sub.badge > 0 && (
                           <span className="shrink-0 min-w-[16px] h-[16px] rounded-full bg-red-600 text-[9px] font-bold text-white flex items-center justify-center px-0.5">{sub.badge > 9 ? '9+' : sub.badge}</span>
@@ -1778,13 +1781,15 @@ export default function Layout({ children }) {
                       return location.pathname === sub.path || (sub.path !== '/casino' && sub.path !== '/forum' && location.pathname.startsWith(sub.path + '/'));
                     });
                     const showInboxBadge = item.items.some((sub) => sub.path === '/inbox') && unreadCount > 0;
+                    const showGtaExclusiveStar = item.id === 'rank' && gtaExclusiveInPool;
                     return (
                       <button key={item.id} type="button" onClick={(e) => { e.stopPropagation(); setMobileBottomMenuOpen(isOpen ? null : item.id); }}
                         className={boxBase} style={isOpen || isActive ? boxActive : boxInactive}
-                        aria-expanded={isOpen} aria-haspopup="true" title={item.label}>
+                        aria-expanded={isOpen} aria-haspopup="true" title={showGtaExclusiveStar ? `${item.label} — Exclusive car in GTA pool!` : item.label}>
                         <span className="relative inline-flex leading-none">
                           <Icon size={13} strokeWidth={2} />
                           {showInboxBadge && <span className="absolute -top-0.5 -right-1 min-w-[10px] h-[10px] rounded-full bg-red-600 text-[8px] font-bold text-white flex items-center justify-center px-0.5">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+                          {showGtaExclusiveStar && <span className="absolute -top-0.5 -left-1 text-violet-400 text-[10px] font-bold" aria-hidden title="Exclusive car in GTA pool">★</span>}
                         </span>
                         <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.label}</span>
                       </button>
