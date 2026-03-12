@@ -196,6 +196,12 @@ async def ensure_all_indexes(db):
         await db.gauntlet_scores.create_index([("user_id", 1), ("at", -1)])
         await db.gauntlet_scores.create_index([("at", -1)])
 
+        # --- Package Run (Snake) ---
+        await db.snake_scores.create_index("id", unique=True)
+        await db.snake_scores.create_index([("score", -1), ("at", 1)])
+        await db.snake_scores.create_index([("user_id", 1), ("at", -1)])
+        await db.snake_scores.create_index([("at", -1)])
+
         # --- Boxing ---
         await db.boxing_profiles.create_index("user_id", unique=True)
         await db.user_boxing_gear.create_index([("user_id", 1), ("gear_id", 1)], unique=True)
