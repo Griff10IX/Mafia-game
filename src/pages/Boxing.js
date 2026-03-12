@@ -233,7 +233,21 @@ function simulateFight(aS, bS) {
       if (isFinal) break;
     }
 
-    // 10-point must scoring for this round
+    // Check if the fight ended mid-round (KO/TKO)
+    const fightOver = a.hp <= 0 || b.hp <= 0 || a.kds >= 3 || b.kds >= 3;
+
+    if (fightOver) {
+      // For a clean KO (HP=0 but no KD was registered on the final blow),
+      // inject a synthetic knockdown so the canvas shows a proper drop animation
+      const lastEv = events[events.length - 1];
+      if (lastEv && !lastEv.aKD && !lastEv.bKD && (a.hp <= 0 || b.hp <= 0)) {
+        if (b.hp <= 0) lastEv.aKD = true;
+        if (a.hp <= 0) lastEv.bKD = true;
+      }
+      break;
+    }
+
+    // 10-point must scoring (only for completed rounds, not KO rounds)
     let scoreA = 10, scoreB = 10;
     if (roundDmgA > roundDmgB * 1.2) scoreB = 9;
     else if (roundDmgB > roundDmgA * 1.2) scoreA = 9;
@@ -276,8 +290,6 @@ function simulateFight(aS, bS) {
     b.momentum *= 0.5;
     if (a.cut) a.cut.severity = Math.min(1, a.cut.severity + 0.04);
     if (b.cut) b.cut.severity = Math.min(1, b.cut.severity + 0.04);
-
-    if (a.hp<=0 || b.hp<=0 || a.kds>=3 || b.kds>=3) break;
   }
 
   let winner=null, reason="Decision";
@@ -376,10 +388,12 @@ function drawFighter(ctx, x, y, facing, anim, progress, color, hp) {
   const isPunch = ["jab","cross","hook","uppercut","body"].includes(anim);
   const isDown = anim === "down" || anim === "ko";
   const hitShake = isHit ? Math.sin(progress * 20) * 3 : 0;
-  const downAngle = isDown ? Math.min(1, progress * 2) * (Math.PI / 3) : 0;
+  const downAngle = isDown
+    ? (anim === "ko" ? (Math.PI / 2.5) : Math.min(1, progress * 3) * (Math.PI / 2.5))
+    : 0;
 
   if (isDown) {
-    ctx.translate(0, 0);
+    ctx.translate(0, 10 * Math.min(1, anim === "ko" ? 1 : progress * 3));
     ctx.rotate(downAngle);
   }
 
@@ -987,7 +1001,6 @@ export default function Boxing3D() {
     const events = res.events;
     for (let idx = 0; idx < events.length; idx++) {
       const ev = events[idx];
-      const nextEv = events[idx + 1];
 
       // Clinch events
       if (ev.type === "clinch") {
@@ -1033,8 +1046,8 @@ export default function Boxing3D() {
       if (ev.isCombo && ev.comboSide === "b") {
         lines.push({ type: "combo", text: `Beautiful ${ev.comboCount}-punch combo from ${nameB}!`, side: "b", ev });
       }
-      if (ev.aKD) lines.push({ type: "kd", text: `KNOCKDOWN! ${nameB} puts ${nameA} on the canvas!`, side: "a", ev });
-      if (ev.bKD) lines.push({ type: "kd", text: `KNOCKDOWN! ${nameA} drops ${nameB}!`, side: "b", ev });
+      if (ev.aKD) lines.push({ type: "kd", text: `KNOCKDOWN! ${nameA} drops ${nameB}!`, side: "b", ev });
+      if (ev.bKD) lines.push({ type: "kd", text: `KNOCKDOWN! ${nameB} puts ${nameA} on the canvas!`, side: "a", ev });
       if (ev.cutA) {
         const sev = ev.cutA.severity > 0.6 ? "Bad cut" : "Cut";
         lines.push({ type: "cut", text: `${sev} opened over ${nameA}'s ${ev.cutA.loc}!`, side: "a", ev });
@@ -1137,7 +1150,7 @@ export default function Boxing3D() {
 
       // Fighter animations — down/ko hold much longer than punches
       const punchDur = 350;
-      const downDur = 2800;
+      const downDur = 1700;
       const koDur = 99999;
       const durA = (fs.fighterA.anim === "down") ? downDur : (fs.fighterA.anim === "ko") ? koDur : punchDur;
       const durB = (fs.fighterB.anim === "down") ? downDur : (fs.fighterB.anim === "ko") ? koDur : punchDur;

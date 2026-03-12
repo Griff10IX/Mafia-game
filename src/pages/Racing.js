@@ -262,9 +262,9 @@ export default function Racing() {
     }
   };
 
-  const handleCompleteRace = async (raceId, resultOrder, dnfIds) => {
+  const handleCompleteRace = async (raceId) => {
     try {
-      const r = await api.post(`/racing/races/${raceId}/complete`, { result_order: resultOrder, dnf_ids: dnfIds || [] });
+      const r = await api.post(`/racing/races/${raceId}/complete`, {});
       setActiveRace((prev) => (prev?.id === raceId ? { ...r.data?.race, _resultsShown: true } : prev));
       refreshUser();
       fetchProfile();
@@ -555,7 +555,7 @@ export default function Racing() {
             playerCarName={playerCarName}
             playerPitLevel={profile?.pit_level ?? 0}
             currentUserId={profile?.user_id}
-            onComplete={(resultOrder, dnfIds) => resultOrder && handleCompleteRace(activeRace.id, resultOrder, dnfIds)}
+            onComplete={() => handleCompleteRace(activeRace.id)}
             onReset={() => { setActiveRace(null); fetchOpenRaces(); }}
           />
         </div>

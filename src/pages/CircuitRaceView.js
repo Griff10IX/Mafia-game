@@ -1094,9 +1094,9 @@ export default function CircuitRaceView({
         }
 
         // Lap crossing
-        if (prevPos > 0.3 && prevPos > 0.93 && r.trackPos < 0.07) {
+        if (prevPos > 0.93 && r.trackPos < 0.07) {
           r.totalLapsDone++;
-          r.lapCount = r.totalLapsDone + 1;
+          r.lapCount = Math.min(nLaps, r.totalLapsDone + 1);
           const lt = track.lapBase / effSpeed + (Math.random() - 0.5) * 0.8;
           r.lapTimes.push(lt);
           // Fastest lap check
@@ -1175,7 +1175,12 @@ export default function CircuitRaceView({
       const sorted = [...racers].sort((a, b) => {
         if (a.dnf && !b.dnf) return 1;
         if (!a.dnf && b.dnf) return -1;
-        if (a.dnf && b.dnf) return (a.dnfAtSec ?? 0) - (b.dnfAtSec ?? 0);
+        if (a.dnf && b.dnf) {
+          const progressA = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
+          const progressB = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+          if (Math.abs(progressB - progressA) > 1e-9) return progressB - progressA;
+          return (b.dnfAtSec ?? 0) - (a.dnfAtSec ?? 0);
+        }
         const aFin = a.finished && a.finishOrder > 0;
         const bFin = b.finished && b.finishOrder > 0;
         if (aFin && bFin) return a.finishOrder - b.finishOrder;
@@ -1258,7 +1263,12 @@ export default function CircuitRaceView({
         const finalOrder = [...racers].sort((a, b) => {
           if (a.dnf && !b.dnf) return 1;
           if (!a.dnf && b.dnf) return -1;
-          if (a.dnf && b.dnf) return (a.dnfAtSec ?? 0) - (b.dnfAtSec ?? 0);
+          if (a.dnf && b.dnf) {
+            const progressA = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
+            const progressB = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+            if (Math.abs(progressB - progressA) > 1e-9) return progressB - progressA;
+            return (b.dnfAtSec ?? 0) - (a.dnfAtSec ?? 0);
+          }
           const aFin = a.finished && a.finishOrder > 0;
           const bFin = b.finished && b.finishOrder > 0;
           if (aFin && bFin) return a.finishOrder - b.finishOrder;

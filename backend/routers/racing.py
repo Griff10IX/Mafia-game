@@ -232,7 +232,7 @@ class BuyTyresRequest(BaseModel):
 
 
 class CompleteRaceRequest(BaseModel):
-    result_order: List[str]  # entrant ids in finish order (1st to last)
+    result_order: Optional[List[str]] = None  # optional client finish order; backend computes official order
     dnf_ids: Optional[List[str]] = None  # entrant ids that did not finish (mechanical failure, fuel, etc.)
 
 
@@ -486,6 +486,30 @@ def _effective_speed(entrant: dict, profile: Optional[dict], upgrades_map: Dict[
     return s
 
 
+class _SeededRandom:
+    """Temporarily seed Python's global RNG for deterministic sims."""
+
+    def __init__(self, seed: str):
+        self.seed = seed
+        self._state = None
+
+    def __enter__(self):
+        try:
+            self._state = random.getstate()
+        except Exception:
+            self._state = None
+        random.seed(self.seed)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self._state is not None:
+            try:
+                random.setstate(self._state)
+            except Exception:
+                pass
+        return False
+
+
 def _run_race_simulation(entrants: List[dict], profile_by_user: Dict[str, dict], upgrades_map: Dict[str, dict]) -> List[str]:
     ids = [e.get("user_id") or e.get("id") for e in entrants]
     speeds = [_effective_speed(e, profile_by_user.get((e.get("user_id") or e.get("id")) or ""), upgrades_map) for e in entrants]
@@ -538,9 +562,13 @@ def _run_race_simulation_laps(
                 continue
             if wear < ENGINE_RISK_THRESHOLD:
                 continue
+            # Cooling reduces in-race engine risk (in addition to reducing post-race wear).
+            up_eng = upgrades_map.get(next((e.get("racing_car_instance_id") for e in entrants if (e.get("user_id") or e.get("id")) == eid), None) or eid) or {}
+            cooling = int(up_eng.get("cooling_level") or 0)
+            cooling_risk_mult = max(0.6, 1.0 - 0.20 * cooling)  # 0,1,2 => 1.0,0.8,0.6
             # Chance of DNF increases with wear; at 100% use ENGINE_DNF_CHANCE_PER_LAP_AT_100
             dnf_chance = (wear - ENGINE_RISK_THRESHOLD) / (ENGINE_WEAR_MAX - ENGINE_RISK_THRESHOLD) * ENGINE_DNF_CHANCE_PER_LAP_AT_100
-            if random.random() < dnf_chance:
+            if random.random() < (dnf_chance * cooling_risk_mult):
                 dnf_ids.append(eid)
                 engine_issue_this_lap[eid] = True  # DNF
 
@@ -571,10 +599,21 @@ def _run_race_simulation_laps(
             # Engine issues (high wear but no DNF): speed penalty
             wear = engine_wear_by_entrant.get(eid) or 0
             if wear >= ENGINE_RISK_THRESHOLD:
-                speed_val *= ENGINE_SPEED_PENALTY_AT_RISK
+                up = upgrades_map.get(e.get("racing_car_instance_id") or eid) or {}
+                cooling = int(up.get("cooling_level") or 0)
+                # Cooling softens the penalty when the engine is in the risk zone.
+                penalty = min(1.0, ENGINE_SPEED_PENALTY_AT_RISK + 0.05 * cooling)  # 0,1,2 => 0.85,0.90,0.95
+                speed_val *= penalty
+            # Fuel upgrade reduces early-race weight penalty (small but meaningful).
+            up_fuel = upgrades_map.get(e.get("racing_car_instance_id") or eid) or {}
+            fuel_lvl = int(up_fuel.get("fuel_level") or 0)
+            # Heavier at start: up to +3% penalty on lap 1, fades to ~0 by final lap.
+            base_weight_penalty = 0.03 * ((num_laps - lap + 1) / max(1, num_laps))
+            weight_penalty = max(0.0, base_weight_penalty - 0.01 * fuel_lvl)  # fuel 0..2 reduces penalty up to 2%
+            fuel_weight_mult = 1.0 + weight_penalty
             tire_factor = max(0.3, tire_wear[eid] / 100.0)
             compound_mult = _compound_grip_mult(e)
-            combined = speed_val * (0.7 + 0.3 * grip_val) * tire_factor * speed_mult * compound_mult
+            combined = (speed_val * (0.7 + 0.3 * grip_val) * tire_factor * speed_mult * compound_mult) / fuel_weight_mult
             if eid in pitting:
                 combined *= PIT_PENALTY_FACTOR
             lap_speeds.append((eid, combined))
@@ -614,13 +653,18 @@ def _run_qualifying(
     entrants: List[dict],
     profile_by_user: Dict[str, dict],
     upgrades_map: Dict[str, dict],
+    track: Optional[dict] = None,
     weather_id: str = "clear",
-) -> List[str]:
+) -> tuple:
     """One-lap qualifying: order by single-lap performance (no tire wear).
     Returns grid order (pole first). Does not count as a race lap — lap 1 is the first race lap after the start."""
     weather = _get_weather(weather_id)
     speed_mult = float(weather.get("speed_mult", 1.0))
-    lap_speeds = []
+    lap_times = []
+    lap_base = float((track or {}).get("lap_base") or 0) if track else 0.0
+    if lap_base <= 0:
+        # Fallback: assume a ~90s lap baseline for ordering when track data missing.
+        lap_base = 90.0
     for e in entrants:
         eid = e.get("user_id") or e.get("id")
         speed_val, grip_val = _effective_speed_and_grip(e, profile_by_user.get(eid) or {}, upgrades_map)
@@ -630,10 +674,18 @@ def _run_qualifying(
                 compound_mult = float(c.get("grip_mult", 1.0))
                 break
         combined = speed_val * (0.7 + 0.3 * grip_val) * speed_mult * compound_mult
-        lap_speeds.append((eid, combined))
-    random.shuffle(lap_speeds)
-    lap_speeds.sort(key=lambda x: -x[1])
-    return [x[0] for x in lap_speeds]
+        combined = max(0.01, float(combined))
+        # Convert performance to a time-like metric: lower is better.
+        # This preserves the existing performance model but makes qualifying "fastest lap wins".
+        lap_time = lap_base / combined
+        # Clamp to reasonable bounds to avoid pathological results if combined spikes.
+        lap_time = max(20.0, min(300.0, lap_time))
+        lap_times.append((eid, lap_time))
+    random.shuffle(lap_times)
+    lap_times.sort(key=lambda x: (x[1], x[0]))
+    qualifying_order = [x[0] for x in lap_times]
+    qualifying_results = [{"entrant_id": eid, "lap_time": round(t, 3)} for eid, t in lap_times]
+    return qualifying_order, qualifying_results
 
 
 # ---------- Endpoints ----------
@@ -742,9 +794,9 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
             "championship": {"positive": "+2% speed & grip", "negative": "—", "unlock": f"{WINS_FOR_CHAMPIONSHIP_UPGRADE}+ wins", "cost": CHAMPIONSHIP_UPGRADE_COST},
             "brakes": {"positive": "+2% grip", "negative": "−1% power", "per_level": True, "max": MAX_BRAKES_LEVEL, "cost_base": BRAKES_GEARBOX_COST_BASE},
             "gearbox": {"positive": "+2% speed", "negative": "−1% grip", "per_level": True, "max": MAX_GEARBOX_LEVEL, "cost_base": BRAKES_GEARBOX_COST_BASE},
-            "cooling": {"positive": "−5% engine wear", "negative": "—", "per_level": True, "max": MAX_COOLING_LEVEL, "cost_base": COOLING_COST_BASE},
+            "cooling": {"positive": "−5% engine wear, lower DNF risk", "negative": "—", "per_level": True, "max": MAX_COOLING_LEVEL, "cost_base": COOLING_COST_BASE},
             "weight": {"positive": "+1% speed & grip", "negative": "—", "unlock": f"{WINS_FOR_WEIGHT}+ wins", "per_level": True, "max": MAX_WEIGHT_LEVEL, "cost_base": WEIGHT_COST_BASE},
-            "fuel": {"positive": "+2% power", "negative": "—", "per_level": True, "max": MAX_FUEL_LEVEL, "cost_base": FUEL_COST_BASE},
+            "fuel": {"positive": "+2% power, less fuel-weight penalty", "negative": "—", "per_level": True, "max": MAX_FUEL_LEVEL, "cost_base": FUEL_COST_BASE},
         },
         "tyre_compounds": TYRE_COMPOUNDS,
         "wins": int(prof.get("wins") or 0),
@@ -1364,8 +1416,8 @@ async def _start_race_internal(race_id: str) -> dict:
     else:
         weather = random.choice(WEATHER_TYPES)
     weather_id = weather.get("id", "clear")
+    engine_wear_by_entrant: Dict[str, float] = {}
     if not race.get("is_automated"):
-        engine_wear_by_entrant: Dict[str, float] = {}
         for p in participants:
             if p.get("is_npc"):
                 continue
@@ -1388,7 +1440,9 @@ async def _start_race_internal(race_id: str) -> dict:
                 stock = int(prof.get(f"tyre_stock_{compound}") or 0)
                 if stock < 1:
                     raise HTTPException(status_code=400, detail=f"Not enough {compound} tyres in stock for a participant. Buy tyres before the race.")
-    qualifying_order = _run_qualifying(participants, profile_by_user, upgrades_map, weather_id)
+    # Deterministic qualifying so grid is stable and fair for a given race_id.
+    with _SeededRandom(f"qualifying:{race_id}"):
+        qualifying_order, qualifying_results = _run_qualifying(participants, profile_by_user, upgrades_map, track, weather_id)
     id_to_p = {(p.get("user_id") or p.get("id")): p for p in participants}
     participants = [id_to_p[eid] for eid in qualifying_order if eid in id_to_p]
     for p in participants:
@@ -1406,6 +1460,9 @@ async def _start_race_internal(race_id: str) -> dict:
             "state": "running",
             "participants": participants,
             "qualifying_order": qualifying_order,
+            "qualifying_results": qualifying_results,
+            "upgrades_snapshot": upgrades_map,
+            "engine_wear_snapshot": engine_wear_by_entrant,
             "laps": num_laps,
             "weather": weather_id,
             "weather_name": weather.get("name", "Clear"),
@@ -1422,6 +1479,9 @@ async def _start_race_internal(race_id: str) -> dict:
     race["state"] = "running"
     race["participants"] = participants
     race["qualifying_order"] = qualifying_order
+    race["qualifying_results"] = qualifying_results
+    race["upgrades_snapshot"] = upgrades_map
+    race["engine_wear_snapshot"] = engine_wear_by_entrant
     race["laps"] = num_laps
     race["weather"] = weather_id
     race["weather_name"] = weather.get("name", "Clear")
@@ -1644,25 +1704,78 @@ async def run_racing_automated_race_ticker():
 
 
 async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: dict = Depends(get_current_user_verified)):
-    """Called by client when the live race finishes. Applies rewards from client-submitted result_order."""
+    """Called by client when the live race finishes. Backend computes the official result_order/dnf_ids."""
     race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
     if not race:
         raise HTTPException(status_code=404, detail="Race not found")
     if race.get("state") != "running":
         raise HTTPException(status_code=400, detail="Race is not in progress")
     participants = list(race.get("participants") or [])
-    result_order = list(body.result_order or [])
     expected_ids = {(p.get("user_id") or p.get("id")) for p in participants}
-    if set(result_order) != expected_ids or len(result_order) != len(expected_ids):
-        raise HTTPException(status_code=400, detail="result_order must contain each participant exactly once")
+    # Only allow a participant (non-NPC) to finalize a race
+    if current_user.get("id") not in expected_ids:
+        raise HTTPException(status_code=403, detail="You are not a participant in this race")
+
+    # Compute official results deterministically from the stored race inputs.
     track = _get_track(race.get("track_id") or "")
     reward_mult = float(track.get("reward_mult", 1.0)) if track else 1.0
     entry_fee = int(race.get("entry_fee") or 0)
+    num_laps = max(NUM_LAPS_MIN, min(NUM_LAPS_MAX, int(race.get("laps") or 3)))
+    weather_id = (race.get("weather") or "clear")
+
+    profile_by_user: Dict[str, dict] = {}
+    upgrades_map: Dict[str, dict] = (race.get("upgrades_snapshot") or {}) if isinstance(race.get("upgrades_snapshot"), dict) else {}
+    engine_wear_by_entrant: Dict[str, float] = (race.get("engine_wear_snapshot") or {}) if isinstance(race.get("engine_wear_snapshot"), dict) else {}
+    # Backfill snapshots if missing (older races)
+    if not upgrades_map:
+        for p in participants:
+            if p.get("is_npc"):
+                eid = p.get("id")
+                upgrades_map[eid] = {
+                    "engine_level": p.get("engine_level", 0),
+                    "tires_level": p.get("tires_level", 0),
+                    "aero_level": p.get("aero_level", 0),
+                    "reliability_level": p.get("reliability_level", 0),
+                    "brakes_level": p.get("brakes_level", 0),
+                    "gearbox_level": p.get("gearbox_level", 0),
+                    "cooling_level": p.get("cooling_level", 0),
+                    "weight_level": p.get("weight_level", 0),
+                    "fuel_level": p.get("fuel_level", 0),
+                }
+                continue
+            uid = p.get("user_id")
+            if uid and uid not in profile_by_user:
+                prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0})
+                if prof:
+                    profile_by_user[uid] = prof
+            inst_id = p.get("racing_car_instance_id")
+            if inst_id and inst_id not in upgrades_map:
+                up = await db.racing_upgrades.find_one({"user_id": uid, "racing_car_instance_id": inst_id}, {"_id": 0})
+                car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0})
+                base = {"engine_level": (car_doc or {}).get("engine_level", 0), "tires_level": (car_doc or {}).get("tires_level", 0)}
+                if up:
+                    base.update(up)
+                upgrades_map[inst_id] = base
+    if not engine_wear_by_entrant:
+        for p in participants:
+            if p.get("is_npc"):
+                continue
+            uid = p.get("user_id")
+            inst_id = p.get("racing_car_instance_id")
+            if uid and inst_id:
+                car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0, "engine_wear": 1})
+                engine_wear_by_entrant[uid] = float(car_doc.get("engine_wear") or 0) if car_doc else 0.0
+
+    # Deterministic sim for authoritative results
+    with _SeededRandom(f"race:{race_id}"):
+        lap_results, result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids = _run_race_simulation_laps(
+            participants, profile_by_user, upgrades_map, num_laps, weather_id=weather_id, engine_wear_by_entrant=engine_wear_by_entrant
+        )
+    dnf_ids: List[str] = list(sim_dnf_ids or [])
     pot = entry_fee * len(participants) * REWARD_POOL_PCT
     if pot < RACING_BASE_CASH_POOL:
         pot = RACING_BASE_CASH_POOL
     rewards = []
-    dnf_ids: List[str] = list(body.dnf_ids or [])
     for i, entrant_id in enumerate(result_order):
         position = i + 1
         entrant = next((x for x in participants if (x.get("user_id") or x.get("id")) == entrant_id), None)
@@ -1724,9 +1837,9 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
             "completed_at": now,
             "rewards": rewards,
             "dnf_ids": dnf_ids,
-            "lap_results": [],
-            "pit_stops": [],
-            "tire_wear_after_lap": {},
+            "lap_results": lap_results,
+            "pit_stops": pit_stops,
+            "tire_wear_after_lap": tire_wear_after_lap,
         }},
     )
     race["state"] = "completed"
@@ -1735,9 +1848,9 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
     race["completed_at"] = now
     race["rewards"] = rewards
     race["dnf_ids"] = dnf_ids
-    race["lap_results"] = []
-    race["pit_stops"] = []
-    race["tire_wear_after_lap"] = {}
+    race["lap_results"] = lap_results
+    race["pit_stops"] = pit_stops
+    race["tire_wear_after_lap"] = tire_wear_after_lap
     return {"message": "Race completed", "race": race}
 
 
