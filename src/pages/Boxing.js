@@ -1932,17 +1932,17 @@ export default function Boxing3D() {
     const secsToCountEnd = isCounting ? Math.max(0, Math.ceil((countEndsAtMs - nowMs) / 1000)) : 0;
     return (
       <div className={styles.page} style={{height:"100vh",overflow:"hidden",fontFamily:"'Cinzel',serif",display:"flex",flexDirection:"column"}}>
-        <div className={styles.pageContent} style={{padding:"6px 12px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--noir-border-light)"}}>
-          <Link to="/boxing" className={styles.btnGoldDarkText} style={{padding:"4px 10px",fontSize:10,textDecoration:"none"}}>← Back to gym</Link>
+        <div className={styles.pageContent} style={{padding:"8px 12px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--noir-border-light)",minHeight:44}}>
+          <Link to="/boxing" className={styles.btnGoldDarkText} style={{padding:"10px 14px",minHeight:44,fontSize:10,textDecoration:"none",touchAction:"manipulation"}}>← Back to gym</Link>
           <div style={{fontSize:12,letterSpacing:"0.12em",color:gold}}>{nameA} vs {nameB}</div>
           <div style={{width:70}}/>
         </div>
-        <div style={{flex:1,minHeight:0,position:"relative",display:"flex",flexDirection:"column"}}>
+        <div style={{flex:1,minHeight:0,position:"relative",display:"flex",flexDirection:"column",touchAction:"manipulation"}}>
           <canvas
             ref={canvasRef}
             style={{width:"100%",height:"100%",minHeight:200,display:"block",background:"#181822"}}
           />
-          <div style={{position:"absolute",left:0,right:0,bottom:0,padding:"4px 10px 6px",background:"linear-gradient(transparent,rgba(0,0,0,0.9))",pointerEvents:"none",flexShrink:0}}>
+          <div style={{position:"absolute",left:0,right:0,bottom:0,padding:"4px 10px 6px",paddingBottom:"max(6px, env(safe-area-inset-bottom))",background:"linear-gradient(transparent,rgba(0,0,0,0.9))",pointerEvents:"none",flexShrink:0}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:640,margin:"0 auto",gap:8}}>
               <div style={{width:90,fontSize:9,color:gold}}>{nameA}</div>
               <div style={{flex:1,padding:"0 8px",minWidth:0}}>
@@ -2084,10 +2084,11 @@ export default function Boxing3D() {
                         onClick={() => available && handleTrain(id)}
                         disabled={busyAction===`train:${id}` || !available}
                         style={{
-                          padding:"4px 8px",fontSize:9,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,
+                          padding:"10px 12px",minHeight:44,fontSize:narrowLayout?11:9,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,
                           background: available ? "rgba(255,255,255,0.02)" : "rgba(60,50,30,0.3)",
                           color: available ? "#e0d0a0" : "#7a6a4a",
                           cursor: available && busyAction!==`train:${id}` ? "pointer" : "default",
+                          touchAction:"manipulation",
                         }}
                       >
                         {d.name || id.replace(/_/g," ")}
@@ -2117,7 +2118,7 @@ export default function Boxing3D() {
                 <button
                   onClick={handleGymUpgrade}
                   disabled={busyAction==="gym_upgrade"}
-                  style={{padding:"4px 9px",fontSize:9,border:"1px solid rgba(201,168,76,0.45)",borderRadius:2,background:"rgba(201,168,76,0.08)",color:"#e0d0a0",cursor:busyAction==="gym_upgrade"?"wait":"pointer"}}
+                  style={{padding:narrowLayout?"10px 14px":"4px 9px",minHeight:44,fontSize:narrowLayout?11:9,border:"1px solid rgba(201,168,76,0.45)",borderRadius:2,background:"rgba(201,168,76,0.08)",color:"#e0d0a0",cursor:busyAction==="gym_upgrade"?"wait":"pointer",touchAction:"manipulation"}}
                 >
                   Upgrade gym
                 </button>
@@ -2130,7 +2131,7 @@ export default function Boxing3D() {
                           key={g.id}
                           onClick={() => handleGymMove(g.id)}
                           disabled={busyAction===`gym_move:${g.id}` || g.id===gymInfo.gym?.id}
-                          style={{padding:"3px 7px",fontSize:9,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,background:g.id===gymInfo.gym?.id?"rgba(201,168,76,0.18)":"rgba(255,255,255,0.02)",color:"#e0d0a0",cursor:g.id===gymInfo.gym?.id?"default":"pointer"}}
+                          style={{padding:narrowLayout?"10px 12px":"3px 7px",minHeight:44,fontSize:narrowLayout?11:9,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,background:g.id===gymInfo.gym?.id?"rgba(201,168,76,0.18)":"rgba(255,255,255,0.02)",color:"#e0d0a0",cursor:g.id===gymInfo.gym?.id?"default":"pointer",touchAction:"manipulation"}}
                         >
                           {g.name}
                         </button>
@@ -2155,7 +2156,7 @@ export default function Boxing3D() {
                         key={c.id}
                         onClick={() => isCurrent ? handleCoachFire() : handleCoachHire(c.id)}
                         disabled={busyAction===`coach:${c.id}` || (busyAction==="coach_fire" && isCurrent)}
-                        style={{padding:"4px 8px",fontSize:9,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,background:isCurrent?"rgba(201,168,76,0.18)":"rgba(255,255,255,0.02)",color:"#e0d0a0",cursor:(busyAction && !isCurrent)?"wait":"pointer"}}
+                        style={{padding:narrowLayout?"10px 12px":"4px 8px",minHeight:44,fontSize:narrowLayout?11:9,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,background:isCurrent?"rgba(201,168,76,0.18)":"rgba(255,255,255,0.02)",color:"#e0d0a0",cursor:(busyAction && !isCurrent)?"wait":"pointer",touchAction:"manipulation"}}
                       >
                         {isCurrent ? `FIRE ${c.name}` : c.name}
                       </button>
@@ -2195,7 +2196,7 @@ export default function Boxing3D() {
                           <button
                             onClick={() => unlocked && handleGearBuy(g.id)}
                             disabled={busyAction===`buy:${g.id}` || !unlocked}
-                            style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:unlocked ? "rgba(201,168,76,0.08)" : "rgba(0,0,0,0.2)",color:unlocked ? "#e0d0a0" : "#5a4a3a",cursor:unlocked && busyAction!==`buy:${g.id}` ? "pointer" : "default"}}
+                            style={{padding:narrowLayout?"8px 10px":"2px 6px",minHeight:narrowLayout?44:28,fontSize:narrowLayout?10:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:unlocked ? "rgba(201,168,76,0.08)" : "rgba(0,0,0,0.2)",color:unlocked ? "#e0d0a0" : "#5a4a3a",cursor:unlocked && busyAction!==`buy:${g.id}` ? "pointer" : "default",touchAction:"manipulation"}}
                           >
                             Buy
                           </button>
@@ -2204,7 +2205,7 @@ export default function Boxing3D() {
                           <button
                             onClick={() => unlocked && handleGearEquip(g.slot, g.id)}
                             disabled={busyAction===`equip:${g.slot}:${g.id}` || !unlocked}
-                            style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:unlocked ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.2)",color:unlocked ? "#e0d0a0" : "#5a4a3a",cursor:unlocked && busyAction!==`equip:${g.slot}:${g.id}` ? "pointer" : "default"}}
+                            style={{padding:narrowLayout?"8px 10px":"2px 6px",minHeight:narrowLayout?44:28,fontSize:narrowLayout?10:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:unlocked ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.2)",color:unlocked ? "#e0d0a0" : "#5a4a3a",cursor:unlocked && busyAction!==`equip:${g.slot}:${g.id}` ? "pointer" : "default",touchAction:"manipulation"}}
                           >
                             Equip
                           </button>
@@ -2213,7 +2214,7 @@ export default function Boxing3D() {
                           <button
                             onClick={() => handleGearEquip(g.slot, null)}
                             disabled={busyAction===`equip:${g.slot}:none`}
-                            style={{padding:"2px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(201,168,76,0.22)",color:"#e0d0a0",cursor:busyAction===`equip:${g.slot}:none`?"wait":"pointer"}}
+                            style={{padding:narrowLayout?"8px 10px":"2px 6px",minHeight:narrowLayout?44:28,fontSize:narrowLayout?10:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(201,168,76,0.22)",color:"#e0d0a0",cursor:busyAction===`equip:${g.slot}:none`?"wait":"pointer",touchAction:"manipulation"}}
                           >
                             Unequip
                           </button>
@@ -2232,7 +2233,7 @@ export default function Boxing3D() {
         <div className={styles.panel} style={{padding:10,minHeight:120}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
             <div style={{fontSize:10,color:"var(--noir-primary)",letterSpacing:"0.14em"}}>MATCHES</div>
-            <button onClick={refreshMatches} disabled={matchesLoading} className={styles.btnGoldDarkText} style={{padding:"2px 6px",fontSize:9,cursor:matchesLoading?"wait":"pointer"}}>Refresh</button>
+            <button onClick={refreshMatches} disabled={matchesLoading} className={styles.btnGoldDarkText} style={{padding:narrowLayout?"10px 12px":"6px 10px",minHeight:44,fontSize:narrowLayout?11:9,cursor:matchesLoading?"wait":"pointer",touchAction:"manipulation"}}>Refresh</button>
           </div>
           {matchError && <div style={{fontSize:9,color:"#ff6666",marginBottom:4}}>{matchError}</div>}
           <div style={{display:"flex",gap:4,marginBottom:6,flexWrap:"wrap"}}>
@@ -2241,13 +2242,13 @@ export default function Boxing3D() {
               onChange={(e)=>setOpponentName(e.target.value)}
               placeholder="Challenge username (leave blank for open match)"
               className={styles.input}
-              style={{flex:"0 0 160px",minWidth:120,padding:"3px 6px",fontSize:9}}
+              style={{flex:"0 0 160px",minWidth:120,minHeight:44,padding:"8px 10px",fontSize:narrowLayout?11:9}}
             />
             <button
               onClick={handleCreateMatch}
               disabled={busyAction==="create_match"}
               className={styles.btnPrimary}
-              style={{padding:"3px 8px",fontSize:9,cursor:busyAction==="create_match"?"wait":"pointer"}}
+              style={{minHeight:44,padding:narrowLayout?"10px 14px":"6px 12px",touchAction:"manipulation",cursor:busyAction==="create_match"?"wait":"pointer"}}
             >
               Start Match
             </button>
@@ -2262,7 +2263,7 @@ export default function Boxing3D() {
                     onClick={()=>startNpcFight(npc)}
                     disabled={npcFightState && !npcFightState.result}
                     className={styles.btnGoldDarkText}
-                    style={{padding:"2px 6px",fontSize:8,cursor:npcFightState && !npcFightState.result ? "wait" : "pointer"}}
+                    style={{padding:narrowLayout?"10px 12px":"6px 10px",minHeight:44,fontSize:narrowLayout?11:8,cursor:npcFightState && !npcFightState.result ? "wait" : "pointer",touchAction:"manipulation"}}
                   >
                     {npc.name}
                   </button>

@@ -1,37 +1,68 @@
-# Flappy Gangster (Flappy-style) — cash rewards by score.
+# Flappy Gangster (Flappy-style) — cash and respect rewards by score. Infinite levels; caps per run.
 from datetime import datetime, timezone, timedelta
 import uuid
 
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
+from typing import Optional
 
 from server import db, get_current_user, log_activity
 
 
+# Base tiers (score threshold -> cash, respect for that tier only; cumulative applied in _get_reward)
 REWARD_TIERS = [
-    {"score": 1, "cash": 250, "label": "Street Punk"},
-    {"score": 5, "cash": 1_000, "label": "Corner Boy"},
-    {"score": 10, "cash": 2_500, "label": "Made Man"},
-    {"score": 20, "cash": 6_000, "label": "Underboss"},
-    {"score": 35, "cash": 12_500, "label": "Capo"},
-    {"score": 50, "cash": 25_000, "label": "Don"},
+    {"score": 1, "cash": 250, "respect": 5, "label": "Street Punk"},
+    {"score": 5, "cash": 1_000, "respect": 5, "label": "Corner Boy"},
+    {"score": 10, "cash": 2_500, "respect": 10, "label": "Made Man"},
+    {"score": 20, "cash": 6_000, "respect": 20, "label": "Underboss"},
+    {"score": 35, "cash": 12_500, "respect": 20, "label": "Capo"},
+    {"score": 50, "cash": 25_000, "respect": 40, "label": "Don"},
 ]
 
+# Caps per single run (infinite levels, but one claim cannot exceed these)
+MAX_CASH_PER_CLAIM = 1_000_000
+MAX_RESPECT_PER_CLAIM = 1_000
+
+# Beyond tier 50: every gate adds this cash (until cap) and 2 respect (until cap)
+CASH_PER_GATE_AFTER_50 = 2_000
+RESPECT_PER_GATE_AFTER_50 = 2
+
 # Basic sanity limits (frontend is not trusted).
-MAX_SCORE_ACCEPTED = 250
+MAX_SCORE_ACCEPTED = 10_000
 MAX_PLAYS_PER_HOUR = 10
 
 
-def _get_cash_reward(score: int) -> dict:
-    reward = {"cash": 0, "label": "Nobody", "tier": -1, "score": 0}
+def _get_reward(score: int) -> dict:
+    """Compute cash and respect for any score; apply caps. Returns label from highest tier reached."""
+    score = max(0, int(score))
+    cash = 0
+    respect = 0
+    label = "Nobody"
+    tier = -1
+
     for i, t in enumerate(REWARD_TIERS):
         if score >= int(t["score"]):
-            reward = {"cash": int(t["cash"]), "label": str(t["label"]), "tier": i, "score": int(t["score"])}
-    return reward
+            cash += int(t["cash"])
+            respect += int(t["respect"])
+            label = str(t["label"])
+            tier = i
+
+    # Beyond 50 gates: infinite progression (capped)
+    if score > 50:
+        extra_gates = score - 50
+        cash += min(MAX_CASH_PER_CLAIM - cash, extra_gates * CASH_PER_GATE_AFTER_50)
+        respect += min(MAX_RESPECT_PER_CLAIM - respect, extra_gates * RESPECT_PER_GATE_AFTER_50)
+
+    cash = min(MAX_CASH_PER_CLAIM, cash)
+    respect = min(MAX_RESPECT_PER_CLAIM, respect)
+    return {"cash": cash, "respect": respect, "label": label, "tier": tier, "score": score}
 
 
 class GauntletClaimRequest(BaseModel):
     score: int
+    theme: Optional[str] = None
+    speed: Optional[str] = None
+    difficulty: Optional[str] = None
 
 
 def register(router):
@@ -72,7 +103,7 @@ def register(router):
         if score > MAX_SCORE_ACCEPTED:
             raise HTTPException(status_code=400, detail="Score too high to claim.")
 
-        # Limit: 5 plays per hour (UTC). Track in user_meta.
+        # Limit: N plays per hour (UTC). Track in user_meta.
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now_dt.isoformat().replace("+00:00", "Z")
         hour_start = now_dt.replace(minute=0, second=0)
@@ -90,7 +121,7 @@ def register(router):
                 remaining = max(0, int((reset_dt - now_dt).total_seconds()))
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Hourly limit reached (5 plays). Try again in {remaining}s.",
+                    detail=f"Hourly limit reached ({MAX_PLAYS_PER_HOUR} plays). Try again in {remaining}s.",
                 )
             new_count = meta_count + 1
             await db.user_meta.update_one(
@@ -114,39 +145,45 @@ def register(router):
             )
             plays_left = MAX_PLAYS_PER_HOUR - 1
 
-        reward = _get_cash_reward(score)
+        reward = _get_reward(score)
         cash = int(reward["cash"] or 0)
-        if cash <= 0:
-            # Still record the run for leaderboard purposes.
+        respect = int(reward["respect"] or 0)
+        if cash <= 0 and respect <= 0:
             try:
                 await db.gauntlet_scores.insert_one(
-                    {"id": str(uuid.uuid4()), "user_id": current_user["id"], "username": current_user.get("username") or "?", "score": score, "cash": 0, "at": now_iso}
+                    {"id": str(uuid.uuid4()), "user_id": current_user["id"], "username": current_user.get("username") or "?", "score": score, "cash": 0, "respect": 0, "at": now_iso}
                 )
             except Exception:
                 pass
-            return {"cash_awarded": 0, "label": reward["label"], "tier": reward["tier"], "plays_left": plays_left, "resets_at": reset_iso}
+            return {"cash_awarded": 0, "respect_awarded": 0, "label": reward["label"], "tier": reward["tier"], "plays_left": plays_left, "resets_at": reset_iso}
 
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": cash}})
+        updates = {}
+        if cash > 0:
+            updates["money"] = cash
+        if respect > 0:
+            updates["respect_points"] = respect
+        if updates:
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": updates})
         try:
             await db.gauntlet_scores.insert_one(
-                {"id": str(uuid.uuid4()), "user_id": current_user["id"], "username": current_user.get("username") or "?", "score": score, "cash": cash, "at": now_iso}
+                {"id": str(uuid.uuid4()), "user_id": current_user["id"], "username": current_user.get("username") or "?", "score": score, "cash": cash, "respect": respect, "at": now_iso}
             )
         except Exception:
             pass
         await db.user_meta.update_one(
             {"user_id": current_user["id"]},
-            {"$set": {"gauntlet_last_claim_at": now_iso, "gauntlet_last_score": score, "gauntlet_last_cash": cash}},
+            {"$set": {"gauntlet_last_claim_at": now_iso, "gauntlet_last_score": score, "gauntlet_last_cash": cash, "gauntlet_last_respect": respect}},
             upsert=True,
         )
         try:
-            await log_activity(current_user["id"], f"Claimed ${cash:,} from Flappy Gangster (score {score}).")
+            await log_activity(current_user["id"], f"Claimed ${cash:,} and {respect} respect from Flappy Gangster (score {score}).")
         except Exception:
             pass
 
-        # Return updated balance for immediate UI update.
-        user_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
+        user_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1, "respect_points": 1})
         return {
             "cash_awarded": cash,
+            "respect_awarded": respect,
             "label": reward["label"],
             "tier": reward["tier"],
             "score": score,

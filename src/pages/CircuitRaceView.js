@@ -362,6 +362,12 @@ export default function CircuitRaceView({
   const [lapDisplay, setLapDisplay] = useState("1");
   const [results, setResults] = useState(null);
   const pitNotifTimer = useRef(null);
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 640);
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 640);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // In replay mode, derive condition from weather prop
   const effectiveCondition = mode === "replay"
@@ -944,7 +950,7 @@ export default function CircuitRaceView({
           <div className="font-heading text-xs mb-2" style={{ color:"var(--noir-primary)", letterSpacing:".2em", textTransform:"uppercase" }}>
             Select Track
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"0.4rem" }}>
+          <div style={{ display:"grid", gridTemplateColumns: isNarrow ? "repeat(2,1fr)" : "repeat(4,1fr)", gap:"0.4rem" }}>
             {TRACKS.map(t => (
               <button
                 key={t.id} type="button"
@@ -952,8 +958,8 @@ export default function CircuitRaceView({
                 style={{
                   background: selectedTrack.id===t.id ? "rgba(201,164,96,.1)" : "transparent",
                   border: `1px solid ${selectedTrack.id===t.id ? "var(--noir-primary)" : "var(--noir-border)"}`,
-                  padding:"0.35rem 0.4rem", cursor:"pointer", textAlign:"left",
-                  transition:".15s",
+                  padding:"0.5rem 0.4rem", minHeight:44, cursor:"pointer", textAlign:"left",
+                  transition:".15s", touchAction:"manipulation",
                 }}
               >
                 <TrackThumb track={t} active={selectedTrack.id===t.id}/>
@@ -976,9 +982,10 @@ export default function CircuitRaceView({
                 <button key={k} type="button" onClick={()=>setCondition(k)}
                   style={{
                     fontFamily:"'Cinzel',serif", fontSize:"8px", letterSpacing:".15em",
-                    padding:"3px 8px", border:`1px solid ${condition===k?"var(--noir-primary)":"var(--noir-border)"}`,
+                    padding:"8px 10px", minHeight:44, border:`1px solid ${condition===k?"var(--noir-primary)":"var(--noir-border)"}`,
                     background:condition===k?"rgba(201,164,96,.1)":"transparent",
                     color:condition===k?"var(--noir-primary)":"var(--noir-muted)", cursor:"pointer",
+                    touchAction:"manipulation",
                   }}
                 >{w.icon} {w.label}</button>
               ))}
@@ -999,10 +1006,11 @@ export default function CircuitRaceView({
                 <button key={td.id} type="button" onClick={()=>setChosenTyre(td.id)}
                   style={{
                     display:"flex", alignItems:"center", gap:"5px",
-                    padding:"3px 9px", border:`1px solid ${chosenTyre===td.id?"var(--noir-primary)":"var(--noir-border)"}`,
+                    padding:"8px 10px", minHeight:44, border:`1px solid ${chosenTyre===td.id?"var(--noir-primary)":"var(--noir-border)"}`,
                     background:chosenTyre===td.id?"rgba(201,164,96,.1)":"transparent",
                     cursor:"pointer", fontSize:"12px", fontWeight:600,
                     color:chosenTyre===td.id?"var(--noir-foreground)":"var(--noir-muted)",
+                    touchAction:"manipulation",
                   }}
                 >
                   <span style={{ width:9,height:9,borderRadius:"50%",background:td.color,display:"inline-block",flexShrink:0 }}/>
@@ -1022,14 +1030,14 @@ export default function CircuitRaceView({
             <div className="font-heading" style={{ fontSize:"8px", letterSpacing:".22em", textTransform:"uppercase", color:"var(--noir-muted)", marginBottom:"4px" }}>Laps</div>
             <input type="number" min={2} max={20} value={numLaps}
               onChange={e=>setNumLaps(Math.max(2,Math.min(5,parseInt(e.target.value)||3)))}
-              style={{ width:56, background:"transparent", border:"1px solid var(--noir-border)", color:"var(--noir-foreground)", fontFamily:"'Rajdhani',sans-serif", fontSize:14, padding:"3px 6px", textAlign:"center" }}
+              style={{ width:56, minHeight:44, background:"transparent", border:"1px solid var(--noir-border)", color:"var(--noir-foreground)", fontFamily:"'Rajdhani',sans-serif", fontSize:14, padding:"6px 8px", textAlign:"center", touchAction:"manipulation" }}
             />
           </div>
         </div>
       )}
 
       {/* ── RACE CANVAS ── */}
-      <div style={{ position:"relative", background:"#0d1208", border:"1px solid var(--noir-border)", marginBottom:"0.6rem", overflow:"hidden" }}>
+      <div style={{ position:"relative", background:"#0d1208", border:"1px solid var(--noir-border)", marginBottom:"0.6rem", overflow:"hidden", touchAction:"manipulation", maxWidth:"100%" }}>
         <canvas ref={canvasRef} style={{ width:"100%", display:"block" }}/>
 
         {/* HUD: top bar */}
@@ -1073,7 +1081,7 @@ export default function CircuitRaceView({
 
       {/* ── LIVE STANDINGS (F1 Manager style) ── */}
       {standings.length > 0 && (
-        <div className={styles.panel} style={{ marginBottom:"0.6rem", overflow:"hidden" }}>
+        <div className={styles.panel} style={{ marginBottom:"0.6rem", overflowX:"auto", overflowY:"hidden", WebkitOverflowScrolling:"touch" }}>
           {standings.map((r, i) => {
             const td = TYRE_DEFS[r.currentTyre] || TYRE_DEFS.medium;
             const wc = tyreColor(r.tyreWear);
@@ -1150,13 +1158,13 @@ export default function CircuitRaceView({
         <div style={{ display:"flex", gap:"0.5rem", alignItems:"center", flexWrap:"wrap", marginBottom:"0.6rem" }}>
           {uiPhase === "setup" && (
             <button type="button" onClick={handleStart}
-              style={{ fontFamily:"'Cinzel',serif", fontSize:"9px", fontWeight:700, letterSpacing:".2em", textTransform:"uppercase", padding:"6px 16px", border:"1px solid var(--noir-primary)", background:"linear-gradient(135deg,#6a4010,#c9a460)", color:"#0a0c06", cursor:"pointer" }}>
+              style={{ fontFamily:"'Cinzel',serif", fontSize:"9px", fontWeight:700, letterSpacing:".2em", textTransform:"uppercase", padding:"10px 18px", minHeight:44, border:"1px solid var(--noir-primary)", background:"linear-gradient(135deg,#6a4010,#c9a460)", color:"#0a0c06", cursor:"pointer", touchAction:"manipulation" }}>
               Start Race
             </button>
           )}
           {(uiPhase === "racing" || uiPhase === "done") && (
             <button type="button" onClick={handleReset}
-              style={{ fontFamily:"'Cinzel',serif", fontSize:"9px", letterSpacing:".2em", textTransform:"uppercase", padding:"6px 14px", border:"1px solid var(--noir-border)", background:"rgba(201,164,96,.07)", color:"var(--noir-primary)", cursor:"pointer" }}>
+              style={{ fontFamily:"'Cinzel',serif", fontSize:"9px", letterSpacing:".2em", textTransform:"uppercase", padding:"10px 16px", minHeight:44, border:"1px solid var(--noir-border)", background:"rgba(201,164,96,.07)", color:"var(--noir-primary)", cursor:"pointer", touchAction:"manipulation" }}>
               Reset
             </button>
           )}

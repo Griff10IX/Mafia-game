@@ -317,7 +317,7 @@ export default function Racing() {
   ];
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page + " overflow-x-hidden"} style={{ minHeight: "100%", WebkitOverflowScrolling: "touch" }}>
       <div className={styles.panelHeader + " px-4 py-3"}>
         <h1 className="text-xl font-heading" style={{ color: "var(--noir-primary)" }}>
           Bootleg runs
@@ -388,7 +388,7 @@ export default function Racing() {
           </ul>
           <button
             type="button"
-            className={styles.btnPrimary + " mt-3"}
+            className={styles.btnPrimary + " mt-3 min-h-[44px] touch-manipulation"}
             onClick={() => { setActiveRace(null); navigate("/racing", { replace: true }); }}
           >
             Back to races
@@ -397,12 +397,12 @@ export default function Racing() {
       )}
 
       {/* ─── TABS ─── */}
-      <div className="flex border-b border-[var(--noir-border)] px-4 gap-2 overflow-x-auto">
+      <div className="flex border-b border-[var(--noir-border)] px-4 gap-2 overflow-x-auto overflow-y-hidden touch-pan-x" style={{ minHeight: 44, WebkitOverflowScrolling: "touch" }}>
         {tabs.map((t) => (
           <button
             key={t.id} type="button"
-            className={"py-2 px-3 text-sm font-heading whitespace-nowrap " + (tab === t.id ? "border-b-2 text-[var(--noir-primary)]" : "text-[var(--noir-muted)]")}
-            style={tab === t.id ? { borderBottomColor: "var(--noir-primary)" } : {}}
+            className={"py-2 px-3 text-sm font-heading whitespace-nowrap flex-shrink-0 " + (tab === t.id ? "border-b-2 text-[var(--noir-primary)]" : "text-[var(--noir-muted)]")}
+            style={{ minHeight: 44, borderBottomColor: tab === t.id ? "var(--noir-primary)" : "transparent" }}
             onClick={() => setTab(t.id)}
           >
             {t.label}
@@ -431,7 +431,7 @@ export default function Racing() {
                 {canStartRace && (
                   <button
                     type="button"
-                    className={styles.btnPrimary + " mt-3"}
+                    className={styles.btnPrimary + " mt-3 min-h-[44px] touch-manipulation"}
                     onClick={() => handleStartRace(activeRace)}
                   >
                     Start race (fill with NPCs)
@@ -452,7 +452,7 @@ export default function Racing() {
                   </span>
                   <button
                     type="button"
-                    className="text-[10px] font-heading px-1.5 py-0.5 border border-[var(--noir-border)] rounded hover:bg-[var(--noir-primary)]/10"
+                    className="text-[10px] font-heading px-3 py-2 min-h-[44px] border border-[var(--noir-border)] rounded hover:bg-[var(--noir-primary)]/10 touch-manipulation"
                     onClick={() => setCreateForm((f) => ({ ...f, weather_id: WEATHER_OPTIONS[Math.floor(Math.random() * WEATHER_OPTIONS.length)].id }))}
                   >
                     Randomise
@@ -498,7 +498,7 @@ export default function Racing() {
                   </select>
                   <span className="text-[10px] text-[var(--noir-muted)]">Stock: {profile?.[`tyre_stock_${createForm.tyre_compound}`] ?? 0}</span>
                 </label>
-                <button type="button" className={styles.btnPrimary}
+                <button type="button" className={styles.btnPrimary + " min-h-[44px] touch-manipulation"}
                   disabled={creating || !selectedInstanceId || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100} onClick={handleCreateRace}>
                   {creating ? "Creating…" : "Create race"}
                 </button>
@@ -540,7 +540,7 @@ export default function Racing() {
                           {race.weather_name || race.weather ? ` • ${race.weather_name ?? WEATHER_OPTIONS.find((w) => w.id === race.weather)?.name ?? race.weather}` : ""}
                         </span>
                       </div>
-                      <button type="button" className={styles.btnPrimary + " text-sm"}
+                      <button type="button" className={styles.btnPrimary + " text-sm min-h-[44px] touch-manipulation"}
                         disabled={joiningId === race.id || !selectedInstanceId || race.participants?.some((p) => p.user_id === profile?.user_id) || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 || (profile?.[`tyre_stock_${joinTyre}`] ?? 0) < 1}
                         onClick={() => handleJoinRace(race, selectedInstanceId, joinTyre)}>
                         {joiningId === race.id ? "Joining…" : "Join"}
