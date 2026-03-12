@@ -35,6 +35,7 @@ export default function Racing() {
   const [cars, setCars] = useState([]);
   const [availableCars, setAvailableCars] = useState([]);
   const [upgradeTradeoffs, setUpgradeTradeoffs] = useState(null);
+  const [upgradesByCar, setUpgradesByCar] = useState({});
   const [tracks, setTracks] = useState([]);
   const [openRaces, setOpenRaces] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -44,7 +45,8 @@ export default function Racing() {
   const [tab, setTab] = useState("races");
   const [creating, setCreating] = useState(false);
   const [joiningId, setJoiningId] = useState(null);
-  const [createForm, setCreateForm] = useState({ track_id: "", entry_fee: 0, max_grid: 6, laps: 3 });
+  const [joinTyre, setJoinTyre] = useState("medium");
+  const [createForm, setCreateForm] = useState({ track_id: "", entry_fee: 0, max_grid: 6, laps: 3, tyre_compound: "medium" });
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -52,6 +54,7 @@ export default function Racing() {
       setProfile(r.data?.profile || null);
       setCars(r.data?.owned_cars || []);
       setUpgradeTradeoffs(r.data?.upgrade_tradeoffs || null);
+      setUpgradesByCar(r.data?.upgrades || {});
     } catch (e) {
       toast.error(apiDetail(e));
     }
@@ -130,6 +133,7 @@ export default function Racing() {
         entry_fee: Number(createForm.entry_fee) || 0,
         max_grid: Number(createForm.max_grid) || 6,
         laps: Number(createForm.laps) || 3,
+        tyre_compound: createForm.tyre_compound || "medium",
       });
       const race = r.data?.race;
       if (race) {
@@ -147,11 +151,11 @@ export default function Racing() {
     }
   };
 
-  const handleJoinRace = async (race, carInstanceId) => {
+  const handleJoinRace = async (race, carInstanceId, tyreCompound = "medium") => {
     if (!carInstanceId) { toast.error("Select a racing car first"); return; }
     setJoiningId(race.id);
     try {
-      await api.post(`/racing/races/${race.id}/join`, { racing_car_instance_id: carInstanceId });
+      await api.post(`/racing/races/${race.id}/join`, { racing_car_instance_id: carInstanceId, tyre_compound: tyreCompound });
       const r = await api.get(`/racing/races/${race.id}`);
       setActiveRace(r.data?.race);
       await fetchOpenRaces();
@@ -208,12 +212,12 @@ export default function Racing() {
     }
   };
 
-  const handleUpgradeCar = async (instanceId) => {
+  const handleUpgradeCar = async (instanceId, upgradeType = "engine") => {
     try {
-      await api.post("/racing/car/upgrade", { racing_car_instance_id: instanceId });
+      await api.post("/racing/car/upgrade", { racing_car_instance_id: instanceId, upgrade_type: upgradeType });
       await fetchProfile();
       refreshUser();
-      toast.success("Car upgraded");
+      toast.success(upgradeType === "engine" || upgradeType === "tires" ? "Car upgraded" : `${upgradeType} upgraded`);
     } catch (e) {
       toast.error(apiDetail(e));
     }
@@ -280,6 +284,8 @@ export default function Racing() {
             participants={activeRace.participants || []}
             lap_results={activeRace.lap_results || []}
             pit_stops={activeRace.pit_stops || []}
+            qualifying_order={activeRace.qualifying_order}
+            tire_wear_after_lap={activeRace.tire_wear_after_lap}
             laps={activeRace.laps || 3}
             resultOrder={activeRace.result_order || []}
             weather={activeRace.weather || "clear"}
@@ -400,6 +406,15 @@ export default function Racing() {
                   <input type="number" min={2} max={5} className={styles.input + " w-16"} value={createForm.laps}
                     onChange={(e) => setCreateForm((f) => ({ ...f, laps: e.target.value }))}/>
                 </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs">Tyres</span>
+                  <select className={styles.input + " w-24"} value={createForm.tyre_compound}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, tyre_compound: e.target.value }))}>
+                    <option value="soft">Soft</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </label>
                 <button type="button" className={styles.btnPrimary}
                   disabled={creating || !selectedInstanceId} onClick={handleCreateRace}>
                   {creating ? "Creating…" : "Create race"}
@@ -413,6 +428,14 @@ export default function Racing() {
             {/* Open races */}
             <div className={styles.panel + " p-4"}>
               <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Open races</h3>
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <span className="text-xs text-[var(--noir-muted)]">Tyres when joining:</span>
+                <select className={styles.input + " w-24 text-sm"} value={joinTyre} onChange={(e) => setJoinTyre(e.target.value)}>
+                  <option value="soft">Soft</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+              </div>
               {openRaces.length === 0 ? (
                 <p className="text-sm text-[var(--noir-muted)]">No open races. Create one above.</p>
               ) : (
@@ -427,7 +450,7 @@ export default function Racing() {
                       </div>
                       <button type="button" className={styles.btnPrimary + " text-sm"}
                         disabled={joiningId === race.id || !selectedInstanceId || race.participants?.some((p) => p.user_id === profile?.user_id)}
-                        onClick={() => handleJoinRace(race, selectedInstanceId)}>
+                        onClick={() => handleJoinRace(race, selectedInstanceId, joinTyre)}>
                         {joiningId === race.id ? "Joining…" : "Join"}
                       </button>
                     </li>
@@ -447,22 +470,49 @@ export default function Racing() {
                 <p className="text-sm text-[var(--noir-muted)]">Choose a car below. You have one racing car slot.</p>
               ) : (
                 <ul className="space-y-2">
-                  {cars.map((c) => (
-                    <li key={c.id} className="flex items-center justify-between p-2 rounded surface">
+                  {cars.map((c) => {
+                    const up = upgradesByCar[c.id] || {};
+                    const engine = up.engine_level ?? c.engine_level ?? 0;
+                    const tires = up.tires_level ?? c.tires_level ?? 0;
+                    const aero = up.aero_level ?? 0;
+                    const reliability = up.reliability_level ?? 0;
+                    const championship = up.championship_upgrade || false;
+                    const wins = profile?.wins ?? 0;
+                    const canAeroRel = wins >= 1;
+                    const canChamp = wins >= 3 && !championship;
+                    return (
+                    <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 p-2 rounded surface">
                       <span>{c.car_name || c.racing_car_id}</span>
-                      <span className="text-xs text-[var(--noir-muted)]">Engine {c.engine_level ?? 0} / Tyres {c.tires_level ?? 0}</span>
-                      <div className="flex gap-2">
+                      <span className="text-xs text-[var(--noir-muted)]">
+                        Engine {engine} / Tyres {tires}
+                        {(aero > 0 || reliability > 0) && ` · Aero ${aero} / Rel ${reliability}`}
+                        {championship && " · Championship ✓"}
+                      </span>
+                      <div className="flex flex-wrap gap-2 items-center">
                         <button type="button" className={styles.btnPrimary + " text-xs"}
                           disabled={selectedInstanceId === c.id} onClick={() => handleSelectCar(c.id)}>
                           {selectedInstanceId === c.id ? "Selected" : "Select"}
                         </button>
-                        <button type="button" className={styles.btnGoldDarkText + " text-xs"}
-                          onClick={() => handleUpgradeCar(c.id)}>
-                          Upgrade
-                        </button>
+                        <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+power −grip"
+                          onClick={() => handleUpgradeCar(c.id, "engine")}>Engine+</button>
+                        <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+grip −power"
+                          onClick={() => handleUpgradeCar(c.id, "tires")}>Tires+</button>
+                        {canAeroRel && (
+                          <>
+                            <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+speed −grip (1+ win)"
+                              onClick={() => handleUpgradeCar(c.id, "aero")}>Aero+</button>
+                            <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="−wear −power (1+ win)"
+                              onClick={() => handleUpgradeCar(c.id, "reliability")}>Rel+</button>
+                          </>
+                        )}
+                        {canChamp && (
+                          <button type="button" className={styles.btnGoldDarkText + " text-xs"} title="+2% speed & grip (3+ wins)"
+                            onClick={() => handleUpgradeCar(c.id, "championship")}>Championship</button>
+                        )}
                       </div>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
               {upgradeTradeoffs ? (

@@ -79,9 +79,10 @@ function simulateFight(aS, bS) {
 
       // ── FIGHTER A ATTACKS ────────────────────────────────────────────────
       const apt = choosePunch(a);
-      // Accuracy: speed advantage, fatigue, momentum (winning builds confidence)
+      // Accuracy: stat-based (accuracy), speed vs defense, fatigue, momentum (backend: base_acc + accuracy*0.012 + speed*0.003; def_avoid + defense*0.012)
       const aAcc = clamp(
         PUNCH_ACC[apt]
+        + ((a.accuracy != null ? a.accuracy : 70) - 70) / 400   // accuracy stat (scale 45–95): training/gear matter
         + (a.speed - b.defense) / 520
         - (1 - a.stam/100) * 0.28        // fatigue tanks accuracy more
         + a.momentum * 0.04              // on a roll = sharper
@@ -148,6 +149,7 @@ function simulateFight(aS, bS) {
       const bpt = choosePunch(b);
       const bAcc = clamp(
         PUNCH_ACC[bpt]
+        + ((b.accuracy != null ? b.accuracy : 70) - 70) / 400   // accuracy stat: training/gear matter
         + (b.speed - a.defense) / 520
         - (1 - b.stam/100) * 0.28
         + b.momentum * 0.04
@@ -240,11 +242,21 @@ function simulateFight(aS, bS) {
     }
 
     // ── BETWEEN ROUNDS ────────────────────────────────────────────────────
-    // Stamina recovery: cornerwork restores ~14–22% depending on stamina stat
-    const aRec = 13 + (a.stamina||62)/100 * 15;
-    const bRec = 13 + (b.stamina||62)/100 * 15;
+    // Stamina & HP recovery: align with backend (stamina + recovery stats matter)
+    const aRec = 6 + ((a.stamina != null ? a.stamina : 62) / 100) * 12 + ((a.recovery != null ? a.recovery : 62) / 100) * 8;
+    const bRec = 6 + ((b.stamina != null ? b.stamina : 62) / 100) * 12 + ((b.recovery != null ? b.recovery : 62) / 100) * 8;
     a.stam = Math.min(100, a.stam + aRec);
     b.stam = Math.min(100, b.stam + bRec);
+    const aHpRec = 2 + ((a.recovery != null ? a.recovery : 62) / 100) * 5;
+    const bHpRec = 2 + ((b.recovery != null ? b.recovery : 62) / 100) * 5;
+    a.hp = Math.min(100, a.hp + aHpRec);
+    b.hp = Math.min(100, b.hp + bHpRec);
+    // Momentum decays toward neutral between rounds
+    a.momentum *= 0.5;
+    b.momentum *= 0.5;
+    // Cuts swell between rounds — corner can slow it slightly
+    if (a.cut) a.cut.severity = Math.min(1, a.cut.severity + 0.04);
+    if (b.cut) b.cut.severity = Math.min(1, b.cut.severity + 0.04);
     // Momentum decays toward neutral between rounds
     a.momentum *= 0.5;
     b.momentum *= 0.5;
@@ -902,8 +914,8 @@ function applyVictoryPose(bx, t, side) {
 
 // ── FIGHTERS DATA ────────────────────────────────────────────────────────────
 const FIGHTERS=[
-  {name:"Tommy 'The Bull' Moran",  power:82,speed:66,stamina:74,defense:60,chin:70,color:0x1a4a9a,colorCSS:"#2a5aaa"},
-  {name:"Sal 'Switchblade' Ricci", power:68,speed:84,stamina:78,defense:76,chin:62,color:0x9a1a1a,colorCSS:"#bb2222"},
+  {name:"Tommy 'The Bull' Moran",  power:82,speed:66,stamina:74,defense:60,accuracy:65,chin:70,recovery:62,color:0x1a4a9a,colorCSS:"#2a5aaa"},
+  {name:"Sal 'Switchblade' Ricci", power:68,speed:84,stamina:78,defense:76,accuracy:72,chin:62,recovery:60,color:0x9a1a1a,colorCSS:"#bb2222"},
 ];
 
 // ── COMPONENT ─────────────────────────────────────────────────────────────────
@@ -1017,10 +1029,17 @@ export default function Boxing3D() {
           setArenaMatchDetail(m);
           arenaMatchDetailRef.current = m;
           if (m.state === "finished") setArenaServerResult({ winner: m.winner, finish_reason: m.finish_reason || "" });
+          // Keep HP and round in sync with server so bar and "End of round" are correct
+          const hp = m.hp || {};
+          const serverRound = m.round ?? 1;
+          setHpA(hp.a != null ? hp.a : 100);
+          setHpB(hp.b != null ? hp.b : 100);
+          setRound(serverRound);
         }
       }).catch(() => {});
     };
-    const id = setInterval(poll, 2000);
+    // Poll every 1s so we catch "counting" and "finished" quickly (count start + 10-count KO)
+    const id = setInterval(poll, 1000);
     poll();
     return () => clearInterval(id);
   }, [arenaMatchId]);
@@ -1577,6 +1596,19 @@ export default function Boxing3D() {
             setKoCount({ count: countFromServer, side: ko.side,
               name: (ko.side==="a" ? r.fight?.nameA : r.fight?.nameB) || "FIGHTER",
               tko: ko.isTKO });
+            // End game on 10 count: when count is 10 and time has expired, don't wait for next poll
+            if (countFromServer >= 10 && secsRemaining <= 0) {
+              ko.stage = "done";
+              setKoCount(null);
+              r.phase = "done";
+              r.victoryT = 0;
+              setGameState("done");
+              const winnerId = ko.side === "a" ? arenaMatchDetailRef.current?.b_id : arenaMatchDetailRef.current?.a_id;
+              const nameA = r.fight?.nameA || FIGHTERS[0].name;
+              const nameB = r.fight?.nameB || FIGHTERS[1].name;
+              const winName = (winnerId === arenaMatchDetailRef.current?.a_id ? nameA : nameB) || "Winner";
+              setWinText(`${winName.split(" ")[0]} WINS — KO (REFEREE COUNT OUT)`);
+            }
           } else {
           ko.countTimer -= dt;
           if(ko.countTimer <= 0){
@@ -1696,11 +1728,11 @@ export default function Boxing3D() {
       const roundNum = m?.round ?? 0;
       const isBetweenRounds = m?.state === "running" && roundNum > 0 && nextRoundAtMs > nowMs;
       if(!aPunching&&r.kdA<=0&&r.phase==="fighting"){
-        if(isBetweenRounds){ r.txA=-1.08; applyRecoveryPose(bA,t,"a"); }
+        if(isBetweenRounds){ r.txA=-1.55; r.txB=1.55; applyRecoveryPose(bA,t,"a"); }
         else { r.txA=-0.90; applyIdle(bA,t,"a"); }
       }
       if(!bPunching&&r.kdB<=0&&r.phase==="fighting"){
-        if(isBetweenRounds){ r.txB=1.08; applyRecoveryPose(bB,t,"b"); }
+        if(isBetweenRounds){ r.txB=1.55; applyRecoveryPose(bB,t,"b"); }
         else { r.txB=0.90; applyIdle(bB,t,"b"); }
       }
 
@@ -1840,8 +1872,9 @@ export default function Boxing3D() {
       speed: scaleStat(youStats.speed, baseA.speed),
       stamina: scaleStat(youStats.stamina, baseA.stamina),
       defense: scaleStat(youStats.defense, baseA.defense),
+      accuracy: scaleStat(youStats.accuracy, baseA.accuracy ?? 65),
       chin: scaleStat(youStats.chin ?? 1, 65),
-      recovery: scaleStat(youStats.recovery ?? 1, 62),
+      recovery: scaleStat(youStats.recovery ?? 1, baseA.recovery ?? 62),
     } : baseA;
 
     const simB = npc ? {
@@ -1850,8 +1883,9 @@ export default function Boxing3D() {
       speed: scaleStat(npc.speed, baseB.speed),
       stamina: scaleStat(npc.stamina, baseB.stamina),
       defense: scaleStat(npc.defense, baseB.defense),
+      accuracy: scaleStat(npc.accuracy, baseB.accuracy ?? 72),
       chin: scaleStat(npc.chin ?? npc.accuracy ?? 5, 60),
-      recovery: scaleStat(npc.recovery ?? 5, 62),
+      recovery: scaleStat(npc.recovery ?? 5, baseB.recovery ?? 60),
     } : baseB;
 
     const result=simulateFight(simA, simB);
@@ -1921,6 +1955,7 @@ export default function Boxing3D() {
               <div style={{width:90,fontSize:9,color:crimson,textAlign:"right"}}>{nameB}</div>
             </div>
             {actionText && <div style={{fontSize:10,color:"#fff",textAlign:"center",marginTop:3}}>{actionText}</div>}
+            {isBetweenRounds && <div style={{fontSize:11,color:"var(--noir-primary)",textAlign:"center",marginTop:2,fontWeight:600}}>End of round {roundNum > 1 ? roundNum - 1 : 1}</div>}
             {isBetweenRounds && <div style={{fontSize:10,color:"var(--noir-primary)",textAlign:"center",marginTop:3}}>Between rounds – next in {secsToNextRound}s</div>}
             {isBetweenRounds && <div style={{fontSize:9,color:"var(--noir-muted)",textAlign:"center",marginTop:1}}>Recovering…</div>}
             {isCounting && <div style={{fontSize:10,color:"var(--noir-primary)",textAlign:"center",marginTop:3}}>Referee count – {secsToCountEnd}s</div>}

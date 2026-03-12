@@ -68,6 +68,36 @@ function interpPts(pts, T) {
   return pts[0].p;
 }
 
+/** Smoother corners: Catmull-Rom spline so cars don't stop/start at segment joints. */
+function interpPtsSmooth(pts, T) {
+  const t = ((T % 1) + 1) % 1;
+  const n = pts.length;
+  if (n < 2) return pts[0].p;
+  const wrap = (i) => ((i % n) + n) % n;
+  for (let seg = 0; seg < n; seg++) {
+    const next = wrap(seg + 1);
+    const f0 = pts[seg].f;
+    const f1 = pts[next].f;
+    const isWrapSegment = f1 <= f0;
+    const inSegment = isWrapSegment
+      ? (t >= f0 || t <= f1)
+      : (t >= f0 && t <= f1);
+    if (!inSegment) continue;
+    const segLen = isWrapSegment ? (1 - f0) + f1 : (f1 - f0);
+    let u = isWrapSegment ? (t >= f0 ? (t - f0) / segLen : (t + (1 - f0)) / segLen) : (t - f0) / segLen;
+    u = Math.max(0, Math.min(1, u));
+    const u2 = u * u, u3 = u2 * u;
+    const p0 = pts[wrap(seg - 1)].p;
+    const p1 = pts[seg].p;
+    const p2 = pts[next].p;
+    const p3 = pts[wrap(seg + 2)].p;
+    const x = 0.5 * (2*p1.x + (-p0.x + p2.x)*u + (2*p0.x - 5*p1.x + 4*p2.x - p3.x)*u2 + (-p0.x + 3*p1.x - 3*p2.x + p3.x)*u3);
+    const y = 0.5 * (2*p1.y + (-p0.y + p2.y)*u + (2*p0.y - 5*p1.y + 4*p2.y - p3.y)*u2 + (-p0.y + 3*p1.y - 3*p2.y + p3.y)*u3);
+    return { x, y };
+  }
+  return pts[0].p;
+}
+
 function rectOvalPt(T, x1,y1,x2,y2,r) {
   const t = ((T % 1) + 1) % 1;
   const W = x2-x1, H = y2-y1;
@@ -142,7 +172,7 @@ const TRACKS = [
   {
     id:"roosevelt", name:"Roosevelt Raceway", km:2.1, corners:12, lapBase:24, rewardMult:1.1,
     desc:"Technical road course, fast sweepers",
-    getPoint:(t)=>interpPts([
+    getPoint:(t)=>interpPtsSmooth([
       {f:0.00,p:{x:400,y:78}},{f:0.09,p:{x:600,y:78}},{f:0.13,p:{x:648,y:108}},
       {f:0.19,p:{x:655,y:170}},{f:0.23,p:{x:630,y:220}},{f:0.27,p:{x:570,y:252}},
       {f:0.34,p:{x:480,y:255}},{f:0.38,p:{x:445,y:218}},{f:0.42,p:{x:462,y:172}},
@@ -248,11 +278,11 @@ function getCurvature(track, t) {
   return Math.abs(delta) / arcLen;
 }
 
-/** Corner multiplier: 1.0 on straights, ~0.65 in sharp corners. Scale by grip (higher grip = less slowdown). */
+/** Corner multiplier: 1.0 on straights, ~0.78 in sharp corners. Scale by grip (higher grip = less slowdown). Cars carry more speed through corners. */
 function getCornerMult(curvature, baseGrip = 0.85) {
-  const k = 0.012;
+  const k = 0.007;
   const raw = 1 / (1 + curvature * k);
-  const minMult = 0.58 + (baseGrip - 0.5) * 0.2;
+  const minMult = 0.78 + (baseGrip - 0.5) * 0.15;
   return Math.max(minMult, Math.min(1, raw));
 }
 
@@ -280,6 +310,8 @@ export default function CircuitRaceView({
   participants = [],
   lap_results = [],
   pit_stops = [],
+  qualifying_order = [],
+  tire_wear_after_lap = {},
   laps: totalLaps = 3,
   resultOrder = [],
   weather: weatherIdProp = "clear",
@@ -605,7 +637,10 @@ export default function CircuitRaceView({
         }
 
         // Tyre wear
-        r.tyreWear = Math.max(td.minWear, r.tyreWear - td.wearPerSec * wd.wearMult * dt);
+        if (r.tireWearByLap && r.tireWearByLap.length)
+          r.tyreWear = r.tireWearByLap[Math.min(r.totalLapsDone, r.tireWearByLap.length - 1)];
+        else
+          r.tyreWear = Math.max(td.minWear, r.tyreWear - td.wearPerSec * wd.wearMult * dt);
 
         // Pit decision
         if (!r.inPit && r.pitStrategy.length > 0) {
@@ -700,26 +735,28 @@ export default function CircuitRaceView({
   useEffect(() => {
     if (mode !== "replay") return;
     if (!participants.length && !resultOrder.length) return;
-    // Use the passed lap_results / result_order to drive animation
-    // We still use live simulation approach but seed positions from backend data
+    const order = (qualifying_order && qualifying_order.length) ? qualifying_order : (resultOrder.length ? resultOrder : participants.map(p => p.user_id || p.id));
     resizeCanvas();
     const track = TRACKS.find(t=>t.id===initialTrackId) || TRACKS[0];
     const cond = WEATHER_MAP[weatherIdProp] || "clear";
-    const racers = (resultOrder.length ? resultOrder : participants.map(p=>p.user_id||p.id)).map((id, i) => {
+    const racers = order.map((id, i) => {
       const p = participants.find(x=>(x.user_id||x.id)===id) || {};
       const isPit = (pit_stops||[]).some(ps=>ps.entrant_id===id);
       const effSpeed = p.effective_speed != null ? p.effective_speed : 15;
       const effGrip = p.effective_grip != null ? p.effective_grip : 0.85;
       const baseSpeed = effSpeed / 15;
+      const tyreId = (p.tyre_compound || "medium").toLowerCase();
       return {
         id, name:p.username||p.car_name||`#${i+1}`, isPlayer:false,
         color:CAR_COLORS[i%CAR_COLORS.length], carName:p.car_name||"",
         trackPos: i * (-0.012), lapCount:1, totalLapsDone:0,
-        currentTyre: isPit ? "hard" : "medium",
-        tyreWear:100, pitStops:0, inPit:false, pitEndAt:0,
+        currentTyre: tyreId in TYRE_DEFS ? tyreId : "medium",
+        tyreWear: Array.isArray(tire_wear_after_lap[id]) ? (tire_wear_after_lap[id][0] ?? 100) : 100,
+        pitStops:0, inPit:false, pitEndAt:0,
         baseSpeed, baseGrip: effGrip,
         pitStrategy: [], finished:false, visible:true, position:i+1, lapTimes:[],
         isPlayer: false,
+        tireWearByLap: tire_wear_after_lap[id],
       };
     });
     setUiPhase("racing");

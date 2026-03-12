@@ -869,6 +869,7 @@ async def advance_running_matches(database) -> int:
             "$push": {"rounds": round_log},
         }
         if go_to_counting:
+            # Client uses down_fighter and count_ends_at for the referee count overlay
             updates["$set"].update({
                 "state": "counting",
                 "down_fighter": go_to_counting,
