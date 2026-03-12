@@ -51,10 +51,19 @@ export default function Racing() {
   const fetchProfile = useCallback(async () => {
     try {
       const r = await api.get("/racing/profile");
-      setProfile(r.data?.profile || null);
-      setCars(r.data?.owned_cars || []);
-      setUpgradeTradeoffs(r.data?.upgrade_tradeoffs || null);
-      setUpgradesByCar(r.data?.upgrades || {});
+      const d = r.data || {};
+      setProfile({
+        ...(d.profile || {}),
+        tyre_stock_soft: d.tyre_stock_soft,
+        tyre_stock_medium: d.tyre_stock_medium,
+        tyre_stock_hard: d.tyre_stock_hard,
+        tyre_costs: d.tyre_costs || {},
+        engine_repair_cost_per_pct: d.engine_repair_cost_per_pct,
+        engine_replace_cost: d.engine_replace_cost,
+      });
+      setCars(d.owned_cars || []);
+      setUpgradeTradeoffs(d.upgrade_tradeoffs || null);
+      setUpgradesByCar(d.upgrades || {});
     } catch (e) {
       toast.error(apiDetail(e));
     }
@@ -224,6 +233,39 @@ export default function Racing() {
     }
   };
 
+  const handleRepairEngine = async (instanceId) => {
+    try {
+      await api.post("/racing/engine/repair", { racing_car_instance_id: instanceId });
+      await fetchProfile();
+      refreshUser();
+      toast.success("Engine repaired");
+    } catch (e) {
+      toast.error(apiDetail(e));
+    }
+  };
+
+  const handleReplaceEngine = async (instanceId) => {
+    try {
+      await api.post("/racing/engine/replace", { racing_car_instance_id: instanceId });
+      await fetchProfile();
+      refreshUser();
+      toast.success("Engine replaced");
+    } catch (e) {
+      toast.error(apiDetail(e));
+    }
+  };
+
+  const handleBuyTyres = async (compound, quantity = 1) => {
+    try {
+      await api.post("/racing/tyres/buy", { compound, quantity });
+      await fetchProfile();
+      refreshUser();
+      toast.success(`Bought ${quantity} ${compound} tyre set(s)`);
+    } catch (e) {
+      toast.error(apiDetail(e));
+    }
+  };
+
   const handleEnterComp = async (compId, carInstanceId) => {
     if (!carInstanceId) { toast.error("Select a racing car first"); return; }
     try {
@@ -319,14 +361,19 @@ export default function Racing() {
             {(activeRace.result_order || []).map((id, i) => {
               const p = (activeRace.participants || []).find((x) => (x.user_id || x.id) === id);
               const rew = (activeRace.rewards || []).find((r) => r.entrant_id === id);
+              const isDnf = rew?.dnf || (activeRace.dnf_ids || []).includes(id);
               return (
                 <li key={id} className="flex items-center justify-between py-1 border-b border-[var(--noir-border)] last:border-0">
-                  <span>#{i + 1} {p?.username || p?.car_name || id}</span>
-                  {rew && (
+                  <span>
+                    #{i + 1} {p?.username || p?.car_name || id}
+                    {isDnf && <span className="text-red-400 font-heading ml-2">DNF</span>}
+                  </span>
+                  {rew && !isDnf && (
                     <span className="text-sm text-[var(--noir-muted)]">
                       {formatMoney(rew.cash)} • {rew.rank_points} RP • {rew.racing_rep} rep
                     </span>
                   )}
+                  {rew && isDnf && <span className="text-xs text-[var(--noir-muted)]">Engine / mechanical</span>}
                 </li>
               );
             })}
@@ -421,12 +468,19 @@ export default function Racing() {
                     <option value="medium">Medium</option>
                     <option value="hard">Hard</option>
                   </select>
+                  <span className="text-[10px] text-[var(--noir-muted)]">Stock: {profile?.[`tyre_stock_${createForm.tyre_compound}`] ?? 0}</span>
                 </label>
                 <button type="button" className={styles.btnPrimary}
-                  disabled={creating || !selectedInstanceId} onClick={handleCreateRace}>
+                  disabled={creating || !selectedInstanceId || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100} onClick={handleCreateRace}>
                   {creating ? "Creating…" : "Create race"}
                 </button>
               </div>
+              {(cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 && (
+                <p className="text-xs text-amber-400 mt-2">Engine at 100% wear. Repair or replace in My ride.</p>
+              )}
+              {((profile?.[`tyre_stock_${createForm.tyre_compound}`] ?? 0) < 1) && (
+                <p className="text-xs text-amber-400 mt-2">No {createForm.tyre_compound} tyres in stock. Buy in My ride.</p>
+              )}
               {!selectedInstanceId && (
                 <p className="text-xs text-amber-400 mt-2">Select a racing car in My ride first.</p>
               )}
@@ -457,7 +511,7 @@ export default function Racing() {
                         </span>
                       </div>
                       <button type="button" className={styles.btnPrimary + " text-sm"}
-                        disabled={joiningId === race.id || !selectedInstanceId || race.participants?.some((p) => p.user_id === profile?.user_id)}
+                        disabled={joiningId === race.id || !selectedInstanceId || race.participants?.some((p) => p.user_id === profile?.user_id) || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 || (profile?.[`tyre_stock_${joinTyre}`] ?? 0) < 1}
                         onClick={() => handleJoinRace(race, selectedInstanceId, joinTyre)}>
                         {joiningId === race.id ? "Joining…" : "Join"}
                       </button>
@@ -472,6 +526,29 @@ export default function Racing() {
         {/* ─── MY RIDE TAB ─── */}
         {tab === "myride" && (
           <>
+            <div className={styles.panel + " p-4 mb-4"}>
+              <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Tyre stock</h3>
+              <p className="text-xs text-[var(--noir-muted)] mb-3">One set per race. Buy more below.</p>
+              <div className="flex flex-wrap gap-4">
+                {["soft", "medium", "hard"].map((compound) => {
+                  const stock = profile?.[`tyre_stock_${compound}`] ?? 0;
+                  const cost = profile?.tyre_costs?.[compound] ?? 500;
+                  return (
+                    <div key={compound} className="flex items-center gap-2 p-2 rounded border border-[var(--noir-border)] bg-[var(--noir-surface)]">
+                      <span className="text-xs font-heading capitalize text-[var(--noir-primary)]">{compound}</span>
+                      <span className="text-sm font-heading tabular-nums">{stock}</span>
+                      <span className="text-[10px] text-[var(--noir-muted)]">sets</span>
+                      <button type="button" className={styles.btnGoldDarkText + " text-xs"} onClick={() => handleBuyTyres(compound, 1)}>
+                        Buy 1 ({formatMoney(cost)})
+                      </button>
+                      <button type="button" className={styles.btnGoldDarkText + " text-xs"} onClick={() => handleBuyTyres(compound, 5)}>
+                        Buy 5 ({formatMoney(cost * 5)})
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             <div className={styles.panel + " p-4 mb-4"}>
               <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Your car</h3>
               {cars.length === 0 ? (
@@ -515,6 +592,44 @@ export default function Racing() {
                           <div className="text-lg font-heading text-[var(--noir-primary)]">{effGrip}%</div>
                           <div className="text-[10px] text-[var(--noir-muted)]">Higher = better in corners</div>
                         </div>
+                      </div>
+                      <div className="mb-3">
+                        <div className="text-[10px] font-heading uppercase text-[var(--noir-muted)] mb-1">Engine wear</div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-2 rounded-full bg-[var(--noir-border)] overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${Math.min(100, (c.engine_wear ?? 0))}%`,
+                                backgroundColor: (c.engine_wear ?? 0) >= 100 ? "#dc2626" : (c.engine_wear ?? 0) >= 75 ? "#f59e0b" : "#22c55e",
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs font-heading text-[var(--noir-primary)] w-10">{(c.engine_wear ?? 0).toFixed(0)}%</span>
+                        </div>
+                        <p className="text-[10px] text-[var(--noir-muted)] mt-0.5">Every race adds wear. At 100% you must repair or replace. High wear risks DNF.</p>
+                        {((c.engine_wear ?? 0) > 0 && (c.engine_wear ?? 0) < 100) && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            <button type="button" className={styles.btnGoldDarkText + " text-xs"}
+                              onClick={() => handleRepairEngine(c.id)}>
+                              Repair to 0% ({formatMoney(((c.engine_wear ?? 0) * (profile?.engine_repair_cost_per_pct ?? 400)))})
+                            </button>
+                            <button type="button" className={styles.btnGoldDarkText + " text-xs"}
+                              onClick={() => handleReplaceEngine(c.id)}>
+                              New engine ({formatMoney(profile?.engine_replace_cost ?? 75000)})
+                            </button>
+                          </div>
+                        )}
+                        {(c.engine_wear ?? 0) >= 100 && (
+                          <p className="text-amber-400 text-xs mt-2">Engine at 100%. Repair or replace before racing.</p>
+                        )}
+                        {(c.engine_wear ?? 0) >= 100 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            <button type="button" className={styles.btnPrimary + " text-xs"} onClick={() => handleReplaceEngine(c.id)}>
+                              Replace engine ({formatMoney(profile?.engine_replace_cost ?? 75000)})
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <div className="mb-3">
                         <div className="text-[10px] font-heading uppercase text-[var(--noir-muted)] mb-1">Upgrade levels</div>

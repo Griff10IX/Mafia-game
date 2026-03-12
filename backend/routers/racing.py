@@ -54,6 +54,19 @@ RACING_REP_BY_POSITION = [5, 3, 2, 1, 0, 0, 0, 0]
 CREW_UPGRADE_COSTS = [0, 50000, 120000, 250000, 500000, 1000000]
 CREW_BONUS_PER_LEVEL = 0.02
 CAR_UPGRADE_COSTS = [0, 20000, 50000, 100000, 200000]
+# Engine wear: per race %, repair cost per %, replace cost. At high wear, risk of speed limit or DNF during race.
+ENGINE_WEAR_PER_RACE = 8
+ENGINE_WEAR_MAX = 100
+ENGINE_REPAIR_COST_PER_PCT = 400
+ENGINE_REPLACE_COST = 75000
+ENGINE_RISK_THRESHOLD = 75  # wear >= this: chance per lap of issues
+ENGINE_DNF_CHANCE_PER_LAP_AT_100 = 0.12  # at 100% wear, ~12% per lap to DNF
+ENGINE_SPEED_PENALTY_AT_RISK = 0.85  # speed mult when "engine issues" but no DNF
+# Tyre stock: per compound, cost per set, initial stock for new players
+TYRE_STOCK_INITIAL = 5
+TYRE_COST_SOFT = 800
+TYRE_COST_MEDIUM = 500
+TYRE_COST_HARD = 400
 # Trade-offs: engine +power -grip, tires +grip -power, aero +speed -grip (unlock 1+ win), reliability -wear -power (unlock 1+ win)
 ENGINE_POWER_PER_LEVEL = 0.04
 ENGINE_GRIP_PENALTY_PER_LEVEL = 0.03
@@ -105,6 +118,9 @@ DEFAULT_PROFILE = {
     "wins": 0,
     "races_completed": 0,
     "selected_racing_car_id": None,
+    "tyre_stock_soft": TYRE_STOCK_INITIAL,
+    "tyre_stock_medium": TYRE_STOCK_INITIAL,
+    "tyre_stock_hard": TYRE_STOCK_INITIAL,
 }
 
 
@@ -138,6 +154,20 @@ class BuyRacingCarRequest(BaseModel):
 class SetSelectedCarRequest(BaseModel):
     racing_car_instance_id: Optional[str] = None
     racing_car_id: Optional[str] = None
+
+
+class RepairEngineRequest(BaseModel):
+    racing_car_instance_id: str
+    target_wear: Optional[float] = None  # default 0 = full repair
+
+
+class ReplaceEngineRequest(BaseModel):
+    racing_car_instance_id: str
+
+
+class BuyTyresRequest(BaseModel):
+    compound: str = "medium"  # soft, medium, hard
+    quantity: int = 1
 
 
 # ---------- Helpers ----------
@@ -251,8 +281,11 @@ def _run_race_simulation_laps(
     upgrades_map: Dict[str, dict],
     num_laps: int,
     weather_id: str = "clear",
+    engine_wear_by_entrant: Optional[Dict[str, float]] = None,
 ) -> tuple:
-    """Run lap-by-lap simulation with tire wear, pit stops, weather. Returns (lap_results, result_order, pit_stops, tire_wear_after_lap)."""
+    """Run lap-by-lap simulation with tire wear, pit stops, weather, optional engine DNF/speed limit.
+    Returns (lap_results, result_order, pit_stops, tire_wear_after_lap, dnf_ids)."""
+    engine_wear_by_entrant = engine_wear_by_entrant or {}
     weather = _get_weather(weather_id)
     tire_wear_mult = float(weather.get("tire_wear_mult", 1.0))
     speed_mult = float(weather.get("speed_mult", 1.0))
@@ -261,6 +294,7 @@ def _run_race_simulation_laps(
     lap_results: List[List[str]] = []
     pit_stops: List[Dict[str, Any]] = []
     tire_wear_after_lap: Dict[str, List[float]] = {eid: [100.0] for eid in ids}
+    dnf_ids: List[str] = []
 
     def _compound_wear_mult(entrant: dict) -> float:
         cid = (entrant.get("tyre_compound") or "medium").lower()
@@ -277,9 +311,24 @@ def _run_race_simulation_laps(
         return 1.0
 
     for lap in range(1, num_laps + 1):
+        # Engine failure check (high wear: chance of DNF or speed penalty this lap)
+        engine_issue_this_lap: Dict[str, bool] = {}  # eid -> True if DNF
+        for eid, wear in engine_wear_by_entrant.items():
+            if eid in dnf_ids:
+                continue
+            if wear < ENGINE_RISK_THRESHOLD:
+                continue
+            # Chance of DNF increases with wear; at 100% use ENGINE_DNF_CHANCE_PER_LAP_AT_100
+            dnf_chance = (wear - ENGINE_RISK_THRESHOLD) / (ENGINE_WEAR_MAX - ENGINE_RISK_THRESHOLD) * ENGINE_DNF_CHANCE_PER_LAP_AT_100
+            if random.random() < dnf_chance:
+                dnf_ids.append(eid)
+                engine_issue_this_lap[eid] = True  # DNF
+
         # Pit when tire below threshold (pit a lap before they'd be gone)
         pitting = set()
         for eid in ids:
+            if eid in dnf_ids:
+                continue
             if tire_wear[eid] < TIRE_PIT_THRESHOLD:
                 pitting.add(eid)
             elif lap > 1 and lap < num_laps and random.random() < 0.12 and tire_wear[eid] < 60:
@@ -287,11 +336,18 @@ def _run_race_simulation_laps(
         for eid in pitting:
             pit_stops.append({"lap": lap, "entrant_id": eid})
 
-        # Lap performance: speed, grip, tire compound, tire wear
+        # Lap performance: speed, grip, tire compound, tire wear; DNFs get 0 speed
         lap_speeds = []
         for e in entrants:
             eid = e.get("user_id") or e.get("id")
+            if eid in dnf_ids:
+                lap_speeds.append((eid, 0.0))
+                continue
             speed_val, grip_val = _effective_speed_and_grip(e, profile_by_user.get(eid) or {}, upgrades_map)
+            # Engine issues (high wear but no DNF): speed penalty
+            wear = engine_wear_by_entrant.get(eid) or 0
+            if wear >= ENGINE_RISK_THRESHOLD:
+                speed_val *= ENGINE_SPEED_PENALTY_AT_RISK
             tire_factor = max(0.3, tire_wear[eid] / 100.0)
             compound_mult = _compound_grip_mult(e)
             combined = speed_val * (0.7 + 0.3 * grip_val) * tire_factor * speed_mult * compound_mult
@@ -307,6 +363,8 @@ def _run_race_simulation_laps(
         # Update tire wear (compound affects wear rate; reliability reduces it)
         for e in entrants:
             eid = e.get("user_id") or e.get("id")
+            if eid in dnf_ids:
+                continue
             up = upgrades_map.get(e.get("racing_car_instance_id") or eid) or {}
             rel = int(up.get("reliability_level") or 0)
             wear_mult_rel = max(0.5, 1.0 - rel * RELIABILITY_WEAR_REDUCTION_PER_LEVEL)
@@ -318,8 +376,14 @@ def _run_race_simulation_laps(
                 tire_wear[eid] = max(0, tire_wear[eid] - wear_this_lap)
             tire_wear_after_lap[eid].append(round(tire_wear[eid], 1))
 
-    result_order = lap_results[-1] if lap_results else ids
-    return lap_results, result_order, pit_stops, tire_wear_after_lap
+    # Result order: finishers by last lap order, then DNFs
+    if lap_results:
+        last_order = lap_results[-1]
+        finishers = [eid for eid in last_order if eid not in dnf_ids]
+        result_order = finishers + dnf_ids
+    else:
+        result_order = ids
+    return lap_results, result_order, pit_stops, tire_wear_after_lap, dnf_ids
 
 
 def _run_qualifying(
@@ -358,6 +422,14 @@ async def get_racing_tracks(current_user: dict = Depends(get_current_user)):
 
 async def get_racing_profile(current_user: dict = Depends(get_current_user_verified)):
     prof = await _ensure_racing_profile(current_user["id"])
+    # Ensure tyre stock exists for existing users (one-time default)
+    for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard"):
+        if prof.get(key) is None:
+            await db.racing_profiles.update_one(
+                {"user_id": current_user["id"]},
+                {"$set": {key: TYRE_STOCK_INITIAL}},
+            )
+            prof[key] = TYRE_STOCK_INITIAL
     owned = await db.user_racing_cars.find({"user_id": current_user["id"]}, {"_id": 0}).to_list(100)
     # One instance per user: if none, create one with first car (no purchase)
     if not owned:
@@ -369,6 +441,7 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
             "racing_car_id": first_car.get("id"),
             "engine_level": 0,
             "tires_level": 0,
+            "engine_wear": 0,
             "acquired_at": _now_iso(),
         })
         await db.racing_profiles.update_one(
@@ -377,7 +450,7 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
             upsert=True,
         )
         prof["selected_racing_car_id"] = instance_id
-        owned = [{"id": instance_id, "user_id": current_user["id"], "racing_car_id": first_car.get("id"), "engine_level": 0, "tires_level": 0, "car_name": first_car.get("name")}]
+        owned = [{"id": instance_id, "user_id": current_user["id"], "racing_car_id": first_car.get("id"), "engine_level": 0, "tires_level": 0, "engine_wear": 0, "car_name": first_car.get("name")}]
     # If multiple (legacy), use only the selected one as "owned" for display
     selected_id = prof.get("selected_racing_car_id")
     if selected_id and len(owned) > 1:
@@ -388,6 +461,7 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
     for o in owned:
         car_def = _get_racing_car(o.get("racing_car_id") or "")
         o["car_name"] = car_def.get("name") if car_def else (o.get("racing_car_id") or "?")
+        o.setdefault("engine_wear", 0)
     upgrades = {}
     for o in owned:
         uid = o.get("id")
@@ -419,6 +493,12 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         },
         "tyre_compounds": TYRE_COMPOUNDS,
         "wins": int(prof.get("wins") or 0),
+        "tyre_stock_soft": int(prof.get("tyre_stock_soft") or TYRE_STOCK_INITIAL),
+        "tyre_stock_medium": int(prof.get("tyre_stock_medium") or TYRE_STOCK_INITIAL),
+        "tyre_stock_hard": int(prof.get("tyre_stock_hard") or TYRE_STOCK_INITIAL),
+        "tyre_costs": {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD},
+        "engine_repair_cost_per_pct": ENGINE_REPAIR_COST_PER_PCT,
+        "engine_replace_cost": ENGINE_REPLACE_COST,
     }
 
 
@@ -450,6 +530,7 @@ async def set_selected_car(body: SetSelectedCarRequest, current_user: dict = Dep
                 "racing_car_id": racing_car_id,
                 "engine_level": 0,
                 "tires_level": 0,
+                "engine_wear": 0,
                 "acquired_at": _now_iso(),
             })
         await _ensure_racing_profile(current_user["id"])
@@ -573,6 +654,72 @@ async def upgrade_car_part(body: UpgradeCarRequest, current_user: dict = Depends
     return {"message": "Car upgraded", "engine_level": new_engine, "tires_level": new_tires}
 
 
+async def repair_engine(body: RepairEngineRequest, current_user: dict = Depends(get_current_user_verified)):
+    """Repair engine wear down to target_wear (default 0) for a fee."""
+    instance_id = (body.racing_car_instance_id or "").strip()
+    doc = await _get_user_racing_car(current_user["id"], instance_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Racing car not found")
+    current_wear = float(doc.get("engine_wear") or 0)
+    target = 0.0 if body.target_wear is None else max(0, min(ENGINE_WEAR_MAX, float(body.target_wear)))
+    if current_wear <= target:
+        raise HTTPException(status_code=400, detail="Engine wear already at or below target")
+    cost = int((current_wear - target) * ENGINE_REPAIR_COST_PER_PCT)
+    if cost < 1:
+        raise HTTPException(status_code=400, detail="Nothing to repair")
+    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
+    if int(user.get("money") or 0) < cost:
+        raise HTTPException(status_code=400, detail="Insufficient cash")
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -cost}})
+    await db.user_racing_cars.update_one(
+        {"user_id": current_user["id"], "id": instance_id},
+        {"$set": {"engine_wear": round(target, 1)}},
+    )
+    return {"message": "Engine repaired", "engine_wear": target, "cost": cost}
+
+
+async def replace_engine(body: ReplaceEngineRequest, current_user: dict = Depends(get_current_user_verified)):
+    """Replace engine (resets wear to 0) for a fixed cost."""
+    instance_id = (body.racing_car_instance_id or "").strip()
+    doc = await _get_user_racing_car(current_user["id"], instance_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Racing car not found")
+    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
+    if int(user.get("money") or 0) < ENGINE_REPLACE_COST:
+        raise HTTPException(status_code=400, detail="Insufficient cash")
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -ENGINE_REPLACE_COST}})
+    await db.user_racing_cars.update_one(
+        {"user_id": current_user["id"], "id": instance_id},
+        {"$set": {"engine_wear": 0}},
+    )
+    return {"message": "Engine replaced", "engine_wear": 0, "cost": ENGINE_REPLACE_COST}
+
+
+async def buy_tyres(body: BuyTyresRequest, current_user: dict = Depends(get_current_user_verified)):
+    """Buy tyre sets (soft, medium, hard) to add to stock."""
+    compound = (body.compound or "medium").strip().lower()
+    if compound not in ("soft", "medium", "hard"):
+        raise HTTPException(status_code=400, detail="compound must be soft, medium, or hard")
+    quantity = max(1, min(20, int(body.quantity or 1)))
+    cost_map = {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD}
+    cost = cost_map[compound] * quantity
+    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
+    if int(user.get("money") or 0) < cost:
+        raise HTTPException(status_code=400, detail="Insufficient cash")
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -cost}})
+    await _ensure_racing_profile(current_user["id"])
+    from pymongo import ReturnDocument
+    updated = await db.racing_profiles.find_one_and_update(
+        {"user_id": current_user["id"]},
+        {"$inc": {f"tyre_stock_{compound}": quantity}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+        projection={f"tyre_stock_{compound}": 1},
+    )
+    new_stock = int(updated.get(f"tyre_stock_{compound}") or 0)
+    return {"message": f"Bought {quantity} {compound} tyre set(s)", "tyre_stock": new_stock, "cost": cost}
+
+
 async def create_race(body: CreateRaceRequest, current_user: dict = Depends(get_current_user_verified)):
     track_id = (body.track_id or "").strip()
     track = _get_track(track_id)
@@ -588,6 +735,13 @@ async def create_race(body: CreateRaceRequest, current_user: dict = Depends(get_
     car_doc = await _get_user_racing_car(current_user["id"], selected_id)
     if not car_doc:
         raise HTTPException(status_code=400, detail="Selected racing car not found")
+    engine_wear = float(car_doc.get("engine_wear") or 0)
+    if engine_wear >= ENGINE_WEAR_MAX:
+        raise HTTPException(status_code=400, detail="Engine at 100% wear. Repair or replace engine before racing.")
+    compound = (body.tyre_compound or "medium").strip().lower()
+    tyre_stock = int(prof.get(f"tyre_stock_{compound}") or 0)
+    if tyre_stock < 1:
+        raise HTTPException(status_code=400, detail=f"No {compound} tyres in stock. Buy tyres in My ride.")
     if entry_fee > 0:
         user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
         if int(user.get("money") or 0) < entry_fee:
@@ -661,6 +815,18 @@ async def join_race(race_id: str, body: JoinRaceRequest, current_user: dict = De
     car_doc = await _get_user_racing_car(current_user["id"], instance_id)
     if not car_doc:
         raise HTTPException(status_code=404, detail="Racing car not found")
+    engine_wear = float(car_doc.get("engine_wear") or 0)
+    if engine_wear >= ENGINE_WEAR_MAX:
+        raise HTTPException(status_code=400, detail="Engine at 100% wear. Repair or replace engine before racing.")
+    compound = (body.tyre_compound or "medium").strip().lower() if hasattr(body, "tyre_compound") else "medium"
+    prof = await _ensure_racing_profile(current_user["id"])
+    for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard"):
+        if prof.get(key) is None:
+            await db.racing_profiles.update_one({"user_id": current_user["id"]}, {"$set": {key: TYRE_STOCK_INITIAL}})
+            prof[key] = TYRE_STOCK_INITIAL
+    tyre_stock = int(prof.get(f"tyre_stock_{compound}") or 0)
+    if tyre_stock < 1:
+        raise HTTPException(status_code=400, detail=f"No {compound} tyres in stock. Buy tyres in My ride.")
     entry_fee = int(race.get("entry_fee") or 0)
     if entry_fee > 0:
         user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
@@ -763,11 +929,37 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
     num_laps = max(NUM_LAPS_MIN, min(NUM_LAPS_MAX, int(race.get("laps") or 3)))
     weather = random.choice(WEATHER_TYPES)
     weather_id = weather.get("id", "clear")
+    # Pre-check: engine wear < 100 and tyre stock for each human
+    engine_wear_by_entrant: Dict[str, float] = {}
+    for p in participants:
+        if p.get("is_npc"):
+            continue
+        uid = p.get("user_id")
+        inst_id = p.get("racing_car_instance_id")
+        if not inst_id:
+            continue
+        car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0, "engine_wear": 1})
+        wear = float(car_doc.get("engine_wear") or 0) if car_doc else 0
+        engine_wear_by_entrant[uid] = wear
+        if wear >= ENGINE_WEAR_MAX:
+            raise HTTPException(status_code=400, detail="A participant's engine is at 100% wear. They must repair or replace before the race.")
+        compound = (p.get("tyre_compound") or "medium").strip().lower()
+        prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0})
+        if prof is not None:
+            for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard"):
+                if prof.get(key) is None:
+                    await db.racing_profiles.update_one({"user_id": uid}, {"$set": {key: TYRE_STOCK_INITIAL}})
+                    prof[key] = TYRE_STOCK_INITIAL
+            stock = int(prof.get(f"tyre_stock_{compound}") or 0)
+            if stock < 1:
+                raise HTTPException(status_code=400, detail=f"Not enough {compound} tyres in stock for a participant. Buy tyres before the race.")
     # Qualifying: one lap to set grid order, then race starts from that order
     qualifying_order = _run_qualifying(participants, profile_by_user, upgrades_map, weather_id)
     id_to_p = {(p.get("user_id") or p.get("id")): p for p in participants}
     participants = [id_to_p[eid] for eid in qualifying_order if eid in id_to_p]
-    lap_results, result_order, pit_stops, tire_wear_after_lap = _run_race_simulation_laps(participants, profile_by_user, upgrades_map, num_laps, weather_id)
+    lap_results, result_order, pit_stops, tire_wear_after_lap, dnf_ids = _run_race_simulation_laps(
+        participants, profile_by_user, upgrades_map, num_laps, weather_id, engine_wear_by_entrant
+    )
     # Enrich participants with effective_speed and effective_grip for replay
     for p in participants:
         prof = profile_by_user.get(p.get("user_id") or p.get("id")) if not p.get("is_npc") else None
@@ -785,23 +977,51 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
         rp = RANK_POINTS_BY_POSITION[i] if i < len(RANK_POINTS_BY_POSITION) else 0
         rep = RACING_REP_BY_POSITION[i] if i < len(RACING_REP_BY_POSITION) else 0
         entrant = next((x for x in participants if (x.get("user_id") or x.get("id")) == entrant_id), None)
+        is_dnf = entrant_id in dnf_ids
+        if entrant:
+            entrant["dnf"] = is_dnf
         if entrant and not entrant.get("is_npc"):
             uid = entrant.get("user_id")
-            await db.users.update_one({"id": uid}, {"$inc": {"money": cash, "rank_points": rp}})
+            if not is_dnf:
+                await db.users.update_one({"id": uid}, {"$inc": {"money": cash, "rank_points": rp}})
+                await db.racing_profiles.update_one(
+                    {"user_id": uid},
+                    {"$inc": {"racing_rep": rep, "races_completed": 1, "wins": 1 if position == 1 else 0}},
+                    upsert=True,
+                )
+                try:
+                    rp_before = int((await db.users.find_one({"id": uid}, {"rank_points": 1}) or {}).get("rank_points", 0)) - rp
+                    await maybe_process_rank_up(uid, rp_before, rp, entrant.get("username", ""))
+                except Exception:
+                    pass
+            else:
+                await db.racing_profiles.update_one(
+                    {"user_id": uid},
+                    {"$inc": {"races_completed": 1}},
+                    upsert=True,
+                )
+            # Engine wear: add per race (cap at 100)
+            inst_id = entrant.get("racing_car_instance_id")
+            if inst_id:
+                car = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0, "engine_wear": 1})
+                if car is not None:
+                    current_wear = float(car.get("engine_wear") or 0)
+                    new_wear = min(ENGINE_WEAR_MAX, current_wear + ENGINE_WEAR_PER_RACE)
+                    await db.user_racing_cars.update_one(
+                        {"user_id": uid, "id": inst_id},
+                        {"$set": {"engine_wear": round(new_wear, 1)}},
+                    )
+            # Deduct one set of tyres for compound used
+            compound = (entrant.get("tyre_compound") or "medium").strip().lower()
             await db.racing_profiles.update_one(
                 {"user_id": uid},
-                {"$inc": {"racing_rep": rep, "races_completed": 1, "wins": 1 if position == 1 else 0}},
+                {"$inc": {f"tyre_stock_{compound}": -1}},
                 upsert=True,
             )
-            try:
-                rp_before = int((await db.users.find_one({"id": uid}, {"rank_points": 1}) or {}).get("rank_points", 0)) - rp
-                await maybe_process_rank_up(uid, rp_before, rp, entrant.get("username", ""))
-            except Exception:
-                pass
-        rewards.append({"entrant_id": entrant_id, "position": position, "cash": cash, "rank_points": rp, "racing_rep": rep})
+        rewards.append({"entrant_id": entrant_id, "position": position, "cash": cash, "rank_points": rp, "racing_rep": rep, "dnf": is_dnf})
     await db.racing_races.update_one(
         {"id": race_id},
-        {"$set": {"state": "completed", "participants": participants, "result_order": result_order, "qualifying_order": qualifying_order, "lap_results": lap_results, "pit_stops": pit_stops, "tire_wear_after_lap": tire_wear_after_lap, "laps": num_laps, "weather": weather_id, "weather_name": weather.get("name", "Clear"), "started_at": now, "completed_at": now, "rewards": rewards}},
+        {"$set": {"state": "completed", "participants": participants, "result_order": result_order, "qualifying_order": qualifying_order, "lap_results": lap_results, "pit_stops": pit_stops, "tire_wear_after_lap": tire_wear_after_lap, "laps": num_laps, "weather": weather_id, "weather_name": weather.get("name", "Clear"), "started_at": now, "completed_at": now, "rewards": rewards, "dnf_ids": dnf_ids}},
     )
     race["state"] = "completed"
     race["participants"] = participants
@@ -814,6 +1034,7 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
     race["weather"] = weather_id
     race["weather_name"] = weather.get("name", "Clear")
     race["rewards"] = rewards
+    race["dnf_ids"] = dnf_ids
     return {"message": "Race completed", "race": race}
 
 
@@ -909,6 +1130,9 @@ def register(router):
     router.add_api_route("/racing/profile/select-car", set_selected_car, methods=["POST"])
     router.add_api_route("/racing/crew/upgrade", upgrade_crew, methods=["POST"])
     router.add_api_route("/racing/car/upgrade", upgrade_car_part, methods=["POST"])
+    router.add_api_route("/racing/engine/repair", repair_engine, methods=["POST"])
+    router.add_api_route("/racing/engine/replace", replace_engine, methods=["POST"])
+    router.add_api_route("/racing/tyres/buy", buy_tyres, methods=["POST"])
     router.add_api_route("/racing/races", create_race, methods=["POST"])
     router.add_api_route("/racing/races/open", get_open_races, methods=["GET"])
     router.add_api_route("/racing/races/{race_id}", get_race, methods=["GET"])
