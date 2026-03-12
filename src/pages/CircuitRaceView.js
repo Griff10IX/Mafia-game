@@ -38,7 +38,15 @@ const COMMENTARY = {
 };
 
 const NPC_NAMES = ["Smokey Joe","Ace Johnson","The Phantom","Lucky Lou","Fast Eddie","Duke Malone","Slick Sam","Rusty Wheeler"];
-const NPC_CARS  = ["Stutz Bearcat","Packard Eight","Duesenberg","Cadillac V-8","Auburn Speedster","Bugatti Royale","Model T Racer","Chevrolet Racer"];
+// Mirror backend 4–5 historical cars for live mode
+const NPC_CARS = ["Ford Model T Racer","Packard 734","Stutz Bearcat","Miller 91","Duesenberg Model J"];
+const NPC_CAR_STATS = [
+  { baseSpeed: 0.38, baseGrip: 0.92 },
+  { baseSpeed: 0.54, baseGrip: 0.88 },
+  { baseSpeed: 0.69, baseGrip: 0.85 },
+  { baseSpeed: 0.85, baseGrip: 0.78 },
+  { baseSpeed: 1.0, baseGrip: 0.82 },
+];
 const NPC_TYRE_POOL = ["soft","medium","medium","hard","medium","hard","soft","medium"];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -218,6 +226,35 @@ const TRACKS = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 function pt2xy(p, sx, sy) { return [sx(p.x), sy(p.y)]; }
+
+/** Approximate curvature at track position t (0..1). Higher = sharper corner. */
+function getCurvature(track, t) {
+  const eps = 0.008;
+  const t0 = (t - eps + 1) % 1;
+  const t1 = (t + eps) % 1;
+  const p0 = track.getPoint(t0);
+  const p1 = track.getPoint(t);
+  const p2 = track.getPoint(t1);
+  const dx1 = p1.x - p0.x, dy1 = p1.y - p0.y;
+  const dx2 = p2.x - p1.x, dy2 = p2.y - p1.y;
+  const len1 = Math.hypot(dx1, dy1) || 1e-6;
+  const len2 = Math.hypot(dx2, dy2) || 1e-6;
+  const ang1 = Math.atan2(dy1, dx1);
+  const ang2 = Math.atan2(dy2, dx2);
+  let delta = ang2 - ang1;
+  if (delta > Math.PI) delta -= 2 * Math.PI;
+  if (delta < -Math.PI) delta += 2 * Math.PI;
+  const arcLen = (len1 + len2) / 2;
+  return Math.abs(delta) / arcLen;
+}
+
+/** Corner multiplier: 1.0 on straights, ~0.65 in sharp corners. Scale by grip (higher grip = less slowdown). */
+function getCornerMult(curvature, baseGrip = 0.85) {
+  const k = 0.012;
+  const raw = 1 / (1 + curvature * k);
+  const minMult = 0.58 + (baseGrip - 0.5) * 0.2;
+  return Math.max(minMult, Math.min(1, raw));
+}
 
 function rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -470,27 +507,30 @@ export default function CircuitRaceView({
   const buildRacers = useCallback((track, cond, nLaps, pTyre) => {
     const wd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
     const racers = [];
-    // Player first
+    // Player first (normalized speed ~1, grip from backend if ever passed)
     racers.push({
       id:"player", name:"You", isPlayer:true,
       color:CAR_COLORS[0], carName:playerCarName,
       trackPos:0, lapCount:1, totalLapsDone:0,
       currentTyre:pTyre, tyreWear:100,
       pitStops:0, inPit:false, pitEndAt:0,
-      baseSpeed:1.0,
+      baseSpeed:1.0, baseGrip:0.85,
       pitStrategy: buildPitStrategy(pTyre, nLaps),
       finished:false, visible:true, position:1,
       lapTimes:[],
     });
     for (let i=0;i<7;i++) {
+      const carIdx = i % NPC_CARS.length;
+      const stats = NPC_CAR_STATS[carIdx] || NPC_CAR_STATS[0];
       const t = NPC_TYRE_POOL[i] in TYRE_DEFS ? NPC_TYRE_POOL[i] : "medium";
       racers.push({
         id:`npc_${i}`, name:NPC_NAMES[i], isPlayer:false,
-        color:CAR_COLORS[i+1], carName:NPC_CARS[i],
+        color:CAR_COLORS[i+1], carName:NPC_CARS[carIdx],
         trackPos: -(i+1)*0.012, lapCount:1, totalLapsDone:0,
         currentTyre:t, tyreWear:100,
         pitStops:0, inPit:false, pitEndAt:0,
-        baseSpeed: 1.0 + (Math.random()-0.5)*0.10,
+        baseSpeed: stats.baseSpeed + (Math.random()-0.5)*0.06,
+        baseGrip: stats.baseGrip,
         pitStrategy: buildPitStrategy(t, nLaps),
         finished:false, visible:true, position:i+2,
         lapTimes:[],
@@ -542,9 +582,14 @@ export default function CircuitRaceView({
         const wearFactor = Math.max(0.4, r.tyreWear / 100);
         const effSpeed = r.baseSpeed * td.gripMult * wd.speedMult * wearFactor;
 
-        // Advance: full lap = lapBase seconds
+        // Corner-aware speed: slow in corners, fast on straights
+        const curvature = getCurvature(track, r.trackPos);
+        const baseGrip = r.baseGrip != null ? r.baseGrip : 0.85;
+        const cornerMult = getCornerMult(curvature, baseGrip);
+
+        // Advance: full lap = lapBase seconds, reduced in corners
         const lapTime = track.lapBase / effSpeed;
-        const advance = (1.0 / lapTime) * dt;
+        const advance = (1.0 / lapTime) * dt * cornerMult;
         const prevPos = r.trackPos;
         r.trackPos = (r.trackPos + advance + 1) % 1;
 
@@ -663,13 +708,16 @@ export default function CircuitRaceView({
     const racers = (resultOrder.length ? resultOrder : participants.map(p=>p.user_id||p.id)).map((id, i) => {
       const p = participants.find(x=>(x.user_id||x.id)===id) || {};
       const isPit = (pit_stops||[]).some(ps=>ps.entrant_id===id);
+      const effSpeed = p.effective_speed != null ? p.effective_speed : 15;
+      const effGrip = p.effective_grip != null ? p.effective_grip : 0.85;
+      const baseSpeed = effSpeed / 15;
       return {
         id, name:p.username||p.car_name||`#${i+1}`, isPlayer:false,
         color:CAR_COLORS[i%CAR_COLORS.length], carName:p.car_name||"",
         trackPos: i * (-0.012), lapCount:1, totalLapsDone:0,
         currentTyre: isPit ? "hard" : "medium",
         tyreWear:100, pitStops:0, inPit:false, pitEndAt:0,
-        baseSpeed: 1.0 - i*0.01 + (Math.random()-0.5)*0.03,
+        baseSpeed, baseGrip: effGrip,
         pitStrategy: [], finished:false, visible:true, position:i+1, lapTimes:[],
         isPlayer: false,
       };

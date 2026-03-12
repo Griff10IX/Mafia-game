@@ -1,4 +1,4 @@
-# Racing: bootleg runs / road races (1920s-30s). Buy racing cars, create/join races, fill with NPCs, simulate, rewards, leaderboard, comps.
+# Racing: bootleg runs / road races (1920s-30s). Choose from historical cars, create/join races, fill with NPCs, simulate, rewards, leaderboard, comps.
 from datetime import datetime, timezone, timedelta
 import random
 import uuid
@@ -12,18 +12,13 @@ from server import db, get_current_user_verified, get_current_user, maybe_proces
 def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
-# Racing cars (bought with cash, separate from garage). id, name, cost, base_speed (for simulation), image
+# Racing cars: 4–5 historically accurate (1920s–30s). Choose one, no purchase. id, name, base_speed, base_grip, image
 RACING_CARS: List[dict] = [
-    {"id": "race_car1", "name": "Model T Racer", "cost": 15000, "base_speed": 12, "image": "/images/gta/car1.jpg"},
-    {"id": "race_car2", "name": "Chevrolet Racer", "cost": 28000, "base_speed": 14, "image": "/images/gta/car2.jpg"},
-    {"id": "race_car3", "name": "Dodge Brothers Racer", "cost": 35000, "base_speed": 15, "image": "/images/gta/car3.jpg"},
-    {"id": "race_car4", "name": "Ford Model A Racer", "cost": 32000, "base_speed": 15, "image": "/images/gta/car4.jpg"},
-    {"id": "race_car5", "name": "Cadillac V-8 Racer", "cost": 65000, "base_speed": 18, "image": "/images/gta/car9.jpg"},
-    {"id": "race_car6", "name": "Packard Eight Racer", "cost": 110000, "base_speed": 20, "image": "/images/gta/car11.jpg"},
-    {"id": "race_car7", "name": "Stutz Bearcat", "cost": 180000, "base_speed": 22, "image": "/images/gta/car14.jpg"},
-    {"id": "race_car8", "name": "Duesenberg Racer", "cost": 320000, "base_speed": 25, "image": "/images/gta/car15.jpeg"},
-    {"id": "race_car9", "name": "Auburn Speedster", "cost": 400000, "base_speed": 26, "image": "/images/gta/car17.jpg"},
-    {"id": "race_car10", "name": "Bugatti Royale Racer", "cost": 800000, "base_speed": 30, "image": "/images/gta/car18.jpg"},
+    {"id": "ford_model_t_racer", "name": "Ford Model T Racer", "base_speed": 10, "base_grip": 0.92, "image": "/images/gta/car1.jpg"},
+    {"id": "packard_734", "name": "Packard 734", "base_speed": 14, "base_grip": 0.88, "image": "/images/gta/car11.jpg"},
+    {"id": "stutz_bearcat", "name": "Stutz Bearcat", "base_speed": 18, "base_grip": 0.85, "image": "/images/gta/car14.jpg"},
+    {"id": "miller_91", "name": "Miller 91", "base_speed": 22, "base_grip": 0.78, "image": "/images/gta/car15.jpeg"},
+    {"id": "duesenberg_model_j", "name": "Duesenberg Model J", "base_speed": 26, "base_grip": 0.82, "image": "/images/gta/car18.jpg"},
 ]
 
 TRACKS: List[dict] = [
@@ -59,7 +54,11 @@ RACING_REP_BY_POSITION = [5, 3, 2, 1, 0, 0, 0, 0]
 CREW_UPGRADE_COSTS = [0, 50000, 120000, 250000, 500000, 1000000]
 CREW_BONUS_PER_LEVEL = 0.02
 CAR_UPGRADE_COSTS = [0, 20000, 50000, 100000, 200000]
-CAR_UPGRADE_BONUS_PER_LEVEL = 0.03
+# Trade-offs: engine +power -grip, tires +grip -power
+ENGINE_POWER_PER_LEVEL = 0.04
+ENGINE_GRIP_PENALTY_PER_LEVEL = 0.03
+TIRES_GRIP_PER_LEVEL = 0.05
+TIRES_POWER_PENALTY_PER_LEVEL = 0.02
 MAX_CREW_LEVEL = 5
 MAX_CAR_UPGRADE_LEVEL = 4
 NUM_LAPS_MIN = 2
@@ -117,7 +116,8 @@ class BuyRacingCarRequest(BaseModel):
 
 
 class SetSelectedCarRequest(BaseModel):
-    racing_car_instance_id: str
+    racing_car_instance_id: Optional[str] = None
+    racing_car_id: Optional[str] = None
 
 
 # ---------- Helpers ----------
@@ -126,6 +126,33 @@ def _get_racing_car(car_id: str) -> Optional[dict]:
         if c.get("id") == car_id:
             return c
     return None
+
+
+def _car_tier_index(car_id: str) -> int:
+    """Index 0..len(RACING_CARS)-1 for similar-level NPC selection."""
+    for i, c in enumerate(RACING_CARS):
+        if c.get("id") == car_id:
+            return i
+    return 0
+
+
+def _effective_speed_and_grip_display(entrant: dict, profile: Optional[dict], upgrades_map: Dict[str, dict]) -> tuple:
+    """Deterministic (speed, grip) for replay display, no random."""
+    car_def = _get_racing_car(entrant.get("racing_car_id") or "")
+    base_speed = float(car_def.get("base_speed", 10)) if car_def else 10
+    base_grip = float(car_def.get("base_grip", 0.85)) if car_def else 0.85
+    offset = entrant.get("npc_speed_offset") or 0
+    base_speed += offset
+    up = upgrades_map.get(entrant.get("racing_car_instance_id") or entrant.get("id") or "") or {}
+    engine = int(up.get("engine_level") or 0)
+    tires = int(up.get("tires_level") or 0)
+    speed = base_speed * (1.0 + engine * ENGINE_POWER_PER_LEVEL - tires * TIRES_POWER_PENALTY_PER_LEVEL)
+    grip = base_grip + tires * TIRES_GRIP_PER_LEVEL - engine * ENGINE_GRIP_PENALTY_PER_LEVEL
+    if profile and not entrant.get("is_npc"):
+        mech = int(profile.get("mechanic_level") or 0)
+        pit = int(profile.get("pit_level") or 0)
+        speed *= 1.0 + (mech + pit) * CREW_BONUS_PER_LEVEL
+    return (max(1.0, speed), max(0.5, min(1.0, grip)))
 
 
 def _get_track(track_id: str) -> Optional[dict]:
@@ -150,21 +177,32 @@ async def _get_user_racing_car(user_id: str, instance_id: str) -> Optional[dict]
     return doc
 
 
-def _effective_speed(entrant: dict, profile: Optional[dict], upgrades_map: Dict[str, dict]) -> float:
+def _effective_speed_and_grip(entrant: dict, profile: Optional[dict], upgrades_map: Dict[str, dict]) -> tuple:
+    """Returns (effective_speed, effective_grip) with upgrade trade-offs: engine +power -grip, tires +grip -power."""
     car_def = _get_racing_car(entrant.get("racing_car_id") or "")
-    base = float(car_def.get("base_speed", 10)) if car_def else 10
+    base_speed = float(car_def.get("base_speed", 10)) if car_def else 10
+    base_grip = float(car_def.get("base_grip", 0.85)) if car_def else 0.85
     offset = entrant.get("npc_speed_offset") or 0
-    base += offset
+    base_speed += offset
     up = upgrades_map.get(entrant.get("racing_car_instance_id") or entrant.get("id") or "") or {}
     engine = int(up.get("engine_level") or 0)
     tires = int(up.get("tires_level") or 0)
-    base *= 1.0 + (engine + tires) * CAR_UPGRADE_BONUS_PER_LEVEL
+    # Trade-offs
+    speed = base_speed * (1.0 + engine * ENGINE_POWER_PER_LEVEL - tires * TIRES_POWER_PENALTY_PER_LEVEL)
+    grip = base_grip + tires * TIRES_GRIP_PER_LEVEL - engine * ENGINE_GRIP_PENALTY_PER_LEVEL
     if profile and not entrant.get("is_npc"):
         mech = int(profile.get("mechanic_level") or 0)
         pit = int(profile.get("pit_level") or 0)
-        base *= 1.0 + (mech + pit) * CREW_BONUS_PER_LEVEL
-    base *= 0.97 + random.random() * 0.06
-    return max(1.0, base)
+        speed *= 1.0 + (mech + pit) * CREW_BONUS_PER_LEVEL
+    speed *= 0.97 + random.random() * 0.06
+    speed = max(1.0, speed)
+    grip = max(0.5, min(1.0, grip))
+    return (speed, grip)
+
+
+def _effective_speed(entrant: dict, profile: Optional[dict], upgrades_map: Dict[str, dict]) -> float:
+    s, _ = _effective_speed_and_grip(entrant, profile, upgrades_map)
+    return s
 
 
 def _run_race_simulation(entrants: List[dict], profile_by_user: Dict[str, dict], upgrades_map: Dict[str, dict]) -> List[str]:
@@ -203,16 +241,17 @@ def _run_race_simulation_laps(
         for eid in pitting:
             pit_stops.append({"lap": lap, "entrant_id": eid})
 
-        # Lap speed: base speed * tire factor * weather; if pitting, apply penalty
+        # Lap performance: combined speed and grip (grip matters in corners / overall lap)
         lap_speeds = []
         for e in entrants:
             eid = e.get("user_id") or e.get("id")
-            base = _effective_speed(e, profile_by_user.get(eid) or {}, upgrades_map)
+            speed_val, grip_val = _effective_speed_and_grip(e, profile_by_user.get(eid) or {}, upgrades_map)
             tire_factor = max(0.3, tire_wear[eid] / 100.0)
-            speed = base * tire_factor * speed_mult
+            # Combine speed and grip into a single lap score (higher grip = less time lost in corners)
+            combined = speed_val * (0.7 + 0.3 * grip_val) * tire_factor * speed_mult
             if eid in pitting:
-                speed *= PIT_PENALTY_FACTOR
-            lap_speeds.append((eid, speed))
+                combined *= PIT_PENALTY_FACTOR
+            lap_speeds.append((eid, combined))
 
         random.shuffle(lap_speeds)
         lap_speeds.sort(key=lambda x: -x[1])
@@ -243,6 +282,32 @@ async def get_racing_tracks(current_user: dict = Depends(get_current_user)):
 async def get_racing_profile(current_user: dict = Depends(get_current_user_verified)):
     prof = await _ensure_racing_profile(current_user["id"])
     owned = await db.user_racing_cars.find({"user_id": current_user["id"]}, {"_id": 0}).to_list(100)
+    # One instance per user: if none, create one with first car (no purchase)
+    if not owned:
+        first_car = RACING_CARS[0]
+        instance_id = str(uuid.uuid4())
+        await db.user_racing_cars.insert_one({
+            "id": instance_id,
+            "user_id": current_user["id"],
+            "racing_car_id": first_car.get("id"),
+            "engine_level": 0,
+            "tires_level": 0,
+            "acquired_at": _now_iso(),
+        })
+        await db.racing_profiles.update_one(
+            {"user_id": current_user["id"]},
+            {"$set": {"selected_racing_car_id": instance_id}},
+            upsert=True,
+        )
+        prof["selected_racing_car_id"] = instance_id
+        owned = [{"id": instance_id, "user_id": current_user["id"], "racing_car_id": first_car.get("id"), "engine_level": 0, "tires_level": 0, "car_name": first_car.get("name")}]
+    # If multiple (legacy), use only the selected one as "owned" for display
+    selected_id = prof.get("selected_racing_car_id")
+    if selected_id and len(owned) > 1:
+        owned = [o for o in owned if o.get("id") == selected_id] or owned[:1]
+    elif not selected_id and owned:
+        await db.racing_profiles.update_one({"user_id": current_user["id"]}, {"$set": {"selected_racing_car_id": owned[0].get("id")}}, upsert=True)
+        prof["selected_racing_car_id"] = owned[0].get("id")
     for o in owned:
         car_def = _get_racing_car(o.get("racing_car_id") or "")
         o["car_name"] = car_def.get("name") if car_def else (o.get("racing_car_id") or "?")
@@ -263,34 +328,52 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "max_crew_level": MAX_CREW_LEVEL,
         "car_upgrade_costs": CAR_UPGRADE_COSTS,
         "max_car_upgrade_level": MAX_CAR_UPGRADE_LEVEL,
+        "upgrade_tradeoffs": {
+            "engine": {"positive": "+power", "negative": "−grip"},
+            "tires": {"positive": "+grip", "negative": "−power"},
+        },
     }
 
 
 async def buy_racing_car(body: BuyRacingCarRequest, current_user: dict = Depends(get_current_user_verified)):
-    car_id = (body.racing_car_id or "").strip()
-    car_def = _get_racing_car(car_id)
-    if not car_def:
-        raise HTTPException(status_code=404, detail="Racing car not found")
-    cost = int(car_def.get("cost") or 0)
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
-    money = int(user.get("money") or 0)
-    if cost > money:
-        raise HTTPException(status_code=400, detail="Insufficient cash")
-    instance_id = str(uuid.uuid4())
-    await db.user_racing_cars.insert_one({
-        "id": instance_id,
-        "user_id": current_user["id"],
-        "racing_car_id": car_id,
-        "engine_level": 0,
-        "tires_level": 0,
-        "acquired_at": _now_iso(),
-    })
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -cost}})
-    return {"message": f"Purchased {car_def.get('name')}", "instance_id": instance_id}
+    """Deprecated: cars are chosen, not bought. Kept for backward compatibility; no-op or redirect to select."""
+    raise HTTPException(status_code=410, detail="Racing cars are chosen, not bought. Use select-car with racing_car_id.")
 
 
 async def set_selected_car(body: SetSelectedCarRequest, current_user: dict = Depends(get_current_user_verified)):
+    racing_car_id = (body.racing_car_id or "").strip()
     instance_id = (body.racing_car_instance_id or "").strip()
+    if racing_car_id:
+        car_def = _get_racing_car(racing_car_id)
+        if not car_def:
+            raise HTTPException(status_code=404, detail="Racing car not found")
+        # Find or create single instance for user
+        existing = await db.user_racing_cars.find_one({"user_id": current_user["id"]}, {"_id": 0})
+        if existing:
+            await db.user_racing_cars.update_one(
+                {"user_id": current_user["id"], "id": existing["id"]},
+                {"$set": {"racing_car_id": racing_car_id}},
+            )
+            instance_id = existing["id"]
+        else:
+            instance_id = str(uuid.uuid4())
+            await db.user_racing_cars.insert_one({
+                "id": instance_id,
+                "user_id": current_user["id"],
+                "racing_car_id": racing_car_id,
+                "engine_level": 0,
+                "tires_level": 0,
+                "acquired_at": _now_iso(),
+            })
+        await _ensure_racing_profile(current_user["id"])
+        await db.racing_profiles.update_one(
+            {"user_id": current_user["id"]},
+            {"$set": {"selected_racing_car_id": instance_id}},
+            upsert=True,
+        )
+        return {"message": "Selected car updated", "selected_racing_car_id": instance_id}
+    if not instance_id:
+        raise HTTPException(status_code=400, detail="Provide racing_car_id or racing_car_instance_id")
     doc = await _get_user_racing_car(current_user["id"], instance_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Racing car not found")
@@ -471,22 +554,46 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
     track = _get_track(race.get("track_id") or "")
     reward_mult = float(track.get("reward_mult", 1.0)) if track else 1.0
     entry_fee = int(race.get("entry_fee") or 0)
+    # Player tier for similar-level NPCs (first human participant)
+    player_tier = 0
+    player_engine = 0
+    player_tires = 0
+    for p in participants:
+        if p.get("is_npc"):
+            continue
+        inst_id = p.get("racing_car_instance_id")
+        if inst_id:
+            car_doc = await db.user_racing_cars.find_one({"user_id": p.get("user_id"), "id": inst_id}, {"_id": 0})
+            if car_doc:
+                player_tier = _car_tier_index(car_doc.get("racing_car_id") or "")
+                player_engine = int(car_doc.get("engine_level") or 0)
+                player_tires = int(car_doc.get("tires_level") or 0)
+        break
     while len(participants) < max_grid:
         npc = random.choice(RACING_NPCS)
-        car_def = random.choice(RACING_CARS)
+        # Pick car from same or adjacent tier
+        tier = max(0, min(len(RACING_CARS) - 1, player_tier + random.randint(-1, 1)))
+        car_def = RACING_CARS[tier]
+        engine_level = max(0, min(MAX_CAR_UPGRADE_LEVEL, player_engine + random.randint(-1, 1)))
+        tires_level = max(0, min(MAX_CAR_UPGRADE_LEVEL, player_tires + random.randint(-1, 1)))
+        npc_id = npc["id"]
         participants.append({
-            "id": npc["id"],
+            "id": npc_id,
             "username": npc.get("name"),
             "racing_car_id": car_def.get("id"),
             "racing_car_instance_id": None,
             "car_name": car_def.get("name"),
             "is_npc": True,
             "npc_speed_offset": int(npc.get("base_speed_offset") or 0),
+            "engine_level": engine_level,
+            "tires_level": tires_level,
         })
     profile_by_user = {}
     upgrades_map = {}
     for p in participants:
         if p.get("is_npc"):
+            eid = p.get("id")
+            upgrades_map[eid] = {"engine_level": p.get("engine_level", 0), "tires_level": p.get("tires_level", 0)}
             continue
         uid = p.get("user_id")
         prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0})
@@ -505,6 +612,12 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
     weather = random.choice(WEATHER_TYPES)
     weather_id = weather.get("id", "clear")
     lap_results, result_order, pit_stops = _run_race_simulation_laps(participants, profile_by_user, upgrades_map, num_laps, weather_id)
+    # Enrich participants with effective_speed and effective_grip for replay
+    for p in participants:
+        prof = profile_by_user.get(p.get("user_id") or p.get("id")) if not p.get("is_npc") else None
+        s, g = _effective_speed_and_grip_display(p, prof, upgrades_map)
+        p["effective_speed"] = round(s, 2)
+        p["effective_grip"] = round(g, 2)
     now = _now_iso()
     pot = entry_fee * len(participants) * REWARD_POOL_PCT
     rewards = []
@@ -634,7 +747,6 @@ def register(router):
     router.add_api_route("/racing/cars", get_racing_cars, methods=["GET"])
     router.add_api_route("/racing/tracks", get_racing_tracks, methods=["GET"])
     router.add_api_route("/racing/profile", get_racing_profile, methods=["GET"])
-    router.add_api_route("/racing/cars/buy", buy_racing_car, methods=["POST"])
     router.add_api_route("/racing/profile/select-car", set_selected_car, methods=["POST"])
     router.add_api_route("/racing/crew/upgrade", upgrade_crew, methods=["POST"])
     router.add_api_route("/racing/car/upgrade", upgrade_car_part, methods=["POST"])

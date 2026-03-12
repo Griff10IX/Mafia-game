@@ -33,6 +33,8 @@ export default function Racing() {
   const raceIdParam = searchParams.get("race");
   const [profile, setProfile] = useState(null);
   const [cars, setCars] = useState([]);
+  const [availableCars, setAvailableCars] = useState([]);
+  const [upgradeTradeoffs, setUpgradeTradeoffs] = useState(null);
   const [tracks, setTracks] = useState([]);
   const [openRaces, setOpenRaces] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -49,6 +51,7 @@ export default function Racing() {
       const r = await api.get("/racing/profile");
       setProfile(r.data?.profile || null);
       setCars(r.data?.owned_cars || []);
+      setUpgradeTradeoffs(r.data?.upgrade_tradeoffs || null);
     } catch (e) {
       toast.error(apiDetail(e));
     }
@@ -85,10 +88,11 @@ export default function Racing() {
     (async () => {
       setLoading(true);
       try {
-        const [, tracksRes] = await Promise.all([
+        const [carsRes, tracksRes] = await Promise.all([
           api.get("/racing/cars"),
           api.get("/racing/tracks"),
         ]);
+        setAvailableCars(carsRes.data?.cars || []);
         setTracks(tracksRes.data?.tracks || []);
         if (tracksRes.data?.tracks?.length && !createForm.track_id)
           setCreateForm((f) => ({ ...f, track_id: tracksRes.data.tracks[0].id }));
@@ -173,20 +177,19 @@ export default function Racing() {
     }
   };
 
-  const handleBuyCar = async (racingCarId) => {
+  const handleSelectCar = async (instanceId) => {
     try {
-      await api.post("/racing/cars/buy", { racing_car_id: racingCarId });
+      await api.post("/racing/profile/select-car", { racing_car_instance_id: instanceId });
       await fetchProfile();
-      refreshUser();
-      toast.success("Racing car purchased");
+      toast.success("Car selected");
     } catch (e) {
       toast.error(apiDetail(e));
     }
   };
 
-  const handleSelectCar = async (instanceId) => {
+  const handleSelectCarByType = async (racingCarId) => {
     try {
-      await api.post("/racing/profile/select-car", { racing_car_instance_id: instanceId });
+      await api.post("/racing/profile/select-car", { racing_car_id: racingCarId });
       await fetchProfile();
       toast.success("Car selected");
     } catch (e) {
@@ -265,7 +268,7 @@ export default function Racing() {
           Bootleg runs
         </h1>
         <p className="text-sm text-[var(--noir-muted)] mt-1">
-          Road races • Buy racing cars • Crew upgrades • Purse by position
+          Road races • Choose car • Crew upgrades • Purse by position
         </p>
       </div>
 
@@ -439,9 +442,9 @@ export default function Racing() {
         {tab === "myride" && (
           <>
             <div className={styles.panel + " p-4 mb-4"}>
-              <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>My racing cars</h3>
+              <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Your car</h3>
               {cars.length === 0 ? (
-                <p className="text-sm text-[var(--noir-muted)]">Buy a racing car below (separate from garage).</p>
+                <p className="text-sm text-[var(--noir-muted)]">Choose a car below. You have one racing car slot.</p>
               ) : (
                 <ul className="space-y-2">
                   {cars.map((c) => (
@@ -462,8 +465,44 @@ export default function Racing() {
                   ))}
                 </ul>
               )}
+              {upgradeTradeoffs ? (
+                <p className="text-xs text-[var(--noir-muted)] mt-3">
+                  Engine: {upgradeTradeoffs.engine?.positive} {upgradeTradeoffs.engine?.negative} —
+                  Tires: {upgradeTradeoffs.tires?.positive} {upgradeTradeoffs.tires?.negative}
+                </p>
+              ) : (
+                <p className="text-xs text-[var(--noir-muted)] mt-3">
+                  Engine: +power −grip — Tires: +grip −power
+                </p>
+              )}
             </div>
-            <RacingCarsShop onBuy={handleBuyCar} formatMoney={formatMoney} styles={styles}/>
+            <div className={styles.panel + " p-4"}>
+              <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Choose car</h3>
+              <p className="text-xs text-[var(--noir-muted)] mb-3">Pick one of the historical race cars. Each has different speed and grip.</p>
+              <div className="grid gap-2">
+                {availableCars.map((car) => {
+                  const isSelected = cars.some((c) => c.racing_car_id === car.id);
+                  return (
+                    <div key={car.id} className="flex items-center justify-between p-2 rounded surface">
+                      <div>
+                        <span className="font-heading">{car.name}</span>
+                        <span className="text-xs text-[var(--noir-muted)] ml-2">
+                          Speed {car.base_speed ?? "—"} • Grip {(car.base_grip != null) ? (car.base_grip * 100).toFixed(0) + "%" : "—"}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.btnPrimary + " text-xs"}
+                        disabled={isSelected}
+                        onClick={() => handleSelectCarByType(car.id)}
+                      >
+                        {isSelected ? "Selected" : "Select"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </>
         )}
 
@@ -561,27 +600,3 @@ export default function Racing() {
   );
 }
 
-// ─── Shop sub-component ───────────────────────────────────────────────────────
-function RacingCarsShop({ onBuy, formatMoney, styles }) {
-  const [cars, setCars] = useState([]);
-  useEffect(() => {
-    api.get("/racing/cars").then((r) => setCars(r.data?.cars || [])).catch(() => {});
-  }, []);
-  return (
-    <div className={styles.panel + " p-4"}>
-      <h3 className="font-heading mb-2" style={{ color: "var(--noir-primary)" }}>Buy racing car</h3>
-      <p className="text-xs text-[var(--noir-muted)] mb-3">Racing cars are separate from your garage.</p>
-      <div className="grid gap-2">
-        {cars.map((car) => (
-          <div key={car.id} className="flex items-center justify-between p-2 rounded surface">
-            <span>{car.name}</span>
-            <span className="text-[var(--noir-primary)]">{formatMoney(car.cost)}</span>
-            <button type="button" className={styles.btnPrimary + " text-xs"} onClick={() => onBuy(car.id)}>
-              Buy
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
