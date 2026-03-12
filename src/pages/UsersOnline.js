@@ -352,6 +352,13 @@ export default function UsersOnline() {
     return () => clearInterval(interval);
   }, [fetchOnlineUsers]);
 
+  // Refetch when tab/window gains focus so mod colour changes from Admin show up immediately
+  useEffect(() => {
+    const onFocus = () => fetchOnlineUsers();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [fetchOnlineUsers]);
+
   if (loading) {
     return (
       <div className={`space-y-2 ${styles.pageContent}`}>
