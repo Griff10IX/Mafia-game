@@ -43,8 +43,9 @@ function formatCooldown(isoUntil) {
 }
 
 function formatDefaultCooldown(cooldownSeconds) {
-  if (cooldownSeconds >= 60) return `${Math.floor(cooldownSeconds / 60)}m`;
-  return `${cooldownSeconds}s`;
+  const s = Number(cooldownSeconds ?? 0) || 0;
+  if (s >= 60) return `${Math.floor(s / 60)}m`;
+  return `${s}s`;
 }
 
 // Custom hook for cooldown ticker
@@ -113,7 +114,7 @@ const AutoRankGtaNotice = () => (
 const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, manualPlayDisabled }) => {
   const onCooldown = option.cooldown_until && formatCooldown(option.cooldown_until);
   const unlocked = option.unlocked;
-  const defaultCooldown = formatDefaultCooldown(option.cooldown);
+  const defaultCooldown = formatDefaultCooldown(option.cooldown ?? 0);
   const progress = Math.min(92, Math.max(10, Number(option.progress) ?? 10));
   const successRateDisplay = eventsEnabled && event?.gta_success
     ? Math.min(100, Math.round(progress * (event.gta_success ?? 1)))
@@ -170,7 +171,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
 
       {/* Jail time */}
       <div className="shrink-0 w-8 text-center">
-        <span className="text-[10px] font-bold text-red-400">{option.jail_time}s</span>
+        <span className="text-[10px] font-bold text-red-400">{option.jail_time ?? 0}s</span>
       </div>
 
       {/* Cooldown */}
@@ -414,8 +415,11 @@ export default function GTA() {
       
       if (optionsRes.status === 'fulfilled' && Array.isArray(optionsRes.value?.data)) {
         setOptions(optionsRes.value.data);
-      } else if (optionsRes.status === 'rejected') {
-        toast.error('Failed to load GTA options');
+      } else {
+        if (optionsRes.status === 'rejected') {
+          toast.error('Failed to load GTA options');
+          setOptions([]);
+        }
       }
       if (statsRes.status === 'fulfilled' && statsRes.value?.data) {
         setGtaStats(statsRes.value.data);
@@ -442,6 +446,9 @@ export default function GTA() {
     } catch (error) {
       toast.error('Failed to load GTA data');
       console.error('Error fetching GTA data:', error);
+      setOptions([]);
+      setRecentStolen([]);
+      setGtaStats({ count_today: 0, count_week: 0, success_today: 0, success_week: 0, profit_today: 0, profit_24h: 0, profit_week: 0 });
     } finally {
       setLoading(false);
     }

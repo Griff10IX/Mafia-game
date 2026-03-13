@@ -198,6 +198,20 @@ GTA_FAIL_ESCAPED_MESSAGES = [
 ]
 
 
+def _parse_iso_datetime(val):
+    """Parse datetime from DB (string with optional Z, or datetime object)."""
+    if val is None:
+        return None
+    if hasattr(val, "year"):
+        return val.replace(tzinfo=timezone.utc) if val.tzinfo is None else val
+    try:
+        s = str(val).strip().replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    except Exception:
+        return None
+
+
 def _gta_progress_from_attempts(gta_attempts: int) -> int:
     """Migrate old attempts-based progress to bar value (25-92). New users start at 25%."""
     if gta_attempts < 50:
@@ -232,8 +246,8 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
     )
     global_cooldown_until = None
     if cooldown_doc:
-        until = datetime.fromisoformat(cooldown_doc["cooldown_until"])
-        if until > now:
+        until = _parse_iso_datetime(cooldown_doc.get("cooldown_until"))
+        if until and until > now:
             global_cooldown_until = cooldown_doc["cooldown_until"]
     user_gta_by_id = {ug["option_id"]: ug for ug in user_gta_list}
     result = []
@@ -274,8 +288,8 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         {"_id": 0, "cooldown_until": 1},
     )
     if cooldown_doc:
-        until = datetime.fromisoformat(cooldown_doc["cooldown_until"])
-        if until > now:
+        until = _parse_iso_datetime(cooldown_doc.get("cooldown_until"))
+        if until and until > now:
             secs = int((until - now).total_seconds())
             raise HTTPException(
                 status_code=400, detail=f"GTA cooldown: try again in {secs}s"
@@ -499,8 +513,9 @@ async def attempt_gta(
     request: GTAAttemptRequest, current_user: dict = Depends(get_current_user_verified)
 ):
     if current_user.get("in_jail"):
-        jail_time = datetime.fromisoformat(current_user["jail_until"])
-        if jail_time > datetime.now(timezone.utc):
+        jail_until_raw = current_user.get("jail_until")
+        jail_time = _parse_iso_datetime(jail_until_raw) if jail_until_raw else None
+        if jail_time and jail_time > datetime.now(timezone.utc):
             raise HTTPException(status_code=400, detail="You are in jail!")
         await db.users.update_one(
             {"id": current_user["id"]},
@@ -525,8 +540,8 @@ async def attempt_gta(
         {"_id": 0, "cooldown_until": 1},
     )
     if cooldown_doc:
-        until = datetime.fromisoformat(cooldown_doc["cooldown_until"])
-        if until > now:
+        until = _parse_iso_datetime(cooldown_doc.get("cooldown_until"))
+        if until and until > now:
             secs = int((until - now).total_seconds())
             raise HTTPException(
                 status_code=400, detail=f"GTA cooldown: try again in {secs}s"
@@ -590,7 +605,7 @@ async def get_gta_stats(current_user: dict = Depends(get_current_user)):
         return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
     def _24h():
         arr = doc.get("last_24h") or []
-        return int(arr[0]["profit"]) if arr else 0
+        return int(arr[0].get("profit", 0)) if arr else 0
     def _week():
         arr = doc.get("last_7_days") or []
         return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
@@ -745,10 +760,11 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
             if car_info:
                 if car_info.get("rarity") == "uncommon":
                     uncommon_count += 1
+                car_value = int(car_info.get("value", 0) or 0)
                 if action == "bullets":
-                    total_bullets += int(car_info["value"] / 10)
+                    total_bullets += car_value // 10
                 else:
-                    total_value += int(car_info["value"] * 0.5)
+                    total_value += int(car_value * 0.5)
                 if user_car.get("_id") is not None:
                     await db.user_cars.delete_one({"_id": user_car["_id"]})
                 elif user_car.get("id") is not None:
@@ -968,7 +984,7 @@ async def get_marketplace_listings(current_user: dict = Depends(get_current_user
         # Public marketplace response: expose only seller_username, never raw seller_id
         out.append({
             "user_car_id": listing_id,
-            "seller_username": seller.get("username", "?"),
+            "seller_username": (seller or {}).get("username", "?"),
             "car_id": uc.get("car_id"),
             "name": display_name,
             "value": car_info.get("value", 0),

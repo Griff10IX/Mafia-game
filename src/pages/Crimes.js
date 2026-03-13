@@ -488,6 +488,9 @@ export default function Crimes() {
     } catch (error) {
       toast.error('Failed to load crimes');
       console.error('Error fetching crimes:', error);
+      setCrimes([]);
+      setUser(null);
+      setCrimeStats({ count_today: 0, count_week: 0, success_today: 0, success_week: 0, profit_today: 0, profit_24h: 0, profit_week: 0 });
       setLoading(false);
     }
   };
@@ -515,7 +518,7 @@ export default function Crimes() {
           const parts = [];
           if (bonus.cash) parts.push(`$${bonus.cash.toLocaleString()}`);
           if (bonus.respect_points) parts.push(`+${bonus.respect_points} respect`);
-          if (bonus.booze) {
+          if (bonus.booze && (bonus.booze?.amount ?? 0) > 0) {
             const boozeId = typeof bonus.booze.id === 'string' ? bonus.booze.id : 'booze';
             const boozeName = boozeId.charAt(0).toUpperCase() + boozeId.slice(1);
             parts.push(`${bonus.booze.amount}× ${boozeName}`);
@@ -567,7 +570,7 @@ export default function Crimes() {
       
       const lockedByRank = crime.unlocked === false && crime.min_rank_name;
       const wait = canCommit
-        ? formatWaitFromMinutes(crime.cooldown_minutes)
+        ? formatWaitFromMinutes(crime.cooldown_minutes ?? 0)
         : remaining && remaining > 0
           ? `${remaining}s`
           : lockedByRank

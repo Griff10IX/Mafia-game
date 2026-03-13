@@ -63,6 +63,7 @@ export default function MyProperties() {
       }
     } catch {
       toast.error('Failed to load properties');
+      setData({ casino: null, property: null });
     } finally {
       setLoading(false);
     }

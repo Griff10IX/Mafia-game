@@ -221,9 +221,11 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     )
     if not user_prop:
         raise HTTPException(status_code=404, detail="You don't own this property")
-    last_collected_raw = user_prop["last_collected"]
+    last_collected_raw = user_prop.get("last_collected")
     try:
-        last_collected = datetime.fromisoformat(last_collected_raw)
+        last_collected = datetime.fromisoformat(last_collected_raw) if last_collected_raw else datetime.now(timezone.utc)
+        if last_collected.tzinfo is None:
+            last_collected = last_collected.replace(tzinfo=timezone.utc)
     except Exception:
         last_collected = datetime.now(timezone.utc)
     now_utc = datetime.now(timezone.utc)

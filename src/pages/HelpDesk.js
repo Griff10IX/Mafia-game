@@ -103,6 +103,7 @@ export default function HelpDesk() {
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load ticket');
       setTicketDetail(null);
+      if (e.response?.status === 404) setSelectedId(null);
     } finally {
       setDetailLoading(false);
     }

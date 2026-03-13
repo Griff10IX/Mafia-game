@@ -32,9 +32,6 @@ def register(router):
     _is_moderator = srv._is_moderator
     _is_hdo = srv._is_hdo
 
-    def _is_hdo(user: dict) -> bool:
-        return bool(user.get("is_help_desk_operator"))
-
     def _can_manage_tickets(user: dict) -> bool:
         return _is_admin(user) or _is_moderator(user) or _is_hdo(user)
 
@@ -88,6 +85,11 @@ def register(router):
 
     def _ticket_to_response(t: dict) -> dict:
         replies = t.get("replies") or []
+        # Reply response: do not expose author_id to client
+        reply_list = [
+            {"author_username": r.get("author_username"), "author_role": r.get("author_role"), "body": r.get("body"), "created_at": r.get("created_at")}
+            for r in reversed(replies)
+        ]
         out = {
             "id": t.get("id"),
             "user_id": t.get("user_id"),
@@ -97,7 +99,7 @@ def register(router):
             "status": t.get("status", "open"),
             "created_at": t.get("created_at"),
             "updated_at": t.get("updated_at"),
-            "replies": list(reversed(replies)),  # newest at top, oldest at bottom
+            "replies": reply_list,
             "closed_at": t.get("closed_at"),
             "closed_by_id": t.get("closed_by_id"),
         }

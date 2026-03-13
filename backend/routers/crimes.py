@@ -357,6 +357,12 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
             f"Prestige {prestige_required}" if prestige_locked
             else next((r["name"] for r in RANKS if r["id"] == crime["min_rank"]), None)
         )
+        cooldown_minutes = crime.get("cooldown_minutes")
+        if cooldown_minutes is None and crime.get("cooldown_seconds") is not None:
+            cooldown_minutes = float(crime["cooldown_seconds"]) / 60.0
+        if cooldown_minutes is None:
+            cooldown_minutes = 5.0
+        crime_type = crime.get("crime_type") or "petty"
         result.append(
             CrimeResponse(
                 id=crime["id"],
@@ -366,8 +372,8 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
                 min_rank_name=min_rank_name,
                 reward_min=crime["reward_min"],
                 reward_max=crime["reward_max"],
-                cooldown_minutes=crime["cooldown_minutes"],
-                crime_type=crime["crime_type"],
+                cooldown_minutes=float(cooldown_minutes),
+                crime_type=crime_type,
                 can_commit=can_commit,
                 next_available=next_available,
                 attempts=attempts,
@@ -737,7 +743,7 @@ async def get_crime_stats(current_user: dict = Depends(get_current_user)):
         return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
     def _24h():
         arr = doc.get("last_24h") or []
-        return int(arr[0]["profit"]) if arr else 0
+        return int(arr[0].get("profit", 0)) if arr else 0
     def _week():
         arr = doc.get("last_7_days") or []
         return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}

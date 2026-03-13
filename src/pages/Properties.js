@@ -41,6 +41,8 @@ export default function Properties() {
       setPropertyIncomePerkUntil(data?.property_income_perk_until ?? null);
     } catch (error) {
       toast.error('Failed to load properties');
+      setProperties([]);
+      setPropertyIncomePerkUntil(null);
     } finally {
       setLoading(false);
     }
@@ -220,9 +222,9 @@ export default function Properties() {
                 {property.owned && (
                   <>
                     <span className="text-mutedForeground uppercase tracking-wider">Level</span>
-                    <span className="text-foreground text-right">{property.level}/{property.max_level}</span>
+                    <span className="text-foreground text-right">{(property.level ?? 0)}/{(property.max_level ?? 0)}</span>
                     <span className="text-mutedForeground uppercase tracking-wider">Available</span>
-                    <span className="text-primary font-bold text-right">${Math.floor(property.available_income).toLocaleString()}</span>
+                    <span className="text-primary font-bold text-right">${Math.floor(property.available_income ?? 0).toLocaleString()}</span>
                   </>
                 )}
               </div>
@@ -264,7 +266,7 @@ export default function Properties() {
                         data-testid={`upgrade-property-${property.id}`}
                         className={`w-full ${styles.surface} border border-primary/30 text-primary rounded font-heading font-bold uppercase tracking-wider py-1.5 text-[10px] hover:bg-primary/10 transition-all flex items-center justify-center gap-1.5`}
                       >
-                        <TrendingUp size={11} /> Upgrade ${(property.price * (property.level + 1)).toLocaleString()}
+                        <TrendingUp size={11} /> Upgrade ${((property.price ?? 0) * ((property.level ?? 0) + 1)).toLocaleString()}
                       </button>
                     )}
                     {property.owned && (
