@@ -228,6 +228,9 @@ export default function Admin() {
   const [profileLoadErrorsLoading, setProfileLoadErrorsLoading] = useState(false);
   const [rateLimits, setRateLimits] = useState(null);
   const [rateLimitEdits, setRateLimitEdits] = useState({});
+  const [rateLimitLog, setRateLimitLog] = useState(null);
+  const [rateLimitLogLoading, setRateLimitLogLoading] = useState(false);
+  const [rateLimitLogUsername, setRateLimitLogUsername] = useState('');
   const [ipBans, setIpBans] = useState([]);
   const [ipBansLoading, setIpBansLoading] = useState(false);
   const [ipBanIp, setIpBanIp] = useState('');
@@ -2026,6 +2029,43 @@ export default function Admin() {
     finally { setSecurityLoading(false); }
   };
 
+  const fetchRateLimitLog = async () => {
+    setRateLimitLogLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.append('limit', '200');
+      if (rateLimitLogUsername.trim()) params.append('username', rateLimitLogUsername.trim());
+      const res = await api.get(`/admin/rate-limit-log?${params.toString()}`);
+      setRateLimitLog(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to fetch rate limit log');
+    } finally {
+      setRateLimitLogLoading(false);
+    }
+  };
+
+  const handleClearRateLimitLogUser = async (userId, username) => {
+    if (!window.confirm(`Clear rate limit flags for ${username}?`)) return;
+    try {
+      const res = await api.post(`/admin/rate-limit-log/clear-user?user_id=${userId}`);
+      toast.success(res.data?.message || 'Cleared');
+      fetchRateLimitLog();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to clear');
+    }
+  };
+
+  const handleClearAllRateLimitLog = async () => {
+    if (!window.confirm('Clear ALL rate limit flags? This cannot be undone.')) return;
+    try {
+      const res = await api.post('/admin/rate-limit-log/clear-all');
+      toast.success(res.data?.message || 'Cleared all');
+      fetchRateLimitLog();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to clear');
+    }
+  };
+
   const handleFetchEconomyOverview = async () => {
     setEconomyOverviewLoading(true);
     try {
@@ -3053,7 +3093,7 @@ export default function Admin() {
                 <label className="text-[9px] text-mutedForeground uppercase font-heading block mb-1">New Max Bet</label>
                 <FormattedNumberInput
                   value={casinoMaxBetValue}
-                  onChange={(e) => setCasinoMaxBetValue(e.target.value)}
+                  onChange={setCasinoMaxBetValue}
                   placeholder="e.g. 50,000,000"
                   className="w-32 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
                 />
@@ -3843,6 +3883,87 @@ export default function Admin() {
                 )}
               </div>
             )}
+
+            {/* Rate Limit Log */}
+            <div className="mt-3 pt-3 border-t border-zinc-700/50">
+              <div className="text-[10px] font-heading text-primary uppercase tracking-wider mb-2">Rate Limit Violations Log</div>
+              <p className="text-[10px] text-mutedForeground mb-2">Users who hit rate limits. Shows why they got cooldown and which endpoints.</p>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <input
+                  type="text"
+                  value={rateLimitLogUsername}
+                  onChange={(e) => setRateLimitLogUsername(e.target.value)}
+                  placeholder="Filter by username"
+                  className="w-40 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <BtnPrimary onClick={fetchRateLimitLog} disabled={rateLimitLogLoading}>
+                  {rateLimitLogLoading ? '...' : 'Load Log'}
+                </BtnPrimary>
+                {rateLimitLog && rateLimitLog.count > 0 && (
+                  <BtnDanger onClick={handleClearAllRateLimitLog} disabled={rateLimitLogLoading}>Clear All</BtnDanger>
+                )}
+              </div>
+              {rateLimitLog && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-4 text-[10px] text-mutedForeground">
+                    <span>Total violations: <span className="text-foreground font-bold">{rateLimitLog.count}</span></span>
+                    <span>Unique users: <span className="text-foreground font-bold">{rateLimitLog.unique_users}</span></span>
+                  </div>
+                  {rateLimitLog.by_user && rateLimitLog.by_user.length > 0 && (
+                    <div className="rounded bg-zinc-900/50 border border-zinc-700/50 p-2">
+                      <div className="text-[9px] font-heading text-mutedForeground uppercase mb-2">By User (top offenders)</div>
+                      <div className="max-h-48 overflow-y-auto space-y-1.5">
+                        {rateLimitLog.by_user.map((u, i) => (
+                          <div key={i} className="flex items-start justify-between gap-2 text-[10px] py-2 px-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-bold text-primary">{u.username}</span>
+                                <span className="text-amber-400 font-mono">{u.count} violation{u.count !== 1 ? 's' : ''}</span>
+                              </div>
+                              <div className="text-[9px] text-mutedForeground mb-1">
+                                First: {u.first_at ? new Date(u.first_at).toLocaleString() : '—'} · Last: {u.last_at ? new Date(u.last_at).toLocaleString() : '—'}
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {Object.entries(u.endpoints || {}).map(([ep, cnt]) => (
+                                  <span key={ep} className="px-1.5 py-0.5 rounded bg-zinc-700/50 text-[8px] font-mono">
+                                    {ep.replace('/api/', '')} <span className="text-amber-400">×{cnt}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {rateLimitLog.entries && rateLimitLog.entries.length > 0 && (
+                    <details className="rounded border border-zinc-700/30 bg-zinc-800/30 overflow-hidden">
+                      <summary className="px-2.5 py-2 cursor-pointer text-[10px] font-heading font-bold text-mutedForeground uppercase tracking-wider hover:bg-zinc-700/30 list-none">
+                        Detailed Log ({rateLimitLog.entries.length} entries)
+                      </summary>
+                      <div className="max-h-64 overflow-y-auto p-2 space-y-1">
+                        {rateLimitLog.entries.map((e, i) => (
+                          <div key={i} className="text-[9px] py-1.5 px-2 rounded bg-zinc-900/50 border border-zinc-700/30">
+                            <div className="flex items-center justify-between gap-2 mb-0.5">
+                              <span className="font-bold text-primary">{e.username}</span>
+                              <span className="text-mutedForeground">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</span>
+                            </div>
+                            <div className="text-foreground mb-0.5">{e.reason}</div>
+                            {e.details && (
+                              <div className="text-mutedForeground">
+                                Path: <span className="font-mono text-amber-400">{e.details.path}</span>
+                                {e.details.min_interval_sec && <span className="ml-2">Limit: {e.details.min_interval_sec}s</span>}
+                                {e.details.elapsed_sec !== undefined && <span className="ml-2">Actual: {e.details.elapsed_sec}s</span>}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              )}
+            </div>
 
             <ActionRow icon={Trash2} label="Clear Old Flags" description="Remove flags older than 30 days" color="text-red-400">
               <BtnDanger onClick={handleClearOldFlags} disabled={securityLoading}>

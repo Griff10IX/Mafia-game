@@ -424,7 +424,24 @@ RATE_LIMIT_CONFIG = {
     "/api/casino/roulette/": (1.2, False),
     "/api/casino/blackjack/": (1.2, False),
     "/api/casino/horseracing/": (1.2, False),
+    "/api/casino/slots/": (1.2, False),
+    "/api/casino/videopoker/": (1.2, False),
+    "/api/casino/mdg/": (1.5, False),
+    "/api/casino/mp-poker/": (1.0, False),
+    "/api/casino/mp-blackjack/": (1.0, False),
     "/api/sports-betting/": (1.2, False),
+    
+    # Minigames & activities
+    "/api/loot-box/": (1.5, False),
+    "/api/crack-safe/": (2.0, False),
+    "/api/jail/bust": (1.5, False),
+    "/api/jail/": (1.0, False),
+    "/api/gta/": (1.5, False),
+    "/api/entertainer/": (1.5, False),
+    "/api/gauntlet/": (1.0, False),
+    "/api/boxing/": (1.0, False),
+    "/api/racing/": (1.0, False),
+    "/api/snake/": (0.5, False),
     
     # Travel & Booze Run
     "/api/travel": (3.0, False),

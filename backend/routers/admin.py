@@ -412,6 +412,57 @@ def register(router):
             raise HTTPException(status_code=404, detail="Flag not found")
         return {"message": "Flag marked as resolved", "flag_id": flag_id}
 
+    @router.get("/admin/rate-limit-log")
+    async def admin_rate_limit_log(
+        limit: int = 100,
+        username: str = None,
+        current_user: dict = Depends(get_current_user)
+    ):
+        """Get rate limit violations log with detailed info about why users got rate limited."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        query = {"flag_type": "endpoint_rate_limit", "resolved": {"$ne": True}}
+        if username:
+            query["username"] = {"$regex": f"^{username}", "$options": "i"}
+        flags = await db.security_flags.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+        by_user = {}
+        for f in flags:
+            uid = f.get("user_id")
+            if uid not in by_user:
+                by_user[uid] = {"username": f.get("username"), "count": 0, "endpoints": {}, "first_at": None, "last_at": None}
+            by_user[uid]["count"] += 1
+            ep = f.get("details", {}).get("path") or "unknown"
+            by_user[uid]["endpoints"][ep] = by_user[uid]["endpoints"].get(ep, 0) + 1
+            ts = f.get("created_at")
+            if ts:
+                if not by_user[uid]["first_at"] or ts < by_user[uid]["first_at"]:
+                    by_user[uid]["first_at"] = ts
+                if not by_user[uid]["last_at"] or ts > by_user[uid]["last_at"]:
+                    by_user[uid]["last_at"] = ts
+        user_summary = sorted(by_user.values(), key=lambda x: x["count"], reverse=True)
+        return {
+            "entries": flags,
+            "count": len(flags),
+            "by_user": user_summary[:50],
+            "unique_users": len(by_user),
+        }
+
+    @router.post("/admin/rate-limit-log/clear-user")
+    async def admin_clear_rate_limit_log_user(user_id: str, current_user: dict = Depends(get_current_user)):
+        """Clear rate limit flags for a specific user."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        result = await db.security_flags.delete_many({"user_id": user_id, "flag_type": "endpoint_rate_limit"})
+        return {"message": f"Cleared {result.deleted_count} rate limit flag(s) for user", "deleted": result.deleted_count}
+
+    @router.post("/admin/rate-limit-log/clear-all")
+    async def admin_clear_rate_limit_log_all(current_user: dict = Depends(get_current_user)):
+        """Clear all rate limit flags."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        result = await db.security_flags.delete_many({"flag_type": "endpoint_rate_limit"})
+        return {"message": f"Cleared {result.deleted_count} rate limit flag(s)", "deleted": result.deleted_count}
+
     @router.get("/admin/security/rate-limits")
     async def admin_get_rate_limits(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
