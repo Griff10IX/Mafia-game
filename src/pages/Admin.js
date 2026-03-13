@@ -306,6 +306,14 @@ export default function Admin() {
   const [stateHeads, setStateHeads] = useState(null);
   const [stateHeadsLoading, setStateHeadsLoading] = useState(false);
 
+  // Casino Max Bets
+  const [casinoMaxBets, setCasinoMaxBets] = useState(null);
+  const [casinoMaxBetsLoading, setCasinoMaxBetsLoading] = useState(false);
+  const [casinoMaxBetGameType, setCasinoMaxBetGameType] = useState('all');
+  const [casinoMaxBetLocation, setCasinoMaxBetLocation] = useState('');
+  const [casinoMaxBetValue, setCasinoMaxBetValue] = useState('');
+  const [casinoMaxBetSaving, setCasinoMaxBetSaving] = useState(false);
+
   // Cheat detection
   const [cheatSameIp, setCheatSameIp] = useState(null);
   const [cheatSameDeviceIps, setCheatSameDeviceIps] = useState(null);
@@ -678,6 +686,45 @@ export default function Admin() {
       fetchStateHeads();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to clear state head');
+    }
+  };
+
+  const fetchCasinoMaxBets = async () => {
+    setCasinoMaxBetsLoading(true);
+    try {
+      const res = await api.get('/admin/casino-max-bets');
+      setCasinoMaxBets(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to fetch casino max bets');
+    } finally {
+      setCasinoMaxBetsLoading(false);
+    }
+  };
+
+  const handleSetCasinoMaxBet = async () => {
+    const val = parseInt(casinoMaxBetValue.replace(/,/g, ''), 10);
+    if (!val || val < 1) {
+      toast.error('Enter a valid max bet value');
+      return;
+    }
+    const loc = casinoMaxBetLocation.trim() || null;
+    const confirmMsg = loc
+      ? `Set max bet to $${val.toLocaleString()} for ${casinoMaxBetGameType === 'all' ? 'all casino types' : casinoMaxBetGameType} in ${loc}?`
+      : `Set max bet to $${val.toLocaleString()} for ${casinoMaxBetGameType === 'all' ? 'ALL casinos everywhere' : `all ${casinoMaxBetGameType} casinos`}?`;
+    if (!window.confirm(confirmMsg)) return;
+    setCasinoMaxBetSaving(true);
+    try {
+      const res = await api.post('/admin/set-casino-max-bet', {
+        game_type: casinoMaxBetGameType,
+        location: loc,
+        max_bet: val,
+      });
+      toast.success(res.data?.message || 'Max bet updated');
+      fetchCasinoMaxBets();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to set max bet');
+    } finally {
+      setCasinoMaxBetSaving(false);
     }
   };
 
@@ -1960,8 +2007,21 @@ export default function Admin() {
       toast.success(response.data.message);
       // Refresh the rate limits
       await handleViewRateLimits();
-    } catch (e) { 
-      toast.error(e.response?.data?.detail || 'Failed to disable rate limits'); 
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to disable rate limits');
+    }
+    finally { setSecurityLoading(false); }
+  };
+
+  const handleEnableAllLimits = async () => {
+    if (!window.confirm('Enable ALL rate limits? This will turn on protection for all endpoints.')) return;
+    setSecurityLoading(true);
+    try {
+      const response = await api.post('/admin/security/rate-limits/enable-all');
+      toast.success(response.data.message);
+      await handleViewRateLimits();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to enable rate limits');
     }
     finally { setSecurityLoading(false); }
   };
@@ -2953,6 +3013,93 @@ export default function Admin() {
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
+          icon={Dice5}
+          title="Casino Max Bets"
+          badge={casinoMaxBets ? <span className="text-[10px] font-heading text-mutedForeground">{Object.keys(casinoMaxBets).length} types</span> : null}
+          isCollapsed={collapsed.casinoMaxBets}
+          onToggle={() => { toggleSection('casinoMaxBets'); if (collapsed.casinoMaxBets && !casinoMaxBets) fetchCasinoMaxBets(); }}
+        />
+        {!collapsed.casinoMaxBets && (
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground">Change max bet for all casinos or a specific game type/location. This overrides owner-set max bets.</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <div>
+                <label className="text-[9px] text-mutedForeground uppercase font-heading block mb-1">Game Type</label>
+                <select
+                  value={casinoMaxBetGameType}
+                  onChange={(e) => setCasinoMaxBetGameType(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="all">All Types</option>
+                  <option value="dice">Dice</option>
+                  <option value="roulette">Roulette</option>
+                  <option value="blackjack">Blackjack</option>
+                  <option value="horseracing">Horse Racing</option>
+                  <option value="videopoker">Video Poker</option>
+                  <option value="slots">Slots</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] text-mutedForeground uppercase font-heading block mb-1">Location (optional)</label>
+                <input
+                  type="text"
+                  value={casinoMaxBetLocation}
+                  onChange={(e) => setCasinoMaxBetLocation(e.target.value)}
+                  placeholder="e.g. New York"
+                  className="w-32 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-mutedForeground uppercase font-heading block mb-1">New Max Bet</label>
+                <FormattedNumberInput
+                  value={casinoMaxBetValue}
+                  onChange={(e) => setCasinoMaxBetValue(e.target.value)}
+                  placeholder="e.g. 50,000,000"
+                  className="w-32 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+              </div>
+              <BtnPrimary onClick={handleSetCasinoMaxBet} disabled={casinoMaxBetSaving || !casinoMaxBetValue}>
+                {casinoMaxBetSaving ? '...' : 'Set Max Bet'}
+              </BtnPrimary>
+            </div>
+            {casinoMaxBetsLoading ? (
+              <p className="text-xs text-mutedForeground">Loading...</p>
+            ) : casinoMaxBets && (
+              <div className="space-y-2 mt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-mutedForeground uppercase font-heading">Current Max Bets by Type</span>
+                  <BtnSecondary onClick={fetchCasinoMaxBets}>Refresh</BtnSecondary>
+                </div>
+                {Object.entries(casinoMaxBets).map(([gameType, locations]) => (
+                  <details key={gameType} className="rounded border border-zinc-700/30 bg-zinc-800/30 overflow-hidden">
+                    <summary className="px-2.5 py-2 cursor-pointer text-xs font-heading font-bold text-primary uppercase tracking-wider hover:bg-zinc-700/30 list-none flex items-center justify-between">
+                      <span>{gameType}</span>
+                      <span className="text-[10px] text-mutedForeground font-normal normal-case">{locations.length} location{locations.length !== 1 ? 's' : ''}</span>
+                    </summary>
+                    <div className="px-2.5 py-2 border-t border-zinc-700/30 max-h-48 overflow-y-auto">
+                      <div className="grid gap-1">
+                        {locations.map((loc, i) => (
+                          <div key={i} className="flex items-center justify-between text-[10px] font-heading px-1.5 py-1 rounded bg-zinc-900/30">
+                            <span className="text-foreground">{loc.location}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-primary font-mono">${(loc.max_bet || 0).toLocaleString()}</span>
+                              {loc.owner && <span className="text-mutedForeground">({loc.owner})</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </details>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
           icon={Lock}
           title="Lock page"
           badge={Object.keys(pageLocks).length > 0 ? <span className="text-[10px] font-heading text-amber-400">{Object.keys(pageLocks).length} locked</span> : null}
@@ -3624,6 +3771,12 @@ export default function Admin() {
             <ActionRow icon={Shield} label="View Rate Limits" description="See rate limiting configuration">
               <BtnPrimary onClick={handleViewRateLimits} disabled={securityLoading}>
                 {securityLoading ? '...' : 'View'}
+              </BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Shield} label="Enable All Limits" description="Turn on rate limiting for all endpoints">
+              <BtnPrimary onClick={handleEnableAllLimits} disabled={securityLoading}>
+                {securityLoading ? '...' : 'Enable All'}
               </BtnPrimary>
             </ActionRow>
 

@@ -81,6 +81,12 @@ class DropAllCasinosPropertiesConfirmation(BaseModel):
     confirmation_text: str  # "DROP ALL CASINOS PROPERTIES"
 
 
+class AdminSetCasinoMaxBetRequest(BaseModel):
+    game_type: str  # dice, roulette, blackjack, horseracing, videopoker, slots, or "all"
+    location: Optional[str] = None  # city/state; if None, applies to all locations for that game type
+    max_bet: int
+
+
 class ForumMuteRequest(BaseModel):
     target_username: str
     duration_hours: Optional[int] = None  # set one of duration_hours, duration_days, or permanent
@@ -2857,6 +2863,68 @@ def register(router):
         total = sum(result.values())
         logging.warning(f"Drop all casinos/properties by {current_user.get('email')} ({current_user.get('username')}), modified={result}")
         return {"message": f"Dropped all casinos and properties: {total} ownerships cleared", "details": result, "total_modified": total}
+
+    @router.post("/admin/set-casino-max-bet")
+    async def admin_set_casino_max_bet(body: AdminSetCasinoMaxBetRequest, current_user: dict = Depends(get_current_user)):
+        """Set max bet for a casino game type. Admin only.
+        game_type: dice, roulette, blackjack, horseracing, videopoker, slots, or 'all'
+        location: specific city/state, or None/empty to apply to all locations
+        max_bet: the new max bet value
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        game_type = (body.game_type or "").strip().lower()
+        location = (body.location or "").strip() if body.location else None
+        max_bet = body.max_bet
+        if max_bet < 1:
+            raise HTTPException(status_code=400, detail="max_bet must be at least 1")
+        coll_map = {
+            "dice": (db.dice_ownership, "city"),
+            "roulette": (db.roulette_ownership, "city"),
+            "blackjack": (db.blackjack_ownership, "city"),
+            "horseracing": (db.horseracing_ownership, "city"),
+            "videopoker": (db.videopoker_ownership, "city"),
+            "slots": (db.slots_ownership, "state"),
+        }
+        results = {}
+        if game_type == "all":
+            for gtype, (coll, loc_key) in coll_map.items():
+                if location:
+                    res = await coll.update_many({loc_key: location}, {"$set": {"max_bet": max_bet}})
+                else:
+                    res = await coll.update_many({}, {"$set": {"max_bet": max_bet}})
+                results[gtype] = res.modified_count
+            total = sum(results.values())
+            logging.info(f"Admin set casino max bet (all games): max_bet={max_bet}, location={location or 'all'}, by {current_user.get('email')}, modified={results}")
+            return {"message": f"Set max bet to ${max_bet:,} for all casino types", "location": location or "all", "max_bet": max_bet, "details": results, "total_modified": total}
+        if game_type not in coll_map:
+            raise HTTPException(status_code=400, detail="Invalid game_type; use dice, roulette, blackjack, horseracing, videopoker, slots, or 'all'")
+        coll, loc_key = coll_map[game_type]
+        if location:
+            res = await coll.update_many({loc_key: location}, {"$set": {"max_bet": max_bet}})
+        else:
+            res = await coll.update_many({}, {"$set": {"max_bet": max_bet}})
+        logging.info(f"Admin set casino max bet: game_type={game_type}, max_bet={max_bet}, location={location or 'all'}, by {current_user.get('email')}, modified={res.modified_count}")
+        return {"message": f"Set max bet to ${max_bet:,} for {game_type}", "game_type": game_type, "location": location or "all", "max_bet": max_bet, "modified": res.modified_count}
+
+    @router.get("/admin/casino-max-bets")
+    async def admin_get_casino_max_bets(current_user: dict = Depends(get_current_user)):
+        """Get current max bets for all casino types by location. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        coll_map = {
+            "dice": (db.dice_ownership, "city"),
+            "roulette": (db.roulette_ownership, "city"),
+            "blackjack": (db.blackjack_ownership, "city"),
+            "horseracing": (db.horseracing_ownership, "city"),
+            "videopoker": (db.videopoker_ownership, "city"),
+            "slots": (db.slots_ownership, "state"),
+        }
+        result = {}
+        for gtype, (coll, loc_key) in coll_map.items():
+            docs = await coll.find({}, {"_id": 0, loc_key: 1, "max_bet": 1, "owner_username": 1}).to_list(100)
+            result[gtype] = [{"location": d.get(loc_key), "max_bet": d.get("max_bet"), "owner": d.get("owner_username")} for d in docs]
+        return result
 
     @router.post("/admin/wipe-all-users")
     async def admin_wipe_all_users(confirm: WipeConfirmation, current_user: dict = Depends(get_current_user)):
