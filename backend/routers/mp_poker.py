@@ -412,7 +412,7 @@ def register(router):
         blind: Optional[int] = Body(None, embed=True),
     ):
         """Start a new 1v1 vs dealer game. Body: { blind?: number }."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         blind = blind or 5000
         blind = max(MP_POKER_VS_DEALER_MIN_BLIND, min(MP_POKER_VS_DEALER_MAX_BLIND, int(blind)))
         money = int(current_user.get("money") or 0)
@@ -482,7 +482,7 @@ def register(router):
     async def vs_dealer_game(current_user: dict = Depends(get_current_user_verified)):
         """Get current vs-dealer game for user. If it's bot's turn, runs bot action and returns updated game.
         When no active game, returns the most recent game (including completed) so the results screen doesn't flicker."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         g = await db.mp_poker_games.find_one(
             {"mode": "vs_dealer", "user_id": uid, "status": "playing"},
             sort=[("created_at", -1)],
@@ -509,7 +509,7 @@ def register(router):
         game_id: Optional[str] = Body(None, embed=True),
     ):
         """Act in vs-dealer game: fold, check, call, bet, raise, all_in. amount required for bet/raise. Optional game_id to target specific game."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         action = (action or "").strip().lower()
         amount = amount or 0
         game_id = (game_id or "").strip() or None
@@ -665,7 +665,7 @@ def register(router):
         max_players = max(MP_POKER_MIN_PLAYERS, min(MP_POKER_MAX_PLAYERS, request.max_players))
         buy_in = max(0, min(MP_POKER_MAX_BUY_IN, request.buy_in))
         extra_prize = max(0, min(MP_POKER_MAX_EXTRA_PRIZE, request.extra_prize))
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         username = current_user.get("username") or "Player"
         money = int(current_user.get("money") or 0)
         need = buy_in + extra_prize
@@ -739,7 +739,7 @@ def register(router):
     @router.post("/casino/mp-poker/games/{game_id}/join")
     async def join_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Join an open poker game."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         username = current_user.get("username") or "Player"
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or g.get("mode") != "vs_players" or g.get("status") != "open":
@@ -783,7 +783,7 @@ def register(router):
             raise HTTPException(status_code=404, detail="Game not found")
         if g.get("status") not in ("open", "ready"):
             raise HTTPException(status_code=400, detail="Cannot cancel")
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         if g.get("creator_id") != uid and not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Only creator can cancel")
         players = g.get("players") or []
@@ -792,7 +792,7 @@ def register(router):
         for p in players:
             refund = buy_in + (extra if p.get("user_id") == g.get("creator_id") else 0)
             if refund > 0:
-                await db.users.update_one({"id": p["user_id"]}, {"$inc": {"money": refund}})
+                await db.users.update_one({"id": p.get("user_id") or ""}, {"$inc": {"money": refund}})
         await db.mp_poker_games.update_one(
             {"id": game_id},
             {"$set": {"status": "cancelled", "phase": "cancelled"}},
@@ -806,7 +806,7 @@ def register(router):
         Non-creators can leave while the game is still in the lobby/ready phase.
         They get their buy-in back and are removed from the seats.
         """
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or g.get("mode") != "vs_players":
             raise HTTPException(status_code=404, detail="Game not found")
@@ -843,7 +843,7 @@ def register(router):
     @router.post("/casino/mp-poker/games/{game_id}/ready")
     async def ready_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Mark yourself ready. When all are ready, all_ready_at is set."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or g.get("mode") != "vs_players" or g.get("phase") not in ("lobby", "ready"):
             raise HTTPException(status_code=400, detail="Cannot ready")
@@ -990,7 +990,7 @@ def register(router):
     @router.post("/casino/mp-poker/games/{game_id}/start")
     async def start_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Start the hand (deal, post blinds). Call after countdown when all ready."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or g.get("mode") != "vs_players" or g.get("phase") != "ready":
             raise HTTPException(status_code=400, detail="Game not in ready phase")
@@ -1048,7 +1048,7 @@ def register(router):
         amount: Optional[int] = Body(None, embed=True),
     ):
         """Fold, check, call, bet, raise, all_in."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         action = (action or "").strip().lower()
         amount = amount or 0
         g = await db.mp_poker_games.find_one({"id": game_id})
@@ -1161,7 +1161,7 @@ def register(router):
             raise HTTPException(status_code=404, detail="Game not found")
         turn_idx = int(g.get("current_turn_index") or 0)
         players = list(g.get("players") or [])
-        if turn_idx < 0 or turn_idx >= len(players) or players[turn_idx].get("user_id") != current_user["id"]:
+        if turn_idx < 0 or turn_idx >= len(players) or players[turn_idx].get("user_id") != current_user.get("id") or "":
             return {k: v for k, v in g.items() if k != "_id"}
         # Vs dealer: if human is all-in, run out the board instead of folding (fixes stuck all-in hand)
         if g.get("mode") == "vs_dealer" and players[turn_idx].get("status") == "all_in":
@@ -1199,7 +1199,7 @@ def register(router):
         if not g:
             raise HTTPException(status_code=404, detail="Game not found")
         chat = list(g.get("chat") or [])
-        chat.append({"user_id": current_user["id"], "username": current_user.get("username") or "Player", "message": msg, "at": datetime.now(timezone.utc).isoformat()})
+        chat.append({"user_id": current_user.get("id") or "", "username": current_user.get("username") or "Player", "message": msg, "at": datetime.now(timezone.utc).isoformat()})
         await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"chat": chat[-50:]}})
         g = await db.mp_poker_games.find_one({"id": game_id})
         return {k: v for k, v in g.items() if k != "_id"}

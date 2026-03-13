@@ -638,16 +638,16 @@ async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dic
     opt = next((o for o in (ev.get("options") or []) if o.get("id") == option_id), None)
     if not opt:
         raise HTTPException(status_code=400, detail="Invalid option")
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
+    user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "money": 1})
     money = int(user.get("money", 0) or 0)
     if stake > money:
         raise HTTPException(status_code=400, detail="Insufficient cash")
     now = datetime.now(timezone.utc).isoformat()
     bet_id = str(uuid.uuid4())
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -stake}})
+    await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -stake}})
     await db.sports_bets.insert_one({
         "id": bet_id,
-        "user_id": current_user["id"],
+        "user_id": current_user.get("id") or "",
         "event_id": event_id,
         "event_name": ev.get("name", "?"),
         "option_id": option_id,
@@ -657,17 +657,17 @@ async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dic
         "status": "open",
         "created_at": now,
     })
-    await log_gambling(current_user["id"], current_user.get("username") or "?", "sports_bet", {"bet_id": bet_id, "event_name": ev.get("name"), "option_name": opt.get("name"), "odds": float(opt.get("odds", 1)), "stake": stake, "status": "open"})
+    await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "sports_bet", {"bet_id": bet_id, "event_name": ev.get("name"), "option_name": opt.get("name"), "odds": float(opt.get("odds", 1)), "stake": stake, "status": "open"})
     return {"message": f"Bet placed: ${stake:,} on {opt.get('name')}", "bet_id": bet_id}
 
 
 async def sports_betting_my_bets(current_user: dict = Depends(get_current_user_verified)):
     open_bets = await db.sports_bets.find(
-        {"user_id": current_user["id"], "status": "open"},
+        {"user_id": current_user.get("id") or "", "status": "open"},
         {"_id": 0},
     ).sort("created_at", -1).to_list(50)
     closed_bets = await db.sports_bets.find(
-        {"user_id": current_user["id"], "status": {"$in": ["won", "lost"]}},
+        {"user_id": current_user.get("id") or "", "status": {"$in": ["won", "lost"]}},
         {"_id": 0},
     ).sort("settled_at", -1).to_list(50)
     return {
@@ -680,19 +680,19 @@ async def sports_betting_cancel_bet(request: SportsBetCancelRequest, current_use
     bet_id = (request.bet_id or "").strip()
     if not bet_id:
         raise HTTPException(status_code=400, detail="bet_id required")
-    bet = await db.sports_bets.find_one({"id": bet_id, "user_id": current_user["id"], "status": "open"}, {"_id": 0, "stake": 1})
+    bet = await db.sports_bets.find_one({"id": bet_id, "user_id": current_user.get("id") or "", "status": "open"}, {"_id": 0, "stake": 1})
     if not bet:
         raise HTTPException(status_code=404, detail="Bet not found or already settled")
     stake = int(bet.get("stake") or 0)
     now = datetime.now(timezone.utc).isoformat()
     await db.sports_bets.update_one({"id": bet_id}, {"$set": {"status": "cancelled", "settled_at": now}})
     if stake > 0:
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": stake}})
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": stake}})
     return {"message": f"Bet cancelled. ${stake:,} refunded.", "refunded": stake}
 
 
 async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_current_user_verified)):
-    cursor = db.sports_bets.find({"user_id": current_user["id"], "status": "open"}, {"_id": 0, "id": 1, "stake": 1})
+    cursor = db.sports_bets.find({"user_id": current_user.get("id") or "", "status": "open"}, {"_id": 0, "id": 1, "stake": 1})
     bets = await cursor.to_list(100)
     if not bets:
         return {"message": "No open bets to cancel.", "refunded": 0, "cancelled_count": 0}
@@ -703,13 +703,13 @@ async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_curren
         await db.sports_bets.update_one({"id": b["id"]}, {"$set": {"status": "cancelled", "settled_at": now}})
         total_refund += stake
     if total_refund > 0:
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": total_refund}})
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": total_refund}})
     return {"message": f"All {len(bets)} bet(s) cancelled. ${total_refund:,} refunded.", "refunded": total_refund, "cancelled_count": len(bets)}
 
 
 async def sports_betting_stats(current_user: dict = Depends(get_current_user_verified)):
     pipeline = [
-        {"$match": {"user_id": current_user["id"], "status": {"$in": ["won", "lost"]}}},
+        {"$match": {"user_id": current_user.get("id") or "", "status": {"$in": ["won", "lost"]}}},
         {"$group": {"_id": None, "total_stake": {"$sum": "$stake"}, "won_count": {"$sum": {"$cond": [{"$eq": ["$status", "won"]}, 1, 0]}}, "lost_count": {"$sum": {"$cond": [{"$eq": ["$status", "lost"]}, 1, 0]}}}},
     ]
     agg = await db.sports_bets.aggregate(pipeline).to_list(1)
@@ -719,18 +719,18 @@ async def sports_betting_stats(current_user: dict = Depends(get_current_user_ver
     lost_count = int(doc.get("lost_count", 0) or 0)
     total_placed = won_count + lost_count
     won_stake = await db.sports_bets.aggregate([
-        {"$match": {"user_id": current_user["id"], "status": "won"}},
+        {"$match": {"user_id": current_user.get("id") or "", "status": "won"}},
         {"$group": {"_id": None, "sum": {"$sum": {"$multiply": ["$stake", "$odds"]}}}},
     ]).to_list(1)
     lost_stake = await db.sports_bets.aggregate([
-        {"$match": {"user_id": current_user["id"], "status": "lost"}},
+        {"$match": {"user_id": current_user.get("id") or "", "status": "lost"}},
         {"$group": {"_id": None, "sum": {"$sum": "$stake"}}},
     ]).to_list(1)
     winnings = int((won_stake[0].get("sum", 0) or 0)) if won_stake else 0
     losses = int((lost_stake[0].get("sum", 0) or 0)) if lost_stake else 0
     profit_loss = winnings - losses
     win_pct = round(100 * won_count / total_placed, 1) if total_placed else 0
-    all_placed = await db.sports_bets.count_documents({"user_id": current_user["id"]})
+    all_placed = await db.sports_bets.count_documents({"user_id": current_user.get("id") or ""})
     return {
         "total_bets_placed": all_placed,
         "total_bets_won": won_count,
@@ -742,7 +742,7 @@ async def sports_betting_stats(current_user: dict = Depends(get_current_user_ver
 
 async def sports_betting_recent_results(current_user: dict = Depends(get_current_user_verified)):
     cursor = db.sports_bets.find(
-        {"user_id": current_user["id"], "status": {"$in": ["won", "lost"]}},
+        {"user_id": current_user.get("id") or "", "status": {"$in": ["won", "lost"]}},
         {"_id": 0, "option_name": 1, "odds": 1, "status": 1, "settled_at": 1, "created_at": 1},
     ).sort("settled_at", -1).limit(25)
     rows = await cursor.to_list(25)

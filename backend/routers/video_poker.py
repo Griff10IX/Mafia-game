@@ -267,7 +267,7 @@ def register(router):
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -VIDEO_POKER_CLAIM_COST}})
         await db.videopoker_ownership.update_one(
             {"city": stored_city or city},
-            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user["username"], "max_bet": VIDEO_POKER_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0}},
+            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": VIDEO_POKER_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0}},
             upsert=True,
         )
         return {"message": f"You now own the video poker table in {city}!"}
@@ -310,11 +310,11 @@ def register(router):
         target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1, "rank_points": 1})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
-        send_set = {"owner_id": target["id"], "owner_username": target.get("username")}
+        send_set = {"owner_id": target.get("id") or "", "owner_username": target.get("username")}
         if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
             send_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
         await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": send_set})
-        _invalidate_ownership_cache(target["id"])
+        _invalidate_ownership_cache(target.get("id") or "")
         return {"message": "Ownership transferred."}
 
     @router.post("/casino/videopoker/sell-on-trade")

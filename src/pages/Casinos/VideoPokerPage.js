@@ -181,12 +181,18 @@ export default function VideoPoker() {
   const [sellPoints, setSellPoints] = useState('');
 
   const fetchConfigAndOwnership = () => {
-    api.get('/casino/videopoker/config').then((r) => setConfig(r.data || { max_bet: 50_000_000 })).catch(() => {});
-    api.get('/casino/videopoker/ownership').then((r) => setOwnership(r.data || null)).catch(() => setOwnership(null));
+    api.get('/casino/videopoker/config').then((r) => setConfig(r.data ?? { max_bet: 50_000_000, claim_cost: 500_000_000 })).catch(() => {
+      setConfig({ max_bet: 50_000_000, claim_cost: 500_000_000 });
+    });
+    api.get('/casino/videopoker/ownership').then((r) => setOwnership(r.data ?? null)).catch(() => {
+      setOwnership(null);
+    });
   };
 
   const fetchHistory = () => {
-    api.get('/casino/videopoker/history').then((r) => setHistory(r.data?.history || [])).catch(() => {});
+    api.get('/casino/videopoker/history').then((r) => setHistory(r.data?.history ?? [])).catch(() => {
+      setHistory([]);
+    });
   };
 
   useEffect(() => {
@@ -197,7 +203,9 @@ export default function VideoPoker() {
         setGame({ status: r.data.status, bet: r.data.bet, hand: r.data.hand });
         setHolds([false, false, false, false, false]);
       }
-    }).catch(() => {});
+    }).catch(() => {
+      setGame(null);
+    });
   }, []);
 
   const handleClaim = async () => {
@@ -581,9 +589,9 @@ export default function VideoPoker() {
           ) : (
             <div className="p-2 space-y-1 max-h-48 overflow-y-auto">
               {history.map((item, i) => {
-                const profit = (item.payout || 0) - (item.bet || 0);
+                const profit = (item.payout ?? 0) - (item.bet ?? 0);
                 return (
-                  <div key={i} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-zinc-800/30 text-xs font-heading">
+                  <div key={item.created_at || i} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-zinc-800/30 text-xs font-heading">
                     <span className="text-mutedForeground truncate">{formatHistoryDate(item.created_at)}</span>
                     <span style={{ color: outcomeColor(item.hand_key) }}>{item.hand_name}</span>
                     <span className="text-mutedForeground">{formatMoney(item.bet)}</span>

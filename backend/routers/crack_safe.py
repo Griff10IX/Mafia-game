@@ -113,7 +113,7 @@ def register(router):
         if user.get("money", 0) < SAFE_ENTRY_COST:
             raise HTTPException(status_code=400, detail=f"You need ${SAFE_ENTRY_COST:,} to attempt to crack the safe.")
 
-        await db.users.update_one({"id": user["id"]}, {"$inc": {"money": -SAFE_ENTRY_COST}})
+        await db.users.update_one({"id": user.get("id") or ""}, {"$inc": {"money": -SAFE_ENTRY_COST}})
 
         await db.safe_game.update_one({}, {"$inc": {"jackpot": SAFE_JACKPOT_PER_ATTEMPT, "total_attempts": 1}})
 
@@ -121,14 +121,14 @@ def register(router):
         correct_positions = sum(1 for a, b in zip(req.numbers, combo) if a == b)
 
         await db.safe_guesses.insert_one({
-            "user_id": user["id"],
+            "user_id": user.get("id") or "",
             "username": user.get("username", "?"),
             "guess": req.numbers,
             "guessed_at": now,
             "correct": cracked,
         })
         await log_activity(
-            user["id"],
+            user.get("id") or "",
             user.get("username") or "?",
             "crack_safe_guess",
             {"cracked": cracked, "correct_positions": sum(1 for a, b in zip(req.numbers, combo) if a == b), "is_admin": is_admin},
@@ -137,7 +137,7 @@ def register(router):
         if cracked:
             fresh = await db.safe_game.find_one({})
             jackpot_amount = fresh.get("jackpot", SAFE_JACKPOT_SEED)
-            await db.users.update_one({"id": user["id"]}, {"$inc": {"money": jackpot_amount}})
+            await db.users.update_one({"id": user.get("id") or ""}, {"$inc": {"money": jackpot_amount}})
             new_combo = [random.randint(SAFE_MIN, SAFE_MAX) for _ in range(SAFE_DIGITS)]
             await db.safe_game.update_one(
                 {},
@@ -151,12 +151,12 @@ def register(router):
             )
             await db.safe_winners.insert_one({
                 "username": user.get("username", "?"),
-                "user_id": user["id"],
+                "user_id": user.get("id") or "",
                 "won_at": now,
                 "amount_won": jackpot_amount,
             })
             await log_activity(
-                user["id"],
+                user.get("id") or "",
                 user.get("username") or "?",
                 "crack_safe_jackpot",
                 {"jackpot_won": jackpot_amount},

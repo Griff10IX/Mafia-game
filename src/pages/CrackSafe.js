@@ -408,9 +408,10 @@ export default function CrackSafe() {
   const fetchInfo = useCallback(async () => {
     try {
       const res = await api.get('/crack-safe/info');
-      setInfo(res.data);
+      setInfo(res.data ?? null);
     } catch {
       toast.error('Failed to load safe info');
+      setInfo(null);
     } finally {
       setLoading(false);
     }
@@ -718,7 +719,7 @@ export default function CrackSafe() {
               </div>
               <div className="divide-y divide-zinc-800/50">
                 {info.last_winners.map((w, i) => (
-                  <div key={i} className="px-2.5 py-2 flex items-center justify-between gap-3">
+                  <div key={w.won_at || i} className="px-2.5 py-2 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0" style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.2)' }}>
                         🏆

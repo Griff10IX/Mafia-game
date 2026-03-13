@@ -34,8 +34,10 @@ export default function MPPokerPage() {
   }, []);
 
   const fetchGames = useCallback(() => {
-    api.get('/casino/mp-poker/games').then((r) => setGames(r.data?.games || [])).catch(() => setGames([])).finally(() => setLoading(false));
-    api.get('/casino/mp-poker/recent-games').then((r) => setRecentGames(r.data?.games || [])).catch(() => {});
+    api.get('/casino/mp-poker/games').then((r) => setGames(r.data?.games ?? [])).catch(() => setGames([])).finally(() => setLoading(false));
+    api.get('/casino/mp-poker/recent-games').then((r) => setRecentGames(r.data?.games ?? [])).catch(() => {
+      setRecentGames([]);
+    });
   }, []);
 
   useEffect(() => {

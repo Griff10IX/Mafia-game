@@ -601,7 +601,7 @@ export default function SportsBetting() {
               {recentResults.length === 0 ? (
                 <p className="text-[11px] text-zinc-600 font-heading py-6 text-center">No results yet.</p>
               ) : recentResults.map((r, i) => (
-                <div key={i} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-zinc-800/20 mb-1 last:mb-0">
+                <div key={r.date || i} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-zinc-800/20 mb-1 last:mb-0">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.result === 'won' ? 'bg-emerald-400' : 'bg-red-400'}`} />
                     <span className="text-[10px] font-heading text-foreground truncate">{r.betting_option}</span>

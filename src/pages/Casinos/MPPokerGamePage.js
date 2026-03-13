@@ -1327,7 +1327,7 @@ export default function MPPokerGamePage() {
             {(game.chat || []).length === 0
               ? <p className="text-[9px] font-heading text-center py-2" style={{ color: 'rgba(255,255,255,0.15)' }}>No messages yet…</p>
               : (game.chat || []).slice(-30).map((c, i) => (
-                  <div key={i} className="text-[9px] font-heading leading-relaxed">
+                  <div key={c.at || i} className="text-[9px] font-heading leading-relaxed">
                     <span className="font-semibold" style={{ color: '#c9a84c' }}>{c.username}:</span>{' '}
                     <span className="text-foreground break-words">{c.message}</span>
                   </div>
