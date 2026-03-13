@@ -155,7 +155,7 @@ async def _process_auto_sell_expired(uid: str, now: datetime, live_list: list, c
             cost_to_cover = round(units * current_price, 0)
             profit_points = round(units * (open_price - current_price), 0)
             await db.stock_positions.delete_one({"id": pos.get("id"), "user_id": uid})
-            await db.users.update_one({"id": uid}, {"$inc": {"points": profit_points - cost_to_cover}})
+            await db.users.update_one({"id": uid}, {"$inc": {"points": profit_points - cost_to_cover, "stock_market_profit_total": profit_points}})
             await db.stock_transactions.insert_one({
                 "id": str(uuid.uuid4()),
                 "user_id": uid,
@@ -175,11 +175,11 @@ async def _process_auto_sell_expired(uid: str, now: datetime, live_list: list, c
                 await send_notification(uid, "📉 Short auto-closed", f"Your {stock.get('name')} short was auto-closed after 7 days. Profit: {profit_points} points!", "reward")
         else:
             value_points = round(units * current_price, 0)
-            await db.stock_positions.delete_one({"id": pos.get("id"), "user_id": uid})
-            await db.users.update_one({"id": uid}, {"$inc": {"points": value_points}})
             buy_price = float(pos.get("buy_price") or 0)
             cost_points = round(units * buy_price, 0)
             profit_points = value_points - cost_points
+            await db.stock_positions.delete_one({"id": pos.get("id"), "user_id": uid})
+            await db.users.update_one({"id": uid}, {"$inc": {"points": value_points, "stock_market_profit_total": profit_points}})
             await db.stock_transactions.insert_one({
                 "id": str(uuid.uuid4()),
                 "user_id": uid,
@@ -532,7 +532,7 @@ def register(router):
             if int(user.get("points") or 0) < cost_to_cover:
                 raise HTTPException(status_code=400, detail=f"Insufficient points to cover. Need {cost_to_cover} points.")
             await db.stock_positions.delete_one({"id": request.position_id, "user_id": uid})
-            await db.users.update_one({"id": uid}, {"$inc": {"points": profit_points - cost_to_cover}})
+            await db.users.update_one({"id": uid}, {"$inc": {"points": profit_points - cost_to_cover, "stock_market_profit_total": profit_points}})
             await db.stock_transactions.insert_one({
                 "id": str(uuid.uuid4()),
                 "user_id": uid,
@@ -556,7 +556,7 @@ def register(router):
         cost_points = round(units * buy_price, 0)
         profit_points = value_points - cost_points
         await db.stock_positions.delete_one({"id": request.position_id, "user_id": uid})
-        await db.users.update_one({"id": uid}, {"$inc": {"points": value_points}})
+        await db.users.update_one({"id": uid}, {"$inc": {"points": value_points, "stock_market_profit_total": profit_points}})
         await db.stock_transactions.insert_one({
             "id": str(uuid.uuid4()),
             "user_id": uid,

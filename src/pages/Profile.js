@@ -445,12 +445,20 @@ const ProfileInfoCard = ({
                 {honours.length === 0 ? (
                   <span className="text-[8px] text-mutedForeground font-heading col-span-2">—</span>
                 ) : (
-                  honours.map((h, i) => (
-                    <span key={i} className="flex items-center gap-0.5 px-1 py-0.5 rounded border border-primary/20 bg-primary/5 text-[8px] font-heading leading-tight min-w-0 w-full">
-                      <span className="text-primary font-bold shrink-0">#{h.rank}</span>
-                      <span className="text-foreground truncate min-w-0">{h.label}</span>
-                    </span>
-                  ))
+                  honours.map((h, i) => {
+                    const top10 = Number(h.rank) <= 10;
+                    return (
+                      <span
+                        key={i}
+                        className={`flex items-center gap-0.5 px-1 py-0.5 rounded border text-[8px] font-heading leading-tight min-w-0 w-full ${
+                          top10 ? 'border-primary/20 bg-primary/5' : 'border-zinc-500/30 bg-zinc-500/5'
+                        }`}
+                      >
+                        <span className={`font-bold shrink-0 ${top10 ? 'text-primary' : 'text-zinc-400'}`}>#{h.rank}</span>
+                        <span className="text-foreground truncate min-w-0">{h.label}</span>
+                      </span>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -590,21 +598,30 @@ const HonoursCard = ({ honours }) => (
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-          {honours.map((h, i) => (
-            <div
-              key={i}
-              className="prof-row flex items-center gap-2 rounded-md border border-primary/20 px-2.5 py-1.5 bg-primary/5"
-            >
-              <div className="flex items-center justify-center w-6 h-6 md:w-7 md:h-7 rounded-full bg-primary/20 border border-primary/30 shrink-0">
-                <span className="text-primary font-heading font-bold text-[10px] md:text-xs">
-                  #{h.rank}
+          {honours.map((h, i) => {
+            const top10 = Number(h.rank) <= 10;
+            return (
+              <div
+                key={i}
+                className={`prof-row flex items-center gap-2 rounded-md border px-2.5 py-1.5 ${
+                  top10 ? 'border-primary/20 bg-primary/5' : 'border-zinc-500/20 bg-zinc-500/5'
+                }`}
+              >
+                <div className={`flex items-center justify-center w-6 h-6 md:w-7 md:h-7 rounded-full border shrink-0 ${
+                  top10 ? 'bg-primary/20 border-primary/30' : 'bg-zinc-500/20 border-zinc-500/30'
+                }`}>
+                  <span className={`font-heading font-bold text-[10px] md:text-xs ${
+                    top10 ? 'text-primary' : 'text-zinc-400'
+                  }`}>
+                    #{h.rank}
+                  </span>
+                </div>
+                <span className="text-foreground font-heading text-[10px] md:text-xs flex-1 leading-tight">
+                  {h.label}
                 </span>
               </div>
-              <span className="text-foreground font-heading text-[10px] md:text-xs flex-1 leading-tight">
-                {h.label}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

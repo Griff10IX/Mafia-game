@@ -329,18 +329,30 @@ async def get_top_leaderboards(
             _top_by_field_weekly("bust_events", "user_id", "at", False, user_id, limit, dead, {"success": True}),
         )
     else:
-        kills, crimes, gta, jail_busts, points_spent = await asyncio.gather(
+        kills, crimes, gta, jail_busts, points_spent, respect_points, bullets_melted, stock_market_profit, booze_run_profit = await asyncio.gather(
             _top_by_field("total_kills", user_id, limit, dead=dead),
             _top_by_field("total_crimes", user_id, limit, dead=dead),
             _top_by_field("total_gta", user_id, limit, dead=dead),
             _top_by_field("jail_busts", user_id, limit, dead=dead),
             _top_by_field("lifetime_points_spent", user_id, limit, dead=dead),
+            _top_by_field("respect_points", user_id, limit, dead=dead),
+            _top_by_field("bullets_melted", user_id, limit, dead=dead),
+            _top_by_field("stock_market_profit_total", user_id, limit, dead=dead),
+            _top_by_field("booze_run_profit_total", user_id, limit, dead=dead),
         )
     result = {"kills": kills, "crimes": crimes, "gta": gta, "jail_busts": jail_busts}
     if (period or "").lower() != "weekly":
         result["points_spent"] = points_spent
+        result["respect_points"] = respect_points
+        result["bullets_melted"] = bullets_melted
+        result["stock_market_profit"] = stock_market_profit
+        result["booze_run_profit"] = booze_run_profit
     else:
         result["points_spent"] = []
+        result["respect_points"] = []
+        result["bullets_melted"] = []
+        result["stock_market_profit"] = []
+        result["booze_run_profit"] = []
     return result
 
 

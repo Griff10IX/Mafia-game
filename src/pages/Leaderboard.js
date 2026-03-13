@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award, Skull, History, DollarSign } from 'lucide-react';
+import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award, Skull, History, DollarSign, Star, Zap, TrendingUp, Wine } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -91,7 +91,10 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
 
 export default function Leaderboard() {
   const [period, setPeriod] = useState('weekly'); // 'weekly' | 'alltime'
-  const [boards, setBoards] = useState({ kills: [], crimes: [], gta: [], jail_busts: [], points_spent: [] });
+  const [boards, setBoards] = useState({
+    kills: [], crimes: [], gta: [], jail_busts: [], points_spent: [],
+    respect_points: [], bullets_melted: [], stock_market_profit: [], booze_run_profit: [],
+  });
   const [loading, setLoading] = useState(true);
   const [topLimit, setTopLimit] = useState(10);
   const [viewMode, setViewMode] = useState('alive'); // 'alive' | 'dead'
@@ -102,7 +105,10 @@ export default function Leaderboard() {
       const response = await api.get('/leaderboards/top', {
         params: { limit: topLimit, dead: viewMode === 'dead', period },
       });
-      setBoards(response.data || { kills: [], crimes: [], gta: [], jail_busts: [], points_spent: [] });
+      setBoards(response.data || {
+        kills: [], crimes: [], gta: [], jail_busts: [], points_spent: [],
+        respect_points: [], bullets_melted: [], stock_market_profit: [], booze_run_profit: [],
+      });
     } catch (error) {
       toast.error('Failed to load leaderboard');
     } finally {
@@ -248,13 +254,43 @@ export default function Leaderboard() {
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
         />
         {period === 'alltime' && (
-          <StatBoard
-            title={viewMode === 'dead' ? 'Top dead · Points Spent' : 'Most Points Spent'}
-            icon={DollarSign}
-            entries={boards.points_spent || []}
-            valueLabel="pts"
-            topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
-          />
+          <>
+            <StatBoard
+              title={viewMode === 'dead' ? 'Top dead · Points Spent' : 'Most Points Spent'}
+              icon={DollarSign}
+              entries={boards.points_spent || []}
+              valueLabel="pts"
+              topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
+            />
+            <StatBoard
+              title={viewMode === 'dead' ? 'Top dead · Respect Points' : 'Respect Points Earned'}
+              icon={Star}
+              entries={boards.respect_points || []}
+              valueLabel="respect"
+              topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
+            />
+            <StatBoard
+              title={viewMode === 'dead' ? 'Top dead · Bullets Melted' : 'Bullets Melted'}
+              icon={Zap}
+              entries={boards.bullets_melted || []}
+              valueLabel="bullets"
+              topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
+            />
+            <StatBoard
+              title={viewMode === 'dead' ? 'Top dead · Stock Market Profit' : 'Highest Stock Market Profit'}
+              icon={TrendingUp}
+              entries={boards.stock_market_profit || []}
+              valueLabel="pts"
+              topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
+            />
+            <StatBoard
+              title={viewMode === 'dead' ? 'Top dead · Booze Run Profit' : 'Booze Run Profit'}
+              icon={Wine}
+              entries={boards.booze_run_profit || []}
+              valueLabel="$"
+              topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
+            />
+          </>
         )}
       </div>
 

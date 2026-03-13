@@ -311,6 +311,7 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
         updates["$inc"] = updates.get("$inc", {})
         updates["$inc"]["booze_profit_today"] = profit
         updates["$inc"]["booze_profit_total"] = profit
+        updates["$inc"]["booze_run_profit_total"] = profit
         updates["$inc"]["booze_runs_count"] = 1
         updates["$inc"][f"booze_profit_by_type.{booze_id}"] = profit
         updates["$set"] = {"booze_profit_today_date": today_utc}
