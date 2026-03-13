@@ -167,6 +167,10 @@ export default function Admin() {
   const [allEventsForTesting, setAllEventsForTesting] = useState(false);
   const [todayEvent, setTodayEvent] = useState(null);
   
+  const [cfBotBlockEnabled, setCfBotBlockEnabled] = useState(null);
+  const [cfBotBlockLoading, setCfBotBlockLoading] = useState(false);
+  const [cfBotBlockError, setCfBotBlockError] = useState(null);
+  
   const [searchUsername, setSearchUsername] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [deleteUserId, setDeleteUserId] = useState('');
@@ -345,6 +349,7 @@ export default function Admin() {
         fetchBoozeRotation();
         fetchAdminSettings();
         fetchModerators();
+        fetchCfBotBlockStatus();
         fetchPageLocks();
       }
       if (admin || mod) {
@@ -639,6 +644,36 @@ export default function Admin() {
       toast.success(res.data?.message || 'Toggled');
       fetchEventsStatus();
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+  };
+
+  const fetchCfBotBlockStatus = async () => {
+    try {
+      const res = await api.get('/admin/cloudflare/bot-block-status');
+      if (res.data?.error) {
+        setCfBotBlockError(res.data.error);
+        setCfBotBlockEnabled(null);
+      } else {
+        setCfBotBlockEnabled(res.data?.enabled ?? null);
+        setCfBotBlockError(null);
+      }
+    } catch (e) {
+      setCfBotBlockError('Failed to fetch status');
+    }
+  };
+
+  const handleToggleCfBotBlock = async () => {
+    setCfBotBlockLoading(true);
+    try {
+      const newVal = !cfBotBlockEnabled;
+      const res = await api.post(`/admin/cloudflare/bot-block-toggle?enabled=${newVal}`);
+      setCfBotBlockEnabled(res.data?.enabled ?? newVal);
+      toast.success(res.data?.message || `Bot blocking ${newVal ? 'enabled' : 'disabled'}`);
+      setCfBotBlockError(null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to toggle');
+    } finally {
+      setCfBotBlockLoading(false);
+    }
   };
 
   const fetchMeta = async () => {
@@ -2338,6 +2373,50 @@ export default function Admin() {
               </BtnSecondary>
             </div>
             <p className="text-[10px] text-mutedForeground">All events (testing): applies every multiplier at once.</p>
+          </div>
+        )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Shield}
+          title="Cloudflare Bot Blocking"
+          badge={
+            <span className="text-[10px] font-heading">
+              {cfBotBlockError ? (
+                <span className="text-amber-400">Not configured</span>
+              ) : cfBotBlockEnabled === null ? (
+                <span className="text-mutedForeground">Loading...</span>
+              ) : cfBotBlockEnabled ? (
+                <span className="text-emerald-400">Blocking bots</span>
+              ) : (
+                <span className="text-red-400">Allowing bots</span>
+              )}
+            </span>
+          }
+          isCollapsed={collapsed.cfBotBlock}
+          onToggle={() => toggleSection('cfBotBlock')}
+        />
+        {!collapsed.cfBotBlock && (
+          <div className="p-3 space-y-2">
+            {cfBotBlockError ? (
+              <p className="text-[10px] text-amber-400">{cfBotBlockError}</p>
+            ) : (
+              <>
+                <p className="text-[10px] text-mutedForeground">
+                  Toggle the &quot;Block All Bots&quot; rule in Cloudflare. When enabled, known bots are blocked from accessing the site.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <BtnPrimary
+                    onClick={handleToggleCfBotBlock}
+                    disabled={cfBotBlockLoading || cfBotBlockEnabled === null}
+                  >
+                    {cfBotBlockLoading ? 'Updating...' : cfBotBlockEnabled ? 'Disable Bot Blocking' : 'Enable Bot Blocking'}
+                  </BtnPrimary>
+                </div>
+              </>
+            )}
           </div>
         )}
         </div>

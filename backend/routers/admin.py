@@ -3,16 +3,22 @@
 # force-online, lock/kill player, search time, clear searches, check, activity/gambling log,
 # find-duplicates, cheat-detection, user-details, wipe, delete-user, events, seed-families, create-test-users.
 import logging
+import os
 import random
 import re
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+import httpx
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from disposable_email import is_disposable_email
+
+# Cloudflare API config for bot blocking toggle
+CF_ZONE_ID = os.environ.get("CF_ZONE_ID", "")
+CF_API_TOKEN = os.environ.get("CF_API_TOKEN", "")
 
 
 class WipeConfirmation(BaseModel):
@@ -3403,3 +3409,73 @@ def register(router):
             "enabled": enabled,
             "updated_count": res.modified_count,
         }
+
+    # ──────────────────────────────────────────────────────────────────────────────
+    # Cloudflare Bot Blocking Toggle
+    # ──────────────────────────────────────────────────────────────────────────────
+
+    @router.get("/admin/cloudflare/bot-block-status")
+    async def admin_cloudflare_bot_block_status(current_user: dict = Depends(get_current_user)):
+        """Get current status of the 'Block All Bots' rule in Cloudflare."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if not CF_ZONE_ID or not CF_API_TOKEN:
+            return {"enabled": None, "error": "Cloudflare not configured (CF_ZONE_ID / CF_API_TOKEN missing)"}
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"https://api.cloudflare.com/client/v4/zones/{CF_ZONE_ID}/firewall/rules",
+                    headers={"Authorization": f"Bearer {CF_API_TOKEN}", "Content-Type": "application/json"},
+                )
+                data = resp.json()
+                if not data.get("success"):
+                    return {"enabled": None, "error": data.get("errors", "Unknown error")}
+                rules = data.get("result", [])
+                for rule in rules:
+                    if "block all bots" in (rule.get("description") or "").lower():
+                        return {"enabled": not rule.get("paused", False), "rule_id": rule.get("id")}
+                return {"enabled": None, "error": "Rule 'Block All Bots' not found"}
+        except Exception as e:
+            logging.exception("Cloudflare API error")
+            return {"enabled": None, "error": str(e)}
+
+    @router.post("/admin/cloudflare/bot-block-toggle")
+    async def admin_cloudflare_bot_block_toggle(enabled: bool, current_user: dict = Depends(get_current_user)):
+        """Enable or disable the 'Block All Bots' Cloudflare firewall rule."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if not CF_ZONE_ID or not CF_API_TOKEN:
+            raise HTTPException(status_code=500, detail="Cloudflare not configured (CF_ZONE_ID / CF_API_TOKEN missing)")
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                # First get the rule ID
+                resp = await client.get(
+                    f"https://api.cloudflare.com/client/v4/zones/{CF_ZONE_ID}/firewall/rules",
+                    headers={"Authorization": f"Bearer {CF_API_TOKEN}", "Content-Type": "application/json"},
+                )
+                data = resp.json()
+                if not data.get("success"):
+                    raise HTTPException(status_code=500, detail=f"Cloudflare error: {data.get('errors')}")
+                rules = data.get("result", [])
+                rule_id = None
+                for rule in rules:
+                    if "block all bots" in (rule.get("description") or "").lower():
+                        rule_id = rule.get("id")
+                        break
+                if not rule_id:
+                    raise HTTPException(status_code=404, detail="Rule 'Block All Bots' not found in Cloudflare")
+                # Update the rule (paused = not enabled)
+                update_resp = await client.patch(
+                    f"https://api.cloudflare.com/client/v4/zones/{CF_ZONE_ID}/firewall/rules/{rule_id}",
+                    headers={"Authorization": f"Bearer {CF_API_TOKEN}", "Content-Type": "application/json"},
+                    json={"paused": not enabled},
+                )
+                update_data = update_resp.json()
+                if not update_data.get("success"):
+                    raise HTTPException(status_code=500, detail=f"Cloudflare update error: {update_data.get('errors')}")
+                return {"message": f"Bot blocking {'enabled' if enabled else 'disabled'}", "enabled": enabled}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.exception("Cloudflare API error")
+            raise HTTPException(status_code=500, detail=str(e))
