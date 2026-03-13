@@ -138,193 +138,390 @@ function rectOvalPt(T, x1,y1,x2,y2,r) {
   return { x:x1+r, y:y1 };
 }
 
+// Helper to draw grandstands along a straight
+function drawGrandstand(ctx, sx, sy, x, y, w, h, rows) {
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = "#6a6050";
+  ctx.fillRect(sx(x), sy(y), sx(x + w) - sx(x), sy(y + h) - sy(y));
+  ctx.globalAlpha = 0.12;
+  ctx.strokeStyle = "#a09070";
+  ctx.lineWidth = 0.6;
+  for (let r = 0; r < rows; r++) {
+    const ry = y + (h / rows) * r;
+    ctx.beginPath();
+    ctx.moveTo(sx(x), sy(ry));
+    ctx.lineTo(sx(x + w), sy(ry));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawTreeCluster(ctx, sx, sy, cx, cy, count, radius) {
+  ctx.save();
+  ctx.globalAlpha = 0.22;
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2;
+    const r = radius * (0.4 + Math.random() * 0.6);
+    const tx = cx + Math.cos(a) * r;
+    const ty = cy + Math.sin(a) * r;
+    ctx.fillStyle = `hsl(${110 + Math.random() * 30}, ${40 + Math.random() * 20}%, ${18 + Math.random() * 10}%)`;
+    ctx.beginPath();
+    ctx.arc(sx(tx), sy(ty), 3 + Math.random() * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawRunoff(ctx, sx, sy, trackFn, tStart, tEnd, offset, steps) {
+  ctx.save();
+  ctx.globalAlpha = 0.08;
+  ctx.fillStyle = "#a09060";
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const f = tStart + (tEnd - tStart) * (i / steps);
+    const p = trackFn(f);
+    const p2 = trackFn((f + 0.005) % 1);
+    const ang = Math.atan2(p2.y - p.y, p2.x - p.x) + Math.PI / 2;
+    const ox = sx(p.x) + Math.cos(ang) * offset;
+    const oy = sy(p.y) + Math.sin(ang) * offset;
+    i === 0 ? ctx.moveTo(ox, oy) : ctx.lineTo(ox, oy);
+  }
+  for (let i = steps; i >= 0; i--) {
+    const f = tStart + (tEnd - tStart) * (i / steps);
+    const p = trackFn(f);
+    const p2 = trackFn((f + 0.005) % 1);
+    const ang = Math.atan2(p2.y - p.y, p2.x - p.x) + Math.PI / 2;
+    const ox = sx(p.x) + Math.cos(ang) * (offset + 14);
+    const oy = sy(p.y) + Math.sin(ang) * (offset + 14);
+    ctx.lineTo(ox, oy);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawSFGantry(ctx, sx, sy, trackFn, sfLine) {
+  const p = trackFn(sfLine);
+  const p2 = trackFn(sfLine + 0.005);
+  const ang = Math.atan2(sy(p2.y) - sy(p.y), sx(p2.x) - sx(p.x)) + Math.PI / 2;
+  ctx.save();
+  ctx.globalAlpha = 0.3;
+  ctx.strokeStyle = "#c9a460";
+  ctx.lineWidth = 2;
+  const len = 18;
+  const x1 = sx(p.x) + Math.cos(ang) * len;
+  const y1 = sy(p.y) + Math.sin(ang) * len;
+  const x2 = sx(p.x) - Math.cos(ang) * len;
+  const y2 = sy(p.y) - Math.sin(ang) * len;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1 - 10);
+  ctx.lineTo(x1, y1);
+  ctx.moveTo(x2, y2 - 10);
+  ctx.lineTo(x2, y2);
+  ctx.moveTo(x1, y1 - 10);
+  ctx.lineTo(x2, y2 - 10);
+  ctx.stroke();
+  ctx.restore();
+}
+
 const TRACKS = [
   {
-    id:"chicago", name:"Chicago Board Track", km:2.4, corners:8, lapBase:22, rewardMult:1.0,
-    desc:"Tight oval, low downforce",
-    getPoint:(t)=>rectOvalPt(t,110,65,690,295,58),
+    id:"chicago", name:"Chicago Board Track", km:3.1, corners:10, lapBase:24, rewardMult:1.0,
+    desc:"Banked wooden oval with tight turns",
+    getPoint:(t)=>interpPtsSmooth([
+      {f:0.00,p:{x:280,y:68}},{f:0.04,p:{x:400,y:62}},{f:0.08,p:{x:520,y:60}},
+      {f:0.12,p:{x:620,y:65}},{f:0.16,p:{x:672,y:82}},{f:0.20,p:{x:700,y:112}},
+      {f:0.24,p:{x:710,y:152}},{f:0.28,p:{x:705,y:192}},{f:0.32,p:{x:688,y:228}},
+      {f:0.36,p:{x:660,y:258}},{f:0.40,p:{x:620,y:278}},{f:0.44,p:{x:570,y:290}},
+      {f:0.48,p:{x:510,y:295}},{f:0.52,p:{x:400,y:298}},{f:0.56,p:{x:290,y:295}},
+      {f:0.60,p:{x:230,y:290}},{f:0.64,p:{x:180,y:278}},{f:0.68,p:{x:140,y:258}},
+      {f:0.72,p:{x:112,y:228}},{f:0.76,p:{x:95,y:192}},{f:0.80,p:{x:90,y:152}},
+      {f:0.84,p:{x:100,y:112}},{f:0.88,p:{x:128,y:82}},{f:0.92,p:{x:170,y:68}},
+      {f:0.96,p:{x:220,y:64}},{f:1.00,p:{x:280,y:68}},
+    ], t),
     pitEntry:0.61, pitExit:0.67, sfLine:0.01,
     drawExtra:(ctx,sx,sy)=>{
-      // Banking stripes on turns
-      ctx.save(); ctx.globalAlpha=0.2;
-      ctx.strokeStyle="#c9a460"; ctx.lineWidth=3;
-      [[0.0,0.06],[0.24,0.31],[0.5,0.56],[0.74,0.81]].forEach(([a,b])=>{
-        ctx.beginPath();
-        for(let i=0;i<=20;i++){ctx.lineTo(...pt2xy(rectOvalPt((a+(b-a)*i/20),110,65,690,295,58),sx,sy));}
-        ctx.stroke();
+      drawGrandstand(ctx, sx, sy, 300, 30, 200, 18, 4);
+      drawGrandstand(ctx, sx, sy, 300, 310, 200, 18, 4);
+      drawRunoff(ctx, sx, sy, (f) => interpPtsSmooth([
+        {f:0.00,p:{x:280,y:68}},{f:0.04,p:{x:400,y:62}},{f:0.08,p:{x:520,y:60}},
+        {f:0.12,p:{x:620,y:65}},{f:0.16,p:{x:672,y:82}},{f:0.20,p:{x:700,y:112}},
+        {f:0.24,p:{x:710,y:152}},{f:0.28,p:{x:705,y:192}},{f:0.32,p:{x:688,y:228}},
+        {f:0.36,p:{x:660,y:258}},{f:0.40,p:{x:620,y:278}},{f:0.44,p:{x:570,y:290}},
+        {f:0.48,p:{x:510,y:295}},{f:0.52,p:{x:400,y:298}},{f:0.56,p:{x:290,y:295}},
+        {f:0.60,p:{x:230,y:290}},{f:0.64,p:{x:180,y:278}},{f:0.68,p:{x:140,y:258}},
+        {f:0.72,p:{x:112,y:228}},{f:0.76,p:{x:95,y:192}},{f:0.80,p:{x:90,y:152}},
+        {f:0.84,p:{x:100,y:112}},{f:0.88,p:{x:128,y:82}},{f:0.92,p:{x:170,y:68}},
+        {f:0.96,p:{x:220,y:64}},{f:1.00,p:{x:280,y:68}},
+      ], f), 0.18, 0.28, 22, 12);
+      ctx.save(); ctx.globalAlpha=0.15;
+      ctx.strokeStyle="#c9a460"; ctx.lineWidth=2;
+      [[0.18,0.24],[0.68,0.76]].forEach(([a,b])=>{
+        for(let s=0;s<3;s++){
+          ctx.beginPath();
+          for(let i=0;i<=16;i++){
+            const f=a+(b-a)*i/16;
+            const p=interpPtsSmooth([{f:0.00,p:{x:280,y:68}},{f:0.04,p:{x:400,y:62}},{f:0.08,p:{x:520,y:60}},{f:0.12,p:{x:620,y:65}},{f:0.16,p:{x:672,y:82}},{f:0.20,p:{x:700,y:112}},{f:0.24,p:{x:710,y:152}},{f:0.28,p:{x:705,y:192}},{f:0.32,p:{x:688,y:228}},{f:0.36,p:{x:660,y:258}},{f:0.40,p:{x:620,y:278}},{f:0.44,p:{x:570,y:290}},{f:0.48,p:{x:510,y:295}},{f:0.52,p:{x:400,y:298}},{f:0.56,p:{x:290,y:295}},{f:0.60,p:{x:230,y:290}},{f:0.64,p:{x:180,y:278}},{f:0.68,p:{x:140,y:258}},{f:0.72,p:{x:112,y:228}},{f:0.76,p:{x:95,y:192}},{f:0.80,p:{x:90,y:152}},{f:0.84,p:{x:100,y:112}},{f:0.88,p:{x:128,y:82}},{f:0.92,p:{x:170,y:68}},{f:0.96,p:{x:220,y:64}},{f:1.00,p:{x:280,y:68}}],f);
+            const p2=interpPtsSmooth([{f:0.00,p:{x:280,y:68}},{f:0.04,p:{x:400,y:62}},{f:0.08,p:{x:520,y:60}},{f:0.12,p:{x:620,y:65}},{f:0.16,p:{x:672,y:82}},{f:0.20,p:{x:700,y:112}},{f:0.24,p:{x:710,y:152}},{f:0.28,p:{x:705,y:192}},{f:0.32,p:{x:688,y:228}},{f:0.36,p:{x:660,y:258}},{f:0.40,p:{x:620,y:278}},{f:0.44,p:{x:570,y:290}},{f:0.48,p:{x:510,y:295}},{f:0.52,p:{x:400,y:298}},{f:0.56,p:{x:290,y:295}},{f:0.60,p:{x:230,y:290}},{f:0.64,p:{x:180,y:278}},{f:0.68,p:{x:140,y:258}},{f:0.72,p:{x:112,y:228}},{f:0.76,p:{x:95,y:192}},{f:0.80,p:{x:90,y:152}},{f:0.84,p:{x:100,y:112}},{f:0.88,p:{x:128,y:82}},{f:0.92,p:{x:170,y:68}},{f:0.96,p:{x:220,y:64}},{f:1.00,p:{x:280,y:68}}],(f+0.005)%1);
+            const ang=Math.atan2(p2.y-p.y,p2.x-p.x)+Math.PI/2;
+            const d=16+s*5;
+            i===0?ctx.moveTo(sx(p.x)+Math.cos(ang)*d,sy(p.y)+Math.sin(ang)*d):ctx.lineTo(sx(p.x)+Math.cos(ang)*d,sy(p.y)+Math.sin(ang)*d);
+          }
+          ctx.stroke();
+        }
       });
       ctx.restore();
+      drawSFGantry(ctx, sx, sy, (f)=>interpPtsSmooth([{f:0.00,p:{x:280,y:68}},{f:0.04,p:{x:400,y:62}},{f:0.08,p:{x:520,y:60}},{f:0.12,p:{x:620,y:65}},{f:0.16,p:{x:672,y:82}},{f:0.20,p:{x:700,y:112}},{f:0.24,p:{x:710,y:152}},{f:0.28,p:{x:705,y:192}},{f:0.32,p:{x:688,y:228}},{f:0.36,p:{x:660,y:258}},{f:0.40,p:{x:620,y:278}},{f:0.44,p:{x:570,y:290}},{f:0.48,p:{x:510,y:295}},{f:0.52,p:{x:400,y:298}},{f:0.56,p:{x:290,y:295}},{f:0.60,p:{x:230,y:290}},{f:0.64,p:{x:180,y:278}},{f:0.68,p:{x:140,y:258}},{f:0.72,p:{x:112,y:228}},{f:0.76,p:{x:95,y:192}},{f:0.80,p:{x:90,y:152}},{f:0.84,p:{x:100,y:112}},{f:0.88,p:{x:128,y:82}},{f:0.92,p:{x:170,y:68}},{f:0.96,p:{x:220,y:64}},{f:1.00,p:{x:280,y:68}}],f), 0.01);
+      ctx.save(); ctx.globalAlpha=0.12; ctx.fillStyle="#c9a460"; ctx.font="bold 10px Cinzel,serif"; ctx.textAlign="center";
+      ctx.fillText("CHICAGO",sx(400),sy(170)); ctx.font="7px Cinzel,serif"; ctx.fillText("BOARD TRACK",sx(400),sy(182)); ctx.restore();
     },
   },
   {
-    id:"daytona", name:"Daytona Beach", km:3.6, corners:4, lapBase:26, rewardMult:1.2,
-    desc:"High-speed banked oval, 31° banking",
-    getPoint:(t)=>{ const a=-Math.PI/2+((t%1)+1)%1*Math.PI*2; return{x:400+310*Math.cos(a),y:182+118*Math.sin(a)}; },
+    id:"daytona", name:"Daytona Beach", km:4.2, corners:6, lapBase:28, rewardMult:1.2,
+    desc:"High-speed banked D-oval, 31° banking",
+    getPoint:(t)=>interpPtsSmooth([
+      {f:0.00,p:{x:280,y:72}},{f:0.04,p:{x:380,y:66}},{f:0.08,p:{x:480,y:62}},
+      {f:0.12,p:{x:560,y:62}},{f:0.16,p:{x:630,y:68}},{f:0.20,p:{x:685,y:90}},
+      {f:0.24,p:{x:718,y:130}},{f:0.28,p:{x:725,y:180}},{f:0.32,p:{x:718,y:230}},
+      {f:0.36,p:{x:685,y:270}},{f:0.40,p:{x:630,y:292}},{f:0.44,p:{x:560,y:298}},
+      {f:0.48,p:{x:480,y:298}},{f:0.52,p:{x:380,y:295}},{f:0.56,p:{x:280,y:288}},
+      {f:0.60,p:{x:200,y:275}},{f:0.64,p:{x:140,y:255}},{f:0.68,p:{x:100,y:225}},
+      {f:0.72,p:{x:82,y:190}},{f:0.76,p:{x:80,y:155}},{f:0.80,p:{x:88,y:122}},
+      {f:0.84,p:{x:108,y:98}},{f:0.88,p:{x:140,y:82}},{f:0.92,p:{x:180,y:72}},
+      {f:0.96,p:{x:230,y:68}},{f:1.00,p:{x:280,y:72}},
+    ], t),
     pitEntry:0.55, pitExit:0.62, sfLine:0.0,
     drawExtra:(ctx,sx,sy)=>{
-      // Infield logo
-      ctx.save(); ctx.globalAlpha=0.15;
-      ctx.fillStyle="#c9a460"; ctx.font="bold 18px Cinzel,serif";
-      ctx.textAlign="center"; ctx.fillText("DAYTONA",sx(400),sy(175));
-      ctx.font="10px Cinzel,serif"; ctx.fillText("BEACH",sx(400),sy(193));
-      ctx.restore();
+      drawGrandstand(ctx, sx, sy, 320, 30, 240, 20, 5);
+      drawGrandstand(ctx, sx, sy, 320, 310, 240, 16, 3);
+      drawTreeCluster(ctx, sx, sy, 400, 170, 8, 40);
+      drawSFGantry(ctx, sx, sy, (f)=>interpPtsSmooth([{f:0.00,p:{x:280,y:72}},{f:0.04,p:{x:380,y:66}},{f:0.08,p:{x:480,y:62}},{f:0.12,p:{x:560,y:62}},{f:0.16,p:{x:630,y:68}},{f:0.20,p:{x:685,y:90}},{f:0.24,p:{x:718,y:130}},{f:0.28,p:{x:725,y:180}},{f:0.32,p:{x:718,y:230}},{f:0.36,p:{x:685,y:270}},{f:0.40,p:{x:630,y:292}},{f:0.44,p:{x:560,y:298}},{f:0.48,p:{x:480,y:298}},{f:0.52,p:{x:380,y:295}},{f:0.56,p:{x:280,y:288}},{f:0.60,p:{x:200,y:275}},{f:0.64,p:{x:140,y:255}},{f:0.68,p:{x:100,y:225}},{f:0.72,p:{x:82,y:190}},{f:0.76,p:{x:80,y:155}},{f:0.80,p:{x:88,y:122}},{f:0.84,p:{x:108,y:98}},{f:0.88,p:{x:140,y:82}},{f:0.92,p:{x:180,y:72}},{f:0.96,p:{x:230,y:68}},{f:1.00,p:{x:280,y:72}}],f), 0.0);
+      ctx.save(); ctx.globalAlpha=0.15; ctx.fillStyle="#c9a460"; ctx.font="bold 16px Cinzel,serif"; ctx.textAlign="center";
+      ctx.fillText("DAYTONA",sx(400),sy(170)); ctx.font="9px Cinzel,serif"; ctx.fillText("BEACH",sx(400),sy(186)); ctx.restore();
     },
   },
   {
-    id:"indianapolis", name:"Indianapolis", km:4.0, corners:4, lapBase:28, rewardMult:1.3,
+    id:"indianapolis", name:"Indianapolis", km:4.6, corners:6, lapBase:30, rewardMult:1.3,
     desc:"Superspeedway, 9° banking, Yard of Bricks",
-    getPoint:(t)=>rectOvalPt(t,90,58,710,302,72),
+    getPoint:(t)=>interpPtsSmooth([
+      {f:0.00,p:{x:300,y:62}},{f:0.04,p:{x:400,y:58}},{f:0.08,p:{x:500,y:58}},
+      {f:0.12,p:{x:590,y:62}},{f:0.16,p:{x:650,y:78}},{f:0.20,p:{x:695,y:108}},
+      {f:0.24,p:{x:715,y:150}},{f:0.28,p:{x:720,y:185}},{f:0.32,p:{x:715,y:220}},
+      {f:0.36,p:{x:695,y:255}},{f:0.40,p:{x:650,y:282}},{f:0.44,p:{x:590,y:298}},
+      {f:0.48,p:{x:500,y:302}},{f:0.52,p:{x:400,y:302}},{f:0.56,p:{x:300,y:298}},
+      {f:0.60,p:{x:210,y:282}},{f:0.64,p:{x:150,y:255}},{f:0.68,p:{x:105,y:220}},
+      {f:0.72,p:{x:85,y:185}},{f:0.76,p:{x:80,y:150}},{f:0.80,p:{x:95,y:108}},
+      {f:0.84,p:{x:130,y:78}},{f:0.88,p:{x:180,y:62}},{f:0.92,p:{x:230,y:58}},
+      {f:0.96,p:{x:270,y:60}},{f:1.00,p:{x:300,y:62}},
+    ], t),
     pitEntry:0.59, pitExit:0.66, sfLine:0.0,
     drawExtra:(ctx,sx,sy)=>{
-      ctx.save(); ctx.globalAlpha=0.15;
-      ctx.fillStyle="#c9a460"; ctx.font="bold 14px Cinzel,serif";
-      ctx.textAlign="center"; ctx.fillText("INDIANAPOLIS",sx(400),sy(175));
-      ctx.font="9px Cinzel,serif"; ctx.fillText("MOTOR SPEEDWAY",sx(400),sy(191));
-      // Yard of bricks
-      ctx.globalAlpha=0.6;
-      ctx.fillStyle="#c8a060"; ctx.fillRect(sx(393),sy(58),sx(408)-sx(393),sy(78)-sy(58));
+      drawGrandstand(ctx, sx, sy, 280, 28, 240, 22, 6);
+      drawGrandstand(ctx, sx, sy, 280, 314, 240, 16, 4);
+      drawTreeCluster(ctx, sx, sy, 400, 180, 6, 30);
+      ctx.save(); ctx.globalAlpha=0.55; ctx.fillStyle="#c8a060";
+      ctx.fillRect(sx(390),sy(56),sx(410)-sx(390),sy(70)-sy(56));
       ctx.restore();
+      drawSFGantry(ctx, sx, sy, (f)=>interpPtsSmooth([{f:0.00,p:{x:300,y:62}},{f:0.04,p:{x:400,y:58}},{f:0.08,p:{x:500,y:58}},{f:0.12,p:{x:590,y:62}},{f:0.16,p:{x:650,y:78}},{f:0.20,p:{x:695,y:108}},{f:0.24,p:{x:715,y:150}},{f:0.28,p:{x:720,y:185}},{f:0.32,p:{x:715,y:220}},{f:0.36,p:{x:695,y:255}},{f:0.40,p:{x:650,y:282}},{f:0.44,p:{x:590,y:298}},{f:0.48,p:{x:500,y:302}},{f:0.52,p:{x:400,y:302}},{f:0.56,p:{x:300,y:298}},{f:0.60,p:{x:210,y:282}},{f:0.64,p:{x:150,y:255}},{f:0.68,p:{x:105,y:220}},{f:0.72,p:{x:85,y:185}},{f:0.76,p:{x:80,y:150}},{f:0.80,p:{x:95,y:108}},{f:0.84,p:{x:130,y:78}},{f:0.88,p:{x:180,y:62}},{f:0.92,p:{x:230,y:58}},{f:0.96,p:{x:270,y:60}},{f:1.00,p:{x:300,y:62}}],f), 0.0);
+      ctx.save(); ctx.globalAlpha=0.14; ctx.fillStyle="#c9a460"; ctx.font="bold 13px Cinzel,serif"; ctx.textAlign="center";
+      ctx.fillText("INDIANAPOLIS",sx(400),sy(172)); ctx.font="8px Cinzel,serif"; ctx.fillText("MOTOR SPEEDWAY",sx(400),sy(186)); ctx.restore();
     },
   },
   {
-    id:"roosevelt", name:"Roosevelt Raceway", km:2.1, corners:12, lapBase:24, rewardMult:1.1,
-    desc:"Technical road course, fast sweepers",
+    id:"roosevelt", name:"Roosevelt Raceway", km:2.8, corners:18, lapBase:26, rewardMult:1.1,
+    desc:"Technical road course, hairpins and chicanes",
     getPoint:(t)=>interpPtsSmooth([
-      {f:0.00,p:{x:400,y:78}},{f:0.09,p:{x:600,y:78}},{f:0.13,p:{x:648,y:108}},
-      {f:0.19,p:{x:655,y:170}},{f:0.23,p:{x:630,y:220}},{f:0.27,p:{x:570,y:252}},
-      {f:0.34,p:{x:480,y:255}},{f:0.38,p:{x:445,y:218}},{f:0.42,p:{x:462,y:172}},
-      {f:0.46,p:{x:520,y:150}},{f:0.50,p:{x:538,y:118}},{f:0.54,p:{x:500,y:92}},
-      {f:0.58,p:{x:440,y:88}},{f:0.63,p:{x:382,y:128}},{f:0.67,p:{x:322,y:158}},
-      {f:0.71,p:{x:252,y:168}},{f:0.75,p:{x:182,y:148}},{f:0.79,p:{x:142,y:108}},
-      {f:0.83,p:{x:152,y:68}},{f:0.89,p:{x:245,y:63}},{f:0.94,p:{x:330,y:66}},
-      {f:1.00,p:{x:400,y:78}},
+      {f:0.000,p:{x:400,y:72}},{f:0.035,p:{x:470,y:68}},{f:0.065,p:{x:540,y:65}},
+      {f:0.095,p:{x:600,y:68}},{f:0.120,p:{x:640,y:85}},{f:0.145,p:{x:660,y:110}},
+      {f:0.170,p:{x:665,y:145}},{f:0.195,p:{x:655,y:175}},{f:0.220,p:{x:635,y:200}},
+      {f:0.245,p:{x:608,y:218}},{f:0.270,p:{x:575,y:228}},{f:0.295,p:{x:540,y:240}},
+      {f:0.320,p:{x:520,y:255}},{f:0.340,p:{x:510,y:235}},{f:0.360,p:{x:490,y:218}},
+      {f:0.385,p:{x:465,y:200}},{f:0.410,p:{x:475,y:172}},{f:0.435,p:{x:500,y:148}},
+      {f:0.460,p:{x:528,y:132}},{f:0.485,p:{x:535,y:108}},{f:0.510,p:{x:518,y:88}},
+      {f:0.535,p:{x:488,y:78}},{f:0.560,p:{x:450,y:82}},{f:0.585,p:{x:420,y:98}},
+      {f:0.610,p:{x:395,y:120}},{f:0.635,p:{x:365,y:140}},{f:0.660,p:{x:330,y:155}},
+      {f:0.685,p:{x:290,y:162}},{f:0.710,p:{x:248,y:158}},{f:0.735,p:{x:210,y:142}},
+      {f:0.760,p:{x:178,y:118}},{f:0.785,p:{x:158,y:92}},{f:0.810,p:{x:155,y:70}},
+      {f:0.835,p:{x:172,y:58}},{f:0.860,p:{x:200,y:55}},{f:0.890,p:{x:250,y:58}},
+      {f:0.920,p:{x:300,y:62}},{f:0.950,p:{x:345,y:66}},{f:0.975,p:{x:375,y:70}},
+      {f:1.000,p:{x:400,y:72}},
     ], t),
     pitEntry:0.77, pitExit:0.83, sfLine:0.0,
     drawExtra:(ctx,sx,sy)=>{
-      ctx.save(); ctx.globalAlpha=0.12;
-      ctx.fillStyle="#c9a460";
-      [0.0,0.02,0.04,0.06,0.08].forEach(f=>{
-        const p=interpPtsSmooth([{f:0.00,p:{x:400,y:78}},{f:0.09,p:{x:600,y:78}},{f:0.13,p:{x:648,y:108}},{f:0.19,p:{x:655,y:170}},{f:0.23,p:{x:630,y:220}},{f:0.27,p:{x:570,y:252}},{f:0.34,p:{x:480,y:255}},{f:0.38,p:{x:445,y:218}},{f:0.42,p:{x:462,y:172}},{f:0.46,p:{x:520,y:150}},{f:0.50,p:{x:538,y:118}},{f:0.54,p:{x:500,y:92}},{f:0.58,p:{x:440,y:88}},{f:0.63,p:{x:382,y:128}},{f:0.67,p:{x:322,y:158}},{f:0.71,p:{x:252,y:168}},{f:0.75,p:{x:182,y:148}},{f:0.79,p:{x:142,y:108}},{f:0.83,p:{x:152,y:68}},{f:0.89,p:{x:245,y:63}},{f:0.94,p:{x:330,y:66}},{f:1.00,p:{x:400,y:78}}],f);
-        ctx.fillRect(sx(p.x)-4,sy(p.y)-12,8,10);
-      });
-      ctx.font="bold 10px Cinzel,serif"; ctx.textAlign="center";
-      ctx.fillText("ROOSEVELT",sx(400),sy(175));
-      ctx.restore();
+      drawGrandstand(ctx, sx, sy, 350, 30, 120, 14, 3);
+      drawTreeCluster(ctx, sx, sy, 320, 200, 6, 25);
+      drawTreeCluster(ctx, sx, sy, 200, 100, 4, 18);
+      drawSFGantry(ctx, sx, sy, (f)=>interpPtsSmooth([{f:0.000,p:{x:400,y:72}},{f:0.035,p:{x:470,y:68}},{f:0.065,p:{x:540,y:65}},{f:0.095,p:{x:600,y:68}},{f:0.120,p:{x:640,y:85}},{f:0.145,p:{x:660,y:110}},{f:0.170,p:{x:665,y:145}},{f:0.195,p:{x:655,y:175}},{f:0.220,p:{x:635,y:200}},{f:0.245,p:{x:608,y:218}},{f:0.270,p:{x:575,y:228}},{f:0.295,p:{x:540,y:240}},{f:0.320,p:{x:520,y:255}},{f:0.340,p:{x:510,y:235}},{f:0.360,p:{x:490,y:218}},{f:0.385,p:{x:465,y:200}},{f:0.410,p:{x:475,y:172}},{f:0.435,p:{x:500,y:148}},{f:0.460,p:{x:528,y:132}},{f:0.485,p:{x:535,y:108}},{f:0.510,p:{x:518,y:88}},{f:0.535,p:{x:488,y:78}},{f:0.560,p:{x:450,y:82}},{f:0.585,p:{x:420,y:98}},{f:0.610,p:{x:395,y:120}},{f:0.635,p:{x:365,y:140}},{f:0.660,p:{x:330,y:155}},{f:0.685,p:{x:290,y:162}},{f:0.710,p:{x:248,y:158}},{f:0.735,p:{x:210,y:142}},{f:0.760,p:{x:178,y:118}},{f:0.785,p:{x:158,y:92}},{f:0.810,p:{x:155,y:70}},{f:0.835,p:{x:172,y:58}},{f:0.860,p:{x:200,y:55}},{f:0.890,p:{x:250,y:58}},{f:0.920,p:{x:300,y:62}},{f:0.950,p:{x:345,y:66}},{f:0.975,p:{x:375,y:70}},{f:1.000,p:{x:400,y:72}}],f), 0.0);
+      ctx.save(); ctx.globalAlpha=0.12; ctx.fillStyle="#c9a460"; ctx.font="bold 10px Cinzel,serif"; ctx.textAlign="center";
+      ctx.fillText("ROOSEVELT",sx(400),sy(175)); ctx.restore();
     },
   },
   {
-    id:"boardwalk", name:"Boardwalk Circuit", km:2.8, corners:16, lapBase:25, rewardMult:1.15,
+    id:"boardwalk", name:"Boardwalk Circuit", km:3.4, corners:22, lapBase:27, rewardMult:1.15,
     desc:"Tight street circuit, chicanes, hairpins",
-    getPoint:(t)=>interpPts([
-      {f:0.00,p:{x:400,y:72}},{f:0.13,p:{x:670,y:72}},{f:0.18,p:{x:712,y:105}},
-      {f:0.22,p:{x:718,y:138}},{f:0.25,p:{x:692,y:158}},{f:0.28,p:{x:662,y:148}},
-      {f:0.31,p:{x:642,y:168}},{f:0.34,p:{x:660,y:194}},{f:0.38,p:{x:718,y:208}},
-      {f:0.42,p:{x:718,y:264}},{f:0.46,p:{x:675,y:290}},{f:0.55,p:{x:400,y:295}},
-      {f:0.63,p:{x:125,y:290}},{f:0.67,p:{x:82,y:260}},{f:0.71,p:{x:82,y:198}},
-      {f:0.74,p:{x:118,y:174}},{f:0.77,p:{x:155,y:192}},{f:0.80,p:{x:152,y:228}},
-      {f:0.83,p:{x:95,y:238}},{f:0.86,p:{x:78,y:128}},{f:0.89,p:{x:80,y:98}},
-      {f:0.92,p:{x:118,y:72}},{f:1.00,p:{x:400,y:72}},
+    getPoint:(t)=>interpPtsSmooth([
+      {f:0.000,p:{x:400,y:68}},{f:0.030,p:{x:480,y:65}},{f:0.060,p:{x:560,y:62}},
+      {f:0.090,p:{x:630,y:62}},{f:0.115,p:{x:680,y:72}},{f:0.135,p:{x:712,y:95}},
+      {f:0.155,p:{x:722,y:125}},{f:0.175,p:{x:718,y:152}},{f:0.195,p:{x:698,y:168}},
+      {f:0.215,p:{x:672,y:158}},{f:0.235,p:{x:658,y:142}},{f:0.255,p:{x:650,y:165}},
+      {f:0.275,p:{x:665,y:190}},{f:0.295,p:{x:698,y:205}},{f:0.315,p:{x:720,y:225}},
+      {f:0.335,p:{x:724,y:252}},{f:0.355,p:{x:712,y:275}},{f:0.380,p:{x:682,y:290}},
+      {f:0.410,p:{x:620,y:298}},{f:0.450,p:{x:500,y:300}},{f:0.490,p:{x:400,y:298}},
+      {f:0.530,p:{x:300,y:296}},{f:0.560,p:{x:200,y:292}},{f:0.590,p:{x:140,y:280}},
+      {f:0.615,p:{x:100,y:260}},{f:0.635,p:{x:85,y:235}},{f:0.655,p:{x:82,y:205}},
+      {f:0.675,p:{x:95,y:182}},{f:0.695,p:{x:122,y:168}},{f:0.715,p:{x:148,y:178}},
+      {f:0.730,p:{x:152,y:202}},{f:0.745,p:{x:138,y:222}},{f:0.760,p:{x:112,y:232}},
+      {f:0.780,p:{x:85,y:180}},{f:0.800,p:{x:80,y:145}},{f:0.820,p:{x:82,y:110}},
+      {f:0.840,p:{x:100,y:85}},{f:0.865,p:{x:135,y:70}},{f:0.895,p:{x:190,y:65}},
+      {f:0.930,p:{x:260,y:65}},{f:0.960,p:{x:330,y:66}},{f:1.000,p:{x:400,y:68}},
     ], t),
     pitEntry:0.69, pitExit:0.75, sfLine:0.0,
     drawExtra:(ctx,sx,sy)=>{
-      ctx.save(); ctx.globalAlpha=0.10;
-      ctx.strokeStyle="#a08050"; ctx.lineWidth=1;
-      for(let i=0;i<12;i++){
-        const x=sx(130+i*46),y1=sy(282),y2=sy(300);
+      ctx.save(); ctx.globalAlpha=0.10; ctx.strokeStyle="#a08050"; ctx.lineWidth=1;
+      for(let i=0;i<16;i++){
+        const x=sx(100+i*40),y1=sy(288),y2=sy(308);
         ctx.beginPath(); ctx.moveTo(x,y1); ctx.lineTo(x,y2); ctx.stroke();
       }
-      ctx.globalAlpha=0.15; ctx.fillStyle="#c9a460"; ctx.font="bold 11px Cinzel,serif"; ctx.textAlign="center";
-      ctx.fillText("BOARDWALK",sx(400),sy(180));
       ctx.restore();
+      drawGrandstand(ctx, sx, sy, 350, 32, 160, 16, 4);
+      drawGrandstand(ctx, sx, sy, 600, 120, 20, 80, 5);
+      drawTreeCluster(ctx, sx, sy, 400, 180, 5, 20);
+      drawSFGantry(ctx, sx, sy, (f)=>interpPtsSmooth([{f:0.000,p:{x:400,y:68}},{f:0.030,p:{x:480,y:65}},{f:0.060,p:{x:560,y:62}},{f:0.090,p:{x:630,y:62}},{f:0.115,p:{x:680,y:72}},{f:0.135,p:{x:712,y:95}},{f:0.155,p:{x:722,y:125}},{f:0.175,p:{x:718,y:152}},{f:0.195,p:{x:698,y:168}},{f:0.215,p:{x:672,y:158}},{f:0.235,p:{x:658,y:142}},{f:0.255,p:{x:650,y:165}},{f:0.275,p:{x:665,y:190}},{f:0.295,p:{x:698,y:205}},{f:0.315,p:{x:720,y:225}},{f:0.335,p:{x:724,y:252}},{f:0.355,p:{x:712,y:275}},{f:0.380,p:{x:682,y:290}},{f:0.410,p:{x:620,y:298}},{f:0.450,p:{x:500,y:300}},{f:0.490,p:{x:400,y:298}},{f:0.530,p:{x:300,y:296}},{f:0.560,p:{x:200,y:292}},{f:0.590,p:{x:140,y:280}},{f:0.615,p:{x:100,y:260}},{f:0.635,p:{x:85,y:235}},{f:0.655,p:{x:82,y:205}},{f:0.675,p:{x:95,y:182}},{f:0.695,p:{x:122,y:168}},{f:0.715,p:{x:148,y:178}},{f:0.730,p:{x:152,y:202}},{f:0.745,p:{x:138,y:222}},{f:0.760,p:{x:112,y:232}},{f:0.780,p:{x:85,y:180}},{f:0.800,p:{x:80,y:145}},{f:0.820,p:{x:82,y:110}},{f:0.840,p:{x:100,y:85}},{f:0.865,p:{x:135,y:70}},{f:0.895,p:{x:190,y:65}},{f:0.930,p:{x:260,y:65}},{f:0.960,p:{x:330,y:66}},{f:1.000,p:{x:400,y:68}}],f), 0.0);
+      ctx.save(); ctx.globalAlpha=0.15; ctx.fillStyle="#c9a460"; ctx.font="bold 11px Cinzel,serif"; ctx.textAlign="center";
+      ctx.fillText("BOARDWALK",sx(400),sy(180)); ctx.restore();
     },
   },
   {
-    id:"lakeside", name:"Lakeside Park", km:3.2, corners:10, lapBase:27, rewardMult:1.1,
-    desc:"Flowing high-speed sweepers, open circuit",
-    getPoint:(t)=>interpPts([
-      {f:0.00,p:{x:400,y:68}},{f:0.11,p:{x:630,y:68}},{f:0.15,p:{x:682,y:98}},
-      {f:0.21,p:{x:695,y:158}},{f:0.27,p:{x:658,y:218}},{f:0.33,p:{x:578,y:258}},
-      {f:0.39,p:{x:498,y:282}},{f:0.44,p:{x:438,y:298}},{f:0.49,p:{x:378,y:288}},
-      {f:0.53,p:{x:318,y:258}},{f:0.57,p:{x:268,y:228}},{f:0.61,p:{x:228,y:208}},
-      {f:0.65,p:{x:184,y:228}},{f:0.69,p:{x:154,y:268}},{f:0.73,p:{x:128,y:238}},
-      {f:0.77,p:{x:108,y:178}},{f:0.81,p:{x:118,y:128}},{f:0.85,p:{x:158,y:94}},
-      {f:0.90,p:{x:220,y:68}},{f:1.00,p:{x:400,y:68}},
+    id:"lakeside", name:"Lakeside Park", km:3.8, corners:14, lapBase:28, rewardMult:1.1,
+    desc:"Flowing high-speed sweepers around the lake",
+    getPoint:(t)=>interpPtsSmooth([
+      {f:0.000,p:{x:400,y:62}},{f:0.030,p:{x:470,y:58}},{f:0.060,p:{x:540,y:56}},
+      {f:0.090,p:{x:600,y:58}},{f:0.115,p:{x:650,y:68}},{f:0.140,p:{x:688,y:88}},
+      {f:0.165,p:{x:708,y:118}},{f:0.190,p:{x:712,y:155}},{f:0.215,p:{x:700,y:190}},
+      {f:0.240,p:{x:675,y:218}},{f:0.265,p:{x:638,y:240}},{f:0.290,p:{x:595,y:258}},
+      {f:0.315,p:{x:548,y:272}},{f:0.340,p:{x:498,y:282}},{f:0.365,p:{x:448,y:290}},
+      {f:0.390,p:{x:398,y:292}},{f:0.415,p:{x:348,y:288}},{f:0.440,p:{x:298,y:275}},
+      {f:0.465,p:{x:255,y:255}},{f:0.490,p:{x:222,y:232}},{f:0.515,p:{x:198,y:210}},
+      {f:0.540,p:{x:178,y:228}},{f:0.565,p:{x:162,y:252}},{f:0.590,p:{x:148,y:268}},
+      {f:0.615,p:{x:128,y:258}},{f:0.640,p:{x:108,y:235}},{f:0.665,p:{x:95,y:205}},
+      {f:0.690,p:{x:88,y:172}},{f:0.715,p:{x:90,y:140}},{f:0.740,p:{x:100,y:112}},
+      {f:0.770,p:{x:122,y:90}},{f:0.800,p:{x:152,y:76}},{f:0.830,p:{x:195,y:66}},
+      {f:0.865,p:{x:250,y:60}},{f:0.900,p:{x:310,y:58}},{f:0.940,p:{x:360,y:60}},
+      {f:1.000,p:{x:400,y:62}},
     ], t),
     pitEntry:0.64, pitExit:0.70, sfLine:0.0,
     drawExtra:(ctx,sx,sy)=>{
       ctx.save();
-      ctx.globalAlpha=0.08; ctx.fillStyle="#3080c0";
-      ctx.beginPath(); ctx.ellipse(sx(380),sy(178),sx(100)-sx(0),sy(55)-sy(0),0,0,Math.PI*2); ctx.fill();
-      ctx.globalAlpha=0.06; ctx.fillStyle="#4090d0";
-      ctx.beginPath(); ctx.ellipse(sx(380),sy(178),sx(70)-sx(0),sy(35)-sy(0),0,0,Math.PI*2); ctx.fill();
-      ctx.globalAlpha=0.18; ctx.fillStyle="#2a5a20";
-      [[280,120],[320,130],[450,115],[500,130],[260,210],[480,230]].forEach(([x,y])=>{
-        ctx.beginPath(); ctx.arc(sx(x),sy(y),4,0,Math.PI*2); ctx.fill();
-      });
-      ctx.globalAlpha=0.12; ctx.fillStyle="#c9a460"; ctx.font="8px Cinzel,serif"; ctx.textAlign="center";
-      ctx.fillText("LAKESIDE PARK",sx(380),sy(195));
+      ctx.globalAlpha=0.10; ctx.fillStyle="#2060a0";
+      ctx.beginPath(); ctx.ellipse(sx(380),sy(175),sx(100)-sx(0),sy(55)-sy(0),0,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=0.07; ctx.fillStyle="#3080c0";
+      ctx.beginPath(); ctx.ellipse(sx(380),sy(175),sx(70)-sx(0),sy(35)-sy(0),0,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=0.04; ctx.fillStyle="#60b0e0";
+      ctx.beginPath(); ctx.ellipse(sx(380),sy(175),sx(40)-sx(0),sy(18)-sy(0),0,0,Math.PI*2); ctx.fill();
       ctx.restore();
+      drawTreeCluster(ctx, sx, sy, 290, 115, 8, 28);
+      drawTreeCluster(ctx, sx, sy, 480, 120, 6, 22);
+      drawTreeCluster(ctx, sx, sy, 260, 220, 5, 20);
+      drawTreeCluster(ctx, sx, sy, 500, 235, 5, 18);
+      drawGrandstand(ctx, sx, sy, 360, 30, 120, 14, 3);
+      drawSFGantry(ctx, sx, sy, (f)=>interpPtsSmooth([{f:0.000,p:{x:400,y:62}},{f:0.030,p:{x:470,y:58}},{f:0.060,p:{x:540,y:56}},{f:0.090,p:{x:600,y:58}},{f:0.115,p:{x:650,y:68}},{f:0.140,p:{x:688,y:88}},{f:0.165,p:{x:708,y:118}},{f:0.190,p:{x:712,y:155}},{f:0.215,p:{x:700,y:190}},{f:0.240,p:{x:675,y:218}},{f:0.265,p:{x:638,y:240}},{f:0.290,p:{x:595,y:258}},{f:0.315,p:{x:548,y:272}},{f:0.340,p:{x:498,y:282}},{f:0.365,p:{x:448,y:290}},{f:0.390,p:{x:398,y:292}},{f:0.415,p:{x:348,y:288}},{f:0.440,p:{x:298,y:275}},{f:0.465,p:{x:255,y:255}},{f:0.490,p:{x:222,y:232}},{f:0.515,p:{x:198,y:210}},{f:0.540,p:{x:178,y:228}},{f:0.565,p:{x:162,y:252}},{f:0.590,p:{x:148,y:268}},{f:0.615,p:{x:128,y:258}},{f:0.640,p:{x:108,y:235}},{f:0.665,p:{x:95,y:205}},{f:0.690,p:{x:88,y:172}},{f:0.715,p:{x:90,y:140}},{f:0.740,p:{x:100,y:112}},{f:0.770,p:{x:122,y:90}},{f:0.800,p:{x:152,y:76}},{f:0.830,p:{x:195,y:66}},{f:0.865,p:{x:250,y:60}},{f:0.900,p:{x:310,y:58}},{f:0.940,p:{x:360,y:60}},{f:1.000,p:{x:400,y:62}}],f), 0.0);
+      ctx.save(); ctx.globalAlpha=0.12; ctx.fillStyle="#c9a460"; ctx.font="8px Cinzel,serif"; ctx.textAlign="center";
+      ctx.fillText("LAKESIDE PARK",sx(380),sy(195)); ctx.restore();
     },
   },
   {
-    id:"harbor", name:"Harbor Front", km:2.5, corners:20, lapBase:23, rewardMult:1.05,
-    desc:"Narrow dockside street track, low grip",
-    getPoint:(t)=>interpPts([
-      {f:0.00,p:{x:400,y:62}},{f:0.07,p:{x:555,y:62}},{f:0.11,p:{x:594,y:82}},
-      {f:0.14,p:{x:614,y:108}},{f:0.17,p:{x:595,y:128}},{f:0.20,p:{x:564,y:118}},
-      {f:0.23,p:{x:540,y:138}},{f:0.26,p:{x:564,y:162}},{f:0.30,p:{x:615,y:172}},
-      {f:0.34,p:{x:645,y:208}},{f:0.37,p:{x:635,y:248}},{f:0.41,p:{x:594,y:272}},
-      {f:0.49,p:{x:400,y:298}},{f:0.57,p:{x:206,y:272}},{f:0.61,p:{x:162,y:248}},
-      {f:0.65,p:{x:152,y:202}},{f:0.68,p:{x:178,y:168}},{f:0.71,p:{x:215,y:162}},
-      {f:0.74,p:{x:232,y:138}},{f:0.77,p:{x:208,y:112}},{f:0.80,p:{x:176,y:105}},
-      {f:0.83,p:{x:148,y:82}},{f:0.86,p:{x:162,y:62}},{f:0.91,p:{x:238,y:62}},
-      {f:1.00,p:{x:400,y:62}},
+    id:"harbor", name:"Harbor Front", km:3.0, corners:24, lapBase:25, rewardMult:1.05,
+    desc:"Narrow dockside street track, cranes and containers",
+    getPoint:(t)=>interpPtsSmooth([
+      {f:0.000,p:{x:400,y:58}},{f:0.025,p:{x:460,y:55}},{f:0.050,p:{x:520,y:55}},
+      {f:0.075,p:{x:570,y:58}},{f:0.100,p:{x:605,y:70}},{f:0.120,p:{x:628,y:90}},
+      {f:0.140,p:{x:638,y:115}},{f:0.160,p:{x:628,y:138}},{f:0.180,p:{x:608,y:148}},
+      {f:0.200,p:{x:585,y:138}},{f:0.220,p:{x:572,y:122}},{f:0.240,p:{x:562,y:142}},
+      {f:0.260,p:{x:572,y:165}},{f:0.280,p:{x:598,y:178}},{f:0.300,p:{x:628,y:192}},
+      {f:0.320,p:{x:648,y:212}},{f:0.340,p:{x:655,y:238}},{f:0.360,p:{x:645,y:262}},
+      {f:0.380,p:{x:622,y:278}},{f:0.405,p:{x:585,y:288}},{f:0.435,p:{x:520,y:295}},
+      {f:0.470,p:{x:440,y:298}},{f:0.505,p:{x:360,y:298}},{f:0.535,p:{x:280,y:295}},
+      {f:0.560,p:{x:220,y:288}},{f:0.585,p:{x:175,y:272}},{f:0.605,p:{x:148,y:250}},
+      {f:0.625,p:{x:138,y:225}},{f:0.645,p:{x:142,y:198}},{f:0.665,p:{x:162,y:178}},
+      {f:0.685,p:{x:188,y:168}},{f:0.705,p:{x:210,y:158}},{f:0.720,p:{x:218,y:140}},
+      {f:0.735,p:{x:208,y:122}},{f:0.750,p:{x:188,y:112}},{f:0.765,p:{x:168,y:102}},
+      {f:0.780,p:{x:152,y:88}},{f:0.800,p:{x:148,y:72}},{f:0.825,p:{x:165,y:58}},
+      {f:0.855,p:{x:200,y:55}},{f:0.890,p:{x:260,y:55}},{f:0.925,p:{x:320,y:56}},
+      {f:0.960,p:{x:365,y:57}},{f:1.000,p:{x:400,y:58}},
     ], t),
     pitEntry:0.79, pitExit:0.85, sfLine:0.0,
     drawExtra:(ctx,sx,sy)=>{
       ctx.save();
-      ctx.globalAlpha=0.07; ctx.fillStyle="#3070a0";
-      ctx.fillRect(sx(300),sy(245),sx(500)-sx(300),sy(310)-sy(245));
-      ctx.globalAlpha=0.12; ctx.strokeStyle="#607080"; ctx.lineWidth=2;
-      [[340,250,340,280],[460,248,460,276]].forEach(([x1,y1,x2,y2])=>{
-        ctx.beginPath(); ctx.moveTo(sx(x1),sy(y1)); ctx.lineTo(sx(x2),sy(y2)); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(sx(x2)-6,sy(y2)-6); ctx.lineTo(sx(x2)+6,sy(y2)-6); ctx.lineTo(sx(x2)+6,sy(y2)); ctx.lineTo(sx(x2)-6,sy(y2)); ctx.stroke();
-      });
-      ctx.globalAlpha=0.14; ctx.fillStyle="#c9a460"; ctx.font="bold 10px Cinzel,serif"; ctx.textAlign="center";
-      ctx.fillText("HARBOR FRONT",sx(400),sy(170));
+      ctx.globalAlpha=0.08; ctx.fillStyle="#2060a0";
+      ctx.fillRect(sx(270),sy(248),sx(530)-sx(270),sy(318)-sy(248));
+      ctx.globalAlpha=0.06; ctx.fillStyle="#3080c0";
+      ctx.fillRect(sx(300),sy(260),sx(500)-sx(300),sy(310)-sy(260));
       ctx.restore();
+      ctx.save(); ctx.globalAlpha=0.16; ctx.strokeStyle="#506070"; ctx.lineWidth=2;
+      [[330,255,330,290],[380,252,380,288],[440,252,440,288],[490,255,490,290]].forEach(([x1,y1,x2,y2])=>{
+        ctx.beginPath(); ctx.moveTo(sx(x1),sy(y1)); ctx.lineTo(sx(x2),sy(y2)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(sx(x2)-8,sy(y2)-8); ctx.lineTo(sx(x2)+8,sy(y2)-8); ctx.lineTo(sx(x2)+8,sy(y2)+2); ctx.lineTo(sx(x2)-8,sy(y2)+2); ctx.closePath(); ctx.stroke();
+      });
+      ctx.restore();
+      ctx.save(); ctx.globalAlpha=0.10; ctx.fillStyle="#708090";
+      [[290,265,30,20],[350,270,25,18],[420,268,28,18],[480,265,30,20]].forEach(([x,y,w,h])=>{
+        ctx.fillRect(sx(x),sy(y),sx(x+w)-sx(x),sy(y+h)-sy(y));
+      });
+      ctx.restore();
+      drawGrandstand(ctx, sx, sy, 350, 28, 120, 16, 4);
+      drawSFGantry(ctx, sx, sy, (f)=>interpPtsSmooth([{f:0.000,p:{x:400,y:58}},{f:0.025,p:{x:460,y:55}},{f:0.050,p:{x:520,y:55}},{f:0.075,p:{x:570,y:58}},{f:0.100,p:{x:605,y:70}},{f:0.120,p:{x:628,y:90}},{f:0.140,p:{x:638,y:115}},{f:0.160,p:{x:628,y:138}},{f:0.180,p:{x:608,y:148}},{f:0.200,p:{x:585,y:138}},{f:0.220,p:{x:572,y:122}},{f:0.240,p:{x:562,y:142}},{f:0.260,p:{x:572,y:165}},{f:0.280,p:{x:598,y:178}},{f:0.300,p:{x:628,y:192}},{f:0.320,p:{x:648,y:212}},{f:0.340,p:{x:655,y:238}},{f:0.360,p:{x:645,y:262}},{f:0.380,p:{x:622,y:278}},{f:0.405,p:{x:585,y:288}},{f:0.435,p:{x:520,y:295}},{f:0.470,p:{x:440,y:298}},{f:0.505,p:{x:360,y:298}},{f:0.535,p:{x:280,y:295}},{f:0.560,p:{x:220,y:288}},{f:0.585,p:{x:175,y:272}},{f:0.605,p:{x:148,y:250}},{f:0.625,p:{x:138,y:225}},{f:0.645,p:{x:142,y:198}},{f:0.665,p:{x:162,y:178}},{f:0.685,p:{x:188,y:168}},{f:0.705,p:{x:210,y:158}},{f:0.720,p:{x:218,y:140}},{f:0.735,p:{x:208,y:122}},{f:0.750,p:{x:188,y:112}},{f:0.765,p:{x:168,y:102}},{f:0.780,p:{x:152,y:88}},{f:0.800,p:{x:148,y:72}},{f:0.825,p:{x:165,y:58}},{f:0.855,p:{x:200,y:55}},{f:0.890,p:{x:260,y:55}},{f:0.925,p:{x:320,y:56}},{f:0.960,p:{x:365,y:57}},{f:1.000,p:{x:400,y:58}}],f), 0.0);
+      ctx.save(); ctx.globalAlpha=0.14; ctx.fillStyle="#c9a460"; ctx.font="bold 10px Cinzel,serif"; ctx.textAlign="center";
+      ctx.fillText("HARBOR FRONT",sx(400),sy(168)); ctx.restore();
     },
   },
   {
-    id:"mountain", name:"Mountain Pass", km:4.2, corners:18, lapBase:29, rewardMult:1.25,
-    desc:"Long elevation changes, sweeping S-curves",
-    getPoint:(t)=>interpPts([
-      {f:0.00,p:{x:400,y:62}},{f:0.06,p:{x:598,y:68}},{f:0.11,p:{x:652,y:94}},
-      {f:0.16,p:{x:668,y:142}},{f:0.21,p:{x:640,y:182}},{f:0.25,p:{x:582,y:202}},
-      {f:0.29,p:{x:542,y:238}},{f:0.33,p:{x:552,y:278}},{f:0.37,p:{x:604,y:298}},
-      {f:0.41,p:{x:608,y:320}},{f:0.45,p:{x:548,y:312}},{f:0.49,p:{x:478,y:288}},
-      {f:0.53,p:{x:418,y:292}},{f:0.57,p:{x:358,y:308}},{f:0.61,p:{x:288,y:298}},
-      {f:0.65,p:{x:228,y:268}},{f:0.69,p:{x:188,y:238}},{f:0.73,p:{x:158,y:198}},
-      {f:0.77,p:{x:138,y:152}},{f:0.81,p:{x:148,y:112}},{f:0.85,p:{x:188,y:82}},
-      {f:0.90,p:{x:268,y:62}},{f:1.00,p:{x:400,y:62}},
+    id:"mountain", name:"Mountain Pass", km:4.8, corners:22, lapBase:32, rewardMult:1.25,
+    desc:"Long elevation changes, switchbacks and S-curves",
+    getPoint:(t)=>interpPtsSmooth([
+      {f:0.000,p:{x:400,y:58}},{f:0.025,p:{x:460,y:56}},{f:0.050,p:{x:530,y:56}},
+      {f:0.075,p:{x:590,y:62}},{f:0.100,p:{x:635,y:78}},{f:0.120,p:{x:662,y:102}},
+      {f:0.140,p:{x:672,y:132}},{f:0.160,p:{x:668,y:162}},{f:0.180,p:{x:652,y:188}},
+      {f:0.200,p:{x:628,y:208}},{f:0.220,p:{x:598,y:218}},{f:0.240,p:{x:572,y:232}},
+      {f:0.260,p:{x:558,y:255}},{f:0.280,p:{x:562,y:278}},{f:0.300,p:{x:582,y:295}},
+      {f:0.320,p:{x:608,y:305}},{f:0.340,p:{x:625,y:318}},{f:0.360,p:{x:618,y:332}},
+      {f:0.380,p:{x:592,y:338}},{f:0.400,p:{x:560,y:328}},{f:0.420,p:{x:528,y:312}},
+      {f:0.440,p:{x:492,y:298}},{f:0.460,p:{x:452,y:290}},{f:0.480,p:{x:410,y:295}},
+      {f:0.500,p:{x:370,y:305}},{f:0.520,p:{x:330,y:312}},{f:0.540,p:{x:290,y:308}},
+      {f:0.560,p:{x:252,y:295}},{f:0.580,p:{x:222,y:275}},{f:0.600,p:{x:198,y:252}},
+      {f:0.620,p:{x:178,y:228}},{f:0.640,p:{x:162,y:202}},{f:0.660,p:{x:148,y:175}},
+      {f:0.680,p:{x:138,y:148}},{f:0.700,p:{x:132,y:122}},{f:0.720,p:{x:135,y:98}},
+      {f:0.740,p:{x:148,y:80}},{f:0.760,p:{x:172,y:68}},{f:0.785,p:{x:205,y:60}},
+      {f:0.815,p:{x:248,y:56}},{f:0.850,p:{x:295,y:55}},{f:0.890,p:{x:340,y:56}},
+      {f:0.930,p:{x:370,y:57}},{f:0.965,p:{x:388,y:57}},{f:1.000,p:{x:400,y:58}},
     ], t),
     pitEntry:0.71, pitExit:0.77, sfLine:0.0,
     drawExtra:(ctx,sx,sy)=>{
       ctx.save();
-      ctx.globalAlpha=0.08; ctx.strokeStyle="#806040"; ctx.lineWidth=1;
-      for(let i=0;i<6;i++){
+      ctx.globalAlpha=0.06; ctx.strokeStyle="#705840"; ctx.lineWidth=0.8;
+      for(let i=0;i<8;i++){
         ctx.beginPath();
-        for(let j=0;j<=40;j++){
-          const x=sx(120+j*14), y=sy(100+i*35+Math.sin(j*0.4)*12);
+        for(let j=0;j<=50;j++){
+          const x=sx(100+j*12), y=sy(80+i*32+Math.sin(j*0.35+i)*14);
           j===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
         }
         ctx.stroke();
       }
-      ctx.globalAlpha=0.18; ctx.fillStyle="#8a7a6a";
-      ctx.beginPath(); ctx.moveTo(sx(400),sy(100)); ctx.lineTo(sx(380),sy(145)); ctx.lineTo(sx(420),sy(145)); ctx.closePath(); ctx.fill();
-      ctx.globalAlpha=0.12; ctx.fillStyle="#c9a460"; ctx.font="bold 10px Cinzel,serif"; ctx.textAlign="center";
-      ctx.fillText("MOUNTAIN PASS",sx(400),sy(175));
       ctx.restore();
+      ctx.save();
+      ctx.globalAlpha=0.20; ctx.fillStyle="#7a6a5a";
+      ctx.beginPath(); ctx.moveTo(sx(400),sy(88)); ctx.lineTo(sx(375),sy(140)); ctx.lineTo(sx(425),sy(140)); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha=0.14;
+      ctx.beginPath(); ctx.moveTo(sx(250),sy(120)); ctx.lineTo(sx(235),sy(155)); ctx.lineTo(sx(265),sy(155)); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(sx(560),sy(130)); ctx.lineTo(sx(545),sy(162)); ctx.lineTo(sx(575),sy(162)); ctx.closePath(); ctx.fill();
+      ctx.restore();
+      drawTreeCluster(ctx, sx, sy, 320, 170, 6, 22);
+      drawTreeCluster(ctx, sx, sy, 480, 240, 5, 18);
+      drawTreeCluster(ctx, sx, sy, 200, 200, 4, 16);
+      drawGrandstand(ctx, sx, sy, 350, 28, 120, 14, 3);
+      drawSFGantry(ctx, sx, sy, (f)=>interpPtsSmooth([{f:0.000,p:{x:400,y:58}},{f:0.025,p:{x:460,y:56}},{f:0.050,p:{x:530,y:56}},{f:0.075,p:{x:590,y:62}},{f:0.100,p:{x:635,y:78}},{f:0.120,p:{x:662,y:102}},{f:0.140,p:{x:672,y:132}},{f:0.160,p:{x:668,y:162}},{f:0.180,p:{x:652,y:188}},{f:0.200,p:{x:628,y:208}},{f:0.220,p:{x:598,y:218}},{f:0.240,p:{x:572,y:232}},{f:0.260,p:{x:558,y:255}},{f:0.280,p:{x:562,y:278}},{f:0.300,p:{x:582,y:295}},{f:0.320,p:{x:608,y:305}},{f:0.340,p:{x:625,y:318}},{f:0.360,p:{x:618,y:332}},{f:0.380,p:{x:592,y:338}},{f:0.400,p:{x:560,y:328}},{f:0.420,p:{x:528,y:312}},{f:0.440,p:{x:492,y:298}},{f:0.460,p:{x:452,y:290}},{f:0.480,p:{x:410,y:295}},{f:0.500,p:{x:370,y:305}},{f:0.520,p:{x:330,y:312}},{f:0.540,p:{x:290,y:308}},{f:0.560,p:{x:252,y:295}},{f:0.580,p:{x:222,y:275}},{f:0.600,p:{x:198,y:252}},{f:0.620,p:{x:178,y:228}},{f:0.640,p:{x:162,y:202}},{f:0.660,p:{x:148,y:175}},{f:0.680,p:{x:138,y:148}},{f:0.700,p:{x:132,y:122}},{f:0.720,p:{x:135,y:98}},{f:0.740,p:{x:148,y:80}},{f:0.760,p:{x:172,y:68}},{f:0.785,p:{x:205,y:60}},{f:0.815,p:{x:248,y:56}},{f:0.850,p:{x:295,y:55}},{f:0.890,p:{x:340,y:56}},{f:0.930,p:{x:370,y:57}},{f:0.965,p:{x:388,y:57}},{f:1.000,p:{x:400,y:58}}],f), 0.0);
+      ctx.save(); ctx.globalAlpha=0.12; ctx.fillStyle="#c9a460"; ctx.font="bold 10px Cinzel,serif"; ctx.textAlign="center";
+      ctx.fillText("MOUNTAIN PASS",sx(400),sy(175)); ctx.restore();
     },
   },
 ];
@@ -558,8 +755,8 @@ export default function CircuitRaceView({
       ctx.fillStyle="rgba(255,80,0,0.03)"; ctx.fillRect(0,0,W,H);
     }
 
-    // ── TRACK SURFACE (draw as thick stroked path) ──
-    const STEPS = 320;
+    // ── TRACK SURFACE ──
+    const STEPS = 400;
     const buildPath = (ctx) => {
       ctx.beginPath();
       for (let i=0;i<=STEPS;i++) {
@@ -569,58 +766,135 @@ export default function CircuitRaceView({
       ctx.closePath();
     };
 
+    // Grass/gravel shoulder
+    buildPath(ctx);
+    ctx.strokeStyle = cond==="night" ? "rgba(40,50,30,0.6)" : cond==="snow" ? "rgba(200,210,220,0.15)" : "rgba(60,90,40,0.35)";
+    ctx.lineWidth = 42; ctx.lineJoin="round"; ctx.lineCap="round"; ctx.stroke();
+
     // Glow halo
     buildPath(ctx);
-    ctx.strokeStyle = cond==="night" ? "rgba(255,200,80,0.10)" : "rgba(80,130,50,0.25)";
-    ctx.lineWidth = 36; ctx.lineJoin="round"; ctx.lineCap="round"; ctx.stroke();
+    ctx.strokeStyle = cond==="night" ? "rgba(255,200,80,0.08)" : "rgba(80,130,50,0.20)";
+    ctx.lineWidth = 36; ctx.stroke();
 
-    // Tarmac
-    const tarmacColor = cond==="rain"?"#262420":cond==="snow"?"#303045":cond==="night"?"#1a1815":"#2e2c28";
+    // Tarmac with gradient effect
+    const tarmacOuter = cond==="rain"?"#222018":cond==="snow"?"#2a2a3a":cond==="night"?"#151210":"#282620";
+    const tarmacInner = cond==="rain"?"#2a2824":cond==="snow"?"#35354a":cond==="night"?"#1e1a18":"#333028";
     buildPath(ctx);
-    ctx.strokeStyle = tarmacColor; ctx.lineWidth = 26; ctx.stroke();
+    ctx.strokeStyle = tarmacOuter; ctx.lineWidth = 30; ctx.stroke();
+    buildPath(ctx);
+    ctx.strokeStyle = tarmacInner; ctx.lineWidth = 24; ctx.stroke();
 
     // White centre line dashes
-    ctx.setLineDash([10,14]);
+    ctx.setLineDash([8,16]);
     buildPath(ctx);
-    ctx.strokeStyle = "rgba(255,255,255,0.10)"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1; ctx.stroke();
     ctx.setLineDash([]);
 
-    // Kerbing — red/white
-    ctx.setLineDash([7,7]);
-    buildPath(ctx);
-    ctx.strokeStyle = "rgba(220,40,40,0.50)"; ctx.lineWidth = 4; ctx.stroke();
-    ctx.setLineDash([]);
+    // Kerbing — alternating red/white blocks (both edges)
+    for (let edge = -1; edge <= 1; edge += 2) {
+      const kerbSteps = 80;
+      for (let i = 0; i < kerbSteps; i++) {
+        const f0 = i / kerbSteps;
+        const f1 = (i + 1) / kerbSteps;
+        const p0 = track.getPoint(f0);
+        const p1 = track.getPoint(f1);
+        const p0n = track.getPoint((f0 + 0.003) % 1);
+        const ang = Math.atan2(p0n.y - p0.y, p0n.x - p0.x) + Math.PI / 2;
+        const offset = 14 * edge;
+        const kx = sx(p0.x) + Math.cos(ang) * offset;
+        const ky = sy(p0.y) + Math.sin(ang) * offset;
+        ctx.fillStyle = i % 2 === 0 ? "rgba(220,40,40,0.45)" : "rgba(255,255,255,0.30)";
+        ctx.beginPath();
+        ctx.arc(kx, ky, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
 
-    // Pit lane corridor
+    // Pit lane — visible parallel road
     ctx.save();
-    const pitSteps = 16;
-    ctx.setLineDash([4,4]);
-    ctx.strokeStyle="rgba(232,200,112,0.18)"; ctx.lineWidth=10; ctx.lineCap="round";
+    const pitSteps = 24;
+    const pitOffset = 22;
+
+    // Pit road surface
+    ctx.strokeStyle = "rgba(50,48,42,0.7)"; ctx.lineWidth = 12; ctx.lineCap = "round"; ctx.lineJoin = "round";
     ctx.beginPath();
-    for(let i=0;i<=pitSteps;i++){
-      const f=track.pitEntry+(track.pitExit-track.pitEntry)*(i/pitSteps);
-      const pp=track.getPoint(((f%1)+1)%1);
-      const pp2=track.getPoint(((f+0.005)%1+1)%1);
-      const a2=Math.atan2(pp2.y-pp.y,pp2.x-pp.x)+Math.PI/2;
-      const ox=sx(pp.x)+Math.cos(a2)*20, oy=sy(pp.y)+Math.sin(a2)*20;
-      i===0?ctx.moveTo(ox,oy):ctx.lineTo(ox,oy);
+    for (let i = 0; i <= pitSteps; i++) {
+      const f = track.pitEntry + (track.pitExit - track.pitEntry) * (i / pitSteps);
+      const pp = track.getPoint(((f % 1) + 1) % 1);
+      const pp2 = track.getPoint(((f + 0.005) % 1 + 1) % 1);
+      const a2 = Math.atan2(pp2.y - pp.y, pp2.x - pp.x) + Math.PI / 2;
+      const ox = sx(pp.x) + Math.cos(a2) * pitOffset;
+      const oy = sy(pp.y) + Math.sin(a2) * pitOffset;
+      i === 0 ? ctx.moveTo(ox, oy) : ctx.lineTo(ox, oy);
     }
     ctx.stroke();
-    ctx.setLineDash([]);
-    const pitMid=track.getPoint((track.pitEntry+track.pitExit)/2);
-    const pitMid2=track.getPoint(((track.pitEntry+track.pitExit)/2+0.005)%1);
-    const pitAng=Math.atan2(pitMid2.y-pitMid.y,pitMid2.x-pitMid.x)+Math.PI/2;
-    ctx.globalAlpha=0.25; ctx.fillStyle="#c9a460"; ctx.font="bold 6px Cinzel,serif"; ctx.textAlign="center";
-    ctx.fillText("PIT LANE",sx(pitMid.x)+Math.cos(pitAng)*20,sy(pitMid.y)+Math.sin(pitAng)*20+3);
+
+    // Pit lane white edges
+    ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1;
+    for (let edge = -1; edge <= 1; edge += 2) {
+      ctx.beginPath();
+      for (let i = 0; i <= pitSteps; i++) {
+        const f = track.pitEntry + (track.pitExit - track.pitEntry) * (i / pitSteps);
+        const pp = track.getPoint(((f % 1) + 1) % 1);
+        const pp2 = track.getPoint(((f + 0.005) % 1 + 1) % 1);
+        const a2 = Math.atan2(pp2.y - pp.y, pp2.x - pp.x) + Math.PI / 2;
+        const d = pitOffset + edge * 6;
+        const ox = sx(pp.x) + Math.cos(a2) * d;
+        const oy = sy(pp.y) + Math.sin(a2) * d;
+        i === 0 ? ctx.moveTo(ox, oy) : ctx.lineTo(ox, oy);
+      }
+      ctx.stroke();
+    }
+
+    // Pit boxes — colored rectangles along pit lane
+    const numBoxes = 6;
+    const boxColors = ["#d4af37", "#dc2626", "#3b82f6", "#16a34a", "#9333ea", "#f97316"];
+    for (let b = 0; b < numBoxes; b++) {
+      const bf = track.pitEntry + (track.pitExit - track.pitEntry) * ((b + 0.5) / numBoxes);
+      const bp = track.getPoint(((bf % 1) + 1) % 1);
+      const bp2 = track.getPoint(((bf + 0.005) % 1 + 1) % 1);
+      const ba = Math.atan2(bp2.y - bp.y, bp2.x - bp.x) + Math.PI / 2;
+      const bx = sx(bp.x) + Math.cos(ba) * (pitOffset + 8);
+      const by = sy(bp.y) + Math.sin(ba) * (pitOffset + 8);
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = boxColors[b % boxColors.length];
+      ctx.fillRect(bx - 3, by - 2, 6, 4);
+    }
+    ctx.globalAlpha = 1;
+
+    // Speed limit lines at pit entry/exit
+    [track.pitEntry, track.pitExit].forEach((pf) => {
+      const pp = track.getPoint(pf);
+      const pp2 = track.getPoint((pf + 0.005) % 1);
+      const a = Math.atan2(pp2.y - pp.y, pp2.x - pp.x) + Math.PI / 2;
+      ctx.strokeStyle = "rgba(255,200,0,0.35)"; ctx.lineWidth = 2;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(sx(pp.x) + Math.cos(a) * 14, sy(pp.y) + Math.sin(a) * 14);
+      ctx.lineTo(sx(pp.x) + Math.cos(a) * 30, sy(pp.y) + Math.sin(a) * 30);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    // Pit lane label
+    const pitMid = track.getPoint((track.pitEntry + track.pitExit) / 2);
+    const pitMid2 = track.getPoint(((track.pitEntry + track.pitExit) / 2 + 0.005) % 1);
+    const pitAng = Math.atan2(pitMid2.y - pitMid.y, pitMid2.x - pitMid.x) + Math.PI / 2;
+    ctx.globalAlpha = 0.30; ctx.fillStyle = "#c9a460"; ctx.font = "bold 6px Cinzel,serif"; ctx.textAlign = "center";
+    ctx.fillText("PIT LANE", sx(pitMid.x) + Math.cos(pitAng) * pitOffset, sy(pitMid.y) + Math.sin(pitAng) * pitOffset + 3);
     ctx.restore();
 
-    // Pit entry marker
-    const pitPt = track.getPoint(track.pitEntry);
-    ctx.fillStyle = "rgba(232,200,112,0.8)";
-    ctx.beginPath(); ctx.arc(sx(pitPt.x),sy(pitPt.y),5,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle = "rgba(232,200,112,0.9)";
-    ctx.font = "6px Cinzel,serif"; ctx.textAlign="center";
-    ctx.fillText("PIT", sx(pitPt.x), sy(pitPt.y)-8);
+    // Pit entry/exit markers
+    const pitEntryPt = track.getPoint(track.pitEntry);
+    ctx.fillStyle = "rgba(232,200,112,0.75)";
+    ctx.beginPath(); ctx.arc(sx(pitEntryPt.x), sy(pitEntryPt.y), 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(232,200,112,0.85)"; ctx.font = "bold 6px Cinzel,serif"; ctx.textAlign = "center";
+    ctx.fillText("IN", sx(pitEntryPt.x), sy(pitEntryPt.y) - 8);
+    const pitExitPt = track.getPoint(track.pitExit);
+    ctx.fillStyle = "rgba(232,200,112,0.55)";
+    ctx.beginPath(); ctx.arc(sx(pitExitPt.x), sy(pitExitPt.y), 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(232,200,112,0.65)"; ctx.font = "5px Cinzel,serif";
+    ctx.fillText("OUT", sx(pitExitPt.x), sy(pitExitPt.y) - 7);
 
     // Start/finish line
     const sfPt = track.getPoint(track.sfLine);
@@ -639,11 +913,20 @@ export default function CircuitRaceView({
     // Extra track-specific decoration
     if (track.drawExtra) track.drawExtra(ctx, sx, sy);
 
-    // Sector markers (S1/S2/S3)
-    [0,0.333,0.666].forEach((sF,si)=>{
-      const sp=track.getPoint(sF);
-      ctx.fillStyle="rgba(180,160,120,0.35)"; ctx.font="bold 6px Rajdhani,sans-serif"; ctx.textAlign="center";
-      ctx.fillText(`S${si+1}`,sx(sp.x),sy(sp.y)-14);
+    // Sector markers — small flags
+    [0, 0.333, 0.666].forEach((sF, si) => {
+      const sp = track.getPoint(sF);
+      const sp2 = track.getPoint((sF + 0.005) % 1);
+      const sAng = Math.atan2(sp2.y - sp.y, sp2.x - sp.x) + Math.PI / 2;
+      const fx = sx(sp.x) + Math.cos(sAng) * -18;
+      const fy = sy(sp.y) + Math.sin(sAng) * -18;
+      ctx.save();
+      ctx.strokeStyle = "rgba(180,160,120,0.3)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx, fy - 10); ctx.stroke();
+      const colors = ["rgba(220,180,60,0.4)", "rgba(60,180,220,0.4)", "rgba(220,60,60,0.4)"];
+      ctx.fillStyle = colors[si];
+      ctx.beginPath(); ctx.moveTo(fx, fy - 10); ctx.lineTo(fx + 7, fy - 8); ctx.lineTo(fx, fy - 6); ctx.closePath(); ctx.fill();
+      ctx.restore();
     });
 
     // Safety car overlay
@@ -722,23 +1005,61 @@ export default function CircuitRaceView({
       }
 
       // Speed glow
-      const grd = ctx.createRadialGradient(px,py,0,px,py,18);
-      grd.addColorStop(0, r.color+"44"); grd.addColorStop(1, r.color+"00");
-      ctx.fillStyle=grd; ctx.fillRect(px-18,py-18,36,36);
+      const grd = ctx.createRadialGradient(px,py,0,px,py,22);
+      grd.addColorStop(0, r.color+"55"); grd.addColorStop(1, r.color+"00");
+      ctx.fillStyle=grd; ctx.fillRect(px-22,py-22,44,44);
 
       // Shadow
-      ctx.save(); ctx.translate(px,py+4); ctx.scale(1.1,0.4);
-      ctx.fillStyle="rgba(0,0,0,0.45)"; ctx.beginPath(); ctx.arc(0,0,9,0,Math.PI*2); ctx.fill();
+      ctx.save(); ctx.translate(px,py+5); ctx.scale(1.2,0.4);
+      ctx.fillStyle="rgba(0,0,0,0.5)"; ctx.beginPath(); ctx.arc(0,0,11,0,Math.PI*2); ctx.fill();
       ctx.restore();
 
-      // Car body
+      // Brake glow in corners
+      const curv = getCurvature(track, r.inPit ? 0 : ((r.totalLapsDone ?? 0) + r.trackPos) % 1);
+      if (curv > 0.06 && !r.inPit && !r.dnf) {
+        const brakeIntensity = Math.min(1, (curv - 0.06) / 0.12);
+        ctx.save(); ctx.translate(px,py); ctx.rotate(angle);
+        ctx.fillStyle = `rgba(255,30,20,${0.3 + brakeIntensity * 0.5})`;
+        ctx.beginPath(); ctx.arc(-12, -3, 2.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(-12, 3, 2.5, 0, Math.PI * 2); ctx.fill();
+        const bGrd = ctx.createRadialGradient(-12, 0, 0, -12, 0, 10);
+        bGrd.addColorStop(0, `rgba(255,40,20,${0.15 * brakeIntensity})`);
+        bGrd.addColorStop(1, "rgba(255,40,20,0)");
+        ctx.fillStyle = bGrd;
+        ctx.fillRect(-22, -10, 20, 20);
+        ctx.restore();
+      }
+
+      // Car body — larger with team color stripe
       ctx.save(); ctx.translate(px,py); ctx.rotate(angle);
       ctx.fillStyle = r.color;
-      ctx.beginPath(); ctx.roundRect(-9,-4,18,8,2.5); ctx.fill();
-      ctx.strokeStyle="rgba(255,255,255,0.22)"; ctx.lineWidth=0.8; ctx.stroke();
-      ctx.fillStyle="rgba(0,0,0,0.62)";
-      ctx.beginPath(); ctx.ellipse(1,0,3.5,2.5,0,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(-11,-5,22,10,3); ctx.fill();
+      ctx.strokeStyle="rgba(255,255,255,0.25)"; ctx.lineWidth=0.8; ctx.stroke();
+      // Team color accent stripe
+      ctx.fillStyle = "rgba(255,255,255,0.15)";
+      ctx.fillRect(-8, -5, 16, 2);
+      // Cockpit
+      ctx.fillStyle="rgba(0,0,0,0.65)";
+      ctx.beginPath(); ctx.ellipse(1,0,4,3,0,0,Math.PI*2); ctx.fill();
+      // Windshield glint
+      ctx.fillStyle="rgba(180,200,220,0.15)";
+      ctx.beginPath(); ctx.ellipse(3,-1,2,1.5,0.3,0,Math.PI*2); ctx.fill();
       ctx.restore();
+
+      // Headlights in night conditions
+      if (cond === "night" && !r.inPit && !r.dnf) {
+        ctx.save();
+        ctx.translate(px, py); ctx.rotate(angle);
+        const hlGrd = ctx.createRadialGradient(13, 0, 0, 25, 0, 30);
+        hlGrd.addColorStop(0, "rgba(255,240,180,0.18)");
+        hlGrd.addColorStop(1, "rgba(255,240,180,0)");
+        ctx.fillStyle = hlGrd;
+        ctx.beginPath(); ctx.moveTo(11, 0); ctx.arc(11, 0, 30, -0.35, 0.35); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "rgba(255,240,180,0.6)";
+        ctx.beginPath(); ctx.arc(11, -3, 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(11, 3, 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
 
       // Car number circle
       const isPlayer = r.isPlayer;
