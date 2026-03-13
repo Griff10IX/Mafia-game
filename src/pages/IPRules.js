@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Globe, RefreshCw, Smartphone, Monitor } from 'lucide-react';
+import { Globe, RefreshCw, Smartphone, Monitor, LogOut } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -7,6 +7,18 @@ import styles from '../styles/noir.module.css';
 function DeviceIcon({ type }) {
   if (type === 'Mobile' || type === 'Tablet') return <Smartphone size={14} className="opacity-70" />;
   return <Monitor size={14} className="opacity-70" />;
+}
+
+function formatLastUsed(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const now = new Date();
+  const sameDay = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  if (sameDay) {
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 export default function IPRules() {
@@ -26,6 +38,7 @@ export default function IPRules() {
         your_signin_ips: [],
         current_device_type: null,
         last_device_type: null,
+        sessions: [],
       });
     } finally {
       setLoading(false);
@@ -65,8 +78,19 @@ export default function IPRules() {
     : rawYourIps;
   const currentDeviceType = data?.current_device_type || null;
   const lastDeviceType = data?.last_device_type || null;
+  const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
 
   const handleRefresh = () => fetchIpInfo(true);
+
+  const handleRevokeSession = async (sessionId) => {
+    try {
+      await api.post('/auth/sessions/revoke', { session_id: sessionId });
+      toast.success('Session logged out');
+      fetchIpInfo(false);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to revoke session');
+    }
+  };
 
   return (
     <div className={styles.pageContent}>
@@ -157,28 +181,70 @@ export default function IPRules() {
         }}
       >
         <h2 className="text-xs font-heading font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--noir-primary)' }}>
-          Addresses you&apos;ve signed in from
+          {sessions.length ? 'Sessions (IP & devices)' : "Addresses you've signed in from"}
         </h2>
-        <ul className="space-y-1">
-          {yourIps.length ? (
-            yourIps.map((ip) => (
+        {sessions.length > 0 ? (
+          <ul className="space-y-1">
+            {sessions.map((s) => (
               <li
-                key={ip}
-                className="px-2 py-1.5 rounded text-sm font-heading flex items-center gap-2"
+                key={s.id}
+                className="px-2 py-1.5 rounded text-sm font-heading flex flex-wrap items-center justify-between gap-2"
                 style={{ backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' }}
               >
-                <span>{ip}</span>
-                {ip === currentIp && (
-                  <span className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>
-                    Current
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span>{s.ip || '—'}</span>
+                  {s.device_type && (
+                    <span className="flex items-center gap-1 text-xs font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
+                      <DeviceIcon type={s.device_type} />
+                      {s.device_type}
+                    </span>
+                  )}
+                  <span className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                    Last used: {formatLastUsed(s.last_used_at)}
                   </span>
+                  {s.is_current && (
+                    <span className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>
+                      Current
+                    </span>
+                  )}
+                </div>
+                {!s.is_current && s.id && (
+                  <button
+                    type="button"
+                    onClick={() => handleRevokeSession(s.id)}
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-heading uppercase tracking-wider border transition-opacity hover:opacity-90"
+                    style={{ borderColor: 'var(--noir-border-light)', color: 'var(--noir-muted)' }}
+                    title="Log out this session"
+                  >
+                    <LogOut size={12} />
+                    Log out
+                  </button>
                 )}
               </li>
-            ))
-          ) : (
-            <li className="text-sm font-heading" style={{ color: 'var(--noir-muted)' }}>None recorded.</li>
-          )}
-        </ul>
+            ))}
+          </ul>
+        ) : (
+          <ul className="space-y-1">
+            {yourIps.length ? (
+              yourIps.map((ip) => (
+                <li
+                  key={ip}
+                  className="px-2 py-1.5 rounded text-sm font-heading flex items-center gap-2"
+                  style={{ backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' }}
+                >
+                  <span>{ip}</span>
+                  {ip === currentIp && (
+                    <span className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>
+                      Current
+                    </span>
+                  )}
+                </li>
+              ))
+            ) : (
+              <li className="text-sm font-heading" style={{ color: 'var(--noir-muted)' }}>None recorded.</li>
+            )}
+          </ul>
+        )}
       </div>
     </div>
   );

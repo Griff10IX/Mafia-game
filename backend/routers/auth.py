@@ -79,6 +79,10 @@ class AccountLockedReplyBody(BaseModel):
         return s
 
 
+class RevokeSessionBody(BaseModel):
+    session_id: str
+
+
 def register(router):
     """Register auth routes. Dependencies from server to avoid circular imports."""
     import server as srv
@@ -247,7 +251,28 @@ def register(router):
             await db.users.insert_one(user_doc.copy())
 
             if not require_verification:
-                token = create_access_token({"sub": user_id, "v": user_doc.get("token_version", 0), "email": user_doc.get("email") or ""})
+                ip = _client_ip(request) or ""
+                ua = (request.headers.get("User-Agent") or "").strip()
+                device_type = _device_type_from_user_agent(ua) if ua else "Unknown"
+                now_iso = datetime.now(timezone.utc).isoformat()
+                session_id = str(uuid.uuid4())
+                session_entry = {
+                    "id": session_id,
+                    "ip": ip,
+                    "device_type": device_type,
+                    "created_at": now_iso,
+                    "last_used_at": now_iso,
+                }
+                await db.users.update_one(
+                    {"id": user_id},
+                    {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 30}}},
+                )
+                token = create_access_token({
+                    "sub": user_id,
+                    "v": user_doc.get("token_version", 0),
+                    "email": user_doc.get("email") or "",
+                    "session_id": session_id,
+                })
                 user_response = {
                     "id": user_doc["id"],
                     "email": user_doc["email"],
@@ -286,7 +311,28 @@ def register(router):
 
             threading.Thread(target=_send_in_background, daemon=True).start()
             # Log them in so they can browse; features are gated until verified
-            token = create_access_token({"sub": user_id, "v": user_doc.get("token_version", 0), "email": user_doc.get("email") or ""})
+            ip = _client_ip(request) or ""
+            ua = (request.headers.get("User-Agent") or "").strip()
+            device_type = _device_type_from_user_agent(ua) if ua else "Unknown"
+            now_iso = datetime.now(timezone.utc).isoformat()
+            session_id = str(uuid.uuid4())
+            session_entry = {
+                "id": session_id,
+                "ip": ip,
+                "device_type": device_type,
+                "created_at": now_iso,
+                "last_used_at": now_iso,
+            }
+            await db.users.update_one(
+                {"id": user_id},
+                {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 30}}},
+            )
+            token = create_access_token({
+                "sub": user_id,
+                "v": user_doc.get("token_version", 0),
+                "email": user_doc.get("email") or "",
+                "session_id": session_id,
+            })
             user_response = {
                 "id": user_doc["id"],
                 "email": user_doc["email"],
@@ -502,7 +548,26 @@ def register(router):
             ips = doc.get("login_ips") or []
             if len(ips) > 20:
                 await db.users.update_one({"id": user["id"]}, {"$set": {"login_ips": ips[-20:]}})
-        token = create_access_token({"sub": user["id"], "v": user.get("token_version", 0), "email": user.get("email") or ""})
+        # Create session for this login (per-IP device/last-used and "log out other sessions")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        session_id = str(uuid.uuid4())
+        session_entry = {
+            "id": session_id,
+            "ip": ip or "",
+            "device_type": device_type or "Unknown",
+            "created_at": now_iso,
+            "last_used_at": now_iso,
+        }
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 30}}},
+        )
+        token = create_access_token({
+            "sub": user["id"],
+            "v": user.get("token_version", 0),
+            "email": user.get("email") or "",
+            "session_id": session_id,
+        })
         user_safe = _login_response_user(user)
         return {"token": token, "user": user_safe}
 
@@ -575,7 +640,7 @@ def register(router):
         return {"message": "Password has been reset successfully. You can now login with your new password."}
 
     @router.post("/auth/verify-email")
-    async def verify_email(body: VerifyEmailBody):
+    async def verify_email(body: VerifyEmailBody, request: Request):
         """Verify email with token from link; marks user verified and returns JWT + user."""
         record = await db.email_verifications.find_one({"token": body.token}, {"_id": 0})
         if not record:
@@ -593,7 +658,28 @@ def register(router):
         user = await db.users.find_one({"id": record["user_id"]}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=400, detail="User not found.")
-        token = create_access_token({"sub": user["id"], "v": user.get("token_version", 0), "email": user.get("email") or ""})
+        ip = _client_ip(request) or ""
+        ua = (request.headers.get("User-Agent") or "").strip()
+        device_type = _device_type_from_user_agent(ua) if ua else "Unknown"
+        now_iso = datetime.now(timezone.utc).isoformat()
+        session_id = str(uuid.uuid4())
+        session_entry = {
+            "id": session_id,
+            "ip": ip,
+            "device_type": device_type,
+            "created_at": now_iso,
+            "last_used_at": now_iso,
+        }
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 30}}},
+        )
+        token = create_access_token({
+            "sub": user["id"],
+            "v": user.get("token_version", 0),
+            "email": user.get("email") or "",
+            "session_id": session_id,
+        })
         user_response = {k: v for k, v in user.items() if k not in ("password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used")}
         return {
             "token": token,
@@ -904,7 +990,7 @@ def register(router):
 
     @router.get("/auth/ip-info")
     async def get_ip_info(request: Request, current_user: dict = Depends(get_current_user)):
-        """Return current IP, accounts that have signed in from this IP, IPs this user has signed in from, and device types (for IP & Devices page)."""
+        """Return current IP, accounts from this IP, IPs/sessions with device and last-used (for IP & Devices page)."""
         current_ip = _client_ip(request) or ""
         accounts_from_current_ip = []
         if current_ip:
@@ -929,10 +1015,42 @@ def register(router):
         ua = (request.headers.get("User-Agent") or "").strip()
         current_device_type = _device_type_from_user_agent(ua) if ua else None
         last_device_type = (current_user.get("last_device_type") or "").strip() or None
+        current_session_id = current_user.get("_session_id")
+        sessions_raw = current_user.get("sessions") or []
+        sessions = [
+            {
+                "id": s.get("id"),
+                "ip": (s.get("ip") or "").strip(),
+                "device_type": (s.get("device_type") or "Unknown").strip(),
+                "created_at": s.get("created_at"),
+                "last_used_at": s.get("last_used_at"),
+                "is_current": s.get("id") == current_session_id,
+            }
+            for s in sessions_raw
+            if s.get("id")
+        ]
         return {
             "current_ip": current_ip,
             "accounts_from_current_ip": accounts_from_current_ip,
             "your_signin_ips": your_ips,
             "current_device_type": current_device_type,
             "last_device_type": last_device_type,
+            "sessions": sessions,
         }
+
+    @router.post("/auth/sessions/revoke")
+    async def revoke_session(body: RevokeSessionBody, current_user: dict = Depends(get_current_user)):
+        """Revoke another session (log out that device). Cannot revoke the current session."""
+        session_id = (body.session_id or "").strip()
+        if not session_id:
+            raise HTTPException(status_code=400, detail="session_id required")
+        current_session_id = current_user.get("_session_id")
+        if session_id == current_session_id:
+            raise HTTPException(status_code=400, detail="Cannot revoke current session")
+        result = await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$pull": {"sessions": {"id": session_id}}},
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Session not found or already revoked")
+        return {"message": "Session revoked"}

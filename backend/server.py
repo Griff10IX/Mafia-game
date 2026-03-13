@@ -598,6 +598,34 @@ async def get_current_user(
     if payload.get("v", 0) != user.get("token_version", 0):
         _log_auth_failure(user_id, 401, "Session invalidated (token_version mismatch)")
         raise HTTPException(status_code=401, detail="Session invalidated. Please log in again.")
+    # If token has session_id, validate it exists (revoked sessions are removed from user.sessions)
+    session_id = payload.get("session_id")
+    if session_id:
+        sessions = user.get("sessions") or []
+        valid_ids = [s.get("id") for s in sessions if s.get("id")]
+        if session_id not in valid_ids:
+            _log_auth_failure(user_id, 401, "Session revoked or invalid")
+            raise HTTPException(status_code=401, detail="Session invalidated. Please log in again.")
+        user["_session_id"] = session_id
+        # Update last_used_at every 5 minutes to avoid write storm
+        now = datetime.now(timezone.utc)
+        for s in sessions:
+            if s.get("id") == session_id:
+                try:
+                    lu = s.get("last_used_at")
+                    if lu:
+                        lu_dt = datetime.fromisoformat(lu.replace("Z", "+00:00")) if isinstance(lu, str) else lu
+                        if lu_dt.tzinfo is None:
+                            lu_dt = lu_dt.replace(tzinfo=timezone.utc)
+                        if (now - lu_dt).total_seconds() >= 300:
+                            await db.users.update_one(
+                                {"id": user_id},
+                                {"$set": {"sessions.$[s].last_used_at": now.isoformat()}},
+                                array_filters=[{"s.id": session_id}],
+                            )
+                except Exception:
+                    pass
+                break
     if user.get("is_dead"):
         # Allow limited access for dead accounts so the frontend can render the death screen
         # and killer reveal flow. Gameplay endpoints remain blocked.
