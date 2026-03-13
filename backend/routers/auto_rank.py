@@ -33,6 +33,7 @@ MIN_OC_INTERVAL_SECONDS = 10
 DEFAULT_OC_INTERVAL_SECONDS = 63  # was 60; 5% slower
 OC_LOOP_INTERVAL_SECONDS = 63  # fallback when config not used
 OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60
+AUTO_RANK_IDLE_TIMEOUT_SECONDS = 3 * 60 * 60  # 3 hours - if no real user activity, auto-rank goes idle
 
 
 # ─── Config helpers ───────────────────────────────────────────────
@@ -288,6 +289,39 @@ async def _set_last_activity(db, user_id: str, activity: str, now: datetime):
         {"id": user_id},
         {"$set": {"auto_rank_last_activity": activity, "auto_rank_last_activity_at": now.isoformat()}},
     )
+
+
+def _is_user_idle(user: dict, now: datetime) -> bool:
+    """Check if user has been inactive (no real activity) for more than AUTO_RANK_IDLE_TIMEOUT_SECONDS.
+    Returns True if idle (should skip auto-rank), False if active."""
+    last_seen = user.get("last_seen")
+    if not last_seen:
+        return False  # No last_seen = treat as active (new user)
+    last_seen_dt = _parse_iso(last_seen)
+    if not last_seen_dt:
+        return False
+    elapsed = (now - last_seen_dt).total_seconds()
+    return elapsed > AUTO_RANK_IDLE_TIMEOUT_SECONDS
+
+
+async def _check_and_set_idle(db, user_id: str, user: dict, now: datetime) -> bool:
+    """Check if user should be idle. If so, set auto_rank_idle=True and return True. Otherwise return False."""
+    if _is_user_idle(user, now):
+        if not user.get("auto_rank_idle"):
+            await db.users.update_one({"id": user_id}, {"$set": {"auto_rank_idle": True}})
+            logger.info("Auto rank: user %s went idle (no activity for 3h)", user.get("username", user_id))
+        return True
+    return False
+
+
+async def wake_auto_rank_if_idle(db, user_id: str):
+    """Called when user makes a real request. If they were idle, wake up auto-rank."""
+    result = await db.users.update_one(
+        {"id": user_id, "auto_rank_idle": True},
+        {"$set": {"auto_rank_idle": False}, "$unset": {"auto_rank_next_run_at": ""}}
+    )
+    if result.modified_count > 0:
+        logger.info("Auto rank: user %s woke up from idle", user_id)
 
 
 # ─── Telegram helper ──────────────────────────────────────────────
@@ -811,10 +845,20 @@ async def run_booze_arrivals():
                 logger.warning("Auto rank booze cleanup: arrival update for jailed %s failed: %s", u.get("id"), e)
 
     cursor = db.users.find(
-        {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_booze": True, "travel_arrives_at": {"$lte": now_iso}, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}},
-        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
+        {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_booze": True, "travel_arrives_at": {"$lte": now_iso}, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
+        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1},
     )
     users = await cursor.to_list(200)
+    
+    # Check each user for idle status and filter out those who should be idle
+    active_users = []
+    for u in users:
+        if _is_user_idle(u, now):
+            await db.users.update_one({"id": u["id"]}, {"$set": {"auto_rank_idle": True}})
+            logger.info("Auto rank booze: user %s went idle (no activity for 3h)", u.get("username", u["id"]))
+        else:
+            active_users.append(u)
+    users = active_users
 
     async def run_one(u):
         chat_id = (u.get("telegram_chat_id") or "").strip()
@@ -839,10 +883,12 @@ async def run_booze_arrivals():
 async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_start: Optional[datetime] = None):
     """Find users whose auto_rank_next_run_at is due, run each once, set next_run_at.
     Use cycle_start (e.g. when the loop iteration began) for scheduling the next run so that
-    delays from run_booze_arrivals() don't stretch the effective interval."""
+    delays from run_booze_arrivals() don't stretch the effective interval.
+    Skips users who have been inactive for 3+ hours (auto_rank_idle)."""
     import server as srv
     db = srv.db
     now = datetime.now(timezone.utc)
+    idle_cutoff = (now - timedelta(seconds=AUTO_RANK_IDLE_TIMEOUT_SECONDS)).isoformat()
     interval = interval_seconds if interval_seconds is not None else await get_auto_rank_interval_seconds(db)
     cursor = db.users.find(
         {
@@ -850,15 +896,26 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
             "auto_rank_enabled": True,
             "in_jail": {"$ne": True},
             "is_dead": {"$ne": True},
+            "auto_rank_idle": {"$ne": True},
             "$or": [
                 {"auto_rank_next_run_at": {"$exists": False}},
                 {"auto_rank_next_run_at": None},
                 {"auto_rank_next_run_at": {"$lte": now.isoformat()}},
             ],
         },
-        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
+        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1},
     )
     users = await cursor.to_list(500)
+    
+    # Check each user for idle status and filter out those who should be idle
+    active_users = []
+    for u in users:
+        if _is_user_idle(u, now):
+            await db.users.update_one({"id": u["id"]}, {"$set": {"auto_rank_idle": True}})
+            logger.info("Auto rank: user %s went idle (no activity for 3h)", u.get("username", u["id"]))
+        else:
+            active_users.append(u)
+    users = active_users
     if users:
         logger.info("Auto rank: running cycle for %d due user(s) (crimes/GTA/booze)", len(users))
     crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
@@ -890,7 +947,8 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
 
 
 async def run_bust_5sec_once():
-    """Single pass: for bust-every-5-sec users, try one jail bust each. Target pool = NPCs + jailed players (random pick so both can be busted)."""
+    """Single pass: for bust-every-5-sec users, try one jail bust each. Target pool = NPCs + jailed players (random pick so both can be busted).
+    Skips users who have been inactive for 3+ hours (auto_rank_idle)."""
     import random
     import server as srv
     db = srv.db
@@ -905,10 +963,20 @@ async def run_bust_5sec_once():
         return
     try:
         cursor = db.users.find(
-            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}},
-            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
+            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1},
         )
         users = await cursor.to_list(500)
+        
+        # Check each user for idle status and filter out those who should be idle
+        active_users = []
+        for u in users:
+            if _is_user_idle(u, now):
+                await db.users.update_one({"id": u["id"]}, {"$set": {"auto_rank_idle": True}})
+                logger.info("Auto rank bust: user %s went idle (no activity for 3h)", u.get("username", u["id"]))
+            else:
+                active_users.append(u)
+        users = active_users
         buster_user_ids = {u["id"] for u in users}
         targets = []
         async for npc in db.jail_npcs.find({}, {"_id": 0, "username": 1}):
@@ -952,7 +1020,8 @@ async def run_bust_5sec_loop():
 
 
 async def run_auto_rank_oc_once():
-    """Single pass: for OC users, run OC with NPC when timer ready. Used by cron or loop."""
+    """Single pass: for OC users, run OC with NPC when timer ready. Used by cron or loop.
+    Skips users who have been inactive for 3+ hours (auto_rank_idle)."""
     import server as srv
     from routers.oc import run_oc_heist_npc_only
     from security import send_telegram_to_chat
@@ -963,10 +1032,21 @@ async def run_auto_rank_oc_once():
     now = datetime.now(timezone.utc)
     try:
         cursor = db.users.find(
-            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_oc": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}},
-            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_oc_retry_at": 1},
+            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_oc": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_oc_retry_at": 1, "last_seen": 1},
         )
         users = await cursor.to_list(500)
+        
+        # Check each user for idle status and filter out those who should be idle
+        active_users = []
+        for u in users:
+            if _is_user_idle(u, now):
+                await db.users.update_one({"id": u["id"]}, {"$set": {"auto_rank_idle": True}})
+                logger.info("Auto rank OC: user %s went idle (no activity for 3h)", u.get("username", u["id"]))
+            else:
+                active_users.append(u)
+        users = active_users
+        
         user_oc_list = await db.user_organised_crime.find(
             {"user_id": {"$in": [u["id"] for u in users]}},
             {"_id": 0, "user_id": 1, "selected_equipment": 1},
@@ -1359,7 +1439,7 @@ def register(router):
     async def _get_auto_rank_stats_impl(db, current_user: dict):
         u = await db.users.find_one(
             {"id": current_user["id"]},
-            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "auto_rank_total_cars_melted": 1, "auto_rank_total_bullets_from_melt": 1, "auto_rank_total_cars_scrapped": 1, "auto_rank_total_cash_from_scrap": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_melt": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_successful_busts_today": 1, "auto_rank_successful_busts_date": 1, "auto_rank_successful_crimes_today": 1, "auto_rank_successful_crimes_date": 1, "auto_rank_successful_gtas_today": 1, "auto_rank_successful_gtas_date": 1, "auto_rank_bullets_from_melt_today": 1, "auto_rank_bullets_from_melt_date": 1, "auto_rank_cars_melted_today": 1, "auto_rank_cars_melted_date": 1, "auto_rank_cars_scrapped_today": 1, "auto_rank_cars_scrapped_date": 1, "auto_rank_cash_from_scrap_today": 1, "auto_rank_cash_from_scrap_date": 1},
+            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "auto_rank_total_cars_melted": 1, "auto_rank_total_bullets_from_melt": 1, "auto_rank_total_cars_scrapped": 1, "auto_rank_total_cash_from_scrap": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_melt": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_successful_busts_today": 1, "auto_rank_successful_busts_date": 1, "auto_rank_successful_crimes_today": 1, "auto_rank_successful_crimes_date": 1, "auto_rank_successful_gtas_today": 1, "auto_rank_successful_gtas_date": 1, "auto_rank_bullets_from_melt_today": 1, "auto_rank_bullets_from_melt_date": 1, "auto_rank_cars_melted_today": 1, "auto_rank_cars_melted_date": 1, "auto_rank_cars_scrapped_today": 1, "auto_rank_cars_scrapped_date": 1, "auto_rank_cash_from_scrap_today": 1, "auto_rank_cash_from_scrap_date": 1, "auto_rank_idle": 1, "last_seen": 1},
         )
         now = datetime.now(timezone.utc)
         since = _parse_iso((u or {}).get("auto_rank_stats_since"))
@@ -1431,8 +1511,11 @@ def register(router):
         cars_scrapped_today = int((u or {}).get("auto_rank_cars_scrapped_today") or 0) if (u or {}).get("auto_rank_cars_scrapped_date") == today else 0
         cash_from_scrap_today = int((u or {}).get("auto_rank_cash_from_scrap_today") or 0) if (u or {}).get("auto_rank_cash_from_scrap_date") == today else 0
         attempted_busts_today = successful_busts_today + failed_busts_today
+        is_idle = bool((u or {}).get("auto_rank_idle"))
         activity_detail = None
-        if in_jail:
+        if is_idle:
+            activity_detail = "Idle — no activity for 3h (will wake on next page visit)"
+        elif in_jail:
             activity_detail = "In jail — cycles paused"
         elif (u or {}).get("travel_arrives_at") and (u or {}).get("auto_rank_booze"):
             activity_detail = "Travelling (booze)"
@@ -1507,6 +1590,7 @@ def register(router):
             "cars_scrapped_today": cars_scrapped_today,
             "cash_from_scrap_today": cash_from_scrap_today,
             "attempted_busts_today": attempted_busts_today,
+            "auto_rank_idle": is_idle,
         }
 
     @router.patch("/auto-rank/me")
@@ -1518,7 +1602,10 @@ def register(router):
             if body.auto_rank_enabled and not can_enable:
                 raise HTTPException(status_code=400, detail="Buy Auto Rank from the Store first.")
             updates["auto_rank_enabled"] = body.auto_rank_enabled
-            if body.auto_rank_enabled is False:
+            if body.auto_rank_enabled:
+                # When enabling, clear idle state so auto-rank runs immediately
+                updates["auto_rank_idle"] = False
+            else:
                 # Disabling Auto Rank also turns off all activity toggles
                 for f in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze", "auto_rank_melt"]:
                     updates[f] = False
@@ -1653,17 +1740,32 @@ def register(router):
                     {"$or": [
                         {"last_seen": {"$gte": five_min_ago.isoformat()}},
                         {"forced_online_until": {"$gt": now.isoformat()}},
-                        {"auto_rank_enabled": True},
+                        # Only count auto_rank_enabled as online if NOT idle
+                        {"$and": [{"auto_rank_enabled": True}, {"auto_rank_idle": {"$ne": True}}]},
                     ]},
                 ],
             }
         cursor = db.users.find(
             query,
-            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "forced_online_until": 1, **{f: 1 for f in _PREFERENCE_FIELDS}},
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "forced_online_until": 1, "auto_rank_idle": 1, **{f: 1 for f in _PREFERENCE_FIELDS}},
         )
         users = await cursor.to_list(500)
 
         def _is_online(u):
+            # If idle, auto-rank is paused so not really "online" from auto-rank perspective
+            if u.get("auto_rank_idle"):
+                # But still check last_seen for real activity
+                ls = u.get("last_seen")
+                if ls:
+                    try:
+                        ts = datetime.fromisoformat(ls.replace("Z", "+00:00") if ls.endswith("Z") else ls)
+                        if ts.tzinfo is None:
+                            ts = ts.replace(tzinfo=timezone.utc)
+                        if ts >= five_min_ago:
+                            return True
+                    except Exception:
+                        pass
+                return False
             if u.get("auto_rank_enabled"):
                 return True
             ls = u.get("last_seen")
@@ -1694,6 +1796,7 @@ def register(router):
                     "id": u.get("id"),
                     "username": u.get("username"),
                     "online": _is_online(u),
+                    "auto_rank_idle": bool(u.get("auto_rank_idle")),
                     **_extract_preferences(u),
                     "telegram_chat_id": u.get("telegram_chat_id") or "",
                     "telegram_bot_token": u.get("telegram_bot_token") or "",

@@ -788,6 +788,11 @@ def register(router):
                 {"id": current_user["id"]},
                 {"$set": update}
             )
+            
+            # Wake up auto-rank if user was idle (no activity for 3+ hours)
+            if current_user.get("auto_rank_idle"):
+                from routers.auto_rank import wake_auto_rank_if_idle
+                await wake_auto_rank_if_idle(db, current_user["id"])
 
             rank_id, rank_name = get_rank_info(_safe_int(current_user.get("rank_points"), 0))
             if current_user.get("email") in ADMIN_EMAILS:

@@ -69,64 +69,83 @@ async def get_states(current_user: dict = Depends(get_current_user)):
             return True
         return now_utc >= t
 
-    for d in dice_docs:
-        if not d.get("owner_id"):
-            continue
-        u = user_map.get(d["owner_id"], {})
-        money = int((u.get("money") or 0) or 0)
-        _, wealth_rank_name = get_wealth_rank(money)
-        dice_max = d.get("max_bet") if d.get("max_bet") is not None else DICE_MAX_BET
-        dice_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": dice_max, "buy_back_reward": d.get("buy_back_reward")}
+    # Build lookup maps for max_bet from ownership docs (including unowned casinos set by admin)
+    dice_docs_by_city = {d.get("city"): d for d in dice_docs if d.get("city")}
+    rlt_docs_by_city = {d.get("city"): d for d in rlt_docs if d.get("city")}
+    blackjack_docs_by_city = {d.get("city"): d for d in blackjack_docs if d.get("city")}
+    horseracing_docs_by_city = {d.get("city"): d for d in horseracing_docs if d.get("city")}
+    videopoker_docs_by_city = {d.get("city"): d for d in videopoker_docs if d.get("city")}
 
-    for d in rlt_docs:
-        if not d.get("owner_id"):
-            continue
-        u = user_map.get(d["owner_id"], {})
-        money = int((u.get("money") or 0) or 0)
-        _, wealth_rank_name = get_wealth_rank(money)
-        rlt_max = d.get("max_bet") if d.get("max_bet") is not None else ROULETTE_MAX_BET
-        roulette_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": rlt_max}
+    # Process all states for each casino type (not just owned ones)
+    for st in STATES or []:
+        # Dice
+        d = dice_docs_by_city.get(st)
+        dice_max = d.get("max_bet") if d and d.get("max_bet") is not None else DICE_MAX_BET
+        if d and d.get("owner_id"):
+            u = user_map.get(d["owner_id"], {})
+            money = int((u.get("money") or 0) or 0)
+            _, wealth_rank_name = get_wealth_rank(money)
+            dice_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": dice_max, "buy_back_reward": d.get("buy_back_reward")}
+        else:
+            dice_owners[st] = {"username": None, "max_bet": dice_max}
 
-    for d in blackjack_docs:
-        if not d.get("owner_id"):
-            continue
-        u = user_map.get(d["owner_id"], {})
-        money = int((u.get("money") or 0) or 0)
-        _, wealth_rank_name = get_wealth_rank(money)
-        bj_max = d.get("max_bet") if d.get("max_bet") is not None else BLACKJACK_MAX_BET
-        blackjack_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": bj_max, "buy_back_reward": d.get("buy_back_reward")}
+        # Roulette
+        d = rlt_docs_by_city.get(st)
+        rlt_max = d.get("max_bet") if d and d.get("max_bet") is not None else ROULETTE_MAX_BET
+        if d and d.get("owner_id"):
+            u = user_map.get(d["owner_id"], {})
+            money = int((u.get("money") or 0) or 0)
+            _, wealth_rank_name = get_wealth_rank(money)
+            roulette_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": rlt_max}
+        else:
+            roulette_owners[st] = {"username": None, "max_bet": rlt_max}
 
-    for d in horseracing_docs:
-        if not d.get("owner_id"):
-            continue
-        u = user_map.get(d["owner_id"], {})
-        money = int((u.get("money") or 0) or 0)
-        _, wealth_rank_name = get_wealth_rank(money)
-        hr_max = d.get("max_bet") if d.get("max_bet") is not None else HORSERACING_MAX_BET
-        horseracing_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": hr_max}
+        # Blackjack
+        d = blackjack_docs_by_city.get(st)
+        bj_max = d.get("max_bet") if d and d.get("max_bet") is not None else BLACKJACK_MAX_BET
+        if d and d.get("owner_id"):
+            u = user_map.get(d["owner_id"], {})
+            money = int((u.get("money") or 0) or 0)
+            _, wealth_rank_name = get_wealth_rank(money)
+            blackjack_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": bj_max, "buy_back_reward": d.get("buy_back_reward")}
+        else:
+            blackjack_owners[st] = {"username": None, "max_bet": bj_max}
 
-    for d in videopoker_docs:
-        if not d.get("owner_id"):
-            continue
-        u = user_map.get(d["owner_id"], {})
-        money = int((u.get("money") or 0) or 0)
-        _, wealth_rank_name = get_wealth_rank(money)
-        vp_max = d.get("max_bet") if d.get("max_bet") is not None else VIDEO_POKER_MAX_BET
-        videopoker_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": vp_max}
+        # Horse Racing
+        d = horseracing_docs_by_city.get(st)
+        hr_max = d.get("max_bet") if d and d.get("max_bet") is not None else HORSERACING_MAX_BET
+        if d and d.get("owner_id"):
+            u = user_map.get(d["owner_id"], {})
+            money = int((u.get("money") or 0) or 0)
+            _, wealth_rank_name = get_wealth_rank(money)
+            horseracing_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": hr_max}
+        else:
+            horseracing_owners[st] = {"username": None, "max_bet": hr_max}
+
+        # Video Poker
+        d = videopoker_docs_by_city.get(st)
+        vp_max = d.get("max_bet") if d and d.get("max_bet") is not None else VIDEO_POKER_MAX_BET
+        if d and d.get("owner_id"):
+            u = user_map.get(d["owner_id"], {})
+            money = int((u.get("money") or 0) or 0)
+            _, wealth_rank_name = get_wealth_rank(money)
+            videopoker_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": vp_max}
+        else:
+            videopoker_owners[st] = {"username": None, "max_bet": vp_max}
 
     # Slots: one per state; include state-owned (no owner) with next_draw_at
     for st in STATES or []:
         doc = next((d for d in slots_docs if (d.get("state") or "").strip() == st), None)
         next_draw_at = doc.get("next_draw_at") if doc else None
+        slots_max = doc.get("max_bet") if doc and doc.get("max_bet") is not None else SLOTS_MAX_BET
         if doc and doc.get("owner_id") and not _slots_expired(doc):
             u = user_map.get(doc["owner_id"], {})
             money = int((u.get("money") or 0) or 0)
             _, wealth_rank_name = get_wealth_rank(money)
-            slots_max = doc.get("max_bet") if doc.get("max_bet") is not None else SLOTS_MAX_BET
             slots_owners[st] = {"user_id": doc["owner_id"], "username": doc.get("owner_username") or u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": slots_max, "buy_back_reward": doc.get("buy_back_reward"), "next_draw_at": next_draw_at}
         else:
             # State-owned or no doc: still include so frontend can show "State owned" and next_draw_at
-            slots_owners[st] = {"username": None, "max_bet": SLOTS_MAX_BET, "next_draw_at": next_draw_at}
+            slots_owners[st] = {"username": None, "max_bet": slots_max, "next_draw_at": next_draw_at}
 
     # State heads: which family (if any) is head of each state
     heads_raw = await get_state_heads()

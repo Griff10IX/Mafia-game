@@ -515,6 +515,19 @@ export default function Admin() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { checkAdmin(); }, []);
 
+  // Auto-load rate limit status for admin
+  useEffect(() => {
+    if (!isAdmin) return;
+    (async () => {
+      try {
+        const response = await api.get('/admin/security/rate-limits');
+        setRateLimits(response.data);
+      } catch (e) {
+        // Silent fail - just don't show status
+      }
+    })();
+  }, [isAdmin]);
+
   // When navigating from Profile staff buttons with state (e.g. activity log / gambling log / target user)
   useEffect(() => {
     const s = location.state;
@@ -3809,22 +3822,24 @@ export default function Admin() {
               </div>
             )}
 
-            <ActionRow icon={Shield} label="View Rate Limits" description="See rate limiting configuration">
-              <BtnPrimary onClick={handleViewRateLimits} disabled={securityLoading}>
-                {securityLoading ? '...' : 'View'}
-              </BtnPrimary>
-            </ActionRow>
-
-            <ActionRow icon={Shield} label="Enable All Limits" description="Turn on rate limiting for all endpoints">
-              <BtnPrimary onClick={handleEnableAllLimits} disabled={securityLoading}>
-                {securityLoading ? '...' : 'Enable All'}
-              </BtnPrimary>
-            </ActionRow>
-
-            <ActionRow icon={Shield} label="Disable All Limits" description="Emergency: Turn off all rate limiting" color="text-red-400">
-              <BtnDanger onClick={handleDisableAllLimits} disabled={securityLoading}>
-                {securityLoading ? '...' : 'Disable All'}
-              </BtnDanger>
+            <ActionRow icon={Shield} label="Rate Limits (Cooldown)" description={rateLimits?.global_enabled ? "ENABLED - Users see cooldown when clicking too fast" : "DISABLED - No cooldown protection"}>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold ${rateLimits?.global_enabled ? 'text-green-400' : 'text-red-400'}`}>
+                  {rateLimits?.global_enabled ? 'ON' : 'OFF'}
+                </span>
+                <BtnPrimary onClick={handleViewRateLimits} disabled={securityLoading}>
+                  {securityLoading ? '...' : 'Refresh'}
+                </BtnPrimary>
+                {rateLimits?.global_enabled ? (
+                  <BtnDanger onClick={handleDisableAllLimits} disabled={securityLoading}>
+                    {securityLoading ? '...' : 'Disable'}
+                  </BtnDanger>
+                ) : (
+                  <BtnPrimary onClick={handleEnableAllLimits} disabled={securityLoading}>
+                    {securityLoading ? '...' : 'Enable'}
+                  </BtnPrimary>
+                )}
+              </div>
             </ActionRow>
 
             {rateLimits && rateLimits.rate_limits && (
