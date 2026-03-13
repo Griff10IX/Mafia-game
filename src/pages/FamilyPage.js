@@ -1600,6 +1600,7 @@ export default function FamilyPage() {
   const [crewOCSetFeeLoading, setCrewOCSetFeeLoading] = useState(false);
   const [crewOCAdvertiseLoading, setCrewOCAdvertiseLoading] = useState(false);
   const [detailsWarId, setDetailsWarId] = useState(null);
+  const [stateTakeoverLoading, setStateTakeoverLoading] = useState(false);
 
   const family = myFamily?.family;
   const members = myFamily?.members || [];
@@ -1729,6 +1730,18 @@ export default function FamilyPage() {
   };
   const handleOfferTruce = async () => { const entry = activeWars[selectedWarIndex]; if (!entry?.war?.id) return; try { await api.post('/families/war/truce/offer', { war_id: entry.war.id }); toast.success('Truce offered'); fetchData(); setShowWarModal(false); } catch (e) { toast.error(apiDetail(e)); } };
   const handleAcceptTruce = async () => { const entry = activeWars[selectedWarIndex]; if (!entry?.war?.id) return; try { await api.post('/families/war/truce/accept', { war_id: entry.war.id }); toast.success('Accepted'); fetchData(); setShowWarModal(false); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleStateTakeoverAccept = async () => {
+    if (!window.confirm(`Accept takeover of ${family?.pending_state_takeover}? Your current state (${family?.head_of_state}) will become unclaimed.`)) return;
+    setStateTakeoverLoading(true);
+    try { const res = await api.post('/families/state-takeover/accept'); toast.success(res.data?.message || 'Takeover accepted!'); fetchData(); }
+    catch (e) { toast.error(apiDetail(e)); } finally { setStateTakeoverLoading(false); }
+  };
+  const handleStateTakeoverReject = async () => {
+    if (!window.confirm(`Reject takeover of ${family?.pending_state_takeover}? It will remain unclaimed.`)) return;
+    setStateTakeoverLoading(true);
+    try { const res = await api.post('/families/state-takeover/reject'); toast.success(res.data?.message || 'Takeover rejected'); fetchData(); }
+    catch (e) { toast.error(apiDetail(e)); } finally { setStateTakeoverLoading(false); }
+  };
   const handleCrewOCCommit = async () => {
     setCrewOCCommitting(true);
     try { const res = await api.post('/families/crew-oc/commit'); toast.success(res.data?.message || 'Crew OC committed.'); refreshUser(); fetchData(); }
@@ -1884,6 +1897,39 @@ export default function FamilyPage() {
             <StatCard label="Rackets" value={`${unlockedRackets}/${rackets.length}`} icon={<TrendingUp size={10} />} delay={0.1} />
             <StatCard label="Ready" value={readyRackets} highlight={readyRackets > 0} icon={<Clock size={10} />} delay={0.15} />
           </div>
+
+          {/* ── State Takeover Offer Banner ── */}
+          {family?.pending_state_takeover && canManage && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-3 py-3 sm:px-4 rounded-lg bg-amber-500/10 border border-amber-500/30 fam-fade-in relative overflow-hidden">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500/60" />
+              <div className="flex items-start sm:items-center gap-2 flex-wrap">
+                <MapPin size={15} className="text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+                <div>
+                  <span className="text-xs text-amber-400 font-heading font-bold tracking-wider uppercase block sm:inline">State Conquest!</span>
+                  <span className="text-xs text-foreground ml-0 sm:ml-2 block sm:inline">
+                    You can take control of <strong className="text-amber-300">{family.pending_state_takeover}</strong>.
+                    {family.head_of_state && <span className="text-mutedForeground"> Your current state ({family.head_of_state}) will become unclaimed.</span>}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 ml-5 sm:ml-0 shrink-0">
+                <button
+                  onClick={handleStateTakeoverAccept}
+                  disabled={stateTakeoverLoading}
+                  className="px-3 py-1.5 rounded text-[10px] font-heading font-bold uppercase tracking-wide bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition-all disabled:opacity-50"
+                >
+                  Accept
+                </button>
+                <button
+                  onClick={handleStateTakeoverReject}
+                  disabled={stateTakeoverLoading}
+                  className="px-3 py-1.5 rounded text-[10px] font-heading font-bold uppercase tracking-wide bg-zinc-700/50 text-zinc-300 border border-zinc-600/50 hover:bg-zinc-600/50 transition-all disabled:opacity-50"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* ── War Banner ── */}
           {activeWars.length > 0 && (

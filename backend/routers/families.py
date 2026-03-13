@@ -348,10 +348,27 @@ async def cleanup_dead_families():
                 )
             head_state = (fam.get("head_of_state") or "").strip()
             if head_state:
-                # If winner's family is already head of another state, just clear this state
-                err = await set_state_head(head_state, winner_id if winner_id else None)
-                if err and winner_id:
-                    await set_state_head(head_state, None)  # Clear the state instead
+                if winner_id:
+                    # Check if winner's family already heads a state
+                    winner_fam = await db.families.find_one({"id": winner_id}, {"_id": 0, "head_of_state": 1, "name": 1})
+                    winner_current_state = (winner_fam or {}).get("head_of_state") or ""
+                    if winner_current_state.strip():
+                        # Winner already heads a state - offer them a choice to takeover
+                        await db.families.update_one(
+                            {"id": winner_id},
+                            {"$set": {
+                                "pending_state_takeover": head_state,
+                                "pending_state_takeover_at": datetime.now(timezone.utc).isoformat(),
+                            }}
+                        )
+                        # Clear the conquered state for now (they can claim it if they accept)
+                        await set_state_head(head_state, None)
+                    else:
+                        # Winner doesn't head a state - give them this one directly
+                        await set_state_head(head_state, winner_id)
+                else:
+                    # No winner - just clear the state
+                    await set_state_head(head_state, None)
             await db.family_members.delete_many({"family_id": family_id})
             await db.families.delete_one({"id": family_id})
 
@@ -663,6 +680,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "racket_income_bonus_percent": float((fam.get("racket_income_bonus_percent") or 0) or 0),
             "head_of_state": fam.get("head_of_state"),
             "state_head_income": fam.get("state_head_income") or {},
+            "pending_state_takeover": fam.get("pending_state_takeover"),
+            "pending_state_takeover_at": fam.get("pending_state_takeover_at"),
             "compound_cash": compound_cash, "compound_points": compound_points, "compound_loot_pieces": compound_loot_pieces,
         },
         "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
@@ -2050,6 +2069,83 @@ async def families_war_public_stats(war_id: str, current_user: dict = Depends(ge
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# State Takeover (when your family conquers a state but you already head one)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def state_takeover_accept(current_user: dict = Depends(get_current_user)):
+    """Accept a pending state takeover offer. Your old state becomes unclaimed, you take the new one."""
+    member = await db.family_members.find_one({"user_id": current_user["id"]}, {"_id": 0, "family_id": 1, "role": 1})
+    if not member:
+        raise HTTPException(status_code=400, detail="You are not in a family")
+    if member.get("role") not in ("don", "underboss"):
+        raise HTTPException(status_code=403, detail="Only the Don or Underboss can accept state takeovers")
+
+    family_id = member["family_id"]
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "pending_state_takeover": 1, "head_of_state": 1, "name": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+
+    pending_state = (fam.get("pending_state_takeover") or "").strip()
+    if not pending_state:
+        raise HTTPException(status_code=400, detail="No pending state takeover offer")
+
+    current_state = (fam.get("head_of_state") or "").strip()
+
+    # Clear our current state first
+    if current_state:
+        await set_state_head(current_state, None)
+
+    # Take the new state (use force=True since we just cleared our old state)
+    err = await set_state_head(pending_state, family_id, force=True)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
+    # Clear the pending offer
+    await db.families.update_one(
+        {"id": family_id},
+        {"$unset": {"pending_state_takeover": "", "pending_state_takeover_at": ""}}
+    )
+
+    return {
+        "message": f"Takeover accepted! Your family now controls {pending_state}. {current_state} is now unclaimed.",
+        "new_state": pending_state,
+        "old_state_released": current_state,
+    }
+
+
+async def state_takeover_reject(current_user: dict = Depends(get_current_user)):
+    """Reject a pending state takeover offer. The conquered state remains unclaimed."""
+    member = await db.family_members.find_one({"user_id": current_user["id"]}, {"_id": 0, "family_id": 1, "role": 1})
+    if not member:
+        raise HTTPException(status_code=400, detail="You are not in a family")
+    if member.get("role") not in ("don", "underboss"):
+        raise HTTPException(status_code=403, detail="Only the Don or Underboss can reject state takeovers")
+
+    family_id = member["family_id"]
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "pending_state_takeover": 1, "head_of_state": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+
+    pending_state = (fam.get("pending_state_takeover") or "").strip()
+    if not pending_state:
+        raise HTTPException(status_code=400, detail="No pending state takeover offer")
+
+    current_state = (fam.get("head_of_state") or "").strip()
+
+    # Clear the pending offer - the conquered state stays unclaimed
+    await db.families.update_one(
+        {"id": family_id},
+        {"$unset": {"pending_state_takeover": "", "pending_state_takeover_at": ""}}
+    )
+
+    return {
+        "message": f"Takeover rejected. {pending_state} remains unclaimed. You keep control of {current_state}.",
+        "rejected_state": pending_state,
+        "kept_state": current_state,
+    }
+
+
 def register(router):
     router.add_api_route("/admin/debug/war-stats", admin_debug_war_stats, methods=["GET"])
     router.add_api_route("/families", families_list, methods=["GET"])
@@ -2090,3 +2186,5 @@ def register(router):
     router.add_api_route("/families/war/truce/offer", families_war_truce_offer, methods=["POST"])
     router.add_api_route("/families/war/truce/accept", families_war_truce_accept, methods=["POST"])
     router.add_api_route("/families/wars/history", families_wars_history, methods=["GET"])
+    router.add_api_route("/families/state-takeover/accept", state_takeover_accept, methods=["POST"])
+    router.add_api_route("/families/state-takeover/reject", state_takeover_reject, methods=["POST"])

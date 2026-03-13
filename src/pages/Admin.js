@@ -302,6 +302,10 @@ export default function Admin() {
   const [clearGamblingDays, setClearGamblingDays] = useState(30);
   const [clearGamblingLoading, setClearGamblingLoading] = useState(false);
 
+  // State Heads management
+  const [stateHeads, setStateHeads] = useState(null);
+  const [stateHeadsLoading, setStateHeadsLoading] = useState(false);
+
   // Cheat detection
   const [cheatSameIp, setCheatSameIp] = useState(null);
   const [cheatSameDeviceIps, setCheatSameDeviceIps] = useState(null);
@@ -650,6 +654,29 @@ export default function Admin() {
       toast.success(res.data?.message || 'Slots cooldowns cleared');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to clear cooldowns');
+    }
+  };
+
+  const fetchStateHeads = async () => {
+    setStateHeadsLoading(true);
+    try {
+      const res = await api.get('/admin/state-heads');
+      setStateHeads(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to fetch state heads');
+    } finally {
+      setStateHeadsLoading(false);
+    }
+  };
+
+  const handleClearStateHead = async (state) => {
+    if (!window.confirm(`Clear head family from ${state}?`)) return;
+    try {
+      const res = await api.post('/admin/state-heads/clear', { state });
+      toast.success(res.data?.message || 'State head cleared');
+      fetchStateHeads();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to clear state head');
     }
   };
 
@@ -2845,6 +2872,58 @@ export default function Admin() {
               <BtnSecondary onClick={handleSlotsDrawReset}>Reset to default (3h)</BtnSecondary>
               <BtnSecondary onClick={handleSlotsClearCooldowns}>Clear slots cooldowns</BtnSecondary>
             </div>
+          </div>
+        )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Building2}
+          title="State Heads"
+          badge={stateHeads?.has_duplicates ? <span className="text-[10px] font-heading text-red-400">Duplicates found!</span> : null}
+          isCollapsed={collapsed.stateHeads}
+          onToggle={() => { toggleSection('stateHeads'); if (collapsed.stateHeads && !stateHeads) fetchStateHeads(); }}
+        />
+        {!collapsed.stateHeads && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground">Manage which family controls each state. A family can only be head of ONE state.</p>
+            {stateHeadsLoading ? (
+              <p className="text-xs text-mutedForeground">Loading...</p>
+            ) : stateHeads ? (
+              <div className="space-y-2">
+                {stateHeads.duplicates?.length > 0 && (
+                  <div className="rounded-md border border-red-500/30 bg-red-500/10 p-2">
+                    <p className="text-[10px] font-heading font-bold text-red-400 uppercase tracking-wider mb-1">Duplicate Detected</p>
+                    {stateHeads.duplicates.map((d) => (
+                      <p key={d.family_id} className="text-xs text-red-300">
+                        <strong>{d.family_name}</strong> is head of {d.states_headed.join(', ')} ({d.count} states)
+                      </p>
+                    ))}
+                  </div>
+                )}
+                <div className="grid gap-1.5">
+                  {Object.entries(stateHeads.state_heads || {}).map(([state, info]) => (
+                    <div key={state} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-zinc-800/50 border border-zinc-700/30">
+                      <div className="min-w-0">
+                        <span className="text-xs font-heading font-bold text-foreground">{state}</span>
+                        {info ? (
+                          <span className="text-[10px] text-primary ml-2">[{info.family_tag}] {info.family_name}</span>
+                        ) : (
+                          <span className="text-[10px] text-mutedForeground ml-2">Unclaimed</span>
+                        )}
+                      </div>
+                      {info && (
+                        <BtnDanger onClick={() => handleClearStateHead(state)}>Clear</BtnDanger>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <BtnSecondary onClick={fetchStateHeads}>Refresh</BtnSecondary>
+              </div>
+            ) : (
+              <BtnPrimary onClick={fetchStateHeads}>Load State Heads</BtnPrimary>
+            )}
           </div>
         )}
         </div>
