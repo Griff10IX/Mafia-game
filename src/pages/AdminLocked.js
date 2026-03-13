@@ -11,8 +11,28 @@ export default function AdminLocked() {
   const [loading, setLoading] = useState(true);
   const [lockedMessageByUser, setLockedMessageByUser] = useState({});
   const [sendingMessageTo, setSendingMessageTo] = useState(null);
+  const [accessChecked, setAccessChecked] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/admin/check');
+        if (cancelled) return;
+        if (!res.data?.is_admin && !res.data?.is_moderator) {
+          navigate('/dashboard', { replace: true });
+          return;
+        }
+        setAccessChecked(true);
+      } catch {
+        if (!cancelled) navigate('/dashboard', { replace: true });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [navigate]);
 
   const fetchLockedAccounts = async () => {
+    if (!accessChecked) return;
     setLoading(true);
     try {
       const res = await api.get('/admin/locked-accounts');
@@ -31,8 +51,8 @@ export default function AdminLocked() {
   };
 
   useEffect(() => {
-    fetchLockedAccounts();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (accessChecked) fetchLockedAccounts();
+  }, [accessChecked]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUnlockAccount = async (username) => {
     try {
@@ -63,7 +83,7 @@ export default function AdminLocked() {
     }
   };
 
-  if (loading && lockedAccounts.length === 0) {
+  if (!accessChecked || (loading && lockedAccounts.length === 0)) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />

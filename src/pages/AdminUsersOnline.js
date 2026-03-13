@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Users, RefreshCw, ShieldAlert, ExternalLink } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -21,11 +21,32 @@ function formatDateTime(iso) {
 }
 
 export default function AdminUsersOnline() {
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [accessChecked, setAccessChecked] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/admin/check');
+        if (cancelled) return;
+        if (!res.data?.is_admin && !res.data?.is_moderator) {
+          navigate('/dashboard', { replace: true });
+          return;
+        }
+        setAccessChecked(true);
+      } catch {
+        if (!cancelled) navigate('/dashboard', { replace: true });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [navigate]);
 
   const fetchLive = async () => {
+    if (!accessChecked) return;
     setLoading(true);
     setError(null);
     try {
@@ -37,6 +58,8 @@ export default function AdminUsersOnline() {
       setUsers([]);
       if (e.response?.status === 403) {
         toast.error('Admin or moderator access required');
+        navigate('/dashboard', { replace: true });
+        return;
       }
     } finally {
       setLoading(false);
@@ -44,18 +67,20 @@ export default function AdminUsersOnline() {
   };
 
   useEffect(() => {
-    fetchLive();
-    const interval = setInterval(fetchLive, 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+    if (accessChecked) {
+      fetchLive();
+      const interval = setInterval(fetchLive, 60 * 1000);
+      return () => clearInterval(interval);
+    }
+  }, [accessChecked]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (loading && users.length === 0) {
+  if (!accessChecked || (loading && users.length === 0)) {
     return (
       <div className={`space-y-3 ${styles.pageContent}`}>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
           <Users size={22} className="text-primary/40 animate-pulse" />
           <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.2em]">Loading live users…</span>
+          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.2em]">Loading…</span>
         </div>
       </div>
     );

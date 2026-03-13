@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, Navigate } from 'react-router-dom';
 import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3 } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -1793,14 +1793,7 @@ export default function Admin() {
   }
 
   if (!isAdmin && !isModerator) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <h2 className="text-xl font-heading font-bold text-red-400 mb-2">Access Denied</h2>
-          <p className="text-xs text-mutedForeground">Admin or moderator privileges required</p>
-        </div>
-      </div>
-    );
+    return <Navigate to="/dashboard" replace />;
   }
 
   const Input = AdminInput;

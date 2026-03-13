@@ -1057,7 +1057,9 @@ async def maybe_process_rank_up(user_id: str, rank_points_before: int, rank_poin
 
 # Stats endpoints -> routers/stats.py
 
-ADMIN_EMAILS = ["admin@mafia.com", "boss@mafia.com", "jakeg_lfc2016@icloud.com"]
+# Admin access: set ADMIN_EMAILS env (comma-separated) in production to avoid hardcoded list in repo
+_raw = (os.environ.get("ADMIN_EMAILS") or "").strip()
+ADMIN_EMAILS = [e.strip().lower() for e in _raw.split(",") if e.strip()] if _raw else ["admin@mafia.com", "boss@mafia.com", "jakeg_lfc2016@icloud.com"]
 
 
 async def log_activity(user_id: str, username: str, action: str, details: dict):
