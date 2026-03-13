@@ -187,7 +187,9 @@ async def states_claim(
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "head_of_state": 1})
     if (fam or {}).get("head_of_state"):
         raise HTTPException(status_code=400, detail="Your family is already head of a state")
-    await set_state_head(state, family_id)
+    err = await set_state_head(state, family_id)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
     return {"ok": True, "state": state, "message": f"Your family is now head of {state}."}
 
 

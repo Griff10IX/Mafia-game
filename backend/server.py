@@ -222,24 +222,23 @@ async def get_head_family_id_for_state(state: str) -> Optional[str]:
     return heads.get((state or "").strip())
 
 
-async def set_state_head(state: str, family_id: Optional[str]) -> None:
+async def set_state_head(state: str, family_id: Optional[str], force: bool = False) -> str:
     """Set or clear the head family for a state. Updates game_settings and family head_of_state.
-    A family can only be head of ONE state at a time - if they're already head elsewhere, clear that first.
+    A family can only be head of ONE state - blocks if they already head another (unless force=True for admin cleanup).
+    Returns error message string if blocked, or empty string on success.
     """
     state = (state or "").strip()
     if state not in (STATES or []):
-        return
+        return "Invalid state"
     heads = await get_state_heads()
     old_fid = heads.get(state)
     fid = (family_id or "").strip() or None
 
-    # If setting a new family as head, first clear them from any other state they might head
-    if fid:
+    # Block if family already heads another state (unless force=True for admin cleanup)
+    if fid and not force:
         for other_state, other_fid in heads.items():
             if other_fid == fid and other_state != state:
-                # This family is head of another state - clear it
-                heads[other_state] = None
-                await db.families.update_one({"id": fid}, {"$set": {"head_of_state": None}})
+                return f"This family is already head of {other_state}. A family can only control one state."
 
     new_value = {**heads, state: fid}
     await db.game_settings.update_one(
@@ -251,6 +250,7 @@ async def set_state_head(state: str, family_id: Optional[str]) -> None:
         await db.families.update_one({"id": old_fid}, {"$set": {"head_of_state": None}})
     if fid:
         await db.families.update_one({"id": fid}, {"$set": {"head_of_state": state}})
+    return ""
 
 
 # Game-wide daily events (rotate by UTC date). Multipliers default 1.0 when not set.

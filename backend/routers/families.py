@@ -348,7 +348,10 @@ async def cleanup_dead_families():
                 )
             head_state = (fam.get("head_of_state") or "").strip()
             if head_state:
-                await set_state_head(head_state, winner_id if winner_id else None)
+                # If winner's family is already head of another state, just clear this state
+                err = await set_state_head(head_state, winner_id if winner_id else None)
+                if err and winner_id:
+                    await set_state_head(head_state, None)  # Clear the state instead
             await db.family_members.delete_many({"family_id": family_id})
             await db.families.delete_one({"id": family_id})
 

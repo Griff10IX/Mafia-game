@@ -3733,3 +3733,90 @@ def register(router):
         else:
             raise HTTPException(status_code=400, detail=f"Unknown action: {req.action}")
         return {"message": f"Bulk '{req.action}' applied to {affected} user(s)", "affected": affected}
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # State Heads Admin (manage which family controls each state)
+    # ─────────────────────────────────────────────────────────────────────────────
+
+    @router.get("/admin/state-heads")
+    async def admin_get_state_heads(current_user: dict = Depends(get_current_user)):
+        """Get all state heads and detect families that are head of multiple states."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        get_state_heads = srv.get_state_heads
+        heads = await get_state_heads()
+
+        # Get family names for each head
+        family_ids = [fid for fid in heads.values() if fid]
+        families = {}
+        if family_ids:
+            fam_docs = await db.families.find({"id": {"$in": family_ids}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "head_of_state": 1}).to_list(len(family_ids))
+            families = {f["id"]: f for f in fam_docs}
+
+        # Build result with family info
+        result = {}
+        family_state_count = {}
+        for state, fid in heads.items():
+            if fid:
+                fam = families.get(fid, {})
+                result[state] = {
+                    "family_id": fid,
+                    "family_name": fam.get("name", "?"),
+                    "family_tag": fam.get("tag", "?"),
+                    "family_head_of_state_field": fam.get("head_of_state"),
+                }
+                family_state_count[fid] = family_state_count.get(fid, 0) + 1
+            else:
+                result[state] = None
+
+        # Detect duplicates (families that are head of multiple states)
+        duplicates = {fid: count for fid, count in family_state_count.items() if count > 1}
+        duplicate_families = []
+        for fid, count in duplicates.items():
+            fam = families.get(fid, {})
+            states_headed = [s for s, f in heads.items() if f == fid]
+            duplicate_families.append({
+                "family_id": fid,
+                "family_name": fam.get("name", "?"),
+                "states_headed": states_headed,
+                "count": count,
+            })
+
+        return {
+            "state_heads": result,
+            "duplicates": duplicate_families,
+            "has_duplicates": len(duplicate_families) > 0,
+        }
+
+    class ClearStateHeadRequest(BaseModel):
+        state: str
+
+    @router.post("/admin/state-heads/clear")
+    async def admin_clear_state_head(req: ClearStateHeadRequest, current_user: dict = Depends(get_current_user)):
+        """Clear the head family from a specific state."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        state = (req.state or "").strip()
+        if state not in STATES:
+            raise HTTPException(status_code=400, detail=f"Invalid state. Valid: {', '.join(STATES)}")
+
+        set_state_head = srv.set_state_head
+        get_state_heads = srv.get_state_heads
+
+        heads = await get_state_heads()
+        old_fid = heads.get(state)
+        if not old_fid:
+            return {"message": f"{state} has no head family", "state": state, "cleared": False}
+
+        old_fam = await db.families.find_one({"id": old_fid}, {"_id": 0, "name": 1})
+        await set_state_head(state, None)
+
+        return {
+            "message": f"Cleared {(old_fam or {}).get('name', old_fid)} from {state}",
+            "state": state,
+            "cleared_family_id": old_fid,
+            "cleared_family_name": (old_fam or {}).get("name", "?"),
+            "cleared": True,
+        }
