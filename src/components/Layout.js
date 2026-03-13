@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2 } from 'lucide-react';
-import api, { getApiErrorMessage } from '../utils/api';
+import api, { getApiErrorMessage, onCooldownChange } from '../utils/api';
 import { setCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -295,6 +295,7 @@ export default function Layout({ children }) {
   const [userSearchExpanded, setUserSearchExpanded] = useState(false);
   const [userSearchLoading, setUserSearchLoading] = useState(false);
   const [pageLocks, setPageLocks] = useState({});
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const userSearchRef = useRef(null);
   const userSearchInputRef = useRef(null);
   const userSearchDebounceRef = useRef(null);
@@ -324,6 +325,8 @@ export default function Layout({ children }) {
         : i
     );
   }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount]);
+
+  useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
   useEffect(() => {
     const onTopBarPrefs = () => {
@@ -1969,6 +1972,31 @@ export default function Layout({ children }) {
       )}
 
       <ThemePicker open={themePickerOpen} onClose={() => setThemePickerOpen(false)} />
+
+      {cooldownSeconds > 0 && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 99999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+        }}>
+          <div style={{
+            textAlign: 'center', padding: '32px 48px', borderRadius: 16,
+            border: '1px solid rgba(var(--noir-primary-rgb), 0.3)',
+            backgroundColor: 'rgba(10,10,10,0.95)',
+            boxShadow: '0 0 40px rgba(0,0,0,0.6)',
+          }}>
+            <div style={{ fontSize: 48, fontFamily: 'var(--font-heading, "Cinzel", serif)', fontWeight: 700, color: 'var(--noir-primary)', lineHeight: 1 }}>
+              {cooldownSeconds}s
+            </div>
+            <div style={{ marginTop: 12, fontSize: 14, fontFamily: 'var(--font-heading, "Cinzel", serif)', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--noir-foreground)', opacity: 0.85 }}>
+              Cooldown
+            </div>
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--noir-muted)' }}>
+              You're clicking too fast. Please wait.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

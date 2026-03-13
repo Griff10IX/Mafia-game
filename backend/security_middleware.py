@@ -1,17 +1,38 @@
 # Security middleware for FastAPI
 from datetime import datetime, timezone
+from collections import defaultdict
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from fastapi import Request
 import logging
 import hashlib
 import os
+import random
 from jose import jwt, JWTError
 
 logger = logging.getLogger(__name__)
 
 # Master toggle - when False the entire security middleware is bypassed (off by default)
 SECURITY_MIDDLEWARE_ENABLED = False
+
+# Track consecutive 429 hits per user for escalating cooldowns (10-30s)
+_user_429_hits: dict[str, list[float]] = defaultdict(list)
+_COOLDOWN_WINDOW = 120  # seconds to track hits within
+_COOLDOWN_MIN = 10
+_COOLDOWN_MAX = 30
+
+
+def _get_cooldown_seconds(user_id: str) -> int:
+    """Escalating cooldown: more consecutive 429s in the window = longer cooldown (10-30s)."""
+    now = datetime.now(timezone.utc).timestamp()
+    cutoff = now - _COOLDOWN_WINDOW
+    _user_429_hits[user_id] = [t for t in _user_429_hits[user_id] if t > cutoff]
+    _user_429_hits[user_id].append(now)
+    hits = len(_user_429_hits[user_id])
+    if hits <= 1:
+        return _COOLDOWN_MIN
+    fraction = min((hits - 1) / 8.0, 1.0)
+    return int(_COOLDOWN_MIN + fraction * (_COOLDOWN_MAX - _COOLDOWN_MIN))
 
 
 class SecurityMiddleware(BaseHTTPMiddleware):
@@ -126,18 +147,28 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         try:
             # 1. Check for request spam (10+ req/sec)
             if await self.check_request_spam(user_id, username, self.db):
-                logger.warning(f"SPAM BLOCKED: {username} - {path}")
+                cooldown = _get_cooldown_seconds(user_id)
+                logger.warning(f"SPAM BLOCKED: {username} - {path} (cooldown {cooldown}s)")
                 return JSONResponse(
                     status_code=429,
-                    content={"detail": "Too many requests. Please slow down."}
+                    content={
+                        "detail": f"Too many requests. Please wait {cooldown} seconds.",
+                        "is_cooldown": True,
+                        "cooldown_seconds": cooldown,
+                    }
                 )
             # 2. Check endpoint-specific rate limits (if enabled for this endpoint)
             # Only for state-changing methods so GETs (e.g. dice config/ownership) can load in parallel.
             if request.method not in ("GET", "HEAD", "OPTIONS") and await self.check_endpoint_rate_limit(path, user_id, username, self.db):
-                logger.warning(f"RATE LIMIT: {username} - {path}")
+                cooldown = _get_cooldown_seconds(user_id)
+                logger.warning(f"RATE LIMIT: {username} - {path} (cooldown {cooldown}s)")
                 return JSONResponse(
                     status_code=429,
-                    content={"detail": "Rate limit exceeded for this action. Please wait."}
+                    content={
+                        "detail": f"Rate limit exceeded. Please wait {cooldown} seconds.",
+                        "is_cooldown": True,
+                        "cooldown_seconds": cooldown,
+                    }
                 )
             
         except Exception as e:

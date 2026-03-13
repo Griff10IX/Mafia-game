@@ -93,26 +93,40 @@ const StatCard = ({ title, icon: Icon, rows, delay = 0 }) => {
   );
 };
 
-export default function MyStats() {
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+let _cachedStats = null;
+let _lastFetchTime = 0;
+const REFRESH_INTERVAL = 60_000;
 
-  const fetchStats = useCallback(() => {
-    setLoading(true);
+export default function MyStats() {
+  const [stats, setStats] = useState(_cachedStats);
+  const [loading, setLoading] = useState(!_cachedStats);
+
+  const fetchStats = useCallback((silent = false) => {
+    if (!silent) setLoading(true);
     api
       .get('/stats/me')
       .then((res) => {
-        if (res?.data) setStats(res.data);
+        if (res?.data) {
+          _cachedStats = res.data;
+          _lastFetchTime = Date.now();
+          setStats(res.data);
+        }
       })
       .catch((e) => {
-        setStats(null);
-        toast.error(e.response?.data?.detail || 'Failed to load your stats');
+        if (!silent) toast.error(e.response?.data?.detail || 'Failed to load your stats');
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (!silent) setLoading(false); });
   }, []);
 
   useEffect(() => {
-    fetchStats();
+    const stale = Date.now() - _lastFetchTime > REFRESH_INTERVAL;
+    if (!_cachedStats) {
+      fetchStats(false);
+    } else if (stale) {
+      fetchStats(true);
+    }
+    const id = setInterval(() => fetchStats(true), REFRESH_INTERVAL);
+    return () => clearInterval(id);
   }, [fetchStats]);
 
   if (loading && !stats) return <LoadingSpinner />;

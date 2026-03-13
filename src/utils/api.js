@@ -11,6 +11,41 @@ const api = axios.create({
   baseURL: API,
 });
 
+// ── Rate-limit cooldown state (shared across the app) ──
+let _cooldownUntil = 0;        // timestamp (ms) when cooldown expires
+let _cooldownTimerId = null;
+const _cooldownListeners = new Set();
+
+export function onCooldownChange(fn) {
+  _cooldownListeners.add(fn);
+  return () => _cooldownListeners.delete(fn);
+}
+function _notifyCooldown(secondsLeft) {
+  _cooldownListeners.forEach(fn => { try { fn(secondsLeft); } catch(_){} });
+}
+function _startCooldown(seconds) {
+  const now = Date.now();
+  const newExpiry = now + seconds * 1000;
+  if (newExpiry <= _cooldownUntil) return;
+  _cooldownUntil = newExpiry;
+  if (_cooldownTimerId) clearInterval(_cooldownTimerId);
+  _notifyCooldown(seconds);
+  _cooldownTimerId = setInterval(() => {
+    const left = Math.ceil((_cooldownUntil - Date.now()) / 1000);
+    if (left <= 0) {
+      clearInterval(_cooldownTimerId);
+      _cooldownTimerId = null;
+      _cooldownUntil = 0;
+      _notifyCooldown(0);
+    } else {
+      _notifyCooldown(left);
+    }
+  }, 1000);
+}
+export function getCooldownRemaining() {
+  return Math.max(0, Math.ceil((_cooldownUntil - Date.now()) / 1000));
+}
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -39,6 +74,16 @@ export const AUTH_ERROR_KEY = 'auth_profile_error';
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // ── 429 Rate Limit → cooldown (NEVER log out) ──
+    if (error.response?.status === 429) {
+      const data = error.response.data || {};
+      const seconds = data.cooldown_seconds || 15;
+      _startCooldown(seconds);
+      const detail = typeof data.detail === 'string' ? data.detail : `Rate limited. Please wait ${seconds} seconds.`;
+      error.response.data = { ...data, detail, is_cooldown: true, cooldown_seconds: seconds };
+      return Promise.reject(error);
+    }
+
     if ((error.response?.status === 401 || error.response?.status === 403) && !hasRedirectedOnAuthFailure && !isPublicPath()) {
       const isAuthMe = error.config?.url?.includes('/auth/me');
       if (error.response?.status === 401 || (error.response?.status === 403 && isAuthMe)) {

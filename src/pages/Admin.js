@@ -3906,6 +3906,10 @@ export default function Admin() {
                     <div className="font-bold text-foreground">${(economyOverview.avg_money ?? 0).toLocaleString()}</div>
                   </div>
                   <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                    <div className="text-mutedForeground uppercase">Avg Points / Player</div>
+                    <div className="font-bold text-primary">{(economyOverview.avg_points ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
                     <div className="text-mutedForeground uppercase">Alive Players</div>
                     <div className="font-bold text-foreground">{(economyOverview.player_count ?? 0).toLocaleString()}</div>
                   </div>
@@ -3917,7 +3921,20 @@ export default function Admin() {
                       {economyOverview.top5_richest.map((u, i) => (
                         <div key={u.username || i} className="flex justify-between px-1">
                           <span className="font-bold text-foreground">{i + 1}. {u.username}</span>
-                          <span className="text-mutedForeground">${(u.money ?? 0).toLocaleString()} cash · ${(u.bank ?? 0).toLocaleString()} banked</span>
+                          <span className="text-mutedForeground">${(u.money ?? 0).toLocaleString()} cash · ${(u.bank ?? 0).toLocaleString()} banked · {(u.points ?? 0).toLocaleString()} pts</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {economyOverview.top5_points?.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-heading text-mutedForeground uppercase mb-1">Top 5 by Points</div>
+                    <div className="space-y-0.5 text-[10px] font-heading">
+                      {economyOverview.top5_points.map((u, i) => (
+                        <div key={u.username || i} className="flex justify-between px-1">
+                          <span className="font-bold text-foreground">{i + 1}. {u.username}</span>
+                          <span className="text-primary">{(u.points ?? 0).toLocaleString()} pts</span>
                         </div>
                       ))}
                     </div>

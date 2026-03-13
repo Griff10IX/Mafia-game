@@ -3561,15 +3561,25 @@ def register(router):
             {"is_dead": {"$ne": True}},
             {"_id": 0, "username": 1, "money": 1, "bank_balance": 1, "points": 1},
         ).sort("money", -1).limit(5).to_list(5)
+        top5_points = await db.users.find(
+            {"is_dead": {"$ne": True}},
+            {"_id": 0, "username": 1, "points": 1},
+        ).sort("points", -1).limit(5).to_list(5)
+        player_count = stats.get("player_count", 1) or 1
         return {
             "total_money": stats.get("total_money", 0),
             "total_bank": stats.get("total_bank", 0),
             "total_points": stats.get("total_points", 0),
             "avg_money": round(stats.get("avg_money", 0)),
+            "avg_points": round(stats.get("total_points", 0) / player_count),
             "player_count": stats.get("player_count", 0),
             "top5_richest": [
-                {"username": u.get("username", "?"), "money": u.get("money", 0), "bank": u.get("bank_balance", 0)}
+                {"username": u.get("username", "?"), "money": u.get("money", 0), "bank": u.get("bank_balance", 0), "points": u.get("points", 0)}
                 for u in (top5 or [])
+            ],
+            "top5_points": [
+                {"username": u.get("username", "?"), "points": u.get("points", 0)}
+                for u in (top5_points or [])
             ],
         }
 

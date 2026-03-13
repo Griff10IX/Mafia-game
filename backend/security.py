@@ -607,7 +607,7 @@ async def get_security_summary(db, limit: int = 100, flag_type: str = None) -> d
     if flag_type:
         query["flag_type"] = flag_type
     
-    flags = await db.security_flags.find(query).sort("created_at", -1).limit(limit).to_list(limit)
+    flags = await db.security_flags.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
     
     # Count by type
     type_counts = {}
