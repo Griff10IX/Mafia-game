@@ -180,9 +180,10 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
     for player in real_players:
         rank_id, rank_name = get_rank_info(player.get("rank_points", 0))
         reward_cash = int((player.get("bust_reward_cash") or 0) or 0)
+        username = (player.get("username") or "").strip() or "?"
         players_data.append(
             {
-                "username": player["username"],
+                "username": username,
                 "rank_name": rank_name,
                 "is_npc": False,
                 "is_self": player["id"] == current_user["id"],
@@ -493,7 +494,7 @@ async def get_jail_stats(current_user: dict = Depends(get_current_user)):
         return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
     def _24h():
         arr = doc.get("last_24h") or []
-        return int(arr[0]["profit"]) if arr else 0
+        return int(arr[0].get("profit", 0)) if arr else 0
     def _week():
         arr = doc.get("last_7_days") or []
         return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
@@ -522,7 +523,23 @@ async def get_jail_status(current_user: dict = Depends(get_current_user)):
     }
     if not current_user.get("in_jail"):
         return {"in_jail": False, **base}
-    jail_until = datetime.fromisoformat(current_user["jail_until"])
+    jail_until_iso = current_user.get("jail_until")
+    if not jail_until_iso:
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},
+        )
+        return {"in_jail": False, **base}
+    try:
+        jail_until = datetime.fromisoformat(str(jail_until_iso).strip().replace("Z", "+00:00"))
+        if jail_until.tzinfo is None:
+            jail_until = jail_until.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},
+        )
+        return {"in_jail": False, **base}
     now = datetime.now(timezone.utc)
     if jail_until <= now:
         await db.users.update_one(

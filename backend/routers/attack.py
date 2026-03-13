@@ -56,6 +56,20 @@ from routers.armoury import _best_weapon_for_user, _get_weapon_mastery_pct, MAST
 from routers.families import resolve_family_id
 
 
+def _parse_iso_datetime(val):
+    """Parse datetime from DB string; return None if missing/invalid. Normalize to UTC if naive."""
+    if val is None:
+        return None
+    if hasattr(val, "year"):
+        return val.replace(tzinfo=timezone.utc) if val.tzinfo is None else val
+    try:
+        s = str(val).strip().replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    except (ValueError, TypeError):
+        return None
+
+
 def _request_meta(request: Optional[Request]) -> dict:
     """Build dict of user_agent, client_ip, attacker_is_bot, and attacker_bot_label for attack attempt logging."""
     out = {}
@@ -470,12 +484,13 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
     note = (request.note or "").strip()
     note = note[:80] if note else None
     target_state = target.get("current_state") if target.get("current_state") in STATES else random.choice(STATES)
+    target_username = (target.get("username") or "").strip() or "?"
     await db.attacks.insert_one({
         "id": attack_id,
         "attacker_id": current_user["id"],
         "attacker_username": current_user.get("username") or "?",
         "target_id": target["id"],
-        "target_username": target["username"],
+        "target_username": target_username,
         "note": note,
         "status": "searching",
         "search_started": now.isoformat(),
@@ -528,7 +543,9 @@ async def get_attack_status(
                     await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
                     raise HTTPException(status_code=404, detail="No active attack")
     now = datetime.now(timezone.utc)
-    found_time = datetime.fromisoformat(attack["found_at"])
+    found_time = _parse_iso_datetime(attack.get("found_at"))
+    if found_time is None:
+        found_time = now
     if attack["status"] == "searching" and now >= found_time:
         target_user = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0, "current_state": 1})
         new_location = (target_user.get("current_state") if target_user and target_user.get("current_state") in STATES else None) or attack.get("planned_location_state") or random.choice(STATES)
@@ -548,7 +565,7 @@ async def get_attack_status(
     return AttackStatusResponse(
         attack_id=attack["id"],
         status=attack["status"],
-        target_username=attack["target_username"],
+        target_username=attack.get("target_username") or "?",
         location_state=attack.get("location_state"),
         can_travel=can_travel,
         can_attack=can_attack,
@@ -595,7 +612,9 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
                     {"$set": {"expires_at": (started + timedelta(hours=24)).isoformat()}}
                 )
         if attack["status"] == "searching":
-            found_time = datetime.fromisoformat(attack["found_at"])
+            found_time = _parse_iso_datetime(attack.get("found_at"))
+            if found_time is None:
+                found_time = now
             if now >= found_time:
                 target_user = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0, "current_state": 1})
                 new_location = (target_user.get("current_state") if target_user and target_user.get("current_state") in STATES else None) or attack.get("planned_location_state") or random.choice(STATES)
@@ -611,7 +630,7 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
         item = {
             "attack_id": attack["id"],
             "status": attack["status"],
-            "target_username": attack["target_username"],
+            "target_username": attack.get("target_username") or "?",
             "note": attack.get("note"),
             "location_state": attack.get("location_state") if attack["status"] == "found" else None,
             "search_started": attack.get("search_started"),
@@ -654,11 +673,14 @@ async def travel_to_target(request: AttackIdRequest, current_user: dict = Depend
     )
     if not attack:
         raise HTTPException(status_code=404, detail="No target found to travel to")
+    location_state = attack.get("location_state")
+    if not location_state:
+        raise HTTPException(status_code=400, detail="Target location unknown")
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$set": {"current_state": attack["location_state"]}}
+        {"$set": {"current_state": location_state}}
     )
-    return {"message": f"Traveled to {attack['location_state']}"}
+    return {"message": f"Traveled to {location_state}"}
 
 async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(get_current_user_verified)):
     user_filter = _find_user_by_username_case_insensitive(request.target_username)

@@ -606,14 +606,16 @@ const TravelModal = ({
   loading, 
   countdown, 
   onTravel 
-}) => (
+}) => {
+  const dest = destination ?? 'Unknown';
+  return (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
     <div className={`${styles.panel} border-2 border-primary/30 rounded-md shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
         <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1">
           <MapPin size={14} />
-          Travel to {destination}
+          Travel to {dest}
         </h2>
         <button
           type="button"
@@ -630,7 +632,7 @@ const TravelModal = ({
           <div className="text-center py-4">
             <div className="text-2xl mb-2">🚗</div>
             <p className="text-[11px] font-heading font-bold text-primary mb-1">
-              Traveling to {destination}...
+              Traveling to {dest}...
             </p>
             <p className="text-2xl font-heading font-bold text-foreground tabular-nums">
               {countdown}s
@@ -707,7 +709,8 @@ const TravelModal = ({
       </div>
     </div>
   </div>
-);
+  );
+};
 
 const CalcModal = ({
   isOpen,
@@ -1023,7 +1026,14 @@ export default function Attack() {
         setUserMolotovs(meRes.data?.molotovs ?? 0);
         setEvent(eventsRes.data?.event ?? null);
         setEventsEnabled(!!eventsRes.data?.events_enabled);
-      } catch (_) {}
+      } catch (_) {
+        setAttacks([]);
+        setInflationPct(0);
+        setUserBullets(0);
+        setUserMolotovs(0);
+        setEvent(null);
+        setEventsEnabled(false);
+      }
     };
     load();
     const interval = setInterval(refreshAttacks, 10000);

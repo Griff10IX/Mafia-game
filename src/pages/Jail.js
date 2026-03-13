@@ -59,7 +59,7 @@ const JailStatusCard = ({
             You Are In Jail
           </h2>
           <div className="text-xl font-heading font-bold text-red-400 mb-1.5 tabular-nums">
-            {secondsRemaining}s
+            {secondsRemaining ?? 0}s
           </div>
           
           {/* Bust reward input */}
@@ -218,7 +218,7 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPla
       <div className="flex items-center gap-2 text-[10px] font-heading shrink-0">
         <span className="text-primary font-bold">+{rp} RP</span>
         <span className="text-mutedForeground w-12 text-right">
-          {player.bust_reward_cash > 0 ? `$${Number(player.bust_reward_cash).toLocaleString()}` : '—'}
+          {(player.bust_reward_cash ?? 0) > 0 ? `$${Number(player.bust_reward_cash ?? 0).toLocaleString()}` : '—'}
         </span>
       </div>
 
@@ -313,14 +313,17 @@ export default function Jail() {
         api.get('/jail/stats').catch(() => ({ data: {} })),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
       ]);
-      setJailStatus(jailRes.data);
-      setJailedPlayers(playersRes.data.players);
+      setJailStatus(jailRes.data || { in_jail: false });
+      setJailedPlayers(Array.isArray(playersRes.data?.players) ? playersRes.data.players : []);
       setJailStats(statsRes.data || {});
       const ar = autoRankRes.data || {};
       setAutoRankJailDisabled(!!(ar.auto_rank_enabled && ar.auto_rank_bust_every_5_sec));
     } catch (error) {
       console.error('Failed to load jail data:', error);
       toast.error('Failed to load jail data');
+      setJailStatus({ in_jail: false });
+      setJailedPlayers([]);
+      setJailStats({ count_today: 0, count_week: 0, success_today: 0, success_week: 0, profit_today: 0, profit_24h: 0, profit_week: 0 });
     } finally {
       setInitialLoading(false);
     }
@@ -329,7 +332,7 @@ export default function Jail() {
   const fetchJailPlayers = async () => {
     try {
       const res = await api.get('/jail/players');
-      setJailedPlayers(res.data.players);
+      setJailedPlayers(Array.isArray(res.data?.players) ? res.data.players : []);
     } catch (error) {
       // Silent fail — players list will refresh on next full fetch
       console.error('Failed to refresh jail players:', error);
@@ -588,7 +591,7 @@ export default function Jail() {
           <div className="p-1.5 space-y-0.5">
             {jailedPlayers.map((player, index) => (
               <JailedPlayerRow
-                key={`${player.username}-${index}`}
+                key={player.username != null ? `${String(player.username)}-${index}` : `player-${index}`}
                 player={player}
                 index={index}
                 onBust={bustOut}

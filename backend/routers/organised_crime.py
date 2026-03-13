@@ -384,7 +384,8 @@ async def run_heist(
         
         if goes_to_jail:
             # UNBREAKABLE JAIL for 60 seconds
-            jail_until = now + timedelta(seconds=job["jail_time"])
+            jail_time_sec = int(job.get("jail_time", 45))
+            jail_until = now + timedelta(seconds=jail_time_sec)
             unbreakable_until = now + timedelta(seconds=60)
             
             await db.users.update_one(
@@ -398,7 +399,7 @@ async def run_heist(
                 }
             )
             
-            msg = random.choice(OC_HEIST_FAIL_CAUGHT_MESSAGES).format(jail_time=job["jail_time"])
+            msg = random.choice(OC_HEIST_FAIL_CAUGHT_MESSAGES).format(jail_time=jail_time_sec)
             return HeistResponse(
                 success=False,
                 message=msg,

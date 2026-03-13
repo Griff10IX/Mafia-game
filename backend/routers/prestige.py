@@ -44,19 +44,19 @@ def register(router):
             all_levels.append(
                 {
                     "level": lvl,
-                    "name": cfg["name"],
+                    "name": cfg.get("name", ""),
                     "godfather_req": level_req,
-                    "crime_mult": cfg["crime_mult"],
-                    "oc_mult": cfg["oc_mult"],
-                    "gta_rare_boost": cfg["gta_rare_boost"],
-                    "npc_mult": cfg["npc_mult"],
+                    "crime_mult": cfg.get("crime_mult", 1.0),
+                    "oc_mult": cfg.get("oc_mult", 1.0),
+                    "gta_rare_boost": cfg.get("gta_rare_boost", 0),
+                    "npc_mult": cfg.get("npc_mult", 1.0),
                     "mission_reward_mult": cfg.get("mission_reward_mult", 1.0),
                 }
             )
 
         return {
             "prestige_level": level,
-            "prestige_name": PRESTIGE_CONFIGS[level]["name"] if level > 0 else None,
+            "prestige_name": PRESTIGE_CONFIGS.get(level, {}).get("name") if level > 0 else None,
             "rank_points": rank_points,
             "rank_id": rank_id,
             "rank_name": rank_name,

@@ -17,9 +17,17 @@ def _parse_iso_datetime(val):
     if val is None:
         return None
     if hasattr(val, "year"):
+        if val.tzinfo is None:
+            return val.replace(tzinfo=timezone.utc)
         return val
-    s = str(val).strip().replace("Z", "+00:00")
-    return datetime.fromisoformat(s)
+    try:
+        s = str(val).strip().replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (ValueError, TypeError):
+        return None
 
 
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

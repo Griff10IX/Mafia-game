@@ -473,6 +473,8 @@ export default function OrganisedCrime() {
       }
     } catch (e) {
       toast.error('Failed to load Organised Crime data');
+      setConfig({ jobs: [], roles: [] });
+      setStatus(null);
     } finally {
       setLoading(false);
     }
@@ -654,10 +656,10 @@ export default function OrganisedCrime() {
         weapons: status.pending_heist.weapons || 'npc',
         explosives: status.pending_heist.explosives || 'npc',
         hacker: status.pending_heist.hacker || 'npc',
-        driver_pct: status.pending_heist.driver_pct,
-        weapons_pct: status.pending_heist.weapons_pct,
-        explosives_pct: status.pending_heist.explosives_pct,
-        hacker_pct: status.pending_heist.hacker_pct,
+        driver_pct: status.pending_heist.driver_pct ?? 25,
+        weapons_pct: status.pending_heist.weapons_pct ?? 25,
+        explosives_pct: status.pending_heist.explosives_pct ?? 25,
+        hacker_pct: status.pending_heist.hacker_pct ?? 25,
         pending_heist_id: status.pending_heist.id,
       });
       

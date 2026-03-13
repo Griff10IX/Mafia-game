@@ -91,10 +91,10 @@ function LevelCard({ row, isCurrent, isUnlocked }) {
       {/* Stats */}
       <div className="flex flex-col gap-1 mt-0.5 pt-2 border-t border-zinc-800/60">
         {[
-          ['Crime', `+${Math.round((row.crime_mult - 1) * 100)}%`],
-          ['OC',    `+${Math.round((row.oc_mult    - 1) * 100)}%`],
-          ['GTA',   `+${row.gta_rare_boost}×`],
-          ['NPC',   `+${Math.round((row.npc_mult   - 1) * 100)}%`],
+          ['Crime', `+${Math.round(((row.crime_mult ?? 1) - 1) * 100)}%`],
+          ['OC',    `+${Math.round(((row.oc_mult ?? 1) - 1) * 100)}%`],
+          ['GTA',   `+${row.gta_rare_boost ?? 0}×`],
+          ['NPC',   `+${Math.round(((row.npc_mult ?? 1) - 1) * 100)}%`],
         ].map(([label, val]) => (
           <div key={label} className="flex justify-between items-center text-[8px] font-heading">
             <span className="text-zinc-600">{label}</span>
@@ -119,6 +119,7 @@ export default function Prestige() {
       setInfo(res.data);
     } catch {
       toast.error('Failed to load prestige info');
+      setInfo(null);
     } finally {
       setLoading(false);
     }
@@ -285,13 +286,13 @@ export default function Prestige() {
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[10px] font-heading text-zinc-500">Rank Points</span>
                 <span className="text-[10px] font-heading font-bold tabular-nums" style={{ color: nextColor }}>
-                  {effectiveRp.toLocaleString()} / {godReq?.toLocaleString()}
+                  {(effectiveRp ?? 0).toLocaleString()} / {(godReq ?? 0).toLocaleString()}
                 </span>
               </div>
-              <ProgressBar value={effectiveRp} max={godReq} color={nextColor} />
+              <ProgressBar value={effectiveRp ?? 0} max={godReq ?? 0} color={nextColor} />
               <p className="text-[9px] text-zinc-600 font-heading mt-1.5">
                 Reach Godfather ({(400_000).toLocaleString()} base pts ×{' '}
-                {info.all_levels?.find(l => l.level === level + 1)?.godfather_req / 400_000 || 1}×) to unlock
+                {((info.all_levels?.find(l => l.level === level + 1)?.godfather_req ?? 400_000) / 400_000).toFixed(1)}×) to unlock
               </p>
             </div>
 
@@ -534,11 +535,11 @@ export default function Prestige() {
                       </div>
                     </td>
                     <td className="px-3 py-2.5" style={{ color: isUnlocked ? rowColor : '#52525b' }}>{row.name}</td>
-                    <td className="px-3 py-2.5 text-center text-zinc-500 tabular-nums">{(row.godfather_req || 0).toLocaleString()}</td>
-                    <td className="px-3 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round((row.crime_mult - 1) * 100)}%</td>
-                    <td className="px-3 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round((row.oc_mult    - 1) * 100)}%</td>
-                    <td className="px-3 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{row.gta_rare_boost}×</td>
-                    <td className="px-3 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round((row.npc_mult   - 1) * 100)}%</td>
+                    <td className="px-3 py-2.5 text-center text-zinc-500 tabular-nums">{(row.godfather_req ?? 0).toLocaleString()}</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.crime_mult ?? 1) - 1) * 100)}%</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.oc_mult ?? 1) - 1) * 100)}%</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{row.gta_rare_boost ?? 0}×</td>
+                    <td className="px-3 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.npc_mult ?? 1) - 1) * 100)}%</td>
                   </tr>
                 );
               })}
