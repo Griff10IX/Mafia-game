@@ -380,6 +380,7 @@ export default function Admin() {
         fetchCfBotBlockStatus();
         fetchCfAutoBlockStatus();
         fetchPageLocks();
+        fetchStateHeads();  // Auto-load state heads to show duplicate warnings
       }
       if (admin || mod) {
         fetchHdos();
@@ -2070,6 +2071,27 @@ export default function Admin() {
           </span>
         )}
       </div>
+
+      {/* Prominent warning for duplicate state heads */}
+      {stateHeads?.has_duplicates && (
+        <div className="admin-fade-in rounded-lg border-2 border-red-500/60 bg-red-500/15 p-3 flex items-start gap-3">
+          <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-heading font-bold text-red-400 uppercase tracking-wider mb-1">Duplicate State Heads Detected!</p>
+            {stateHeads.duplicates?.map((d) => (
+              <p key={d.family_id} className="text-[11px] text-red-300">
+                <strong>{d.family_name}</strong> is head of {d.states_headed.join(', ')} ({d.count} states)
+              </p>
+            ))}
+            <button
+              onClick={() => { scrollToCategory('admin-gameworld'); setCollapsed((prev) => ({ ...prev, stateHeads: false })); }}
+              className="mt-2 text-[10px] font-heading font-bold text-red-400 underline hover:text-red-300"
+            >
+              → Go to State Heads section to fix
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Sticky category navigation */}
       <nav className="sticky top-0 z-20 -mx-2 px-2 py-2 bg-background/95 border-b border-primary/20 rounded-b-md admin-category-nav backdrop-blur supports-[backdrop-filter]:bg-background/80">

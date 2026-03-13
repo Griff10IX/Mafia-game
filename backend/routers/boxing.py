@@ -77,6 +77,10 @@ BOXING_NPCS: List[dict] = [
 ROUND_BREAK_SECONDS = 6
 COUNT_DURATION_SECONDS = 9
 
+# Knockdown rules - 3 knockdowns in a round or total = TKO
+MAX_KNOCKDOWNS_PER_ROUND = 3
+MAX_KNOCKDOWNS_TOTAL = 3
+
 
 def _get_npc_by_id_or_name(value: str) -> Optional[dict]:
     if not value:
@@ -452,6 +456,8 @@ async def matches_create(payload: MatchCreateRequest, current_user: dict = Depen
             "max_rounds": 12,
             "hp": {"a": 100, "b": 100},
             "stam": {"a": 100, "b": 100},
+            "kds": {"a": 0, "b": 0},  # Total knockdowns per fighter
+            "kds_this_round": {"a": 0, "b": 0},  # Knockdowns in current round (reset each round)
             "odds": odds,
             "rounds": [],
             "winner": None,
@@ -496,6 +502,8 @@ async def matches_create(payload: MatchCreateRequest, current_user: dict = Depen
             "max_rounds": 12,
             "hp": {"a": 100, "b": 100},
             "stam": {"a": 100, "b": 100},
+            "kds": {"a": 0, "b": 0},  # Total knockdowns per fighter
+            "kds_this_round": {"a": 0, "b": 0},  # Knockdowns in current round
             "odds": {"a": odds["a"], "b": odds["b"]},
             "rounds": [],
             "winner": None,
@@ -529,6 +537,8 @@ async def matches_create(payload: MatchCreateRequest, current_user: dict = Depen
         "max_rounds": 12,
         "hp": {"a": 100, "b": 100},
         "stam": {"a": 100, "b": 100},
+        "kds": {"a": 0, "b": 0},  # Total knockdowns per fighter
+        "kds_this_round": {"a": 0, "b": 0},  # Knockdowns in current round
         "odds": {"a": odds["a"], "b": odds["b"]},
         "rounds": [],
         "winner": None,
@@ -634,6 +644,9 @@ async def matches_watch(match_id: str, current_user: dict = Depends(get_current_
         "max_rounds": int(m.get("max_rounds") or 12),
         "hp": m.get("hp") or {"a": 0, "b": 0},
         "stam": m.get("stam") or {"a": 0, "b": 0},
+        "kds": m.get("kds") or {"a": 0, "b": 0},  # Total knockdowns per fighter
+        "down_fighter": m.get("down_fighter"),  # Currently down fighter during counting phase
+        "count_ends_at": m.get("count_ends_at"),  # When the count ends
         "odds": m.get("odds") or {},
         "last_event": last,
         "rounds": rounds,
@@ -643,14 +656,13 @@ async def matches_watch(match_id: str, current_user: dict = Depends(get_current_
 
 
 async def matches_live(current_user: dict = Depends(get_current_user)):
-    # Public list so spectators can watch without needing a match id.
+    # Public list so spectators can watch without needing a match id. Include "counting" state for knockdowns.
     cursor = db.boxing_matches.find(
-        {"state": {"$in": ["pending", "ready", "running"]}},
-        {"_id": 0, "id": 1, "state": 1, "created_at": 1, "started_at": 1, "a_username": 1, "b_username": 1, "round": 1, "max_rounds": 1, "hp": 1, "stam": 1, "odds": 1, "is_open": 1},
+        {"state": {"$in": ["pending", "ready", "running", "counting"]}},
+        {"_id": 0, "id": 1, "state": 1, "created_at": 1, "started_at": 1, "a_username": 1, "b_username": 1, "round": 1, "max_rounds": 1, "hp": 1, "stam": 1, "kds": 1, "down_fighter": 1, "count_ends_at": 1, "odds": 1, "is_open": 1},
     ).sort("created_at", -1).limit(25)
     matches = await cursor.to_list(25)
     # Cap round at max_rounds so we never show e.g. R77/12 (fight ends at 12)
-    max_r = 12
     for m in matches:
         mr = int(m.get("max_rounds") or 12)
         r = int(m.get("round") or 0)
@@ -717,7 +729,11 @@ async def bets_my(current_user: dict = Depends(get_current_user_verified)):
     return {"open": open_bets, "closed": closed_bets}
 
 
-def _round_exchange(a_stats: dict, b_stats: dict, a_hp: int, b_hp: int, a_stam: int, b_stam: int, first_round: bool = True) -> dict:
+def _round_exchange(a_stats: dict, b_stats: dict, a_hp: int, b_hp: int, a_stam: int, b_stam: int, first_round: bool = True, a_kds_round: int = 0, b_kds_round: int = 0) -> dict:
+    """
+    Simulate a single round exchange. Returns HP, stamina, damage dealt, knockdowns this round.
+    Knockdowns can now happen on big damage even if HP doesn't hit 0 (more realistic).
+    """
     def clamp(n, lo, hi):
         return max(lo, min(hi, int(n)))
 
@@ -730,35 +746,75 @@ def _round_exchange(a_stats: dict, b_stats: dict, a_hp: int, b_hp: int, a_stam: 
     a_attempts = clamp(8 + (a_stats["speed"] // 2) + (a_stam // 25), 6, 22)
     b_attempts = clamp(8 + (b_stats["speed"] // 2) + (b_stam // 25), 6, 22)
 
-    def resolve(att_stats, def_stats, attempts, att_stam):
+    def resolve(att_stats, def_stats, attempts, att_stam, def_hp, def_stam):
         base_acc = 0.28 + (att_stats["accuracy"] * 0.012) + (att_stats["speed"] * 0.003)
         def_avoid = 0.10 + (def_stats["defense"] * 0.012) + (def_stats["speed"] * 0.003)
         stam_penalty = max(0.0, (40 - att_stam) * 0.004)
         p_hit = max(0.05, min(0.80, base_acc - def_avoid - stam_penalty))
         hits = 0
         dmg = 0
+        knockdowns = 0
         def_chin = max(1, int(def_stats.get("chin", 1) or 1))
-        chin_mult = max(0.70, 1.0 - (def_chin - 1) * 0.03)  # Option A: damage reduction by chin
+        chin_mult = max(0.70, 1.0 - (def_chin - 1) * 0.03)
+        
         for _ in range(attempts):
             if random.random() < p_hit:
                 hits += 1
                 per = 1.0 + (att_stats["power"] * 0.35) - (def_stats["defense"] * 0.12)
-                dmg += max(1, int(round(per * chin_mult)))
+                punch_dmg = max(1, int(round(per * chin_mult)))
+                dmg += punch_dmg
+                
+                # Knockdown chance based on damage, chin, stamina, and current HP
+                # Big punches have a chance to cause knockdown even without HP=0
+                if punch_dmg >= 4:  # Only significant punches can cause KD
+                    hurt_mult = 1.0
+                    if def_hp < 30:
+                        hurt_mult = 2.5  # Very hurt fighters go down easier
+                    elif def_hp < 50:
+                        hurt_mult = 1.6
+                    
+                    stam_mult = max(0.5, 1.0 + (50 - def_stam) * 0.015)  # Tired fighters go down easier
+                    chin_factor = max(0.3, 1.0 - (def_chin - 1) * 0.08)  # Better chin = less likely to drop
+                    power_factor = 1.0 + (att_stats.get("power", 1) - 5) * 0.06  # Higher power = more KDs
+                    
+                    # Base KD chance is low but scales with damage
+                    kd_chance = (punch_dmg / 100) * hurt_mult * stam_mult * chin_factor * power_factor
+                    kd_chance = min(0.35, kd_chance)  # Cap at 35% per big punch
+                    
+                    if random.random() < kd_chance:
+                        knockdowns += 1
+        
         stam_cost = attempts * 2 + hits
-        return hits, dmg, stam_cost
+        return hits, dmg, stam_cost, knockdowns
 
-    a_hits, a_dmg, a_cost = resolve(a_stats, b_stats, a_attempts, a_stam)
-    b_hits, b_dmg, b_cost = resolve(b_stats, a_stats, b_attempts, b_stam)
+    a_hits, a_dmg, a_cost, a_kds_dealt = resolve(a_stats, b_stats, a_attempts, a_stam, b_hp, b_stam)
+    b_hits, b_dmg, b_cost, b_kds_dealt = resolve(b_stats, a_stats, b_attempts, b_stam, a_hp, a_stam)
 
     a_stam = clamp(a_stam - a_cost, 0, 100)
     b_stam = clamp(b_stam - b_cost, 0, 100)
 
-    # Apply damage; when HP would go to 0 we always go to 0 so the match enters counting (referee count).
-    # Chin/recovery only affect the get-up roll after the count, not whether we show a count.
+    # Apply damage
     b_hp_after = clamp(b_hp - a_dmg, 0, 100)
     a_hp_after = clamp(a_hp - b_dmg, 0, 100)
+    
+    # If HP hits 0, that's definitely a knockdown (if not already counted)
+    if b_hp_after <= 0 and a_kds_dealt == 0:
+        a_kds_dealt = 1
+    if a_hp_after <= 0 and b_kds_dealt == 0:
+        b_kds_dealt = 1
 
-    return {"a_hits": a_hits, "b_hits": b_hits, "a_dmg": a_dmg, "b_dmg": b_dmg, "hp": {"a": a_hp_after, "b": b_hp_after}, "stam": {"a": a_stam, "b": b_stam}}
+    # Total knockdowns this round for each fighter
+    a_kds_this_round = b_kds_dealt  # A got knocked down by B
+    b_kds_this_round = a_kds_dealt  # B got knocked down by A
+
+    return {
+        "a_hits": a_hits, "b_hits": b_hits,
+        "a_dmg": a_dmg, "b_dmg": b_dmg,
+        "hp": {"a": a_hp_after, "b": b_hp_after},
+        "stam": {"a": a_stam, "b": b_stam},
+        "a_kds_this_round": a_kds_this_round,  # Times A was knocked down this round
+        "b_kds_this_round": b_kds_this_round,  # Times B was knocked down this round
+    }
 
 
 async def advance_running_matches(database) -> int:
@@ -833,20 +889,39 @@ async def advance_running_matches(database) -> int:
         b_eff = _effective_stats(b_prof or DEFAULT_PROFILE)
         hp = claim.get("hp") or {"a": 100, "b": 100}
         stam = claim.get("stam") or {"a": 100, "b": 100}
+        kds = claim.get("kds") or {"a": 0, "b": 0}
         rnd = int(claim.get("round") or 0) + 1
         hp_a, hp_b = int(hp.get("a") or 100), int(hp.get("b") or 100)
         stam_a, stam_b = int(stam.get("a") or 100), int(stam.get("b") or 100)
+        kds_a, kds_b = int(kds.get("a") or 0), int(kds.get("b") or 0)
+        
+        # Track if fighter came back from knockdown (reduced recovery)
+        came_from_kd = claim.get("came_from_kd")
 
         # Between-round recovery (round 2+)
         if rnd > 1:
-            stam_a = min(100, stam_a + 6 + (a_eff.get("stamina") or 1) * 0.8 + (a_eff.get("recovery") or 1) * 0.5)
-            stam_b = min(100, stam_b + 6 + (b_eff.get("stamina") or 1) * 0.8 + (b_eff.get("recovery") or 1) * 0.5)
-            hp_a = min(100, hp_a + 2 + (a_eff.get("recovery") or 1) * 0.4)
-            hp_b = min(100, hp_b + 2 + (b_eff.get("recovery") or 1) * 0.4)
+            # Reduced recovery if fighter was knocked down last round
+            a_recovery_mult = 0.5 if came_from_kd == "a" else 1.0
+            b_recovery_mult = 0.5 if came_from_kd == "b" else 1.0
+            
+            stam_a = min(100, stam_a + (6 + (a_eff.get("stamina") or 1) * 0.8 + (a_eff.get("recovery") or 1) * 0.5) * a_recovery_mult)
+            stam_b = min(100, stam_b + (6 + (b_eff.get("stamina") or 1) * 0.8 + (b_eff.get("recovery") or 1) * 0.5) * b_recovery_mult)
+            hp_a = min(100, hp_a + (2 + (a_eff.get("recovery") or 1) * 0.4) * a_recovery_mult)
+            hp_b = min(100, hp_b + (2 + (b_eff.get("recovery") or 1) * 0.4) * b_recovery_mult)
             stam_a, stam_b = max(0, int(stam_a)), max(0, int(stam_b))
             hp_a, hp_b = max(0, int(hp_a)), max(0, int(hp_b))
 
+        # Reset knockdowns for this round
+        kds_this_round_a = 0
+        kds_this_round_b = 0
+        
         out = _round_exchange(a_eff, b_eff, hp_a, hp_b, stam_a, stam_b, first_round=(rnd == 1))
+        
+        # Update knockdown counts
+        kds_this_round_a = out.get("a_kds_this_round", 0)
+        kds_this_round_b = out.get("b_kds_this_round", 0)
+        kds_a += kds_this_round_a
+        kds_b += kds_this_round_b
 
         max_rounds = int(claim.get("max_rounds") or 12)
         if rnd > max_rounds:
@@ -855,12 +930,25 @@ async def advance_running_matches(database) -> int:
         finish = None
         reason = None
         go_to_counting = None  # "a" or "b" if that fighter is down and we enter count
-        if out["hp"]["a"] <= 0 and out["hp"]["b"] <= 0:
+        
+        # Check for TKO (3 knockdowns in this round or total)
+        if kds_this_round_a >= MAX_KNOCKDOWNS_PER_ROUND or kds_a >= MAX_KNOCKDOWNS_TOTAL:
+            finish = "b"  # B wins, A lost by TKO
+            reason = "tko"
+        elif kds_this_round_b >= MAX_KNOCKDOWNS_PER_ROUND or kds_b >= MAX_KNOCKDOWNS_TOTAL:
+            finish = "a"  # A wins, B lost by TKO
+            reason = "tko"
+        elif out["hp"]["a"] <= 0 and out["hp"]["b"] <= 0:
             finish = "draw"
             reason = "double_ko"
         elif out["hp"]["a"] <= 0:
             go_to_counting = "a"
         elif out["hp"]["b"] <= 0:
+            go_to_counting = "b"
+        elif kds_this_round_a > 0 and out["hp"]["a"] > 0:
+            # Knockdown but HP not 0 - still go to count
+            go_to_counting = "a"
+        elif kds_this_round_b > 0 and out["hp"]["b"] > 0:
             go_to_counting = "b"
         elif rnd >= max_rounds:
             # decision by total damage, then hits, then random
@@ -879,12 +967,26 @@ async def advance_running_matches(database) -> int:
                 finish = "a" if total_a > total_b else "b"
                 reason = "decision"
 
-        round_log = {"round": rnd, "at": now, **out}
+        round_log = {
+            "round": rnd, "at": now,
+            "a_hits": out["a_hits"], "b_hits": out["b_hits"],
+            "a_dmg": out["a_dmg"], "b_dmg": out["b_dmg"],
+            "hp": out["hp"], "stam": out["stam"],
+            "a_kds": kds_this_round_a, "b_kds": kds_this_round_b,
+        }
         break_sec = int(claim.get("round_break_seconds") or ROUND_BREAK_SECONDS)
         next_round_at = (datetime.now(timezone.utc) + timedelta(seconds=break_sec)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
         updates: Dict[str, Any] = {
-            "$set": {"round": rnd, "hp": out["hp"], "stam": out["stam"], "next_round_at": next_round_at},
+            "$set": {
+                "round": rnd,
+                "hp": out["hp"],
+                "stam": out["stam"],
+                "kds": {"a": kds_a, "b": kds_b},
+                "kds_this_round": {"a": kds_this_round_a, "b": kds_this_round_b},
+                "next_round_at": next_round_at,
+                "came_from_kd": None,  # Reset
+            },
             "$push": {"rounds": round_log},
         }
         if go_to_counting:
@@ -972,6 +1074,12 @@ async def advance_counting_matches(database) -> int:
         hp = dict(claim.get("hp") or {"a": 100, "b": 100})
         stam = dict(claim.get("stam") or {"a": 100, "b": 100})
 
+        # Check total knockdowns - if at TKO limit, fighter doesn't get up
+        kds = claim.get("kds") or {"a": 0, "b": 0}
+        down_kds = kds.get(down) or 0
+        if down_kds >= MAX_KNOCKDOWNS_TOTAL:
+            got_up = False  # TKO - too many knockdowns
+
         if got_up:
             # If we're already at max rounds, fight is over — resolve by decision (no extra round)
             if current_round >= max_rounds:
@@ -994,22 +1102,33 @@ async def advance_counting_matches(database) -> int:
                 )
                 await _finalize_match(database, match_id, winner_id=winner_id, finish_reason="decision")
             else:
-                new_hp = min(100, 5 + recovery)
+                # Fighter gets up but is hurt - reduced HP and stamina
+                new_hp = min(100, max(1, 5 + recovery))  # Ensure at least 1 HP
                 hp[down] = new_hp
                 stam[down] = max(0, int((stam.get(down) or 0) * 0.5))
                 break_sec = int(claim.get("round_break_seconds") or ROUND_BREAK_SECONDS)
                 next_round_at = (datetime.now(timezone.utc) + timedelta(seconds=break_sec)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
                 await database.boxing_matches.update_one(
                     {"id": match_id},
-                    {"$set": {"state": "running", "hp": hp, "stam": stam, "next_round_at": next_round_at, "down_fighter": None, "count_ends_at": None}},
+                    {"$set": {
+                        "state": "running",
+                        "hp": hp,
+                        "stam": stam,
+                        "next_round_at": next_round_at,
+                        "down_fighter": None,
+                        "count_ends_at": None,
+                        "came_from_kd": down,  # Mark that this fighter came from knockdown (reduced recovery next round)
+                    }},
                 )
         else:
             winner_id = b_id if down == "a" else a_id
+            # Determine if it's KO or TKO based on knockdown count
+            finish_reason = "tko" if down_kds >= MAX_KNOCKDOWNS_TOTAL else "ko"
             await database.boxing_matches.update_one(
                 {"id": match_id},
-                {"$set": {"state": "finished", "finished_at": now, "winner": winner_id, "finish_reason": "ko", "down_fighter": None, "count_ends_at": None}},
+                {"$set": {"state": "finished", "finished_at": now, "winner": winner_id, "finish_reason": finish_reason, "down_fighter": None, "count_ends_at": None}},
             )
-            await _finalize_match(database, match_id, winner_id=winner_id, finish_reason="ko")
+            await _finalize_match(database, match_id, winner_id=winner_id, finish_reason=finish_reason)
         return 1
     finally:
         await database.boxing_matches.update_one({"id": match_id}, {"$set": {"sim_lock": None}})
