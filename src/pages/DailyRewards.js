@@ -198,9 +198,10 @@ export default function DailyRewards() {
   const fetchInfo = useCallback(async () => {
     try {
       const res = await api.get('/daily-rewards/info');
-      setInfo(res.data);
+      setInfo(res.data ?? null);
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Failed to load daily rewards');
+      setInfo(null);
     } finally {
       setLoading(false);
     }
@@ -215,7 +216,10 @@ export default function DailyRewards() {
       } else {
         setTttGame(null);
       }
-    } catch { setTttGame(null); }
+    } catch {
+      setTttGame(null);
+      setTttResult(null);
+    }
   }, []);
 
   useEffect(() => { fetchInfo(); }, [fetchInfo]);

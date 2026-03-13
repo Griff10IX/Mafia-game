@@ -27,6 +27,11 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         self.check_duplicate_request = check_duplicate_request
     
     def _client_ip(self, request: Request) -> str:
+        # Cloudflare provides real IP in CF-Connecting-IP
+        cf_ip = request.headers.get("cf-connecting-ip")
+        if cf_ip:
+            return cf_ip.strip()
+        # Fallback to X-Forwarded-For (nginx or other proxies)
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
             return forwarded.split(",")[0].strip()

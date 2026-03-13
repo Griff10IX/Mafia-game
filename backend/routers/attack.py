@@ -83,11 +83,16 @@ def _request_meta(request: Optional[Request]) -> dict:
             label = _bot_label_from_ua(out.get("user_agent") or "")
             if label:
                 out["attacker_bot_label"] = label[:120]
-        forwarded = (request.headers.get("x-forwarded-for") or "").strip()
-        if forwarded:
-            out["client_ip"] = forwarded.split(",")[0].strip()[:45]
-        elif getattr(request, "client", None) and getattr(request.client, "host", None):
-            out["client_ip"] = str(request.client.host)[:45]
+        # Get client IP (prefer Cloudflare header)
+        cf_ip = (request.headers.get("cf-connecting-ip") or "").strip()
+        if cf_ip:
+            out["client_ip"] = cf_ip[:45]
+        else:
+            forwarded = (request.headers.get("x-forwarded-for") or "").strip()
+            if forwarded:
+                out["client_ip"] = forwarded.split(",")[0].strip()[:45]
+            elif getattr(request, "client", None) and getattr(request.client, "host", None):
+                out["client_ip"] = str(request.client.host)[:45]
     return out
 
 

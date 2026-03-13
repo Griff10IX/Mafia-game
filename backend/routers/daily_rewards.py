@@ -105,6 +105,7 @@ async def _grant_daily_win_rewards(user_id: str) -> tuple[int, list]:
                 "car_id": car_id,
                 "car_name": car.get("name", car_id),
                 "acquired_at": now_iso,
+                "damage_percent": 0,  # Reward cars have no damage
             })
             cars_won.append(car.get("name", car_id))
     return RPS_WIN_MONEY, cars_won
@@ -179,15 +180,15 @@ def register(router):
         now_iso = now.isoformat()
         new_plays = (plays + [now_iso])[-50:]
         await db.users.update_one(
-            {"id": current_user["id"]},
+            {"id": current_user.get("id") or ""},
             {"$set": {"rps_plays": new_plays}},
         )
         money_won = 0
         cars_won = []
         if result == "win":
-            money_won, cars_won = await _grant_daily_win_rewards(current_user["id"])
+            money_won, cars_won = await _grant_daily_win_rewards(current_user.get("id") or "")
         await log_activity(
-            current_user["id"],
+            current_user.get("id") or "",
             current_user.get("username") or "?",
             "daily_rewards_rps",
             {"game": "rps", "result": result, "money_won": money_won, "cars_won": cars_won, "your_choice": choice, "computer_choice": computer},
@@ -218,7 +219,7 @@ def register(router):
     @router.get("/daily-rewards/ttt")
     async def daily_rewards_ttt_status(current_user: dict = Depends(get_current_user)):
         """Get current Noughts & Crosses game if any (for resuming)."""
-        game = await db.daily_rewards_ttt.find_one({"user_id": current_user["id"]})
+        game = await db.daily_rewards_ttt.find_one({"user_id": current_user.get("id") or ""})
         if not game:
             return {"has_game": False}
         board = list(game.get("board") or [""] * 9)
@@ -247,7 +248,7 @@ def register(router):
                 status_code=400,
                 detail=f"You have used all {RPS_PLAYS_PER_WINDOW} plays for this 6-hour window.",
             )
-        existing = await db.daily_rewards_ttt.find_one({"user_id": current_user["id"]})
+        existing = await db.daily_rewards_ttt.find_one({"user_id": current_user.get("id") or ""})
         if existing:
             raise HTTPException(status_code=400, detail="Finish your current Noughts & Crosses game first.")
         now = datetime.now(timezone.utc)
@@ -262,9 +263,9 @@ def register(router):
         else:
             turn = "X"  # Player (X) goes first
         new_plays = (plays + [now_iso])[-50:]
-        await db.users.update_one({"id": current_user["id"]}, {"$set": {"rps_plays": new_plays}})
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$set": {"rps_plays": new_plays}})
         await db.daily_rewards_ttt.insert_one({
-            "user_id": current_user["id"],
+            "user_id": current_user.get("id") or "",
             "board": board,
             "player_side": player_side,
             "computer_side": computer_side,
@@ -295,7 +296,7 @@ def register(router):
     async def daily_rewards_ttt_move(req: TTTMoveRequest, current_user: dict = Depends(get_current_user)):
         """Play a move in Noughts & Crosses. Returns updated board and result (ongoing/win/lose/draw)."""
         cell = max(0, min(8, int(req.cell)))
-        game = await db.daily_rewards_ttt.find_one({"user_id": current_user["id"]})
+        game = await db.daily_rewards_ttt.find_one({"user_id": current_user.get("id") or ""})
         if not game:
             raise HTTPException(status_code=400, detail="No active game. Start one first.")
         board = list(game.get("board") or [""] * 9)
@@ -316,25 +317,25 @@ def register(router):
         if winner:
             result = "win" if winner == player_side else "lose"
             if result == "win":
-                money_won, cars_won = await _grant_daily_win_rewards(current_user["id"])
+                money_won, cars_won = await _grant_daily_win_rewards(current_user.get("id") or "")
             await log_activity(
-                current_user["id"],
+                current_user.get("id") or "",
                 current_user.get("username") or "?",
                 "daily_rewards_ttt",
                 {"game": "ttt", "result": result, "money_won": money_won, "cars_won": cars_won},
             )
-            await db.daily_rewards_ttt.delete_one({"user_id": current_user["id"]})
+            await db.daily_rewards_ttt.delete_one({"user_id": current_user.get("id") or ""})
         else:
             empty = _ttt_empty_cells(board)
             if not empty:
                 result = "draw"
                 await log_activity(
-                    current_user["id"],
+                    current_user.get("id") or "",
                     current_user.get("username") or "?",
                     "daily_rewards_ttt",
                     {"game": "ttt", "result": "draw"},
                 )
-                await db.daily_rewards_ttt.delete_one({"user_id": current_user["id"]})
+                await db.daily_rewards_ttt.delete_one({"user_id": current_user.get("id") or ""})
             else:
                 comp_cell = _ttt_computer_move(board, computer_side)
                 if comp_cell >= 0:
@@ -343,24 +344,24 @@ def register(router):
                     if winner:
                         result = "lose"
                         await log_activity(
-                            current_user["id"],
+                            current_user.get("id") or "",
                             current_user.get("username") or "?",
                             "daily_rewards_ttt",
                             {"game": "ttt", "result": "lose"},
                         )
-                        await db.daily_rewards_ttt.delete_one({"user_id": current_user["id"]})
+                        await db.daily_rewards_ttt.delete_one({"user_id": current_user.get("id") or ""})
                     elif not _ttt_empty_cells(board):
                         result = "draw"
                         await log_activity(
-                            current_user["id"],
+                            current_user.get("id") or "",
                             current_user.get("username") or "?",
                             "daily_rewards_ttt",
                             {"game": "ttt", "result": "draw"},
                         )
-                        await db.daily_rewards_ttt.delete_one({"user_id": current_user["id"]})
+                        await db.daily_rewards_ttt.delete_one({"user_id": current_user.get("id") or ""})
                     else:
                         await db.daily_rewards_ttt.update_one(
-                            {"user_id": current_user["id"]},
+                            {"user_id": current_user.get("id") or ""},
                             {"$set": {"board": board, "turn": player_side}},
                         )
         raw_plays = current_user.get("rps_plays")

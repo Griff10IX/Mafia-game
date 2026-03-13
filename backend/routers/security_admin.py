@@ -134,6 +134,11 @@ def register(router):
         raise HTTPException(status_code=404, detail="No active ban found for this IP")
 
     def _client_ip(req: Request) -> str:
+        # Cloudflare provides real IP in CF-Connecting-IP
+        cf_ip = req.headers.get("cf-connecting-ip")
+        if cf_ip:
+            return cf_ip.strip()
+        # Fallback to X-Forwarded-For (nginx or other proxies)
         forwarded = req.headers.get("x-forwarded-for")
         if forwarded:
             return forwarded.split(",")[0].strip()
