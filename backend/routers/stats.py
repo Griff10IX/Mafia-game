@@ -157,7 +157,9 @@ def register(router):
                 {"_id": 0, "is_npc": 1, "rank_points": 1}
             )
 
-            if users_only_kills and (bool(killer and killer.get("is_npc")) or bool(victim and victim.get("is_npc"))):
+            killer_is_npc = bool(killer and killer.get("is_npc"))
+            victim_is_npc = bool(victim and victim.get("is_npc"))
+            if users_only_kills and (killer_is_npc or victim_is_npc):
                 continue
 
             victim_rank_name = None

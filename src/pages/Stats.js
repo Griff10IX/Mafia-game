@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { TrendingUp } from 'lucide-react';
@@ -252,7 +252,7 @@ const WipedFamiliesListView = ({ families }) => (
         <div className="divide-y divide-zinc-700/30">
           {families.map((w) => (
             <div
-              key={(w.war_id || '') + (w.ended_at || '') + (w.wiped_family_name || '')}
+              key={`${w.war_id || ''}-${w.wiped_family_id || ''}-${w.ended_at || ''}`}
               className="stat-row grid grid-cols-12 gap-1 px-2 py-1.5 text-[10px] font-heading"
             >
               <div className="col-span-3 text-foreground font-bold truncate" title={w.wiped_family_name}>
@@ -286,7 +286,7 @@ const WipedFamiliesListView = ({ families }) => (
         </div>
       ) : (
         families.map((w) => (
-          <div key={(w.war_id || '') + (w.ended_at || '') + (w.wiped_family_name || '')} className="stat-row p-2 space-y-1">
+            <div key={`${w.war_id || ''}-${w.wiped_family_id || ''}-${w.ended_at || ''}`} className="stat-row p-2 space-y-1">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <div className="text-[10px] font-heading font-bold text-foreground truncate">
@@ -369,27 +369,23 @@ export default function Stats() {
   const recentKills = Array.isArray(data?.recent_kills) ? data.recent_kills : [];
   const wipedFamilies = Array.isArray(data?.wiped_families) ? data.wiped_families : [];
 
-  useEffect(() => {
-    let cancelled = false;
-    
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await api.get(`/stats/overview?users_only_kills=${usersOnlyKills ? 'true' : 'false'}`);
-        if (!cancelled) setData(res.data);
-      } catch (e) {
-        if (!cancelled) {
-          toast.error('Failed to load stats');
-          console.error('Error fetching stats:', e);
-          setData(null);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    
-    return () => { cancelled = true; };
+  const fetchStats = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/stats/overview?users_only_kills=${usersOnlyKills ? 'true' : 'false'}`);
+      setData(res.data);
+    } catch (e) {
+      toast.error('Failed to load stats');
+      console.error('Error fetching stats:', e);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
   }, [usersOnlyKills]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -402,6 +398,19 @@ export default function Stats() {
   return (
     <div className={`space-y-2 ${styles.pageContent}`} data-testid="stats-page">
       <style>{STATS_STYLES}</style>
+
+      {!data && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-heading text-amber-200 flex flex-wrap items-center justify-between gap-2">
+          <span>Stats could not be loaded. Check your connection and try again.</span>
+          <button
+            type="button"
+            onClick={() => fetchStats()}
+            className="px-2 py-1 rounded text-xs font-heading uppercase tracking-wider border border-amber-500/50 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       <p className="text-[9px] text-zinc-500 font-heading italic">Game capital, users, vehicles, ranks — and the body count.</p>
 
