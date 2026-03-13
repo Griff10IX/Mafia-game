@@ -3501,3 +3501,186 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         result = await _cf_toggle_rule("Block Automation", enabled)
         return {"message": f"Automation script blocking {'enabled' if enabled else 'disabled'}", **result}
+
+    # ──────────────────────────────────────────────────────────────────────────────
+    # New Admin Tools
+    # ──────────────────────────────────────────────────────────────────────────────
+
+    @router.get("/admin/economy/overview")
+    async def admin_economy_overview(current_user: dict = Depends(get_current_user)):
+        """Economy snapshot: total money, points, average wealth, top 5 richest."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        pipeline = [
+            {"$match": {"is_dead": {"$ne": True}}},
+            {"$group": {
+                "_id": None,
+                "total_money": {"$sum": {"$ifNull": ["$money", 0]}},
+                "total_bank": {"$sum": {"$ifNull": ["$bank_balance", 0]}},
+                "total_points": {"$sum": {"$ifNull": ["$points", 0]}},
+                "avg_money": {"$avg": {"$ifNull": ["$money", 0]}},
+                "player_count": {"$sum": 1},
+            }},
+        ]
+        agg = await db.users.aggregate(pipeline).to_list(1)
+        stats = agg[0] if agg else {}
+        top5 = await db.users.find(
+            {"is_dead": {"$ne": True}},
+            {"_id": 0, "username": 1, "money": 1, "bank_balance": 1, "points": 1},
+        ).sort("money", -1).limit(5).to_list(5)
+        return {
+            "total_money": stats.get("total_money", 0),
+            "total_bank": stats.get("total_bank", 0),
+            "total_points": stats.get("total_points", 0),
+            "avg_money": round(stats.get("avg_money", 0)),
+            "player_count": stats.get("player_count", 0),
+            "top5_richest": [
+                {"username": u.get("username", "?"), "money": u.get("money", 0), "bank": u.get("bank_balance", 0)}
+                for u in (top5 or [])
+            ],
+        }
+
+    @router.get("/admin/players/activity-summary")
+    async def admin_players_activity_summary(current_user: dict = Depends(get_current_user)):
+        """What online players are doing: count per feature area (last 5 min)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        online = await db.users.find(
+            {"last_action_at": {"$gte": cutoff}, "is_dead": {"$ne": True}},
+            {"_id": 0, "last_action_page": 1},
+        ).to_list(500)
+        counts = {}
+        for u in (online or []):
+            page = u.get("last_action_page") or "unknown"
+            counts[page] = counts.get(page, 0) + 1
+        sorted_counts = sorted(counts.items(), key=lambda x: x[1], reverse=True)
+        return {"total_online": len(online), "by_page": [{"page": p, "count": c} for p, c in sorted_counts]}
+
+    @router.get("/admin/players/compare")
+    async def admin_players_compare(
+        user1: str = Query(..., description="Username 1"),
+        user2: str = Query(..., description="Username 2"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Side-by-side comparison of two players for alt investigation."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or mod access required")
+        fields = {
+            "_id": 0, "id": 1, "username": 1, "email": 1, "money": 1, "bank_balance": 1,
+            "points": 1, "rank_points": 1, "health": 1, "created_at": 1, "last_login": 1,
+            "last_action_at": 1, "registration_ip": 1, "last_login_ip": 1,
+            "device_fingerprint": 1, "user_agent": 1, "is_dead": 1, "prestige": 1,
+        }
+        u1 = await db.users.find_one({"username": re.compile(f"^{re.escape(user1)}$", re.IGNORECASE)}, fields)
+        u2 = await db.users.find_one({"username": re.compile(f"^{re.escape(user2)}$", re.IGNORECASE)}, fields)
+        if not u1:
+            raise HTTPException(status_code=404, detail=f"User '{user1}' not found")
+        if not u2:
+            raise HTTPException(status_code=404, detail=f"User '{user2}' not found")
+        same_ip = bool(
+            u1.get("registration_ip") and u2.get("registration_ip")
+            and u1["registration_ip"] == u2["registration_ip"]
+        )
+        same_device = bool(
+            u1.get("device_fingerprint") and u2.get("device_fingerprint")
+            and u1["device_fingerprint"] == u2["device_fingerprint"]
+        )
+        return {"user1": u1, "user2": u2, "same_ip": same_ip, "same_device": same_device}
+
+    @router.get("/admin/system/health")
+    async def admin_system_health(current_user: dict = Depends(get_current_user)):
+        """System health: DB stats, document counts, server info."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        try:
+            user_count = await db.users.count_documents({})
+            alive_count = await db.users.count_documents({"is_dead": {"$ne": True}})
+            car_count = await db.user_cars.count_documents({})
+            family_count = await db.families.count_documents({})
+            flag_count = await db.security_flags.count_documents({"resolved": {"$ne": True}})
+            cutoff_5m = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+            online_count = await db.users.count_documents({"last_action_at": {"$gte": cutoff_5m}, "is_dead": {"$ne": True}})
+            return {
+                "status": "healthy",
+                "users_total": user_count,
+                "users_alive": alive_count,
+                "users_online": online_count,
+                "cars": car_count,
+                "families": family_count,
+                "unresolved_flags": flag_count,
+                "server_time": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            return {"status": "degraded", "error": str(e)}
+
+    class MaintenanceBannerRequest(BaseModel):
+        enabled: bool
+        message: Optional[str] = None
+        starts_at: Optional[str] = None
+        duration_minutes: Optional[int] = None
+
+    @router.get("/admin/maintenance-banner")
+    async def admin_get_maintenance_banner(current_user: dict = Depends(get_current_user)):
+        """Get current maintenance banner state."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        doc = await db.game_settings.find_one({"key": "maintenance_banner"}, {"_id": 0})
+        if not doc:
+            return {"enabled": False}
+        return doc.get("value", {"enabled": False})
+
+    @router.post("/admin/maintenance-banner")
+    async def admin_set_maintenance_banner(req: MaintenanceBannerRequest, current_user: dict = Depends(get_current_user)):
+        """Set or clear the maintenance banner."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        value = {
+            "enabled": req.enabled,
+            "message": req.message or "Scheduled maintenance in progress.",
+            "starts_at": req.starts_at,
+            "duration_minutes": req.duration_minutes,
+            "set_by": current_user.get("username", "?"),
+            "set_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.game_settings.update_one(
+            {"key": "maintenance_banner"},
+            {"$set": {"key": "maintenance_banner", "value": value}},
+            upsert=True,
+        )
+        return {"message": f"Maintenance banner {'enabled' if req.enabled else 'disabled'}", **value}
+
+    class BulkUserActionRequest(BaseModel):
+        usernames: list
+        action: str  # give_points, give_money, lock, unlock, reset_daily_rewards
+        value: Optional[int] = None
+
+    @router.post("/admin/bulk-action")
+    async def admin_bulk_user_action(req: BulkUserActionRequest, current_user: dict = Depends(get_current_user)):
+        """Apply an action to multiple users at once."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if not req.usernames or len(req.usernames) > 50:
+            raise HTTPException(status_code=400, detail="Provide 1-50 usernames")
+        usernames_lower = [u.strip().lower() for u in req.usernames if u.strip()]
+        user_filter = {"username": {"$in": [re.compile(f"^{re.escape(u)}$", re.IGNORECASE) for u in usernames_lower]}}
+        affected = 0
+        if req.action == "give_points" and req.value:
+            r = await db.users.update_many(user_filter, {"$inc": {"points": req.value}})
+            affected = r.modified_count
+        elif req.action == "give_money" and req.value:
+            r = await db.users.update_many(user_filter, {"$inc": {"money": req.value}})
+            affected = r.modified_count
+        elif req.action == "lock":
+            r = await db.users.update_many(user_filter, {"$set": {"locked": True, "locked_at": datetime.now(timezone.utc).isoformat(), "locked_reason": "Bulk lock by admin"}})
+            affected = r.modified_count
+        elif req.action == "unlock":
+            r = await db.users.update_many(user_filter, {"$set": {"locked": False}, "$unset": {"locked_at": "", "locked_reason": ""}})
+            affected = r.modified_count
+        elif req.action == "reset_daily_rewards":
+            r = await db.users.update_many(user_filter, {"$set": {"rps_plays": []}})
+            ttt = await db.daily_rewards_ttt.delete_many({"user_id": {"$in": usernames_lower}})
+            affected = r.modified_count
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown action: {req.action}")
+        return {"message": f"Bulk '{req.action}' applied to {affected} user(s)", "affected": affected}

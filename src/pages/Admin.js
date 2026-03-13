@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3 } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../components/FormattedNumberInput';
@@ -14,18 +14,19 @@ const ADMIN_STYLES = `
 `;
 
 const ADMIN_CATEGORIES = [
+  { id: 'admin-players', label: 'Player Management', icon: UserCog },
   { id: 'admin-gameworld', label: 'Game World', icon: Zap },
-  { id: 'admin-quick', label: 'Quick & Bulk', icon: Gift },
-  { id: 'admin-players', label: 'Players', icon: UserCog },
-  { id: 'admin-combat', label: 'Combat & Tools', icon: Crosshair },
-  { id: 'admin-moderation', label: 'Moderation', icon: AlertTriangle },
+  { id: 'admin-security', label: 'Security & Cloudflare', icon: Globe },
+  { id: 'admin-cheat', label: 'Cheat Detection', icon: AlertTriangle },
+  { id: 'admin-analytics', label: 'Analytics', icon: BarChart3 },
   { id: 'admin-logs', label: 'Logs', icon: ScrollText },
-  { id: 'admin-database', label: 'Database', icon: Skull },
-  { id: 'admin-moderators', label: 'Moderators', icon: Shield },
-  { id: 'admin-mod-display', label: 'Mod display', icon: Palette },
-  { id: 'admin-hdo', label: 'Help Desk Operators', icon: HelpCircle },
+  { id: 'admin-testing', label: 'Testing Tools', icon: Wrench },
+  { id: 'admin-quick', label: 'Quick & Bulk', icon: Gift },
+  { id: 'admin-database', label: 'Database', icon: Database },
+  { id: 'admin-staff', label: 'Staff Management', icon: Shield },
+  { id: 'admin-mod-tools', label: 'Mod Tools', icon: Palette },
 ];
-const MOD_ONLY_CATEGORY_IDS = ['admin-moderation', 'admin-logs', 'admin-hdo', 'admin-moderators', 'admin-mod-display'];
+const MOD_ONLY_CATEGORY_IDS = ['admin-cheat', 'admin-logs', 'admin-staff', 'admin-mod-tools'];
 
 function scrollToCategory(id) {
   const el = document.getElementById(id);
@@ -331,6 +332,25 @@ export default function Admin() {
   const [hdosLoading, setHdosLoading] = useState(false);
   const [promoteHdoUsername, setPromoteHdoUsername] = useState('');
   const [promoteHdoLoading, setPromoteHdoLoading] = useState(false);
+
+  const [economyOverview, setEconomyOverview] = useState(null);
+  const [economyOverviewLoading, setEconomyOverviewLoading] = useState(false);
+  const [playerActivity, setPlayerActivity] = useState(null);
+  const [playerActivityLoading, setPlayerActivityLoading] = useState(false);
+  const [compareUser1, setCompareUser1] = useState('');
+  const [compareUser2, setCompareUser2] = useState('');
+  const [compareResult, setCompareResult] = useState(null);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [systemHealth, setSystemHealth] = useState(null);
+  const [systemHealthLoading, setSystemHealthLoading] = useState(false);
+  const [maintenanceBanner, setMaintenanceBanner] = useState(null);
+  const [maintenanceBannerLoading, setMaintenanceBannerLoading] = useState(false);
+  const [maintenanceMsg, setMaintenanceMsg] = useState('');
+  const [maintenanceDuration, setMaintenanceDuration] = useState(60);
+  const [bulkUsernames, setBulkUsernames] = useState('');
+  const [bulkAction, setBulkAction] = useState('give_points');
+  const [bulkValue, setBulkValue] = useState(100);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const toggleSection = (key) => {
     setCollapsed(prev => {
@@ -1919,6 +1939,80 @@ export default function Admin() {
     finally { setSecurityLoading(false); }
   };
 
+  const handleFetchEconomyOverview = async () => {
+    setEconomyOverviewLoading(true);
+    try {
+      const res = await api.get('/admin/economy/overview');
+      setEconomyOverview(res.data ?? null);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load economy overview'); }
+    finally { setEconomyOverviewLoading(false); }
+  };
+
+  const handleFetchPlayerActivity = async () => {
+    setPlayerActivityLoading(true);
+    try {
+      const res = await api.get('/admin/players/activity-summary');
+      setPlayerActivity(res.data ?? null);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load player activity'); }
+    finally { setPlayerActivityLoading(false); }
+  };
+
+  const handleCompareUsers = async () => {
+    if (!compareUser1.trim() || !compareUser2.trim()) { toast.error('Enter two usernames'); return; }
+    setCompareLoading(true);
+    try {
+      const res = await api.get(`/admin/players/compare?user1=${encodeURIComponent(compareUser1.trim())}&user2=${encodeURIComponent(compareUser2.trim())}`);
+      setCompareResult(res.data ?? null);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to compare users'); }
+    finally { setCompareLoading(false); }
+  };
+
+  const handleFetchSystemHealth = async () => {
+    setSystemHealthLoading(true);
+    try {
+      const res = await api.get('/admin/system/health');
+      setSystemHealth(res.data ?? null);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load system health'); }
+    finally { setSystemHealthLoading(false); }
+  };
+
+  const handleFetchMaintenanceBanner = async () => {
+    setMaintenanceBannerLoading(true);
+    try {
+      const res = await api.get('/admin/maintenance-banner');
+      setMaintenanceBanner(res.data ?? null);
+      if (res.data?.message) setMaintenanceMsg(res.data.message);
+      if (res.data?.duration_minutes) setMaintenanceDuration(res.data.duration_minutes);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load banner'); }
+    finally { setMaintenanceBannerLoading(false); }
+  };
+
+  const handleSetMaintenanceBanner = async (enabled) => {
+    setMaintenanceBannerLoading(true);
+    try {
+      const res = await api.post('/admin/maintenance-banner', {
+        enabled,
+        message: maintenanceMsg || 'Scheduled maintenance in progress.',
+        duration_minutes: maintenanceDuration || 60,
+      });
+      setMaintenanceBanner(res.data ?? null);
+      toast.success(res.data?.message || (enabled ? 'Banner enabled' : 'Banner disabled'));
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to update banner'); }
+    finally { setMaintenanceBannerLoading(false); }
+  };
+
+  const handleBulkAction = async () => {
+    const names = bulkUsernames.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
+    if (!names.length) { toast.error('Enter at least one username'); return; }
+    if (!window.confirm(`Apply "${bulkAction}" to ${names.length} user(s)?`)) return;
+    setBulkLoading(true);
+    try {
+      const res = await api.post('/admin/bulk-action', { usernames: names, action: bulkAction, value: bulkValue || null });
+      toast.success(res.data?.message || 'Bulk action applied');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setBulkLoading(false); }
+  };
+
   if (loading) {
     return (
       <div className={`${styles.pageContent}`}>
@@ -2378,6 +2472,301 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ─── Players (admin only) ─── */}
+      {isAdmin && (
+      <section id="admin-players" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <UserCog size={12} />
+          Player Management
+        </h2>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Activity}
+          title="System Health"
+          badge={systemHealth ? <span className={`text-[10px] font-heading ${systemHealth.status === 'healthy' ? 'text-emerald-400' : 'text-amber-400'}`}>{systemHealth.status}</span> : null}
+          isCollapsed={collapsed.systemHealth}
+          onToggle={() => { toggleSection('systemHealth'); if (collapsed.systemHealth && !systemHealth) handleFetchSystemHealth(); }}
+        />
+        {!collapsed.systemHealth && (
+          <div className="p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <BtnPrimary onClick={handleFetchSystemHealth} disabled={systemHealthLoading}>{systemHealthLoading ? 'Loading...' : 'Refresh'}</BtnPrimary>
+            </div>
+            {systemHealth && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] font-heading">
+                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                  <div className="text-mutedForeground uppercase">Status</div>
+                  <div className={`font-bold ${systemHealth.status === 'healthy' ? 'text-emerald-400' : 'text-amber-400'}`}>{systemHealth.status}</div>
+                </div>
+                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                  <div className="text-mutedForeground uppercase">Users (alive)</div>
+                  <div className="font-bold text-foreground">{(systemHealth.users_alive ?? 0).toLocaleString()} / {(systemHealth.users_total ?? 0).toLocaleString()}</div>
+                </div>
+                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                  <div className="text-mutedForeground uppercase">Online (5m)</div>
+                  <div className="font-bold text-primary">{(systemHealth.users_online ?? 0).toLocaleString()}</div>
+                </div>
+                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                  <div className="text-mutedForeground uppercase">Cars</div>
+                  <div className="font-bold text-foreground">{(systemHealth.cars ?? 0).toLocaleString()}</div>
+                </div>
+                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                  <div className="text-mutedForeground uppercase">Families</div>
+                  <div className="font-bold text-foreground">{(systemHealth.families ?? 0).toLocaleString()}</div>
+                </div>
+                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                  <div className="text-mutedForeground uppercase">Unresolved Flags</div>
+                  <div className={`font-bold ${(systemHealth.unresolved_flags ?? 0) > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>{systemHealth.unresolved_flags ?? 0}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={UserCog}
+          title="Player Actions"
+          isCollapsed={collapsed.player}
+          onToggle={() => toggleSection('player')}
+        />
+        {!collapsed.player && (
+          <div className="p-2 space-y-1">
+            <ActionRow icon={Gift} label="Who has exclusive loot" description="Cars (car20/car21), Colt Monitor, Steel Vest 1922, Speakeasy">
+              <BtnPrimary onClick={handleFetchExclusiveLoot} disabled={exclusiveLootLoading}>{exclusiveLootLoading ? '...' : 'View'}</BtnPrimary>
+            </ActionRow>
+            {exclusiveLootOwners && (
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-1 max-h-64 overflow-y-auto">
+                <div className="font-bold text-primary mb-1">Exclusive loot owners ({exclusiveLootOwners.length})</div>
+                {exclusiveLootOwners.map((o, i) => (
+                  <div key={i} className="flex items-center gap-2 py-0.5 border-b border-primary/10 last:border-0">
+                    <Link to={`/profile/${encodeURIComponent(o.username)}`} className="text-primary hover:underline font-bold">{o.username}</Link>
+                    <span className="text-mutedForeground">{o.items?.map((it) => `${it.item} (${it.category})`).join(', ') ?? '—'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <ActionRow icon={User} label="View registration info" description="Email, username, created at, IPs for target user">
+              <BtnPrimary onClick={handleViewRegistration} disabled={viewRegistrationLoading}>{viewRegistrationLoading ? '...' : 'View'}</BtnPrimary>
+            </ActionRow>
+            {viewRegistrationInfo && (
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-1">
+                <div className="font-bold text-primary mb-1">Registration info</div>
+                <div><span className="text-mutedForeground">Username:</span> {viewRegistrationInfo.username ?? '—'}</div>
+                <div><span className="text-mutedForeground">Email:</span> {viewRegistrationInfo.email ?? '—'}</div>
+                <div><span className="text-mutedForeground">User ID:</span> {viewRegistrationInfo.id ?? '—'}</div>
+                <div><span className="text-mutedForeground">Created:</span> {viewRegistrationInfo.created_at ? new Date(viewRegistrationInfo.created_at).toLocaleString() : '—'}</div>
+                <div><span className="text-mutedForeground">Registration IP:</span> {viewRegistrationInfo.registration_ip || '—'}</div>
+                <div><span className="text-mutedForeground">Last login IP:</span> {viewRegistrationInfo.last_login_ip || '—'}</div>
+                {viewRegistrationInfo.is_dead && <div className="text-red-400 font-bold">Account is dead</div>}
+              </div>
+            )}
+            <ActionRow icon={AlertTriangle} label="Login 500 diagnosis" description="Inspect user document by email (keys & types). Compare with a working user to find missing/wrong fields.">
+              <input
+                type="email"
+                value={userInspectEmail}
+                onChange={(e) => setUserInspectEmail(e.target.value)}
+                placeholder="user@example.com"
+                className="flex-1 min-w-0 max-w-[200px] px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+              />
+              <BtnPrimary onClick={handleUserInspect} disabled={userInspectLoading}>{userInspectLoading ? '...' : 'Inspect'}</BtnPrimary>
+            </ActionRow>
+            {userInspectResult && (
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-2 pl-6">
+                <div className="font-bold text-primary">User inspect: {userInspectResult.email}</div>
+                {userInspectResult.found ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                      <div><span className="text-mutedForeground">Username:</span> {userInspectResult.username ?? '—'}</div>
+                      <div><span className="text-mutedForeground">User ID:</span> {userInspectResult.user_id ?? '—'}</div>
+                      <div><span className="text-mutedForeground">has_id:</span> <span className={userInspectResult.has_id ? 'text-emerald-400' : 'text-red-400'}>{String(userInspectResult.has_id)}</span></div>
+                      <div><span className="text-mutedForeground">id_type:</span> {userInspectResult.id_type ?? '—'}</div>
+                      <div><span className="text-mutedForeground">Device:</span> {userInspectResult.last_device_type ?? '—'}</div>
+                      {userInspectResult.last_user_agent && (
+                        <div className="col-span-2"><span className="text-mutedForeground">User-Agent:</span> <span className="font-mono text-[9px] break-all">{userInspectResult.last_user_agent}</span></div>
+                      )}
+                    </div>
+                    <div><span className="text-mutedForeground">Keys ({userInspectResult.keys?.length ?? 0}):</span> <span className="text-foreground font-mono">{userInspectResult.keys?.join(', ') ?? '—'}</span></div>
+                    <div>
+                      <span className="text-mutedForeground">Value types:</span>
+                      <pre className="mt-1 p-1.5 rounded bg-zinc-900/60 text-[9px] overflow-x-auto max-h-40 overflow-y-auto">{JSON.stringify(userInspectResult.value_types || {}, null, 2)}</pre>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-mutedForeground">{userInspectResult.message ?? 'Not found.'}</div>
+                )}
+              </div>
+            )}
+            <ActionRow icon={UserCog} label="Change Rank">
+              {ranks.length > 0 ? (
+                <Select value={String(formData.newRank)} onChange={(e) => setFormData((prev) => ({ ...prev, newRank: parseInt(e.target.value) }))}>
+                  {ranks.map((r) => <option key={r.id} value={String(r.id)}>{r.name}</option>)}
+                </Select>
+              ) : (
+                <Input type="number" min="1" max="11" value={formData.newRank} onChange={(e) => setFormData((prev) => ({ ...prev, newRank: parseInt(e.target.value) }))} />
+              )}
+              <span className="text-[10px] text-zinc-500 font-heading shrink-0">Prestige</span>
+              <Select value={String(formData.prestigeLevel ?? 0)} onChange={(e) => setFormData((prev) => ({ ...prev, prestigeLevel: parseInt(e.target.value) }))} className="w-16">
+                {[0, 1, 2, 3, 4, 5].map((p) => (
+                  <option key={p} value={String(p)}>{p === 0 ? 'None' : `P${p}`}</option>
+                ))}
+              </Select>
+              <BtnPrimary onClick={handleChangeRank}>Set</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Coins} label="Add Points">
+              <FormattedNumberInput value={formData.points != null ? String(formData.points) : ''} onChange={(raw) => setFormData((prev) => ({ ...prev, points: raw === '' ? 0 : parseInt(raw, 10) }))} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
+              <BtnPrimary onClick={handleAddPoints}>Add</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Crosshair} label="Give Bullets">
+              <Input type="number" min="1" value={formData.bullets} onChange={(e) => setFormData((prev) => ({ ...prev, bullets: parseInt(e.target.value) }))} />
+              <BtnPrimary onClick={handleAddBullets}>Give</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Car} label="Add Car">
+              <Select value={formData.carId} onChange={(e) => setFormData((prev) => ({ ...prev, carId: e.target.value }))}>
+                {cars.length > 0 ? cars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>) : Array.from({ length: 20 }, (_, i) => <option key={i} value={`car${i + 1}`}>Car {i + 1}</option>)}
+              </Select>
+              <BtnPrimary onClick={handleAddCar}>Add</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Gift} label="Give Loot Box Pieces" description="Add pieces for Loot Box (100 = 1 open)">
+              <Input type="number" min="0" value={formData.lootPieces} onChange={(e) => setFormData((prev) => ({ ...prev, lootPieces: parseInt(e.target.value, 10) || 0 }))} />
+              <BtnPrimary onClick={handleAddLootPieces}>Give</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Lock} label="Lock Player (investigation)" description="User can only access /locked page and submit one comment until unlocked" color="text-red-400">
+              <BtnDanger onClick={handleLockPlayer}>Lock</BtnDanger>
+            </ActionRow>
+            <ActionRow icon={Lock} label="Unlock Account" description="Restore access after investigation">
+              <BtnPrimary onClick={() => handleUnlockAccount()}>Unlock</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={Lock} label="Test lock (60s)" description="Lock yourself for 60 seconds to test the locked page">
+              <button type="button" onClick={handleTestLockSelf} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-amber-500/20 border-amber-500/40 text-amber-400 hover:bg-amber-500/30">
+                Test lock
+              </button>
+            </ActionRow>
+            <ActionRow icon={Lock} label="Locked accounts" description="Users under investigation and their comment">
+              <button type="button" onClick={fetchLockedAccounts} disabled={lockedAccountsLoading} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600 disabled:opacity-50">
+                {lockedAccountsLoading ? '...' : 'Refresh'}
+              </button>
+            </ActionRow>
+            {lockedAccounts.length > 0 && (
+              <div className="mt-1 pl-6 space-y-2 border-l-2 border-amber-500/30">
+                {lockedAccounts.map((u) => (
+                  <div key={u.username} className="text-[10px] font-heading rounded border border-zinc-600/50 bg-zinc-800/30 p-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-bold text-amber-400">{u.username}</span>
+                      <button type="button" onClick={() => handleUnlockAccount(u.username)} className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30">Unlock</button>
+                    </div>
+                    {u.account_locked_at && <div className="text-zinc-500 mt-0.5">Locked: {new Date(u.account_locked_at).toLocaleString()}</div>}
+                    {u.account_locked_comment ? <div className="mt-1 text-foreground whitespace-pre-wrap">{u.account_locked_comment}</div> : <div className="mt-1 text-zinc-500 italic">No comment yet.</div>}
+                    {u.account_locked_comment_at && <div className="text-zinc-500 text-[9px]">Submitted: {new Date(u.account_locked_comment_at).toLocaleString()}</div>}
+                    {u.account_locked_admin_message && (
+                      <div className="mt-2 pt-2 border-t border-zinc-600/50">
+                        <span className="text-primary font-bold">Staff message:</span>
+                        <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_admin_message}</div>
+                        {u.account_locked_admin_message_at && <div className="text-zinc-500 text-[9px]">{new Date(u.account_locked_admin_message_at).toLocaleString()}</div>}
+                      </div>
+                    )}
+                    {u.account_locked_user_reply && (
+                      <div className="mt-1">
+                        <span className="text-emerald-400 font-bold">Their reply:</span>
+                        <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_user_reply}</div>
+                        {u.account_locked_user_reply_at && <div className="text-zinc-500 text-[9px]">{new Date(u.account_locked_user_reply_at).toLocaleString()}</div>}
+                      </div>
+                    )}
+                    <div className="mt-2 pt-2 border-t border-zinc-600/50">
+                      <textarea
+                        value={lockedMessageByUser[u.username] ?? ''}
+                        onChange={(e) => setLockedMessageByUser((prev) => ({ ...prev, [u.username]: e.target.value }))}
+                        placeholder="Leave message for user (they can reply once)"
+                        rows={2}
+                        className="w-full px-2 py-1 rounded border border-zinc-600 bg-zinc-800/50 text-[10px] font-heading placeholder:text-zinc-500 focus:border-primary/50 focus:outline-none resize-y"
+                        maxLength={2000}
+                        disabled={sendingMessageTo === u.username}
+                      />
+                      <button type="button" onClick={() => handleSendLockedMessage(u.username)} disabled={sendingMessageTo === u.username || !(lockedMessageByUser[u.username] || '').trim()} className="mt-1 px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed">
+                        {sendingMessageTo === u.username ? 'Sending...' : 'Send message'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <ActionRow icon={Skull} label="Kill Player (modkill)" description="Account is dead; cannot login until revived" color="text-red-400">
+              <BtnDanger onClick={handleKillPlayer}>Kill</BtnDanger>
+            </ActionRow>
+            <ActionRow icon={Zap} label="Revive Player" description="Restore a dead or modkilled account so they can log in again">
+              <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={Bot} label="Auto Rank" description="Give or remove auto rank for the target user">
+              <button type="button" onClick={handleGiveAutoRank} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30">Give</button>
+              <button type="button" onClick={handleRemoveAutoRank} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600">Remove</button>
+            </ActionRow>
+            <ActionRow icon={Mail} label="Change Email" description="Set a new email for the target user">
+              <Input type="email" value={formData.adminNewEmail} onChange={(e) => setFormData((prev) => ({ ...prev, adminNewEmail: e.target.value }))} placeholder="new@email.com" className="flex-1 min-w-0 text-[11px]" />
+              <BtnPrimary onClick={handleChangeEmail}>Set</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={LogOut} label="Log Out User" description="Invalidate all sessions; they must log in again">
+              <BtnPrimary onClick={handleLogOutUser}>Log out</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={Users} label="Sessions" description="View and revoke individual sessions (IP, device, last used)">
+              <BtnPrimary onClick={handleLoadUserSessions} disabled={adminUserSessionsLoading}>
+                {adminUserSessionsLoading ? '...' : 'View sessions'}
+              </BtnPrimary>
+            </ActionRow>
+            {adminUserSessions && (
+              <div className="pl-6 pr-2 py-2 space-y-1 border-l-2 border-primary/20 ml-1">
+                <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider mb-1">
+                  {adminUserSessions.length ? `${adminUserSessions.length} session(s)` : 'No sessions'}
+                </div>
+                {adminUserSessions.length === 0 ? (
+                  <div className="text-[10px] text-mutedForeground">No sessions (or legacy token).</div>
+                ) : (
+                  adminUserSessions.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex flex-wrap items-center justify-between gap-2 py-1.5 px-2 rounded text-[10px] font-heading bg-zinc-800/50"
+                    >
+                      <span className="text-foreground">{s.ip || '—'}</span>
+                      <span className="text-mutedForeground">{s.device_type || '—'}</span>
+                      <span className="text-mutedForeground">
+                        Last used: {s.last_used_at ? new Date(s.last_used_at).toLocaleString() : '—'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleAdminRevokeSession(s.id)}
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-heading uppercase border border-amber-500/40 text-amber-400 hover:bg-amber-500/20"
+                      >
+                        <LogOut size={10} />
+                        Revoke
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+            <ActionRow icon={KeyRound} label="Set Password" description="Set a new password (min 6 chars); user is logged out">
+              <Input type="password" value={formData.adminNewPassword} onChange={(e) => setFormData((prev) => ({ ...prev, adminNewPassword: e.target.value }))} placeholder="New password" className="flex-1 min-w-0 text-[11px]" autoComplete="off" />
+              <BtnPrimary onClick={handleSetPassword}>Set</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={Lock} label="Clear Login Lockout" description="Remove lockout so they can try logging in again">
+              <BtnPrimary onClick={handleClearLoginLockout}>Clear</BtnPrimary>
+            </ActionRow>
+          </div>
+        )}
+        </div>
+      </section>
+      )}
+
+
       {/* ─── Game World (admin only) ─── */}
       {isAdmin && (
       <section id="admin-gameworld" className="admin-category-nav space-y-4">
@@ -2408,94 +2797,6 @@ export default function Admin() {
               </BtnSecondary>
             </div>
             <p className="text-[10px] text-mutedForeground">All events (testing): applies every multiplier at once.</p>
-          </div>
-        )}
-        </div>
-
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <SectionHeader
-          icon={Shield}
-          title="Cloudflare Bot Blocking"
-          badge={
-            <span className="text-[10px] font-heading">
-              {cfBotBlockError ? (
-                <span className="text-amber-400">Not configured</span>
-              ) : cfBotBlockEnabled === null ? (
-                <span className="text-mutedForeground">Loading...</span>
-              ) : cfBotBlockEnabled ? (
-                <span className="text-emerald-400">Blocking bots</span>
-              ) : (
-                <span className="text-red-400">Allowing bots</span>
-              )}
-            </span>
-          }
-          isCollapsed={collapsed.cfBotBlock}
-          onToggle={() => toggleSection('cfBotBlock')}
-        />
-        {!collapsed.cfBotBlock && (
-          <div className="p-3 space-y-2">
-            {cfBotBlockError ? (
-              <p className="text-[10px] text-amber-400">{cfBotBlockError}</p>
-            ) : (
-              <>
-                <p className="text-[10px] text-mutedForeground">
-                  Toggle the &quot;Block All Bots&quot; rule in Cloudflare. When enabled, known bots (Google, SEO tools, AI crawlers) are blocked.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <BtnPrimary
-                    onClick={handleToggleCfBotBlock}
-                    disabled={cfBotBlockLoading || cfBotBlockEnabled === null}
-                  >
-                    {cfBotBlockLoading ? 'Updating...' : cfBotBlockEnabled ? 'Disable Bot Blocking' : 'Enable Bot Blocking'}
-                  </BtnPrimary>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-        </div>
-
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <SectionHeader
-          icon={Bot}
-          title="Block Automation Scripts"
-          badge={
-            <span className="text-[10px] font-heading">
-              {cfAutoBlockError ? (
-                <span className="text-amber-400">Not configured</span>
-              ) : cfAutoBlockEnabled === null ? (
-                <span className="text-mutedForeground">Loading...</span>
-              ) : cfAutoBlockEnabled ? (
-                <span className="text-emerald-400">Blocking scripts</span>
-              ) : (
-                <span className="text-red-400">Allowing scripts</span>
-              )}
-            </span>
-          }
-          isCollapsed={collapsed.cfAutoBlock}
-          onToggle={() => toggleSection('cfAutoBlock')}
-        />
-        {!collapsed.cfAutoBlock && (
-          <div className="p-3 space-y-2">
-            {cfAutoBlockError ? (
-              <p className="text-[10px] text-amber-400">{cfAutoBlockError}</p>
-            ) : (
-              <>
-                <p className="text-[10px] text-mutedForeground">
-                  Toggle the &quot;Block Automation Scripts&quot; rule. Blocks Python, Java, Selenium, Puppeteer, curl, and other automation tools players might use to cheat.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <BtnPrimary
-                    onClick={handleToggleCfAutoBlock}
-                    disabled={cfAutoBlockLoading || cfAutoBlockEnabled === null}
-                  >
-                    {cfAutoBlockLoading ? 'Updating...' : cfAutoBlockEnabled ? 'Disable Script Blocking' : 'Enable Script Blocking'}
-                  </BtnPrimary>
-                </div>
-              </>
-            )}
           </div>
         )}
         </div>
@@ -2764,16 +3065,55 @@ export default function Admin() {
           </div>
         )}
         </div>
-      </section>
-      )}
 
-      {/* ─── GTA pool (admin only) ─── */}
-      {isAdmin && (
-      <section id="admin-gta-pool" className="admin-category-nav space-y-4">
-        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
-          <Car size={12} />
-          GTA pool
-        </h2>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Bell}
+          title="Maintenance Banner"
+          badge={maintenanceBanner?.enabled ? <span className="text-[10px] font-heading text-amber-400">Active</span> : null}
+          isCollapsed={collapsed.maintenanceBanner}
+          onToggle={() => { toggleSection('maintenanceBanner'); if (collapsed.maintenanceBanner && !maintenanceBanner) handleFetchMaintenanceBanner(); }}
+        />
+        {!collapsed.maintenanceBanner && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground font-heading">Set a maintenance banner visible to all players. They see a countdown and your message.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <BtnPrimary onClick={handleFetchMaintenanceBanner} disabled={maintenanceBannerLoading}>
+                {maintenanceBannerLoading ? '...' : 'Refresh status'}
+              </BtnPrimary>
+              <span className="text-[10px] font-heading">
+                {maintenanceBanner?.enabled ? <span className="text-amber-400 font-bold">Banner is ON</span> : <span className="text-mutedForeground">Banner is OFF</span>}
+              </span>
+            </div>
+            <div className="space-y-1">
+              <input
+                type="text"
+                value={maintenanceMsg}
+                onChange={(e) => setMaintenanceMsg(e.target.value)}
+                placeholder="Maintenance message..."
+                className="w-full px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={5}
+                  max={1440}
+                  value={maintenanceDuration}
+                  onChange={(e) => setMaintenanceDuration(parseInt(e.target.value, 10) || 60)}
+                  className="w-24 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                />
+                <span className="text-[10px] text-mutedForeground">minutes duration</span>
+              </div>
+              <div className="flex gap-2">
+                <BtnPrimary onClick={() => handleSetMaintenanceBanner(true)} disabled={maintenanceBannerLoading}>Enable banner</BtnPrimary>
+                <BtnDanger onClick={() => handleSetMaintenanceBanner(false)} disabled={maintenanceBannerLoading}>Disable</BtnDanger>
+              </div>
+            </div>
+          </div>
+        )}
+        </div>
+
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
@@ -2821,913 +3161,103 @@ export default function Admin() {
       </section>
       )}
 
-      {/* ─── Quick & Bulk (admin only) ─── */}
+      {/* ─── Security & Cloudflare (admin only) ─── */}
       {isAdmin && (
-      <section id="admin-quick" className="admin-category-nav space-y-4">
+      <section id="admin-security" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
-          <Gift size={12} />
-          Quick & Bulk
+          <Globe size={12} />
+          Security & Cloudflare
         </h2>
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
-          icon={Zap}
-          title="Quick Actions"
-          isCollapsed={collapsed.quick}
-          onToggle={() => toggleSection('quick')}
-        />
-        {!collapsed.quick && (
-          <div className="p-2 space-y-1">
-            <ActionRow icon={Building2} label="Seed Families" description="Create 3 families with 5 users each">
-              <BtnPrimary onClick={handleSeedFamilies}>Seed</BtnPrimary>
-            </ActionRow>
-            <ActionRow icon={Gift} label="Give All Points" description="Give points to all alive accounts">
-              <FormattedNumberInput value={String(giveAllPoints)} onChange={(raw) => setGiveAllPoints(parseInt(raw, 10) || 1)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
-              <BtnPrimary onClick={handleGiveAllPoints}>Give</BtnPrimary>
-            </ActionRow>
-            <ActionRow icon={Gift} label="Give All Money" description="Give money to all alive accounts">
-              <FormattedNumberInput value={String(giveAllMoney)} onChange={(raw) => setGiveAllMoney(parseInt(raw, 10) || 10000)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
-              <BtnPrimary onClick={handleGiveAllMoney}>Give</BtnPrimary>
-            </ActionRow>
-          </div>
-        )}
-        </div>
-      </section>
-      )}
-
-      {/* ─── Players (admin only) ─── */}
-      {isAdmin && (
-      <section id="admin-players" className="admin-category-nav space-y-4">
-        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
-          <UserCog size={12} />
-          Players
-        </h2>
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <SectionHeader
-          icon={UserCog}
-          title="Player Actions"
-          isCollapsed={collapsed.player}
-          onToggle={() => toggleSection('player')}
-        />
-        {!collapsed.player && (
-          <div className="p-2 space-y-1">
-            <ActionRow icon={Gift} label="Who has exclusive loot" description="Cars (car20/car21), Colt Monitor, Steel Vest 1922, Speakeasy">
-              <BtnPrimary onClick={handleFetchExclusiveLoot} disabled={exclusiveLootLoading}>{exclusiveLootLoading ? '...' : 'View'}</BtnPrimary>
-            </ActionRow>
-            {exclusiveLootOwners && (
-              <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-1 max-h-64 overflow-y-auto">
-                <div className="font-bold text-primary mb-1">Exclusive loot owners ({exclusiveLootOwners.length})</div>
-                {exclusiveLootOwners.map((o, i) => (
-                  <div key={i} className="flex items-center gap-2 py-0.5 border-b border-primary/10 last:border-0">
-                    <Link to={`/profile/${encodeURIComponent(o.username)}`} className="text-primary hover:underline font-bold">{o.username}</Link>
-                    <span className="text-mutedForeground">{o.items?.map((it) => `${it.item} (${it.category})`).join(', ') ?? '—'}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <ActionRow icon={User} label="View registration info" description="Email, username, created at, IPs for target user">
-              <BtnPrimary onClick={handleViewRegistration} disabled={viewRegistrationLoading}>{viewRegistrationLoading ? '...' : 'View'}</BtnPrimary>
-            </ActionRow>
-            {viewRegistrationInfo && (
-              <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-1">
-                <div className="font-bold text-primary mb-1">Registration info</div>
-                <div><span className="text-mutedForeground">Username:</span> {viewRegistrationInfo.username ?? '—'}</div>
-                <div><span className="text-mutedForeground">Email:</span> {viewRegistrationInfo.email ?? '—'}</div>
-                <div><span className="text-mutedForeground">User ID:</span> {viewRegistrationInfo.id ?? '—'}</div>
-                <div><span className="text-mutedForeground">Created:</span> {viewRegistrationInfo.created_at ? new Date(viewRegistrationInfo.created_at).toLocaleString() : '—'}</div>
-                <div><span className="text-mutedForeground">Registration IP:</span> {viewRegistrationInfo.registration_ip || '—'}</div>
-                <div><span className="text-mutedForeground">Last login IP:</span> {viewRegistrationInfo.last_login_ip || '—'}</div>
-                {viewRegistrationInfo.is_dead && <div className="text-red-400 font-bold">Account is dead</div>}
-              </div>
-            )}
-            <ActionRow icon={AlertTriangle} label="Login 500 diagnosis" description="Inspect user document by email (keys & types). Compare with a working user to find missing/wrong fields.">
-              <input
-                type="email"
-                value={userInspectEmail}
-                onChange={(e) => setUserInspectEmail(e.target.value)}
-                placeholder="user@example.com"
-                className="flex-1 min-w-0 max-w-[200px] px-2 py-1 rounded border border-input bg-transparent text-[11px]"
-              />
-              <BtnPrimary onClick={handleUserInspect} disabled={userInspectLoading}>{userInspectLoading ? '...' : 'Inspect'}</BtnPrimary>
-            </ActionRow>
-            {userInspectResult && (
-              <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-2 pl-6">
-                <div className="font-bold text-primary">User inspect: {userInspectResult.email}</div>
-                {userInspectResult.found ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-                      <div><span className="text-mutedForeground">Username:</span> {userInspectResult.username ?? '—'}</div>
-                      <div><span className="text-mutedForeground">User ID:</span> {userInspectResult.user_id ?? '—'}</div>
-                      <div><span className="text-mutedForeground">has_id:</span> <span className={userInspectResult.has_id ? 'text-emerald-400' : 'text-red-400'}>{String(userInspectResult.has_id)}</span></div>
-                      <div><span className="text-mutedForeground">id_type:</span> {userInspectResult.id_type ?? '—'}</div>
-                      <div><span className="text-mutedForeground">Device:</span> {userInspectResult.last_device_type ?? '—'}</div>
-                      {userInspectResult.last_user_agent && (
-                        <div className="col-span-2"><span className="text-mutedForeground">User-Agent:</span> <span className="font-mono text-[9px] break-all">{userInspectResult.last_user_agent}</span></div>
-                      )}
-                    </div>
-                    <div><span className="text-mutedForeground">Keys ({userInspectResult.keys?.length ?? 0}):</span> <span className="text-foreground font-mono">{userInspectResult.keys?.join(', ') ?? '—'}</span></div>
-                    <div>
-                      <span className="text-mutedForeground">Value types:</span>
-                      <pre className="mt-1 p-1.5 rounded bg-zinc-900/60 text-[9px] overflow-x-auto max-h-40 overflow-y-auto">{JSON.stringify(userInspectResult.value_types || {}, null, 2)}</pre>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-mutedForeground">{userInspectResult.message ?? 'Not found.'}</div>
-                )}
-              </div>
-            )}
-            <ActionRow icon={UserCog} label="Change Rank">
-              {ranks.length > 0 ? (
-                <Select value={String(formData.newRank)} onChange={(e) => setFormData((prev) => ({ ...prev, newRank: parseInt(e.target.value) }))}>
-                  {ranks.map((r) => <option key={r.id} value={String(r.id)}>{r.name}</option>)}
-                </Select>
+          icon={Shield}
+          title="Cloudflare Bot Blocking"
+          badge={
+            <span className="text-[10px] font-heading">
+              {cfBotBlockError ? (
+                <span className="text-amber-400">Not configured</span>
+              ) : cfBotBlockEnabled === null ? (
+                <span className="text-mutedForeground">Loading...</span>
+              ) : cfBotBlockEnabled ? (
+                <span className="text-emerald-400">Blocking bots</span>
               ) : (
-                <Input type="number" min="1" max="11" value={formData.newRank} onChange={(e) => setFormData((prev) => ({ ...prev, newRank: parseInt(e.target.value) }))} />
+                <span className="text-red-400">Allowing bots</span>
               )}
-              <span className="text-[10px] text-zinc-500 font-heading shrink-0">Prestige</span>
-              <Select value={String(formData.prestigeLevel ?? 0)} onChange={(e) => setFormData((prev) => ({ ...prev, prestigeLevel: parseInt(e.target.value) }))} className="w-16">
-                {[0, 1, 2, 3, 4, 5].map((p) => (
-                  <option key={p} value={String(p)}>{p === 0 ? 'None' : `P${p}`}</option>
-                ))}
-              </Select>
-              <BtnPrimary onClick={handleChangeRank}>Set</BtnPrimary>
-            </ActionRow>
-
-            <ActionRow icon={Coins} label="Add Points">
-              <FormattedNumberInput value={formData.points != null ? String(formData.points) : ''} onChange={(raw) => setFormData((prev) => ({ ...prev, points: raw === '' ? 0 : parseInt(raw, 10) }))} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
-              <BtnPrimary onClick={handleAddPoints}>Add</BtnPrimary>
-            </ActionRow>
-
-            <ActionRow icon={Crosshair} label="Give Bullets">
-              <Input type="number" min="1" value={formData.bullets} onChange={(e) => setFormData((prev) => ({ ...prev, bullets: parseInt(e.target.value) }))} />
-              <BtnPrimary onClick={handleAddBullets}>Give</BtnPrimary>
-            </ActionRow>
-
-            <ActionRow icon={Car} label="Add Car">
-              <Select value={formData.carId} onChange={(e) => setFormData((prev) => ({ ...prev, carId: e.target.value }))}>
-                {cars.length > 0 ? cars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>) : Array.from({ length: 20 }, (_, i) => <option key={i} value={`car${i + 1}`}>Car {i + 1}</option>)}
-              </Select>
-              <BtnPrimary onClick={handleAddCar}>Add</BtnPrimary>
-            </ActionRow>
-
-            <ActionRow icon={Gift} label="Give Loot Box Pieces" description="Add pieces for Loot Box (100 = 1 open)">
-              <Input type="number" min="0" value={formData.lootPieces} onChange={(e) => setFormData((prev) => ({ ...prev, lootPieces: parseInt(e.target.value, 10) || 0 }))} />
-              <BtnPrimary onClick={handleAddLootPieces}>Give</BtnPrimary>
-            </ActionRow>
-
-            <ActionRow icon={Lock} label="Lock Player (investigation)" description="User can only access /locked page and submit one comment until unlocked" color="text-red-400">
-              <BtnDanger onClick={handleLockPlayer}>Lock</BtnDanger>
-            </ActionRow>
-            <ActionRow icon={Lock} label="Unlock Account" description="Restore access after investigation">
-              <BtnPrimary onClick={() => handleUnlockAccount()}>Unlock</BtnPrimary>
-            </ActionRow>
-            <ActionRow icon={Lock} label="Test lock (60s)" description="Lock yourself for 60 seconds to test the locked page">
-              <button type="button" onClick={handleTestLockSelf} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-amber-500/20 border-amber-500/40 text-amber-400 hover:bg-amber-500/30">
-                Test lock
-              </button>
-            </ActionRow>
-            <ActionRow icon={Lock} label="Locked accounts" description="Users under investigation and their comment">
-              <button type="button" onClick={fetchLockedAccounts} disabled={lockedAccountsLoading} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600 disabled:opacity-50">
-                {lockedAccountsLoading ? '...' : 'Refresh'}
-              </button>
-            </ActionRow>
-            {lockedAccounts.length > 0 && (
-              <div className="mt-1 pl-6 space-y-2 border-l-2 border-amber-500/30">
-                {lockedAccounts.map((u) => (
-                  <div key={u.username} className="text-[10px] font-heading rounded border border-zinc-600/50 bg-zinc-800/30 p-2">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className="font-bold text-amber-400">{u.username}</span>
-                      <button type="button" onClick={() => handleUnlockAccount(u.username)} className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30">Unlock</button>
-                    </div>
-                    {u.account_locked_at && <div className="text-zinc-500 mt-0.5">Locked: {new Date(u.account_locked_at).toLocaleString()}</div>}
-                    {u.account_locked_comment ? <div className="mt-1 text-foreground whitespace-pre-wrap">{u.account_locked_comment}</div> : <div className="mt-1 text-zinc-500 italic">No comment yet.</div>}
-                    {u.account_locked_comment_at && <div className="text-zinc-500 text-[9px]">Submitted: {new Date(u.account_locked_comment_at).toLocaleString()}</div>}
-                    {u.account_locked_admin_message && (
-                      <div className="mt-2 pt-2 border-t border-zinc-600/50">
-                        <span className="text-primary font-bold">Staff message:</span>
-                        <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_admin_message}</div>
-                        {u.account_locked_admin_message_at && <div className="text-zinc-500 text-[9px]">{new Date(u.account_locked_admin_message_at).toLocaleString()}</div>}
-                      </div>
-                    )}
-                    {u.account_locked_user_reply && (
-                      <div className="mt-1">
-                        <span className="text-emerald-400 font-bold">Their reply:</span>
-                        <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_user_reply}</div>
-                        {u.account_locked_user_reply_at && <div className="text-zinc-500 text-[9px]">{new Date(u.account_locked_user_reply_at).toLocaleString()}</div>}
-                      </div>
-                    )}
-                    <div className="mt-2 pt-2 border-t border-zinc-600/50">
-                      <textarea
-                        value={lockedMessageByUser[u.username] ?? ''}
-                        onChange={(e) => setLockedMessageByUser((prev) => ({ ...prev, [u.username]: e.target.value }))}
-                        placeholder="Leave message for user (they can reply once)"
-                        rows={2}
-                        className="w-full px-2 py-1 rounded border border-zinc-600 bg-zinc-800/50 text-[10px] font-heading placeholder:text-zinc-500 focus:border-primary/50 focus:outline-none resize-y"
-                        maxLength={2000}
-                        disabled={sendingMessageTo === u.username}
-                      />
-                      <button type="button" onClick={() => handleSendLockedMessage(u.username)} disabled={sendingMessageTo === u.username || !(lockedMessageByUser[u.username] || '').trim()} className="mt-1 px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed">
-                        {sendingMessageTo === u.username ? 'Sending...' : 'Send message'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <ActionRow icon={Skull} label="Kill Player (modkill)" description="Account is dead; cannot login until revived" color="text-red-400">
-              <BtnDanger onClick={handleKillPlayer}>Kill</BtnDanger>
-            </ActionRow>
-            <ActionRow icon={Zap} label="Revive Player" description="Restore a dead or modkilled account so they can log in again">
-              <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
-            </ActionRow>
-            <ActionRow icon={Bot} label="Auto Rank" description="Give or remove auto rank for the target user">
-              <button type="button" onClick={handleGiveAutoRank} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30">Give</button>
-              <button type="button" onClick={handleRemoveAutoRank} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600">Remove</button>
-            </ActionRow>
-            <ActionRow icon={Mail} label="Change Email" description="Set a new email for the target user">
-              <Input type="email" value={formData.adminNewEmail} onChange={(e) => setFormData((prev) => ({ ...prev, adminNewEmail: e.target.value }))} placeholder="new@email.com" className="flex-1 min-w-0 text-[11px]" />
-              <BtnPrimary onClick={handleChangeEmail}>Set</BtnPrimary>
-            </ActionRow>
-            <ActionRow icon={LogOut} label="Log Out User" description="Invalidate all sessions; they must log in again">
-              <BtnPrimary onClick={handleLogOutUser}>Log out</BtnPrimary>
-            </ActionRow>
-            <ActionRow icon={Users} label="Sessions" description="View and revoke individual sessions (IP, device, last used)">
-              <BtnPrimary onClick={handleLoadUserSessions} disabled={adminUserSessionsLoading}>
-                {adminUserSessionsLoading ? '...' : 'View sessions'}
-              </BtnPrimary>
-            </ActionRow>
-            {adminUserSessions && (
-              <div className="pl-6 pr-2 py-2 space-y-1 border-l-2 border-primary/20 ml-1">
-                <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider mb-1">
-                  {adminUserSessions.length ? `${adminUserSessions.length} session(s)` : 'No sessions'}
+            </span>
+          }
+          isCollapsed={collapsed.cfBotBlock}
+          onToggle={() => toggleSection('cfBotBlock')}
+        />
+        {!collapsed.cfBotBlock && (
+          <div className="p-3 space-y-2">
+            {cfBotBlockError ? (
+              <p className="text-[10px] text-amber-400">{cfBotBlockError}</p>
+            ) : (
+              <>
+                <p className="text-[10px] text-mutedForeground">
+                  Toggle the &quot;Block All Bots&quot; rule in Cloudflare. When enabled, known bots (Google, SEO tools, AI crawlers) are blocked.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <BtnPrimary
+                    onClick={handleToggleCfBotBlock}
+                    disabled={cfBotBlockLoading || cfBotBlockEnabled === null}
+                  >
+                    {cfBotBlockLoading ? 'Updating...' : cfBotBlockEnabled ? 'Disable Bot Blocking' : 'Enable Bot Blocking'}
+                  </BtnPrimary>
                 </div>
-                {adminUserSessions.length === 0 ? (
-                  <div className="text-[10px] text-mutedForeground">No sessions (or legacy token).</div>
-                ) : (
-                  adminUserSessions.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex flex-wrap items-center justify-between gap-2 py-1.5 px-2 rounded text-[10px] font-heading bg-zinc-800/50"
-                    >
-                      <span className="text-foreground">{s.ip || '—'}</span>
-                      <span className="text-mutedForeground">{s.device_type || '—'}</span>
-                      <span className="text-mutedForeground">
-                        Last used: {s.last_used_at ? new Date(s.last_used_at).toLocaleString() : '—'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleAdminRevokeSession(s.id)}
-                        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-heading uppercase border border-amber-500/40 text-amber-400 hover:bg-amber-500/20"
-                      >
-                        <LogOut size={10} />
-                        Revoke
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
+              </>
             )}
-            <ActionRow icon={KeyRound} label="Set Password" description="Set a new password (min 6 chars); user is logged out">
-              <Input type="password" value={formData.adminNewPassword} onChange={(e) => setFormData((prev) => ({ ...prev, adminNewPassword: e.target.value }))} placeholder="New password" className="flex-1 min-w-0 text-[11px]" autoComplete="off" />
-              <BtnPrimary onClick={handleSetPassword}>Set</BtnPrimary>
-            </ActionRow>
-            <ActionRow icon={Lock} label="Clear Login Lockout" description="Remove lockout so they can try logging in again">
-              <BtnPrimary onClick={handleClearLoginLockout}>Clear</BtnPrimary>
-            </ActionRow>
           </div>
         )}
         </div>
-      </section>
-      )}
 
-      {/* ─── Combat & Tools (admin only) ─── */}
-      {isAdmin && (
-      <section id="admin-combat" className="admin-category-nav space-y-4">
-        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
-          <Crosshair size={12} />
-          Combat & Tools
-        </h2>
+
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
-          icon={Clock}
-          title="Search & Attack Tools"
-          isCollapsed={collapsed.search}
-          onToggle={() => toggleSection('search')}
+          icon={Bot}
+          title="Block Automation Scripts"
+          badge={
+            <span className="text-[10px] font-heading">
+              {cfAutoBlockError ? (
+                <span className="text-amber-400">Not configured</span>
+              ) : cfAutoBlockEnabled === null ? (
+                <span className="text-mutedForeground">Loading...</span>
+              ) : cfAutoBlockEnabled ? (
+                <span className="text-emerald-400">Blocking scripts</span>
+              ) : (
+                <span className="text-red-400">Allowing scripts</span>
+              )}
+            </span>
+          }
+          isCollapsed={collapsed.cfAutoBlock}
+          onToggle={() => toggleSection('cfAutoBlock')}
         />
-        {!collapsed.search && (
-          <div className="p-2 space-y-1">
-            <ActionRow icon={Settings} label="Set Search Time" description="Per user: 1–999 mins, or 0 to clear override">
-              <Input type="number" min={0} max={999} value={formData.searchMinutes} onChange={(e) => setFormData((prev) => ({ ...prev, searchMinutes: parseInt(e.target.value) || 0 }))} placeholder="Mins" />
-              <BtnPrimary onClick={handleSetSearchTime}>Set</BtnPrimary>
-            </ActionRow>
-
-            <ActionRow icon={Settings} label="Set All to 1 min" description="Affects all users">
-              <BtnPrimary onClick={handleSetAllSearchTime1}>Set All 1 min</BtnPrimary>
-            </ActionRow>
-            <ActionRow icon={Settings} label="Set All to 5 mins" description="Affects all users">
-              <BtnPrimary onClick={handleSetAllSearchTime5}>Set All 5 min</BtnPrimary>
-            </ActionRow>
-
-            <ActionRow icon={Trash2} label="Clear All Searches" description="Delete all attack searches" color="text-red-400">
-              <BtnDanger onClick={handleClearAllSearches} disabled={clearSearchesLoading}>
-                {clearSearchesLoading ? '...' : 'Clear'}
-              </BtnDanger>
-            </ActionRow>
-
-            <ActionRow icon={Clock} label="Reset Hitlist NPC Timers" description="All users can add NPCs again">
-              <BtnPrimary onClick={handleResetHitlistNpcTimers} disabled={resetNpcTimersLoading}>
-                {resetNpcTimersLoading ? '...' : 'Reset'}
-              </BtnPrimary>
-            </ActionRow>
-
-            <ActionRow icon={Clock} label="Reset All OC Timers" description="Clear OC cooldown for everyone; all can run Organised Crime immediately">
-              <BtnPrimary onClick={handleResetAllOcTimers} disabled={resetOcTimersLoading}>
-                {resetOcTimersLoading ? '...' : 'Reset'}
-              </BtnPrimary>
-            </ActionRow>
-
-            <ActionRow icon={Clock} label="Reset Daily Rewards Timer" description="Clear 6h play window: all users get 3 plays again (RPS / Noughts & Crosses)">
-              <BtnPrimary onClick={handleResetDailyRewardsTimerAll} disabled={resetDailyRewardsLoading}>
-                {resetDailyRewardsLoading ? '...' : 'Reset all'}
-              </BtnPrimary>
-            </ActionRow>
-            <ActionRow icon={Clock} label="Reset Daily Rewards for one user" description="Use Target Username above; clears their plays and any in-progress game">
-              <BtnPrimary onClick={handleResetDailyRewardsTimerUser} disabled={resetDailyRewardsLoading}>
-                {resetDailyRewardsLoading ? '...' : 'Reset user'}
-              </BtnPrimary>
-            </ActionRow>
+        {!collapsed.cfAutoBlock && (
+          <div className="p-3 space-y-2">
+            {cfAutoBlockError ? (
+              <p className="text-[10px] text-amber-400">{cfAutoBlockError}</p>
+            ) : (
+              <>
+                <p className="text-[10px] text-mutedForeground">
+                  Toggle the &quot;Block Automation Scripts&quot; rule. Blocks Python, Java, Selenium, Puppeteer, curl, and other automation tools players might use to cheat.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <BtnPrimary
+                    onClick={handleToggleCfAutoBlock}
+                    disabled={cfAutoBlockLoading || cfAutoBlockEnabled === null}
+                  >
+                    {cfAutoBlockLoading ? 'Updating...' : cfAutoBlockEnabled ? 'Disable Script Blocking' : 'Enable Script Blocking'}
+                  </BtnPrimary>
+                </div>
+              </>
+            )}
           </div>
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={Shield}
-            title="Bodyguard Tools"
-            isCollapsed={collapsed.bodyguards}
-            onToggle={() => toggleSection('bodyguards')}
-          />
-          {!collapsed.bodyguards && (
-            <div className="p-2 space-y-1">
-              <ActionRow icon={Shield} label="Generate Robots" description="For target user">
-                <Input type="number" min="1" max="4" value={bgTestCount} onChange={(e) => setBgTestCount(parseInt(e.target.value) || 1)} />
-                <BtnPrimary onClick={handleGenerateBodyguards}>Generate</BtnPrimary>
-              </ActionRow>
 
-              <ActionRow icon={Trash2} label="Clear Target's BGs" description="Remove all bodyguards" color="text-red-400">
-                <BtnDanger onClick={handleClearBodyguards}>Clear</BtnDanger>
-              </ActionRow>
-
-              <ActionRow icon={Trash2} label="Drop ALL Bodyguards" description="Remove from every user" color="text-red-400">
-                <BtnDanger onClick={handleDropAllHumanBodyguards} disabled={dropHumanBgLoading}>
-                  {dropHumanBgLoading ? '...' : 'Drop All'}
-                </BtnDanger>
-              </ActionRow>
-
-              <ActionRow icon={Shield} label="Test bodyguard payout" description="Run weekly payout job once (human BGs only)">
-                <BtnPrimary onClick={handleTestBodyguardPayout} disabled={testPayoutLoading}>
-                  {testPayoutLoading ? '...' : 'Run test payout'}
-                </BtnPrimary>
-              </ActionRow>
-
-              <ActionRow icon={Shield} label="Seed 4 Human Bodyguards" description="Clears robots, creates 4 test humans for you" color="text-emerald-400">
-                <BtnPrimary onClick={handleSeedHumanBodyguards} disabled={seedHumanBgLoading}>
-                  {seedHumanBgLoading ? '...' : 'Seed Humans'}
-                </BtnPrimary>
-              </ActionRow>
-
-              <ActionRow icon={Bot} label="Seed Random Mix" description="4 random bodyguards (mix of robots/humans)" color="text-cyan-400">
-                <BtnPrimary onClick={handleSeedRandomBodyguards} disabled={seedRandomBgLoading}>
-                  {seedRandomBgLoading ? '...' : 'Seed Random'}
-                </BtnPrimary>
-              </ActionRow>
-
-              <ActionRow icon={Shield} label="Reset Drop Cooldown" description="Clear your bodyguard drop timer" color="text-amber-400">
-                <BtnPrimary onClick={handleResetBgCooldown}>Reset</BtnPrimary>
-              </ActionRow>
-            </div>
-          )}
-        </div>
-
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={BarChart3}
-            title="Attack Analytics"
-            isCollapsed={collapsed.attackAnalytics}
-            onToggle={() => toggleSection('attackAnalytics')}
-          />
-          {!collapsed.attackAnalytics && (
-            <div className="p-3 space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-heading text-mutedForeground uppercase tracking-widest">Per-weapon stats</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setAttackAnalyticsDays(1)}
-                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
-                      attackAnalyticsDays === 1 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
-                    }`}
-                  >
-                    1d
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAttackAnalyticsDays(7)}
-                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
-                      attackAnalyticsDays === 7 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
-                    }`}
-                  >
-                    7d
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAttackAnalyticsDays(30)}
-                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
-                      attackAnalyticsDays === 30 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
-                    }`}
-                  >
-                    30d
-                  </button>
-                </div>
-                <BtnPrimary onClick={handleFetchAttackAnalytics} disabled={attackAnalyticsLoading}>
-                  {attackAnalyticsLoading ? 'Loading…' : 'Load stats'}
-                </BtnPrimary>
-              </div>
-              {attackAnalytics && (
-                <div className="space-y-2">
-                  <p className="text-[10px] font-heading text-mutedForeground">
-                    Global: {attackAnalytics.global?.attempts ?? 0} attempts, {attackAnalytics.global?.kills ?? 0} kills,{' '}
-                    {attackAnalytics.global?.kill_rate != null ? `${(attackAnalytics.global.kill_rate * 100).toFixed(1)}% kill rate` : '—'}
-                  </p>
-                  <div className="overflow-x-auto max-h-72">
-                    {(!attackAnalytics.items || attackAnalytics.items.length === 0) ? (
-                      <p className="text-[10px] text-mutedForeground font-heading">No attack attempts in this window.</p>
-                    ) : (
-                      <table className="w-full text-left border-collapse text-[10px] font-heading">
-                        <thead className="sticky top-0 bg-zinc-900/95 z-10">
-                          <tr className="border-b border-zinc-700/50">
-                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Weapon</th>
-                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Attempts</th>
-                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Kills</th>
-                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Kill %</th>
-                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Avg bullets</th>
-                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Avg damage</th>
-                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Usage %</th>
-                            <th className="py-1.5 font-bold text-mutedForeground uppercase">Last used</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {attackAnalytics.items.map((item, idx) => (
-                            <tr key={`${item.weapon_id || item.weapon_name || idx}`} className="border-b border-zinc-700/30">
-                              <td className="py-1.5 pr-2 text-foreground font-medium">
-                                {item.weapon_name || 'Unknown'}
-                              </td>
-                              <td className="py-1.5 pr-2">{item.attempts?.toLocaleString?.() ?? item.attempts}</td>
-                              <td className="py-1.5 pr-2">{item.kills?.toLocaleString?.() ?? item.kills}</td>
-                              <td className="py-1.5 pr-2">
-                                {item.kill_rate != null ? `${(item.kill_rate * 100).toFixed(1)}%` : '—'}
-                              </td>
-                              <td className="py-1.5 pr-2">
-                                {item.avg_bullets_per_attempt != null ? Math.round(item.avg_bullets_per_attempt).toLocaleString() : '—'}
-                              </td>
-                              <td className="py-1.5 pr-2">
-                                {item.avg_damage != null ? item.avg_damage.toFixed(1) : '—'}
-                              </td>
-                              <td className="py-1.5 pr-2">
-                                {item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}
-                              </td>
-                              <td className="py-1.5">
-                                {item.last_at ? new Date(item.last_at).toLocaleString() : '—'}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className="border-t border-zinc-700/50 pt-3 mt-2 space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[10px] font-heading text-mutedForeground uppercase tracking-widest">Per-user attack profile</span>
-                  <Input
-                    type="text"
-                    value={attackUserId}
-                    onChange={(e) => setAttackUserId(e.target.value)}
-                    placeholder="Username or user ID"
-                    className="w-48 text-[11px]"
-                  />
-                  <BtnSecondary onClick={handleFetchAttackUserProfile} disabled={attackUserLoading}>
-                    {attackUserLoading ? 'Loading…' : 'Load user'}
-                  </BtnSecondary>
-                </div>
-                {attackUserProfile && (
-                  <div className="text-[10px] font-heading space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-mutedForeground">User:</span>
-                      <span className="text-foreground font-bold">{attackUserProfile.user?.username ?? '—'}</span>
-                      <span className="text-zinc-500 font-mono text-[9px]">{attackUserProfile.user?.id}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-[9px] font-heading text-mutedForeground uppercase mb-1">As attacker</div>
-                        <div className="space-y-0.5 text-[10px]">
-                          <div>Attempts: {attackUserProfile.attacker_summary?.attempts ?? 0}</div>
-                          <div>Kills: {attackUserProfile.attacker_summary?.kills ?? 0}</div>
-                          <div>
-                            Kill %:{' '}
-                            {attackUserProfile.attacker_summary?.kill_rate != null
-                              ? `${(attackUserProfile.attacker_summary.kill_rate * 100).toFixed(1)}%`
-                              : '—'}
-                          </div>
-                          <div>
-                            Avg bullets / attempt:{' '}
-                            {attackUserProfile.attacker_summary?.avg_bullets_per_attempt != null
-                              ? Math.round(attackUserProfile.attacker_summary.avg_bullets_per_attempt).toLocaleString()
-                              : '—'}
-                          </div>
-                          <div>
-                            Avg damage / attempt:{' '}
-                            {attackUserProfile.attacker_summary?.avg_damage_per_attempt != null
-                              ? attackUserProfile.attacker_summary.avg_damage_per_attempt.toFixed(1)
-                              : '—'}
-                          </div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[9px] font-heading text-mutedForeground uppercase mb-1">As target</div>
-                        <div className="space-y-0.5 text-[10px]">
-                          <div>Times attacked: {attackUserProfile.target_summary?.times_attacked ?? 0}</div>
-                          <div>Times killed: {attackUserProfile.target_summary?.times_killed ?? 0}</div>
-                          <div>
-                            Death %:{' '}
-                            {attackUserProfile.target_summary?.death_rate != null
-                              ? `${(attackUserProfile.target_summary.death_rate * 100).toFixed(1)}%`
-                              : '—'}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {attackUserProfile.top_weapons?.length > 0 && (
-                      <div>
-                        <div className="text-[9px] font-heading text-mutedForeground uppercase mb-1">Top weapons</div>
-                        <div className="overflow-x-auto max-h-40">
-                          <table className="w-full text-left border-collapse text-[10px] font-heading">
-                            <thead>
-                              <tr className="border-b border-zinc-700/50">
-                                <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Weapon</th>
-                                <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Attempts</th>
-                                <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Kills</th>
-                                <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Kill %</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {attackUserProfile.top_weapons.map((w, idx) => (
-                                <tr key={`${w.weapon_id || w.weapon_name || idx}`} className="border-b border-zinc-700/30">
-                                  <td className="py-1.5 pr-2">{w.weapon_name || 'Unknown'}</td>
-                                  <td className="py-1.5 pr-2">{w.attempts?.toLocaleString?.() ?? w.attempts}</td>
-                                  <td className="py-1.5 pr-2">{w.kills?.toLocaleString?.() ?? w.kills}</td>
-                                  <td className="py-1.5 pr-2">
-                                    {w.kill_rate != null ? `${(w.kill_rate * 100).toFixed(1)}%` : '—'}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Crime Analytics */}
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={BarChart3}
-            title="Crime Analytics"
-            badge={
-              crimeAnalytics?.items
-                ? <span className="text-[10px] font-heading text-mutedForeground">{crimeAnalytics.items.length} crimes</span>
-                : null
-            }
-            isCollapsed={collapsed.crimeAnalytics}
-            onToggle={() => toggleSection('crimeAnalytics')}
-          />
-          {!collapsed.crimeAnalytics && (
-            <div className="p-3 space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-heading text-mutedForeground uppercase tracking-widest">Window</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setCrimeAnalyticsDays(1)}
-                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
-                      crimeAnalyticsDays === 1 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
-                    }`}
-                  >
-                    1d
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCrimeAnalyticsDays(7)}
-                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
-                      crimeAnalyticsDays === 7 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
-                    }`}
-                  >
-                    7d
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCrimeAnalyticsDays(30)}
-                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
-                      crimeAnalyticsDays === 30 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
-                    }`}
-                  >
-                    30d
-                  </button>
-                </div>
-                <BtnPrimary onClick={handleFetchCrimeAnalytics} disabled={crimeAnalyticsLoading}>
-                  {crimeAnalyticsLoading ? 'Loading…' : 'Load crime stats'}
-                </BtnPrimary>
-              </div>
-              {crimeAnalytics && (
-                <p className="text-[10px] text-mutedForeground font-heading">
-                  Generated at {crimeAnalytics.generated_at ? new Date(crimeAnalytics.generated_at).toLocaleString() : '—'} for last {crimeAnalytics.days} day(s).
-                </p>
-              )}
-              <div className="overflow-x-auto max-h-72">
-                {!crimeAnalytics || !crimeAnalytics.items || crimeAnalytics.items.length === 0 ? (
-                  <p className="text-[10px] text-mutedForeground font-heading">No crime attempts in this window.</p>
-                ) : (
-                  <table className="w-full text-left border-collapse text-[10px] font-heading">
-                    <thead className="sticky top-0 bg-zinc-900/95 z-10">
-                      <tr className="border-b border-zinc-700/50">
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Crime</th>
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Type</th>
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Attempts</th>
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Successes</th>
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Success %</th>
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Avg profit</th>
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Total profit</th>
-                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Usage %</th>
-                        <th className="py-1.5 font-bold text-mutedForeground uppercase">Last used</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {crimeAnalytics.items.map((item) => (
-                        <tr key={item.crime_id} className="border-b border-zinc-700/30">
-                          <td className="py-1.5 pr-2 text-foreground font-medium">{item.crime_name || item.crime_id}</td>
-                          <td className="py-1.5 pr-2 text-mutedForeground">{item.crime_type || 'normal'}</td>
-                          <td className="py-1.5 pr-2">{item.attempts?.toLocaleString?.() ?? item.attempts}</td>
-                          <td className="py-1.5 pr-2">{item.successes?.toLocaleString?.() ?? item.successes}</td>
-                          <td className="py-1.5 pr-2">
-                            {item.success_rate != null ? `${(item.success_rate * 100).toFixed(1)}%` : '—'}
-                          </td>
-                          <td className="py-1.5 pr-2">
-                            {item.avg_profit != null ? `$${Math.round(item.avg_profit).toLocaleString()}` : '—'}
-                          </td>
-                          <td className="py-1.5 pr-2">
-                            {item.total_profit != null ? `$${Number(item.total_profit).toLocaleString()}` : '—'}
-                          </td>
-                          <td className="py-1.5 pr-2">
-                            {item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}
-                          </td>
-                          <td className="py-1.5">
-                            {item.last_at ? new Date(item.last_at).toLocaleString() : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={Skull}
-            title="Crime logs (post data)"
-            badge={crimeLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{crimeLogsData.logs.length} entries</span> : null}
-            isCollapsed={collapsed.crimeLogs}
-            onToggle={() => toggleSection('crimeLogs')}
-          />
-          {!collapsed.crimeLogs && (
-            <div className="p-3 space-y-3">
-              <p className="text-[10px] text-mutedForeground font-heading">Search by username to load that user&apos;s crime attempts. Full post data: crime name, success/fail, profit, city, time.</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  value={crimeLogsUsername}
-                  onChange={(e) => setCrimeLogsUsername(e.target.value)}
-                  placeholder="Username"
-                  className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
-                />
-                <span className="text-[10px] text-mutedForeground">Limit</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={1000}
-                  value={crimeLogsLimit}
-                  onChange={(e) => setCrimeLogsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 500)))}
-                  className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
-                />
-                <BtnPrimary onClick={handleFetchCrimeLogs} disabled={crimeLogsLoading}>
-                  {crimeLogsLoading ? 'Loading…' : 'Load crime logs'}
-                </BtnPrimary>
-              </div>
-              {crimeLogsData && (
-                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-                  <p className="text-[10px] font-heading text-primary mb-1">Crime log for: <strong>{crimeLogsData.username ?? '—'}</strong></p>
-                  {(!crimeLogsData.logs || crimeLogsData.logs.length === 0) ? (
-                    <p className="text-[10px] text-mutedForeground font-heading">No crime attempts found.</p>
-                  ) : (
-                    <table className="w-full text-left border-collapse text-[9px] font-heading">
-                      <thead className="sticky top-0 bg-zinc-900/95 z-10">
-                        <tr className="border-b border-zinc-700/50">
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Crime</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Type</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Success</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Profit</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">City</th>
-                          <th className="py-1 font-bold text-mutedForeground uppercase">Time</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {crimeLogsData.logs.map((row, idx) => (
-                          <tr key={idx} className="border-b border-zinc-700/30">
-                            <td className="py-1 pr-1 text-foreground">{row.crime_name ?? row.crime_id ?? '—'}</td>
-                            <td className="py-1 pr-1 text-mutedForeground">{row.crime_type ?? '—'}</td>
-                            <td className="py-1 pr-1">{row.success ? <span className="text-emerald-400">Yes</span> : <span className="text-amber-400">No</span>}</td>
-                            <td className="py-1 pr-1">{row.profit != null ? `$${Number(row.profit).toLocaleString()}` : '—'}</td>
-                            <td className="py-1 pr-1 text-mutedForeground">{row.city ?? '—'}</td>
-                            <td className="py-1 text-mutedForeground">{row.at ? new Date(row.at).toLocaleString() : '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* GTA Logs (Post Data) */}
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={Car}
-            title="GTA logs (post data)"
-            badge={gtaLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{gtaLogsData.logs.length} entries</span> : null}
-            isCollapsed={collapsed.gtaLogs}
-            onToggle={() => {
-              toggleSection('gtaLogs');
-              if (collapsed.gtaLogs) fetchGtaExclusivePool();
-            }}
-          />
-          {!collapsed.gtaLogs && (
-            <div className="p-3 space-y-3">
-              <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-zinc-700/50">
-                <span className="text-[10px] font-heading text-mutedForeground">Al Capone exclusive (car20) in GTA pool:</span>
-                {gtaExclusiveReleased === null ? (
-                  <span className="text-[10px] text-mutedForeground">…</span>
-                ) : (
-                  <>
-                    <span className={`text-[10px] font-heading font-bold ${gtaExclusiveReleased ? 'text-emerald-400' : 'text-amber-400'}`}>
-                      {gtaExclusiveReleased ? 'Released (very rare drop)' : 'Retracted'}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={gtaExclusiveLoading}
-                      onClick={() => handleSetGtaExclusivePool(!gtaExclusiveReleased)}
-                      className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-[10px] font-heading font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
-                    >
-                      {gtaExclusiveLoading ? '…' : gtaExclusiveReleased ? 'Retract from pool' : 'Release into pool'}
-                    </button>
-                  </>
-                )}
-              </div>
-              <p className="text-[10px] text-mutedForeground font-heading">Search by username to load that user&apos;s GTA attempts. Full post data: option, car, success, profit, jailed.</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <input type="text" value={gtaLogsUsername} onChange={(e) => setGtaLogsUsername(e.target.value)} placeholder="Username" className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading" />
-                <span className="text-[10px] text-mutedForeground">Limit</span>
-                <input type="number" min={1} max={1000} value={gtaLogsLimit} onChange={(e) => setGtaLogsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 500)))} className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
-                <BtnPrimary onClick={handleFetchGtaLogs} disabled={gtaLogsLoading}>{gtaLogsLoading ? 'Loading…' : 'Load GTA logs'}</BtnPrimary>
-              </div>
-              {gtaLogsData && (
-                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-                  <p className="text-[10px] font-heading text-primary mb-1">GTA log for: <strong>{gtaLogsData.username ?? '—'}</strong></p>
-                  {(!gtaLogsData.logs || gtaLogsData.logs.length === 0) ? (
-                    <p className="text-[10px] text-mutedForeground font-heading">No GTA attempts found.</p>
-                  ) : (
-                    <table className="w-full text-left border-collapse text-[9px] font-heading">
-                      <thead className="sticky top-0 bg-zinc-900/95 z-10">
-                        <tr className="border-b border-zinc-700/50">
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Time</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Option</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Success</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Car</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Profit</th>
-                          <th className="py-1 font-bold text-mutedForeground uppercase">Jailed</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {gtaLogsData.logs.map((row, idx) => (
-                          <tr key={idx} className="border-b border-zinc-700/30">
-                            <td className="py-1 pr-1 text-mutedForeground">{row.at ? new Date(row.at).toLocaleString() : '—'}</td>
-                            <td className="py-1 pr-1">{row.option_name ?? row.option_id ?? '—'}</td>
-                            <td className="py-1 pr-1">{row.success ? <span className="text-emerald-400">Yes</span> : <span className="text-amber-400">No</span>}</td>
-                            <td className="py-1 pr-1">{row.car_name ?? row.car_id ?? '—'}</td>
-                            <td className="py-1 pr-1">{row.profit != null ? `$${Number(row.profit).toLocaleString()}` : '—'}</td>
-                            <td className="py-1">{row.jailed ? `Yes (${row.jail_seconds ?? '?'}s)` : '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Jail Bust Logs (Post Data) */}
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={Lock}
-            title="Jail bust logs (post data)"
-            badge={jailLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{jailLogsData.logs.length} entries</span> : null}
-            isCollapsed={collapsed.jailLogs}
-            onToggle={() => toggleSection('jailLogs')}
-          />
-          {!collapsed.jailLogs && (
-            <div className="p-3 space-y-3">
-              <p className="text-[10px] text-mutedForeground font-heading">Search by username to load that user&apos;s jail bust attempts. Full post data: target, NPC vs player, success, profit.</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <input type="text" value={jailLogsUsername} onChange={(e) => setJailLogsUsername(e.target.value)} placeholder="Username" className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading" />
-                <span className="text-[10px] text-mutedForeground">Limit</span>
-                <input type="number" min={1} max={1000} value={jailLogsLimit} onChange={(e) => setJailLogsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 500)))} className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
-                <BtnPrimary onClick={handleFetchJailLogs} disabled={jailLogsLoading}>{jailLogsLoading ? 'Loading…' : 'Load jail logs'}</BtnPrimary>
-              </div>
-              {jailLogsData && (
-                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-                  <p className="text-[10px] font-heading text-primary mb-1">Jail bust log for: <strong>{jailLogsData.username ?? '—'}</strong></p>
-                  {(!jailLogsData.logs || jailLogsData.logs.length === 0) ? (
-                    <p className="text-[10px] text-mutedForeground font-heading">No bust attempts found.</p>
-                  ) : (
-                    <table className="w-full text-left border-collapse text-[9px] font-heading">
-                      <thead className="sticky top-0 bg-zinc-900/95 z-10">
-                        <tr className="border-b border-zinc-700/50">
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Time</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Target</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">NPC</th>
-                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Success</th>
-                          <th className="py-1 font-bold text-mutedForeground uppercase">Profit</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {jailLogsData.logs.map((row, idx) => (
-                          <tr key={idx} className="border-b border-zinc-700/30">
-                            <td className="py-1 pr-1 text-mutedForeground">{row.at ? new Date(row.at).toLocaleString() : '—'}</td>
-                            <td className="py-1 pr-1">{row.target_username ?? '—'}</td>
-                            <td className="py-1 pr-1">{row.is_npc ? 'Yes' : 'No'}</td>
-                            <td className="py-1 pr-1">{row.success ? <span className="text-emerald-400">Yes</span> : <span className="text-amber-400">No</span>}</td>
-                            <td className="py-1">{row.profit != null ? `$${Number(row.profit).toLocaleString()}` : '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </section>
-      )}
-
-      {/* ─── Moderation ─── */}
-      <section id="admin-moderation" className="admin-category-nav space-y-4">
-        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
-          <AlertTriangle size={12} />
-          Moderation
-        </h2>
-        {/* Lock player (investigation) – visible to admin and mod */}
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
@@ -3819,166 +3349,6 @@ export default function Admin() {
           )}
         </div>
 
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-amber-500/30`}>
-        <SectionHeader
-          icon={AlertTriangle}
-          title="Cheat Detection"
-          badge={
-            ((cheatSameIp?.total_groups ?? 0) > 0 || (cheatSameDeviceIps?.total_groups ?? 0) > 0 || ((cheatDuplicates?.by_domain?.length ?? 0) + (cheatDuplicates?.by_similar_username?.length ?? 0)) > 0) && (
-              <span className="text-[10px] font-heading text-amber-400">Review below</span>
-            )
-          }
-          isCollapsed={collapsed.cheat}
-          onToggle={() => toggleSection('cheat')}
-        />
-        {!collapsed.cheat && (
-          <div className="p-3 space-y-4">
-            <div>
-              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Accounts on same IP</div>
-              <p className="text-xs text-mutedForeground mb-2">Find users who registered or logged in from the same IP (possible multi-accounts).</p>
-              <BtnPrimary onClick={handleFetchSameIp} disabled={cheatLoading}>Load same-IP report</BtnPrimary>
-              {cheatSameIp && (
-                <div className="mt-3 max-h-64 overflow-y-auto space-y-2">
-                  {cheatSameIp.total_groups === 0 ? (
-                    <p className="text-xs text-mutedForeground">No IP shared by 2+ accounts.</p>
-                  ) : (
-                    cheatSameIp.groups?.slice(0, 30).map((g, i) => (
-                      <div key={i} className="p-2 rounded bg-zinc-900/50 border border-amber-500/20">
-                        <div className="text-[10px] font-heading text-amber-400 mb-1">IP: {g.ip} — {g.count} account(s)</div>
-                        <div className="space-y-0.5">
-                          {g.accounts.map((a, j) => (
-                            <div key={j} className="flex justify-between text-[10px]">
-                              <span className="text-foreground font-bold">{a.username}</span>
-                              <span className="text-mutedForeground">{a.email}</span>
-                              <span className="text-mutedForeground">{a.source}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Same device, different IPs</div>
-              <p className="text-xs text-mutedForeground mb-2">Find users who share the same browser/device (User-Agent) but log in from different IPs. Possible multi-account or same device on VPN / different networks.</p>
-              <BtnPrimary onClick={handleFetchSameDeviceDifferentIps} disabled={cheatLoading}>Load same-device report</BtnPrimary>
-              {cheatSameDeviceIps && (
-                <div className="mt-3 max-h-72 overflow-y-auto space-y-2">
-                  {cheatSameDeviceIps.total_groups === 0 ? (
-                    <p className="text-xs text-mutedForeground">No groups with same device and different IPs.</p>
-                  ) : (
-                    (cheatSameDeviceIps.groups || []).map((g, i) => (
-                      <div key={i} className="p-2 rounded bg-zinc-900/50 border border-amber-500/20">
-                        <div className="text-[10px] font-heading text-amber-400 mb-1">
-                          {g.account_count} account(s) · {g.distinct_ip_count} different IP(s)
-                        </div>
-                        <div className="text-[9px] font-mono text-mutedForeground mb-1 truncate" title={g.user_agent_full}>{g.user_agent}</div>
-                        <div className="space-y-0.5">
-                          {(g.users || []).map((a, j) => (
-                            <div key={j} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px]">
-                              <span className="text-foreground font-bold">{a.username}</span>
-                              <span className="text-mutedForeground">{a.email}</span>
-                              <span className="text-mutedForeground font-mono">IPs: {(a.ips || []).join(', ') || '—'}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <p className="text-xs text-mutedForeground mb-2">
-                Failed logins (wrong password or unknown account) from an IP that already has at least one other alive account.
-                Useful for spotting users trying to access multiple accounts from the same IP.
-              </p>
-              <BtnPrimary onClick={handleFetchLoginAttempts} disabled={cheatLoading}>Load hacking attempts</BtnPrimary>
-              {cheatLoginEvents && (
-                <div className="mt-3 max-h-64 overflow-y-auto space-y-1.5">
-                  {(cheatLoginEvents.events || []).length === 0 ? (
-                    <p className="text-xs text-mutedForeground">No suspicious login attempts recorded.</p>
-                  ) : (
-                    (cheatLoginEvents.events || []).map((e, idx) => (
-                      <div key={idx} className="p-2 rounded bg-zinc-900/60 border border-red-500/30 text-[10px] font-heading">
-                        <div className="flex justify-between gap-2 flex-wrap mb-1">
-                          <span className="text-amber-400">IP: {e.ip}</span>
-                          <span className="text-zinc-500">{e.at && new Date(e.at).toLocaleString()}</span>
-                        </div>
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-zinc-400">
-                          {e.username && <span>Username: <span className="text-foreground font-bold">{e.username}</span></span>}
-                          {e.email && <span>Email: <span className="text-foreground">{e.email}</span></span>}
-                          {e.login_input && <span>Login input: <span className="text-foreground">{e.login_input}</span></span>}
-                          {typeof e.same_ip_alive_count === 'number' && (
-                            <span>Alive accounts on IP: <span className="text-foreground">{e.same_ip_alive_count}</span></span>
-                          )}
-                          {typeof e.same_ip_other_alive_count === 'number' && (
-                            <span>Other alive accounts on IP: <span className="text-foreground">{e.same_ip_other_alive_count}</span></span>
-                          )}
-                          {e.reason && <span className="text-red-400">Reason: {e.reason}</span>}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-            <div>
-              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Duplicate account suspects</div>
-              <p className="text-xs text-mutedForeground mb-2">Same email domain or similar usernames (e.g. name1, name2).</p>
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                <input
-                  type="text"
-                  value={duplicateSuspectsUsername}
-                  onChange={(e) => setDuplicateSuspectsUsername(e.target.value)}
-                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs w-40"
-                  placeholder="Filter by username"
-                />
-                <BtnPrimary onClick={handleFetchDuplicateSuspects} disabled={cheatLoading}>Load duplicate suspects</BtnPrimary>
-              </div>
-              {cheatDuplicates && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
-                  <div>
-                    <div className="text-[10px] font-heading text-primary uppercase mb-1">Same email domain</div>
-                    <div className="max-h-48 overflow-y-auto space-y-1">
-                      {(cheatDuplicates.by_domain || []).length === 0 ? (
-                        <p className="text-xs text-mutedForeground">None</p>
-                      ) : (
-                        (cheatDuplicates.by_domain || []).map((g, i) => (
-                          <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
-                            <div className="text-[10px] text-amber-400 font-heading">{g.domain} — {g.count}</div>
-                            {g.accounts?.slice(0, 5).map((a, j) => (
-                              <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>
-                            ))}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-heading text-primary uppercase mb-1">Similar usernames</div>
-                    <div className="max-h-48 overflow-y-auto space-y-1">
-                      {(cheatDuplicates.by_similar_username || []).length === 0 ? (
-                        <p className="text-xs text-mutedForeground">None</p>
-                      ) : (
-                        (cheatDuplicates.by_similar_username || []).map((g, i) => (
-                          <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
-                            <div className="text-[10px] text-amber-400 font-heading">"{g.base}" — {g.count}</div>
-                            {g.accounts?.slice(0, 5).map((a, j) => (
-                              <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>
-                            ))}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
 
             {isAdmin && (
               <div>
@@ -4012,9 +3382,6 @@ export default function Admin() {
                 </div>
               </div>
             )}
-          </div>
-        )}
-        </div>
 
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -4278,6 +3645,828 @@ export default function Admin() {
         )}
         </div>
       </section>
+      )}
+
+      {/* ─── Cheat Detection ─── */}
+      <section id="admin-cheat" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <AlertTriangle size={12} />
+          Cheat Detection
+        </h2>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Users}
+          title="Quick Player Comparison"
+          badge={compareResult?.same_ip ? <span className="text-[10px] font-heading text-red-400">Same IP!</span> : compareResult?.same_device ? <span className="text-[10px] font-heading text-amber-400">Same device!</span> : null}
+          isCollapsed={collapsed.playerCompare}
+          onToggle={() => toggleSection('playerCompare')}
+        />
+        {!collapsed.playerCompare && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground font-heading">Compare two players side-by-side: stats, IPs, devices, registration dates. Essential for alt-account investigation.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input type="text" value={compareUser1} onChange={(e) => setCompareUser1(e.target.value)} placeholder="Username 1" className="w-36 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading" />
+              <span className="text-[10px] text-mutedForeground">vs</span>
+              <input type="text" value={compareUser2} onChange={(e) => setCompareUser2(e.target.value)} placeholder="Username 2" className="w-36 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading" />
+              <BtnPrimary onClick={handleCompareUsers} disabled={compareLoading}>{compareLoading ? 'Loading...' : 'Compare'}</BtnPrimary>
+            </div>
+            {compareResult && (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2 text-[10px] font-heading">
+                  {compareResult.same_ip && <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-400 font-bold border border-red-500/30">SAME REGISTRATION IP</span>}
+                  {compareResult.same_device && <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30">SAME DEVICE</span>}
+                  {!compareResult.same_ip && !compareResult.same_device && <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30">No matches found</span>}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[compareResult.user1, compareResult.user2].map((u, idx) => u && (
+                    <div key={u.username || idx} className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30 text-[10px] font-heading space-y-0.5">
+                      <div className="font-bold text-primary text-[11px]">{u.username ?? '—'}</div>
+                      <div className="text-mutedForeground">Email: {u.email ?? '—'}</div>
+                      <div>Cash: ${(u.money ?? 0).toLocaleString()} · Bank: ${(u.bank_balance ?? 0).toLocaleString()}</div>
+                      <div>Points: {(u.points ?? 0).toLocaleString()} · Prestige: {u.prestige ?? 0}</div>
+                      <div className="text-mutedForeground">Registered: {u.created_at ? new Date(u.created_at).toLocaleString() : '—'}</div>
+                      <div className="text-mutedForeground">Last login: {u.last_login ? new Date(u.last_login).toLocaleString() : '—'}</div>
+                      <div className="font-mono text-[9px]">Reg IP: {u.registration_ip ?? '—'}</div>
+                      <div className="font-mono text-[9px]">Login IP: {u.last_login_ip ?? '—'}</div>
+                      <div className="font-mono text-[9px] truncate" title={u.device_fingerprint ?? ''}>Device: {u.device_fingerprint ? u.device_fingerprint.substring(0, 24) + '...' : '—'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        </div>
+
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-amber-500/30`}>
+        <SectionHeader
+          icon={AlertTriangle}
+          title="Cheat Detection"
+          badge={
+            ((cheatSameIp?.total_groups ?? 0) > 0 || (cheatSameDeviceIps?.total_groups ?? 0) > 0 || ((cheatDuplicates?.by_domain?.length ?? 0) + (cheatDuplicates?.by_similar_username?.length ?? 0)) > 0) && (
+              <span className="text-[10px] font-heading text-amber-400">Review below</span>
+            )
+          }
+          isCollapsed={collapsed.cheat}
+          onToggle={() => toggleSection('cheat')}
+        />
+        {!collapsed.cheat && (
+          <div className="p-3 space-y-4">
+            <div>
+              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Accounts on same IP</div>
+              <p className="text-xs text-mutedForeground mb-2">Find users who registered or logged in from the same IP (possible multi-accounts).</p>
+              <BtnPrimary onClick={handleFetchSameIp} disabled={cheatLoading}>Load same-IP report</BtnPrimary>
+              {cheatSameIp && (
+                <div className="mt-3 max-h-64 overflow-y-auto space-y-2">
+                  {cheatSameIp.total_groups === 0 ? (
+                    <p className="text-xs text-mutedForeground">No IP shared by 2+ accounts.</p>
+                  ) : (
+                    cheatSameIp.groups?.slice(0, 30).map((g, i) => (
+                      <div key={i} className="p-2 rounded bg-zinc-900/50 border border-amber-500/20">
+                        <div className="text-[10px] font-heading text-amber-400 mb-1">IP: {g.ip} — {g.count} account(s)</div>
+                        <div className="space-y-0.5">
+                          {g.accounts.map((a, j) => (
+                            <div key={j} className="flex justify-between text-[10px]">
+                              <span className="text-foreground font-bold">{a.username}</span>
+                              <span className="text-mutedForeground">{a.email}</span>
+                              <span className="text-mutedForeground">{a.source}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Same device, different IPs</div>
+              <p className="text-xs text-mutedForeground mb-2">Find users who share the same browser/device (User-Agent) but log in from different IPs. Possible multi-account or same device on VPN / different networks.</p>
+              <BtnPrimary onClick={handleFetchSameDeviceDifferentIps} disabled={cheatLoading}>Load same-device report</BtnPrimary>
+              {cheatSameDeviceIps && (
+                <div className="mt-3 max-h-72 overflow-y-auto space-y-2">
+                  {cheatSameDeviceIps.total_groups === 0 ? (
+                    <p className="text-xs text-mutedForeground">No groups with same device and different IPs.</p>
+                  ) : (
+                    (cheatSameDeviceIps.groups || []).map((g, i) => (
+                      <div key={i} className="p-2 rounded bg-zinc-900/50 border border-amber-500/20">
+                        <div className="text-[10px] font-heading text-amber-400 mb-1">
+                          {g.account_count} account(s) · {g.distinct_ip_count} different IP(s)
+                        </div>
+                        <div className="text-[9px] font-mono text-mutedForeground mb-1 truncate" title={g.user_agent_full}>{g.user_agent}</div>
+                        <div className="space-y-0.5">
+                          {(g.users || []).map((a, j) => (
+                            <div key={j} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px]">
+                              <span className="text-foreground font-bold">{a.username}</span>
+                              <span className="text-mutedForeground">{a.email}</span>
+                              <span className="text-mutedForeground font-mono">IPs: {(a.ips || []).join(', ') || '—'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="text-xs text-mutedForeground mb-2">
+                Failed logins (wrong password or unknown account) from an IP that already has at least one other alive account.
+                Useful for spotting users trying to access multiple accounts from the same IP.
+              </p>
+              <BtnPrimary onClick={handleFetchLoginAttempts} disabled={cheatLoading}>Load hacking attempts</BtnPrimary>
+              {cheatLoginEvents && (
+                <div className="mt-3 max-h-64 overflow-y-auto space-y-1.5">
+                  {(cheatLoginEvents.events || []).length === 0 ? (
+                    <p className="text-xs text-mutedForeground">No suspicious login attempts recorded.</p>
+                  ) : (
+                    (cheatLoginEvents.events || []).map((e, idx) => (
+                      <div key={idx} className="p-2 rounded bg-zinc-900/60 border border-red-500/30 text-[10px] font-heading">
+                        <div className="flex justify-between gap-2 flex-wrap mb-1">
+                          <span className="text-amber-400">IP: {e.ip}</span>
+                          <span className="text-zinc-500">{e.at && new Date(e.at).toLocaleString()}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-zinc-400">
+                          {e.username && <span>Username: <span className="text-foreground font-bold">{e.username}</span></span>}
+                          {e.email && <span>Email: <span className="text-foreground">{e.email}</span></span>}
+                          {e.login_input && <span>Login input: <span className="text-foreground">{e.login_input}</span></span>}
+                          {typeof e.same_ip_alive_count === 'number' && (
+                            <span>Alive accounts on IP: <span className="text-foreground">{e.same_ip_alive_count}</span></span>
+                          )}
+                          {typeof e.same_ip_other_alive_count === 'number' && (
+                            <span>Other alive accounts on IP: <span className="text-foreground">{e.same_ip_other_alive_count}</span></span>
+                          )}
+                          {e.reason && <span className="text-red-400">Reason: {e.reason}</span>}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Duplicate account suspects</div>
+              <p className="text-xs text-mutedForeground mb-2">Same email domain or similar usernames (e.g. name1, name2).</p>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <input
+                  type="text"
+                  value={duplicateSuspectsUsername}
+                  onChange={(e) => setDuplicateSuspectsUsername(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs w-40"
+                  placeholder="Filter by username"
+                />
+                <BtnPrimary onClick={handleFetchDuplicateSuspects} disabled={cheatLoading}>Load duplicate suspects</BtnPrimary>
+              </div>
+              {cheatDuplicates && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                  <div>
+                    <div className="text-[10px] font-heading text-primary uppercase mb-1">Same email domain</div>
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {(cheatDuplicates.by_domain || []).length === 0 ? (
+                        <p className="text-xs text-mutedForeground">None</p>
+                      ) : (
+                        (cheatDuplicates.by_domain || []).map((g, i) => (
+                          <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
+                            <div className="text-[10px] text-amber-400 font-heading">{g.domain} — {g.count}</div>
+                            {g.accounts?.slice(0, 5).map((a, j) => (
+                              <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>
+                            ))}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-heading text-primary uppercase mb-1">Similar usernames</div>
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {(cheatDuplicates.by_similar_username || []).length === 0 ? (
+                        <p className="text-xs text-mutedForeground">None</p>
+                      ) : (
+                        (cheatDuplicates.by_similar_username || []).map((g, i) => (
+                          <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
+                            <div className="text-[10px] text-amber-400 font-heading">"{g.base}" — {g.count}</div>
+                            {g.accounts?.slice(0, 5).map((a, j) => (
+                              <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>
+                            ))}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
+        </div>
+
+      </section>
+
+      {/* ─── Analytics (admin only) ─── */}
+      {isAdmin && (
+      <section id="admin-analytics" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <BarChart3 size={12} />
+          Analytics
+        </h2>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Coins}
+          title="Economy Overview"
+          isCollapsed={collapsed.economyOverview}
+          onToggle={() => { toggleSection('economyOverview'); if (collapsed.economyOverview && !economyOverview) handleFetchEconomyOverview(); }}
+        />
+        {!collapsed.economyOverview && (
+          <div className="p-3 space-y-2">
+            <BtnPrimary onClick={handleFetchEconomyOverview} disabled={economyOverviewLoading}>{economyOverviewLoading ? 'Loading...' : 'Refresh'}</BtnPrimary>
+            {economyOverview && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] font-heading">
+                  <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                    <div className="text-mutedForeground uppercase">Cash in circulation</div>
+                    <div className="font-bold text-foreground">${(economyOverview.total_money ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                    <div className="text-mutedForeground uppercase">Banked</div>
+                    <div className="font-bold text-foreground">${(economyOverview.total_bank ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                    <div className="text-mutedForeground uppercase">Total Points</div>
+                    <div className="font-bold text-primary">{(economyOverview.total_points ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                    <div className="text-mutedForeground uppercase">Avg Cash / Player</div>
+                    <div className="font-bold text-foreground">${(economyOverview.avg_money ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                    <div className="text-mutedForeground uppercase">Alive Players</div>
+                    <div className="font-bold text-foreground">{(economyOverview.player_count ?? 0).toLocaleString()}</div>
+                  </div>
+                </div>
+                {economyOverview.top5_richest?.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-heading text-mutedForeground uppercase mb-1">Top 5 Richest</div>
+                    <div className="space-y-0.5 text-[10px] font-heading">
+                      {economyOverview.top5_richest.map((u, i) => (
+                        <div key={u.username || i} className="flex justify-between px-1">
+                          <span className="font-bold text-foreground">{i + 1}. {u.username}</span>
+                          <span className="text-mutedForeground">${(u.money ?? 0).toLocaleString()} cash · ${(u.bank ?? 0).toLocaleString()} banked</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Activity}
+          title="Online Player Activity"
+          badge={playerActivity ? <span className="text-[10px] font-heading text-primary">{playerActivity.total_online} online</span> : null}
+          isCollapsed={collapsed.playerActivity}
+          onToggle={() => { toggleSection('playerActivity'); if (collapsed.playerActivity && !playerActivity) handleFetchPlayerActivity(); }}
+        />
+        {!collapsed.playerActivity && (
+          <div className="p-3 space-y-2">
+            <BtnPrimary onClick={handleFetchPlayerActivity} disabled={playerActivityLoading}>{playerActivityLoading ? 'Loading...' : 'Refresh'}</BtnPrimary>
+            {playerActivity && (
+              <div className="space-y-2">
+                <div className="text-[10px] font-heading text-foreground">
+                  <span className="text-primary font-bold">{playerActivity.total_online}</span> players active in the last 5 minutes
+                </div>
+                {playerActivity.by_page?.length > 0 && (
+                  <div className="space-y-0.5 text-[10px] font-heading">
+                    {playerActivity.by_page.map((item, i) => (
+                      <div key={item.page || i} className="flex justify-between px-1 py-0.5 rounded bg-zinc-800/30">
+                        <span className="text-foreground">{item.page}</span>
+                        <span className="text-primary font-bold">{item.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Attack Analytics"
+            isCollapsed={collapsed.attackAnalytics}
+            onToggle={() => toggleSection('attackAnalytics')}
+          />
+          {!collapsed.attackAnalytics && (
+            <div className="p-3 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-heading text-mutedForeground uppercase tracking-widest">Per-weapon stats</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setAttackAnalyticsDays(1)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      attackAnalyticsDays === 1 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    1d
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAttackAnalyticsDays(7)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      attackAnalyticsDays === 7 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    7d
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAttackAnalyticsDays(30)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      attackAnalyticsDays === 30 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    30d
+                  </button>
+                </div>
+                <BtnPrimary onClick={handleFetchAttackAnalytics} disabled={attackAnalyticsLoading}>
+                  {attackAnalyticsLoading ? 'Loading…' : 'Load stats'}
+                </BtnPrimary>
+              </div>
+              {attackAnalytics && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-heading text-mutedForeground">
+                    Global: {attackAnalytics.global?.attempts ?? 0} attempts, {attackAnalytics.global?.kills ?? 0} kills,{' '}
+                    {attackAnalytics.global?.kill_rate != null ? `${(attackAnalytics.global.kill_rate * 100).toFixed(1)}% kill rate` : '—'}
+                  </p>
+                  <div className="overflow-x-auto max-h-72">
+                    {(!attackAnalytics.items || attackAnalytics.items.length === 0) ? (
+                      <p className="text-[10px] text-mutedForeground font-heading">No attack attempts in this window.</p>
+                    ) : (
+                      <table className="w-full text-left border-collapse text-[10px] font-heading">
+                        <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                          <tr className="border-b border-zinc-700/50">
+                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Weapon</th>
+                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Attempts</th>
+                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Kills</th>
+                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Kill %</th>
+                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Avg bullets</th>
+                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Avg damage</th>
+                            <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Usage %</th>
+                            <th className="py-1.5 font-bold text-mutedForeground uppercase">Last used</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {attackAnalytics.items.map((item, idx) => (
+                            <tr key={`${item.weapon_id || item.weapon_name || idx}`} className="border-b border-zinc-700/30">
+                              <td className="py-1.5 pr-2 text-foreground font-medium">
+                                {item.weapon_name || 'Unknown'}
+                              </td>
+                              <td className="py-1.5 pr-2">{item.attempts?.toLocaleString?.() ?? item.attempts}</td>
+                              <td className="py-1.5 pr-2">{item.kills?.toLocaleString?.() ?? item.kills}</td>
+                              <td className="py-1.5 pr-2">
+                                {item.kill_rate != null ? `${(item.kill_rate * 100).toFixed(1)}%` : '—'}
+                              </td>
+                              <td className="py-1.5 pr-2">
+                                {item.avg_bullets_per_attempt != null ? Math.round(item.avg_bullets_per_attempt).toLocaleString() : '—'}
+                              </td>
+                              <td className="py-1.5 pr-2">
+                                {item.avg_damage != null ? item.avg_damage.toFixed(1) : '—'}
+                              </td>
+                              <td className="py-1.5 pr-2">
+                                {item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}
+                              </td>
+                              <td className="py-1.5">
+                                {item.last_at ? new Date(item.last_at).toLocaleString() : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-zinc-700/50 pt-3 mt-2 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-heading text-mutedForeground uppercase tracking-widest">Per-user attack profile</span>
+                  <Input
+                    type="text"
+                    value={attackUserId}
+                    onChange={(e) => setAttackUserId(e.target.value)}
+                    placeholder="Username or user ID"
+                    className="w-48 text-[11px]"
+                  />
+                  <BtnSecondary onClick={handleFetchAttackUserProfile} disabled={attackUserLoading}>
+                    {attackUserLoading ? 'Loading…' : 'Load user'}
+                  </BtnSecondary>
+                </div>
+                {attackUserProfile && (
+                  <div className="text-[10px] font-heading space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-mutedForeground">User:</span>
+                      <span className="text-foreground font-bold">{attackUserProfile.user?.username ?? '—'}</span>
+                      <span className="text-zinc-500 font-mono text-[9px]">{attackUserProfile.user?.id}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-[9px] font-heading text-mutedForeground uppercase mb-1">As attacker</div>
+                        <div className="space-y-0.5 text-[10px]">
+                          <div>Attempts: {attackUserProfile.attacker_summary?.attempts ?? 0}</div>
+                          <div>Kills: {attackUserProfile.attacker_summary?.kills ?? 0}</div>
+                          <div>
+                            Kill %:{' '}
+                            {attackUserProfile.attacker_summary?.kill_rate != null
+                              ? `${(attackUserProfile.attacker_summary.kill_rate * 100).toFixed(1)}%`
+                              : '—'}
+                          </div>
+                          <div>
+                            Avg bullets / attempt:{' '}
+                            {attackUserProfile.attacker_summary?.avg_bullets_per_attempt != null
+                              ? Math.round(attackUserProfile.attacker_summary.avg_bullets_per_attempt).toLocaleString()
+                              : '—'}
+                          </div>
+                          <div>
+                            Avg damage / attempt:{' '}
+                            {attackUserProfile.attacker_summary?.avg_damage_per_attempt != null
+                              ? attackUserProfile.attacker_summary.avg_damage_per_attempt.toFixed(1)
+                              : '—'}
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] font-heading text-mutedForeground uppercase mb-1">As target</div>
+                        <div className="space-y-0.5 text-[10px]">
+                          <div>Times attacked: {attackUserProfile.target_summary?.times_attacked ?? 0}</div>
+                          <div>Times killed: {attackUserProfile.target_summary?.times_killed ?? 0}</div>
+                          <div>
+                            Death %:{' '}
+                            {attackUserProfile.target_summary?.death_rate != null
+                              ? `${(attackUserProfile.target_summary.death_rate * 100).toFixed(1)}%`
+                              : '—'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {attackUserProfile.top_weapons?.length > 0 && (
+                      <div>
+                        <div className="text-[9px] font-heading text-mutedForeground uppercase mb-1">Top weapons</div>
+                        <div className="overflow-x-auto max-h-40">
+                          <table className="w-full text-left border-collapse text-[10px] font-heading">
+                            <thead>
+                              <tr className="border-b border-zinc-700/50">
+                                <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Weapon</th>
+                                <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Attempts</th>
+                                <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Kills</th>
+                                <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Kill %</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {attackUserProfile.top_weapons.map((w, idx) => (
+                                <tr key={`${w.weapon_id || w.weapon_name || idx}`} className="border-b border-zinc-700/30">
+                                  <td className="py-1.5 pr-2">{w.weapon_name || 'Unknown'}</td>
+                                  <td className="py-1.5 pr-2">{w.attempts?.toLocaleString?.() ?? w.attempts}</td>
+                                  <td className="py-1.5 pr-2">{w.kills?.toLocaleString?.() ?? w.kills}</td>
+                                  <td className="py-1.5 pr-2">
+                                    {w.kill_rate != null ? `${(w.kill_rate * 100).toFixed(1)}%` : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Crime Analytics */}
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Crime Analytics"
+            badge={
+              crimeAnalytics?.items
+                ? <span className="text-[10px] font-heading text-mutedForeground">{crimeAnalytics.items.length} crimes</span>
+                : null
+            }
+            isCollapsed={collapsed.crimeAnalytics}
+            onToggle={() => toggleSection('crimeAnalytics')}
+          />
+          {!collapsed.crimeAnalytics && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-heading text-mutedForeground uppercase tracking-widest">Window</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setCrimeAnalyticsDays(1)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      crimeAnalyticsDays === 1 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    1d
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCrimeAnalyticsDays(7)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      crimeAnalyticsDays === 7 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    7d
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCrimeAnalyticsDays(30)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border ${
+                      crimeAnalyticsDays === 30 ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    30d
+                  </button>
+                </div>
+                <BtnPrimary onClick={handleFetchCrimeAnalytics} disabled={crimeAnalyticsLoading}>
+                  {crimeAnalyticsLoading ? 'Loading…' : 'Load crime stats'}
+                </BtnPrimary>
+              </div>
+              {crimeAnalytics && (
+                <p className="text-[10px] text-mutedForeground font-heading">
+                  Generated at {crimeAnalytics.generated_at ? new Date(crimeAnalytics.generated_at).toLocaleString() : '—'} for last {crimeAnalytics.days} day(s).
+                </p>
+              )}
+              <div className="overflow-x-auto max-h-72">
+                {!crimeAnalytics || !crimeAnalytics.items || crimeAnalytics.items.length === 0 ? (
+                  <p className="text-[10px] text-mutedForeground font-heading">No crime attempts in this window.</p>
+                ) : (
+                  <table className="w-full text-left border-collapse text-[10px] font-heading">
+                    <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                      <tr className="border-b border-zinc-700/50">
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Crime</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Type</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Attempts</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Successes</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Success %</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Avg profit</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Total profit</th>
+                        <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Usage %</th>
+                        <th className="py-1.5 font-bold text-mutedForeground uppercase">Last used</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {crimeAnalytics.items.map((item) => (
+                        <tr key={item.crime_id} className="border-b border-zinc-700/30">
+                          <td className="py-1.5 pr-2 text-foreground font-medium">{item.crime_name || item.crime_id}</td>
+                          <td className="py-1.5 pr-2 text-mutedForeground">{item.crime_type || 'normal'}</td>
+                          <td className="py-1.5 pr-2">{item.attempts?.toLocaleString?.() ?? item.attempts}</td>
+                          <td className="py-1.5 pr-2">{item.successes?.toLocaleString?.() ?? item.successes}</td>
+                          <td className="py-1.5 pr-2">
+                            {item.success_rate != null ? `${(item.success_rate * 100).toFixed(1)}%` : '—'}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            {item.avg_profit != null ? `$${Math.round(item.avg_profit).toLocaleString()}` : '—'}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            {item.total_profit != null ? `$${Number(item.total_profit).toLocaleString()}` : '—'}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            {item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}
+                          </td>
+                          <td className="py-1.5">
+                            {item.last_at ? new Date(item.last_at).toLocaleString() : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Casino Analytics"
+            badge={casinoAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{casinoAnalytics.items.length} games</span> : null}
+            isCollapsed={collapsed.casinoAnalytics}
+            onToggle={() => toggleSection('casinoAnalytics')}
+          />
+          {!collapsed.casinoAnalytics && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {[1, 7, 30].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setCasinoAnalyticsDays(d)}
+                    className={`px-2 py-1 rounded border text-[10px] font-heading ${casinoAnalyticsDays === d ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}
+                  >
+                    {d}d
+                  </button>
+                ))}
+                <BtnPrimary onClick={handleFetchCasinoAnalytics} disabled={casinoAnalyticsLoading}>
+                  {casinoAnalyticsLoading ? 'Loading…' : 'Load stats'}
+                </BtnPrimary>
+              </div>
+              {casinoAnalytics && (
+                <>
+                  <p className="text-[10px] text-mutedForeground font-heading">Generated at {casinoAnalytics.generated_at ? new Date(casinoAnalytics.generated_at).toLocaleString() : '—'} for last {casinoAnalytics.days} day(s).</p>
+                  <div className="overflow-x-auto max-h-72">
+                    {(!casinoAnalytics.items || casinoAnalytics.items.length === 0) ? (
+                      <p className="text-[10px] text-mutedForeground font-heading">No casino activity in this window.</p>
+                    ) : (
+                      <table className="w-full text-[10px] font-heading">
+                        <thead><tr><th className="text-left p-1.5 text-mutedForeground">Game</th><th className="text-right p-1.5 text-mutedForeground">Attempts</th><th className="text-right p-1.5 text-mutedForeground">Wins</th><th className="text-right p-1.5 text-mutedForeground">Profit</th><th className="text-right p-1.5 text-mutedForeground">Share</th></tr></thead>
+                        <tbody>
+                          {casinoAnalytics.items.map((item, idx) => (
+                            <tr key={idx} className="border-b border-zinc-700/30">
+                              <td className="py-1.5 pr-2 font-medium">{item.game_type || '—'}</td>
+                              <td className="py-1.5 text-right">{item.attempts != null ? item.attempts.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.wins != null ? item.wins.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_profit != null ? `$${Number(item.total_profit).toLocaleString()}` : '—'}</td>
+                              <td className="py-1.5 text-right">{item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Trades Analytics */}
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Trades (Quicktrade) Analytics"
+            badge={tradesAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{tradesAnalytics.items.length} types</span> : null}
+            isCollapsed={collapsed.tradesAnalytics}
+            onToggle={() => toggleSection('tradesAnalytics')}
+          />
+          {!collapsed.tradesAnalytics && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {[1, 7, 30].map((d) => (
+                  <button key={d} type="button" onClick={() => setTradesAnalyticsDays(d)} className={`px-2 py-1 rounded border text-[10px] font-heading ${tradesAnalyticsDays === d ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}>{d}d</button>
+                ))}
+                <BtnPrimary onClick={handleFetchTradesAnalytics} disabled={tradesAnalyticsLoading}>{tradesAnalyticsLoading ? 'Loading…' : 'Load stats'}</BtnPrimary>
+              </div>
+              {tradesAnalytics && (
+                <>
+                  <p className="text-[10px] text-mutedForeground font-heading">Last {tradesAnalytics.days} day(s).</p>
+                  <div className="overflow-x-auto max-h-72">
+                    {(!tradesAnalytics.items || tradesAnalytics.items.length === 0) ? <p className="text-[10px] text-mutedForeground font-heading">No trade events.</p> : (
+                      <table className="w-full text-[10px] font-heading">
+                        <thead><tr><th className="text-left p-1.5 text-mutedForeground">Type</th><th className="text-left p-1.5 text-mutedForeground">Direction</th><th className="text-right p-1.5 text-mutedForeground">Count</th><th className="text-right p-1.5 text-mutedForeground">Points</th><th className="text-right p-1.5 text-mutedForeground">Money</th><th className="text-right p-1.5 text-mutedForeground">Share</th></tr></thead>
+                        <tbody>
+                          {tradesAnalytics.items.map((item, idx) => (
+                            <tr key={idx} className="border-b border-zinc-700/30">
+                              <td className="py-1.5 pr-2 font-medium">{item.event_type || '—'}</td>
+                              <td className="py-1.5">{item.direction || '—'}</td>
+                              <td className="py-1.5 text-right">{item.count != null ? item.count.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_points != null ? item.total_points.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_money != null ? item.total_money.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Hitlist & Bodyguards Analytics */}
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Hitlist & Bodyguards Analytics"
+            badge={hitlistBodyguardsAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{hitlistBodyguardsAnalytics.items.length} event types</span> : null}
+            isCollapsed={collapsed.hitlistBodyguardsAnalytics}
+            onToggle={() => toggleSection('hitlistBodyguardsAnalytics')}
+          />
+          {!collapsed.hitlistBodyguardsAnalytics && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {[1, 7, 30].map((d) => (
+                  <button key={d} type="button" onClick={() => setHitlistBodyguardsAnalyticsDays(d)} className={`px-2 py-1 rounded border text-[10px] font-heading ${hitlistBodyguardsAnalyticsDays === d ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}>{d}d</button>
+                ))}
+                <BtnPrimary onClick={handleFetchHitlistBodyguardsAnalytics} disabled={hitlistBodyguardsAnalyticsLoading}>{hitlistBodyguardsAnalyticsLoading ? 'Loading…' : 'Load stats'}</BtnPrimary>
+              </div>
+              {hitlistBodyguardsAnalytics && (
+                <>
+                  <p className="text-[10px] text-mutedForeground font-heading">Last {hitlistBodyguardsAnalytics.days} day(s).</p>
+                  <div className="overflow-x-auto max-h-72">
+                    {(!hitlistBodyguardsAnalytics.items || hitlistBodyguardsAnalytics.items.length === 0) ? <p className="text-[10px] text-mutedForeground font-heading">No events.</p> : (
+                      <table className="w-full text-[10px] font-heading">
+                        <thead><tr><th className="text-left p-1.5 text-mutedForeground">Event type</th><th className="text-right p-1.5 text-mutedForeground">Count</th><th className="text-right p-1.5 text-mutedForeground">Cost cash</th><th className="text-right p-1.5 text-mutedForeground">Cost pts</th><th className="text-right p-1.5 text-mutedForeground">Hire cost</th><th className="text-right p-1.5 text-mutedForeground">Share</th></tr></thead>
+                        <tbody>
+                          {hitlistBodyguardsAnalytics.items.map((item, idx) => (
+                            <tr key={idx} className="border-b border-zinc-700/30">
+                              <td className="py-1.5 pr-2 font-medium">{item.event_type || '—'}</td>
+                              <td className="py-1.5 text-right">{item.count != null ? item.count.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_cost_cash != null ? item.total_cost_cash.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_cost_points != null ? item.total_cost_points.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_hire_cost != null ? item.total_hire_cost.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Economy Analytics (cars, properties, loot, booze) */}
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Economy Analytics"
+            badge={economyAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{economyAnalytics.items.length} types</span> : null}
+            isCollapsed={collapsed.economyAnalytics}
+            onToggle={() => toggleSection('economyAnalytics')}
+          />
+          {!collapsed.economyAnalytics && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {[1, 7, 30].map((d) => (
+                  <button key={d} type="button" onClick={() => setEconomyAnalyticsDays(d)} className={`px-2 py-1 rounded border text-[10px] font-heading ${economyAnalyticsDays === d ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}>{d}d</button>
+                ))}
+                <BtnPrimary onClick={handleFetchEconomyAnalytics} disabled={economyAnalyticsLoading}>{economyAnalyticsLoading ? 'Loading…' : 'Load stats'}</BtnPrimary>
+              </div>
+              {economyAnalytics && (
+                <>
+                  <p className="text-[10px] text-mutedForeground font-heading">Car trades, property buys, loot drops, loot box opens, booze runs. Last {economyAnalytics.days} day(s).</p>
+                  <div className="overflow-x-auto max-h-72">
+                    {(!economyAnalytics.items || economyAnalytics.items.length === 0) ? <p className="text-[10px] text-mutedForeground font-heading">No economy events.</p> : (
+                      <table className="w-full text-[10px] font-heading">
+                        <thead><tr><th className="text-left p-1.5 text-mutedForeground">Type</th><th className="text-right p-1.5 text-mutedForeground">Count</th><th className="text-right p-1.5 text-mutedForeground">Price/Cost</th><th className="text-right p-1.5 text-mutedForeground">Profit</th><th className="text-right p-1.5 text-mutedForeground">Revenue</th><th className="text-right p-1.5 text-mutedForeground">Pieces</th><th className="text-right p-1.5 text-mutedForeground">Share</th></tr></thead>
+                        <tbody>
+                          {economyAnalytics.items.map((item, idx) => (
+                            <tr key={idx} className="border-b border-zinc-700/30">
+                              <td className="py-1.5 pr-2 font-medium">{item.event_type || '—'}</td>
+                              <td className="py-1.5 text-right">{item.count != null ? item.count.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{(item.total_price || item.total_cost) != null ? (item.total_price || item.total_cost).toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_profit != null ? item.total_profit.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_revenue != null ? item.total_revenue.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_pieces != null ? item.total_pieces.toLocaleString() : '—'}</td>
+                              <td className="py-1.5 text-right">{item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Bank Logs (Post Data) */}
+      </section>
+      )}
 
       {/* ─── Logs ─── */}
       <section id="admin-logs" className="admin-category-nav space-y-4">
@@ -4533,201 +4722,212 @@ export default function Admin() {
         </div>
 
         {/* Casino Analytics */}
+
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
-            icon={BarChart3}
-            title="Casino Analytics"
-            badge={casinoAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{casinoAnalytics.items.length} games</span> : null}
-            isCollapsed={collapsed.casinoAnalytics}
-            onToggle={() => toggleSection('casinoAnalytics')}
+            icon={Skull}
+            title="Crime logs (post data)"
+            badge={crimeLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{crimeLogsData.logs.length} entries</span> : null}
+            isCollapsed={collapsed.crimeLogs}
+            onToggle={() => toggleSection('crimeLogs')}
           />
-          {!collapsed.casinoAnalytics && (
-            <div className="p-3 space-y-2">
+          {!collapsed.crimeLogs && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">Search by username to load that user&apos;s crime attempts. Full post data: crime name, success/fail, profit, city, time.</p>
               <div className="flex flex-wrap items-center gap-2">
-                {[1, 7, 30].map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setCasinoAnalyticsDays(d)}
-                    className={`px-2 py-1 rounded border text-[10px] font-heading ${casinoAnalyticsDays === d ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}
-                  >
-                    {d}d
-                  </button>
-                ))}
-                <BtnPrimary onClick={handleFetchCasinoAnalytics} disabled={casinoAnalyticsLoading}>
-                  {casinoAnalyticsLoading ? 'Loading…' : 'Load stats'}
+                <input
+                  type="text"
+                  value={crimeLogsUsername}
+                  onChange={(e) => setCrimeLogsUsername(e.target.value)}
+                  placeholder="Username"
+                  className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                />
+                <span className="text-[10px] text-mutedForeground">Limit</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={crimeLogsLimit}
+                  onChange={(e) => setCrimeLogsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 500)))}
+                  className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                />
+                <BtnPrimary onClick={handleFetchCrimeLogs} disabled={crimeLogsLoading}>
+                  {crimeLogsLoading ? 'Loading…' : 'Load crime logs'}
                 </BtnPrimary>
               </div>
-              {casinoAnalytics && (
-                <>
-                  <p className="text-[10px] text-mutedForeground font-heading">Generated at {casinoAnalytics.generated_at ? new Date(casinoAnalytics.generated_at).toLocaleString() : '—'} for last {casinoAnalytics.days} day(s).</p>
-                  <div className="overflow-x-auto max-h-72">
-                    {(!casinoAnalytics.items || casinoAnalytics.items.length === 0) ? (
-                      <p className="text-[10px] text-mutedForeground font-heading">No casino activity in this window.</p>
-                    ) : (
-                      <table className="w-full text-[10px] font-heading">
-                        <thead><tr><th className="text-left p-1.5 text-mutedForeground">Game</th><th className="text-right p-1.5 text-mutedForeground">Attempts</th><th className="text-right p-1.5 text-mutedForeground">Wins</th><th className="text-right p-1.5 text-mutedForeground">Profit</th><th className="text-right p-1.5 text-mutedForeground">Share</th></tr></thead>
-                        <tbody>
-                          {casinoAnalytics.items.map((item, idx) => (
-                            <tr key={idx} className="border-b border-zinc-700/30">
-                              <td className="py-1.5 pr-2 font-medium">{item.game_type || '—'}</td>
-                              <td className="py-1.5 text-right">{item.attempts != null ? item.attempts.toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{item.wins != null ? item.wins.toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{item.total_profit != null ? `$${Number(item.total_profit).toLocaleString()}` : '—'}</td>
-                              <td className="py-1.5 text-right">{item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </>
+              {crimeLogsData && (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <p className="text-[10px] font-heading text-primary mb-1">Crime log for: <strong>{crimeLogsData.username ?? '—'}</strong></p>
+                  {(!crimeLogsData.logs || crimeLogsData.logs.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground font-heading">No crime attempts found.</p>
+                  ) : (
+                    <table className="w-full text-left border-collapse text-[9px] font-heading">
+                      <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                        <tr className="border-b border-zinc-700/50">
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Crime</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Type</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Success</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Profit</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">City</th>
+                          <th className="py-1 font-bold text-mutedForeground uppercase">Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {crimeLogsData.logs.map((row, idx) => (
+                          <tr key={idx} className="border-b border-zinc-700/30">
+                            <td className="py-1 pr-1 text-foreground">{row.crime_name ?? row.crime_id ?? '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground">{row.crime_type ?? '—'}</td>
+                            <td className="py-1 pr-1">{row.success ? <span className="text-emerald-400">Yes</span> : <span className="text-amber-400">No</span>}</td>
+                            <td className="py-1 pr-1">{row.profit != null ? `$${Number(row.profit).toLocaleString()}` : '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground">{row.city ?? '—'}</td>
+                            <td className="py-1 text-mutedForeground">{row.at ? new Date(row.at).toLocaleString() : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Trades Analytics */}
+        {/* GTA Logs (Post Data) */}
+
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
-            icon={BarChart3}
-            title="Trades (Quicktrade) Analytics"
-            badge={tradesAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{tradesAnalytics.items.length} types</span> : null}
-            isCollapsed={collapsed.tradesAnalytics}
-            onToggle={() => toggleSection('tradesAnalytics')}
+            icon={Car}
+            title="GTA logs (post data)"
+            badge={gtaLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{gtaLogsData.logs.length} entries</span> : null}
+            isCollapsed={collapsed.gtaLogs}
+            onToggle={() => {
+              toggleSection('gtaLogs');
+              if (collapsed.gtaLogs) fetchGtaExclusivePool();
+            }}
           />
-          {!collapsed.tradesAnalytics && (
-            <div className="p-3 space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                {[1, 7, 30].map((d) => (
-                  <button key={d} type="button" onClick={() => setTradesAnalyticsDays(d)} className={`px-2 py-1 rounded border text-[10px] font-heading ${tradesAnalyticsDays === d ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}>{d}d</button>
-                ))}
-                <BtnPrimary onClick={handleFetchTradesAnalytics} disabled={tradesAnalyticsLoading}>{tradesAnalyticsLoading ? 'Loading…' : 'Load stats'}</BtnPrimary>
+          {!collapsed.gtaLogs && (
+            <div className="p-3 space-y-3">
+              <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-zinc-700/50">
+                <span className="text-[10px] font-heading text-mutedForeground">Al Capone exclusive (car20) in GTA pool:</span>
+                {gtaExclusiveReleased === null ? (
+                  <span className="text-[10px] text-mutedForeground">…</span>
+                ) : (
+                  <>
+                    <span className={`text-[10px] font-heading font-bold ${gtaExclusiveReleased ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {gtaExclusiveReleased ? 'Released (very rare drop)' : 'Retracted'}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={gtaExclusiveLoading}
+                      onClick={() => handleSetGtaExclusivePool(!gtaExclusiveReleased)}
+                      className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-[10px] font-heading font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
+                    >
+                      {gtaExclusiveLoading ? '…' : gtaExclusiveReleased ? 'Retract from pool' : 'Release into pool'}
+                    </button>
+                  </>
+                )}
               </div>
-              {tradesAnalytics && (
-                <>
-                  <p className="text-[10px] text-mutedForeground font-heading">Last {tradesAnalytics.days} day(s).</p>
-                  <div className="overflow-x-auto max-h-72">
-                    {(!tradesAnalytics.items || tradesAnalytics.items.length === 0) ? <p className="text-[10px] text-mutedForeground font-heading">No trade events.</p> : (
-                      <table className="w-full text-[10px] font-heading">
-                        <thead><tr><th className="text-left p-1.5 text-mutedForeground">Type</th><th className="text-left p-1.5 text-mutedForeground">Direction</th><th className="text-right p-1.5 text-mutedForeground">Count</th><th className="text-right p-1.5 text-mutedForeground">Points</th><th className="text-right p-1.5 text-mutedForeground">Money</th><th className="text-right p-1.5 text-mutedForeground">Share</th></tr></thead>
-                        <tbody>
-                          {tradesAnalytics.items.map((item, idx) => (
-                            <tr key={idx} className="border-b border-zinc-700/30">
-                              <td className="py-1.5 pr-2 font-medium">{item.event_type || '—'}</td>
-                              <td className="py-1.5">{item.direction || '—'}</td>
-                              <td className="py-1.5 text-right">{item.count != null ? item.count.toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{item.total_points != null ? item.total_points.toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{item.total_money != null ? item.total_money.toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </>
+              <p className="text-[10px] text-mutedForeground font-heading">Search by username to load that user&apos;s GTA attempts. Full post data: option, car, success, profit, jailed.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="text" value={gtaLogsUsername} onChange={(e) => setGtaLogsUsername(e.target.value)} placeholder="Username" className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading" />
+                <span className="text-[10px] text-mutedForeground">Limit</span>
+                <input type="number" min={1} max={1000} value={gtaLogsLimit} onChange={(e) => setGtaLogsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 500)))} className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
+                <BtnPrimary onClick={handleFetchGtaLogs} disabled={gtaLogsLoading}>{gtaLogsLoading ? 'Loading…' : 'Load GTA logs'}</BtnPrimary>
+              </div>
+              {gtaLogsData && (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <p className="text-[10px] font-heading text-primary mb-1">GTA log for: <strong>{gtaLogsData.username ?? '—'}</strong></p>
+                  {(!gtaLogsData.logs || gtaLogsData.logs.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground font-heading">No GTA attempts found.</p>
+                  ) : (
+                    <table className="w-full text-left border-collapse text-[9px] font-heading">
+                      <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                        <tr className="border-b border-zinc-700/50">
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Time</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Option</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Success</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Car</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Profit</th>
+                          <th className="py-1 font-bold text-mutedForeground uppercase">Jailed</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gtaLogsData.logs.map((row, idx) => (
+                          <tr key={idx} className="border-b border-zinc-700/30">
+                            <td className="py-1 pr-1 text-mutedForeground">{row.at ? new Date(row.at).toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1">{row.option_name ?? row.option_id ?? '—'}</td>
+                            <td className="py-1 pr-1">{row.success ? <span className="text-emerald-400">Yes</span> : <span className="text-amber-400">No</span>}</td>
+                            <td className="py-1 pr-1">{row.car_name ?? row.car_id ?? '—'}</td>
+                            <td className="py-1 pr-1">{row.profit != null ? `$${Number(row.profit).toLocaleString()}` : '—'}</td>
+                            <td className="py-1">{row.jailed ? `Yes (${row.jail_seconds ?? '?'}s)` : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Hitlist & Bodyguards Analytics */}
+        {/* Jail Bust Logs (Post Data) */}
+
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
-            icon={BarChart3}
-            title="Hitlist & Bodyguards Analytics"
-            badge={hitlistBodyguardsAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{hitlistBodyguardsAnalytics.items.length} event types</span> : null}
-            isCollapsed={collapsed.hitlistBodyguardsAnalytics}
-            onToggle={() => toggleSection('hitlistBodyguardsAnalytics')}
+            icon={Lock}
+            title="Jail bust logs (post data)"
+            badge={jailLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{jailLogsData.logs.length} entries</span> : null}
+            isCollapsed={collapsed.jailLogs}
+            onToggle={() => toggleSection('jailLogs')}
           />
-          {!collapsed.hitlistBodyguardsAnalytics && (
-            <div className="p-3 space-y-2">
+          {!collapsed.jailLogs && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">Search by username to load that user&apos;s jail bust attempts. Full post data: target, NPC vs player, success, profit.</p>
               <div className="flex flex-wrap items-center gap-2">
-                {[1, 7, 30].map((d) => (
-                  <button key={d} type="button" onClick={() => setHitlistBodyguardsAnalyticsDays(d)} className={`px-2 py-1 rounded border text-[10px] font-heading ${hitlistBodyguardsAnalyticsDays === d ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}>{d}d</button>
-                ))}
-                <BtnPrimary onClick={handleFetchHitlistBodyguardsAnalytics} disabled={hitlistBodyguardsAnalyticsLoading}>{hitlistBodyguardsAnalyticsLoading ? 'Loading…' : 'Load stats'}</BtnPrimary>
+                <input type="text" value={jailLogsUsername} onChange={(e) => setJailLogsUsername(e.target.value)} placeholder="Username" className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading" />
+                <span className="text-[10px] text-mutedForeground">Limit</span>
+                <input type="number" min={1} max={1000} value={jailLogsLimit} onChange={(e) => setJailLogsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 500)))} className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
+                <BtnPrimary onClick={handleFetchJailLogs} disabled={jailLogsLoading}>{jailLogsLoading ? 'Loading…' : 'Load jail logs'}</BtnPrimary>
               </div>
-              {hitlistBodyguardsAnalytics && (
-                <>
-                  <p className="text-[10px] text-mutedForeground font-heading">Last {hitlistBodyguardsAnalytics.days} day(s).</p>
-                  <div className="overflow-x-auto max-h-72">
-                    {(!hitlistBodyguardsAnalytics.items || hitlistBodyguardsAnalytics.items.length === 0) ? <p className="text-[10px] text-mutedForeground font-heading">No events.</p> : (
-                      <table className="w-full text-[10px] font-heading">
-                        <thead><tr><th className="text-left p-1.5 text-mutedForeground">Event type</th><th className="text-right p-1.5 text-mutedForeground">Count</th><th className="text-right p-1.5 text-mutedForeground">Cost cash</th><th className="text-right p-1.5 text-mutedForeground">Cost pts</th><th className="text-right p-1.5 text-mutedForeground">Hire cost</th><th className="text-right p-1.5 text-mutedForeground">Share</th></tr></thead>
-                        <tbody>
-                          {hitlistBodyguardsAnalytics.items.map((item, idx) => (
-                            <tr key={idx} className="border-b border-zinc-700/30">
-                              <td className="py-1.5 pr-2 font-medium">{item.event_type || '—'}</td>
-                              <td className="py-1.5 text-right">{item.count != null ? item.count.toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{item.total_cost_cash != null ? item.total_cost_cash.toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{item.total_cost_points != null ? item.total_cost_points.toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{item.total_hire_cost != null ? item.total_hire_cost.toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </>
+              {jailLogsData && (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <p className="text-[10px] font-heading text-primary mb-1">Jail bust log for: <strong>{jailLogsData.username ?? '—'}</strong></p>
+                  {(!jailLogsData.logs || jailLogsData.logs.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground font-heading">No bust attempts found.</p>
+                  ) : (
+                    <table className="w-full text-left border-collapse text-[9px] font-heading">
+                      <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                        <tr className="border-b border-zinc-700/50">
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Time</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Target</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">NPC</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Success</th>
+                          <th className="py-1 font-bold text-mutedForeground uppercase">Profit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {jailLogsData.logs.map((row, idx) => (
+                          <tr key={idx} className="border-b border-zinc-700/30">
+                            <td className="py-1 pr-1 text-mutedForeground">{row.at ? new Date(row.at).toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1">{row.target_username ?? '—'}</td>
+                            <td className="py-1 pr-1">{row.is_npc ? 'Yes' : 'No'}</td>
+                            <td className="py-1 pr-1">{row.success ? <span className="text-emerald-400">Yes</span> : <span className="text-amber-400">No</span>}</td>
+                            <td className="py-1">{row.profit != null ? `$${Number(row.profit).toLocaleString()}` : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Economy Analytics (cars, properties, loot, booze) */}
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={BarChart3}
-            title="Economy Analytics"
-            badge={economyAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{economyAnalytics.items.length} types</span> : null}
-            isCollapsed={collapsed.economyAnalytics}
-            onToggle={() => toggleSection('economyAnalytics')}
-          />
-          {!collapsed.economyAnalytics && (
-            <div className="p-3 space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                {[1, 7, 30].map((d) => (
-                  <button key={d} type="button" onClick={() => setEconomyAnalyticsDays(d)} className={`px-2 py-1 rounded border text-[10px] font-heading ${economyAnalyticsDays === d ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}>{d}d</button>
-                ))}
-                <BtnPrimary onClick={handleFetchEconomyAnalytics} disabled={economyAnalyticsLoading}>{economyAnalyticsLoading ? 'Loading…' : 'Load stats'}</BtnPrimary>
-              </div>
-              {economyAnalytics && (
-                <>
-                  <p className="text-[10px] text-mutedForeground font-heading">Car trades, property buys, loot drops, loot box opens, booze runs. Last {economyAnalytics.days} day(s).</p>
-                  <div className="overflow-x-auto max-h-72">
-                    {(!economyAnalytics.items || economyAnalytics.items.length === 0) ? <p className="text-[10px] text-mutedForeground font-heading">No economy events.</p> : (
-                      <table className="w-full text-[10px] font-heading">
-                        <thead><tr><th className="text-left p-1.5 text-mutedForeground">Type</th><th className="text-right p-1.5 text-mutedForeground">Count</th><th className="text-right p-1.5 text-mutedForeground">Price/Cost</th><th className="text-right p-1.5 text-mutedForeground">Profit</th><th className="text-right p-1.5 text-mutedForeground">Revenue</th><th className="text-right p-1.5 text-mutedForeground">Pieces</th><th className="text-right p-1.5 text-mutedForeground">Share</th></tr></thead>
-                        <tbody>
-                          {economyAnalytics.items.map((item, idx) => (
-                            <tr key={idx} className="border-b border-zinc-700/30">
-                              <td className="py-1.5 pr-2 font-medium">{item.event_type || '—'}</td>
-                              <td className="py-1.5 text-right">{item.count != null ? item.count.toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{(item.total_price || item.total_cost) != null ? (item.total_price || item.total_cost).toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{item.total_profit != null ? item.total_profit.toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{item.total_revenue != null ? item.total_revenue.toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{item.total_pieces != null ? item.total_pieces.toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Bank Logs (Post Data) */}
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
@@ -4928,6 +5128,190 @@ export default function Admin() {
         </div>
       </section>
 
+      {/* ─── Testing Tools (admin only) ─── */}
+      {isAdmin && (
+      <section id="admin-testing" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <Wrench size={12} />
+          Testing Tools
+        </h2>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Clock}
+          title="Search & Attack Tools"
+          isCollapsed={collapsed.search}
+          onToggle={() => toggleSection('search')}
+        />
+        {!collapsed.search && (
+          <div className="p-2 space-y-1">
+            <ActionRow icon={Settings} label="Set Search Time" description="Per user: 1–999 mins, or 0 to clear override">
+              <Input type="number" min={0} max={999} value={formData.searchMinutes} onChange={(e) => setFormData((prev) => ({ ...prev, searchMinutes: parseInt(e.target.value) || 0 }))} placeholder="Mins" />
+              <BtnPrimary onClick={handleSetSearchTime}>Set</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Settings} label="Set All to 1 min" description="Affects all users">
+              <BtnPrimary onClick={handleSetAllSearchTime1}>Set All 1 min</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={Settings} label="Set All to 5 mins" description="Affects all users">
+              <BtnPrimary onClick={handleSetAllSearchTime5}>Set All 5 min</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Trash2} label="Clear All Searches" description="Delete all attack searches" color="text-red-400">
+              <BtnDanger onClick={handleClearAllSearches} disabled={clearSearchesLoading}>
+                {clearSearchesLoading ? '...' : 'Clear'}
+              </BtnDanger>
+            </ActionRow>
+
+            <ActionRow icon={Clock} label="Reset Hitlist NPC Timers" description="All users can add NPCs again">
+              <BtnPrimary onClick={handleResetHitlistNpcTimers} disabled={resetNpcTimersLoading}>
+                {resetNpcTimersLoading ? '...' : 'Reset'}
+              </BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Clock} label="Reset All OC Timers" description="Clear OC cooldown for everyone; all can run Organised Crime immediately">
+              <BtnPrimary onClick={handleResetAllOcTimers} disabled={resetOcTimersLoading}>
+                {resetOcTimersLoading ? '...' : 'Reset'}
+              </BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Clock} label="Reset Daily Rewards Timer" description="Clear 6h play window: all users get 3 plays again (RPS / Noughts & Crosses)">
+              <BtnPrimary onClick={handleResetDailyRewardsTimerAll} disabled={resetDailyRewardsLoading}>
+                {resetDailyRewardsLoading ? '...' : 'Reset all'}
+              </BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={Clock} label="Reset Daily Rewards for one user" description="Use Target Username above; clears their plays and any in-progress game">
+              <BtnPrimary onClick={handleResetDailyRewardsTimerUser} disabled={resetDailyRewardsLoading}>
+                {resetDailyRewardsLoading ? '...' : 'Reset user'}
+              </BtnPrimary>
+            </ActionRow>
+          </div>
+        )}
+        </div>
+
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Shield}
+            title="Bodyguard Tools"
+            isCollapsed={collapsed.bodyguards}
+            onToggle={() => toggleSection('bodyguards')}
+          />
+          {!collapsed.bodyguards && (
+            <div className="p-2 space-y-1">
+              <ActionRow icon={Shield} label="Generate Robots" description="For target user">
+                <Input type="number" min="1" max="4" value={bgTestCount} onChange={(e) => setBgTestCount(parseInt(e.target.value) || 1)} />
+                <BtnPrimary onClick={handleGenerateBodyguards}>Generate</BtnPrimary>
+              </ActionRow>
+
+              <ActionRow icon={Trash2} label="Clear Target's BGs" description="Remove all bodyguards" color="text-red-400">
+                <BtnDanger onClick={handleClearBodyguards}>Clear</BtnDanger>
+              </ActionRow>
+
+              <ActionRow icon={Trash2} label="Drop ALL Bodyguards" description="Remove from every user" color="text-red-400">
+                <BtnDanger onClick={handleDropAllHumanBodyguards} disabled={dropHumanBgLoading}>
+                  {dropHumanBgLoading ? '...' : 'Drop All'}
+                </BtnDanger>
+              </ActionRow>
+
+              <ActionRow icon={Shield} label="Test bodyguard payout" description="Run weekly payout job once (human BGs only)">
+                <BtnPrimary onClick={handleTestBodyguardPayout} disabled={testPayoutLoading}>
+                  {testPayoutLoading ? '...' : 'Run test payout'}
+                </BtnPrimary>
+              </ActionRow>
+
+              <ActionRow icon={Shield} label="Seed 4 Human Bodyguards" description="Clears robots, creates 4 test humans for you" color="text-emerald-400">
+                <BtnPrimary onClick={handleSeedHumanBodyguards} disabled={seedHumanBgLoading}>
+                  {seedHumanBgLoading ? '...' : 'Seed Humans'}
+                </BtnPrimary>
+              </ActionRow>
+
+              <ActionRow icon={Bot} label="Seed Random Mix" description="4 random bodyguards (mix of robots/humans)" color="text-cyan-400">
+                <BtnPrimary onClick={handleSeedRandomBodyguards} disabled={seedRandomBgLoading}>
+                  {seedRandomBgLoading ? '...' : 'Seed Random'}
+                </BtnPrimary>
+              </ActionRow>
+
+              <ActionRow icon={Shield} label="Reset Drop Cooldown" description="Clear your bodyguard drop timer" color="text-amber-400">
+                <BtnPrimary onClick={handleResetBgCooldown}>Reset</BtnPrimary>
+              </ActionRow>
+            </div>
+          )}
+        </div>
+
+      </section>
+      )}
+
+      {/* ─── Quick & Bulk (admin only) ─── */}
+      {isAdmin && (
+      <section id="admin-quick" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <Gift size={12} />
+          Quick & Bulk
+        </h2>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Zap}
+          title="Quick Actions"
+          isCollapsed={collapsed.quick}
+          onToggle={() => toggleSection('quick')}
+        />
+        {!collapsed.quick && (
+          <div className="p-2 space-y-1">
+            <ActionRow icon={Building2} label="Seed Families" description="Create 3 families with 5 users each">
+              <BtnPrimary onClick={handleSeedFamilies}>Seed</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={Gift} label="Give All Points" description="Give points to all alive accounts">
+              <FormattedNumberInput value={String(giveAllPoints)} onChange={(raw) => setGiveAllPoints(parseInt(raw, 10) || 1)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
+              <BtnPrimary onClick={handleGiveAllPoints}>Give</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={Gift} label="Give All Money" description="Give money to all alive accounts">
+              <FormattedNumberInput value={String(giveAllMoney)} onChange={(raw) => setGiveAllMoney(parseInt(raw, 10) || 10000)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
+              <BtnPrimary onClick={handleGiveAllMoney}>Give</BtnPrimary>
+            </ActionRow>
+          </div>
+        )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Layers}
+          title="Bulk User Action"
+          isCollapsed={collapsed.bulkAction}
+          onToggle={() => toggleSection('bulkAction')}
+        />
+        {!collapsed.bulkAction && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground font-heading">Apply an action to multiple users at once. Enter usernames separated by commas or newlines (max 50).</p>
+            <textarea
+              value={bulkUsernames}
+              onChange={(e) => setBulkUsernames(e.target.value)}
+              placeholder="user1, user2, user3..."
+              rows={3}
+              className="w-full px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading resize-y"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <select value={bulkAction} onChange={(e) => setBulkAction(e.target.value)} className="px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading">
+                <option value="give_points">Give Points</option>
+                <option value="give_money">Give Money</option>
+                <option value="lock">Lock Accounts</option>
+                <option value="unlock">Unlock Accounts</option>
+                <option value="reset_daily_rewards">Reset Daily Rewards</option>
+              </select>
+              {(bulkAction === 'give_points' || bulkAction === 'give_money') && (
+                <FormattedNumberInput value={String(bulkValue)} onChange={(raw) => setBulkValue(parseInt(raw, 10) || 0)} className="flex h-9 w-24 rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
+              )}
+              <BtnPrimary onClick={handleBulkAction} disabled={bulkLoading}>{bulkLoading ? '...' : 'Apply to all'}</BtnPrimary>
+            </div>
+          </div>
+        )}
+        </div>
+      </section>
+      )}
+
       {/* ─── Database (admin only) ─── */}
       {isAdmin && (
       <section id="admin-database" className="admin-category-nav space-y-4">
@@ -5052,13 +5436,15 @@ export default function Admin() {
       </section>
       )}
 
-      {/* ─── Moderators (admin only) ─── */}
-      {isAdmin && (
-      <section id="admin-moderators" className="admin-category-nav space-y-4">
+
+      {/* ─── Staff Management ─── */}
+      {(isAdmin || isModerator) && (
+      <section id="admin-staff" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Shield size={12} />
-          Moderators
+          Staff Management
         </h2>
+        {isAdmin && (
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
@@ -5140,15 +5526,58 @@ export default function Admin() {
           </div>
           <div className="admin-art-line text-primary mx-3" />
         </div>
+        )}
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Promote / demote Help Desk Operators</span>
+          </div>
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground font-heading">HDOs can reply to and close Help Desk tickets. They appear in dark green on Users Online. Admins and mods can promote or demote.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={promoteHdoUsername}
+                onChange={(e) => setPromoteHdoUsername(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handlePromoteHdo()}
+                placeholder="Username to promote"
+                className="flex-1 min-w-[140px] bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+              />
+              <BtnPrimary onClick={handlePromoteHdo} disabled={promoteHdoLoading}>
+                {promoteHdoLoading ? '...' : 'Promote to HDO'}
+              </BtnPrimary>
+            </div>
+            <div>
+              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-1.5">Current Help Desk Operators</div>
+              {hdosLoading ? (
+                <p className="text-[10px] text-mutedForeground">Loading…</p>
+              ) : hdosList.length === 0 ? (
+                <p className="text-[10px] text-mutedForeground font-heading">None. Promote a user above.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {hdosList.map((h) => (
+                    <li key={h.id || h.username} className="flex items-center justify-between gap-2 py-1.5 px-2 rounded bg-zinc-800/40 border border-zinc-700/50">
+                      <span className="text-sm font-heading font-medium text-foreground">{h.username ?? '—'}</span>
+                      <span className="text-[10px] text-mutedForeground truncate max-w-[180px]">{h.email ?? '—'}</span>
+                      <BtnDanger onClick={() => handleDemoteHdo(h.username)} className="shrink-0">Demote</BtnDanger>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          <div className="admin-art-line text-primary mx-3" />
+        </div>
       </section>
       )}
 
-      {/* ─── Mod display (moderators only) ─── */}
+      {/* ─── Mod Tools ─── */}
       {isModerator && (
-      <section id="admin-mod-display" className="admin-category-nav space-y-4">
+      <section id="admin-mod-tools" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Palette size={12} />
-          Mod display
+          Mod Tools
         </h2>
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -5194,57 +5623,3 @@ export default function Admin() {
         </div>
       </section>
       )}
-
-      {/* ─── Help Desk Operators (admin or mod) ─── */}
-      {(isAdmin || isModerator) && (
-      <section id="admin-hdo" className="admin-category-nav space-y-4">
-        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
-          <HelpCircle size={12} />
-          Help Desk Operators
-        </h2>
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Promote / demote Help Desk Operators</span>
-          </div>
-          <div className="p-3 space-y-3">
-            <p className="text-[10px] text-mutedForeground font-heading">HDOs can reply to and close Help Desk tickets. They appear in dark green on Users Online. Admins and mods can promote or demote.</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="text"
-                value={promoteHdoUsername}
-                onChange={(e) => setPromoteHdoUsername(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handlePromoteHdo()}
-                placeholder="Username to promote"
-                className="flex-1 min-w-[140px] bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
-              />
-              <BtnPrimary onClick={handlePromoteHdo} disabled={promoteHdoLoading}>
-                {promoteHdoLoading ? '...' : 'Promote to HDO'}
-              </BtnPrimary>
-            </div>
-            <div>
-              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-1.5">Current Help Desk Operators</div>
-              {hdosLoading ? (
-                <p className="text-[10px] text-mutedForeground">Loading…</p>
-              ) : hdosList.length === 0 ? (
-                <p className="text-[10px] text-mutedForeground font-heading">None. Promote a user above.</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {hdosList.map((h) => (
-                    <li key={h.id || h.username} className="flex items-center justify-between gap-2 py-1.5 px-2 rounded bg-zinc-800/40 border border-zinc-700/50">
-                      <span className="text-sm font-heading font-medium text-foreground">{h.username ?? '—'}</span>
-                      <span className="text-[10px] text-mutedForeground truncate max-w-[180px]">{h.email ?? '—'}</span>
-                      <BtnDanger onClick={() => handleDemoteHdo(h.username)} className="shrink-0">Demote</BtnDanger>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-          <div className="admin-art-line text-primary mx-3" />
-        </div>
-      </section>
-      )}
-    </div>
-  );
-}

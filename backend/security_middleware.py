@@ -80,18 +80,17 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 logger.warning("IP ban check failed: %s", e)
 
         # Skip security checks for certain paths
-        skip_paths = [
-            "/",
-            "/docs",
-            "/openapi.json",
+        # Exact matches for root/docs (avoid "/" matching everything via startswith)
+        _skip_exact = {"/", "/docs", "/openapi.json"}
+        _skip_prefix = [
             "/api/auth/login",
             "/api/auth/register",
             "/api/auth/me",
-            "/api/admin/",  # Admin tools: bypass spam + rate limits so security/anti-cheat UI works
+            "/api/admin/",
             "/admin/",
         ]
         
-        if any(path.startswith(p) for p in skip_paths):
+        if path in _skip_exact or any(path.startswith(p) for p in _skip_prefix):
             return await call_next(request)
         
         # Try to extract user from JWT token
