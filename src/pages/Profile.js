@@ -975,8 +975,9 @@ export default function Profile() {
 
   useEffect(() => {
     if (!username) return;
+    setLoading(true);
+    setProfile(null);
     const run = async () => {
-      setLoading(true);
       try {
         const res = await api.get(`/users/${encodeURIComponent(username)}/profile`);
         setProfile(res.data);

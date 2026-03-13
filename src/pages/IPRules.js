@@ -1,34 +1,49 @@
-import { useState, useEffect } from 'react';
-import { Globe } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Globe, RefreshCw, Smartphone, Monitor } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
+
+function DeviceIcon({ type }) {
+  if (type === 'Mobile' || type === 'Tablet') return <Smartphone size={14} className="opacity-70" />;
+  return <Monitor size={14} className="opacity-70" />;
+}
 
 export default function IPRules() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await api.get('/auth/ip-info');
-        if (!cancelled) setData(res.data);
-      } catch (e) {
-        if (!cancelled) {
-          toast.error(e.response?.data?.detail || 'Failed to load address info');
-          setData({
-            current_ip: '',
-            accounts_from_current_ip: [],
-            your_signin_ips: [],
-          });
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+  const fetchIpInfo = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoading(true);
+    try {
+      const res = await api.get('/auth/ip-info');
+      setData(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load address info');
+      setData({
+        current_ip: '',
+        accounts_from_current_ip: [],
+        your_signin_ips: [],
+        current_device_type: null,
+        last_device_type: null,
+      });
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchIpInfo(false);
+  }, [fetchIpInfo]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.visibilityState === 'visible') fetchIpInfo(false);
+    };
+    document.addEventListener('visibilitychange', onFocus);
+    return () => document.removeEventListener('visibilitychange', onFocus);
+  }, [fetchIpInfo]);
 
   if (loading && !data) {
     return (
@@ -44,15 +59,35 @@ export default function IPRules() {
 
   const currentIp = (data?.current_ip || '').trim();
   const accountsFromIp = data?.accounts_from_current_ip || [];
-  const yourIps = data?.your_signin_ips || [];
+  const rawYourIps = data?.your_signin_ips || [];
+  const yourIps = currentIp
+    ? [currentIp, ...rawYourIps.filter((ip) => (ip || '').trim() !== currentIp)]
+    : rawYourIps;
+  const currentDeviceType = data?.current_device_type || null;
+  const lastDeviceType = data?.last_device_type || null;
+
+  const handleRefresh = () => fetchIpInfo(true);
 
   return (
     <div className={styles.pageContent}>
-      <div className="flex items-center gap-2 mb-4">
-        <Globe size={20} style={{ color: 'var(--noir-primary)' }} />
-        <h1 className="text-lg font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-foreground)' }}>
-          IP & Devices
-        </h1>
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2">
+          <Globe size={20} style={{ color: 'var(--noir-primary)' }} />
+          <h1 className="text-lg font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-foreground)' }}>
+            IP & Devices
+          </h1>
+        </div>
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-heading uppercase tracking-wider border transition-opacity disabled:opacity-50"
+          style={{ backgroundColor: 'var(--noir-surface)', borderColor: 'var(--noir-border-light)', color: 'var(--noir-foreground)' }}
+          title="Refresh IP and device info"
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </button>
       </div>
 
       <div
@@ -79,9 +114,20 @@ export default function IPRules() {
         </h2>
         {currentIp ? (
           <>
-            <p className="text-sm font-heading mb-2" style={{ color: 'var(--noir-foreground)' }}>
+            <p className="text-sm font-heading mb-2 flex flex-wrap items-center gap-x-3 gap-y-1" style={{ color: 'var(--noir-foreground)' }}>
               <span style={{ color: 'var(--noir-primary)' }}>{currentIp}</span>
+              {currentDeviceType && (
+                <span className="flex items-center gap-1.5 text-xs font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
+                  <DeviceIcon type={currentDeviceType} />
+                  {currentDeviceType}
+                </span>
+              )}
             </p>
+            {lastDeviceType && lastDeviceType !== currentDeviceType && (
+              <p className="text-xs font-heading mb-2" style={{ color: 'var(--noir-muted)' }}>
+                Last login was from: {lastDeviceType}
+              </p>
+            )}
             <ul className="space-y-1">
               {accountsFromIp.length ? (
                 accountsFromIp.map((username) => (

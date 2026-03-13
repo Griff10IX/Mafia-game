@@ -904,7 +904,7 @@ def register(router):
 
     @router.get("/auth/ip-info")
     async def get_ip_info(request: Request, current_user: dict = Depends(get_current_user)):
-        """Return current IP, accounts that have signed in from this IP, and IPs this user has signed in from (for IP rules page)."""
+        """Return current IP, accounts that have signed in from this IP, IPs this user has signed in from, and device types (for IP & Devices page)."""
         current_ip = _client_ip(request) or ""
         accounts_from_current_ip = []
         if current_ip:
@@ -926,8 +926,13 @@ def register(router):
             ip = (ip or "").strip()
             if ip and ip not in your_ips:
                 your_ips.append(ip)
+        ua = (request.headers.get("User-Agent") or "").strip()
+        current_device_type = _device_type_from_user_agent(ua) if ua else None
+        last_device_type = (current_user.get("last_device_type") or "").strip() or None
         return {
             "current_ip": current_ip,
             "accounts_from_current_ip": accounts_from_current_ip,
             "your_signin_ips": your_ips,
+            "current_device_type": current_device_type,
+            "last_device_type": last_device_type,
         }
