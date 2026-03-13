@@ -1121,13 +1121,14 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         killer_family_doc = None
         if current_user.get("family_id"):
             killer_family_doc = await db.families.find_one({"id": current_user["family_id"]}, {"_id": 0, "name": 1})
+        money_after_loot = max(0, victim_money - cash_loot)
         await db.users.update_one(
             {"id": victim_id},
             {"$set": {
                 "is_dead": True,
                 "dead_at": now_iso,
                 "points_at_death": target.get("points", 0),
-                "money_at_death": target.get("money", 0),
+                "money_at_death": money_after_loot,
                 "money": 0,
                 "health": 0,
                 "killed_by_username": current_user.get("username"),

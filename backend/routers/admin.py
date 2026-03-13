@@ -415,11 +415,14 @@ def register(router):
             middleware_enabled = getattr(sm_module, "SECURITY_MIDDLEWARE_ENABLED", False)
         except ImportError:
             middleware_enabled = False
+        rl_ms = {}
+        for ep, (interval_sec, enabled) in security_module.RATE_LIMIT_CONFIG.items():
+            rl_ms[ep] = (round(interval_sec * 1000, 1), enabled)
         return {
-            "rate_limits": security_module.RATE_LIMIT_CONFIG,
+            "rate_limits": rl_ms,
             "global_enabled": getattr(security_module, "GLOBAL_RATE_LIMITS_ENABLED", False),
             "security_middleware_enabled": middleware_enabled,
-            "note": "Min seconds between clicks per endpoint. All security middleware is OFF by default."
+            "note": "Values are in milliseconds. All security middleware is OFF by default."
         }
 
     @router.post("/admin/security/rate-limits/toggle")
@@ -438,27 +441,30 @@ def register(router):
         return {
             "message": f"Rate limit for '{endpoint}' {'enabled' if enabled_bool else 'disabled'}",
             "endpoint": endpoint,
-            "min_interval_sec": interval,
+            "min_interval_ms": round(interval * 1000, 1),
             "enabled": enabled_bool
         }
 
     @router.post("/admin/security/rate-limits/update")
     async def admin_update_rate_limit(
         endpoint: str,
-        min_interval_sec: float,
+        min_interval_ms: float,
         current_user: dict = Depends(get_current_user)
     ):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         if endpoint not in security_module.RATE_LIMIT_CONFIG:
             raise HTTPException(status_code=404, detail=f"Endpoint '{endpoint}' not found in rate limit config")
-        if min_interval_sec < 0.1 or min_interval_sec > 60:
-            raise HTTPException(status_code=400, detail="Min interval must be between 0.1 and 60 seconds")
+        if min_interval_ms < 0 or min_interval_ms > 60000:
+            raise HTTPException(status_code=400, detail="Min interval must be between 0 and 60000 ms")
+        min_interval_sec = min_interval_ms / 1000.0
         _, enabled = security_module.RATE_LIMIT_CONFIG[endpoint]
         security_module.RATE_LIMIT_CONFIG[endpoint] = (min_interval_sec, enabled)
+        label = f"{min_interval_ms}ms" if min_interval_ms < 1000 else f"{min_interval_sec}s"
         return {
-            "message": f"Rate limit for '{endpoint}' updated to {min_interval_sec}s between clicks",
+            "message": f"Rate limit for '{endpoint}' updated to {label} between clicks",
             "endpoint": endpoint,
+            "min_interval_ms": min_interval_ms,
             "min_interval_sec": min_interval_sec,
             "enabled": enabled
         }

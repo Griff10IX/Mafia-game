@@ -651,7 +651,7 @@ async def get_security_summary(db, limit: int = 100, flag_type: str = None) -> d
         "recent_flags": flags,
         "telegram_enabled": TELEGRAM_ENABLED,
         "telegram_configured": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID),
-        "rate_limit_config": {path: {"min_interval_sec": interval, "enabled": enabled} for path, (interval, enabled) in RATE_LIMIT_CONFIG.items()}
+        "rate_limit_config": {path: {"min_interval_ms": round(interval * 1000, 1), "enabled": enabled} for path, (interval, enabled) in RATE_LIMIT_CONFIG.items()}
     }
 
 

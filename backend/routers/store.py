@@ -61,12 +61,13 @@ CUSTOM_BULLETS_MAX = 250_000
 
 
 def _bullet_cost(bullets: int) -> int:
-    """Cost in points for any bullets 1–CUSTOM_BULLETS_MAX. Matches BULLET_PACKS."""
+    """Cost in points for any bullets 1–CUSTOM_BULLETS_MAX. Linear scaling: ~0.02 pts/bullet below 5k, 0.015 pts/bullet above 5k."""
     if bullets < 1 or bullets > CUSTOM_BULLETS_MAX:
         raise ValueError(f"Bullets must be 1–{CUSTOM_BULLETS_MAX:,}")
     if bullets < 5000:
-        return max(1, int((bullets * 0.02)))  # same rate as 5k pack
-    return 100 + ((bullets - 5000) // 5000) * 75
+        return max(1, int(bullets * 0.02))
+    import math
+    return 100 + math.ceil((bullets - 5000) * 75 / 5000)
 CUSTOM_CAR_COST = 500
 BUY_HEALTH_COST_POINTS = 15
 FULL_HEALTH = 100
@@ -294,14 +295,24 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
     pattern = _username_pattern(to_username)
     if pattern is None:
         raise HTTPException(status_code=400, detail="Enter a valid username")
-    recipient = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
+    recipient = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1, "is_dead": 1})
     if not recipient:
         raise HTTPException(status_code=404, detail="User not found")
+    if recipient.get("is_dead"):
+        raise HTTPException(status_code=400, detail="Cannot send points to a dead account")
     if recipient["id"] == sender_id:
         raise HTTPException(status_code=400, detail="You cannot send points to yourself")
+    # Atomic deduct: only succeeds if sender still has enough points
+    deduct = await db.users.update_one(
+        {"id": sender_id, "points": {"$gte": amount}},
+        {"$inc": {"points": -amount}},
+    )
+    if deduct.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
     recipient_username = (recipient.get("username") or "").strip() or "?"
     now = datetime.now(timezone.utc).isoformat()
     transfer_id = str(uuid.uuid4())
+    await db.users.update_one({"id": recipient["id"]}, {"$inc": {"points": amount}})
     await db.points_transfers.insert_one({
         "id": transfer_id,
         "from_user_id": sender_id,
@@ -311,8 +322,6 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
         "amount": amount,
         "created_at": now,
     })
-    await db.users.update_one({"id": sender_id}, {"$inc": {"points": -amount}})
-    await db.users.update_one({"id": recipient["id"]}, {"$inc": {"points": amount}})
     await send_notification(
         recipient["id"],
         "Points received",

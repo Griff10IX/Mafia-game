@@ -61,22 +61,34 @@ def register(router):
         money_at_death = int(dead_user.get("money_at_death") or 0)
         if points_at_death <= 0 and money_at_death <= 0:
             raise HTTPException(status_code=400, detail="That account had no points or cash to transfer")
+        # Atomically claim — prevents double-retrieval race condition
+        claim = await db.users.find_one_and_update(
+            {"id": dead_user["id"], "is_dead": True, "retrieval_used": {"$ne": True}},
+            {"$set": {"retrieval_used": True}},
+        )
+        if not claim:
+            raise HTTPException(status_code=400, detail="That dead account has already been used for a transfer.")
         add_points = max(0, int(points_at_death * DEAD_ALIVE_PERCENT))
         add_money = max(0, int(money_at_death * DEAD_ALIVE_PERCENT))
         tax_money = max(0, int(money_at_death * (1 - DEAD_ALIVE_PERCENT)))
+        tax_points = max(0, int(points_at_death * (1 - DEAD_ALIVE_PERCENT)))
         dead_state = (dead_user.get("current_state") or "").strip()
         head_family_id = await get_head_family_id_for_state(dead_state) if dead_state else None
-        if head_family_id and tax_money > 0:
-            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": tax_money, "state_head_income.dead_alive_tax": tax_money}})
+        if head_family_id:
+            family_inc = {}
+            if tax_money > 0:
+                family_inc["treasury"] = tax_money
+                family_inc["state_head_income.dead_alive_tax"] = tax_money
+            if tax_points > 0:
+                family_inc["treasury_points"] = tax_points
+                family_inc["state_head_income.dead_alive_points_tax"] = tax_points
+            if family_inc:
+                await db.families.update_one({"id": head_family_id}, {"$inc": family_inc})
         if add_points > 0 or add_money > 0:
             await db.users.update_one(
                 {"id": current_user["id"]},
                 {"$inc": {"points": add_points, "money": add_money}}
             )
-        await db.users.update_one(
-            {"id": dead_user["id"]},
-            {"$set": {"retrieval_used": True}}
-        )
         msg = f"Transferred 95% from your dead account ({dead_user['username']}, 5% tax): "
         parts = []
         if add_money > 0:

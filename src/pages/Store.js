@@ -30,7 +30,7 @@ const BULLET_PACKS = [
 const CUSTOM_BULLETS_MAX = 250_000;
 
 const VALID_TABS = ['points', 'sendpts', 'upgrades', 'bullets'];
-const bulletCost = (bullets) => bullets < 5000 ? Math.max(1, Math.floor(bullets * 0.02)) : 100 + Math.floor((bullets - 5000) / 5000) * 75;
+const bulletCost = (bullets) => bullets < 5000 ? Math.max(1, Math.floor(bullets * 0.02)) : 100 + Math.ceil((bullets - 5000) * 75 / 5000);
 
 const UPGRADES = [
   { id: 'health', title: 'Full Health', Icon: Heart, price: 15, path: '/store/buy-health', ownedKey: null, desc: 'Restore health to 100%', extra: (u) => ({ line: 'Health', value: `${Number(u?.health ?? 100).toFixed(0)}%` }) },
@@ -202,6 +202,8 @@ export default function Store() {
   };
 
   const apiBuy = async (path, body, successMsg) => {
+    if (loading) return;
+    setLoading(true);
     try {
       await api.post(path, body || {});
       toast.success(successMsg || 'Done');
@@ -209,6 +211,8 @@ export default function Store() {
       fetchData();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -289,12 +293,12 @@ export default function Store() {
         <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent rounded-t-lg pointer-events-none" aria-hidden />
         <Tab
           active={activeTab === 'points'}
-          onClick={() => setActiveTab('points')}
+          onClick={() => { setActiveTab('points'); setSearchParams({ tab: 'points' }); }}
           disabled={pointsTabLocked}
         >Points</Tab>
-        <Tab active={activeTab === 'sendpts'} onClick={() => setActiveTab('sendpts')}>Send pts</Tab>
-        <Tab active={activeTab === 'upgrades'} onClick={() => setActiveTab('upgrades')}>Upgrades</Tab>
-        <Tab active={activeTab === 'bullets'} onClick={() => setActiveTab('bullets')}>Bullets</Tab>
+        <Tab active={activeTab === 'sendpts'} onClick={() => { setActiveTab('sendpts'); setSearchParams({ tab: 'sendpts' }); }}>Send pts</Tab>
+        <Tab active={activeTab === 'upgrades'} onClick={() => { setActiveTab('upgrades'); setSearchParams({ tab: 'upgrades' }); }}>Upgrades</Tab>
+        <Tab active={activeTab === 'bullets'} onClick={() => { setActiveTab('bullets'); setSearchParams({ tab: 'bullets' }); }}>Bullets</Tab>
       </div>
 
       {activeTab === 'points' && (

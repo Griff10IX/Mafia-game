@@ -44,18 +44,17 @@ export default function QuickTrade() {
     setLoading(true);
     try {
       const [sellRes, buyRes, tokenRes, propRes] = await Promise.all([
-        api.get('/trade/sell-offers').catch(() => ({ data: [] })),
-        api.get('/trade/buy-offers').catch(() => ({ data: [] })),
-        api.get('/trade/token-offers').catch(() => ({ data: [] })),
-        api.get('/trade/properties').catch(() => ({ data: [] }))
+        api.get('/trade/sell-offers'),
+        api.get('/trade/buy-offers'),
+        api.get('/trade/token-offers'),
+        api.get('/trade/properties'),
       ]);
-      
       setSellOffers(sellRes.data || []);
       setBuyOffers(buyRes.data || []);
       setTokenOffers(tokenRes.data || []);
       setProperties(propRes.data || []);
     } catch (e) {
-      toast.error('Failed to load trades');
+      toast.error(e.response?.data?.detail || 'Failed to load trades');
     } finally {
       setLoading(false);
     }
@@ -162,19 +161,22 @@ export default function QuickTrade() {
 
   const handleAcceptBatch = async (offerIds, type) => {
     if (!offerIds.length) return;
-    const n = offerIds.length;
+    let completed = 0;
     try {
       for (const id of offerIds) {
         await api.post(`/trade/${type}-offer/${id}/accept`);
+        completed++;
       }
-      toast.success(n === 1 ? 'Trade completed!' : `${n} trades completed!`);
-      fetchTrades();
-      refreshUser();
+      toast.success(completed === 1 ? 'Trade completed!' : `${completed} trades completed!`);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Trade failed');
-      fetchTrades();
-      refreshUser();
+      if (completed > 0) {
+        toast.success(`${completed} of ${offerIds.length} trades completed. ${e.response?.data?.detail || 'Remaining failed.'}`);
+      } else {
+        toast.error(e.response?.data?.detail || 'Trade failed');
+      }
     }
+    fetchTrades();
+    refreshUser();
   };
 
   const handleCancelOffer = async (offerId, type) => {
@@ -261,8 +263,8 @@ export default function QuickTrade() {
     return parseFloat(num).toLocaleString('en-US');
   };
   
-  const sellPerPoint = sellPoints && sellCost ? (parseFloat(sellCost) / parseFloat(sellPoints)) : 0;
-  const buyPerPoint = buyPoints && buyOffer ? (parseFloat(buyOffer) / parseFloat(buyPoints)) : 0;
+  const sellPerPoint = sellPoints && sellCost && parseFloat(sellPoints) > 0 ? (parseFloat(sellCost) / parseFloat(sellPoints)) : 0;
+  const buyPerPoint = buyPoints && buyOffer && parseFloat(buyPoints) > 0 ? (parseFloat(buyOffer) / parseFloat(buyPoints)) : 0;
   
   const calculateFee = (points) => Math.max(1, Math.floor(parseFloat(points) * 0.005));
   
@@ -589,7 +591,7 @@ export default function QuickTrade() {
                         <div className="flex items-center gap-1.5">
                           <Users size={12} className="text-primary" />
                           <span className="text-xs font-heading font-bold text-foreground">
-                            {isMyOffer ? 'You' : (firstOffer.hide_name ? '[Anon]' : <Link to={`/profile/${encodeURIComponent(firstOffer.username)}`} className="text-primary hover:underline">{firstOffer.username}</Link>)}
+                            {isMyOffer ? 'You' : (firstOffer.hide_name ? '[Anon]' : firstOffer.username ? <Link to={`/profile/${encodeURIComponent(firstOffer.username)}`} className="text-primary hover:underline">{firstOffer.username}</Link> : '[Unknown]')}
                           </span>
                           {totalOffers > 1 && (
                             <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.5 rounded font-heading font-bold">{totalOffers}</span>
@@ -687,7 +689,7 @@ export default function QuickTrade() {
                         <div className="flex items-center gap-1.5">
                           <Users size={12} className="text-primary" />
                           <span className="text-xs font-heading font-bold text-foreground">
-                            {isMyOffer ? 'You' : (firstOffer.hide_name ? '[Anon]' : <Link to={`/profile/${encodeURIComponent(firstOffer.username)}`} className="text-primary hover:underline">{firstOffer.username}</Link>)}
+                            {isMyOffer ? 'You' : (firstOffer.hide_name ? '[Anon]' : firstOffer.username ? <Link to={`/profile/${encodeURIComponent(firstOffer.username)}`} className="text-primary hover:underline">{firstOffer.username}</Link> : '[Unknown]')}
                           </span>
                           {totalOffers > 1 && (
                             <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.5 rounded font-heading font-bold">{totalOffers}</span>

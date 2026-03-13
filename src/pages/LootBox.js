@@ -352,9 +352,13 @@ function ResultModal({ result, onClose }) {
 }
 
 /* ─── Main component ─── */
+let _cachedLootStatus = null;
+let _lootLastFetch = 0;
+const LOOT_REFRESH = 30_000;
+
 export default function LootBox() {
-  const [status, setStatus] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState(_cachedLootStatus);
+  const [loading, setLoading] = useState(!_cachedLootStatus);
   const [phase, setPhase] = useState('idle'); // idle | shaking | exploding | done
   const [result, setResult] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -362,18 +366,26 @@ export default function LootBox() {
   const [rarityForm, setRarityForm] = useState({ exclusive_chance_pct: 2, common_pct: 55, uncommon_pct: 32, rare_pct: 13 });
   const [raritySaving, setRaritySaving] = useState(false);
 
-  const loadStatus = async () => {
+  const loadStatus = async (silent = false) => {
     try {
       const res = await api.get('/loot-box/status');
+      _cachedLootStatus = res.data;
+      _lootLastFetch = Date.now();
       setStatus(res.data);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load loot box status');
+      if (!silent) toast.error(e.response?.data?.detail || 'Failed to load loot box status');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
-  useEffect(() => { loadStatus(); }, []);
+  useEffect(() => {
+    const stale = Date.now() - _lootLastFetch > LOOT_REFRESH;
+    if (!_cachedLootStatus) loadStatus(false);
+    else if (stale) loadStatus(true);
+    const id = setInterval(() => loadStatus(true), LOOT_REFRESH);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

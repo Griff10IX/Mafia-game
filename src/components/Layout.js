@@ -314,7 +314,7 @@ export default function Layout({ children }) {
     let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator);
     if (hasAdminEmail && !isAdmin) {
       items = items.map((i) =>
-        i.type === 'group' && i.id === 'account'
+        i.type === 'group' && i.id === 'you'
           ? { ...i, items: [...i.items, { action: 'promoteAdmin', label: 'Use admin powers' }] }
           : i
       );

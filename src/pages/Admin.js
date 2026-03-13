@@ -1909,19 +1909,18 @@ export default function Admin() {
     }
   };
 
-  const handleUpdateRateLimit = async (endpoint, newLimit) => {
-    const num = Number(newLimit);
-    if (Number.isNaN(num) || num < 0.1 || num > 60) {
-      toast.error('Limit must be between 0.1 and 60 seconds');
+  const handleUpdateRateLimit = async (endpoint, newLimitMs) => {
+    const num = Number(newLimitMs);
+    if (Number.isNaN(num) || num < 0 || num > 60000) {
+      toast.error('Limit must be between 0 and 60000 ms');
       return;
     }
     try {
-      const response = await api.post(`/admin/security/rate-limits/update?endpoint=${encodeURIComponent(endpoint)}&min_interval_sec=${num}`);
+      const response = await api.post(`/admin/security/rate-limits/update?endpoint=${encodeURIComponent(endpoint)}&min_interval_ms=${num}`);
       toast.success(response.data.message);
-      // Refresh the rate limits
       await handleViewRateLimits();
-    } catch (e) { 
-      toast.error(e.response?.data?.detail || 'Failed to update rate limit'); 
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update rate limit');
     }
   };
 
@@ -3535,14 +3534,15 @@ export default function Admin() {
 
             {rateLimits && rateLimits.rate_limits && (
               <div className="mt-2 p-3 rounded bg-zinc-900/50 border border-zinc-700/50 space-y-2">
-                <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Rate limit (min sec between clicks):</div>
+                <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Rate limit (ms between clicks):</div>
                 <div className="max-h-64 overflow-y-auto space-y-1.5">
                   {Object.entries(rateLimits.rate_limits).map(([endpoint, val]) => {
-                    const minIntervalSec = Array.isArray(val) ? val[0] : (val?.min_interval_sec ?? 1);
+                    const minIntervalMs = Array.isArray(val) ? val[0] : (val?.min_interval_ms ?? 1000);
                     const enabled = Array.isArray(val) ? val[1] : (val?.enabled ?? false);
-                    const editValue = rateLimitEdits[endpoint] !== undefined ? rateLimitEdits[endpoint] : minIntervalSec;
-                    const hasChanged = Number(editValue) !== Number(minIntervalSec);
-                    
+                    const editValue = rateLimitEdits[endpoint] !== undefined ? rateLimitEdits[endpoint] : minIntervalMs;
+                    const hasChanged = Number(editValue) !== Number(minIntervalMs);
+                    const displayLabel = Number(editValue) >= 1000 ? `${(Number(editValue) / 1000).toFixed(1)}s` : `${Number(editValue)}ms`;
+
                     return (
                       <div key={endpoint} className="flex flex-col gap-2 text-[10px] p-2 rounded bg-zinc-800/50 border border-zinc-700/30 hover:border-primary/30 transition-colors">
                         <div className="flex items-center justify-between gap-2">
@@ -3552,8 +3552,8 @@ export default function Admin() {
                           <button
                             onClick={() => handleToggleRateLimit(endpoint, enabled)}
                             className={`shrink-0 px-2 py-1 rounded text-[9px] font-bold transition-all ${
-                              enabled 
-                                ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30' 
+                              enabled
+                                ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30'
                                 : 'bg-zinc-700/50 text-mutedForeground hover:bg-zinc-700 border border-zinc-600/30'
                             }`}
                           >
@@ -3563,14 +3563,14 @@ export default function Admin() {
                         <div className="flex items-center gap-2">
                           <input
                             type="number"
-                            min="0.1"
-                            max="60"
-                            step="0.1"
+                            min="0"
+                            max="60000"
+                            step="50"
                             value={editValue}
-                            onChange={(e) => setRateLimitEdits({...rateLimitEdits, [endpoint]: parseFloat(e.target.value) || 0.5})}
+                            onChange={(e) => setRateLimitEdits({...rateLimitEdits, [endpoint]: parseFloat(e.target.value) || 0})}
                             className="flex-1 bg-zinc-900/70 border border-zinc-700/50 rounded px-2 py-1 text-[10px] text-foreground focus:border-primary/50 focus:outline-none"
                           />
-                          <span className="text-mutedForeground text-[9px] whitespace-nowrap">sec between clicks</span>
+                          <span className="text-mutedForeground text-[9px] whitespace-nowrap">ms ({displayLabel})</span>
                           {hasChanged && (
                             <button
                               onClick={() => handleUpdateRateLimit(endpoint, editValue)}
@@ -3585,7 +3585,7 @@ export default function Admin() {
                   })}
                 </div>
                 {rateLimits.note && (
-                  <p className="text-[9px] text-mutedForeground italic mt-2">💡 {rateLimits.note}</p>
+                  <p className="text-[9px] text-mutedForeground italic mt-2">{rateLimits.note}</p>
                 )}
               </div>
             )}

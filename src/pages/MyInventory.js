@@ -22,24 +22,39 @@ const LoadingSpinner = () => (
   </div>
 );
 
+let _cachedInventory = null;
+let _invLastFetch = 0;
+const INV_REFRESH = 30_000;
+
 export default function MyInventory() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(_cachedInventory);
+  const [loading, setLoading] = useState(!_cachedInventory);
   const [equipping, setEquipping] = useState({ weapon: null, armour: null });
   const [usingToken, setUsingToken] = useState(null);
 
-  const fetchInventory = () => {
+  const fetchInventory = (silent = false) => {
+    if (!silent) setLoading(true);
     api
       .get('/inventory')
       .then((res) => {
-        if (res?.data) setData(res.data);
+        if (res?.data) {
+          _cachedInventory = res.data;
+          _invLastFetch = Date.now();
+          setData(res.data);
+        }
       })
-      .catch(() => setData({ weapons: [], armour: { options: [] }, loot_exclusives: {}, tokens: {} }))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (!silent) setData({ weapons: [], armour: { options: [] }, loot_exclusives: {}, tokens: {} });
+      })
+      .finally(() => { if (!silent) setLoading(false); });
   };
 
   useEffect(() => {
-    fetchInventory();
+    const stale = Date.now() - _invLastFetch > INV_REFRESH;
+    if (!_cachedInventory) fetchInventory(false);
+    else if (stale) fetchInventory(true);
+    const id = setInterval(() => fetchInventory(true), INV_REFRESH);
+    return () => clearInterval(id);
   }, []);
 
   const equipWeapon = async (weaponId) => {

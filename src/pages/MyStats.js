@@ -95,7 +95,7 @@ const StatCard = ({ title, icon: Icon, rows, delay = 0 }) => {
 
 let _cachedStats = null;
 let _lastFetchTime = 0;
-const REFRESH_INTERVAL = 60_000;
+const REFRESH_INTERVAL = 30_000;
 
 export default function MyStats() {
   const [stats, setStats] = useState(_cachedStats);
