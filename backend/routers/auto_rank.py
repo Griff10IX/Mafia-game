@@ -161,16 +161,40 @@ async def _update_auto_rank_stats_crimes(db, user_id: str, count: int, cash: int
         await _inc_successful_crimes_today(db, user_id, now, count)
 
 
-async def _update_auto_rank_stats_gta(db, user_id: str, car: dict, now: datetime):
+async def _update_auto_rank_stats_gta(db, user_id: str, car: dict, now: datetime, option_id: Optional[str] = None, option_name: Optional[str] = None):
+    """Record one auto-rank GTA: update stats, total_gta (for leaderboard), and gta_events (for weekly leaderboard)."""
     await _ensure_stats_since(db, user_id, now)
     car_name = (car or {}).get("name") or "Car"
     car_value = int((car or {}).get("value", 0) or 0)
-    u = await db.users.find_one({"id": user_id}, {"_id": 0, "auto_rank_best_cars": 1})
+    car_id = (car or {}).get("id")
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "auto_rank_best_cars": 1, "username": 1})
     best = list((u or {}).get("auto_rank_best_cars") or [])
     best.append({"name": car_name, "value": car_value})
     best.sort(key=lambda x: x.get("value", 0), reverse=True)
-    await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_gtas": 1}, "$set": {"auto_rank_best_cars": best[:3]}})
+    await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"auto_rank_total_gtas": 1, "total_gta": 1}, "$set": {"auto_rank_best_cars": best[:3]}},
+    )
     await _inc_successful_gtas_today(db, user_id, now, 1)
+    # Insert gta_event so weekly leaderboard and stats include auto-rank GTAs
+    try:
+        event_doc = {
+            "user_id": user_id,
+            "username": (u or {}).get("username") or "",
+            "at": now,
+            "success": True,
+            "profit": car_value,
+            "option_id": option_id or "",
+            "option_name": option_name or "",
+            "car_id": car_id,
+            "car_name": car_name,
+            "car_value": car_value,
+            "jailed": False,
+            "jail_seconds": None,
+        }
+        await db.gta_events.insert_one(event_doc)
+    except Exception:
+        pass
 
 
 async def _update_auto_rank_stats_booze(db, user_id: str, now: datetime, profit: int = 0):
@@ -643,7 +667,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 next_index = int(user.get("auto_rank_next_gta_option_index") or 0) % max(1, len(unlocked))
                 opt = unlocked[next_index]
                 try:
-                    out = await _attempt_gta_impl(opt["id"], user)
+                    out = await _attempt_gta_impl(opt["id"], user, caller_updates_total_gta=True)
                     # Advance to next unlocked option so we rotate through all GTAs as they unlock
                     await db.users.update_one(
                         {"id": user_id},
@@ -652,7 +676,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     if out.success:
                         has_success = True
                         car_name = out.car.get("name", "Car") if out.car else "Car"
-                        await _update_auto_rank_stats_gta(db, user_id, out.car or {}, now)
+                        await _update_auto_rank_stats_gta(db, user_id, out.car or {}, now, option_id=opt.get("id"), option_name=opt.get("name"))
                         await _set_last_activity(db, user_id, "gta", now)
                         lines.append(f"**GTA** — Success: {car_name}! +{out.rank_points_earned} RP.")
                     else:

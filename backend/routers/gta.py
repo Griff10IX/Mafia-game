@@ -259,8 +259,9 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
     return result
 
 
-async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptResponse:
-    """Run one GTA attempt. Caller must ensure option exists, user rank OK, and cooldown passed. Used by route and auto_rank."""
+async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_total_gta: bool = False) -> GTAAttemptResponse:
+    """Run one GTA attempt. Caller must ensure option exists, user rank OK, and cooldown passed. Used by route and auto_rank.
+    When caller_updates_total_gta is True (e.g. auto_rank), total_gta is not incremented here; the caller does it for leaderboard consistency."""
     option = next((o for o in GTA_OPTIONS if o["id"] == option_id), None)
     if not option:
         raise ValueError(f"Invalid GTA option: {option_id}")
@@ -420,7 +421,9 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
         )
         _invalidate_travel_info_cache(current_user["id"])
         rp_before = int(current_user.get("rank_points") or 0)
-        gta_inc = {"money": car["value"], "rank_points": rank_points, "total_gta": 1}
+        gta_inc = {"money": car["value"], "rank_points": rank_points}
+        if not caller_updates_total_gta:
+            gta_inc["total_gta"] = 1
         if (car.get("rarity") or "").strip().lower() == "uncommon":
             gta_inc["uncommon_cars_stolen"] = 1
         respect_drop = maybe_respect_points_drop()
