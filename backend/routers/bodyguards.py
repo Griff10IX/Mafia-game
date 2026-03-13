@@ -1032,6 +1032,140 @@ async def admin_seed_human_bodyguards(current_user: dict = Depends(get_current_u
     }
 
 
+async def admin_seed_random_bodyguards(current_user: dict = Depends(get_current_user)):
+    """Admin-only: Clear all bodyguards and create 4 random bodyguards (mix of robots and humans).
+    The mix is random - could be 2R/2H, 1H/3R, alternating R-H-H-R, etc."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    admin_id = current_user["id"]
+    
+    # Clear all existing bodyguards (robots and humans) for admin
+    await db.bodyguards.delete_many({"user_id": admin_id})
+    # Remove robot users and clear human bodyguard flags
+    await db.users.delete_many({"is_bodyguard": True, "bodyguard_owner_id": admin_id})
+    
+    # Ensure admin has 4 slots
+    await db.users.update_one({"id": admin_id}, {"$set": {"bodyguard_slots": 4}})
+    
+    now = datetime.now(timezone.utc)
+    
+    # Generate random mix: pick how many humans (0-4), rest are robots
+    # To ensure variety, we'll pick a random pattern
+    patterns = [
+        [True, True, False, False],     # 2 robots, 2 humans (R-R-H-H)
+        [False, False, True, True],     # 2 humans, 2 robots (H-H-R-R)
+        [True, False, True, False],     # alternating R-H-R-H
+        [False, True, False, True],     # alternating H-R-H-R
+        [True, False, False, True],     # R-H-H-R
+        [False, True, True, False],     # H-R-R-H
+        [True, True, True, False],      # 3 robots, 1 human
+        [False, True, True, True],      # 1 human, 3 robots
+        [True, False, False, False],    # 1 robot, 3 humans
+        [False, False, False, True],    # 3 humans, 1 robot
+    ]
+    pattern = random.choice(patterns)
+    
+    created_info = []
+    human_counter = 0
+    robot_counter = 0
+    
+    for slot in range(1, 5):
+        is_robot = pattern[slot - 1]
+        
+        if is_robot:
+            robot_counter += 1
+            # Create robot bodyguard (similar to normal hire)
+            guard_id = str(uuid.uuid4())
+            guard_username = f"RobotGuard_{admin_id[:8]}_{slot}"
+            await db.users.insert_one({
+                "id": guard_id,
+                "username": guard_username,
+                "email": f"robot_{slot}_{admin_id[:8]}@bot.local",
+                "password_hash": "disabled",
+                "created_at": now.isoformat(),
+                "rank_points": 0,
+                "money": 0,
+                "points": 0,
+                "health": 100,
+                "current_state": current_user.get("current_state", "New York"),
+                "is_bodyguard": True,
+                "bodyguard_owner_id": admin_id,
+            })
+            await db.bodyguards.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": admin_id,
+                "owner_username": current_user.get("username"),
+                "slot_number": slot,
+                "is_robot": True,
+                "bodyguard_user_id": guard_id,
+                "bodyguard_username": guard_username,
+                "health": 100,
+                "armour_level": 0,
+                "hired_at": now.isoformat(),
+                "hire_cost": 100,
+            })
+            created_info.append(f"Slot {slot}: Robot ({guard_username})")
+        else:
+            human_counter += 1
+            # Create human bodyguard
+            guard_username = f"TestHuman{human_counter}"
+            guard_user = await db.users.find_one({"username": guard_username}, {"_id": 0, "id": 1})
+            
+            if not guard_user:
+                guard_id = str(uuid.uuid4())
+                await db.users.insert_one({
+                    "id": guard_id,
+                    "username": guard_username,
+                    "email": f"testhuman{human_counter}@test.local",
+                    "password_hash": "disabled",
+                    "created_at": now.isoformat(),
+                    "rank_points": 100,
+                    "money": 10000,
+                    "points": 100,
+                    "health": 100,
+                    "current_state": current_user.get("current_state", "New York"),
+                    "is_bodyguard": True,
+                    "bodyguard_owner_id": admin_id,
+                })
+            else:
+                guard_id = guard_user["id"]
+                await db.users.update_one(
+                    {"id": guard_id},
+                    {"$set": {"is_bodyguard": True, "bodyguard_owner_id": admin_id}}
+                )
+            
+            await db.bodyguards.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": admin_id,
+                "owner_username": current_user.get("username"),
+                "slot_number": slot,
+                "is_robot": False,
+                "bodyguard_user_id": guard_id,
+                "bodyguard_username": guard_username,
+                "health": 100,
+                "armour_level": 0,
+                "payment_points": 10,
+                "payment_money": 1000,
+                "payout_weekday": 0,
+                "last_payout_date": None,
+                "hired_at": now.isoformat(),
+                "hire_cost": 100,
+            })
+            created_info.append(f"Slot {slot}: Human ({guard_username})")
+    
+    _invalidate_bodyguards_cache(admin_id)
+    
+    pattern_str = "-".join("R" if r else "H" for r in pattern)
+    return {
+        "message": f"Created 4 random bodyguards: {robot_counter} robot(s), {human_counter} human(s). Pattern: {pattern_str}",
+        "pattern": pattern_str,
+        "robots": robot_counter,
+        "humans": human_counter,
+        "slots": created_info,
+    }
+
+
 # ----- Weekly payout (human bodyguards) -----
 # bodyguard_payouts: one doc per (owner_id, slot_number, payout_date) for audit and crash safety.
 # Unique index on (owner_id, slot_number, payout_date) prevents double-pay; we check it before paying.
@@ -1254,4 +1388,5 @@ def register(router):
     router.add_api_route("/admin/bodyguards/drop-all", admin_drop_all_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/generate", admin_generate_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/seed-humans", admin_seed_human_bodyguards, methods=["POST"])
+    router.add_api_route("/admin/bodyguards/seed-random", admin_seed_random_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/reset-cooldown", admin_reset_bodyguard_cooldown, methods=["POST"])

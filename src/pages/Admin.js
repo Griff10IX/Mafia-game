@@ -1153,6 +1153,23 @@ export default function Admin() {
     }
   };
 
+  const [seedRandomBgLoading, setSeedRandomBgLoading] = useState(false);
+  const handleSeedRandomBodyguards = async () => {
+    setSeedRandomBgLoading(true);
+    try {
+      const res = await api.post('/admin/bodyguards/seed-random');
+      const data = res.data || {};
+      toast.success(data.message ?? 'Created random bodyguards', { duration: 8000 });
+      if (data.slots?.length) {
+        toast.info(data.slots.join(' | '), { duration: 10000 });
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed', { duration: 8000 });
+    } finally {
+      setSeedRandomBgLoading(false);
+    }
+  };
+
   const handleResetBgCooldown = async () => {
     try {
       const res = await api.post('/admin/bodyguards/reset-cooldown');
@@ -3022,6 +3039,12 @@ export default function Admin() {
               <ActionRow icon={Shield} label="Seed 4 Human Bodyguards" description="Clears robots, creates 4 test humans for you" color="text-emerald-400">
                 <BtnPrimary onClick={handleSeedHumanBodyguards} disabled={seedHumanBgLoading}>
                   {seedHumanBgLoading ? '...' : 'Seed Humans'}
+                </BtnPrimary>
+              </ActionRow>
+
+              <ActionRow icon={Bot} label="Seed Random Mix" description="4 random bodyguards (mix of robots/humans)" color="text-cyan-400">
+                <BtnPrimary onClick={handleSeedRandomBodyguards} disabled={seedRandomBgLoading}>
+                  {seedRandomBgLoading ? '...' : 'Seed Random'}
                 </BtnPrimary>
               </ActionRow>
 

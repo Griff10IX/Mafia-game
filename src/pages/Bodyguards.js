@@ -262,8 +262,10 @@ export default function Bodyguards() {
   };
 
   const nextEmptySlot = bodyguards.find((b) => !b.bodyguard_username)?.slot_number;
-  const robotBodyguards = bodyguards.filter((b) => b.is_robot && b.bodyguard_username);
-  const humanBodyguards = bodyguards.filter((b) => !b.is_robot && b.bodyguard_username);
+  // All active bodyguards sorted by slot number (mixed robots and humans together)
+  const activeBodyguards = bodyguards
+    .filter((b) => b.bodyguard_username)
+    .sort((a, b) => (a.slot_number ?? 0) - (b.slot_number ?? 0));
 
   const sendInvite = async () => {
     const username = (inviteUsername || '').trim();
@@ -708,19 +710,11 @@ export default function Bodyguards() {
             </div>
           )}
 
-          {/* Robots */}
+          {/* Your Bodyguards (in slot order) */}
           <div>
-            <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Robots</h4>
+            <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Your Bodyguards</h4>
             <div className="space-y-1">
-              {robotBodyguards.map((bg) => renderBodyguardCard(bg))}
-            </div>
-          </div>
-
-          {/* Humans */}
-          <div>
-            <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Humans</h4>
-            <div className="space-y-1">
-              {humanBodyguards.map((bg) => renderBodyguardCard(bg))}
+              {activeBodyguards.map((bg) => renderBodyguardCard(bg))}
               {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
                 <div className="bg-row rounded-lg bg-zinc-800/30 border border-transparent hover:border-primary/20 px-3 py-3 space-y-2">
                   <div className="text-[10px] text-mutedForeground mb-1">
