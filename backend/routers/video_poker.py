@@ -200,7 +200,7 @@ def register(router):
 
     @router.get("/casino/videopoker/ownership")
     async def casino_videopoker_ownership(current_user: dict = Depends(get_current_user_verified)):
-        user_id = current_user["id"]
+        user_id = current_user.get("id") or ""
         now_ts = time.time()
         entry = _ownership_cache.get(user_id)
         if entry and (now_ts - entry["ts"]) < _OWNERSHIP_TTL_SEC:
@@ -227,7 +227,7 @@ def register(router):
         if owner_id:
             u = await db.users.find_one({"id": owner_id}, {"username": 1})
             owner_name = u.get("username") if u else None
-        is_owner = owner_id == current_user["id"]
+        is_owner = owner_id == current_user.get("id") or ""
         max_bet = doc.get("max_bet", VIDEO_POKER_DEFAULT_MAX_BET)
         total_earnings = doc.get("total_earnings", 0)
         profit = int((doc.get("profit") or 0) or 0)
@@ -251,47 +251,47 @@ def register(router):
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
         if rank_id < CAPO_RANK_ID:
             raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim a casino. Reach Capo to hold one.")
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
-        owned = await _user_owns_any_casino(current_user["id"])
+        owned = await _user_owns_any_casino(current_user.get("id") or "")
         if owned and (owned.get("type") != "videopoker" or owned.get("city") != city):
             raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
         stored_city, doc = await _get_ownership_doc(city)
         if doc and doc.get("owner_id"):
             raise HTTPException(status_code=400, detail="This table already has an owner")
-        user = await db.users.find_one({"id": current_user["id"]})
+        user = await db.users.find_one({"id": current_user.get("id") or ""})
         if not user or user.get("money", 0) < VIDEO_POKER_CLAIM_COST:
             raise HTTPException(status_code=400, detail=f"You need ${VIDEO_POKER_CLAIM_COST:,} to claim")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -VIDEO_POKER_CLAIM_COST}})
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -VIDEO_POKER_CLAIM_COST}})
         await db.videopoker_ownership.update_one(
             {"city": stored_city or city},
-            {"$set": {"owner_id": current_user["id"], "owner_username": current_user["username"], "max_bet": VIDEO_POKER_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0}},
+            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user["username"], "max_bet": VIDEO_POKER_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0}},
             upsert=True,
         )
         return {"message": f"You now own the video poker table in {city}!"}
 
     @router.post("/casino/videopoker/relinquish")
     async def casino_videopoker_relinquish(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user_verified)):
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None, "owner_username": None}})
         return {"message": "Ownership relinquished."}
 
     @router.post("/casino/videopoker/set-max-bet")
     async def casino_videopoker_set_max_bet(request: RouletteSetMaxBetRequest, current_user: dict = Depends(get_current_user_verified)):
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         new_max = max(1_000_000, min(request.max_bet, VIDEO_POKER_ABSOLUTE_MAX_BET))
         await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": new_max}})
@@ -299,12 +299,12 @@ def register(router):
 
     @router.post("/casino/videopoker/send-to-user")
     async def casino_videopoker_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user_verified)):
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         target_username_pattern = _username_pattern(request.target_username.strip())
         target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1, "rank_points": 1})
@@ -319,21 +319,21 @@ def register(router):
 
     @router.post("/casino/videopoker/sell-on-trade")
     async def casino_videopoker_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user_verified)):
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         if request.points <= 0:
             raise HTTPException(status_code=400, detail="Points must be positive")
         stored_city, doc = await _get_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         casino_property = {
             "_id": ObjectId(),
             "type": "casino_videopoker",
             "location": city,
             "name": f"Video Poker Table ({city})",
-            "owner_id": current_user["id"],
+            "owner_id": current_user.get("id") or "",
             "owner_username": current_user.get("username", "Unknown"),
             "for_sale": True,
             "sale_price": request.points,
@@ -345,14 +345,14 @@ def register(router):
     @router.get("/casino/videopoker/game")
     async def casino_videopoker_game(current_user: dict = Depends(get_current_user_verified)):
         """Get the current active game (if any) for page refresh."""
-        game = await db.videopoker_games.find_one({"user_id": current_user["id"]}, {"_id": 0, "deck": 0})
+        game = await db.videopoker_games.find_one({"user_id": current_user.get("id") or ""}, {"_id": 0, "deck": 0})
         if not game:
             return {"active": False}
         return {"active": True, "bet": game.get("bet"), "hand": game.get("hand"), "status": game.get("status", "deal")}
 
     @router.post("/casino/videopoker/deal")
     async def casino_videopoker_deal(request: VideoPokerDealRequest, current_user: dict = Depends(get_current_user_verified)):
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         city = _normalize_city(raw) if raw else (STATES[0] if STATES else "")
         if not city:
@@ -360,25 +360,25 @@ def register(router):
         stored_city, doc = await _get_ownership_doc(city)
         max_bet = doc.get("max_bet", VIDEO_POKER_DEFAULT_MAX_BET) if doc else VIDEO_POKER_DEFAULT_MAX_BET
         owner_id = doc.get("owner_id") if doc else None
-        if owner_id and owner_id == current_user["id"]:
+        if owner_id and owner_id == current_user.get("id") or "":
             raise HTTPException(status_code=400, detail="You cannot play at your own table")
         bet = max(0, int(request.bet))
         if bet <= 0:
             raise HTTPException(status_code=400, detail="Bet must be positive")
         if bet > max_bet:
             raise HTTPException(status_code=400, detail=f"Bet exceeds max ${max_bet:,}")
-        user = await db.users.find_one({"id": current_user["id"]})
+        user = await db.users.find_one({"id": current_user.get("id") or ""})
         if not user or user.get("money", 0) < bet:
             raise HTTPException(status_code=400, detail="Not enough money")
-        existing = await db.videopoker_games.find_one({"user_id": current_user["id"]})
+        existing = await db.videopoker_games.find_one({"user_id": current_user.get("id") or ""})
         if existing:
             raise HTTPException(status_code=400, detail="Finish your current game first")
         deck = _make_deck()
         random.shuffle(deck)
         hand = [deck.pop() for _ in range(5)]
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -bet}})
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -bet}})
         await db.videopoker_games.insert_one({
-            "user_id": current_user["id"],
+            "user_id": current_user.get("id") or "",
             "city": stored_city or city,
             "bet": bet,
             "hand": hand,
@@ -391,8 +391,8 @@ def register(router):
 
     @router.post("/casino/videopoker/draw")
     async def casino_videopoker_draw(request: VideoPokerDrawRequest, current_user: dict = Depends(get_current_user_verified)):
-        _invalidate_ownership_cache(current_user["id"])
-        game = await db.videopoker_games.find_one({"user_id": current_user["id"]})
+        _invalidate_ownership_cache(current_user.get("id") or "")
+        game = await db.videopoker_games.find_one({"user_id": current_user.get("id") or ""})
         if not game:
             raise HTTPException(status_code=400, detail="No active game")
         if game.get("status") != "deal":
@@ -416,7 +416,7 @@ def register(router):
         hand_key, hand_name, multiplier = _evaluate_hand(hand)
         payout = bet * multiplier
 
-        user = await db.users.find_one({"id": current_user["id"]})
+        user = await db.users.find_one({"id": current_user.get("id") or ""})
         shortfall = 0
 
         if payout == 0:
@@ -427,7 +427,7 @@ def register(router):
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                 await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"total_earnings": bet, "profit": bet}})
         elif payout == bet:
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
         else:
             profit_portion = payout - bet
             if owner_id:
@@ -436,7 +436,7 @@ def register(router):
                 actual_owner_pay = min(profit_portion, owner_money)
                 shortfall = profit_portion - actual_owner_pay
                 actual_payout = bet + actual_owner_pay
-                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": actual_payout}})
+                await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay}})
                 await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"profit": -actual_owner_pay}})
                 payout = actual_payout
@@ -448,13 +448,13 @@ def register(router):
                     if edge > 0:
                         await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.videopoker": edge}})
                     payout = bet + profit_portion - edge
-                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
+                await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
 
-        updated_user = await db.users.find_one({"id": current_user["id"]})
+        updated_user = await db.users.find_one({"id": current_user.get("id") or ""})
         new_balance = (updated_user.get("money", 0) or 0)
 
         await _settle_and_save_history(
-            current_user["id"], current_user.get("username"), city, bet, hand_key, hand_name, payout, hand
+            current_user.get("id") or "", current_user.get("username"), city, bet, hand_key, hand_name, payout, hand
         )
 
         return {
@@ -471,6 +471,6 @@ def register(router):
 
     @router.get("/casino/videopoker/history")
     async def casino_videopoker_history(current_user: dict = Depends(get_current_user_verified)):
-        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "videopoker_history": 1})
+        user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "videopoker_history": 1})
         history = (user.get("videopoker_history") or [])[:VIDEO_POKER_HISTORY_MAX]
         return {"history": history}

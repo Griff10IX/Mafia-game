@@ -335,12 +335,14 @@ export default function HorseRacingPage() {
   const trackContainerRef = useRef(null);
 
   const fetchHistory = useCallback(() => {
-    api.get('/casino/horseracing/history').then((r) => setHistory(r.data?.history || [])).catch(() => {});
+    api.get('/casino/horseracing/history').then((r) => setHistory(r.data?.history ?? [])).catch(() => {
+      setHistory([]);
+    });
   }, []);
 
   const fetchConfigAndOwnership = useCallback(() => {
     api.get('/casino/horseracing/config').then((r) => {
-      const data = r.data || {};
+      const data = r.data ?? {};
       const horsesList = Array.isArray(data.horses) ? data.horses : [];
       setConfig({
         horses: horsesList,
@@ -352,8 +354,10 @@ export default function HorseRacingPage() {
         if (prev) return prev;
         return horsesList.length && horsesList[0] ? horsesList[0].id : null;
       });
-    }).catch(() => {});
-    api.get('/casino/horseracing/ownership').then((r) => setOwnership(r.data || null)).catch(() => setOwnership(null));
+    }).catch(() => {
+      setConfig({ horses: [], max_bet: 10_000_000, house_edge: 0.05, claim_cost: 500_000_000 });
+    });
+    api.get('/casino/horseracing/ownership').then((r) => setOwnership(r.data ?? null)).catch(() => setOwnership(null));
   }, []);
 
   useEffect(() => { fetchConfigAndOwnership(); fetchHistory(); }, [fetchConfigAndOwnership, fetchHistory]);
@@ -946,7 +950,7 @@ export default function HorseRacingPage() {
             {history.map((item, i) => {
               const profit = (item.payout || 0) - (item.bet || 0);
               return (
-                <div key={i} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-zinc-800/30 text-xs font-heading">
+                <div key={item.created_at || i} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-zinc-800/30 text-xs font-heading">
                   <span className="text-mutedForeground truncate">{formatHistoryDate(item.created_at)}</span>
                   <span className="text-foreground truncate">{item.horse_name}</span>
                   <span className="text-mutedForeground">{formatMoney(item.bet)}</span>

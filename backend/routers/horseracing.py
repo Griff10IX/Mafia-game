@@ -157,7 +157,7 @@ def register(router):
     @router.get("/casino/horseracing/ownership")
     async def casino_horseracing_ownership(current_user: dict = Depends(get_current_user_verified)):
         """Current city's track ownership: owner, is_owner, claim_cost, max_bet."""
-        user_id = current_user["id"]
+        user_id = current_user.get("id") or ""
         now_ts = time.time()
         entry = _ownership_cache.get(user_id)
         if entry and (now_ts - entry["ts"]) < _OWNERSHIP_TTL_SEC:
@@ -184,7 +184,7 @@ def register(router):
         if owner_id:
             u = await db.users.find_one({"id": owner_id}, {"username": 1})
             owner_name = u.get("username") if u else None
-        is_owner = owner_id == current_user["id"]
+        is_owner = owner_id == current_user.get("id") or ""
         max_bet = doc.get("max_bet", HORSERACING_MAX_BET)
         total_earnings = doc.get("total_earnings", 0)
         profit = int((doc.get("profit") or 0) or 0)
@@ -208,47 +208,47 @@ def register(router):
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
         if rank_id < CAPO_RANK_ID:
             raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim a casino. Reach Capo to hold one.")
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_horseracing((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
-        owned = await _user_owns_any_casino(current_user["id"])
+        owned = await _user_owns_any_casino(current_user.get("id") or "")
         if owned and (owned.get("type") != "horseracing" or owned.get("city") != city):
             raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
         stored_city, doc = await _get_horseracing_ownership_doc(city)
         if doc and doc.get("owner_id"):
             raise HTTPException(status_code=400, detail="This track already has an owner")
-        user = await db.users.find_one({"id": current_user["id"]})
+        user = await db.users.find_one({"id": current_user.get("id") or ""})
         if not user or user.get("money", 0) < HORSERACING_CLAIM_COST:
             raise HTTPException(status_code=400, detail=f"You need ${HORSERACING_CLAIM_COST:,} to claim")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -HORSERACING_CLAIM_COST}})
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -HORSERACING_CLAIM_COST}})
         await db.horseracing_ownership.update_one(
             {"city": stored_city or city},
-            {"$set": {"owner_id": current_user["id"], "owner_username": current_user["username"], "max_bet": HORSERACING_MAX_BET, "total_earnings": 0, "profit": 0}},
+            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": HORSERACING_MAX_BET, "total_earnings": 0, "profit": 0}},
             upsert=True,
         )
         return {"message": f"You now own the race track in {city}!"}
 
     @router.post("/casino/horseracing/relinquish")
     async def casino_horseracing_relinquish(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user_verified)):
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_horseracing((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_horseracing_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this track")
         await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None, "owner_username": None}})
         return {"message": "Ownership relinquished."}
 
     @router.post("/casino/horseracing/set-max-bet")
     async def casino_horseracing_set_max_bet(request: RouletteSetMaxBetRequest, current_user: dict = Depends(get_current_user_verified)):
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_horseracing((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_horseracing_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this track")
         new_max = max(1_000_000, min(request.max_bet, HORSERACING_ABSOLUTE_MAX_BET))
         await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": new_max}})
@@ -256,41 +256,41 @@ def register(router):
 
     @router.post("/casino/horseracing/send-to-user")
     async def casino_horseracing_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user_verified)):
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_horseracing((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_horseracing_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this track")
         target_username_pattern = _username_pattern(request.target_username.strip())
         target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1, "rank_points": 1})
-        if not target or target["id"] == current_user["id"]:
+        if not target or (target.get("id") or "") == (current_user.get("id") or ""):
             raise HTTPException(status_code=400, detail="Invalid target user")
-        send_set = {"owner_id": target["id"], "owner_username": target.get("username")}
+        send_set = {"owner_id": target.get("id") or "", "owner_username": target.get("username") or ""}
         if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
             send_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
         await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": send_set})
-        _invalidate_ownership_cache(target["id"])
+        _invalidate_ownership_cache(target.get("id") or "")
         return {"message": f"Track ownership transferred to {target.get('username', '?')}."}
 
     @router.post("/casino/horseracing/sell-on-trade")
     async def casino_horseracing_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user_verified)):
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_horseracing((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         if request.points <= 0:
             raise HTTPException(status_code=400, detail="Points must be positive")
         stored_city, doc = await _get_horseracing_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this track")
         casino_property = {
             "_id": ObjectId(),
             "type": "casino_horseracing",
             "location": city,
             "name": f"Horse Racing Track ({city})",
-            "owner_id": current_user["id"],
+            "owner_id": current_user.get("id") or "",
             "owner_username": current_user.get("username", "Unknown"),
             "for_sale": True,
             "sale_price": request.points,
@@ -301,13 +301,13 @@ def register(router):
 
     @router.post("/casino/horseracing/race")
     async def casino_horseracing_race(request: HorseRacingBetRequest, current_user: dict = Depends(get_current_user_verified)):
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         city = _normalize_city_for_horseracing(raw) if raw else (STATES[0] if STATES else "")
         stored_city, doc = await _get_horseracing_ownership_doc(city) if city else (None, None)
         max_bet = doc.get("max_bet", HORSERACING_MAX_BET) if doc else HORSERACING_MAX_BET
         owner_id = doc.get("owner_id") if doc else None
-        if owner_id and owner_id == current_user["id"]:
+        if owner_id and owner_id == current_user.get("id") or "":
             raise HTTPException(status_code=400, detail="You cannot bet at your own track")
         horse_id = int(request.horse_id)
         bet = int(request.bet or 0)
@@ -340,16 +340,16 @@ def register(router):
             else:
                 if head_family_id:
                     await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.horseracing": bet}})
-            await db.users.update_one({"id": current_user["id"]}, {"$set": {"money": new_money}})
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$set": {"money": new_money}})
         else:
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -bet}})
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -bet}})
             head_family_id = await get_head_family_id_for_state(stored_city or city) if (stored_city or city) else None
             if won:
                 owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
                 owner_money = int((owner.get("money") or 0) or 0)
                 actual_payout = min(payout, owner_money)
                 shortfall = payout - actual_payout
-                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": actual_payout}})
+                await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout}})
                 await db.horseracing_ownership.update_one(
                     {"city": stored_city or city},
@@ -384,11 +384,11 @@ def register(router):
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.users.update_one(
-            {"id": current_user["id"]},
+            {"id": current_user.get("id") or ""},
             {"$push": {"horseracing_history": {"$each": [history_entry], "$slice": -HORSERACING_HISTORY_MAX}}}
         )
         await log_gambling(
-            current_user["id"],
+            current_user.get("id") or "",
             current_user.get("username") or "?",
             "horseracing",
             {
@@ -417,6 +417,6 @@ def register(router):
 
     @router.get("/casino/horseracing/history")
     async def casino_horseracing_history(current_user: dict = Depends(get_current_user_verified)):
-        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "horseracing_history": 1})
+        user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "horseracing_history": 1})
         history = (user.get("horseracing_history") or [])[:HORSERACING_HISTORY_MAX]
         return {"history": list(reversed(history))}

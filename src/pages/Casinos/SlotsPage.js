@@ -310,7 +310,7 @@ export default function SlotsPage() {
 
   const fetchConfig = useCallback(() => {
     api.get('/casino/slots/config').then((r) => {
-      const d = r.data || {};
+      const d = r.data ?? {};
       setConfig({
         max_bet: d.max_bet ?? 5_000_000,
         current_state: d.current_state || '',
@@ -320,20 +320,26 @@ export default function SlotsPage() {
         ownership_hours: d.ownership_hours ?? 3,
         next_draw_at: d.next_draw_at || null,
       });
-    }).catch(() => {});
+    }).catch(() => {
+      setConfig({ max_bet: 5_000_000, current_state: '', states: [], symbols: [], state_owned: true, ownership_hours: 3, next_draw_at: null });
+    });
   }, []);
 
   const fetchOwnership = useCallback(() => {
     api.get('/casino/slots/ownership').then((r) => {
-      const o = r.data || {};
+      const o = r.data ?? {};
       setOwnership(o);
       if (o.is_owner && o.max_bet != null) setOwnerMaxBet(String(o.max_bet));
       if (o.is_owner && o.buy_back_reward != null) setOwnerBuyBack(String(o.buy_back_reward ?? 0));
-    }).catch(() => setOwnership(null));
+    }).catch(() => {
+      setOwnership(null);
+    });
   }, []);
 
   const fetchHistory = useCallback(() => {
-    api.get('/casino/slots/history').then((r) => setHistory(r.data?.history || [])).catch(() => {});
+    api.get('/casino/slots/history').then((r) => setHistory(r.data?.history ?? [])).catch(() => {
+      setHistory([]);
+    });
   }, []);
 
   useEffect(() => {
@@ -894,7 +900,7 @@ export default function SlotsPage() {
           ) : (
             <ul className="space-y-1 text-[11px] font-heading">
               {history.map((h, i) => (
-                <li key={i} className="flex items-center justify-between gap-2 py-1 border-b border-border/30 last:border-0">
+                <li key={h.created_at || i} className="flex items-center justify-between gap-2 py-1 border-b border-border/30 last:border-0">
                   <span className="flex gap-0.5">
                     {(h.reels || []).map((r, j) => {
                       const id = typeof r === 'string' ? r : r?.id;
