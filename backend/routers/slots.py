@@ -349,7 +349,7 @@ def register(router):
         entries_doc = await db.slots_entries.find_one({"state": stored_state or state}, {"_id": 0, "user_ids": 1})
         entry_user_ids = (entries_doc or {}).get("user_ids") or []
         entries_count = len(entry_user_ids)
-        has_entered = current_user.get("id") or "" in entry_user_ids
+        has_entered = (current_user.get("id") or "") in entry_user_ids
         next_draw_at = (doc.get("next_draw_at") or doc.get("expires_at")) if doc else None
         if not next_draw_at:
             next_draw_at = _next_draw_utc().isoformat()
@@ -377,7 +377,7 @@ def register(router):
             raise HTTPException(status_code=400, detail="Invalid state")
         await _run_slots_draw_if_needed(state)
         stored_state, doc = await _get_slots_ownership_doc(state)
-        if doc and doc.get("owner_id") == current_user.get("id") or "" and not _is_slots_ownership_expired(doc):
+        if doc and doc.get("owner_id") == current_user.get("id") and not _is_slots_ownership_expired(doc):
             raise HTTPException(status_code=400, detail="You already own the slots here")
         cooldown = current_user.get("slots_cooldown_until")
         if cooldown:
@@ -463,10 +463,14 @@ def register(router):
         if not state or not from_owner_id:
             raise HTTPException(status_code=400, detail="Invalid offer")
         from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1, "username": 1})
-        from_points = int((from_user.get("points") or 0) or 0)
-        if from_points < points_offered:
+        if not from_user:
+            raise HTTPException(status_code=400, detail="Previous owner not found")
+        deduct_res = await db.users.find_one_and_update(
+            {"id": from_owner_id, "points": {"$gte": points_offered}},
+            {"$inc": {"points": -points_offered}},
+        )
+        if not deduct_res:
             raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
-        await db.users.update_one({"id": from_owner_id}, {"$inc": {"points": -points_offered}})
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
         stored_state, _ = await _get_slots_ownership_doc(state)
         next_draw_iso = _next_draw_utc().isoformat()
@@ -503,16 +507,21 @@ def register(router):
         is_valid_owner = owner_id and not _is_slots_ownership_expired(doc)
         # No owner (or expired) = state-owned: always allow play, house pays
         max_bet = (doc.get("max_bet") if doc and doc.get("max_bet") is not None else SLOTS_MAX_BET)
-        if is_valid_owner and owner_id == current_user.get("id") or "":
+        if is_valid_owner and owner_id == current_user.get("id"):
             raise HTTPException(status_code=400, detail="You cannot play at your own slots")
         bet = int(request.bet or 0)
         if bet < 1:
             raise HTTPException(status_code=400, detail="Bet must be at least 1")
         if bet > max_bet:
             raise HTTPException(status_code=400, detail=f"Max bet is ${max_bet:,}")
-        user_money = int(current_user.get("money") or 0)
-        if user_money < bet:
+        debit_res = await db.users.find_one_and_update(
+            {"id": current_user.get("id") or "", "money": {"$gte": bet}},
+            {"$inc": {"money": -bet}},
+            return_document=False,
+        )
+        if not debit_res:
             raise HTTPException(status_code=400, detail="Insufficient cash")
+        user_money = int((debit_res.get("money") or 0) or 0)
 
         reels = _slots_spin()
         payout_full = _slots_payout(reels, bet)
@@ -522,15 +531,15 @@ def register(router):
             # State-owned: house pays; house edge to state head (like dice)
             head_family_id = await get_head_family_id_for_state(stored_state or state) if (stored_state or state) else None
             if win:
-                house_cut = int(bet * SLOTS_HOUSE_EDGE) if head_family_id else 0
+                gross = bet * (a["mult_3"] if (a := next((s for s in SLOTS_SYMBOLS if s["id"] == reels[0]["id"]), {})) else 3)
+                house_cut = int(gross * SLOTS_HOUSE_EDGE) if head_family_id else 0
                 if house_cut > 0:
                     await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": house_cut, "state_head_income.slots": house_cut}})
-                new_money = user_money - bet + payout_full - house_cut
+                await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout_full}})
             else:
                 if head_family_id:
                     await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.slots": bet}})
-                new_money = user_money - bet
-            await db.users.update_one({"id": current_user.get("id") or ""}, {"$set": {"money": new_money}})
+            new_money = (user_money - bet) + (payout_full if win else 0)
             history_entry = {
                 "bet": bet,
                 "reels": [r["id"] for r in reels],
@@ -559,8 +568,7 @@ def register(router):
                 "buy_back_offer": None,
             }
 
-        # Owner-owned
-        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -bet}})
+        # Owner-owned (bet already debited above)
         head_family_id = await get_head_family_id_for_state(stored_state or state) if (stored_state or state) else None
         if not win:
             if head_family_id:
@@ -596,7 +604,8 @@ def register(router):
                 "buy_back_offer": None,
             }
 
-        # Player won: owner pays
+        # Player won: credit bet to owner first, then owner pays payout
+        await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
         owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
         owner_money = int(((owner or {}).get("money") or 0) or 0)
         owner_username = (owner or {}).get("username")
@@ -617,8 +626,8 @@ def register(router):
             if points_offered <= 0:
                 if head_family_id:
                     await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.slots": bet}})
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": -bet}})
                 else:
-                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                     await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet - actual_payout}})
                 # End owner's 3h: clear ownership and set cooldown
                 cooldown_until = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
@@ -654,12 +663,11 @@ def register(router):
                 cooldown_until = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
                 await db.users.update_one({"id": owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
         else:
-            house_cut = bet - actual_payout
-            if head_family_id and house_cut > 0:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": house_cut, "state_head_income.slots": house_cut}})
-            else:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-                await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": house_cut}})
+            edge = int(bet * SLOTS_HOUSE_EDGE)
+            if head_family_id and edge > 0:
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.slots": edge}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}})
+            await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet - actual_payout}})
 
         history_entry = {
             "bet": bet,

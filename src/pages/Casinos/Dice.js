@@ -389,7 +389,7 @@ export default function Dice() {
   const handleSellOnTrade = async () => {
     const city = ownership?.current_city;
     if (!city || ownerLoading) return;
-    const points = parseInt(sellPoints, 10);
+    const points = parseInt(String(sellPoints).replace(/\D/g, ''), 10);
     if (!points || points <= 0) { toast.error('Enter valid points'); return; }
     setOwnerLoading(true);
     try {
@@ -687,7 +687,7 @@ export default function Dice() {
                 <button
                   type="button"
                   onClick={placeDiceBet}
-                  disabled={!canBet || diceLoading}
+                  disabled={!canBet || diceLoading || playing}
                   className="w-full rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
                   style={{
                     background: 'linear-gradient(180deg, #d4af37, #a08020, #8a6e18)',

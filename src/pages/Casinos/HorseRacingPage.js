@@ -423,7 +423,7 @@ export default function HorseRacingPage() {
   const handleSellOnTrade = async () => {
     const city = ownership?.current_city;
     if (!city || ownerLoading) return;
-    const points = parseInt(sellPoints);
+    const points = parseInt(String(sellPoints).replace(/\D/g, ''), 10);
     if (!points || points <= 0) { toast.error('Enter valid points'); return; }
     setOwnerLoading(true);
     try {

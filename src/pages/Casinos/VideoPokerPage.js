@@ -251,7 +251,7 @@ export default function VideoPoker() {
   const handleSellOnTrade = async () => {
     const city = ownership?.current_city;
     if (!city || ownerLoading) return;
-    const points = parseInt(sellPoints);
+    const points = parseInt(String(sellPoints).replace(/\D/g, ''), 10);
     if (!points || points <= 0) { toast.error('Enter valid points'); return; }
     setOwnerLoading(true);
     try { await api.post('/casino/videopoker/sell-on-trade', { city, points }); toast.success(`Listed for ${points.toLocaleString()} pts!`); setSellPoints(''); }
@@ -506,7 +506,7 @@ export default function VideoPoker() {
                       canHold={isDealPhase}
                       index={i}
                       dealing={dealing}
-                      revealed={true}
+                      revealed={!isDealPhase}
                     />
                   ))}
                 </div>

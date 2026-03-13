@@ -140,6 +140,12 @@ def register(router):
           Refund eliminated players their buy-in from pot, winner gets remainder.
         - If not elimination_rounds: best hand wins the whole pot (original logic).
         """
+        claim_res = await db.mp_blackjack_games.update_one(
+            {"id": game_id, "status": {"$ne": "completed"}, "phase": {"$in": ("playing", "dealer")}},
+            {"$set": {"_settlement_claimed": True}},
+        )
+        if claim_res.modified_count == 0:
+            return
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game or game.get("phase") not in ("playing", "dealer"):
             return
@@ -197,6 +203,7 @@ def register(router):
                             "current_turn_index": -1,
                             "all_ready_at": None,
                         },
+                        "$unset": {"_settlement_claimed": ""},
                         "$push": {"round_history": {"$each": [round_entry], "$slice": -5}},
                     },
                 )
@@ -651,6 +658,13 @@ def register(router):
             raise HTTPException(status_code=400, detail="Game cannot be cancelled at this stage")
         if game.get("creator_id") != uid and not _is_admin(current_user) and not _is_moderator(current_user):
             raise HTTPException(status_code=403, detail="Only the creator or staff can cancel the game")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        claim_res = await db.mp_blackjack_games.update_one(
+            {"id": game_id, "status": {"$in": ("open", "playing")}, "phase": {"$nin": ("playing", "dealer")}},
+            {"$set": {"status": "cancelled", "completed_at": now_iso}},
+        )
+        if claim_res.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Game cannot be cancelled at this stage")
         players = list(game.get("players") or [])
         pot = int(game.get("pot") or 0)
         num_players = len(players)
@@ -665,11 +679,6 @@ def register(router):
             add = refund_each + (remainder if i == 0 else 0)
             if add > 0:
                 await db.users.update_one({"id": uid_p}, {"$inc": {"money": add}})
-        now_iso = datetime.now(timezone.utc).isoformat()
-        await db.mp_blackjack_games.update_one(
-            {"id": game_id},
-            {"$set": {"status": "cancelled", "completed_at": now_iso}},
-        )
         return {"message": "Game cancelled; all players refunded", "game_id": game_id}
 
     @router.post("/casino/mp-blackjack/games/{game_id}/leave")

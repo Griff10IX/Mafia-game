@@ -183,16 +183,18 @@ def register(router):
             pool = alive_entries if alive_entries else new_entries
             winner_entry = random.choice(pool)
             winner_id = winner_entry["user_id"]
-            await db.users.update_one(
-                {"id": winner_id},
-                {"$inc": {"points": new_pot_pts, "money": new_pot_money}},
-            )
             winner_user = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
             winner_username = (winner_user and winner_user.get("username")) or winner_entry.get("username") or "?"
             now_iso = datetime.now(timezone.utc).isoformat()
-            await db.mdg_games.update_one(
-                {"id": request.game_id},
+            claim_res = await db.mdg_games.find_one_and_update(
+                {"id": request.game_id, "status": "open"},
                 {"$set": {"status": "completed", "winner_id": winner_id, "winner_username": winner_username, "rolled_at": now_iso, "roll": roll}},
+            )
+            if not claim_res:
+                return {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money}
+            await db.users.update_one(
+                {"id": winner_id},
+                {"$inc": {"points": new_pot_pts, "money": new_pot_money}},
             )
             await log_gambling(
                 winner_id,
@@ -228,16 +230,18 @@ def register(router):
         pool = alive_entries if alive_entries else entries
         winner_entry = random.choice(pool)
         winner_id = winner_entry["user_id"]
-        pot_pts = int(game.get("pot_points") or 0)
-        pot_money = float(game.get("pot_money") or 0)
-        await db.users.update_one({"id": winner_id}, {"$inc": {"points": pot_pts, "money": pot_money}})
         winner_user = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
         winner_username = (winner_user and winner_user.get("username")) or winner_entry.get("username") or "?"
         now_iso = datetime.now(timezone.utc).isoformat()
-        await db.mdg_games.update_one(
-            {"id": request.game_id},
+        pot_pts = int(game.get("pot_points") or 0)
+        pot_money = float(game.get("pot_money") or 0)
+        claim_res = await db.mdg_games.find_one_and_update(
+            {"id": request.game_id, "status": "open"},
             {"$set": {"status": "completed", "winner_id": winner_id, "winner_username": winner_username, "rolled_at": now_iso, "roll": roll}},
         )
+        if not claim_res:
+            raise HTTPException(status_code=400, detail="Game already closed")
+        await db.users.update_one({"id": winner_id}, {"$inc": {"points": pot_pts, "money": pot_money}})
         await log_gambling(
             winner_id,
             winner_username,

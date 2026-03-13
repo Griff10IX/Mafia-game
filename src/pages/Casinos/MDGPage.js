@@ -229,7 +229,7 @@ export default function MDGPage() {
                         {!isIn && (
                           <button
                             type="button"
-                            disabled={joiningId !== null}
+                            disabled={joiningId === g.id}
                             onClick={() => handleJoin(g.id)}
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-primary/40 bg-primary/20 text-primary font-heading font-bold text-[9px] uppercase hover:bg-primary/30 disabled:opacity-50 transition-colors"
                           >
@@ -239,7 +239,7 @@ export default function MDGPage() {
                         {canRoll && (
                           <button
                             type="button"
-                            disabled={rollingId !== null}
+                            disabled={rollingId === g.id}
                             onClick={() => handleRoll(g.id)}
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-amber-500/50 bg-amber-500/20 text-amber-400 font-heading font-bold text-[9px] uppercase hover:bg-amber-500/30 disabled:opacity-50 transition-colors"
                           >

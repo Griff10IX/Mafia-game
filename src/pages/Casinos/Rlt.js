@@ -368,9 +368,9 @@ export default function Rlt() {
 
   const spin = async () => {
     if (!canSpin) return;
+    setSpinning(true);
     setLastResult(null);
     setShowWin(false);
-    setSpinning(false);
     setWheelRotation(0);
     if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
 
@@ -446,7 +446,7 @@ export default function Rlt() {
 
   const handleSellOnTrade = async () => {
     if (!ownership?.current_city || ownerLoading) return;
-    const points = parseInt(sellPoints);
+    const points = parseInt(String(sellPoints).replace(/\D/g, ''), 10);
     if (!points || points <= 0) { toast.error('Enter valid points'); return; }
     setOwnerLoading(true);
     try {

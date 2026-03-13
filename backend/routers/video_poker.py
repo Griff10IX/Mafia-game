@@ -259,17 +259,17 @@ def register(router):
         if owned and (owned.get("type") != "videopoker" or owned.get("city") != city):
             raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
         stored_city, doc = await _get_ownership_doc(city)
-        if doc and doc.get("owner_id"):
-            raise HTTPException(status_code=400, detail="This table already has an owner")
         user = await db.users.find_one({"id": current_user.get("id") or ""})
         if not user or user.get("money", 0) < VIDEO_POKER_CLAIM_COST:
             raise HTTPException(status_code=400, detail=f"You need ${VIDEO_POKER_CLAIM_COST:,} to claim")
-        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -VIDEO_POKER_CLAIM_COST}})
-        await db.videopoker_ownership.update_one(
-            {"city": stored_city or city},
+        res = await db.videopoker_ownership.update_one(
+            {"city": stored_city or city, "owner_id": None},
             {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": VIDEO_POKER_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0}},
             upsert=True,
         )
+        if not res.modified_count and not res.upserted_id:
+            raise HTTPException(status_code=400, detail="This table already has an owner")
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -VIDEO_POKER_CLAIM_COST}})
         return {"message": f"You now own the video poker table in {city}!"}
 
     @router.post("/casino/videopoker/relinquish")
@@ -360,23 +360,28 @@ def register(router):
         stored_city, doc = await _get_ownership_doc(city)
         max_bet = doc.get("max_bet", VIDEO_POKER_DEFAULT_MAX_BET) if doc else VIDEO_POKER_DEFAULT_MAX_BET
         owner_id = doc.get("owner_id") if doc else None
-        if owner_id and owner_id == current_user.get("id") or "":
+        if owner_id and owner_id == current_user.get("id"):
             raise HTTPException(status_code=400, detail="You cannot play at your own table")
         bet = max(0, int(request.bet))
         if bet <= 0:
             raise HTTPException(status_code=400, detail="Bet must be positive")
         if bet > max_bet:
             raise HTTPException(status_code=400, detail=f"Bet exceeds max ${max_bet:,}")
-        user = await db.users.find_one({"id": current_user.get("id") or ""})
-        if not user or user.get("money", 0) < bet:
+        debit_res = await db.users.find_one_and_update(
+            {"id": current_user.get("id") or "", "money": {"$gte": bet}},
+            {"$inc": {"money": -bet}},
+        )
+        if not debit_res:
             raise HTTPException(status_code=400, detail="Not enough money")
         existing = await db.videopoker_games.find_one({"user_id": current_user.get("id") or ""})
         if existing:
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": bet}})
             raise HTTPException(status_code=400, detail="Finish your current game first")
         deck = _make_deck()
         random.shuffle(deck)
         hand = [deck.pop() for _ in range(5)]
-        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -bet}})
+        if owner_id:
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
         await db.videopoker_games.insert_one({
             "user_id": current_user.get("id") or "",
             "city": stored_city or city,
@@ -392,11 +397,11 @@ def register(router):
     @router.post("/casino/videopoker/draw")
     async def casino_videopoker_draw(request: VideoPokerDrawRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user.get("id") or "")
-        game = await db.videopoker_games.find_one({"user_id": current_user.get("id") or ""})
+        game = await db.videopoker_games.find_one_and_delete(
+            {"user_id": current_user.get("id") or "", "status": "deal"}
+        )
         if not game:
-            raise HTTPException(status_code=400, detail="No active game")
-        if game.get("status") != "deal":
-            raise HTTPException(status_code=400, detail="Game not in deal phase")
+            raise HTTPException(status_code=400, detail="No active game or already settled")
         deck = list(game.get("deck") or [])
         hand = list(game.get("hand") or [])
         bet = game.get("bet", 0)
@@ -421,27 +426,30 @@ def register(router):
 
         if payout == 0:
             head_family_id = await get_head_family_id_for_state(city) if city else None
-            if head_family_id:
+            if owner_id:
+                if head_family_id:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.videopoker": bet}})
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": -bet}})
+                else:
+                    await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"total_earnings": bet, "profit": bet}})
+            elif head_family_id:
                 await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.videopoker": bet}})
-            elif owner_id:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-                await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"total_earnings": bet, "profit": bet}})
         elif payout == bet:
+            if owner_id:
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -bet}})
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
         else:
             profit_portion = payout - bet
             if owner_id:
                 owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
                 owner_money = int((owner.get("money") or 0) or 0)
-                actual_owner_pay = min(profit_portion, owner_money)
-                shortfall = profit_portion - actual_owner_pay
-                actual_payout = bet + actual_owner_pay
+                actual_payout = min(payout, owner_money)
+                shortfall = payout - actual_payout
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay}})
-                await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"profit": -actual_owner_pay}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout}})
+                await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"profit": bet - actual_payout}})
                 payout = actual_payout
             else:
-                # No owner: house edge to state head (like dice)
                 head_family_id = await get_head_family_id_for_state(city) if city else None
                 if head_family_id and profit_portion > 0:
                     edge = int(profit_portion * VIDEO_POKER_HOUSE_EDGE)

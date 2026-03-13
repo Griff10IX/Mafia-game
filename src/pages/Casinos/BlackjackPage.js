@@ -309,7 +309,7 @@ export default function Blackjack() {
   const handleSellOnTrade = async () => {
     const city = ownership?.current_city;
     if (!city || ownerLoading) return;
-    const points = parseInt(sellPoints);
+    const points = parseInt(String(sellPoints).replace(/\D/g, ''), 10);
     if (!points || points <= 0) { toast.error('Enter valid points'); return; }
     setOwnerLoading(true);
     try { await api.post('/casino/blackjack/sell-on-trade', { city, points }); toast.success(`Listed for ${points.toLocaleString()} pts!`); setSellPoints(''); setTimeout(() => navigate('/quick-trade'), 1500); }
@@ -435,7 +435,7 @@ export default function Blackjack() {
                 {Math.floor(buyBackSecondsLeft / 60)}:{String(buyBackSecondsLeft % 60).padStart(2, '0')}
               </span>
             )}
-            <button onClick={acceptBuyBack} disabled={buyBackActionLoading}
+            <button onClick={acceptBuyBack} disabled={buyBackActionLoading || (buyBackSecondsLeft !== null && buyBackSecondsLeft <= 0)}
               className="rounded-lg px-5 py-2 text-xs font-heading font-bold uppercase border-2 disabled:opacity-40"
               style={{ background: 'linear-gradient(180deg, #d4af37, #8a6e18)', borderColor: '#c9a84c', color: '#1a1200' }}
             >Accept</button>

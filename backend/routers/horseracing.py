@@ -216,17 +216,17 @@ def register(router):
         if owned and (owned.get("type") != "horseracing" or owned.get("city") != city):
             raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
         stored_city, doc = await _get_horseracing_ownership_doc(city)
-        if doc and doc.get("owner_id"):
-            raise HTTPException(status_code=400, detail="This track already has an owner")
         user = await db.users.find_one({"id": current_user.get("id") or ""})
         if not user or user.get("money", 0) < HORSERACING_CLAIM_COST:
             raise HTTPException(status_code=400, detail=f"You need ${HORSERACING_CLAIM_COST:,} to claim")
-        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -HORSERACING_CLAIM_COST}})
-        await db.horseracing_ownership.update_one(
-            {"city": stored_city or city},
+        res = await db.horseracing_ownership.update_one(
+            {"city": stored_city or city, "owner_id": None},
             {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": HORSERACING_MAX_BET, "total_earnings": 0, "profit": 0}},
             upsert=True,
         )
+        if not res.modified_count and not res.upserted_id:
+            raise HTTPException(status_code=400, detail="This track already has an owner")
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -HORSERACING_CLAIM_COST}})
         return {"message": f"You now own the race track in {city}!"}
 
     @router.post("/casino/horseracing/relinquish")
@@ -307,7 +307,7 @@ def register(router):
         stored_city, doc = await _get_horseracing_ownership_doc(city) if city else (None, None)
         max_bet = doc.get("max_bet", HORSERACING_MAX_BET) if doc else HORSERACING_MAX_BET
         owner_id = doc.get("owner_id") if doc else None
-        if owner_id and owner_id == current_user.get("id") or "":
+        if owner_id and owner_id == current_user.get("id"):
             raise HTTPException(status_code=400, detail="You cannot bet at your own track")
         horse_id = int(request.horse_id)
         bet = int(request.bet or 0)
@@ -318,9 +318,13 @@ def register(router):
         horse = next((h for h in HORSERACING_HORSES if h["id"] == horse_id), None)
         if not horse:
             raise HTTPException(status_code=400, detail="Invalid horse")
-        user_money = int(current_user.get("money") or 0)
-        if user_money < bet:
+        debit_res = await db.users.find_one_and_update(
+            {"id": current_user.get("id") or "", "money": {"$gte": bet}},
+            {"$inc": {"money": -bet}},
+        )
+        if not debit_res:
             raise HTTPException(status_code=400, detail="Insufficient cash")
+        user_money = int((debit_res.get("money") or 0) or 0)
         winner = _horseracing_pick_winner()
         won = winner["id"] == horse_id
         if won:
@@ -340,11 +344,12 @@ def register(router):
             else:
                 if head_family_id:
                     await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.horseracing": bet}})
-            await db.users.update_one({"id": current_user.get("id") or ""}, {"$set": {"money": new_money}})
+            if won:
+                await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
         else:
-            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -bet}})
             head_family_id = await get_head_family_id_for_state(stored_city or city) if (stored_city or city) else None
             if won:
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                 owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
                 owner_money = int((owner.get("money") or 0) or 0)
                 actual_payout = min(payout, owner_money)
@@ -353,7 +358,7 @@ def register(router):
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout}})
                 await db.horseracing_ownership.update_one(
                     {"city": stored_city or city},
-                    {"$inc": {"profit": -actual_payout}}
+                    {"$inc": {"profit": bet - actual_payout}}
                 )
                 new_money = user_money - bet + actual_payout
                 if shortfall > 0:
@@ -365,6 +370,7 @@ def register(router):
                     edge = int(bet * (1 + horse["odds"]) * HORSERACING_HOUSE_EDGE)
                     if edge > 0:
                         await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.horseracing": edge}})
+                        await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}})
             else:
                 if head_family_id:
                     await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.horseracing": bet}})

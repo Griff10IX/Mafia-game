@@ -211,17 +211,17 @@ def register(router):
         if owned and (owned.get("type") != "roulette" or owned.get("city") != city):
             raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
         stored_city, doc = await _get_roulette_ownership_doc(city)
-        if doc and doc.get("owner_id"):
-            raise HTTPException(status_code=400, detail="This table already has an owner")
         user = await db.users.find_one({"id": current_user.get("id") or ""})
         if not user or user.get("money", 0) < ROULETTE_CLAIM_COST:
             raise HTTPException(status_code=400, detail=f"You need ${ROULETTE_CLAIM_COST:,} to claim")
-        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -ROULETTE_CLAIM_COST}})
-        await db.roulette_ownership.update_one(
-            {"city": stored_city or city},
+        res = await db.roulette_ownership.update_one(
+            {"city": stored_city or city, "owner_id": None},
             {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": ROULETTE_DEFAULT_MAX_BET, "total_earnings": 0}},
             upsert=True
         )
+        if not res.modified_count and not res.upserted_id:
+            raise HTTPException(status_code=400, detail="This table already has an owner")
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -ROULETTE_CLAIM_COST}})
         return {"message": f"You now own the roulette table in {city}!"}
 
     @router.post("/casino/roulette/relinquish")
@@ -309,7 +309,7 @@ def register(router):
         stored_city, ownership_doc = await _get_roulette_ownership_doc(city) if city else (city, None)
         owner_id = ownership_doc.get("owner_id") if ownership_doc else None
         max_bet = ownership_doc.get("max_bet", ROULETTE_DEFAULT_MAX_BET) if ownership_doc else ROULETTE_DEFAULT_MAX_BET
-        if owner_id and owner_id == current_user.get("id") or "":
+        if owner_id and owner_id == current_user.get("id"):
             raise HTTPException(status_code=400, detail="You cannot gamble at your own roulette table")
         total_stake = 0
         validated_bets = []
@@ -335,31 +335,43 @@ def register(router):
             validated_bets.append({"type": bet_type, "selection": selection, "amount": amount})
         if total_stake > max_bet:
             raise HTTPException(status_code=400, detail=f"Total bet exceeds max of ${max_bet:,}")
-        user = await db.users.find_one({"id": current_user.get("id") or ""})
-        if not user or user.get("money", 0) < total_stake:
+        debit_res = await db.users.find_one_and_update(
+            {"id": current_user.get("id") or "", "money": {"$gte": total_stake}},
+            {"$inc": {"money": -total_stake}},
+        )
+        if not debit_res:
             raise HTTPException(status_code=400, detail="Not enough money")
-        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -total_stake}})
         result = random.randint(0, 36)
         total_payout = 0
         for bet in validated_bets:
             if _roulette_check_bet_win(bet["type"], bet["selection"], result):
                 multiplier = _roulette_get_multiplier(bet["type"])
                 total_payout += bet["amount"] * multiplier
-        if total_payout > 0:
-            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": total_payout}})
-        # House edge (like dice): always take cut, send to state head or owner
-        owner_cut = int(total_stake * ROULETTE_HOUSE_EDGE)
-        if owner_cut > 0:
-            head_family_id = await get_head_family_id_for_state(stored_city or city)
+        win = total_payout > 0
+        head_family_id = await get_head_family_id_for_state(stored_city or city)
+        edge = int(total_stake * ROULETTE_HOUSE_EDGE)
+        if not win:
             if head_family_id:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": owner_cut, "state_head_income.roulette": owner_cut}})
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": total_stake, "state_head_income.roulette": total_stake}})
             elif owner_id:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_cut}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": total_stake}})
                 await db.roulette_ownership.update_one(
                     {"city": stored_city or city},
-                    {"$inc": {"total_earnings": owner_cut}}
+                    {"$inc": {"total_earnings": total_stake}}
                 )
-        win = total_payout > 0
+        elif not owner_id:
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": total_payout}})
+        else:
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": total_payout}})
+            net_cost = total_payout - total_stake
+            if head_family_id and edge > 0:
+                net_cost += edge
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.roulette": edge}})
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": -net_cost}})
+            await db.roulette_ownership.update_one(
+                {"city": stored_city or city},
+                {"$inc": {"total_earnings": -net_cost}}
+            )
         await log_gambling(
             current_user.get("id") or "",
             current_user.get("username") or "?",
@@ -378,5 +390,5 @@ def register(router):
             "win": win,
             "total_payout": total_payout,
             "total_stake": total_stake,
-            "owner_cut": owner_cut
+            "owner_cut": edge if (head_family_id or owner_id) else 0
         }

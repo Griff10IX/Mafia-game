@@ -524,6 +524,7 @@ export default function MPPokerGamePage() {
   };
 
   const markReady = async () => {
+    if (!gameId) return;
     setReadyLoading(true);
     try {
       const res = await api.post(`/casino/mp-poker/games/${gameId}/ready`);
@@ -558,6 +559,7 @@ export default function MPPokerGamePage() {
 
   const sendChat = (e) => {
     e?.preventDefault();
+    if (!gameId) return;
     const msg = chatInput.trim();
     if (!msg || sendingChat) return;
     setSendingChat(true);

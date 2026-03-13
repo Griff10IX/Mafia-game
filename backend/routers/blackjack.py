@@ -206,14 +206,36 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
         payout = bet
     if payout > 0:
         if owner_id and result in ("win", "dealer_bust"):
-            owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
+            owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
             owner_money = int((owner.get("money") or 0) or 0)
             actual_owner_pay = min(bet, owner_money)
+            shortfall = bet - actual_owner_pay
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": bet + actual_owner_pay}})
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay}})
             stored_city_bj, doc_bj = await _get_blackjack_ownership_doc(bj_city)
-            if bet - actual_owner_pay > 0:
-                await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -actual_owner_pay}})
+            buy_back_reward = int((doc_bj or {}).get("buy_back_reward") or 0)
+            if shortfall > 0:
+                bj_owner_set = {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username")}
+                if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
+                    bj_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+                await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$set": bj_owner_set})
+                if buy_back_reward > 0:
+                    owner_username = (owner or {}).get("username")
+                    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
+                    offer_id = str(uuid.uuid4())
+                    await db.blackjack_buy_back_offers.insert_one({
+                        "id": offer_id,
+                        "city": stored_city_bj or bj_city,
+                        "from_owner_id": owner_id,
+                        "to_user_id": current_user.get("id") or "",
+                        "points_offered": buy_back_reward,
+                        "amount_shortfall": shortfall,
+                        "owner_paid": actual_owner_pay,
+                        "expires_at": expires_at,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                else:
+                    await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -actual_owner_pay}})
             else:
                 await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -bet}})
         else:
@@ -359,17 +381,17 @@ def register(router):
         if owned and (owned.get("type") != "blackjack" or owned.get("city") != city):
             raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
         stored_city, doc = await _get_blackjack_ownership_doc(city)
-        if doc and doc.get("owner_id"):
-            raise HTTPException(status_code=400, detail="This table already has an owner")
         user = await db.users.find_one({"id": current_user.get("id") or ""})
         if not user or user.get("money", 0) < BLACKJACK_CLAIM_COST:
             raise HTTPException(status_code=400, detail=f"You need ${BLACKJACK_CLAIM_COST:,} to claim")
-        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -BLACKJACK_CLAIM_COST}})
-        await db.blackjack_ownership.update_one(
-            {"city": stored_city or city},
+        res = await db.blackjack_ownership.update_one(
+            {"city": stored_city or city, "owner_id": None},
             {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": BLACKJACK_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0, "buy_back_reward": 0}},
             upsert=True,
         )
+        if not res.modified_count and not res.upserted_id:
+            raise HTTPException(status_code=400, detail="This table already has an owner")
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -BLACKJACK_CLAIM_COST}})
         return {"message": f"You now own the blackjack table in {city}!"}
 
     @router.post("/casino/blackjack/relinquish")
@@ -431,10 +453,14 @@ def register(router):
         if not city or not from_owner_id:
             raise HTTPException(status_code=400, detail="Invalid offer")
         from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1, "username": 1})
-        from_points = int((from_user.get("points") or 0) or 0)
-        if from_points < points_offered:
+        if not from_user:
+            raise HTTPException(status_code=400, detail="Previous owner not found")
+        deduct_res = await db.users.find_one_and_update(
+            {"id": from_owner_id, "points": {"$gte": points_offered}},
+            {"$inc": {"points": -points_offered}},
+        )
+        if not deduct_res:
             raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
-        await db.users.update_one({"id": from_owner_id}, {"$inc": {"points": -points_offered}})
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
         from_username = from_user.get("username") if from_user else None
         await db.blackjack_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_username}})
@@ -507,27 +533,31 @@ def register(router):
         stored_city, doc = await _get_blackjack_ownership_doc(city)
         max_bet = doc.get("max_bet", BLACKJACK_DEFAULT_MAX_BET) if doc else BLACKJACK_DEFAULT_MAX_BET
         owner_id = doc.get("owner_id") if doc else None
-        if owner_id and owner_id == current_user.get("id") or "":
+        if owner_id and owner_id == current_user.get("id"):
             raise HTTPException(status_code=400, detail="You cannot play at your own table")
         bet = max(0, int(request.bet))
         if bet <= 0:
             raise HTTPException(status_code=400, detail="Bet must be positive")
         if bet > max_bet:
             raise HTTPException(status_code=400, detail=f"Bet exceeds max ${max_bet:,}")
-        user = await db.users.find_one({"id": current_user.get("id") or ""})
-        if not user or user.get("money", 0) < bet:
-            raise HTTPException(status_code=400, detail="Not enough money")
         existing = await db.blackjack_games.find_one({"user_id": current_user.get("id") or ""})
         if existing:
             if _blackjack_game_is_stale(existing):
                 await _blackjack_auto_finish_game(existing, current_user)
             else:
                 raise HTTPException(status_code=400, detail="Finish your current game first")
+        debit_res = await db.users.find_one_and_update(
+            {"id": current_user.get("id") or "", "money": {"$gte": bet}},
+            {"$inc": {"money": -bet}},
+            return_document=False,
+        )
+        if not debit_res:
+            raise HTTPException(status_code=400, detail="Not enough money")
+        user = debit_res
         deck = _blackjack_make_deck()
         random.shuffle(deck)
         player_hand = [deck.pop(), deck.pop()]
         dealer_hand = [deck.pop(), deck.pop()]
-        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -bet}})
         player_total = _blackjack_hand_total(player_hand)
         dealer_total = _blackjack_hand_total(dealer_hand)
         dealer_hidden = 1
@@ -628,7 +658,12 @@ def register(router):
                 "ownership_transferred": ownership_transferred,
             }
         if _blackjack_is_blackjack(dealer_hand):
-            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": 0}})
+            debit_res = await db.users.find_one_and_update(
+                {"id": current_user.get("id") or "", "money": {"$gte": bet}},
+                {"$inc": {"money": -bet}},
+            )
+            if not debit_res:
+                raise HTTPException(status_code=400, detail="Not enough money")
             head_family_id = await get_head_family_id_for_state(stored_city or city)
             if head_family_id:
                 await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.blackjack": bet}})

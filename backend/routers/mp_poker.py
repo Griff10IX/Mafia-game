@@ -786,6 +786,12 @@ def register(router):
         uid = current_user.get("id") or ""
         if g.get("creator_id") != uid and not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Only creator can cancel")
+        claim_res = await db.mp_poker_games.update_one(
+            {"id": game_id, "status": {"$in": ("open", "ready")}},
+            {"$set": {"status": "cancelled", "phase": "cancelled"}},
+        )
+        if claim_res.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Game already cancelled or in progress")
         players = g.get("players") or []
         buy_in = int(g.get("buy_in") or 0)
         extra = int(g.get("extra_prize") or 0)
@@ -793,10 +799,6 @@ def register(router):
             refund = buy_in + (extra if p.get("user_id") == g.get("creator_id") else 0)
             if refund > 0:
                 await db.users.update_one({"id": p.get("user_id") or ""}, {"$inc": {"money": refund}})
-        await db.mp_poker_games.update_one(
-            {"id": game_id},
-            {"$set": {"status": "cancelled", "phase": "cancelled"}},
-        )
         return {"message": "Game cancelled"}
 
     @router.post("/casino/mp-poker/games/{game_id}/leave")
@@ -862,6 +864,12 @@ def register(router):
         return {k: v for k, v in g.items() if k != "_id"}
 
     async def _mp_poker_run_showdown(game_id: str):
+        claim_res = await db.mp_poker_games.update_one(
+            {"id": game_id, "street": "showdown", "status": {"$ne": "completed"}},
+            {"$set": {"status": "completed", "phase": "settled"}},
+        )
+        if claim_res.modified_count == 0:
+            return
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or g.get("street") != "showdown":
             return
