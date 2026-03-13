@@ -190,7 +190,7 @@ export default function QuickTrade() {
   };
 
   const handleCreateTokenOffer = async () => {
-    const qty = Math.max(1, parseInt(String(tokenQuantity).replace(/,/g, ''), 10) || 1;
+    const qty = Math.max(1, parseInt(String(tokenQuantity).replace(/,/g, ''), 10) || 1);
     const price = Math.max(1, parseInt(String(tokenPrice).replace(/,/g, ''), 10) || 0;
     if (!price) {
       toast.error('Enter price in points');
