@@ -326,6 +326,8 @@ export default function UsersOnline() {
     } catch (error) {
       toast.error('Failed to load online users');
       console.error('Error fetching online users:', error);
+      setTotalOnline(0);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -401,7 +403,7 @@ export default function UsersOnline() {
             <div className="flex flex-wrap gap-1" data-testid="users-grid">
                 {users.map((user, idx) => (
                   <UserCard
-                    key={idx}
+                    key={user.username || `user-${idx}`}
                     user={user}
                     profileCache={profileCache}
                     profileLoading={profileLoading}

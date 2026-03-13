@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BarChart3, Shield, Target, Sword, Dice5, Trophy, DollarSign, TrendingUp, Wine, Bot, Landmark, Zap } from 'lucide-react';
+import { toast } from 'sonner';
 import api from '../utils/api';
 import styles from '../styles/noir.module.css';
 
@@ -96,21 +97,36 @@ export default function MyStats() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchStats = useCallback(() => {
+    setLoading(true);
     api
       .get('/stats/me')
       .then((res) => {
         if (res?.data) setStats(res.data);
       })
-      .catch(() => setStats({}))
+      .catch((e) => {
+        setStats(null);
+        toast.error(e.response?.data?.detail || 'Failed to load your stats');
+      })
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <LoadingSpinner />;
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  if (loading && !stats) return <LoadingSpinner />;
   if (!stats) {
     return (
       <div className={`${styles.pageContent} p-4`}>
-        <p className="text-mutedForeground">Failed to load stats.</p>
+        <p className="text-mutedForeground mb-2">Failed to load stats.</p>
+        <button
+          type="button"
+          onClick={() => fetchStats()}
+          className="px-2 py-1 rounded text-xs font-heading uppercase tracking-wider border border-primary/40 text-primary hover:bg-primary/10"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -159,11 +175,11 @@ export default function MyStats() {
       : []),
   ];
 
-  const casinoTypeLabel = (t) => ({ dice: 'Dice', roulette: 'Roulette', blackjack: 'Blackjack', horseracing: 'Horse Racing', videopoker: 'Video Poker', slots: 'Slots' }[t] || t);
-  const propertyTypeLabel = (t) => ({ airport: 'Airport', bullet_factory: 'Armoury' }[t] || t);
+  const casinoTypeLabel = (t) => (t && { dice: 'Dice', roulette: 'Roulette', blackjack: 'Blackjack', horseracing: 'Horse Racing', videopoker: 'Video Poker', slots: 'Slots' }[t]) || '—';
+  const propertyTypeLabel = (t) => (t && { airport: 'Airport', bullet_factory: 'Armoury' }[t]) || '—';
   const casinoRows = [
-    { label: 'Casino Owned', value: casinos.owned_casino ? `${casinoTypeLabel(casinos.owned_casino.type)} (${casinos.owned_casino.location})` : '—', valueColor: casinos.owned_casino ? 'text-emerald-400' : 'text-mutedForeground' },
-    { label: 'Property Owned', value: casinos.owned_property ? `${propertyTypeLabel(casinos.owned_property.type)} (${casinos.owned_property.location})` : '—', valueColor: casinos.owned_property ? 'text-emerald-400' : 'text-mutedForeground' },
+    { label: 'Casino Owned', value: casinos.owned_casino ? `${casinoTypeLabel(casinos.owned_casino.type)} (${casinos.owned_casino?.location ?? '—'})` : '—', valueColor: casinos.owned_casino ? 'text-emerald-400' : 'text-mutedForeground' },
+    { label: 'Property Owned', value: casinos.owned_property ? `${propertyTypeLabel(casinos.owned_property.type)} (${casinos.owned_property?.location ?? '—'})` : '—', valueColor: casinos.owned_property ? 'text-emerald-400' : 'text-mutedForeground' },
     { label: 'Profit from Owning Casino', value: formatMoney(casinos.casino_profit), valueColor: casinos.casino_profit > 0 ? 'text-emerald-400' : 'text-foreground' },
     { label: 'Profit from Property', value: formatNumber(casinos.property_profit), valueColor: casinos.property_profit > 0 ? 'text-emerald-400' : 'text-foreground' },
   ];

@@ -184,6 +184,8 @@ export default function Admin() {
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
   const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
   const [viewRegistrationInfo, setViewRegistrationInfo] = useState(null);
+  const [adminUserSessions, setAdminUserSessions] = useState(null);
+  const [adminUserSessionsLoading, setAdminUserSessionsLoading] = useState(false);
   const [viewRegistrationLoading, setViewRegistrationLoading] = useState(false);
   const [userInspectEmail, setUserInspectEmail] = useState('');
   const [userInspectResult, setUserInspectResult] = useState(null);
@@ -813,7 +815,36 @@ export default function Admin() {
     try {
       const response = await api.post(`/admin/log-out-user?target_username=${encodeURIComponent(formData.targetUsername)}`);
       toast.success(response.data?.message || 'User logged out');
+      setAdminUserSessions(null);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleLoadUserSessions = async () => {
+    if (!(formData.targetUsername || '').trim()) { toast.error('Enter target username'); return; }
+    setAdminUserSessionsLoading(true);
+    setAdminUserSessions(null);
+    try {
+      const res = await api.get('/admin/user-sessions', { params: { target_username: formData.targetUsername } });
+      setAdminUserSessions(res.data?.sessions ?? []);
+      toast.success(res.data?.sessions?.length ? `${res.data.sessions.length} session(s)` : 'No sessions');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load sessions');
+      setAdminUserSessions([]);
+    } finally {
+      setAdminUserSessionsLoading(false);
+    }
+  };
+
+  const handleAdminRevokeSession = async (sessionId) => {
+    if (!(formData.targetUsername || '').trim()) return;
+    if (!window.confirm('Revoke this session? That device will be logged out.')) return;
+    try {
+      await api.post('/admin/sessions/revoke', { target_username: formData.targetUsername, session_id: sessionId });
+      toast.success('Session revoked');
+      handleLoadUserSessions();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    }
   };
 
   const handleSetPassword = async () => {
@@ -2825,6 +2856,42 @@ export default function Admin() {
             <ActionRow icon={LogOut} label="Log Out User" description="Invalidate all sessions; they must log in again">
               <BtnPrimary onClick={handleLogOutUser}>Log out</BtnPrimary>
             </ActionRow>
+            <ActionRow icon={Users} label="Sessions" description="View and revoke individual sessions (IP, device, last used)">
+              <BtnPrimary onClick={handleLoadUserSessions} disabled={adminUserSessionsLoading}>
+                {adminUserSessionsLoading ? '...' : 'View sessions'}
+              </BtnPrimary>
+            </ActionRow>
+            {adminUserSessions && (
+              <div className="pl-6 pr-2 py-2 space-y-1 border-l-2 border-primary/20 ml-1">
+                <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider mb-1">
+                  {adminUserSessions.length ? `${adminUserSessions.length} session(s)` : 'No sessions'}
+                </div>
+                {adminUserSessions.length === 0 ? (
+                  <div className="text-[10px] text-mutedForeground">No sessions (or legacy token).</div>
+                ) : (
+                  adminUserSessions.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex flex-wrap items-center justify-between gap-2 py-1.5 px-2 rounded text-[10px] font-heading bg-zinc-800/50"
+                    >
+                      <span className="text-foreground">{s.ip || '—'}</span>
+                      <span className="text-mutedForeground">{s.device_type || '—'}</span>
+                      <span className="text-mutedForeground">
+                        Last used: {s.last_used_at ? new Date(s.last_used_at).toLocaleString() : '—'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleAdminRevokeSession(s.id)}
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-heading uppercase border border-amber-500/40 text-amber-400 hover:bg-amber-500/20"
+                      >
+                        <LogOut size={10} />
+                        Revoke
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
             <ActionRow icon={KeyRound} label="Set Password" description="Set a new password (min 6 chars); user is logged out">
               <Input type="password" value={formData.adminNewPassword} onChange={(e) => setFormData((prev) => ({ ...prev, adminNewPassword: e.target.value }))} placeholder="New password" className="flex-1 min-w-0 text-[11px]" autoComplete="off" />
               <BtnPrimary onClick={handleSetPassword}>Set</BtnPrimary>

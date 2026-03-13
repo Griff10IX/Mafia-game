@@ -56,6 +56,11 @@ class AdminSetPasswordRequest(BaseModel):
     new_password: str
 
 
+class AdminRevokeSessionRequest(BaseModel):
+    target_username: str
+    session_id: str
+
+
 class DropUserCasinoRequest(BaseModel):
     user_id: str
     game_type: str  # dice, roulette, blackjack, horseracing, videopoker, slots
@@ -920,6 +925,58 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         await db.users.update_one({"id": target["id"]}, {"$inc": {"token_version": 1}})
         return {"message": f"{target.get('username', target_username)} has been logged out. All their sessions are invalid."}
+
+    @router.get("/admin/user-sessions")
+    async def admin_get_user_sessions(
+        target_username: str = Query(..., description="Username to list sessions for"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """List sessions (IP, device, last used) for a user. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one(
+            {"username": username_pattern},
+            {"_id": 0, "id": 1, "username": 1, "sessions": 1},
+        )
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        sessions_raw = target.get("sessions") or []
+        sessions = [
+            {
+                "id": s.get("id"),
+                "ip": (s.get("ip") or "").strip(),
+                "device_type": (s.get("device_type") or "Unknown").strip(),
+                "created_at": s.get("created_at"),
+                "last_used_at": s.get("last_used_at"),
+            }
+            for s in sessions_raw
+            if s.get("id")
+        ]
+        return {"username": target.get("username"), "sessions": sessions}
+
+    @router.post("/admin/sessions/revoke")
+    async def admin_revoke_session(
+        body: AdminRevokeSessionRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Revoke one session for a user (by username and session_id). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        session_id = (body.session_id or "").strip()
+        if not session_id:
+            raise HTTPException(status_code=400, detail="session_id required")
+        username_pattern = _username_pattern(body.target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        result = await db.users.update_one(
+            {"id": target["id"]},
+            {"$pull": {"sessions": {"id": session_id}}},
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Session not found or already revoked")
+        return {"message": f"Session revoked for {target.get('username', body.target_username)}."}
 
     @router.post("/admin/set-password")
     async def admin_set_password(

@@ -48,6 +48,8 @@ def register(router):
         users_data = []
         id_to_user = {}
         for user in users:
+            if not (user.get("username") or "").strip():
+                continue
             if (user.get("email") in ADMIN_EMAILS or user.get("is_moderator")) and user.get("admin_ghost_mode"):
                 continue
             uid = user.get("id")
@@ -76,7 +78,7 @@ def register(router):
             elif is_hdo:
                 online_color = HDO_ONLINE_COLOR
             item = {
-                "username": user["username"],
+                "username": (user.get("username") or "").strip(),
                 "rank": rank_id,
                 "rank_name": rank_name,
                 "rank_points": _rp,
