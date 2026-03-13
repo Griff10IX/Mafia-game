@@ -53,13 +53,13 @@ const AttemptRow = ({ attempt }) => {
   const killed = attempt.outcome === 'killed';
   const incomingKilled = !outgoingRow && killed;
   const DirIcon = outgoingRow ? ArrowUpRight : ArrowDownLeft;
-  const otherUser = outgoingRow ? attempt.target_username : attempt.attacker_username;
+  const otherUser = (outgoingRow ? attempt.target_username : attempt.attacker_username) ?? '?';
   const rewardMoney = attempt.rewards?.money;
   const isBodyguardKill = attempt.is_bodyguard_kill;
   const bgOwner = attempt.bodyguard_owner_username;
 
   const statusLabel = incomingKilled
-    ? `Killed by ${attempt.attacker_username || '?'}`
+    ? `Killed by ${attempt.attacker_username ?? '?'}`
     : killed
       ? 'Killed'
       : 'Failed';
@@ -75,7 +75,7 @@ const AttemptRow = ({ attempt }) => {
             </div>
             
             <Link
-              to={`/profile/${encodeURIComponent(otherUser || '')}`}
+              to={`/profile/${encodeURIComponent(otherUser ?? '')}`}
               className="font-heading font-bold text-foreground hover:text-primary transition-colors text-[11px] truncate"
             >
               {otherUser}
@@ -174,8 +174,8 @@ const AttemptsCard = ({ title, attempts, icon: Icon, emptyMessage, delay = 0 }) 
         </div>
       ) : (
         <div className="divide-y divide-zinc-700/30">
-          {attempts.slice(0, 50).map((attempt) => (
-            <AttemptRow key={attempt.id} attempt={attempt} />
+          {attempts.slice(0, 50).map((attempt, idx) => (
+            <AttemptRow key={attempt.id ?? `attempt-${idx}`} attempt={attempt} />
           ))}
         </div>
       )}
@@ -197,6 +197,7 @@ export default function Attempts() {
     } catch (e) {
       toast.error('Failed to load attempts');
       console.error('Error fetching attempts:', e);
+      setAttempts([]);
     } finally {
       setLoading(false);
     }

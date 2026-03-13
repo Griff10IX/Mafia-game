@@ -159,6 +159,15 @@ export default function Bodyguards() {
       console.error('[Bodyguards] fetchData failed', { which, status, detail, url: error.config?.url, data: error.response?.data });
       const msg = typeof detail === 'string' ? detail : JSON.stringify(detail);
       toast.error(`Failed to load ${which}: ${msg || status || 'Network error'}`, { duration: 12000 });
+      setBodyguards([]);
+      setUser(null);
+      setBodyguardFor(null);
+      setBodyguardProfit(null);
+      setBodyguardLastDropAt(null);
+      setBgStats(null);
+      setInvites({ sent: [], received: [] });
+      setNextHireInflationPct(0);
+      setInflationWindowEndsAt(null);
     } finally {
       setLoading(false);
     }
@@ -413,12 +422,12 @@ export default function Bodyguards() {
               </div>
               <div className="text-[10px] text-mutedForeground truncate hidden sm:block">
                 <Link
-                  to={`/profile/${encodeURIComponent(bg.bodyguard_username)}`}
+                  to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
                   className="hover:text-primary"
                   data-testid={`bodyguard-profile-${bg.slot_number}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {bg.bodyguard_username}
+                  {bg.bodyguard_username ?? '—'}
                 </Link>
                 {bg.bodyguard_rank_name && <span> • {bg.bodyguard_rank_name}</span>}
               </div>
@@ -453,11 +462,11 @@ export default function Bodyguards() {
               <div className="bg-zinc-900/50 rounded p-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Guard</div>
                 <Link
-                  to={`/profile/${encodeURIComponent(bg.bodyguard_username)}`}
+                  to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
                   className="text-foreground font-bold hover:text-primary"
                   data-testid={`bodyguard-profile-expanded-${bg.slot_number}`}
                 >
-                  {bg.bodyguard_username}
+                  {bg.bodyguard_username ?? '—'}
                 </Link>
               </div>
               <div className="bg-zinc-900/50 rounded p-2">
@@ -487,19 +496,19 @@ export default function Bodyguards() {
               {(bg.hire_cost ?? 0) > 0 && (
                 <div className="bg-zinc-900/50 rounded p-2 col-span-2">
                   <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Upfront cost</div>
-                  <div className="text-foreground font-bold">{bg.hire_cost.toLocaleString()} pts</div>
+                  <div className="text-foreground font-bold">{(bg.hire_cost ?? 0).toLocaleString()} pts</div>
                 </div>
               )}
-              {!bg.is_robot && (bg.payment_points > 0 || bg.payment_money > 0) && (
+              {!bg.is_robot && ((bg.payment_points ?? 0) > 0 || (bg.payment_money ?? 0) > 0) && (
                 <div className="bg-zinc-900/50 rounded p-2 col-span-2">
                   <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Pay (per week, auto on day)</div>
                   <div className="text-foreground font-bold">
-                    {[bg.payment_points > 0 && `${bg.payment_points} pts`, bg.payment_money > 0 && `$${Number(bg.payment_money).toLocaleString()}`].filter(Boolean).join(' + ')}
-                    {bg.payout_weekday != null && ` · ${WEEKDAY_OPTIONS[bg.payout_weekday]?.label || 'Weekly'}s`}
+                    {[(bg.payment_points ?? 0) > 0 && `${bg.payment_points ?? 0} pts`, (bg.payment_money ?? 0) > 0 && `$${Number(bg.payment_money ?? 0).toLocaleString()}`].filter(Boolean).join(' + ')}
+                    {bg.payout_weekday != null && ` · ${WEEKDAY_OPTIONS[bg.payout_weekday]?.label ?? 'Weekly'}s`}
                   </div>
                 </div>
               )}
-              {!bg.is_robot && hasGuard && (
+              {hasGuard && (
                 <div className="col-span-2 pt-1">
                   <button
                     type="button"
@@ -507,7 +516,7 @@ export default function Bodyguards() {
                     disabled={!!droppingSlot || dropOnCooldown}
                     className="text-[10px] font-heading uppercase tracking-wide text-red-400 hover:text-red-300 border border-red-500/40 rounded px-2 py-1.5 bg-red-500/10 disabled:opacity-50"
                   >
-                    {droppingSlot === bg.slot_number ? '…' : dropOnCooldown ? `Drop (in ${dropCooldownMins}m)` : 'Drop bodyguard'}
+                    {droppingSlot === bg.slot_number ? '…' : dropOnCooldown ? `Drop (in ${dropCooldownMins}m)` : `Drop ${bg.is_robot ? 'robot' : 'bodyguard'}`}
                   </button>
                 </div>
               )}
@@ -618,16 +627,16 @@ export default function Bodyguards() {
             <div>
               <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Your invites (sent)</h4>
               <div className="space-y-1.5">
-                {invites.sent.map((inv) => {
+                {invites.sent.map((inv, idx) => {
                   const payParts = [];
                   if (inv.payment_points) payParts.push(`${inv.payment_points} pts`);
-                  if (inv.payment_money) payParts.push(`$${Number(inv.payment_money).toLocaleString()}`);
+                  if (inv.payment_money) payParts.push(`$${Number(inv.payment_money ?? 0).toLocaleString()}`);
                   const payStr = payParts.length ? payParts.join(' + ') + '/week' : '—';
-                  const weekdayLabel = WEEKDAY_OPTIONS.find((o) => o.value === inv.payout_weekday)?.label ?? '—';
+                  const weekdayLabel = WEEKDAY_OPTIONS.find((o) => o.value === (inv.payout_weekday ?? 0))?.label ?? '—';
                   const isCancelling = cancellingInviteId === inv.id;
                   return (
                     <div
-                      key={inv.id}
+                      key={inv.id ?? `sent-${idx}`}
                       className="bg-row rounded-lg bg-zinc-800/30 border border-primary/20 px-3 py-2 flex flex-wrap items-center justify-between gap-2"
                     >
                       <div className="text-[11px] text-foreground font-heading min-w-0">
@@ -656,16 +665,16 @@ export default function Bodyguards() {
             <div>
               <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Invitations (received)</h4>
               <div className="space-y-1.5">
-                {invites.received.map((inv) => {
+                {invites.received.map((inv, idx) => {
                   const payParts = [];
                   if (inv.payment_points) payParts.push(`${inv.payment_points} pts`);
-                  if (inv.payment_money) payParts.push(`$${Number(inv.payment_money).toLocaleString()}`);
+                  if (inv.payment_money) payParts.push(`$${Number(inv.payment_money ?? 0).toLocaleString()}`);
                   const payStr = payParts.length ? payParts.join(' + ') + '/week' : '—';
-                  const weekdayLabel = WEEKDAY_OPTIONS.find((o) => o.value === inv.payout_weekday)?.label ?? '—';
+                  const weekdayLabel = WEEKDAY_OPTIONS.find((o) => o.value === (inv.payout_weekday ?? 0))?.label ?? '—';
                   const isActing = actingInviteId === inv.id;
                   return (
                     <div
-                      key={inv.id}
+                      key={inv.id ?? `received-${idx}`}
                       className="bg-row rounded-lg bg-zinc-800/30 border border-primary/20 px-3 py-2 flex flex-wrap items-center justify-between gap-2"
                     >
                       <div className="text-[11px] text-foreground font-heading min-w-0">

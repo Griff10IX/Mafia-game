@@ -1520,6 +1520,8 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
     ).sort("created_at", -1).to_list(200)
     filtered = []
     for d in docs:
+        if not d.get("id"):
+            d["id"] = str(uuid.uuid4())
         d["direction"] = "outgoing" if d.get("attacker_id") == current_user["id"] else "incoming"
         if d["direction"] == "incoming":
             outcome = d.get("outcome")

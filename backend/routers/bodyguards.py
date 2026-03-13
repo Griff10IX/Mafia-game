@@ -12,6 +12,23 @@ from fastapi import Depends, HTTPException
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_iso_datetime(val):
+    """Parse datetime from DB (string with optional Z, or datetime object). Return None if missing/invalid."""
+    if val is None:
+        return None
+    if hasattr(val, "year"):
+        return val.replace(tzinfo=timezone.utc) if val.tzinfo is None else val
+    if not isinstance(val, str):
+        return None
+    try:
+        s = val.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    except Exception:
+        return None
+
+
 from server import (
     db,
     get_current_user,
@@ -57,13 +74,8 @@ def _bodyguard_inflation_level_now(user: dict) -> int:
     until_iso = user.get("bodyguard_inflation_until")
     if not until_iso:
         return 0
-    try:
-        until = datetime.fromisoformat(until_iso.replace("Z", "+00:00"))
-        if until.tzinfo is None:
-            until = until.replace(tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) > until:
-            return 0
-    except Exception:
+    until = _parse_iso_datetime(until_iso)
+    if until is None or datetime.now(timezone.utc) > until:
         return 0
     return int(user.get("bodyguard_inflation_level") or 0)
 
@@ -217,14 +229,9 @@ async def get_bodyguards_hire_inflation(current_user: dict = Depends(get_current
     until_iso = user.get("bodyguard_inflation_until")
     window_ends_at = None
     if until_iso:
-        try:
-            until = datetime.fromisoformat(until_iso.replace("Z", "+00:00"))
-            if until.tzinfo is None:
-                until = until.replace(tzinfo=timezone.utc)
-            if until > datetime.now(timezone.utc):
-                window_ends_at = until_iso
-        except Exception:
-            pass
+        until = _parse_iso_datetime(until_iso)
+        if until and until > datetime.now(timezone.utc):
+            window_ends_at = until_iso
     return {"next_hire_inflation_pct": pct, "inflation_window_ends_at": window_ends_at}
 
 
@@ -256,7 +263,7 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
                         {"id": guard_id},
                         {"_id": 0, "username": 1, "rank_points": 1, "armour_level": 1}
                     )
-                    username_bg = bg_user["username"] if bg_user else "Unknown"
+                    username_bg = bg_user.get("username", "Unknown") if bg_user else "Unknown"
                     if bg_user:
                         _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
                     armour_level = int(bg_user.get("armour_level", 0) or 0) if bg_user else 0
@@ -266,7 +273,7 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
                             {"id": bg["bodyguard_user_id"]},
                             {"_id": 0, "username": 1, "rank_points": 1}
                         )
-                        username_bg = bg_user["username"] if bg_user else None
+                        username_bg = bg_user.get("username") if bg_user else None
                         if bg_user:
                             _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
                     username_bg = username_bg or bg.get("robot_name") or f"Robot Guard #{i + 1}"
@@ -351,27 +358,24 @@ async def get_bodyguards_stats(current_user: dict = Depends(get_current_user)):
     for bg in bodyguards:
         if not bg.get("hired_at") or not (bg.get("bodyguard_user_id") or bg.get("is_robot")):
             continue
-        try:
-            hired_at = datetime.fromisoformat(bg["hired_at"].replace("Z", "+00:00"))
-            if hired_at.tzinfo is None:
-                hired_at = hired_at.replace(tzinfo=timezone.utc)
-            secs = int((now - hired_at).total_seconds())
-            if secs < 0:
-                secs = 0
-            if longest_surviving_seconds is None or secs > longest_surviving_seconds:
-                longest_surviving_seconds = secs
-                if bg.get("is_robot") and bg.get("robot_name"):
-                    longest_surviving_name = bg["robot_name"]
-                elif bg.get("bodyguard_user_id"):
-                    u = await db.users.find_one(
-                        {"id": bg["bodyguard_user_id"]},
-                        {"_id": 0, "username": 1},
-                    )
-                    longest_surviving_name = u["username"] if u else "Unknown"
-                else:
-                    longest_surviving_name = "Bodyguard"
-        except Exception:
+        hired_at = _parse_iso_datetime(bg.get("hired_at"))
+        if hired_at is None:
             continue
+        secs = int((now - hired_at).total_seconds())
+        if secs < 0:
+            secs = 0
+        if longest_surviving_seconds is None or secs > longest_surviving_seconds:
+            longest_surviving_seconds = secs
+            if bg.get("is_robot") and bg.get("robot_name"):
+                longest_surviving_name = bg.get("robot_name", "Robot")
+            elif bg.get("bodyguard_user_id"):
+                u = await db.users.find_one(
+                    {"id": bg["bodyguard_user_id"]},
+                    {"_id": 0, "username": 1},
+                )
+                longest_surviving_name = u.get("username", "Unknown") if u else "Unknown"
+            else:
+                longest_surviving_name = "Bodyguard"
     return {
         "total_hired": total_hired,
         "human_hired": human_hired,
@@ -429,11 +433,12 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
             status_code=400,
             detail="You cannot hire bodyguards while you're working as one. Ask your client to drop you first.",
         )
-    if current_user["bodyguard_slots"] >= 4:
+    slots = int(current_user.get("bodyguard_slots") or 0)
+    if slots >= 4:
         raise HTTPException(status_code=400, detail="All bodyguard slots already purchased")
     ev = await get_effective_event()
-    cost = int(BODYGUARD_SLOT_COSTS[current_user["bodyguard_slots"]] * ev.get("bodyguard_cost", 1.0))
-    if current_user["points"] < cost:
+    cost = int(BODYGUARD_SLOT_COSTS[slots] * ev.get("bodyguard_cost", 1.0))
+    if int(current_user.get("points") or 0) < cost:
         raise HTTPException(status_code=400, detail="Insufficient points")
     await db.users.update_one(
         {"id": current_user["id"]},
@@ -481,7 +486,7 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
     inflation_level = _bodyguard_inflation_level_now(user_for_inflation)
     inflation_mult = 1.0 + _bodyguard_inflation_percent_for_level(inflation_level)
     cost = int(base_cost * ev.get("bodyguard_cost", 1.0) * inflation_mult)
-    if current_user["points"] < cost:
+    if int(current_user.get("points") or 0) < cost:
         raise HTTPException(status_code=400, detail="Insufficient points")
     now = datetime.now(timezone.utc)
     window_end = now + timedelta(hours=BODYGUARD_INFLATION_HOURS)
@@ -607,7 +612,7 @@ async def invite_bodyguard(request: BodyguardInviteRequest, current_user: dict =
     await send_notification(
         target["id"],
         "🛡️ Bodyguard Offer",
-        f"{current_user['username']} wants to hire you as a bodyguard: {pay_str}.",
+        f"{current_user.get('username') or 'Someone'} wants to hire you as a bodyguard: {pay_str}.",
         "bodyguard"
     )
     return {"message": f"Bodyguard invite sent to {target['username']}"}
@@ -655,7 +660,7 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
     bodyguards = await db.bodyguards.find({"user_id": inviter["id"]}).to_list(10)
     empty_slot = None
     for i in range(1, 5):
-        slot_bg = next((b for b in bodyguards if b["slot_number"] == i), None)
+        slot_bg = next((b for b in bodyguards if b.get("slot_number") == i), None)
         if not slot_bg or (not slot_bg.get("bodyguard_user_id") and not slot_bg.get("is_robot")):
             empty_slot = i
             break
@@ -980,14 +985,9 @@ async def run_bodyguard_weekly_payout(database, test_run: bool = False):
             continue
         contract_end = bg.get("contract_end")
         if contract_end:
-            try:
-                end = datetime.fromisoformat(contract_end.replace("Z", "+00:00"))
-                if end.tzinfo is None:
-                    end = end.replace(tzinfo=timezone.utc)
-                if now >= end:
-                    continue
-            except Exception:
-                pass
+            end = _parse_iso_datetime(contract_end)
+            if end is not None and now >= end:
+                continue
         guard_id = bg["bodyguard_user_id"]
         # If the human bodyguard was killed, payments are cancelled — don't pay dead users
         guard_user = await database.users.find_one({"id": guard_id}, {"_id": 0, "is_dead": 1})
@@ -1057,7 +1057,7 @@ async def run_bodyguard_weekly_payout(database, test_run: bool = False):
 
 
 async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_user)):
-    """Owner drops a human bodyguard from a slot. Payments stop; the slot becomes empty. Once every 3 hours."""
+    """Owner drops a bodyguard (robot or human) from a slot. Payments stop; the slot becomes empty. Once every 3 hours (shared cooldown for all types)."""
     if slot < 1 or slot > 4:
         raise HTTPException(status_code=400, detail="Invalid slot")
     # Cooldown: only one drop per BODYGUARD_DROP_COOLDOWN_HOURS
@@ -1066,10 +1066,8 @@ async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_use
         {"_id": 0, "bodyguard_last_drop_at": 1},
     )
     if owner_doc and owner_doc.get("bodyguard_last_drop_at"):
-        try:
-            last_drop = datetime.fromisoformat(owner_doc["bodyguard_last_drop_at"].replace("Z", "+00:00"))
-            if last_drop.tzinfo is None:
-                last_drop = last_drop.replace(tzinfo=timezone.utc)
+        last_drop = _parse_iso_datetime(owner_doc.get("bodyguard_last_drop_at"))
+        if last_drop:
             elapsed = (datetime.now(timezone.utc) - last_drop).total_seconds()
             if elapsed < BODYGUARD_DROP_COOLDOWN_HOURS * 3600:
                 mins_left = int((BODYGUARD_DROP_COOLDOWN_HOURS * 3600 - elapsed) / 60)
@@ -1077,46 +1075,50 @@ async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_use
                     status_code=429,
                     detail=f"You can only drop a bodyguard once every {BODYGUARD_DROP_COOLDOWN_HOURS} hours. Try again in {mins_left} minutes.",
                 )
-        except HTTPException:
-            raise
-        except Exception:
-            pass
     bg = await db.bodyguards.find_one(
         {"user_id": current_user["id"], "slot_number": slot},
         {"_id": 0, "bodyguard_user_id": 1, "is_robot": 1},
     )
     if not bg:
         raise HTTPException(status_code=404, detail="No bodyguard in that slot")
-    if bg.get("is_robot"):
-        raise HTTPException(status_code=400, detail="Cannot drop a robot; use admin clear if needed")
     guard_id = bg.get("bodyguard_user_id")
     if not guard_id:
         raise HTTPException(status_code=400, detail="Slot is already empty")
+    is_robot = bg.get("is_robot", False)
     guard_user = await db.users.find_one({"id": guard_id}, {"_id": 0, "username": 1})
     guard_name = guard_user.get("username", "?") if guard_user else "?"
-    await db.bodyguards.update_one(
-        {"user_id": current_user["id"], "slot_number": slot},
-        {
-            "$set": {
-                "bodyguard_user_id": None,
-                "payment_points": 0,
-                "payment_money": 0,
-                "payout_weekday": None,
-                "last_payout_date": None,
+
+    if is_robot:
+        # Robot: delete the bodyguard slot and the robot user record entirely
+        await db.bodyguards.delete_one({"user_id": current_user["id"], "slot_number": slot})
+        await db.users.delete_one({"id": guard_id, "is_bodyguard": True})
+    else:
+        # Human: clear the slot, keep the user but remove bodyguard flags
+        await db.bodyguards.update_one(
+            {"user_id": current_user["id"], "slot_number": slot},
+            {
+                "$set": {
+                    "bodyguard_user_id": None,
+                    "payment_points": 0,
+                    "payment_money": 0,
+                    "payout_weekday": None,
+                    "last_payout_date": None,
+                },
+                "$unset": {"contract_end": "", "hired_at": "", "hire_cost": ""},
             },
-            "$unset": {"contract_end": "", "hired_at": "", "hire_cost": ""},
-        },
-    )
-    await db.users.update_one(
-        {"id": guard_id},
-        {"$unset": {"is_bodyguard": "", "bodyguard_owner_id": ""}},
-    )
-    await send_notification(
-        guard_id,
-        "🛡️ Bodyguard Dropped",
-        f"{current_user.get('username', '?')} has dropped you as their bodyguard. You are no longer under contract.",
-        "bodyguard",
-    )
+        )
+        await db.users.update_one(
+            {"id": guard_id},
+            {"$unset": {"is_bodyguard": "", "bodyguard_owner_id": ""}},
+        )
+        # Notify only human bodyguards (robots don't need notifications)
+        await send_notification(
+            guard_id,
+            "🛡️ Bodyguard Dropped",
+            f"{current_user.get('username', '?')} has dropped you as their bodyguard. You are no longer under contract.",
+            "bodyguard",
+        )
+
     now = datetime.now(timezone.utc)
     await db.hitlist_bodyguard_events.insert_one({
         "at": now.isoformat(),
@@ -1126,14 +1128,17 @@ async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_use
         "guard_id": guard_id,
         "guard_username": guard_name,
         "slot": slot,
+        "is_robot": is_robot,
     })
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$set": {"bodyguard_last_drop_at": now.isoformat()}},
     )
     _invalidate_bodyguards_cache(current_user["id"])
-    _invalidate_bodyguards_cache(guard_id)
-    return {"message": f"Dropped {guard_name} from slot {slot}. Payments cancelled. You can drop again in {BODYGUARD_DROP_COOLDOWN_HOURS} hours."}
+    if not is_robot:
+        _invalidate_bodyguards_cache(guard_id)
+    guard_type = "robot" if is_robot else "human"
+    return {"message": f"Dropped {guard_name} ({guard_type}) from slot {slot}. You can drop again in {BODYGUARD_DROP_COOLDOWN_HOURS} hours."}
 
 
 async def admin_test_bodyguard_payout(current_user: dict = Depends(get_current_user)):

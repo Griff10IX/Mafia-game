@@ -185,23 +185,23 @@ const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onRevea
             <div className="rounded bg-zinc-800/50 p-2 sm:p-2.5 border border-zinc-700/40">
               <div className="text-[8px] sm:text-[9px] text-zinc-500 font-heading uppercase mb-0.5">Bounties</div>
               <div className="text-xl sm:text-2xl font-heading font-bold text-red-400">
-                {me.count}
+                {me?.count ?? 0}
               </div>
             </div>
             
             <div className="rounded bg-zinc-800/50 p-2 sm:p-2.5 border border-zinc-700/40">
               <div className="text-[8px] sm:text-[9px] text-zinc-500 font-heading uppercase mb-0.5">Total Reward</div>
               <div className="flex flex-col gap-0.5">
-                {me.total_cash > 0 && (
+                {(me?.total_cash ?? 0) > 0 && (
                   <div className="text-sm sm:text-base font-heading font-bold text-emerald-400 flex items-center gap-1">
                     <CashStack className="w-4 h-3 sm:w-5 sm:h-4" />
-                    ${Number(me.total_cash).toLocaleString()}
+                    ${Number(me?.total_cash ?? 0).toLocaleString()}
                   </div>
                 )}
-                {me.total_points > 0 && (
+                {(me?.total_points ?? 0) > 0 && (
                   <div className="text-xs sm:text-sm font-heading font-bold text-primary flex items-center gap-1">
                     <CoinIcon className="w-3 h-3 sm:w-4 sm:h-4" />
-                    {Number(me.total_points).toLocaleString()}
+                    {Number(me?.total_points ?? 0).toLocaleString()}
                   </div>
                 )}
               </div>
@@ -271,10 +271,10 @@ const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onRevea
             </summary>
             <div className="mt-2 space-y-1">
               {who.map((w, i) => (
-                <div key={i} className="flex items-center justify-between gap-2 text-[9px] sm:text-[10px] font-heading bg-zinc-800/40 rounded p-1.5 border border-zinc-700/30">
-                  <span className="text-foreground font-bold truncate">{w.placer_username}</span>
+                <div key={w.placer_username ? `${w.placer_username}-${i}` : i} className="flex items-center justify-between gap-2 text-[9px] sm:text-[10px] font-heading bg-zinc-800/40 rounded p-1.5 border border-zinc-700/30">
+                  <span className="text-foreground font-bold truncate">{w.placer_username ?? 'Unknown'}</span>
                   <span className="text-zinc-400 text-[8px] sm:text-[9px] whitespace-nowrap">
-                    {w.reward_amount} {w.reward_type} · {w.target_type}
+                    {w.reward_amount ?? 0} {w.reward_type ?? ''} · {w.target_type ?? ''}
                   </span>
                 </div>
               ))}
@@ -485,16 +485,16 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                   const buying = buyingOffTarget === item.target_username;
                   const afford = cost && canAffordBuyOff(cost.cash, cost.points);
                   return (
-                    <tr key={item.id} className="hover:bg-zinc-800/30 transition-colors">
+                    <tr key={item.id ?? `hitlist-${index}`} className="hover:bg-zinc-800/30 transition-colors">
                       <td className="py-2 px-3">
                         <div className="flex items-center gap-1.5">
                           {item.target_type === 'npc' ? (
-                            <span className="text-foreground font-bold text-xs">{item.target_username}</span>
+                            <span className="text-foreground font-bold text-xs">{item.target_username ?? ''}</span>
                           ) : (
-                            <Link to={`/profile/${encodeURIComponent(item.target_username)}`} className="text-primary hover:underline font-bold text-xs">{item.target_username}</Link>
+                            <Link to={`/profile/${encodeURIComponent(item.target_username ?? '')}`} className="text-primary hover:underline font-bold text-xs">{item.target_username ?? ''}</Link>
                           )}
                           <Link
-                            to={`/attack?target=${encodeURIComponent(item.target_username)}`}
+                            to={`/attack?target=${encodeURIComponent(item.target_username ?? '')}`}
                             className="shrink-0 p-1 rounded hover:bg-primary/20 text-primary transition-colors"
                             title="Attack"
                           >
@@ -524,12 +524,12 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                           {item.reward_type === 'cash' ? (
                             <>
                               <CashStack className="w-4 h-3" />
-                              ${Number(item.reward_amount).toLocaleString()}
+                              ${Number(item.reward_amount ?? 0).toLocaleString()}
                             </>
                           ) : (
                             <>
                               <CoinIcon className="w-3.5 h-3.5" />
-                              {Number(item.reward_amount).toLocaleString()}
+                              {Number(item.reward_amount ?? 0).toLocaleString()}
                             </>
                           )}
                         </div>
@@ -541,7 +541,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                         {showBuyOff && costLabel && (
                           <button
                             type="button"
-                            onClick={() => onBuyOffUser?.(item.target_username)}
+                            onClick={() => onBuyOffUser?.(item.target_username ?? '')}
                             disabled={buying || !afford}
                             className="inline-flex items-center gap-1 px-2 py-1 rounded text-[9px] font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
                           >
@@ -568,18 +568,18 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
               const buying = buyingOffTarget === item.target_username;
               const afford = cost && canAffordBuyOff(cost.cash, cost.points);
               return (
-                <div key={item.id} className="p-2.5 space-y-2 hover:bg-zinc-800/20 transition-colors">
+                <div key={item.id ?? `hitlist-m-${index}`} className="p-2.5 space-y-2 hover:bg-zinc-800/20 transition-colors">
                   {/* Wanted poster style */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1">
                         {item.target_type === 'npc' ? (
-                          <span className="text-foreground font-heading font-bold text-xs">{item.target_username}</span>
+                          <span className="text-foreground font-heading font-bold text-xs">{item.target_username ?? ''}</span>
                         ) : (
-                          <Link to={`/profile/${encodeURIComponent(item.target_username)}`} className="text-primary hover:underline font-heading font-bold text-xs">{item.target_username}</Link>
+                          <Link to={`/profile/${encodeURIComponent(item.target_username ?? '')}`} className="text-primary hover:underline font-heading font-bold text-xs">{item.target_username ?? ''}</Link>
                         )}
                         <Link
-                          to={`/attack?target=${encodeURIComponent(item.target_username)}`}
+                          to={`/attack?target=${encodeURIComponent(item.target_username ?? '')}`}
                           className="shrink-0 p-1 rounded hover:bg-primary/20 text-primary transition-colors"
                           title="Attack"
                         >
@@ -608,12 +608,12 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                         {item.reward_type === 'cash' ? (
                           <>
                             <CashStack className="w-4 h-3" />
-                            ${Number(item.reward_amount).toLocaleString()}
+                            ${Number(item.reward_amount ?? 0).toLocaleString()}
                           </>
                         ) : (
                           <>
                             <CoinIcon className="w-3.5 h-3.5" />
-                            {Number(item.reward_amount).toLocaleString()}
+                            {Number(item.reward_amount ?? 0).toLocaleString()}
                           </>
                         )}
                       </div>
@@ -626,7 +626,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                   {showBuyOff && costLabel && (
                     <button
                       type="button"
-                      onClick={() => onBuyOffUser?.(item.target_username)}
+                      onClick={() => onBuyOffUser?.(item.target_username ?? '')}
                       disabled={buying || !afford}
                       className="w-full inline-flex items-center justify-center gap-1 py-2 rounded text-[10px] font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
                     >
@@ -718,6 +718,10 @@ export default function HitlistPage() {
     } catch (e) {
       toast.error('Failed to load contracts');
       console.error('Error fetching hitlist:', e);
+      setList([]);
+      setMe(null);
+      setUser(null);
+      setNpcStatus(null);
     } finally {
       setLoading(false);
     }

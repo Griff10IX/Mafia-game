@@ -21,6 +21,23 @@ from server import (
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_iso_datetime(val):
+    """Parse datetime from DB (string with optional Z, or datetime object). Return None if missing/invalid."""
+    if val is None:
+        return None
+    if hasattr(val, "year"):
+        return val.replace(tzinfo=timezone.utc) if val.tzinfo is None else val
+    if not isinstance(val, str):
+        return None
+    try:
+        s = val.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    except Exception:
+        return None
+
+
 # Request models (used only by hitlist)
 class HitlistAddRequest(BaseModel):
     target_username: str
@@ -215,18 +232,25 @@ async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
     """Whether this user can add an NPC to the hitlist (max 3 per 3 hours). Timers are per-user, not global."""
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)
-    timestamps = (current_user.get("hitlist_npc_add_timestamps") or [])[:]
-    timestamps = [t for t in timestamps if t and (datetime.fromisoformat(t.replace("Z", "+00:00")) if isinstance(t, str) else t) > window_start]
+    raw = (current_user.get("hitlist_npc_add_timestamps") or [])[:]
+    timestamps = []
+    for t in raw:
+        if not t:
+            continue
+        dt = _parse_iso_datetime(t) if isinstance(t, str) else (t if hasattr(t, "year") else None)
+        if dt and dt > window_start:
+            timestamps.append(t)
     adds_in_window = len(timestamps)
     can_add = adds_in_window < HITLIST_NPC_MAX_PER_WINDOW
     next_add_at = None
     if not can_add and timestamps:
-        oldest = min(timestamps, key=lambda t: datetime.fromisoformat(t.replace("Z", "+00:00")) if isinstance(t, str) else t)
-        try:
-            oldest_dt = datetime.fromisoformat(oldest.replace("Z", "+00:00"))
+        def _ts_key(x):
+            d = _parse_iso_datetime(x) if isinstance(x, str) else (x if hasattr(x, "year") else None)
+            return d or datetime.min.replace(tzinfo=timezone.utc)
+        oldest = min(timestamps, key=_ts_key)
+        oldest_dt = _parse_iso_datetime(oldest) if isinstance(oldest, str) else (oldest if hasattr(oldest, "year") else None)
+        if oldest_dt:
             next_add_at = (oldest_dt + timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)).isoformat()
-        except Exception:
-            pass
     return {
         "can_add": can_add,
         "adds_used_in_window": adds_in_window,
@@ -240,8 +264,14 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
     """Add a random NPC to the hitlist. Max 3 per 3 hours per user. NPC is attackable from Attack page."""
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)
-    timestamps = list(current_user.get("hitlist_npc_add_timestamps") or [])
-    timestamps = [t for t in timestamps if t and (datetime.fromisoformat(t.replace("Z", "+00:00")) if isinstance(t, str) else t) > window_start]
+    raw = list(current_user.get("hitlist_npc_add_timestamps") or [])
+    timestamps = []
+    for t in raw:
+        if not t:
+            continue
+        dt = _parse_iso_datetime(t) if isinstance(t, str) else (t if hasattr(t, "year") else None)
+        if dt and dt > window_start:
+            timestamps.append(t)
     if len(timestamps) >= HITLIST_NPC_MAX_PER_WINDOW:
         raise HTTPException(
             status_code=400,
@@ -330,11 +360,11 @@ async def hitlist_list(current_user: dict = Depends(get_current_user)):
     async for doc in cursor:
         # Build response from allowed fields only; never include placer_id or target_id
         item = {
-            "id": doc["id"],
-            "target_username": doc["target_username"],
+            "id": doc.get("id") or str(uuid.uuid4()),
+            "target_username": doc.get("target_username") or "",
             "target_type": doc.get("target_type") or "user",
             "reward_type": doc.get("reward_type") or "cash",
-            "reward_amount": doc.get("reward_amount", 0),
+            "reward_amount": int(doc.get("reward_amount") or 0),
             "placer_username": None if doc.get("hidden") else (doc.get("placer_username") or "Unknown"),
             "created_at": doc.get("created_at"),
         }
@@ -351,16 +381,16 @@ async def hitlist_me(current_user: dict = Depends(get_current_user)):
     user_id = current_user["id"]
     entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
     count = len(entries)
-    total_cash = sum(e["reward_amount"] for e in entries if e.get("reward_type") == "cash")
-    total_points = sum(e["reward_amount"] for e in entries if e.get("reward_type") == "points")
-    buy_off_cash = int(sum(e["reward_amount"] * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "cash"))
-    buy_off_points = int(sum(e["reward_amount"] * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "points"))
+    total_cash = sum(int(e.get("reward_amount") or 0) for e in entries if e.get("reward_type") == "cash")
+    total_points = sum(int(e.get("reward_amount") or 0) for e in entries if e.get("reward_type") == "points")
+    buy_off_cash = int(sum(int(e.get("reward_amount") or 0) * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "cash"))
+    buy_off_points = int(sum(int(e.get("reward_amount") or 0) * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "points"))
     revealed = current_user.get("hitlist_revealed") is True
     who = []
     if revealed:
         # Once you paid to reveal, show actual placer names (hidden only hides on public list, not from the target who paid).
         who = [
-            {"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")}
+            {"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount", 0), "target_type": e.get("target_type"), "created_at": e.get("created_at")}
             for e in entries
         ]
     return {
@@ -381,8 +411,8 @@ async def hitlist_buy_off(current_user: dict = Depends(get_current_user)):
     entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
     if not entries:
         raise HTTPException(status_code=400, detail="You are not on the hitlist")
-    cost_cash = int(sum(e["reward_amount"] * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "cash"))
-    cost_points = int(sum(e["reward_amount"] * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "points"))
+    cost_cash = int(sum(int(e.get("reward_amount") or 0) * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "cash"))
+    cost_points = int(sum(int(e.get("reward_amount") or 0) * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "points"))
     user_cash = int((current_user.get("money") or 0) or 0)
     user_points = int((current_user.get("points") or 0) or 0)
     if cost_cash > 0 and user_cash < cost_cash:
@@ -454,8 +484,8 @@ async def hitlist_buy_off_user(request: HitlistBuyOffUserRequest, current_user: 
     ).to_list(100)
     if not entries:
         raise HTTPException(status_code=400, detail="That user is not on the hitlist")
-    cost_cash = int(sum(e["reward_amount"] * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "cash"))
-    cost_points = int(sum(e["reward_amount"] * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "points"))
+    cost_cash = int(sum(int(e.get("reward_amount") or 0) * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "cash"))
+    cost_points = int(sum(int(e.get("reward_amount") or 0) * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "points"))
     user_cash = int((current_user.get("money") or 0) or 0)
     user_points = int((current_user.get("points") or 0) or 0)
     if cost_cash > 0 and user_cash < cost_cash:
@@ -520,7 +550,7 @@ async def hitlist_reveal(current_user: dict = Depends(get_current_user)):
     if current_user.get("hitlist_revealed") is True:
         entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
         # Once revealed, show actual placer names (hidden only affects public list).
-        who = [{"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
+        who = [{"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount", 0), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
         return {"message": "Already revealed.", "who": who}
     cost = HITLIST_REVEAL_COST_POINTS
     if (current_user.get("points") or 0) < cost:
@@ -528,7 +558,7 @@ async def hitlist_reveal(current_user: dict = Depends(get_current_user)):
     await db.users.update_one({"id": user_id}, {"$set": {"hitlist_revealed": True}, "$inc": {"points": -cost}})
     entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
     # Show actual placer names; hidden only affects public list, not the target who paid to reveal.
-    who = [{"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
+    who = [{"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount", 0), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.hitlist_bodyguard_events.insert_one({
         "at": now_iso,
