@@ -2938,13 +2938,27 @@ def register(router):
             "slots": (db.slots_ownership, "state"),
         }
         results = {}
+        
+        async def upsert_all_locations(coll, loc_key, gtype):
+            """Upsert max_bet for all cities/states so unclaimed casinos also get updated."""
+            count = 0
+            for loc in (STATES or []):
+                res = await coll.update_one(
+                    {loc_key: loc},
+                    {"$set": {"max_bet": max_bet}},
+                    upsert=True
+                )
+                if res.modified_count or res.upserted_id:
+                    count += 1
+            return count
+        
         if game_type == "all":
             for gtype, (coll, loc_key) in coll_map.items():
                 if location:
-                    res = await coll.update_many({loc_key: location}, {"$set": {"max_bet": max_bet}})
+                    res = await coll.update_one({loc_key: location}, {"$set": {"max_bet": max_bet}}, upsert=True)
+                    results[gtype] = 1 if (res.modified_count or res.upserted_id) else 0
                 else:
-                    res = await coll.update_many({}, {"$set": {"max_bet": max_bet}})
-                results[gtype] = res.modified_count
+                    results[gtype] = await upsert_all_locations(coll, loc_key, gtype)
             total = sum(results.values())
             logging.info(f"Admin set casino max bet (all games): max_bet={max_bet}, location={location or 'all'}, by {current_user.get('email')}, modified={results}")
             return {"message": f"Set max bet to ${max_bet:,} for all casino types", "location": location or "all", "max_bet": max_bet, "details": results, "total_modified": total}
@@ -2952,11 +2966,12 @@ def register(router):
             raise HTTPException(status_code=400, detail="Invalid game_type; use dice, roulette, blackjack, horseracing, videopoker, slots, or 'all'")
         coll, loc_key = coll_map[game_type]
         if location:
-            res = await coll.update_many({loc_key: location}, {"$set": {"max_bet": max_bet}})
+            res = await coll.update_one({loc_key: location}, {"$set": {"max_bet": max_bet}}, upsert=True)
+            count = 1 if (res.modified_count or res.upserted_id) else 0
         else:
-            res = await coll.update_many({}, {"$set": {"max_bet": max_bet}})
-        logging.info(f"Admin set casino max bet: game_type={game_type}, max_bet={max_bet}, location={location or 'all'}, by {current_user.get('email')}, modified={res.modified_count}")
-        return {"message": f"Set max bet to ${max_bet:,} for {game_type}", "game_type": game_type, "location": location or "all", "max_bet": max_bet, "modified": res.modified_count}
+            count = await upsert_all_locations(coll, loc_key, game_type)
+        logging.info(f"Admin set casino max bet: game_type={game_type}, max_bet={max_bet}, location={location or 'all'}, by {current_user.get('email')}, modified={count}")
+        return {"message": f"Set max bet to ${max_bet:,} for {game_type}", "game_type": game_type, "location": location or "all", "max_bet": max_bet, "modified": count}
 
     @router.get("/admin/casino-max-bets")
     async def admin_get_casino_max_bets(current_user: dict = Depends(get_current_user)):
