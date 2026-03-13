@@ -327,6 +327,9 @@ export default function HorseRacingPage() {
   const [liveCommentary, setLiveCommentary] = useState('');
   const [livePositions, setLivePositions] = useState(null);
   const [photoFinishRevealed, setPhotoFinishRevealed] = useState(false);
+  const [buyBackOffer, setBuyBackOffer] = useState(null);
+  const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
+  const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
   const raceEndRef = useRef(null);
   const gateTimeoutRef = useRef(null);
   const raceStartTimeRef = useRef(null);
@@ -357,7 +360,15 @@ export default function HorseRacingPage() {
     }).catch(() => {
       setConfig({ horses: [], max_bet: 10_000_000, house_edge: 0.05, claim_cost: 500_000_000 });
     });
-    api.get('/casino/horseracing/ownership').then((r) => setOwnership(r.data ?? null)).catch(() => setOwnership(null));
+    api.get('/casino/horseracing/ownership').then((r) => {
+      const data = r.data ?? null;
+      setOwnership(data);
+      if (data?.buy_back_offer) {
+        setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
+      } else {
+        setBuyBackOffer(null);
+      }
+    }).catch(() => { setOwnership(null); setBuyBackOffer(null); });
   }, []);
 
   useEffect(() => { fetchConfigAndOwnership(); fetchHistory(); }, [fetchConfigAndOwnership, fetchHistory]);
@@ -367,6 +378,20 @@ export default function HorseRacingPage() {
     if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
     if (commentaryIntervalRef.current) clearInterval(commentaryIntervalRef.current);
   }, []);
+
+  // Buy-back countdown timer
+  useEffect(() => {
+    if (!buyBackOffer?.expires_at) { setBuyBackSecondsLeft(null); return; }
+    const update = () => {
+      const exp = new Date(buyBackOffer.expires_at).getTime();
+      const left = Math.max(0, Math.ceil((exp - Date.now()) / 1000));
+      setBuyBackSecondsLeft(left);
+      if (left <= 0) setBuyBackOffer(null);
+    };
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [buyBackOffer]);
 
   const handleClaim = async () => {
     const city = ownership?.current_city;
@@ -432,6 +457,31 @@ export default function HorseRacingPage() {
       setSellPoints('');
     } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setOwnerLoading(false); }
+  };
+
+  const acceptBuyBack = async () => {
+    if (!buyBackOffer?.offer_id || buyBackActionLoading) return;
+    setBuyBackActionLoading(true);
+    try {
+      const res = await api.post('/casino/horseracing/buy-back/accept', { offer_id: buyBackOffer.offer_id });
+      toast.success(res.data?.message || 'Accepted! You received the points.');
+      setBuyBackOffer(null);
+      refreshUser();
+      fetchConfigAndOwnership();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setBuyBackActionLoading(false); }
+  };
+
+  const rejectBuyBack = async () => {
+    if (!buyBackOffer?.offer_id || buyBackActionLoading) return;
+    setBuyBackActionLoading(true);
+    try {
+      await api.post('/casino/horseracing/buy-back/reject', { offer_id: buyBackOffer.offer_id });
+      toast.success('You kept the track!');
+      setBuyBackOffer(null);
+      fetchConfigAndOwnership();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setBuyBackActionLoading(false); }
   };
 
   const horses = Array.isArray(config.horses) ? config.horses : [];
@@ -552,6 +602,8 @@ export default function HorseRacingPage() {
           toast.success(`${data.winner_name} wins! +${formatMoney(data.payout - betNum)}`);
           setShowWin(true);
           setTimeout(() => setShowWin(false), 3000);
+          if (data.ownership_transferred) toast.success('You won the track! It is now yours.');
+          if (data.buy_back_offer) setBuyBackOffer(data.buy_back_offer);
         } else {
           toast.error(`${data.winner_name} won. Lost ${formatMoney(betNum)}`);
         }
@@ -668,6 +720,40 @@ export default function HorseRacingPage() {
             </div>
           </div>
           <div className="cg-art-line text-primary mx-3" />
+        </div>
+      )}
+
+      {/* Buy-back offer */}
+      {buyBackOffer && (
+        <div
+          className="p-4 rounded-lg border-2 space-y-3"
+          style={{
+            background: 'linear-gradient(180deg, #2a1a00 0%, #1a1200 100%)',
+            borderColor: '#8a6e18',
+          }}
+        >
+          <h3 className="font-heading font-bold text-primary uppercase tracking-wider text-sm">Buy-Back Offer</h3>
+          <p className="text-xs text-mutedForeground">
+            House could only pay {formatMoney(buyBackOffer.owner_paid)}. Accept to return the track for {(buyBackOffer.points_offered || 0).toLocaleString()} points, or reject to keep ownership.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            {buyBackSecondsLeft !== null && (
+              <span className="text-sm font-heading font-medium text-primary tabular-nums">
+                {Math.floor(buyBackSecondsLeft / 60)}:{String(buyBackSecondsLeft % 60).padStart(2, '0')}
+              </span>
+            )}
+            <button onClick={acceptBuyBack} disabled={buyBackActionLoading || (buyBackSecondsLeft !== null && buyBackSecondsLeft <= 0)}
+              className="rounded-lg px-5 py-2 text-xs font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40"
+              style={{ background: 'linear-gradient(180deg, #d4af37, #8a6e18)', borderColor: '#c9a84c', color: '#1a1200' }}
+            >
+              {buyBackActionLoading ? '...' : `Accept (${(buyBackOffer.points_offered || 0).toLocaleString()} pts)`}
+            </button>
+            <button onClick={rejectBuyBack} disabled={buyBackActionLoading}
+              className="bg-zinc-800 border border-zinc-600 text-foreground px-5 py-2 rounded-lg text-xs font-heading font-bold uppercase disabled:opacity-40"
+            >
+              {buyBackActionLoading ? '...' : 'Reject'}
+            </button>
+          </div>
         </div>
       )}
 

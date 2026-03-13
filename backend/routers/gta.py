@@ -752,7 +752,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                     uncommon_count += 1
                 car_value = int(car_info.get("value", 0) or 0)
                 if action == "bullets":
-                    total_bullets += car_value // 10
+                    total_bullets += car_value // 500
                 else:
                     total_value += int(car_value * 0.5)
                 if user_car.get("_id") is not None:

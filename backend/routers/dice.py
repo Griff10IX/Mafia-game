@@ -443,7 +443,8 @@ def register(router):
         if not deduct_res:
             raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
-        await db.dice_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username")}})
+        # Reset max_bet to 0 when ownership returns - owner must set it again
+        await db.dice_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "max_bet": 0}})
         await db.dice_buy_back_offers.delete_one({"id": request.offer_id})
         _invalidate_ownership_cache(current_user.get("id") or "")
         _invalidate_ownership_cache(from_owner_id)

@@ -474,9 +474,10 @@ def register(router):
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
         stored_state, _ = await _get_slots_ownership_doc(state)
         next_draw_iso = _next_draw_utc().isoformat()
+        # Reset max_bet to 0 when ownership returns - owner must set it again
         await db.slots_ownership.update_one(
             {"state": stored_state or state},
-            {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "expires_at": next_draw_iso, "next_draw_at": next_draw_iso}},
+            {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "expires_at": next_draw_iso, "next_draw_at": next_draw_iso, "max_bet": 0}},
         )
         await db.slots_buy_back_offers.delete_one({"id": request.offer_id})
         _invalidate_slots_ownership_cache(current_user.get("id") or "")

@@ -1,8 +1,9 @@
-# Casino Video Poker (Jacks or Better): config, ownership, claim, relinquish, set-max-bet, send-to-user, sell-on-trade, deal, draw, game, history
-from datetime import datetime, timezone
+# Casino Video Poker (Jacks or Better): config, ownership, claim, relinquish, set-max-bet, set-buy-back, send-to-user, sell-on-trade, deal, draw, game, history, buy-back
+from datetime import datetime, timezone, timedelta
 import re
 import random
 import time
+import uuid
 from collections import Counter
 from typing import Optional
 from pydantic import BaseModel, field_validator
@@ -81,6 +82,19 @@ class VideoPokerDealRequest(BaseModel):
 
 class VideoPokerDrawRequest(BaseModel):
     holds: list  # list of 0-based indices to hold (e.g. [0, 2, 4])
+
+
+class VideoPokerSetBuyBackRequest(BaseModel):
+    city: str
+    amount: int
+
+
+class VideoPokerBuyBackAcceptRequest(BaseModel):
+    offer_id: str
+
+
+class VideoPokerBuyBackRejectRequest(BaseModel):
+    offer_id: str
 
 
 # ----- Per-user cache for GET /casino/videopoker/ownership -----
@@ -200,11 +214,18 @@ def register(router):
 
     @router.get("/casino/videopoker/ownership")
     async def casino_videopoker_ownership(current_user: dict = Depends(get_current_user_verified)):
+        """Current city's video poker ownership: owner, is_owner, claim_cost, max_bet, buy_back_reward, buy_back_offer."""
         user_id = current_user.get("id") or ""
         now_ts = time.time()
         entry = _ownership_cache.get(user_id)
         if entry and (now_ts - entry["ts"]) < _OWNERSHIP_TTL_SEC:
             return entry["data"]
+        now = datetime.now(timezone.utc)
+        # Clean up expired buyback offers for this user
+        await db.videopoker_buy_back_offers.delete_many({
+            "to_user_id": user_id,
+            "expires_at": {"$lt": now.isoformat()},
+        })
         raw = (current_user.get("current_state") or "").strip()
         city = _normalize_city(raw) if raw else (STATES[0] if STATES else "Chicago")
         display_city = city or raw or "Chicago"
@@ -218,6 +239,8 @@ def register(router):
                 "is_unclaimed": True,
                 "claim_cost": VIDEO_POKER_CLAIM_COST,
                 "max_bet": VIDEO_POKER_DEFAULT_MAX_BET,
+                "buy_back_reward": None,
+                "buy_back_offer": None,
             }
             if len(_ownership_cache) < _OWNERSHIP_MAX_ENTRIES:
                 _ownership_cache[user_id] = {"ts": now_ts, "data": out}
@@ -231,6 +254,26 @@ def register(router):
         max_bet = doc.get("max_bet", VIDEO_POKER_DEFAULT_MAX_BET)
         total_earnings = doc.get("total_earnings", 0)
         profit = int((doc.get("profit") or 0) or 0)
+        buy_back_reward = doc.get("buy_back_reward")
+        # Check for active buyback offer for this user
+        active_offer = await db.videopoker_buy_back_offers.find_one(
+            {"to_user_id": user_id},
+            {"_id": 0, "id": 1, "points_offered": 1, "amount_shortfall": 1, "owner_paid": 1, "expires_at": 1}
+        )
+        buy_back_offer = None
+        if active_offer:
+            try:
+                exp_dt = datetime.fromisoformat((active_offer.get("expires_at") or "").replace("Z", "+00:00"))
+                if exp_dt > now:
+                    buy_back_offer = {
+                        "offer_id": active_offer["id"],
+                        "points_offered": int(active_offer.get("points_offered") or 0),
+                        "amount_shortfall": int(active_offer.get("amount_shortfall") or 0),
+                        "owner_paid": int(active_offer.get("owner_paid") or 0),
+                        "expires_at": active_offer.get("expires_at"),
+                    }
+            except Exception:
+                pass
         out = {
             "current_city": display_city,
             "owner_id": owner_id,
@@ -239,8 +282,10 @@ def register(router):
             "is_unclaimed": owner_id is None,
             "claim_cost": VIDEO_POKER_CLAIM_COST,
             "max_bet": max_bet,
+            "buy_back_reward": buy_back_reward,
             "total_earnings": total_earnings if is_owner else None,
             "profit": profit if is_owner else None,
+            "buy_back_offer": buy_back_offer,
         }
         if len(_ownership_cache) < _OWNERSHIP_MAX_ENTRIES:
             _ownership_cache[user_id] = {"ts": now_ts, "data": out}
@@ -264,7 +309,7 @@ def register(router):
             raise HTTPException(status_code=400, detail=f"You need ${VIDEO_POKER_CLAIM_COST:,} to claim")
         res = await db.videopoker_ownership.update_one(
             {"city": stored_city or city, "owner_id": None},
-            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": VIDEO_POKER_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0}},
+            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": VIDEO_POKER_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0, "buy_back_reward": 0}},
             upsert=True,
         )
         if not res.modified_count and not res.upserted_id:
@@ -296,6 +341,67 @@ def register(router):
         new_max = max(1_000_000, min(request.max_bet, VIDEO_POKER_ABSOLUTE_MAX_BET))
         await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": new_max}})
         return {"message": f"Max bet set to ${new_max:,}"}
+
+    @router.post("/casino/videopoker/set-buy-back-reward")
+    async def casino_videopoker_set_buy_back_reward(request: VideoPokerSetBuyBackRequest, current_user: dict = Depends(get_current_user_verified)):
+        """Set buy-back reward (points) offered when you cannot pay a win (owner only)."""
+        _invalidate_ownership_cache(current_user.get("id") or "")
+        city = _normalize_city((request.city or "").strip())
+        if not city or city not in STATES:
+            raise HTTPException(status_code=400, detail="Invalid city")
+        stored_city, doc = await _get_ownership_doc(city)
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
+            raise HTTPException(status_code=403, detail="You do not own this table")
+        amount = max(0, int(request.amount))
+        await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": {"buy_back_reward": amount}})
+        return {"message": "Buy-back reward updated."}
+
+    @router.post("/casino/videopoker/buy-back/accept")
+    async def casino_videopoker_buy_back_accept(request: VideoPokerBuyBackAcceptRequest, current_user: dict = Depends(get_current_user_verified)):
+        """Accept a buy-back offer: receive points and transfer ownership back to previous owner."""
+        offer = await db.videopoker_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0})
+        if not offer:
+            raise HTTPException(status_code=404, detail="Offer not found")
+        if offer.get("to_user_id") != current_user.get("id") or "":
+            raise HTTPException(status_code=403, detail="Not your offer")
+        expires = offer.get("expires_at")
+        if expires:
+            try:
+                if datetime.fromisoformat(expires.replace("Z", "+00:00")) < datetime.now(timezone.utc):
+                    raise HTTPException(status_code=400, detail="Offer expired")
+            except Exception:
+                pass
+        city = offer.get("city")
+        from_owner_id = offer.get("from_owner_id")
+        points_offered = int(offer.get("points_offered") or 0)
+        if not city or not from_owner_id:
+            raise HTTPException(status_code=400, detail="Invalid offer")
+        from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1, "username": 1})
+        if not from_user:
+            raise HTTPException(status_code=400, detail="Previous owner not found")
+        deduct_res = await db.users.find_one_and_update(
+            {"id": from_owner_id, "points": {"$gte": points_offered}},
+            {"$inc": {"points": -points_offered}},
+        )
+        if not deduct_res:
+            raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
+        # Reset max_bet to 0 when ownership returns - owner must set it again
+        await db.videopoker_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "max_bet": 0}})
+        await db.videopoker_buy_back_offers.delete_one({"id": request.offer_id})
+        _invalidate_ownership_cache(current_user.get("id") or "")
+        _invalidate_ownership_cache(from_owner_id)
+        return {"message": "Accepted. You received the points and the table was returned to the previous owner."}
+
+    @router.post("/casino/videopoker/buy-back/reject")
+    async def casino_videopoker_buy_back_reject(request: VideoPokerBuyBackRejectRequest, current_user: dict = Depends(get_current_user_verified)):
+        """Reject a buy-back offer: keep ownership."""
+        offer = await db.videopoker_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0, "to_user_id": 1})
+        if not offer or offer.get("to_user_id") != current_user.get("id") or "":
+            raise HTTPException(status_code=404, detail="Offer not found")
+        await db.videopoker_buy_back_offers.delete_one({"id": request.offer_id})
+        _invalidate_ownership_cache(current_user.get("id") or "")
+        return {"message": "Rejected. You keep the table."}
 
     @router.post("/casino/videopoker/send-to-user")
     async def casino_videopoker_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -440,15 +546,52 @@ def register(router):
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
         else:
             profit_portion = payout - bet
+            ownership_transferred = False
+            buy_back_offer = None
             if owner_id:
-                owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
+                owner_doc = await db.videopoker_ownership.find_one({"city": city}, {"_id": 0, "buy_back_reward": 1})
+                points_offered = int((owner_doc or {}).get("buy_back_reward") or 0)
+                owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
                 owner_money = int((owner.get("money") or 0) or 0)
+                owner_username = owner.get("username") if owner else None
                 actual_payout = min(payout, owner_money)
                 shortfall = payout - actual_payout
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout}})
                 await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"profit": bet - actual_payout}})
                 payout = actual_payout
+                if shortfall > 0:
+                    ownership_transferred = True
+                    vp_owner_set = {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or ""}
+                    if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
+                        vp_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+                    await db.videopoker_ownership.update_one({"city": city}, {"$set": vp_owner_set})
+                    if points_offered <= 0:
+                        head_family_id = await get_head_family_id_for_state(city) if city else None
+                        if head_family_id:
+                            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.videopoker": bet}})
+                        else:
+                            await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+                            await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"profit": bet - actual_payout}})
+                    else:
+                        # Create buyback offer
+                        expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
+                        offer_id = str(uuid.uuid4())
+                        buy_back_doc = {
+                            "id": offer_id,
+                            "city": city,
+                            "from_owner_id": owner_id,
+                            "from_owner_username": owner_username,
+                            "to_user_id": current_user.get("id") or "",
+                            "to_username": current_user.get("username"),
+                            "points_offered": points_offered,
+                            "amount_shortfall": shortfall,
+                            "owner_paid": actual_payout,
+                            "expires_at": expires_at,
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                        await db.videopoker_buy_back_offers.insert_one(buy_back_doc)
+                        buy_back_offer = {"offer_id": offer_id, "points_offered": points_offered, "amount_shortfall": shortfall, "owner_paid": actual_payout, "expires_at": expires_at}
             else:
                 head_family_id = await get_head_family_id_for_state(city) if city else None
                 if head_family_id and profit_portion > 0:
@@ -465,7 +608,7 @@ def register(router):
             current_user.get("id") or "", current_user.get("username"), city, bet, hand_key, hand_name, payout, hand
         )
 
-        return {
+        result = {
             "status": "done",
             "bet": bet,
             "hand": hand,
@@ -476,6 +619,11 @@ def register(router):
             "new_balance": new_balance,
             "shortfall": shortfall,
         }
+        # Add buyback info if ownership was transferred
+        if owner_id and payout > bet and shortfall > 0:
+            result["ownership_transferred"] = ownership_transferred
+            result["buy_back_offer"] = buy_back_offer
+        return result
 
     @router.get("/casino/videopoker/history")
     async def casino_videopoker_history(current_user: dict = Depends(get_current_user_verified)):
