@@ -253,7 +253,7 @@ export default function Dashboard() {
       id: 'money', 
       label: 'Cash', 
       icon: DollarSign, 
-      value: `$${Number(user?.money ?? 0).toLocaleString()}`, 
+      value: `$${Math.floor(Number(user?.money ?? 0)).toLocaleString()}`, 
       testId: 'stat-money' 
     },
     { 

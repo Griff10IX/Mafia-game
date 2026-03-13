@@ -132,14 +132,14 @@ INCOME_BOOST_PER_KILL_PERCENT = 2
 MODERATELY_UPGRADED_LEVEL = 2
 MODERATELY_UPGRADED_SECURITY = 1
 
-# Missions (fairly hard). requirements map keys: crimes_in_state, business_income_7d, raids_won, guards_weapon_3, security_level, rank_id, etc.
+# Missions (fairly hard). requirements map keys: crimes_in_state, collections, raids_won, guards_weapon_3, security_level, rank_id, etc.
 ILLEGAL_BUSINESS_MISSIONS = [
     {"id": "ibm_1", "order": 1, "title": "Prove the operation", "story": "The Commissioner wants a cut—prove you can run the block.",
      "how_to_complete": "Reach Capo rank and complete 100 crimes in total.",
      "requirements": {"crimes": 100, "rank_id": CAPO_RANK_ID}, "rewards": {"points": 2}},
     {"id": "ibm_2", "order": 2, "title": "Expand the take", "story": "Word on the street: you need more muscle before the big boys notice.",
-     "how_to_complete": "Earn $50,000 business income in the last 7 days and reach security level 1 (buy 1 upgrade).",
-     "requirements": {"business_income_7d": 50_000, "security_level": 1}, "rewards": {"income_mult": 1.1, "points": 3, "cash": 5_000}},
+     "how_to_complete": "Collect from your business 5 times and reach security level 1 (buy 1 upgrade).",
+     "requirements": {"collections": 5, "security_level": 1}, "rewards": {"income_mult": 1.1, "points": 3, "cash": 5_000}},
     {"id": "ibm_3", "order": 3, "title": "Hit back", "story": "They hit you once. Show them you hit harder.",
      "how_to_complete": "Win 3 raids.",
      "requirements": {"raids_won": 3}, "rewards": {"points": 3, "jailbust_tokens": 1}},
@@ -153,8 +153,8 @@ ILLEGAL_BUSINESS_MISSIONS = [
      "how_to_complete": "Complete 250 crimes in total.",
      "requirements": {"crimes": 250}, "rewards": {"points": 4}},
     {"id": "ibm_7", "order": 7, "title": "Bigger take", "story": "The operation is growing. Show it in the books.",
-     "how_to_complete": "Earn $150,000 business income in the last 7 days.",
-     "requirements": {"business_income_7d": 150_000}, "rewards": {"income_mult": 1.1, "points": 5, "cash": 10_000, "xp_crimes_tokens": 1}},
+     "how_to_complete": "Collect from your business 15 times.",
+     "requirements": {"collections": 15}, "rewards": {"income_mult": 1.1, "points": 5, "cash": 10_000, "xp_crimes_tokens": 1}},
     {"id": "ibm_8", "order": 8, "title": "Raid veteran", "story": "You've hit enough joints to know the score.",
      "how_to_complete": "Win 5 raids.",
      "requirements": {"raids_won": 5}, "rewards": {"points": 5}},
@@ -167,9 +167,9 @@ ILLEGAL_BUSINESS_MISSIONS = [
     {"id": "ibm_11", "order": 11, "title": "Crime lord", "story": "500 crimes total. The family notices.",
      "how_to_complete": "Complete 500 crimes in total.",
      "requirements": {"crimes": 500}, "rewards": {"points": 8}},
-    {"id": "ibm_12", "order": 12, "title": "Money machine", "story": "Half a million in a week from the operation.",
-     "how_to_complete": "Earn $500,000 business income in the last 7 days.",
-     "requirements": {"business_income_7d": 500_000}, "rewards": {"income_mult": 1.2, "points": 10, "cash": 50_000}},
+    {"id": "ibm_12", "order": 12, "title": "Money machine", "story": "The operation is a well-oiled machine now.",
+     "how_to_complete": "Collect from your business 50 times and reach security level 10.",
+     "requirements": {"collections": 50, "security_level": 10}, "rewards": {"income_mult": 1.2, "points": 10, "cash": 50_000}},
     {"id": "ibm_13", "order": 13, "title": "Raid master", "story": "Ten successful hits. You're the one they fear.",
      "how_to_complete": "Win 10 raids.",
      "requirements": {"raids_won": 10}, "rewards": {"income_mult": 1.1, "points": 10}},
@@ -306,14 +306,14 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
             cur["crimes"] = int(current_user.get("total_crimes") or 0)
         if "rank_id" in req:
             cur["rank_id"] = _user_rank_id(current_user)
-        if "business_income_7d" in req:
-            cur["business_income_7d"] = int(current_user.get("illegal_business_income_7d") or 0)
         if "security_level" in req and business:
             cur["security_level"] = len(business.get("security_upgrades") or [])
         if "raids_won" in req:
             cur["raids_won"] = int(current_user.get("illegal_business_raids_won") or 0)
         if "crimes_in_state" in req:
             cur["crimes_in_state"] = int(current_user.get("illegal_business_crimes_in_state") or 0)
+        if "collections" in req:
+            cur["collections"] = int(current_user.get("illegal_business_collections") or 0)
         missions_progress.append({"mission": m, "completed": m["id"] in completed_ids, "current": cur, "target": req})
     # Build security upgrades list (no mission locks; cost computed by index)
     security_upgrades_with_lock = []
@@ -444,7 +444,7 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
     bullets_earned = max(1, int((1 + min(level + security_level, 9)) * ib_mult))
     points_earned = int((random.randint(1, 5) if level >= 3 else 0) * ib_mult)
     loot_pieces_earned = (random.randint(1, 2) if random.random() < 0.05 else 0)
-    inc = {"money": income}
+    inc = {"money": income, "illegal_business_collections": 1}
     if respect_earned > 0:
         inc["respect_points"] = respect_earned
     if bullets_earned > 0:
@@ -522,14 +522,14 @@ async def get_illegal_business_missions(current_user: dict = Depends(get_current
             cur["crimes"] = int(current_user.get("total_crimes") or 0)
         if "rank_id" in req:
             cur["rank_id"] = _user_rank_id(current_user)
-        if "business_income_7d" in req:
-            cur["business_income_7d"] = int(current_user.get("illegal_business_income_7d") or 0)
         if "security_level" in req and business:
             cur["security_level"] = len(business.get("security_upgrades") or [])
         if "raids_won" in req:
             cur["raids_won"] = int(current_user.get("illegal_business_raids_won") or 0)
         if "crimes_in_state" in req:
             cur["crimes_in_state"] = int(current_user.get("illegal_business_crimes_in_state") or 0)
+        if "collections" in req:
+            cur["collections"] = int(current_user.get("illegal_business_collections") or 0)
         progress.append({"mission": m, "completed": m["id"] in completed_ids, "current": cur, "target": req})
     return {"missions": progress}
 
@@ -551,14 +551,14 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
             cur = int(current_user.get("total_crimes") or 0)
         elif key == "rank_id":
             cur = _user_rank_id(current_user)
-        elif key == "business_income_7d":
-            cur = int(current_user.get("illegal_business_income_7d") or 0)
         elif key == "security_level":
             cur = len(business.get("security_upgrades") or [])
         elif key == "raids_won":
             cur = int(current_user.get("illegal_business_raids_won") or 0)
         elif key == "crimes_in_state":
             cur = int(current_user.get("illegal_business_crimes_in_state") or 0)
+        elif key == "collections":
+            cur = int(current_user.get("illegal_business_collections") or 0)
         else:
             cur = 0
         if cur < target:

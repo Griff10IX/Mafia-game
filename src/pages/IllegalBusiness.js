@@ -426,7 +426,7 @@ export default function IllegalBusiness() {
                           const cur = Number(current[key]) ?? 0;
                           const n = Number(need) ?? 1;
                           const pct = Math.min(100, Math.round((cur / n) * 100));
-                          const fmt = key === 'business_income_7d' ? formatMoney : (x) => Number(x).toLocaleString();
+                          const fmt = (x) => Number(x).toLocaleString();
                           const label = key.replace(/_/g, ' ');
                           return (
                             <div key={key}>
