@@ -1,6 +1,7 @@
 # Leaderboard endpoints: single leaderboard, top N per stat (alive or dead); weekly or all-time
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone, timedelta
 from typing import List
 
@@ -8,6 +9,9 @@ from fastapi import Depends, Query
 from pydantic import BaseModel
 
 from server import ADMIN_EMAILS, db, get_current_user
+
+_lb_cache: dict = {}
+_LB_CACHE_TTL = 30
 
 # Exclude admin accounts and moderators from leaderboards
 def _leaderboard_user_filter() -> dict:
@@ -377,51 +381,80 @@ async def get_leaderboard(current_user: dict = Depends(get_current_user)):
     return result
 
 
+def _stamp_current_user(boards_raw: dict, username: str) -> dict:
+    """Re-stamp is_current_user on cached board dicts for the requesting user."""
+    out = {}
+    for key, entries in boards_raw.items():
+        if not entries:
+            out[key] = entries
+            continue
+        out[key] = [
+            {"rank": e["rank"], "username": e["username"], "value": e["value"],
+             "is_current_user": e.get("_uid") == username}
+            for e in entries
+        ]
+    return out
+
+
+async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
+    """Run all DB aggregations, return dicts with _uid so is_current_user can be stamped per request."""
+    dummy_uid = "__cache__"
+    if (period or "").lower() == "weekly":
+        kills, crimes, gta, jail_busts, stock_market_profit, booze_run_profit, respect_points, bullets_melted = await asyncio.gather(
+            _top_by_field_weekly("attack_attempts", "attacker_id", "created_at", True, dummy_uid, limit, dead, {"outcome": "killed"}),
+            _top_by_field_weekly("crime_events", "user_id", "at", False, dummy_uid, limit, dead),
+            _top_by_field_weekly("gta_events", "user_id", "at", False, dummy_uid, limit, dead),
+            _top_by_field_weekly("bust_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),
+            _top_by_field_weekly_sum("stock_transactions", "user_id", "created_at", "profit_points", dummy_uid, limit, dead),
+            _top_by_field_weekly_sum("economy_events", "user_id", "at", "profit", dummy_uid, limit, dead, {"type": "booze_run_sell"}),
+            _top_by_field_weekly_sum("respect_events", "user_id", "at", "amount", dummy_uid, limit, dead),
+            _top_by_field_weekly_sum("melt_events", "user_id", "at", "bullets", dummy_uid, limit, dead),
+        )
+    else:
+        kills, crimes, gta, jail_busts, points_spent, respect_points, bullets_melted, stock_market_profit, booze_run_profit = await asyncio.gather(
+            _top_by_field("total_kills", dummy_uid, limit, dead=dead),
+            _top_by_field("total_crimes", dummy_uid, limit, dead=dead),
+            _top_by_field("total_gta", dummy_uid, limit, dead=dead),
+            _top_by_field("jail_busts", dummy_uid, limit, dead=dead),
+            _top_by_field("lifetime_points_spent", dummy_uid, limit, dead=dead),
+            _top_by_field("respect_points", dummy_uid, limit, dead=dead),
+            _top_by_field("bullets_melted", dummy_uid, limit, dead=dead),
+            _top_by_field("stock_market_profit_total", dummy_uid, limit, dead=dead),
+            _top_by_field("booze_run_profit_total", dummy_uid, limit, dead=dead),
+        )
+
+    def _to_raw(entries):
+        return [{"rank": e.rank, "username": e.username, "value": e.value, "_uid": e.username} for e in entries]
+
+    result = {"kills": _to_raw(kills), "crimes": _to_raw(crimes), "gta": _to_raw(gta), "jail_busts": _to_raw(jail_busts)}
+    if (period or "").lower() != "weekly":
+        result["points_spent"] = _to_raw(points_spent)
+    else:
+        result["points_spent"] = []
+    result["respect_points"] = _to_raw(respect_points)
+    result["bullets_melted"] = _to_raw(bullets_melted)
+    result["stock_market_profit"] = _to_raw(stock_market_profit)
+    result["booze_run_profit"] = _to_raw(booze_run_profit)
+    return result
+
+
 async def get_top_leaderboards(
     limit: int = Query(10, ge=1, le=100, description="Top N (5, 10, 20, 50, 100)"),
     dead: bool = Query(False, description="If true, show top dead accounts instead of alive"),
     period: str = Query("alltime", description="weekly = this week (Mon UTC), alltime = lifetime stats"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Top N leaderboards per stat (kills, crimes, gta, jail busts). period=weekly or alltime. dead=true for top dead."""
-    user_id = current_user["id"]
-    if (period or "").lower() == "weekly":
-        kills, crimes, gta, jail_busts, stock_market_profit, booze_run_profit, respect_points, bullets_melted = await asyncio.gather(
-            _top_by_field_weekly("attack_attempts", "attacker_id", "created_at", True, user_id, limit, dead, {"outcome": "killed"}),
-            _top_by_field_weekly("crime_events", "user_id", "at", False, user_id, limit, dead),
-            _top_by_field_weekly("gta_events", "user_id", "at", False, user_id, limit, dead),
-            _top_by_field_weekly("bust_events", "user_id", "at", False, user_id, limit, dead, {"success": True}),
-            _top_by_field_weekly_sum("stock_transactions", "user_id", "created_at", "profit_points", user_id, limit, dead),
-            _top_by_field_weekly_sum("economy_events", "user_id", "at", "profit", user_id, limit, dead, {"type": "booze_run_sell"}),
-            _top_by_field_weekly_sum("respect_events", "user_id", "at", "amount", user_id, limit, dead),
-            _top_by_field_weekly_sum("melt_events", "user_id", "at", "bullets", user_id, limit, dead),
-        )
-    else:
-        kills, crimes, gta, jail_busts, points_spent, respect_points, bullets_melted, stock_market_profit, booze_run_profit = await asyncio.gather(
-            _top_by_field("total_kills", user_id, limit, dead=dead),
-            _top_by_field("total_crimes", user_id, limit, dead=dead),
-            _top_by_field("total_gta", user_id, limit, dead=dead),
-            _top_by_field("jail_busts", user_id, limit, dead=dead),
-            _top_by_field("lifetime_points_spent", user_id, limit, dead=dead),
-            _top_by_field("respect_points", user_id, limit, dead=dead),
-            _top_by_field("bullets_melted", user_id, limit, dead=dead),
-            _top_by_field("stock_market_profit_total", user_id, limit, dead=dead),
-            _top_by_field("booze_run_profit_total", user_id, limit, dead=dead),
-        )
-    result = {"kills": kills, "crimes": crimes, "gta": gta, "jail_busts": jail_busts}
-    if (period or "").lower() != "weekly":
-        result["points_spent"] = points_spent
-        result["respect_points"] = respect_points
-        result["bullets_melted"] = bullets_melted
-        result["stock_market_profit"] = stock_market_profit
-        result["booze_run_profit"] = booze_run_profit
-    else:
-        result["points_spent"] = []
-        result["respect_points"] = respect_points
-        result["bullets_melted"] = bullets_melted
-        result["stock_market_profit"] = stock_market_profit
-        result["booze_run_profit"] = booze_run_profit
-    return result
+    """Top N leaderboards per stat. Results are cached for 30s to keep background refreshes fast."""
+    username = current_user.get("username") or ""
+    cache_key = f"{limit}:{dead}:{(period or 'alltime').lower()}"
+    now = time.monotonic()
+    cached = _lb_cache.get(cache_key)
+    if cached and (now - cached["ts"]) < _LB_CACHE_TTL:
+        return _stamp_current_user(cached["data"], username)
+
+    boards_raw = await _fetch_top_boards_raw(limit, dead, period)
+    _lb_cache[cache_key] = {"ts": now, "data": boards_raw}
+    return _stamp_current_user(boards_raw, username)
 
 
 def register(router):

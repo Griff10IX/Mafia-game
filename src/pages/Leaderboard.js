@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award, Skull, History, DollarSign, Star, Zap, TrendingUp, Wine } from 'lucide-react';
 import api from '../utils/api';
@@ -90,37 +90,45 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
 }
 
 export default function Leaderboard() {
-  const [period, setPeriod] = useState('weekly'); // 'weekly' | 'alltime'
-  const [boards, setBoards] = useState({
+  const [period, setPeriod] = useState('weekly');
+  const [boards, setBoards] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [topLimit, setTopLimit] = useState(10);
+  const [viewMode, setViewMode] = useState('alive');
+  const intervalRef = useRef(null);
+
+  const emptyBoards = {
     kills: [], crimes: [], gta: [], jail_busts: [], points_spent: [],
     respect_points: [], bullets_melted: [], stock_market_profit: [], booze_run_profit: [],
-  });
-  const [loading, setLoading] = useState(true);
-  const [topLimit, setTopLimit] = useState(10);
-  const [viewMode, setViewMode] = useState('alive'); // 'alive' | 'dead'
+  };
 
-  const fetchLeaderboard = useCallback(async () => {
-    setLoading(true);
+  const fetchLeaderboard = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
     try {
       const response = await api.get('/leaderboards/top', {
         params: { limit: topLimit, dead: viewMode === 'dead', period },
       });
-      setBoards(response.data || {
-        kills: [], crimes: [], gta: [], jail_busts: [], points_spent: [],
-        respect_points: [], bullets_melted: [], stock_market_profit: [], booze_run_profit: [],
-      });
+      setBoards(response.data || emptyBoards);
     } catch (error) {
-      toast.error('Failed to load leaderboard');
+      if (!silent) toast.error('Failed to load leaderboard');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [topLimit, viewMode, period]);
 
   useEffect(() => {
-    fetchLeaderboard();
+    fetchLeaderboard(boards !== null);
   }, [fetchLeaderboard]);
 
-  if (loading) {
+  useEffect(() => {
+    intervalRef.current = setInterval(() => fetchLeaderboard(true), 60_000);
+    return () => clearInterval(intervalRef.current);
+  }, [fetchLeaderboard]);
+
+  if (loading && !boards) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
         <Trophy size={22} className="text-primary/40 animate-pulse" />
@@ -214,12 +222,13 @@ export default function Leaderboard() {
           </div>
           <button
             type="button"
-            onClick={fetchLeaderboard}
-            className="flex items-center gap-1 text-[10px] text-mutedForeground hover:text-primary border border-primary/20 hover:border-primary/40 rounded-sm px-2 py-1 transition-colors font-heading"
+            onClick={() => fetchLeaderboard(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1 text-[10px] text-mutedForeground hover:text-primary border border-primary/20 hover:border-primary/40 rounded-sm px-2 py-1 transition-colors font-heading disabled:opacity-50"
             title="Refresh leaderboards"
           >
-            <RefreshCw size={10} />
-            Refresh
+            <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} />
+            {refreshing ? 'Updating…' : 'Refresh'}
           </button>
         </div>
       </header>
@@ -228,28 +237,28 @@ export default function Leaderboard() {
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Kills' : 'Top Kills'}
           icon={Target}
-          entries={boards.kills}
+          entries={boards?.kills}
           valueLabel="kills"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Crimes' : 'Top Crimes'}
           icon={Flame}
-          entries={boards.crimes}
+          entries={boards?.crimes}
           valueLabel="crimes"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · GTA' : 'Top GTA'}
           icon={Car}
-          entries={boards.gta}
+          entries={boards?.gta}
           valueLabel="GTA"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Jail Busts' : 'Top Jail Busts'}
           icon={Lock}
-          entries={boards.jail_busts}
+          entries={boards?.jail_busts}
           valueLabel="busts"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
         />
@@ -257,7 +266,7 @@ export default function Leaderboard() {
           <StatBoard
             title={viewMode === 'dead' ? 'Top dead · Points Spent' : 'Most Points Spent'}
             icon={DollarSign}
-            entries={boards.points_spent || []}
+            entries={boards?.points_spent}
             valueLabel="pts"
             topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
           />
@@ -265,28 +274,28 @@ export default function Leaderboard() {
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Respect Points' : 'Respect Points Earned'}
           icon={Star}
-          entries={boards.respect_points || []}
+          entries={boards?.respect_points}
           valueLabel="respect"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (${period === 'weekly' ? 'this week' : 'all-time'})`}
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Bullets Melted' : 'Bullets Melted'}
           icon={Zap}
-          entries={boards.bullets_melted || []}
+          entries={boards?.bullets_melted}
           valueLabel="bullets"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (${period === 'weekly' ? 'this week' : 'all-time'})`}
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Stock Market Profit' : 'Highest Stock Market Profit'}
           icon={TrendingUp}
-          entries={boards.stock_market_profit || []}
+          entries={boards?.stock_market_profit}
           valueLabel="pts"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (${period === 'weekly' ? 'this week' : 'all-time'})`}
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Booze Run Profit' : 'Booze Run Profit'}
           icon={Wine}
-          entries={boards.booze_run_profit || []}
+          entries={boards?.booze_run_profit}
           valueLabel="$"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (${period === 'weekly' ? 'this week' : 'all-time'})`}
         />
