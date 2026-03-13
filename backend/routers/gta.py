@@ -626,12 +626,14 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
         if car_info:
             user_car_id = user_car.get("id") or str(user_car.get("_id", ""))
             display_name = (user_car.get("custom_name") or user_car.get("car_name")) if car_id == "car_custom" else (user_car.get("car_name") or car_info.get("name"))
+            # Custom cars never have damage
+            damage = 0 if car_id == "car_custom" else min(100, max(0, float(user_car.get("damage_percent", 0))))
             entry = {
                 "user_car_id": user_car_id,
                 "car_id": car_id,
                 "car_name": display_name,
                 "acquired_at": user_car.get("acquired_at"),
-                "damage_percent": min(100, max(0, float(user_car.get("damage_percent", 0)))),
+                "damage_percent": damage,
                 **car_info,
             }
             if car_id == "car_custom":
@@ -663,12 +665,14 @@ async def get_recent_stolen(current_user: dict = Depends(get_current_user)):
         if car_info:
             user_car_id = user_car.get("id") or str(user_car.get("_id", ""))
             display_name = (user_car.get("custom_name") or user_car.get("car_name") or car_info.get("name") or "Car") if car_id == "car_custom" else (user_car.get("car_name") or car_info.get("name") or "Car")
+            # Custom cars never have damage
+            damage = 0 if car_id == "car_custom" else min(100, max(0, float(user_car.get("damage_percent", 0))))
             entry = {
                 "user_car_id": user_car_id,
                 "car_id": car_id,
                 "car_name": display_name,
                 "acquired_at": user_car.get("acquired_at"),
-                "damage_percent": min(100, max(0, float(user_car.get("damage_percent", 0)))),
+                "damage_percent": damage,
                 **car_info,
             }
             if car_id == "car_custom":
@@ -967,18 +971,21 @@ async def get_marketplace_listings(current_user: dict = Depends(get_current_user
         display_name = (uc.get("custom_name") or uc.get("car_name") or car_info.get("name")) if uc.get("car_id") == "car_custom" else (uc.get("car_name") or car_info.get("name"))
         seller = await db.users.find_one({"id": uc["user_id"]}, {"_id": 0, "username": 1})
         listing_id = uc.get("id") or str(uc.get("_id", ""))
+        # Custom cars never have damage
+        car_id = uc.get("car_id")
+        damage = 0 if car_id == "car_custom" else min(100, max(0, float(uc.get("damage_percent", 0))))
         # Public marketplace response: expose only seller_username, never raw seller_id
         out.append({
             "user_car_id": listing_id,
             "seller_username": (seller or {}).get("username", "?"),
-            "car_id": uc.get("car_id"),
+            "car_id": car_id,
             "name": display_name,
             "value": car_info.get("value", 0),
             "rarity": car_info.get("rarity", "common"),
             "image": car_info.get("image"),
             "sale_price": uc.get("sale_price", 0),
             "listed_at": uc.get("listed_at"),
-            "damage_percent": min(100, max(0, float(uc.get("damage_percent", 0)))),
+            "damage_percent": damage,
         })
     return {"listings": out}
 
@@ -1185,6 +1192,83 @@ async def _is_car_on_owner_profile(db, owner_id: str, user_car_id: str) -> bool:
     return user_car_id in car_ids
 
 
+CAR_IMAGE_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+CAR_IMAGE_MAX_DATA_URL_BYTES = 300_000
+
+
+def _validate_car_image_url(url: str) -> tuple[bool, str]:
+    """
+    Validate custom car image URL for security.
+    Supports both external URLs and data URLs.
+    Returns (is_valid, error_message).
+    """
+    import base64
+    import re
+
+    if not url:
+        return False, "No URL provided"
+
+    # Block dangerous URL schemes
+    url_lower = url.lower().strip()
+    if url_lower.startswith("javascript:"):
+        return False, "Invalid URL scheme"
+    if url_lower.startswith("vbscript:"):
+        return False, "Invalid URL scheme"
+
+    # Handle data URLs (validate like avatars)
+    if url.startswith("data:"):
+        if not url.startswith("data:image/"):
+            return False, "Data URLs must be images"
+
+        match = re.match(r"^data:(image/[a-zA-Z0-9+-]+);base64,(.+)$", url)
+        if not match:
+            return False, "Invalid data URL format"
+
+        mime_type = match.group(1).lower()
+        base64_data = match.group(2)
+
+        # Block SVG (XSS risk)
+        if "svg" in mime_type:
+            return False, "SVG images are not allowed"
+
+        if mime_type not in CAR_IMAGE_ALLOWED_TYPES:
+            return False, "Invalid image type. Allowed: JPEG, PNG, GIF, WEBP"
+
+        if not re.match(r"^[A-Za-z0-9+/=]+$", base64_data):
+            return False, "Invalid base64 encoding"
+
+        try:
+            decoded = base64.b64decode(base64_data)
+        except Exception:
+            return False, "Failed to decode image data"
+
+        # Verify magic bytes
+        magic_bytes = {
+            "image/jpeg": [b"\xff\xd8\xff"],
+            "image/png": [b"\x89PNG\r\n\x1a\n"],
+            "image/gif": [b"GIF87a", b"GIF89a"],
+            "image/webp": [b"RIFF"],
+        }
+        valid_magic = any(decoded.startswith(m) for m in magic_bytes.get(mime_type, []))
+        if not valid_magic:
+            return False, "Image data does not match declared type"
+
+        if mime_type == "image/webp" and b"WEBP" not in decoded[:12]:
+            return False, "Invalid WEBP image"
+
+        return True, ""
+
+    # External URLs - must be http/https and look like an image
+    if not (url_lower.startswith("http://") or url_lower.startswith("https://")):
+        return False, "URL must start with http:// or https://"
+
+    # Block SVG URLs
+    if ".svg" in url_lower:
+        return False, "SVG images are not allowed"
+
+    return True, ""
+
+
 async def update_custom_car_image(
     user_car_id: str,
     request: CustomCarImageUpdate,
@@ -1205,11 +1289,23 @@ async def update_custom_car_image(
         raise HTTPException(status_code=404, detail="Car not found in your garage")
     if user_car.get("car_id") != "car_custom":
         raise HTTPException(status_code=400, detail="Only custom cars can have a custom picture")
+
     value = (request.image_url or "").strip() or None
+
+    if value is not None:
+        # Size check for data URLs
+        if value.startswith("data:") and len(value) > CAR_IMAGE_MAX_DATA_URL_BYTES:
+            raise HTTPException(status_code=400, detail="Image too large. Use a smaller image.")
+        # Security validation
+        is_valid, error_msg = _validate_car_image_url(value)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+
     if user_car.get("_id") is not None:
         q = {"_id": user_car["_id"]}
     else:
         q = {"user_id": current_user.get("id") or "", "id": user_car.get("id")}
+
     if value is None:
         await db.user_cars.update_one(q, {"$unset": {"custom_image_url": ""}})
     else:
@@ -1234,12 +1330,14 @@ async def get_view_car(
     if not car_info:
         raise HTTPException(status_code=404, detail="Car not found")
     owner_id = user_car.get("user_id")
+    car_id = user_car.get("car_id")
     rarity = car_info.get("rarity") or "common"
-    travel_time = TRAVEL_TIMES.get("custom", 20) if car_info.get("id") == "car_custom" else TRAVEL_TIMES.get(rarity, 45)
-    damage_percent = min(100, max(0, float(user_car.get("damage_percent", 0))))
+    travel_time = TRAVEL_TIMES.get("custom", 20) if car_id == "car_custom" else TRAVEL_TIMES.get(rarity, 45)
+    # Custom cars never have damage
+    damage_percent = 0 if car_id == "car_custom" else min(100, max(0, float(user_car.get("damage_percent", 0))))
     name = user_car.get("custom_name") or user_car.get("car_name") or car_info.get("name")
     image = car_info.get("image")
-    if user_car.get("car_id") == "car_custom" and user_car.get("custom_image_url"):
+    if car_id == "car_custom" and user_car.get("custom_image_url"):
         image = user_car.get("custom_image_url")
     out = {
         **{k: v for k, v in car_info.items()},

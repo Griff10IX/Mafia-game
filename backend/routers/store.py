@@ -266,6 +266,7 @@ async def buy_custom_car(
         "custom_name": request.car_name,
         "custom_image_url": None,
         "acquired_at": datetime.now(timezone.utc).isoformat(),
+        "damage_percent": 0,  # Custom cars never have damage
     })
     _invalidate_travel_info_cache(current_user["id"])
     await send_notification(

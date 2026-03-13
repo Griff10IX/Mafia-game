@@ -48,14 +48,17 @@ async def _get_or_create_safe():
 
 
 def _generate_clues(combo: list, total_attempts: int) -> list:
+    if not combo:
+        return []
     even_count = sum(1 for n in combo if n % 2 == 0)
     total_sum = sum(combo)
     high = max(combo)
+    first = combo[0] if combo else 0
     return [
         {"id": 1, "unlocked": True, "text": f"There are {even_count} even number{'s' if even_count != 1 else ''}", "unlock_after": 0},
         {"id": 2, "unlocked": total_attempts >= 5, "text": f"The sum of all numbers is {total_sum}", "unlock_after": 5},
         {"id": 3, "unlocked": total_attempts >= 15, "text": f"The highest number is {high}", "unlock_after": 15},
-        {"id": 4, "unlocked": total_attempts >= 30, "text": f"The first number is {combo[0]}", "unlock_after": 30},
+        {"id": 4, "unlocked": total_attempts >= 30, "text": f"The first number is {first}", "unlock_after": 30},
     ]
 
 
@@ -63,7 +66,7 @@ def register(router):
     @router.get("/crack-safe/info")
     async def crack_safe_info(user: dict = Depends(get_current_user_verified)):
         safe = await _get_or_create_safe()
-        combo = safe["combination"]
+        combo = safe.get("combination") or []
         total_attempts = safe.get("total_attempts", 0)
         clues = _generate_clues(combo, total_attempts)
         is_admin = _is_admin(user)
@@ -82,7 +85,7 @@ def register(router):
             })
         if not winners and safe.get("last_winner_username"):
             winners = [{
-                "username": safe["last_winner_username"],
+                "username": safe.get("last_winner_username") or "?",
                 "won_at": safe["last_won_at"].isoformat() if safe.get("last_won_at") else None,
                 "amount_won": None,
             }]
@@ -106,7 +109,7 @@ def register(router):
     @router.post("/crack-safe/guess")
     async def crack_safe_guess(req: SafeGuessRequest, user: dict = Depends(get_current_user_verified)):
         safe = await _get_or_create_safe()
-        combo = safe["combination"]
+        combo = safe.get("combination") or []
         now = datetime.now(timezone.utc)
         is_admin = _is_admin(user)
 
@@ -169,7 +172,7 @@ def register(router):
             }
 
         fresh = await db.safe_game.find_one({})
-        clues = _generate_clues(fresh["combination"], fresh.get("total_attempts", 0))
+        clues = _generate_clues(fresh.get("combination") or [], fresh.get("total_attempts", 0))
 
         # Only sometimes reveal how many digits were in the correct position (randomly, not every attempt)
         show_position_hint = random.random() < 0.5

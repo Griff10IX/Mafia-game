@@ -213,7 +213,8 @@ const CrimeProgressBar = ({ progress }) => {
 const CrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
   const unavailable = !crime.can_commit && (!crime.remaining || crime.remaining <= 0);
   const onCooldown = !crime.can_commit && crime.remaining && crime.remaining > 0;
-  const showLocked = manualPlayDisabled && crime.can_commit;
+  // Lock if manualPlayDisabled is true OR null (unknown/loading state) - safe default
+  const showLocked = (manualPlayDisabled === true || manualPlayDisabled === null) && crime.can_commit;
 
   return (
     <div
@@ -400,7 +401,7 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
 
         {/* Action button */}
         <div className="shrink-0">
-          {manualPlayDisabled && crime.can_commit ? (
+          {(manualPlayDisabled === true || manualPlayDisabled === null) && crime.can_commit ? (
             <button type="button" disabled className="bg-zinc-700/50 text-zinc-500 rounded px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase border border-zinc-600/50 cursor-not-allowed">Locked</button>
           ) : crime.can_commit ? (
             <button
@@ -436,7 +437,7 @@ export default function Crimes() {
     profit_today: 0, profit_24h: 0, profit_week: 0,
   });
 
-  const [autoRankCrimesDisabled, setAutoRankCrimesDisabled] = useState(false);
+  const [autoRankCrimesDisabled, setAutoRankCrimesDisabled] = useState(null); // null = unknown/loading, true = disabled, false = enabled
   const [activeLootPerks, setActiveLootPerks] = useState([]);
 
   const fetchCrimes = async () => {
@@ -491,6 +492,7 @@ export default function Crimes() {
       setCrimes([]);
       setUser(null);
       setCrimeStats({ count_today: 0, count_week: 0, success_today: 0, success_week: 0, profit_today: 0, profit_24h: 0, profit_week: 0 });
+      setAutoRankCrimesDisabled(false); // Allow manual play if we can't determine status
       setLoading(false);
     }
   };
@@ -663,7 +665,7 @@ export default function Crimes() {
       </div>
 
       {user?.in_jail && <JailNotice />}
-      {autoRankCrimesDisabled && <AutoRankCrimesNotice />}
+      {autoRankCrimesDisabled === true && <AutoRankCrimesNotice />}
 
       {eventsEnabled && <EventBanner event={event} />}
 
@@ -712,7 +714,7 @@ export default function Crimes() {
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
             Available Crimes
           </span>
-          {!user?.in_jail && !autoRankCrimesDisabled && commitAllCount > 0 && (
+          {!user?.in_jail && autoRankCrimesDisabled === false && commitAllCount > 0 && (
             <button
               type="button"
               onClick={commitAll}

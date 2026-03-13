@@ -1145,6 +1145,68 @@ async def families_update_profile_text(request: FamilyProfileTextRequest, curren
 
 
 FAMILY_AVATAR_MAX_BYTES = 250_000  # same as user avatar
+FAMILY_AVATAR_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+
+def _validate_family_avatar(data_url: str) -> tuple[bool, str]:
+    """
+    Validate family avatar data URL for security.
+    Returns (is_valid, error_message).
+    """
+    import base64
+    import re
+
+    if not data_url:
+        return False, "No data provided"
+
+    if not data_url.startswith("data:image/"):
+        return False, "Avatar must be an image data URL"
+
+    # Parse: data:image/TYPE;base64,DATA
+    match = re.match(r"^data:(image/[a-zA-Z0-9+-]+);base64,(.+)$", data_url)
+    if not match:
+        return False, "Invalid data URL format. Must be base64 encoded."
+
+    mime_type = match.group(1).lower()
+    base64_data = match.group(2)
+
+    # Block SVG (can contain JavaScript/XSS)
+    if "svg" in mime_type:
+        return False, "SVG images are not allowed for security reasons"
+
+    if mime_type not in FAMILY_AVATAR_ALLOWED_TYPES:
+        return False, "Invalid image type. Allowed: JPEG, PNG, GIF, WEBP"
+
+    # Validate base64 characters
+    if not re.match(r"^[A-Za-z0-9+/=]+$", base64_data):
+        return False, "Invalid base64 encoding"
+
+    try:
+        decoded = base64.b64decode(base64_data)
+    except Exception:
+        return False, "Failed to decode base64 data"
+
+    # Verify magic bytes
+    magic_bytes = {
+        "image/jpeg": [b"\xff\xd8\xff"],
+        "image/png": [b"\x89PNG\r\n\x1a\n"],
+        "image/gif": [b"GIF87a", b"GIF89a"],
+        "image/webp": [b"RIFF"],
+    }
+
+    valid_magic = False
+    for magic in magic_bytes.get(mime_type, []):
+        if decoded.startswith(magic):
+            valid_magic = True
+            break
+
+    if not valid_magic:
+        return False, "Image data does not match declared type"
+
+    if mime_type == "image/webp" and b"WEBP" not in decoded[:12]:
+        return False, "Invalid WEBP image data"
+
+    return True, ""
 
 
 async def families_update_avatar(request: FamilyAvatarRequest, current_user: dict = Depends(get_current_user)):
@@ -1154,15 +1216,21 @@ async def families_update_avatar(request: FamilyAvatarRequest, current_user: dic
     family_id = current_user.get("family_id")
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
+
     avatar = (request.avatar_data or "").strip() or None
+
     if avatar is not None:
-        if not avatar.startswith("data:image/"):
-            raise HTTPException(status_code=400, detail="Avatar must be an image data URL (data:image/...)")
+        # Size check first
         if len(avatar) > FAMILY_AVATAR_MAX_BYTES:
-            raise HTTPException(status_code=400, detail="Image too large. Use a smaller image.")
+            raise HTTPException(status_code=400, detail="Image too large. Use a smaller image (max ~180KB).")
+        # Security validation
+        is_valid, error_msg = _validate_family_avatar(avatar)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+
     update = {"$set": {"avatar_url": avatar}} if avatar else {"$unset": {"avatar_url": ""}}
     await db.families.update_one({"id": family_id}, update)
-    _invalidate_my_cache(current_user["id"])
+    _invalidate_my_cache(current_user.get("id") or "")
     _invalidate_list_cache()
     return {"message": "Family picture updated.", "avatar_url": avatar}
 

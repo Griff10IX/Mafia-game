@@ -555,23 +555,98 @@ def register(router):
             logger.exception("staff-stats build response failed: %s", e)
             raise HTTPException(status_code=500, detail="Error loading user data. Please try again.")
 
+    # Allowed image MIME types for avatars (NO SVG - can contain XSS)
+    AVATAR_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+    AVATAR_MAX_BYTES = 250_000
+
+    def _validate_avatar_data_url(data_url: str) -> tuple[bool, str]:
+        """
+        Validate avatar data URL for security.
+        Returns (is_valid, error_message).
+        """
+        import base64
+        import re
+
+        if not data_url:
+            return False, "No data provided"
+
+        # Must start with data:image/
+        if not data_url.startswith("data:image/"):
+            return False, "Avatar must be an image data URL"
+
+        # Parse the data URL: data:image/TYPE;base64,DATA
+        match = re.match(r"^data:(image/[a-zA-Z0-9+-]+);base64,(.+)$", data_url)
+        if not match:
+            return False, "Invalid data URL format. Must be base64 encoded."
+
+        mime_type = match.group(1).lower()
+        base64_data = match.group(2)
+
+        # Block SVG (can contain JavaScript/XSS attacks)
+        if "svg" in mime_type:
+            return False, "SVG images are not allowed for security reasons"
+
+        # Whitelist allowed MIME types
+        if mime_type not in AVATAR_ALLOWED_TYPES:
+            return False, f"Invalid image type. Allowed: JPEG, PNG, GIF, WEBP"
+
+        # Validate base64 string (only valid base64 characters)
+        if not re.match(r"^[A-Za-z0-9+/=]+$", base64_data):
+            return False, "Invalid base64 encoding"
+
+        # Try to decode base64 to ensure it's valid
+        try:
+            decoded = base64.b64decode(base64_data)
+        except Exception:
+            return False, "Failed to decode base64 data"
+
+        # Verify magic bytes match claimed MIME type
+        magic_bytes = {
+            "image/jpeg": [b"\xff\xd8\xff"],
+            "image/png": [b"\x89PNG\r\n\x1a\n"],
+            "image/gif": [b"GIF87a", b"GIF89a"],
+            "image/webp": [b"RIFF"],  # RIFF header, followed by WEBP
+        }
+
+        valid_magic = False
+        for magic in magic_bytes.get(mime_type, []):
+            if decoded.startswith(magic):
+                valid_magic = True
+                break
+
+        if not valid_magic:
+            return False, "Image data does not match declared type"
+
+        # Additional check for WEBP (must have WEBP after RIFF)
+        if mime_type == "image/webp" and b"WEBP" not in decoded[:12]:
+            return False, "Invalid WEBP image data"
+
+        return True, ""
+
     @router.post("/profile/avatar")
     async def update_avatar(request: AvatarUpdateRequest, current_user: dict = Depends(get_current_user)):
         """Update your avatar (stored as a data URL)."""
         avatar = (request.avatar_data or "").strip()
+
+        # Handle removal
         if not avatar:
             await db.users.update_one(
-                {"id": current_user["id"]},
+                {"id": current_user.get("id") or ""},
                 {"$set": {"avatar_url": None}},
             )
             return {"message": "Avatar removed"}
-        if not avatar.startswith("data:image/"):
-            raise HTTPException(status_code=400, detail="Avatar must be an image data URL (data:image/...)")
-        if len(avatar) > 250_000:
-            raise HTTPException(status_code=400, detail="Avatar too large. Use a smaller image.")
+
+        # Size check first (before expensive validation)
+        if len(avatar) > AVATAR_MAX_BYTES:
+            raise HTTPException(status_code=400, detail="Avatar too large. Use a smaller image (max ~180KB).")
+
+        # Security validation
+        is_valid, error_msg = _validate_avatar_data_url(avatar)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
 
         await db.users.update_one(
-            {"id": current_user["id"]},
+            {"id": current_user.get("id") or ""},
             {"$set": {"avatar_url": avatar}}
         )
         return {"message": "Avatar updated"}
