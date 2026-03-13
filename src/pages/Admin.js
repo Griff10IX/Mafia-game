@@ -171,6 +171,10 @@ export default function Admin() {
   const [cfBotBlockLoading, setCfBotBlockLoading] = useState(false);
   const [cfBotBlockError, setCfBotBlockError] = useState(null);
   
+  const [cfAutoBlockEnabled, setCfAutoBlockEnabled] = useState(null);
+  const [cfAutoBlockLoading, setCfAutoBlockLoading] = useState(false);
+  const [cfAutoBlockError, setCfAutoBlockError] = useState(null);
+  
   const [searchUsername, setSearchUsername] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [deleteUserId, setDeleteUserId] = useState('');
@@ -350,6 +354,7 @@ export default function Admin() {
         fetchAdminSettings();
         fetchModerators();
         fetchCfBotBlockStatus();
+        fetchCfAutoBlockStatus();
         fetchPageLocks();
       }
       if (admin || mod) {
@@ -673,6 +678,36 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to toggle');
     } finally {
       setCfBotBlockLoading(false);
+    }
+  };
+
+  const fetchCfAutoBlockStatus = async () => {
+    try {
+      const res = await api.get('/admin/cloudflare/automation-block-status');
+      if (res.data?.error) {
+        setCfAutoBlockError(res.data.error);
+        setCfAutoBlockEnabled(null);
+      } else {
+        setCfAutoBlockEnabled(res.data?.enabled ?? null);
+        setCfAutoBlockError(null);
+      }
+    } catch (e) {
+      setCfAutoBlockError('Failed to fetch status');
+    }
+  };
+
+  const handleToggleCfAutoBlock = async () => {
+    setCfAutoBlockLoading(true);
+    try {
+      const newVal = !cfAutoBlockEnabled;
+      const res = await api.post(`/admin/cloudflare/automation-block-toggle?enabled=${newVal}`);
+      setCfAutoBlockEnabled(res.data?.enabled ?? newVal);
+      toast.success(res.data?.message || `Automation blocking ${newVal ? 'enabled' : 'disabled'}`);
+      setCfAutoBlockError(null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to toggle');
+    } finally {
+      setCfAutoBlockLoading(false);
     }
   };
 
@@ -2405,7 +2440,7 @@ export default function Admin() {
             ) : (
               <>
                 <p className="text-[10px] text-mutedForeground">
-                  Toggle the &quot;Block All Bots&quot; rule in Cloudflare. When enabled, known bots are blocked from accessing the site.
+                  Toggle the &quot;Block All Bots&quot; rule in Cloudflare. When enabled, known bots (Google, SEO tools, AI crawlers) are blocked.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <BtnPrimary
@@ -2413,6 +2448,50 @@ export default function Admin() {
                     disabled={cfBotBlockLoading || cfBotBlockEnabled === null}
                   >
                     {cfBotBlockLoading ? 'Updating...' : cfBotBlockEnabled ? 'Disable Bot Blocking' : 'Enable Bot Blocking'}
+                  </BtnPrimary>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Bot}
+          title="Block Automation Scripts"
+          badge={
+            <span className="text-[10px] font-heading">
+              {cfAutoBlockError ? (
+                <span className="text-amber-400">Not configured</span>
+              ) : cfAutoBlockEnabled === null ? (
+                <span className="text-mutedForeground">Loading...</span>
+              ) : cfAutoBlockEnabled ? (
+                <span className="text-emerald-400">Blocking scripts</span>
+              ) : (
+                <span className="text-red-400">Allowing scripts</span>
+              )}
+            </span>
+          }
+          isCollapsed={collapsed.cfAutoBlock}
+          onToggle={() => toggleSection('cfAutoBlock')}
+        />
+        {!collapsed.cfAutoBlock && (
+          <div className="p-3 space-y-2">
+            {cfAutoBlockError ? (
+              <p className="text-[10px] text-amber-400">{cfAutoBlockError}</p>
+            ) : (
+              <>
+                <p className="text-[10px] text-mutedForeground">
+                  Toggle the &quot;Block Automation Scripts&quot; rule. Blocks Python, Java, Selenium, Puppeteer, curl, and other automation tools players might use to cheat.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <BtnPrimary
+                    onClick={handleToggleCfAutoBlock}
+                    disabled={cfAutoBlockLoading || cfAutoBlockEnabled === null}
+                  >
+                    {cfAutoBlockLoading ? 'Updating...' : cfAutoBlockEnabled ? 'Disable Script Blocking' : 'Enable Script Blocking'}
                   </BtnPrimary>
                 </div>
               </>

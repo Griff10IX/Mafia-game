@@ -3414,11 +3414,8 @@ def register(router):
     # Cloudflare Bot Blocking Toggle
     # ──────────────────────────────────────────────────────────────────────────────
 
-    @router.get("/admin/cloudflare/bot-block-status")
-    async def admin_cloudflare_bot_block_status(current_user: dict = Depends(get_current_user)):
-        """Get current status of the 'Block All Bots' rule in Cloudflare."""
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
+    async def _cf_get_rule_status(rule_name: str) -> dict:
+        """Helper to get Cloudflare firewall rule status by name."""
         if not CF_ZONE_ID or not CF_API_TOKEN:
             return {"enabled": None, "error": "Cloudflare not configured (CF_ZONE_ID / CF_API_TOKEN missing)"}
         try:
@@ -3432,23 +3429,19 @@ def register(router):
                     return {"enabled": None, "error": data.get("errors", "Unknown error")}
                 rules = data.get("result", [])
                 for rule in rules:
-                    if "block all bots" in (rule.get("description") or "").lower():
+                    if rule_name.lower() in (rule.get("description") or "").lower():
                         return {"enabled": not rule.get("paused", False), "rule_id": rule.get("id")}
-                return {"enabled": None, "error": "Rule 'Block All Bots' not found"}
+                return {"enabled": None, "error": f"Rule '{rule_name}' not found"}
         except Exception as e:
             logging.exception("Cloudflare API error")
             return {"enabled": None, "error": str(e)}
 
-    @router.post("/admin/cloudflare/bot-block-toggle")
-    async def admin_cloudflare_bot_block_toggle(enabled: bool, current_user: dict = Depends(get_current_user)):
-        """Enable or disable the 'Block All Bots' Cloudflare firewall rule."""
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
+    async def _cf_toggle_rule(rule_name: str, enabled: bool) -> dict:
+        """Helper to toggle a Cloudflare firewall rule by name."""
         if not CF_ZONE_ID or not CF_API_TOKEN:
             raise HTTPException(status_code=500, detail="Cloudflare not configured (CF_ZONE_ID / CF_API_TOKEN missing)")
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                # First get the rule ID
                 resp = await client.get(
                     f"https://api.cloudflare.com/client/v4/zones/{CF_ZONE_ID}/firewall/rules",
                     headers={"Authorization": f"Bearer {CF_API_TOKEN}", "Content-Type": "application/json"},
@@ -3459,12 +3452,11 @@ def register(router):
                 rules = data.get("result", [])
                 rule_id = None
                 for rule in rules:
-                    if "block all bots" in (rule.get("description") or "").lower():
+                    if rule_name.lower() in (rule.get("description") or "").lower():
                         rule_id = rule.get("id")
                         break
                 if not rule_id:
-                    raise HTTPException(status_code=404, detail="Rule 'Block All Bots' not found in Cloudflare")
-                # Update the rule (paused = not enabled)
+                    raise HTTPException(status_code=404, detail=f"Rule '{rule_name}' not found in Cloudflare")
                 update_resp = await client.patch(
                     f"https://api.cloudflare.com/client/v4/zones/{CF_ZONE_ID}/firewall/rules/{rule_id}",
                     headers={"Authorization": f"Bearer {CF_API_TOKEN}", "Content-Type": "application/json"},
@@ -3473,9 +3465,39 @@ def register(router):
                 update_data = update_resp.json()
                 if not update_data.get("success"):
                     raise HTTPException(status_code=500, detail=f"Cloudflare update error: {update_data.get('errors')}")
-                return {"message": f"Bot blocking {'enabled' if enabled else 'disabled'}", "enabled": enabled}
+                return {"enabled": enabled}
         except HTTPException:
             raise
         except Exception as e:
             logging.exception("Cloudflare API error")
             raise HTTPException(status_code=500, detail=str(e))
+
+    @router.get("/admin/cloudflare/bot-block-status")
+    async def admin_cloudflare_bot_block_status(current_user: dict = Depends(get_current_user)):
+        """Get current status of the 'Block All Bots' rule in Cloudflare."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return await _cf_get_rule_status("Block All Bots")
+
+    @router.post("/admin/cloudflare/bot-block-toggle")
+    async def admin_cloudflare_bot_block_toggle(enabled: bool, current_user: dict = Depends(get_current_user)):
+        """Enable or disable the 'Block All Bots' Cloudflare firewall rule."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        result = await _cf_toggle_rule("Block All Bots", enabled)
+        return {"message": f"Bot blocking {'enabled' if enabled else 'disabled'}", **result}
+
+    @router.get("/admin/cloudflare/automation-block-status")
+    async def admin_cloudflare_automation_block_status(current_user: dict = Depends(get_current_user)):
+        """Get current status of the 'Block Automation Scripts' rule in Cloudflare."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return await _cf_get_rule_status("Block Automation")
+
+    @router.post("/admin/cloudflare/automation-block-toggle")
+    async def admin_cloudflare_automation_block_toggle(enabled: bool, current_user: dict = Depends(get_current_user)):
+        """Enable or disable the 'Block Automation Scripts' Cloudflare firewall rule."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        result = await _cf_toggle_rule("Block Automation", enabled)
+        return {"message": f"Automation script blocking {'enabled' if enabled else 'disabled'}", **result}
