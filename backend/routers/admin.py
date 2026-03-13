@@ -410,10 +410,16 @@ def register(router):
     async def admin_get_rate_limits(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        try:
+            import security_middleware as sm_module
+            middleware_enabled = getattr(sm_module, "SECURITY_MIDDLEWARE_ENABLED", False)
+        except ImportError:
+            middleware_enabled = False
         return {
             "rate_limits": security_module.RATE_LIMIT_CONFIG,
-            "global_enabled": getattr(security_module, "GLOBAL_RATE_LIMITS_ENABLED", True),
-            "note": "Min seconds between clicks per endpoint. Rate limits are in-memory; changes apply immediately."
+            "global_enabled": getattr(security_module, "GLOBAL_RATE_LIMITS_ENABLED", False),
+            "security_middleware_enabled": middleware_enabled,
+            "note": "Min seconds between clicks per endpoint. All security middleware is OFF by default."
         }
 
     @router.post("/admin/security/rate-limits/toggle")
@@ -462,13 +468,18 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         security_module.GLOBAL_RATE_LIMITS_ENABLED = False
+        try:
+            import security_middleware as sm_module
+            sm_module.SECURITY_MIDDLEWARE_ENABLED = False
+        except ImportError:
+            pass
         count = 0
         for endpoint in security_module.RATE_LIMIT_CONFIG:
             interval, _ = security_module.RATE_LIMIT_CONFIG[endpoint]
             security_module.RATE_LIMIT_CONFIG[endpoint] = (interval, False)
             count += 1
         return {
-            "message": f"Disabled ALL rate limiting (global toggle OFF + {count} endpoints disabled)",
+            "message": f"Disabled ALL rate limiting + security middleware (global toggle OFF + {count} endpoints disabled)",
             "global_enabled": False,
             "count": count
         }
@@ -478,13 +489,18 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         security_module.GLOBAL_RATE_LIMITS_ENABLED = True
+        try:
+            import security_middleware as sm_module
+            sm_module.SECURITY_MIDDLEWARE_ENABLED = True
+        except ImportError:
+            pass
         count = 0
         for endpoint in security_module.RATE_LIMIT_CONFIG:
             interval, _ = security_module.RATE_LIMIT_CONFIG[endpoint]
             security_module.RATE_LIMIT_CONFIG[endpoint] = (interval, True)
             count += 1
         return {
-            "message": f"Enabled ALL rate limiting (global toggle ON + {count} endpoints enabled)",
+            "message": f"Enabled ALL rate limiting + security middleware (global toggle ON + {count} endpoints enabled)",
             "global_enabled": True,
             "count": count
         }
@@ -501,6 +517,23 @@ def register(router):
             "message": f"Global rate limits {'ENABLED' if enabled else 'DISABLED'}",
             "global_enabled": enabled
         }
+
+    @router.post("/admin/security/middleware-toggle")
+    async def admin_toggle_security_middleware(
+        enabled: bool,
+        current_user: dict = Depends(get_current_user)
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        try:
+            import security_middleware as sm_module
+            sm_module.SECURITY_MIDDLEWARE_ENABLED = enabled
+            return {
+                "message": f"Security middleware {'ENABLED' if enabled else 'DISABLED'}",
+                "security_middleware_enabled": enabled
+            }
+        except ImportError:
+            raise HTTPException(status_code=500, detail="security_middleware module not found")
 
     @router.post("/admin/security/test-telegram")
     async def admin_test_telegram(current_user: dict = Depends(get_current_user)):

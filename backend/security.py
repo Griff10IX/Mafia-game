@@ -25,10 +25,10 @@ MAX_REQUESTS_PER_SECOND = 10  # Spam detection: 10+ requests per second
 MAX_FAILED_ATTACKS_PER_MINUTE = 20  # Bot-like failed attack spam
 MAX_SAME_ACTION_PER_SECOND = 3  # Same endpoint hit 3+ times in 1 second = bot
 
-# Exploit detection (not legitimate gameplay limits)
-DETECT_NEGATIVE_BALANCE = True  # Should never happen legitimately
+# Exploit detection (off by default - enable in admin panel or here when ready for production)
+DETECT_NEGATIVE_BALANCE = False
 DETECT_IMPOSSIBLE_GAIN = 1_000_000_000_000  # $1T+ gain in single action = exploit
-DETECT_DUPLICATE_REQUESTS = True  # Same request twice in <100ms = potential exploit
+DETECT_DUPLICATE_REQUESTS = False
 
 # In-memory rate limiting (per user)
 user_request_counts = defaultdict(list)  # user_id -> [timestamp1, timestamp2, ...]
@@ -379,7 +379,7 @@ def validate_positive_int(value: Any, field_name: str, max_value: int = None) ->
 # ====== CONFIGURABLE RATE LIMITING PER ENDPOINT (SPEED / CLICKS) ======
 
 # GLOBAL TOGGLE - When False, ALL rate limits are bypassed regardless of per-endpoint settings
-GLOBAL_RATE_LIMITS_ENABLED = True
+GLOBAL_RATE_LIMITS_ENABLED = False
 
 # Rate limit configuration: endpoint_pattern -> (min_interval_seconds, enabled)
 # Limit is "minimum seconds between clicks" - e.g. 1.0 = max 1 click/sec, 0.5 = max 2 clicks/sec
@@ -387,62 +387,65 @@ RATE_LIMIT_CONFIG = {
     # Format: "endpoint_pattern": (min_interval_sec, enabled)
     # NOTE: Paths must include /api/ prefix to match actual request paths
     
-    # Money & economy (protect against rapid exploits)
-    "/api/bank/transfer": (6.0, True),
-    "/api/bank/interest/deposit": (3.0, True),
-    "/api/bank/interest/claim": (3.0, True),
-    "/api/bank/swiss/deposit": (2.0, True),
-    "/api/bank/swiss/withdraw": (2.0, True),
+    # All per-endpoint rate limits are OFF by default.
+    # Enable individually or flip GLOBAL_RATE_LIMITS_ENABLED when ready for production.
+
+    # Money & economy
+    "/api/bank/transfer": (6.0, False),
+    "/api/bank/interest/deposit": (3.0, False),
+    "/api/bank/interest/claim": (3.0, False),
+    "/api/bank/swiss/deposit": (2.0, False),
+    "/api/bank/swiss/withdraw": (2.0, False),
     
     # Attack system
-    "/api/attack/": (1.5, True),
+    "/api/attack/": (1.5, False),
     
-    # Crimes (prevent rapid commit spam)
-    "/api/crimes/": (1.5, True),
+    # Crimes
+    "/api/crimes/": (1.5, False),
     
-    # Hitlist (prevent spam)
-    "/api/hitlist/add": (4.0, True),
-    "/api/hitlist/buy-off": (3.0, True),
+    # Hitlist
+    "/api/hitlist/add": (4.0, False),
+    "/api/hitlist/buy-off": (3.0, False),
     
-    # Store purchases (prevent rapid buying exploits)
-    "/api/store/": (2.0, True),
-    "/api/weapons/": (1.5, True),
-    "/api/armour/": (1.5, True),
+    # Store purchases
+    "/api/store/": (2.0, False),
+    "/api/weapons/": (1.5, False),
+    "/api/armour/": (1.5, False),
     
-    # Properties & racket (moderate)
+    # Properties & racket
     "/api/properties/": (1.5, False),
     "/api/racket/": (1.5, False),
     
-    # Bodyguards (no delay between hires)
-    "/api/bodyguards/": (0, True),
+    # Bodyguards
+    "/api/bodyguards/": (0, False),
     
-    # Casino/gambling (prevent rapid betting exploits)
-    "/api/casino/dice/": (1.2, True),
-    "/api/casino/roulette/": (1.2, True),
-    "/api/casino/blackjack/": (1.2, True),
-    "/api/casino/horseracing/": (1.2, True),
-    "/api/sports-betting/": (1.2, True),
+    # Casino/gambling
+    "/api/casino/dice/": (1.2, False),
+    "/api/casino/roulette/": (1.2, False),
+    "/api/casino/blackjack/": (1.2, False),
+    "/api/casino/horseracing/": (1.2, False),
+    "/api/sports-betting/": (1.2, False),
     
     # Travel & Booze Run
-    "/api/travel": (3.0, True),
-    "/api/booze-run/": (2.0, True),
+    "/api/travel": (3.0, False),
+    "/api/booze-run/": (2.0, False),
     
-    # Families (raid: 2 per enemy family per 3h enforced in endpoint; min 3s between requests)
-    "/api/families/attack-racket": (3.0, True),
+    # Families
+    "/api/families/attack-racket": (3.0, False),
     "/api/families/": (1.5, False),
     
-    # Notifications (prevent spam)
-    "/api/notifications/send": (3.0, True),
+    # Notifications
+    "/api/notifications/send": (3.0, False),
     
-    # Admin endpoints (no rate limit - admins need full access)
+    # Admin endpoints
     "/api/admin/": (0.0, False),
     
-    # Auth & profile (light limits)
-    "/api/auth/login": (3.0, True),
-    "/api/auth/register": (6.0, True),
-    "/api/auth/me": (0.5, False),  # Frequent polling is OK
+    # Auth & profile
+    "/api/auth/login": (3.0, False),
+    "/api/auth/register": (6.0, False),
+    "/api/auth/me": (0.5, False),
     
-    # Meta & read-only (light or disabled)
+    # Meta & read-only
     "/api/meta/": (0.5, False),
     "/api/users/": (0.75, False),
     "/api/leaderboard/": (1.0, False),

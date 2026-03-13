@@ -10,6 +10,9 @@ from jose import jwt, JWTError
 
 logger = logging.getLogger(__name__)
 
+# Master toggle - when False the entire security middleware is bypassed (off by default)
+SECURITY_MIDDLEWARE_ENABLED = False
+
 
 class SecurityMiddleware(BaseHTTPMiddleware):
     """
@@ -40,6 +43,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         return ""
 
     async def dispatch(self, request: Request, call_next):
+        if not SECURITY_MIDDLEWARE_ENABLED:
+            return await call_next(request)
+
         path = request.url.path
         # IP ban: blocked from accessing the server at all (checked first, no path skip)
         client_ip = self._client_ip(request)
