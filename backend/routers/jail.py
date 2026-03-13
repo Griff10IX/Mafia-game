@@ -813,7 +813,7 @@ async def spawn_jail_npcs():
             if current_npcs < 5:
                 npc_name = random.choice(npc_names)
                 rank_names = [r["name"] for r in RANKS]
-                weights = [30, 25, 20, 15, 10, 7, 5, 3, 2, 1, 1]
+                weights = [30, 25, 20, 15, 10, 7, 5, 3, 2, 1, 1, 1, 1]
                 existing = await db.jail_npcs.find_one({"username": npc_name})
                 if not existing:
                     rank_name = random.choices(rank_names, weights=weights, k=1)[0]
