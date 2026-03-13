@@ -77,14 +77,14 @@ def register(router):
             return {"message": "No preferences to update", "notification_preferences": current_user.get("notification_preferences") or DEFAULT_NOTIFICATION_PREFS}
         new_prefs = {**(current_user.get("notification_preferences") or DEFAULT_NOTIFICATION_PREFS), **updates}
         await db.users.update_one(
-            {"id": current_user["id"]},
+            {"id": current_user.get("id") or ""},
             {"$set": {"notification_preferences": new_prefs}}
         )
         return {"message": "Preferences updated", "notification_preferences": new_prefs}
 
     @router.get("/notifications")
     async def get_notifications(current_user: dict = Depends(get_current_user)):
-        user_id = current_user["id"]
+        user_id = current_user.get("id") or ""
         # Delete notifications older than 7 days (inbox retention)
         cutoff = (datetime.now(timezone.utc) - timedelta(days=INBOX_RETENTION_DAYS)).isoformat()
         await db.notifications.delete_many({"user_id": user_id, "created_at": {"$lt": cutoff}})
@@ -106,7 +106,7 @@ def register(router):
     @router.get("/notifications/sent")
     async def get_sent_messages(current_user: dict = Depends(get_current_user)):
         """Return sent direct messages for the current user."""
-        user_id = current_user["id"]
+        user_id = current_user.get("id") or ""
         sent = await db.notifications.find(
             {"user_id": user_id, "notification_type": "user_message_sent"},
             {"_id": 0}
@@ -115,27 +115,27 @@ def register(router):
 
     @router.post("/notifications/{notification_id}/read")
     async def mark_notification_read(notification_id: str, current_user: dict = Depends(get_current_user)):
-        _invalidate_list_cache(current_user["id"])
+        _invalidate_list_cache(current_user.get("id") or "")
         await db.notifications.update_one(
-            {"id": notification_id, "user_id": current_user["id"]},
+            {"id": notification_id, "user_id": current_user.get("id") or ""},
             {"$set": {"read": True}}
         )
         return {"message": "Notification marked as read"}
 
     @router.post("/notifications/read-all")
     async def mark_all_notifications_read(current_user: dict = Depends(get_current_user)):
-        _invalidate_list_cache(current_user["id"])
+        _invalidate_list_cache(current_user.get("id") or "")
         await db.notifications.update_many(
-            {"user_id": current_user["id"], "read": False},
+            {"user_id": current_user.get("id") or "", "read": False},
             {"$set": {"read": True}}
         )
         return {"message": "All notifications marked as read"}
 
     @router.delete("/notifications/{notification_id}")
     async def delete_notification(notification_id: str, current_user: dict = Depends(get_current_user)):
-        _invalidate_list_cache(current_user["id"])
+        _invalidate_list_cache(current_user.get("id") or "")
         result = await db.notifications.delete_one(
-            {"id": notification_id, "user_id": current_user["id"]}
+            {"id": notification_id, "user_id": current_user.get("id") or ""}
         )
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Notification not found")
@@ -143,14 +143,14 @@ def register(router):
 
     @router.delete("/notifications")
     async def delete_all_notifications(current_user: dict = Depends(get_current_user)):
-        _invalidate_list_cache(current_user["id"])
-        result = await db.notifications.delete_many({"user_id": current_user["id"]})
+        _invalidate_list_cache(current_user.get("id") or "")
+        result = await db.notifications.delete_many({"user_id": current_user.get("id") or ""})
         return {"message": "All messages deleted", "deleted_count": result.deleted_count}
 
     @router.post("/notifications/send")
     async def send_message_to_user(request: SendMessageRequest, current_user: dict = Depends(get_current_user)):
         """Send a direct message to another user. Message can include emojis; optional gif_url is shown as an image."""
-        _invalidate_list_cache(current_user["id"])
+        _invalidate_list_cache(current_user.get("id") or "")
         target_username = (request.target_username or "").strip()
         if not target_username:
             raise HTTPException(status_code=400, detail="Enter a username")
@@ -174,14 +174,14 @@ def register(router):
             raise HTTPException(status_code=400, detail="GIF URL must start with http:// or https://")
         sender_username = current_user.get("username") or "?"
         title = f"Message from {sender_username}"
-        extra = {"sender_id": current_user["id"], "sender_username": sender_username}
+        extra = {"sender_id": current_user.get("id") or "", "sender_username": sender_username}
         if gif_url:
             extra["gif_url"] = gif_url
         await send_notification(target["id"], title, message, "user_message", category="messages", **extra)
         sent_copy = {
             "id": str(uuid.uuid4()),
-            "user_id": current_user["id"],
-            "sender_id": current_user["id"],
+            "user_id": current_user.get("id") or "",
+            "sender_id": current_user.get("id") or "",
             "sender_username": sender_username,
             "recipient_id": target["id"],
             "recipient_username": target["username"],
@@ -216,7 +216,7 @@ def register(router):
     @router.get("/notifications/thread/{other_user_id}")
     async def get_thread(other_user_id: str, current_user: dict = Depends(get_current_user)):
         """Get conversation thread with another user (for Telegram-style chat)."""
-        me = current_user["id"]
+        me = current_user.get("id") or ""
         from_them = await db.notifications.find(
             {
                 "user_id": me,

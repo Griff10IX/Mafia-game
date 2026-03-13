@@ -410,11 +410,12 @@ export default function Bank() {
     setLoading(true);
     try {
       const [m, o] = await Promise.all([api.get('/bank/meta'), api.get('/bank/overview')]);
-      setMeta(m.data || { interest_options: [] });
-      setOverview(o.data);
+      setMeta(m.data ?? { interest_options: [] });
+      setOverview(o.data ?? null);
     } catch (e) {
       toast.error('Failed to load bank');
-      console.error('Error fetching bank data:', e);
+      setMeta({ interest_options: [] });
+      setOverview(null);
     } finally {
       setLoading(false);
     }

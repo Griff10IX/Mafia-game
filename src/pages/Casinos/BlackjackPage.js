@@ -188,15 +188,20 @@ export default function Blackjack() {
   const navigate = useNavigate();
 
   const fetchConfigAndOwnership = () => {
-    api.get('/casino/blackjack/config').then((r) => setConfig(r.data || { max_bet: 50_000_000 })).catch(() => {});
+    api.get('/casino/blackjack/config').then((r) => setConfig(r.data ?? { max_bet: 50_000_000, claim_cost: 500_000_000 })).catch(() => {
+      setConfig({ max_bet: 50_000_000, claim_cost: 500_000_000 });
+    });
     api.get('/casino/blackjack/ownership').then((r) => {
-      const data = r.data || null;
+      const data = r.data ?? null;
       setOwnership(data);
       if (data?.buy_back_reward != null) setOwnerBuyBack(String(data.buy_back_reward));
       if (data?.buy_back_offer) {
         setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
       } else { setBuyBackOffer(null); }
-    }).catch(() => setOwnership(null));
+    }).catch(() => {
+      setOwnership(null);
+      setBuyBackOffer(null);
+    });
   };
 
   useEffect(() => {
@@ -235,13 +240,17 @@ export default function Blackjack() {
   };
 
   const fetchHistory = () => {
-    api.get('/casino/blackjack/history').then((r) => setHistory(r.data?.history || [])).catch(() => {});
+    api.get('/casino/blackjack/history').then((r) => setHistory(r.data?.history ?? [])).catch(() => {
+      setHistory([]);
+    });
   };
 
   const fetchCurrentGame = () => {
     api.get('/casino/blackjack/current-game').then((r) => {
       if (r.data?.hasGame) setGame(r.data);
-    }).catch(() => {});
+    }).catch(() => {
+      setGame(null);
+    });
   };
 
   useEffect(() => { fetchConfigAndOwnership(); fetchHistory(); fetchCurrentGame(); }, []);
@@ -657,7 +666,7 @@ export default function Blackjack() {
               {history.map((item, i) => {
                 const profit = (item.payout || 0) - (item.bet || 0);
                 return (
-                  <div key={i} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-zinc-800/30 text-xs font-heading">
+                  <div key={item.created_at || i} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-zinc-800/30 text-xs font-heading">
                     <span className="text-mutedForeground truncate">{formatHistoryDate(item.created_at)}</span>
                     <span style={{ color: outcomeColor(item.result) }}>{outcomeLabel(item.result)}</span>
                     <span className="text-mutedForeground">{formatMoney(item.bet)}</span>

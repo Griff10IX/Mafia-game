@@ -207,12 +207,12 @@ export default function Dice() {
 
   const fetchConfigAndOwnership = () => {
     api.get('/casino/dice/config')
-      .then((r) => setDiceConfig(r.data || { sides_min: 2, sides_max: 5000, max_bet: 5_000_000 }))
-      .catch(() => {});
+      .then((r) => setDiceConfig(r.data ?? { sides_min: 2, sides_max: 5000, max_bet: 5_000_000 }))
+      .catch(() => setDiceConfig({ sides_min: 2, sides_max: 5000, max_bet: 5_000_000 }));
 
     api.get('/casino/dice/ownership')
       .then((r) => {
-        const data = r.data || { current_city: null, owner: null };
+        const data = r.data ?? { current_city: null, owner: null };
         setOwnership(data);
         if (data.buy_back_offer) {
           setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
@@ -220,7 +220,10 @@ export default function Dice() {
           setBuyBackOffer(null);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setOwnership({ current_city: null, owner: null });
+        setBuyBackOffer(null);
+      });
   };
 
   useEffect(() => { fetchConfigAndOwnership(); }, []);

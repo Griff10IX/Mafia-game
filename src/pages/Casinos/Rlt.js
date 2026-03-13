@@ -306,13 +306,17 @@ export default function Rlt() {
 
   const fetchOwnership = () => {
     api.get('/casino/roulette/ownership').then((r) => {
-      setOwnership(r.data);
+      setOwnership(r.data ?? null);
       if (r.data?.max_bet) setConfig((prev) => ({ ...prev, max_bet: r.data.max_bet }));
-    }).catch(() => {});
+    }).catch(() => {
+      setOwnership(null);
+    });
   };
 
   useEffect(() => {
-    api.get('/casino/roulette/config').then((r) => setConfig(r.data || { max_bet: 50_000_000 })).catch(() => {});
+    api.get('/casino/roulette/config').then((r) => setConfig(r.data ?? { max_bet: 50_000_000 })).catch(() => {
+      setConfig({ max_bet: 50_000_000 });
+    });
     fetchOwnership();
   }, []);
 

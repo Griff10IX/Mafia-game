@@ -565,7 +565,7 @@ def register(router):
     @router.post("/casino/mp-blackjack/games")
     async def mp_bj_create(request: MPCreateRequest, current_user: dict = Depends(get_current_user_verified)):
         """Create a new multiplayer blackjack game. Creator is first player; pays buy_in + extra_prize."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         username = (current_user.get("username") or "?").strip()
         max_players = max(MP_BJ_MIN_PLAYERS, min(MP_BJ_MAX_PLAYERS, request.max_players))
         buy_in = max(0, request.buy_in)
@@ -643,7 +643,7 @@ def register(router):
     @router.post("/casino/mp-blackjack/games/{game_id}/cancel")
     async def mp_bj_cancel(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Cancel an open/ready game. Creator, admin, or moderator. Refund all players."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -679,7 +679,7 @@ def register(router):
 
         Non-creators can leave while the game is not yet playing a hand; they are refunded their buy-in.
         """
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -726,7 +726,7 @@ def register(router):
     @router.post("/casino/mp-blackjack/games/{game_id}/join")
     async def mp_bj_join(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Join an open game. Pay buy_in. Game moves to ready phase when full."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         username = (current_user.get("username") or "?").strip()
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
@@ -798,7 +798,7 @@ def register(router):
     @router.post("/casino/mp-blackjack/games/{game_id}/ready")
     async def mp_bj_ready(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Mark self as ready. When all active players ready, sets all_ready_at timestamp."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -824,7 +824,7 @@ def register(router):
         Called by frontend after countdown expires (all_ready_at + MP_BJ_START_COUNTDOWN seconds).
         Deals cards and begins the playing phase.
         """
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -893,7 +893,7 @@ def register(router):
     @router.post("/casino/mp-blackjack/games/{game_id}/hit")
     async def mp_bj_hit(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Current player hits."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -942,7 +942,7 @@ def register(router):
     @router.post("/casino/mp-blackjack/games/{game_id}/stand")
     async def mp_bj_stand(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Current player stands."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -983,7 +983,7 @@ def register(router):
     @router.post("/casino/mp-blackjack/games/{game_id}/chat")
     async def mp_bj_chat(game_id: str, request: MPChatRequest, current_user: dict = Depends(get_current_user_verified)):
         """Send a chat message. Must be in the game."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         username = (current_user.get("username") or "?").strip()
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:

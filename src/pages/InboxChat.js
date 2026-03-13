@@ -55,10 +55,12 @@ export default function InboxChat() {
     if (!userId) return;
     try {
       const res = await api.get(`/notifications/thread/${userId}`);
-      setThread(res.data.thread || []);
-      setOtherUsername(res.data.other_username || 'User');
+      setThread(res.data?.thread ?? []);
+      setOtherUsername(res.data?.other_username ?? 'User');
     } catch (e) {
       toast.error(e.response?.status === 404 ? 'User not found' : 'Failed to load chat');
+      setThread([]);
+      setOtherUsername('');
       navigate('/inbox');
     } finally {
       setLoading(false);

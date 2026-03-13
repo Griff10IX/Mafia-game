@@ -60,7 +60,7 @@ export default function StockMarket() {
 
   const fetchList = useCallback(() => api.get('/stock-market/list').then((r) => setStocks(r.data?.stocks || [])).catch(() => setStocks([])), []);
   const fetchPositions = useCallback(() => api.get('/stock-market/positions').then((r) => setPositions(r.data?.positions || [])).catch(() => setPositions([])), []);
-  const fetchSummary = useCallback(() => api.get('/stock-market/summary').then((r) => setSummary(r.data || { total_trades: 0, total_profit: 0, max_points: 3000, points_in_use: 0 })).catch(() => {}), []);
+  const fetchSummary = useCallback(() => api.get('/stock-market/summary').then((r) => setSummary(r.data ?? { total_trades: 0, total_profit: 0, max_points: 3000, points_in_use: 0 })).catch(() => setSummary({ total_trades: 0, total_profit: 0, max_points: 3000, points_in_use: 0 })), []);
   const fetchHistory = useCallback(() => api.get('/stock-market/history').then((r) => setHistory(r.data?.history || [])).catch(() => setHistory([])), []);
 
   useEffect(() => {

@@ -291,7 +291,7 @@ def register(router):
     @router.get("/stock-market/positions")
     async def stock_market_positions(current_user: dict = Depends(get_current_user)):
         """Current open positions and current value (using live price from CoinGecko, fallback if missing). Auto-sells positions older than 7 days."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         now = datetime.now(timezone.utc)
         now_ts = now.timestamp()
         live_list = await _get_cached_live_prices()
@@ -372,7 +372,7 @@ def register(router):
     @router.get("/stock-market/history")
     async def stock_market_history(current_user: dict = Depends(get_current_user)):
         """Transaction history (buys and sells)."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         cursor = db.stock_transactions.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1)
         items = await cursor.to_list(100)
         return {"history": items}
@@ -380,7 +380,7 @@ def register(router):
     @router.get("/stock-market/summary")
     async def stock_market_summary(current_user: dict = Depends(get_current_user)):
         """Total trades, all-time profit/loss, points-in-market cap and usage."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         cursor = db.stock_transactions.find({"user_id": uid}, {"_id": 0, "type": 1, "profit_points": 1})
         items = await cursor.to_list(1000)
         total_trades = len(items)
@@ -397,7 +397,7 @@ def register(router):
     @router.post("/stock-market/buy")
     async def stock_market_buy(request: StockBuyRequest, current_user: dict = Depends(get_current_user)):
         """Long: spend points to buy. Short: receive points (short sell); profit if price drops. Optional stop_loss_pct and take_profit_pct (0-100)."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         stock = next((s for s in STOCKS if s["id"] == request.stock_id), None)
         if not stock:
             raise HTTPException(status_code=404, detail="Stock not found")
@@ -490,27 +490,19 @@ def register(router):
     @router.post("/stock-market/sell")
     async def stock_market_sell(request: StockSellRequest, current_user: dict = Depends(get_current_user)):
         """Close a position: long = sell (receive value); short = cover (pay to close, profit if price dropped)."""
-        uid = current_user["id"]
+        uid = current_user.get("id") or ""
         pos = await db.stock_positions.find_one({"id": request.position_id, "user_id": uid}, {"_id": 0})
         if not pos:
             raise HTTPException(status_code=404, detail="Position not found")
-        bought_at_raw = pos.get("bought_at")
-        if bought_at_raw:
-            try:
-                bought_at = datetime.fromisoformat(bought_at_raw.replace("Z", "+00:00"))
-                if bought_at.tzinfo is None:
-                    bought_at = bought_at.replace(tzinfo=timezone.utc)
-                elapsed = (datetime.now(timezone.utc) - bought_at).total_seconds()
-                if elapsed < SELL_COOLDOWN_SEC:
-                    wait_sec = int(SELL_COOLDOWN_SEC - elapsed)
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"You must wait 3 minutes after opening before closing. You can close in {wait_sec} seconds.",
-                    )
-            except HTTPException:
-                raise
-            except Exception:
-                pass
+        bought_at = _parse_bought_at(pos.get("bought_at"))
+        if bought_at:
+            elapsed = (datetime.now(timezone.utc) - bought_at).total_seconds()
+            if elapsed < SELL_COOLDOWN_SEC:
+                wait_sec = int(SELL_COOLDOWN_SEC - elapsed)
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"You must wait 3 minutes after opening before closing. You can close in {wait_sec} seconds.",
+                )
         stock = next((s for s in STOCKS if s["id"] == pos.get("stock_id")), None)
         if not stock:
             raise HTTPException(status_code=400, detail="Stock not found")

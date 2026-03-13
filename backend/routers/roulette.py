@@ -147,7 +147,7 @@ def register(router):
     @router.get("/casino/roulette/ownership")
     async def casino_roulette_ownership(current_user: dict = Depends(get_current_user_verified)):
         """Get roulette ownership for player's current city."""
-        user_id = current_user["id"]
+        user_id = current_user.get("id") or ""
         now_ts = time.time()
         entry = _ownership_cache.get(user_id)
         if entry and (now_ts - entry["ts"]) < _OWNERSHIP_TTL_SEC:
@@ -178,7 +178,7 @@ def register(router):
         if owner_id:
             owner = await db.users.find_one({"id": owner_id}, {"username": 1})
             owner_name = owner.get("username") if owner else None
-        is_owner = owner_id == current_user["id"]
+        is_owner = owner_id == current_user.get("id") or ""
         max_bet = doc.get("max_bet", ROULETTE_DEFAULT_MAX_BET)
         total_earnings = doc.get("total_earnings", 0)
         profit = int((doc.get("profit") or total_earnings or 0) or 0)
@@ -203,23 +203,23 @@ def register(router):
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
         if rank_id < CAPO_RANK_ID:
             raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim a casino. Reach Capo to hold one.")
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_roulette((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
-        owned = await _user_owns_any_casino(current_user["id"])
+        owned = await _user_owns_any_casino(current_user.get("id") or "")
         if owned and (owned.get("type") != "roulette" or owned.get("city") != city):
             raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
         stored_city, doc = await _get_roulette_ownership_doc(city)
         if doc and doc.get("owner_id"):
             raise HTTPException(status_code=400, detail="This table already has an owner")
-        user = await db.users.find_one({"id": current_user["id"]})
+        user = await db.users.find_one({"id": current_user.get("id") or ""})
         if not user or user.get("money", 0) < ROULETTE_CLAIM_COST:
             raise HTTPException(status_code=400, detail=f"You need ${ROULETTE_CLAIM_COST:,} to claim")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -ROULETTE_CLAIM_COST}})
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -ROULETTE_CLAIM_COST}})
         await db.roulette_ownership.update_one(
             {"city": stored_city or city},
-            {"$set": {"owner_id": current_user["id"], "owner_username": current_user["username"], "max_bet": ROULETTE_DEFAULT_MAX_BET, "total_earnings": 0}},
+            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": ROULETTE_DEFAULT_MAX_BET, "total_earnings": 0}},
             upsert=True
         )
         return {"message": f"You now own the roulette table in {city}!"}
@@ -227,12 +227,12 @@ def register(router):
     @router.post("/casino/roulette/relinquish")
     async def casino_roulette_relinquish(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user_verified)):
         """Give up ownership of a roulette table."""
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_roulette((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_roulette_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         await db.roulette_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None, "owner_username": None}})
         return {"message": "Ownership relinquished."}
@@ -240,12 +240,12 @@ def register(router):
     @router.post("/casino/roulette/set-max-bet")
     async def casino_roulette_set_max_bet(request: RouletteSetMaxBetRequest, current_user: dict = Depends(get_current_user_verified)):
         """Set the max bet for your roulette table."""
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_roulette((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_roulette_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         new_max = max(1_000_000, min(request.max_bet, ROULETTE_ABSOLUTE_MAX_BET))
         await db.roulette_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": new_max}})
@@ -254,42 +254,42 @@ def register(router):
     @router.post("/casino/roulette/send-to-user")
     async def casino_roulette_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user_verified)):
         """Transfer roulette table ownership to another user."""
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_roulette((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_roulette_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         target_username_pattern = _username_pattern(request.target_username.strip())
         target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1, "rank_points": 1})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
-        send_set = {"owner_id": target["id"], "owner_username": target["username"]}
+        send_set = {"owner_id": target.get("id") or "", "owner_username": target.get("username") or ""}
         if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
             send_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
         await db.roulette_ownership.update_one({"city": stored_city or city}, {"$set": send_set})
-        _invalidate_ownership_cache(target["id"])
+        _invalidate_ownership_cache(target.get("id") or "")
         return {"message": "Ownership transferred."}
 
     @router.post("/casino/roulette/sell-on-trade")
     async def casino_roulette_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user_verified)):
         """List your roulette table for sale on Quick Trade (points only)."""
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_roulette((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         if request.points <= 0:
             raise HTTPException(status_code=400, detail="Points must be positive")
         stored_city, doc = await _get_roulette_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         casino_property = {
             "_id": ObjectId(),
             "type": "casino_rlt",
             "location": city,
             "name": f"Roulette Table ({city})",
-            "owner_id": current_user["id"],
+            "owner_id": current_user.get("id") or "",
             "owner_username": current_user.get("username", "Unknown"),
             "for_sale": True,
             "sale_price": request.points,
@@ -301,7 +301,7 @@ def register(router):
     @router.post("/casino/roulette/spin")
     async def casino_roulette_spin(request: RouletteSpinRequest, current_user: dict = Depends(get_current_user_verified)):
         """Spin the roulette wheel with the provided bets."""
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         bets = request.bets or []
         if not bets:
             raise HTTPException(status_code=400, detail="No bets provided")
@@ -309,7 +309,7 @@ def register(router):
         stored_city, ownership_doc = await _get_roulette_ownership_doc(city) if city else (city, None)
         owner_id = ownership_doc.get("owner_id") if ownership_doc else None
         max_bet = ownership_doc.get("max_bet", ROULETTE_DEFAULT_MAX_BET) if ownership_doc else ROULETTE_DEFAULT_MAX_BET
-        if owner_id and owner_id == current_user["id"]:
+        if owner_id and owner_id == current_user.get("id") or "":
             raise HTTPException(status_code=400, detail="You cannot gamble at your own roulette table")
         total_stake = 0
         validated_bets = []
@@ -335,10 +335,10 @@ def register(router):
             validated_bets.append({"type": bet_type, "selection": selection, "amount": amount})
         if total_stake > max_bet:
             raise HTTPException(status_code=400, detail=f"Total bet exceeds max of ${max_bet:,}")
-        user = await db.users.find_one({"id": current_user["id"]})
+        user = await db.users.find_one({"id": current_user.get("id") or ""})
         if not user or user.get("money", 0) < total_stake:
             raise HTTPException(status_code=400, detail="Not enough money")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -total_stake}})
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -total_stake}})
         result = random.randint(0, 36)
         total_payout = 0
         for bet in validated_bets:
@@ -346,7 +346,7 @@ def register(router):
                 multiplier = _roulette_get_multiplier(bet["type"])
                 total_payout += bet["amount"] * multiplier
         if total_payout > 0:
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": total_payout}})
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": total_payout}})
         # House edge (like dice): always take cut, send to state head or owner
         owner_cut = int(total_stake * ROULETTE_HOUSE_EDGE)
         if owner_cut > 0:
@@ -361,7 +361,7 @@ def register(router):
                 )
         win = total_payout > 0
         await log_gambling(
-            current_user["id"],
+            current_user.get("id") or "",
             current_user.get("username") or "?",
             "roulette",
             {

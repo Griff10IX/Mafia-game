@@ -236,11 +236,11 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
     option_ids = [o["id"] for o in GTA_OPTIONS]
     cooldown_doc, user_gta_list = await asyncio.gather(
         db.gta_cooldowns.find_one(
-            {"user_id": current_user["id"]},
+            {"user_id": current_user.get("id") or ""},
             {"_id": 0, "cooldown_until": 1},
         ),
         db.user_gta.find(
-            {"user_id": current_user["id"], "option_id": {"$in": option_ids}},
+            {"user_id": current_user.get("id") or "", "option_id": {"$in": option_ids}},
             {"_id": 0, "option_id": 1, "attempts": 1, "successes": 1, "progress": 1, "progress_max": 1},
         ).to_list(len(option_ids)),
     )
@@ -284,7 +284,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         raise ValueError(f"Invalid GTA option: {option_id}")
     now = datetime.now(timezone.utc)
     cooldown_doc = await db.gta_cooldowns.find_one(
-        {"user_id": current_user["id"]},
+        {"user_id": current_user.get("id") or ""},
         {"_id": 0, "cooldown_until": 1},
     )
     if cooldown_doc:
@@ -297,7 +297,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
     
     # PROGRESS BAR: 10-92%. Success +3-5%. Fail -1-3%; once hit 92%, floor 77%
     user_gta = await db.user_gta.find_one(
-        {"user_id": current_user["id"], "option_id": option["id"]},
+        {"user_id": current_user.get("id") or "", "option_id": option["id"]},
         {"_id": 0},
     )
     gta_attempts = int((user_gta or {}).get("attempts", 0) or 0)
@@ -335,9 +335,9 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         progress_after = max(floor, progress - drop)
     
     cooldown_until = now + timedelta(seconds=option["cooldown"])
-    await db.gta_cooldowns.delete_many({"user_id": current_user["id"]})
+    await db.gta_cooldowns.delete_many({"user_id": current_user.get("id") or ""})
     await db.gta_cooldowns.insert_one(
-        {"user_id": current_user["id"], "cooldown_until": cooldown_until.isoformat()}
+        {"user_id": current_user.get("id") or "", "cooldown_until": cooldown_until.isoformat()}
     )
     
     set_fields = {
@@ -347,7 +347,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
     if progress_max is not None:
         set_fields["progress_max"] = progress_max
     await db.user_gta.update_one(
-        {"user_id": current_user["id"], "option_id": option["id"]},
+        {"user_id": current_user.get("id") or "", "option_id": option["id"]},
         {"$set": set_fields, "$inc": {"attempts": 1, "successes": 1 if success else 0}},
         upsert=True,
     )
@@ -372,7 +372,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
                     available_cars = list(available_cars) + [exclusive_car]
         # Prestige bonus and loot-box GTA rare perk: weight rarer cars more heavily
         from server import get_prestige_bonus
-        _gta_prestige_user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "prestige_level": 1})
+        _gta_prestige_user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "prestige_level": 1})
         _rare_boost = get_prestige_bonus(_gta_prestige_user or {})["gta_rare_boost"]
         gta_rare_perk = int(current_user.get("gta_rare_drop_perk_attempts_remaining") or 0)
         if gta_rare_perk > 0:
@@ -403,40 +403,26 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         rank_points = rank_points_map.get(car["rarity"], 5)
         rank_points = int(rank_points * ev.get("rank_points", 1.0))
         now_utc = datetime.now(timezone.utc)
-        rp_perk_until = current_user.get("rp_perk_until")
-        if rp_perk_until:
-            try:
-                until = datetime.fromisoformat(rp_perk_until.replace("Z", "+00:00"))
-                if until.tzinfo is None:
-                    until = until.replace(tzinfo=timezone.utc)
-                if now_utc < until:
-                    rank_points = int(rank_points * 1.1)
-            except Exception:
-                pass
-        xp_gta_until = current_user.get("xp_gta_until")
-        if xp_gta_until:
-            try:
-                until = datetime.fromisoformat(xp_gta_until.replace("Z", "+00:00"))
-                if until.tzinfo is None:
-                    until = until.replace(tzinfo=timezone.utc)
-                if now_utc < until:
-                    rank_points = rank_points * 2
-            except Exception:
-                pass
+        rp_perk_until = _parse_iso_datetime(current_user.get("rp_perk_until"))
+        if rp_perk_until and now_utc < rp_perk_until:
+            rank_points = int(rank_points * 1.1)
+        xp_gta_until = _parse_iso_datetime(current_user.get("xp_gta_until"))
+        if xp_gta_until and now_utc < xp_gta_until:
+            rank_points = rank_points * 2
         gta_rare_perk = int(current_user.get("gta_rare_drop_perk_attempts_remaining") or 0)
         if gta_rare_perk > 0:
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"gta_rare_drop_perk_attempts_remaining": -1}})
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"gta_rare_drop_perk_attempts_remaining": -1}})
         await db.user_cars.insert_one(
             {
                 "id": str(uuid.uuid4()),
-                "user_id": current_user["id"],
+                "user_id": current_user.get("id") or "",
                 "car_id": car["id"],
                 "car_name": car["name"],
                 "acquired_at": datetime.now(timezone.utc).isoformat(),
                 "damage_percent": damage_percent,
             }
         )
-        _invalidate_travel_info_cache(current_user["id"])
+        _invalidate_travel_info_cache(current_user.get("id") or "")
         rp_before = int(current_user.get("rank_points") or 0)
         gta_inc = {"money": car["value"], "rank_points": rank_points}
         if not caller_updates_total_gta:
@@ -447,23 +433,23 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         if respect_drop:
             gta_inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_GTA_MULT))
         await db.users.update_one(
-            {"id": current_user["id"]},
+            {"id": current_user.get("id") or ""},
             {"$inc": gta_inc},
         )
         if gta_inc.get("respect_points"):
-            await log_respect_earned(current_user["id"], gta_inc["respect_points"], "gta")
+            await log_respect_earned(current_user.get("id") or "", gta_inc["respect_points"], "gta")
         new_total_gta = (current_user.get("total_gta") or 0) + 1
         claimed = current_user.get("respect_points_gta_milestones_claimed") or []
         new_claimed = [m for m in GTA_MILESTONES if m <= new_total_gta and m not in claimed]
         milestone_respect = sum(GTA_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
-        await _award_gta_milestones(current_user["id"], new_total_gta, claimed)
+        await _award_gta_milestones(current_user.get("id") or "", new_total_gta, claimed)
         respect_earned = max(0, int((respect_drop or 0) * RESPECT_FROM_GTA_MULT)) + max(0, int(milestone_respect * RESPECT_FROM_GTA_MULT))
         try:
-            await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
+            await maybe_process_rank_up(current_user.get("id") or "", rp_before, rank_points, current_user.get("username", ""))
         except Exception as e:
             logger.exception("Rank-up notification (GTA): %s", e)
         try:
-            await update_objectives_progress(current_user["id"], "gta", 1)
+            await update_objectives_progress(current_user.get("id") or "", "gta", 1)
         except Exception:
             pass
         msg = random.choice(GTA_SUCCESS_MESSAGES).format(car_name=car["name"])
@@ -482,7 +468,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
     if caught:
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=option["jail_time"])
         await db.users.update_one(
-            {"id": current_user["id"]},
+            {"id": current_user.get("id") or ""},
             {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitch_attempted_this_term": False}},
         )
         fail_msg = random.choice(GTA_FAIL_CAUGHT_MESSAGES).format(seconds=option["jail_time"])
@@ -518,7 +504,7 @@ async def attempt_gta(
         if jail_time and jail_time > datetime.now(timezone.utc):
             raise HTTPException(status_code=400, detail="You are in jail!")
         await db.users.update_one(
-            {"id": current_user["id"]},
+            {"id": current_user.get("id") or ""},
             {"$set": {"in_jail": False, "jail_until": None}, "$unset": {"auto_rank_next_run_at": ""}},
         )
     option = next((o for o in GTA_OPTIONS if o["id"] == request.option_id), None)
@@ -536,7 +522,7 @@ async def attempt_gta(
         )
     now = datetime.now(timezone.utc)
     cooldown_doc = await db.gta_cooldowns.find_one(
-        {"user_id": current_user["id"]},
+        {"user_id": current_user.get("id") or ""},
         {"_id": 0, "cooldown_until": 1},
     )
     if cooldown_doc:
@@ -555,7 +541,7 @@ async def attempt_gta(
     jailed = getattr(result, "jailed", False)
     jail_seconds = int(option["jail_time"]) if (option and jailed) else None
     event_doc = {
-        "user_id": current_user["id"],
+        "user_id": current_user.get("id") or "",
         "username": current_user.get("username") or "",
         "at": now,
         "success": success,
@@ -579,7 +565,7 @@ async def get_gta_stats(current_user: dict = Depends(get_current_user)):
     last_24h_start = now - timedelta(hours=24)
     seven_days_start = now - timedelta(days=7)
     pipeline = [
-        {"$match": {"user_id": current_user["id"]}},
+        {"$match": {"user_id": current_user.get("id") or ""}},
         {
             "$facet": {
                 "today": [
@@ -625,9 +611,9 @@ MELT_BULLETS_COOLDOWN_SECONDS = 45  # Only 1 car can be melted for bullets every
 
 
 async def get_garage(current_user: dict = Depends(get_current_user)):
-    cars = await db.user_cars.find({"user_id": current_user["id"]}).to_list(1000)
+    cars = await db.user_cars.find({"user_id": current_user.get("id") or ""}).to_list(1000)
     user_doc = await db.users.find_one(
-        {"id": current_user["id"]},
+        {"id": current_user.get("id") or ""},
         {"_id": 0, "melt_bullets_cooldown_until": 1},
     )
     melt_bullets_cooldown_until = user_doc.get("melt_bullets_cooldown_until") if user_doc else None
@@ -663,7 +649,7 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
 async def get_recent_stolen(current_user: dict = Depends(get_current_user)):
     """Last 10 cars stolen (by acquired_at desc) for the GTA page. Same shape as garage entries."""
     cursor = (
-        db.user_cars.find({"user_id": current_user["id"]})
+        db.user_cars.find({"user_id": current_user.get("id") or ""})
         .sort("acquired_at", -1)
         .limit(10)
     )
@@ -939,20 +925,20 @@ async def buy_car(
     now = datetime.now(timezone.utc)
     doc = {
         "id": str(uuid.uuid4()),
-        "user_id": current_user["id"],
+        "user_id": current_user.get("id") or "",
         "car_id": request.car_id,
         "car_name": car_info.get("name"),
         "acquired_at": now.isoformat(),
         "damage_percent": 0,
     }
     await db.user_cars.insert_one(doc)
-    _invalidate_travel_info_cache(current_user["id"])
+    _invalidate_travel_info_cache(current_user.get("id") or "")
     await db.users.update_one(
-        {"id": current_user["id"]},
+        {"id": current_user.get("id") or ""},
         {"$inc": {"money": -price}},
     )
     await log_activity(
-        current_user["id"],
+        current_user.get("id") or "",
         current_user.get("username") or "?",
         "garage_buy_car",
         {"car_id": request.car_id, "car_name": car_info.get("name"), "price": price, "source": "dealer"},
@@ -969,7 +955,7 @@ async def buy_car(
 async def get_marketplace_listings(current_user: dict = Depends(get_current_user)):
     """List cars that other players have listed for sale (cash). Excludes current user's own listings."""
     cursor = db.user_cars.find(
-        {"listed_for_sale": True, "user_id": {"$ne": current_user["id"]}},
+        {"listed_for_sale": True, "user_id": {"$ne": current_user.get("id") or ""}},
         {"_id": 1, "id": 1, "user_id": 1, "car_id": 1, "car_name": 1, "custom_name": 1, "sale_price": 1, "listed_at": 1, "damage_percent": 1},
     ).sort("listed_at", -1)
     listings = await cursor.to_list(200)
@@ -1004,12 +990,12 @@ async def list_car(
     if request.price <= 0:
         raise HTTPException(status_code=400, detail="Price must be positive")
     user_car = await db.user_cars.find_one(
-        {"user_id": current_user["id"], "id": request.user_car_id}
+        {"user_id": current_user.get("id") or "", "id": request.user_car_id}
     )
     if not user_car:
         try:
             user_car = await db.user_cars.find_one(
-                {"user_id": current_user["id"], "_id": ObjectId(request.user_car_id)}
+                {"user_id": current_user.get("id") or "", "_id": ObjectId(request.user_car_id)}
             )
         except Exception:
             user_car = None
@@ -1026,10 +1012,10 @@ async def list_car(
     if user_car.get("_id") is not None:
         q = {"_id": user_car["_id"]}
     else:
-        q = {"user_id": current_user["id"], "id": user_car.get("id")}
+        q = {"user_id": current_user.get("id") or "", "id": user_car.get("id")}
     await db.user_cars.update_one(q, {"$set": {"listed_for_sale": True, "sale_price": request.price, "listed_at": now}})
     await log_activity(
-        current_user["id"],
+        current_user.get("id") or "",
         current_user.get("username") or "?",
         "garage_list_car",
         {"user_car_id": request.user_car_id, "car_id": user_car.get("car_id"), "car_name": user_car.get("car_name"), "sale_price": request.price},
@@ -1042,12 +1028,12 @@ async def delist_car(
 ):
     """Remove your car from the marketplace."""
     user_car = await db.user_cars.find_one(
-        {"user_id": current_user["id"], "id": request.user_car_id}
+        {"user_id": current_user.get("id") or "", "id": request.user_car_id}
     )
     if not user_car:
         try:
             user_car = await db.user_cars.find_one(
-                {"user_id": current_user["id"], "_id": ObjectId(request.user_car_id)}
+                {"user_id": current_user.get("id") or "", "_id": ObjectId(request.user_car_id)}
             )
         except Exception:
             user_car = None
@@ -1058,7 +1044,7 @@ async def delist_car(
     if user_car.get("_id") is not None:
         q = {"_id": user_car["_id"]}
     else:
-        q = {"user_id": current_user["id"], "id": user_car.get("id")}
+        q = {"user_id": current_user.get("id") or "", "id": user_car.get("id")}
     await db.user_cars.update_one(q, {"$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}})
     return {"message": "Car delisted"}
 
@@ -1067,7 +1053,7 @@ async def buy_listed_car(
     request: GTABuyListedCarRequest, current_user: dict = Depends(get_current_user_verified)
 ):
     """Buy a car listed by another player (pay cash to seller)."""
-    buyer_id = current_user["id"]
+    buyer_id = current_user.get("id") or ""
     user_car = await db.user_cars.find_one(
         {"id": request.user_car_id, "listed_for_sale": True}
     )
@@ -1141,12 +1127,12 @@ async def repair_car(
 ):
     """Repair a car in the garage (pay cash to set damage to 0)."""
     user_car = await db.user_cars.find_one(
-        {"user_id": current_user["id"], "id": request.user_car_id}
+        {"user_id": current_user.get("id") or "", "id": request.user_car_id}
     )
     if not user_car:
         try:
             user_car = await db.user_cars.find_one(
-                {"user_id": current_user["id"], "_id": ObjectId(request.user_car_id)}
+                {"user_id": current_user.get("id") or "", "_id": ObjectId(request.user_car_id)}
             )
         except Exception:
             user_car = None
@@ -1165,9 +1151,9 @@ async def repair_car(
     if user_car.get("_id") is not None:
         q = {"_id": user_car["_id"]}
     else:
-        q = {"user_id": current_user["id"], "id": user_car.get("id")}
+        q = {"user_id": current_user.get("id") or "", "id": user_car.get("id")}
     await db.user_cars.update_one(q, {"$set": {"damage_percent": 0}})
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -cost}})
+    await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -cost}})
     return {
         "message": f"Repaired for ${cost:,}. Damage 0%.",
         "damage_percent": 0,
@@ -1206,12 +1192,12 @@ async def update_custom_car_image(
 ):
     """Update the custom car picture URL for a user's custom car (car_id car_custom)."""
     user_car = await db.user_cars.find_one(
-        {"user_id": current_user["id"], "id": user_car_id}
+        {"user_id": current_user.get("id") or "", "id": user_car_id}
     )
     if not user_car:
         try:
             user_car = await db.user_cars.find_one(
-                {"user_id": current_user["id"], "_id": ObjectId(user_car_id)}
+                {"user_id": current_user.get("id") or "", "_id": ObjectId(user_car_id)}
             )
         except Exception:
             user_car = None
@@ -1223,7 +1209,7 @@ async def update_custom_car_image(
     if user_car.get("_id") is not None:
         q = {"_id": user_car["_id"]}
     else:
-        q = {"user_id": current_user["id"], "id": user_car.get("id")}
+        q = {"user_id": current_user.get("id") or "", "id": user_car.get("id")}
     if value is None:
         await db.user_cars.update_one(q, {"$unset": {"custom_image_url": ""}})
     else:
@@ -1264,11 +1250,11 @@ async def get_view_car(
         "travel_time": travel_time,
         "value": car_info.get("value", 0),
     }
-    if owner_id == current_user["id"]:
+    if owner_id == current_user.get("id") or "":
         out["owner"] = "you"
         out["listed_for_sale"] = bool(user_car.get("listed_for_sale"))
         out["sale_price"] = user_car.get("sale_price")
-        user_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "profile_featured_car_id": 1, "profile_show_cars": 1, "profile_car_ids": 1})
+        user_doc = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "profile_featured_car_id": 1, "profile_show_cars": 1, "profile_car_ids": 1})
         car_ids_on_profile = (user_doc or {}).get("profile_car_ids") or ([(user_doc or {}).get("profile_featured_car_id")] if (user_doc or {}).get("profile_featured_car_id") else [])
         out["profile_car_ids"] = car_ids_on_profile
         out["featured_on_profile"] = user_car.get("id") in car_ids_on_profile

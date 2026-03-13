@@ -85,7 +85,7 @@ async def bank_meta(current_user: dict = Depends(get_current_user_verified)):
 
 
 async def bank_overview(current_user: dict = Depends(get_current_user_verified)):
-    uid = current_user["id"]
+    uid = current_user.get("id") or ""
     now_ts = time.monotonic()
     entry = _overview_cache.get(uid)
     if entry is not None and entry[1] > now_ts:
@@ -135,7 +135,7 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     rate = float(opt["rate"])
     hours = int(opt["hours"])
 
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
+    user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "money": 1})
     money = int(user.get("money", 0) or 0) if user else 0
     if amount > money:
         raise HTTPException(status_code=400, detail="Insufficient cash on hand")
@@ -143,7 +143,7 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     # ECONOMY LIMIT: Max $50M total in unclaimed interest deposits
     MAX_INTEREST_DEPOSITS = 50_000_000
     existing_deposits = await db.bank_deposits.aggregate([
-        {"$match": {"user_id": current_user["id"], "claimed_at": None}},
+        {"$match": {"user_id": current_user.get("id") or "", "claimed_at": None}},
         {"$group": {"_id": None, "total_principal": {"$sum": "$principal"}}}
     ]).to_list(1)
     current_total = int(existing_deposits[0].get("total_principal", 0)) if existing_deposits else 0
@@ -161,12 +161,12 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
 
     deposit_id = str(uuid.uuid4())
     await db.users.update_one(
-        {"id": current_user["id"]},
+        {"id": current_user.get("id") or ""},
         {"$inc": {"money": -amount, "total_interest_deposited": int(amount)}},
     )
     await db.bank_deposits.insert_one({
         "id": deposit_id,
-        "user_id": current_user["id"],
+        "user_id": current_user.get("id") or "",
         "principal": int(amount),
         "duration_hours": hours,
         "interest_rate": rate,
@@ -177,16 +177,16 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     })
     try:
         if update_objectives_progress:
-            await update_objectives_progress(current_user["id"], "deposit_interest", amount)
+            await update_objectives_progress(current_user.get("id") or "", "deposit_interest", amount)
     except Exception:
         pass
-    _invalidate_overview_cache(current_user["id"])
+    _invalidate_overview_cache(current_user.get("id") or "")
     return {"message": f"Deposited ${amount:,} for {hours}h", "deposit_id": deposit_id, "interest": interest, "matures_at": matures.isoformat()}
 
 
 async def bank_interest_claim(request: BankDepositClaimRequest, current_user: dict = Depends(get_current_user_verified)):
     """Claim a matured interest deposit. Early withdrawal is not allowed."""
-    dep = await db.bank_deposits.find_one({"id": request.deposit_id, "user_id": current_user["id"]}, {"_id": 0})
+    dep = await db.bank_deposits.find_one({"id": request.deposit_id, "user_id": current_user.get("id") or ""}, {"_id": 0})
     if not dep:
         raise HTTPException(status_code=404, detail="Deposit not found")
     if dep.get("claimed_at"):
@@ -203,9 +203,9 @@ async def bank_interest_claim(request: BankDepositClaimRequest, current_user: di
     interest = int(dep.get("interest_amount", 0) or 0)
     total = principal + interest
 
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": total}})
+    await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": total}})
     await db.bank_deposits.update_one({"id": dep["id"]}, {"$set": {"claimed_at": now.isoformat()}})
-    _invalidate_overview_cache(current_user["id"])
+    _invalidate_overview_cache(current_user.get("id") or "")
     return {"message": f"Claimed ${total:,} (${principal:,} + ${interest:,} interest)", "total": total}
 
 
@@ -213,7 +213,7 @@ async def bank_swiss_deposit(request: BankSwissMoveRequest, current_user: dict =
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1, "swiss_balance": 1, "swiss_limit": 1})
+    user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "money": 1, "swiss_balance": 1, "swiss_limit": 1})
     money = int(user.get("money", 0) or 0) if user else 0
     swiss_balance = int(user.get("swiss_balance", 0) or 0) if user else 0
     swiss_limit = int(user.get("swiss_limit", SWISS_BANK_LIMIT_START) or SWISS_BANK_LIMIT_START) if user else SWISS_BANK_LIMIT_START
@@ -223,10 +223,10 @@ async def bank_swiss_deposit(request: BankSwissMoveRequest, current_user: dict =
         raise HTTPException(status_code=400, detail=f"Swiss bank limit is ${swiss_limit:,}")
 
     await db.users.update_one(
-        {"id": current_user["id"]},
+        {"id": current_user.get("id") or ""},
         {"$inc": {"money": -amount, "swiss_balance": amount}}
     )
-    _invalidate_overview_cache(current_user["id"])
+    _invalidate_overview_cache(current_user.get("id") or "")
     return {"message": f"Deposited ${amount:,} into Swiss Bank"}
 
 
@@ -234,22 +234,22 @@ async def bank_swiss_withdraw(request: BankSwissMoveRequest, current_user: dict 
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "swiss_balance": 1})
+    user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "swiss_balance": 1})
     swiss_balance = int(user.get("swiss_balance", 0) or 0) if user else 0
     if amount > swiss_balance:
         raise HTTPException(status_code=400, detail="Insufficient Swiss balance")
     await db.users.update_one(
-        {"id": current_user["id"]},
+        {"id": current_user.get("id") or ""},
         {"$inc": {"money": amount, "swiss_balance": -amount}}
     )
-    _invalidate_overview_cache(current_user["id"])
+    _invalidate_overview_cache(current_user.get("id") or "")
     return {"message": f"Withdrew ${amount:,} from Swiss Bank"}
 
 
 async def bank_transfer(request: MoneyTransferRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
     if check_rate_limit:
         try:
-            allowed, error_msg = check_rate_limit(current_user["id"], "money_transfers")
+            allowed, error_msg = check_rate_limit(current_user.get("id") or "", "money_transfers")
             if not allowed:
                 raise HTTPException(status_code=429, detail=error_msg)
         except TypeError:
@@ -270,31 +270,31 @@ async def bank_transfer(request: MoneyTransferRequest, req: Request, current_use
     if recipient.get("is_dead"):
         raise HTTPException(status_code=400, detail="Recipient is dead")
 
-    sender = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
+    sender = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "money": 1})
     money = int(sender.get("money", 0) or 0) if sender else 0
     if amount > money:
         raise HTTPException(status_code=400, detail="Insufficient cash on hand")
 
     now = datetime.now(timezone.utc).isoformat()
     transfer_id = str(uuid.uuid4())
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -amount}})
+    await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -amount}})
     await db.users.update_one({"id": recipient["id"]}, {"$inc": {"money": amount}})
     if security_module and getattr(security_module, "check_negative_balance", None):
         try:
-            await security_module.check_negative_balance(db, current_user["id"], current_user.get("username", ""))
+            await security_module.check_negative_balance(db, current_user.get("id") or "", current_user.get("username", ""))
             await security_module.check_negative_balance(db, recipient["id"], recipient.get("username", ""))
         except Exception:
             pass
     await db.money_transfers.insert_one({
         "id": transfer_id,
-        "from_user_id": current_user["id"],
+        "from_user_id": current_user.get("id") or "",
         "from_username": current_user.get("username", ""),
         "to_user_id": recipient["id"],
         "to_username": recipient.get("username", ""),
         "amount": int(amount),
         "created_at": now,
     })
-    _invalidate_overview_cache(current_user["id"])
+    _invalidate_overview_cache(current_user.get("id") or "")
     _invalidate_overview_cache(recipient["id"])
     return {"message": f"Sent ${amount:,} to {recipient.get('username', '')}"}
 

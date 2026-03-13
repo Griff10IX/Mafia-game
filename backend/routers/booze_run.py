@@ -16,6 +16,19 @@ from server import (
     _is_admin,
 )
 
+
+def _parse_iso_datetime(s):
+    """Parse ISO datetime string safely; return timezone-aware datetime or None."""
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
 # ----- Constants -----
 BOOZE_ROTATION_HOURS = 3
 _booze_rotation_override_seconds: Optional[int] = None
@@ -152,12 +165,9 @@ def _booze_user_carrying_total(carrying: dict) -> int:
 def _booze_user_in_jail(user: dict) -> bool:
     if not user.get("in_jail"):
         return False
-    jail_until_iso = user.get("jail_until")
-    if not jail_until_iso:
+    jail_until = _parse_iso_datetime(user.get("jail_until"))
+    if not jail_until:
         return False
-    jail_until = datetime.fromisoformat(jail_until_iso.replace("Z", "+00:00"))
-    if jail_until.tzinfo is None:
-        jail_until = jail_until.replace(tzinfo=timezone.utc)
     return jail_until > datetime.now(timezone.utc)
 
 
@@ -191,16 +201,9 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int) -> dict:
     booze_index = booze_ids.index(booze_id)
     prices_map = _booze_prices_for_rotation()
     price = prices_map.get((loc_index, booze_index), 400)
-    booze_until = user.get("booze_until")
-    if booze_until:
-        try:
-            until = datetime.fromisoformat(booze_until.replace("Z", "+00:00"))
-            if until.tzinfo is None:
-                until = until.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) < until:
-                price = max(1, int(price * 0.9))
-        except Exception:
-            pass
+    booze_until = _parse_iso_datetime(user.get("booze_until"))
+    if booze_until and datetime.now(timezone.utc) < booze_until:
+        price = max(1, int(price * 0.9))
     cost = price * amount
     if user.get("money", 0) < cost:
         raise HTTPException(status_code=400, detail="Insufficient money")
@@ -429,7 +432,7 @@ async def booze_run_sell(request: BoozeSellRequest, current_user: dict = Depends
 
 
 async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
-    if current_user["points"] < BOOZE_CAPACITY_UPGRADE_COST:
+    if int(current_user.get("points") or 0) < BOOZE_CAPACITY_UPGRADE_COST:
         raise HTTPException(status_code=400, detail="Insufficient points")
     current_bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
     if current_bonus >= BOOZE_CAPACITY_BONUS_MAX:

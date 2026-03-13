@@ -14,6 +14,19 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, _is_admin, _is_moderator, _is_hdo, log_activity, send_notification, ADMIN_EMAILS
 
 
+def _parse_iso_datetime(s):
+    """Parse ISO datetime string safely; return timezone-aware datetime or None."""
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
 MOD_DEFAULT = "#1e3a5f"
 ADMIN_DEFAULT = "#a78bfa"
 
@@ -199,7 +212,7 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
         if c_author_id and colors.get(c_author_id):
             c["author_online_color"] = colors[c_author_id]
     # Attach like status for current user
-    uid = current_user["id"]
+    uid = current_user.get("id") or ""
     for c in comments:
         liked = await db.forum_comment_likes.find_one({"comment_id": c["id"], "user_id": uid})
         c["liked"] = liked is not None
@@ -266,21 +279,15 @@ async def create_topic(
         if existing and existing.get("crew_oc_forum_topic_id"):
             raise HTTPException(status_code=400, detail="Family already has a Crew OC topic. Use that topic or remove the link from family first.")
         # Crew OC topic only when OC is available or within CREW_OC_TOPIC_WINDOW_MINUTES before it becomes available
-        cooldown_until = fam.get("crew_oc_cooldown_until")
+        cooldown_until = _parse_iso_datetime(fam.get("crew_oc_cooldown_until"))
         if cooldown_until:
-            try:
-                until = datetime.fromisoformat(str(cooldown_until).replace("Z", "+00:00"))
-                now = datetime.now(timezone.utc)
-                window_start = until - timedelta(minutes=CREW_OC_TOPIC_WINDOW_MINUTES)
-                if now < window_start:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"You can only create a Crew OC topic when your Crew OC is available or up to {CREW_OC_TOPIC_WINDOW_MINUTES} minutes before it becomes available.",
-                    )
-            except HTTPException:
-                raise
-            except Exception:
-                pass
+            now = datetime.now(timezone.utc)
+            window_start = cooldown_until - timedelta(minutes=CREW_OC_TOPIC_WINDOW_MINUTES)
+            if now < window_start:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"You can only create a Crew OC topic when your Crew OC is available or up to {CREW_OC_TOPIC_WINDOW_MINUTES} minutes before it becomes available.",
+                )
     if category not in FORUM_CATEGORIES:
         category = "general"
     if not title:
@@ -460,7 +467,7 @@ async def like_comment(
     comment = await db.forum_comments.find_one({"id": comment_id, "topic_id": topic_id}, {"_id": 0})
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
-    uid = current_user["id"]
+    uid = current_user.get("id") or ""
     existing = await db.forum_comment_likes.find_one({"comment_id": comment_id, "user_id": uid})
     if existing:
         await db.forum_comment_likes.delete_one({"comment_id": comment_id, "user_id": uid})
@@ -480,7 +487,7 @@ async def update_topic(
     topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
-    uid = current_user["id"]
+    uid = current_user.get("id") or ""
     is_author = topic.get("author_id") == uid
     is_admin = _is_admin(current_user)
     is_mod = _is_moderator(current_user)

@@ -91,6 +91,8 @@ export default function ForumTopic() {
       setTopic(res.data?.topic ?? null);
       setComments(res.data?.comments ?? []);
     } catch (e) {
+      setTopic(null);
+      setComments([]);
       if (e.response?.status === 404) {
         toast.error('Topic not found');
         navigate('/forum');

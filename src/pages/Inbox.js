@@ -473,11 +473,12 @@ export default function Inbox() {
   const fetchNotifications = useCallback(async () => {
     try {
       const response = await api.get('/notifications');
-      setNotifications(response.data.notifications);
-      setUnreadCount(response.data.unread_count);
+      setNotifications(response.data?.notifications ?? []);
+      setUnreadCount(response.data?.unread_count ?? 0);
     } catch (error) {
       toast.error('Failed to load notifications');
-      console.error('Error fetching notifications:', error);
+      setNotifications([]);
+      setUnreadCount(0);
     } finally {
       setLoading(false);
     }
@@ -486,10 +487,9 @@ export default function Inbox() {
   const fetchSentMessages = useCallback(async () => {
     try {
       const response = await api.get('/notifications/sent');
-      setSentMessages(response.data.sent_messages || []);
+      setSentMessages(response.data?.sent_messages ?? []);
     } catch (error) {
-      console.error('Error fetching sent messages:', error);
-      // Don't show error toast as this is optional
+      setSentMessages([]);
     }
   }, []);
 

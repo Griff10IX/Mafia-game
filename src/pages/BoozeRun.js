@@ -629,6 +629,7 @@ export default function BoozeRun() {
       setConfig(r.data);
     } catch (e) {
       toast.error(apiErrorDetail(e, 'Failed to load booze run'));
+      setConfig(null);
     } finally {
       setLoading(false);
     }

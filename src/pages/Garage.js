@@ -481,10 +481,12 @@ export default function Garage() {
   const fetchGarage = async () => {
     try {
       const response = await api.get('/gta/garage');
-      setCars(response.data.cars ?? []);
-      setMeltBulletsCooldownUntil(response.data.melt_bullets_cooldown_until ?? null);
+      setCars(response.data?.cars ?? []);
+      setMeltBulletsCooldownUntil(response.data?.melt_bullets_cooldown_until ?? null);
     } catch (error) {
       toast.error('Failed to load garage');
+      setCars([]);
+      setMeltBulletsCooldownUntil(null);
     } finally {
       setLoading(false);
     }
@@ -685,9 +687,9 @@ export default function Garage() {
           />
 
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
-            {displayedCars.map((car, index) => (
+            {displayedCars.map((car) => (
               <CarCard
-                key={index}
+                key={car.user_car_id || car._id}
                 car={car}
                 isSelected={selectedCars.includes(car.user_car_id)}
                 onToggle={toggleSelect}

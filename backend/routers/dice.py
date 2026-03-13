@@ -124,7 +124,7 @@ def register(router):
         """Current city's dice ownership and effective max_bet (owner's or default).
         Expired buy-back offers are auto-REJECTED (winner keeps ownership).
         """
-        user_id = current_user["id"]
+        user_id = current_user.get("id") or ""
         now_ts = time.time()
         entry = _ownership_cache.get(user_id)
         if entry and (now_ts - entry["ts"]) < _OWNERSHIP_TTL_SEC:
@@ -152,7 +152,7 @@ def register(router):
         if max_bet is None:
             max_bet = DICE_MAX_BET
         buy_back_reward = doc.get("buy_back_reward")
-        is_owner = current_user["id"] == owner_id
+        is_owner = current_user.get("id") or "" == owner_id
         owner = None
         if owner_id:
             u = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "money": 1})
@@ -162,7 +162,7 @@ def register(router):
                 owner = {"username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name}
         profit = int((doc.get("profit") or 0) or 0)
         active_offer = await db.dice_buy_back_offers.find_one(
-            {"to_user_id": current_user["id"]},
+            {"to_user_id": current_user.get("id") or ""},
             {"_id": 0, "id": 1, "points_offered": 1, "amount_shortfall": 1, "owner_paid": 1, "expires_at": 1}
         )
         buy_back_offer = None
@@ -195,7 +195,7 @@ def register(router):
     @router.post("/casino/dice/play")
     async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depends(get_current_user_verified)):
         """Place a dice bet. Win if roll == chosen_number; payout = stake * sides * (1 - house_edge)."""
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         raw_city = (current_user.get("current_state") or STATES[0] if STATES else "").strip()
         city = _normalize_city_for_dice(raw_city) if raw_city else (STATES[0] if STATES else "")
         if not city:
@@ -215,7 +215,7 @@ def register(router):
         if doc:
             max_bet = doc.get("max_bet") if doc.get("max_bet") is not None else DICE_MAX_BET
             owner_id = doc.get("owner_id")
-        if owner_id and owner_id == current_user["id"]:
+        if owner_id and owner_id == current_user.get("id") or "":
             raise HTTPException(status_code=400, detail="You cannot play at your own table")
         if stake > max_bet:
             raise HTTPException(status_code=400, detail=f"Stake exceeds max bet ({max_bet})")
@@ -227,24 +227,24 @@ def register(router):
         win = roll == chosen
         head_family_id = await get_head_family_id_for_state(db_city)
         if not win:
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -stake}})
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -stake}})
             if head_family_id:
                 await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": stake, "state_head_income.dice": stake}})
             elif owner_id:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
                 await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake}})
-            await log_gambling(current_user["id"], current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "chosen": chosen, "roll": roll, "win": False, "payout": 0})
+            await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "chosen": chosen, "roll": roll, "win": False, "payout": 0})
             return {"roll": roll, "win": False, "payout": 0, "actual_payout": 0, "owner_paid": 0, "shortfall": 0, "ownership_transferred": False, "buy_back_offer": None}
         if not owner_id:
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout_full - stake}})
-            await log_gambling(current_user["id"], current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full})
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout_full - stake}})
+            await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full})
             return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": payout_full, "owner_paid": 0, "shortfall": 0, "ownership_transferred": False, "buy_back_offer": None}
         owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
         owner_money = int((owner.get("money") or 0) or 0)
         owner_username = owner.get("username") if owner else None
         actual_payout = min(payout_full, owner_money)
         shortfall = payout_full - actual_payout
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": actual_payout - stake}})
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout - stake}})
         await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout}})
         ownership_transferred = False
         buy_back_offer = None
@@ -252,7 +252,7 @@ def register(router):
         edge = int(stake * sides * DICE_HOUSE_EDGE)
         if shortfall > 0:
             ownership_transferred = True
-            dice_owner_set = {"owner_id": current_user["id"], "owner_username": current_user["username"]}
+            dice_owner_set = {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or ""}
             if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
                 dice_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
             await db.dice_ownership.update_one({"city": db_city}, {"$set": dice_owner_set})
@@ -270,7 +270,7 @@ def register(router):
                     "city": db_city,
                     "from_owner_id": owner_id,
                     "from_owner_username": owner_username,
-                    "to_user_id": current_user["id"],
+                    "to_user_id": current_user.get("id") or "",
                     "to_username": current_user.get("username"),
                     "points_offered": points_offered,
                     "amount_shortfall": shortfall,
@@ -286,7 +286,7 @@ def register(router):
             else:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
                 await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
-        await log_gambling(current_user["id"], current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "shortfall": shortfall})
+        await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "shortfall": shortfall})
         return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "owner_paid": actual_payout, "shortfall": shortfall, "ownership_transferred": ownership_transferred, "buy_back_offer": buy_back_offer}
 
     @router.post("/casino/dice/claim")
@@ -295,11 +295,11 @@ def register(router):
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
         if rank_id < CAPO_RANK_ID:
             raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim a casino. Reach Capo to hold one.")
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_dice((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
-        owned = await _user_owns_any_casino(current_user["id"])
+        owned = await _user_owns_any_casino(current_user.get("id") or "")
         if owned and (owned.get("type") != "dice" or owned.get("city") != city):
             raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
         user_city = _normalize_city_for_dice((current_user.get("current_state") or "").strip())
@@ -314,24 +314,24 @@ def register(router):
         await db.dice_ownership.update_one(
             {"city": city},
             {
-                "$set": {"owner_id": current_user["id"], "owner_username": current_user["username"], "buy_back_reward": 0, "profit": 0},
+                "$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "buy_back_reward": 0, "profit": 0},
                 "$setOnInsert": {"max_bet": DICE_MAX_BET},  # only set default on new docs; preserve owner's configured max_bet on reclaim
             },
             upsert=True,
         )
         if DICE_CLAIM_COST_POINTS > 0:
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -DICE_CLAIM_COST_POINTS}})
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": -DICE_CLAIM_COST_POINTS}})
         return {"message": "You now own the dice table here."}
 
     @router.post("/casino/dice/relinquish")
     async def casino_dice_relinquish(request: DiceClaimRequest, current_user: dict = Depends(get_current_user_verified)):
         """Relinquish ownership of the dice table in a city."""
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_dice((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_dice_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None, "owner_username": None}})
         return {"message": "You have relinquished the dice table."}
@@ -339,12 +339,12 @@ def register(router):
     @router.post("/casino/dice/set-max-bet")
     async def casino_dice_set_max_bet(request: DiceSetMaxBetRequest, current_user: dict = Depends(get_current_user_verified)):
         """Set max bet for your dice table (owner only)."""
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_dice((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_dice_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         max_bet = max(1, min(int(request.max_bet), DICE_ABSOLUTE_MAX_BET))
         await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": max_bet}})
@@ -353,12 +353,12 @@ def register(router):
     @router.post("/casino/dice/set-buy-back-reward")
     async def casino_dice_set_buy_back_reward(request: DiceSetBuyBackRequest, current_user: dict = Depends(get_current_user_verified)):
         """Set buy-back reward (points) offered when you cannot pay a win (owner only)."""
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_dice((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_dice_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         amount = max(0, int(request.amount))
         await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"buy_back_reward": amount}})
@@ -371,7 +371,7 @@ def register(router):
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_dice_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"profit": 0}})
         return {"message": "Profit reset to zero."}
@@ -379,21 +379,21 @@ def register(router):
     @router.post("/casino/dice/sell-on-trade")
     async def casino_dice_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user_verified)):
         """List your dice table for sale on Quick Trade (points only)."""
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_dice((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         if request.points <= 0:
             raise HTTPException(status_code=400, detail="Points must be positive")
         stored_city, doc = await _get_dice_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         casino_property = {
             "_id": ObjectId(),
             "type": "casino_dice",
             "location": city,
             "name": f"Dice Table ({city})",
-            "owner_id": current_user["id"],
+            "owner_id": current_user.get("id") or "",
             "owner_username": current_user.get("username", "Unknown"),
             "for_sale": True,
             "sale_price": request.points,
@@ -408,7 +408,7 @@ def register(router):
         offer = await db.dice_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0})
         if not offer:
             raise HTTPException(status_code=404, detail="Offer not found")
-        if offer.get("to_user_id") != current_user["id"]:
+        if offer.get("to_user_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="Not your offer")
         expires = offer.get("expires_at")
         if expires:
@@ -427,10 +427,10 @@ def register(router):
         if from_points < points_offered:
             raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
         await db.users.update_one({"id": from_owner_id}, {"$inc": {"points": -points_offered}})
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": points_offered}})
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
         await db.dice_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username")}})
         await db.dice_buy_back_offers.delete_one({"id": request.offer_id})
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         _invalidate_ownership_cache(from_owner_id)
         return {"message": "Accepted. You received the points and the table was returned to the previous owner."}
 
@@ -438,29 +438,29 @@ def register(router):
     async def casino_dice_buy_back_reject(request: DiceBuyBackRejectRequest, current_user: dict = Depends(get_current_user_verified)):
         """Reject a buy-back offer: keep ownership."""
         offer = await db.dice_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0, "to_user_id": 1})
-        if not offer or offer.get("to_user_id") != current_user["id"]:
+        if not offer or offer.get("to_user_id") != current_user.get("id") or "":
             raise HTTPException(status_code=404, detail="Offer not found")
         await db.dice_buy_back_offers.delete_one({"id": request.offer_id})
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         return {"message": "Rejected. You keep the casino."}
 
     @router.post("/casino/dice/send-to-user")
     async def casino_dice_send_to_user(request: DiceSendToUserRequest, current_user: dict = Depends(get_current_user_verified)):
         """Transfer dice table ownership to another user (owner only)."""
-        _invalidate_ownership_cache(current_user["id"])
+        _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_dice((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_dice_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user["id"]:
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         target_username_pattern = _username_pattern(request.target_username.strip())
         target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1, "rank_points": 1})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
-        send_set = {"owner_id": target["id"], "owner_username": target["username"]}
+        send_set = {"owner_id": target.get("id") or "", "owner_username": target.get("username") or ""}
         if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
             send_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
         await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": send_set})
-        _invalidate_ownership_cache(target["id"])
+        _invalidate_ownership_cache(target.get("id") or "")
         return {"message": "Ownership transferred."}
