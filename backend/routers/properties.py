@@ -10,6 +10,19 @@ from fastapi import Depends, HTTPException
 from server import db, get_current_user
 
 
+def _parse_iso_datetime(s):
+    """Parse ISO datetime string safely; return timezone-aware datetime or None."""
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
 class PropertiesListResponse(BaseModel):
     properties: List["PropertyResponse"]
     property_income_perk_until: Optional[str] = None  # When 10% property income loot perk expires (ISO)
@@ -93,10 +106,8 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
         streak_days = int(user_prop.get("collection_streak_days") or 0) if owned else 0
         buff_label = None
         if owned and "last_collected" in user_prop:
-            last_collected_raw = user_prop["last_collected"]
-            try:
-                last_collected = datetime.fromisoformat(last_collected_raw)
-            except Exception:
+            last_collected = _parse_iso_datetime(user_prop.get("last_collected"))
+            if not last_collected:
                 last_collected = datetime.now(timezone.utc)
             hours_since_collect = max(
                 0.0, (datetime.now(timezone.utc) - last_collected).total_seconds() / 3600
@@ -108,12 +119,7 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
         # Buff metadata (per-property income buff)
         income_buff_until = None
         if owned:
-            raw_until = user_prop.get("income_buff_until")
-            if raw_until:
-                try:
-                    income_buff_until = datetime.fromisoformat(raw_until.replace("Z", "+00:00"))
-                except Exception:
-                    income_buff_until = None
+            income_buff_until = _parse_iso_datetime(user_prop.get("income_buff_until"))
         if income_buff_until and income_buff_until > datetime.now(timezone.utc):
             buff_label = "+10% reinvest bonus"
         required_property_id = prop.get("required_property_id")
@@ -179,7 +185,7 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
                     detail=f"Max out {name} (reach max level) to unlock this property.",
                 )
         cost = prop["price"]
-    if current_user["money"] < cost:
+    if int(current_user.get("money") or 0) < cost:
         raise HTTPException(status_code=400, detail="Insufficient money")
     await db.users.update_one(
         {"id": current_user["id"]},
@@ -221,12 +227,8 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     )
     if not user_prop:
         raise HTTPException(status_code=404, detail="You don't own this property")
-    last_collected_raw = user_prop.get("last_collected")
-    try:
-        last_collected = datetime.fromisoformat(last_collected_raw) if last_collected_raw else datetime.now(timezone.utc)
-        if last_collected.tzinfo is None:
-            last_collected = last_collected.replace(tzinfo=timezone.utc)
-    except Exception:
+    last_collected = _parse_iso_datetime(user_prop.get("last_collected"))
+    if not last_collected:
         last_collected = datetime.now(timezone.utc)
     now_utc = datetime.now(timezone.utc)
     hours_passed = (now_utc - last_collected).total_seconds() / 3600
@@ -235,26 +237,12 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     income = min(hours_passed * prop["income_per_hour"] * level, base_income_cap)
     if income < 1:
         raise HTTPException(status_code=400, detail="No income to collect yet")
-    perk_until = current_user.get("property_income_perk_until")
-    if perk_until:
-        try:
-            until = datetime.fromisoformat(perk_until.replace("Z", "+00:00"))
-            if until.tzinfo is None:
-                until = until.replace(tzinfo=timezone.utc)
-            if now_utc < until:
-                income = income * 1.1
-        except Exception:
-            pass
-    properties_until = current_user.get("properties_until")
-    if properties_until:
-        try:
-            until = datetime.fromisoformat(properties_until.replace("Z", "+00:00"))
-            if until.tzinfo is None:
-                until = until.replace(tzinfo=timezone.utc)
-            if now_utc < until:
-                income = income * 3
-        except Exception:
-            pass
+    perk_until = _parse_iso_datetime(current_user.get("property_income_perk_until"))
+    if perk_until and now_utc < perk_until:
+        income = income * 1.1
+    properties_until = _parse_iso_datetime(current_user.get("properties_until"))
+    if properties_until and now_utc < properties_until:
+        income = income * 3
     # Streak bonus: +1% income per consecutive day (up to MAX_STREAK_DAYS)
     streak_days = int(user_prop.get("collection_streak_days") or 0)
     # First ever collection: start streak at 1
@@ -272,18 +260,11 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     if streak_days > 0:
         income *= 1.0 + streak_days * STREAK_BONUS_PER_DAY
     # Per-property reinvest buff
-    income_buff_until = user_prop.get("income_buff_until")
+    buff_until_dt = _parse_iso_datetime(user_prop.get("income_buff_until"))
     buff_active = False
-    if income_buff_until:
-        try:
-            buff_until_dt = datetime.fromisoformat(income_buff_until.replace("Z", "+00:00"))
-            if buff_until_dt.tzinfo is None:
-                buff_until_dt = buff_until_dt.replace(tzinfo=timezone.utc)
-            if now_utc < buff_until_dt:
-                income *= 1.0 + BUFF_INCOME_MULT
-                buff_active = True
-        except Exception:
-            buff_active = False
+    if buff_until_dt and now_utc < buff_until_dt:
+        income *= 1.0 + BUFF_INCOME_MULT
+        buff_active = True
     # Risk event: if money has been capped for a while, chance to lose a slice
     risk_event = None
     if hours_passed >= RISK_HOURS_THRESHOLD and income >= base_income_cap * 0.99:
