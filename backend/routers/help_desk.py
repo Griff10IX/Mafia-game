@@ -1,4 +1,5 @@
 # Help Desk: tickets (create, list, get, reply, close). Staff = admin, mod, or HDO.
+# Also handles admin message permission requests.
 from datetime import datetime, timezone
 import uuid
 
@@ -21,6 +22,10 @@ class FamilyChangeNameRequest(BaseModel):
     family_tag: str  # current tag to identify the crew (case-insensitive)
     new_name: str
     new_tag: Optional[str] = None  # optional; if provided, also change tag
+
+
+class AdminMessageRequestCreate(BaseModel):
+    reason: str  # why they want to message an admin
 
 
 def register(router):
@@ -214,4 +219,191 @@ def register(router):
             "family_id": fam["id"],
             "name": new_name,
             "tag": updates.get("tag", fam["tag"]),
+        }
+
+    # ===== Admin Message Permission Requests =====
+
+    @router.post("/help-desk/admin-message-request")
+    async def request_admin_message_permission(body: AdminMessageRequestCreate, current_user: dict = Depends(get_current_user)):
+        """Request permission to send direct messages to admins/mods. Creates a special ticket for staff to review."""
+        reason = (body.reason or "").strip()[:2000]
+        if len(reason) < 10:
+            raise HTTPException(status_code=400, detail="Please provide a reason (at least 10 characters)")
+        
+        # Check if user already has an open request
+        existing = await db.admin_message_requests.find_one({
+            "user_id": current_user["id"],
+            "status": "pending"
+        })
+        if existing:
+            raise HTTPException(status_code=400, detail="You already have a pending request. Please wait for staff to review it.")
+        
+        # Check if user already has permission
+        has_permission = await db.admin_message_permissions.find_one({"user_id": current_user["id"]})
+        if has_permission:
+            raise HTTPException(status_code=400, detail="You already have permission to message staff.")
+        
+        request_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        doc = {
+            "id": request_id,
+            "user_id": current_user["id"],
+            "username": current_user.get("username") or "?",
+            "reason": reason,
+            "status": "pending",  # pending, approved, denied
+            "created_at": now,
+            "reviewed_at": None,
+            "reviewed_by_id": None,
+            "reviewed_by_username": None,
+        }
+        await db.admin_message_requests.insert_one(doc)
+        return {"id": request_id, "message": "Request submitted. Staff will review it shortly."}
+
+    @router.get("/help-desk/admin-message-requests")
+    async def list_admin_message_requests(current_user: dict = Depends(get_current_user)):
+        """List admin message permission requests. Staff see all pending; users see their own."""
+        if _can_manage_tickets(current_user):
+            # Staff sees all pending requests
+            cursor = db.admin_message_requests.find(
+                {"status": "pending"},
+                {"_id": 0}
+            ).sort("created_at", -1).limit(100)
+        else:
+            # Users see their own requests
+            cursor = db.admin_message_requests.find(
+                {"user_id": current_user["id"]},
+                {"_id": 0}
+            ).sort("created_at", -1).limit(20)
+        requests = await cursor.to_list(100)
+        return {"requests": requests}
+
+    @router.post("/help-desk/admin-message-requests/{request_id}/approve")
+    async def approve_admin_message_request(request_id: str, current_user: dict = Depends(get_current_user)):
+        """Approve a user's request to message staff. Admin/mod only."""
+        if not (_is_admin(current_user) or _is_moderator(current_user)):
+            raise HTTPException(status_code=403, detail="Only admins and moderators can approve requests")
+        
+        req = await db.admin_message_requests.find_one({"id": request_id}, {"_id": 0})
+        if not req:
+            raise HTTPException(status_code=404, detail="Request not found")
+        if req["status"] != "pending":
+            raise HTTPException(status_code=400, detail=f"Request already {req['status']}")
+        
+        now = datetime.now(timezone.utc).isoformat()
+        
+        # Update request status
+        await db.admin_message_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "approved",
+                "reviewed_at": now,
+                "reviewed_by_id": current_user["id"],
+                "reviewed_by_username": current_user.get("username") or "?",
+            }}
+        )
+        
+        # Grant permission
+        await db.admin_message_permissions.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": req["user_id"],
+            "username": req["username"],
+            "admin_id": "all",  # can message all staff
+            "approved_by_id": current_user["id"],
+            "approved_by_username": current_user.get("username") or "?",
+            "approved_at": now,
+        })
+        
+        # Notify the user
+        await srv.send_notification(
+            req["user_id"],
+            "Admin Message Permission Approved",
+            f"Your request to message staff has been approved by {current_user.get('username') or 'staff'}. You can now send direct messages to admins and moderators.",
+            "system",
+            category="system"
+        )
+        
+        return {"message": f"Approved. {req['username']} can now message staff."}
+
+    @router.post("/help-desk/admin-message-requests/{request_id}/deny")
+    async def deny_admin_message_request(request_id: str, current_user: dict = Depends(get_current_user)):
+        """Deny a user's request to message staff. Admin/mod only."""
+        if not (_is_admin(current_user) or _is_moderator(current_user)):
+            raise HTTPException(status_code=403, detail="Only admins and moderators can deny requests")
+        
+        req = await db.admin_message_requests.find_one({"id": request_id}, {"_id": 0})
+        if not req:
+            raise HTTPException(status_code=404, detail="Request not found")
+        if req["status"] != "pending":
+            raise HTTPException(status_code=400, detail=f"Request already {req['status']}")
+        
+        now = datetime.now(timezone.utc).isoformat()
+        
+        # Update request status
+        await db.admin_message_requests.update_one(
+            {"id": request_id},
+            {"$set": {
+                "status": "denied",
+                "reviewed_at": now,
+                "reviewed_by_id": current_user["id"],
+                "reviewed_by_username": current_user.get("username") or "?",
+            }}
+        )
+        
+        # Notify the user
+        await srv.send_notification(
+            req["user_id"],
+            "Admin Message Permission Denied",
+            "Your request to message staff directly has been denied. Please continue using the Help Desk for support.",
+            "system",
+            category="system"
+        )
+        
+        return {"message": f"Denied. {req['username']} will be notified."}
+
+    @router.delete("/help-desk/admin-message-permissions/{user_id}")
+    async def revoke_admin_message_permission(user_id: str, current_user: dict = Depends(get_current_user)):
+        """Revoke a user's permission to message staff. Admin/mod only."""
+        if not (_is_admin(current_user) or _is_moderator(current_user)):
+            raise HTTPException(status_code=403, detail="Only admins and moderators can revoke permissions")
+        
+        result = await db.admin_message_permissions.delete_one({"user_id": user_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Permission not found for this user")
+        
+        # Notify the user
+        await srv.send_notification(
+            user_id,
+            "Admin Message Permission Revoked",
+            "Your permission to message staff directly has been revoked. Please use the Help Desk for support.",
+            "system",
+            category="system"
+        )
+        
+        return {"message": "Permission revoked"}
+
+    @router.get("/help-desk/admin-message-permissions")
+    async def list_admin_message_permissions(current_user: dict = Depends(get_current_user)):
+        """List all users with admin message permissions. Admin/mod only."""
+        if not (_is_admin(current_user) or _is_moderator(current_user)):
+            raise HTTPException(status_code=403, detail="Only admins and moderators can view this")
+        
+        permissions = await db.admin_message_permissions.find({}, {"_id": 0}).to_list(500)
+        return {"permissions": permissions}
+
+    @router.get("/help-desk/my-admin-message-status")
+    async def get_my_admin_message_status(current_user: dict = Depends(get_current_user)):
+        """Check if current user can message staff and their request status."""
+        has_permission = await db.admin_message_permissions.find_one({"user_id": current_user["id"]})
+        pending_request = await db.admin_message_requests.find_one({
+            "user_id": current_user["id"],
+            "status": "pending"
+        })
+        is_staff = _is_admin(current_user) or _is_moderator(current_user) or _is_hdo(current_user)
+        
+        return {
+            "can_message_staff": is_staff or bool(has_permission),
+            "is_staff": is_staff,
+            "has_permission": bool(has_permission),
+            "has_pending_request": bool(pending_request),
+            "pending_request_id": pending_request["id"] if pending_request else None,
         }

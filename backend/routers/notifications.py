@@ -14,6 +14,8 @@ from server import (
     send_notification_to_all,
     _username_pattern,
     ADMIN_EMAILS,
+    _is_admin,
+    _is_moderator,
 )
 
 # ----- Constants -----
@@ -161,10 +163,30 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         target = await db.users.find_one(
             {"username": target_username_pattern},
-            {"_id": 0, "id": 1, "username": 1}
+            {"_id": 0, "id": 1, "username": 1, "email": 1, "is_moderator": 1}
         )
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
+        
+        # Check if target is an admin or moderator - normal users cannot message them directly
+        target_is_staff = (target.get("email") or "") in (ADMIN_EMAILS or []) or target.get("is_moderator")
+        sender_is_staff = _is_admin(current_user) or _is_moderator(current_user)
+        
+        if target_is_staff and not sender_is_staff:
+            # Check if sender has been approved to message this admin/mod
+            approval = await db.admin_message_permissions.find_one({
+                "user_id": current_user.get("id") or "",
+                "$or": [
+                    {"admin_id": target["id"]},
+                    {"admin_id": "all"}
+                ]
+            })
+            if not approval:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="You cannot message staff directly. Please submit a Help Desk ticket to request permission."
+                )
+        
         message = (request.message or "").strip()
         if not message and not (request.gif_url or "").strip():
             raise HTTPException(status_code=400, detail="Message or GIF is required")
