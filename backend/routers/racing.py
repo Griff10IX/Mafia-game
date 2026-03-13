@@ -58,6 +58,8 @@ REWARD_POOL_PCT = 0.9
 REWARD_BY_POSITION = [0.40, 0.25, 0.15, 0.10, 0.05, 0.03, 0.02, 0.00]
 # When entry_fee is 0, use this base pool so crew bank still grows; scaled so ~2–3 races can afford cheapest upgrades (e.g. 20k–30k)
 RACING_BASE_CASH_POOL = 50_000
+# Crew bank debt limit: players can go this far negative when paying for essentials (repair, tyres)
+CREW_BANK_DEBT_LIMIT = -50_000
 RANK_POINTS_BY_POSITION = [15, 10, 6, 4, 2, 1, 0, 0]
 RACING_REP_BY_POSITION = [5, 3, 2, 1, 0, 0, 0, 0]
 
@@ -425,14 +427,23 @@ async def _ensure_racing_profile(user_id: str) -> dict:
     return {k: v for k, v in doc.items() if k != "_id"}
 
 
-async def _deduct_crew_bank(user_id: str, cost: int) -> None:
-    """Deduct cost from racing crew bank. Raises HTTPException if insufficient."""
+async def _deduct_crew_bank(user_id: str, cost: int, allow_debt: bool = False) -> None:
+    """Deduct cost from racing crew bank.
+    If allow_debt=True, allows balance to go negative (down to CREW_BANK_DEBT_LIMIT).
+    """
     if cost <= 0:
         return
     prof = await db.racing_profiles.find_one({"user_id": user_id}, {"_id": 0, "crew_bank": 1})
     bank = int((prof or {}).get("crew_bank") or 0)
-    if bank < cost:
-        raise HTTPException(status_code=400, detail="Insufficient crew bank (race to earn more)")
+    new_balance = bank - cost
+
+    if allow_debt:
+        if new_balance < CREW_BANK_DEBT_LIMIT:
+            raise HTTPException(status_code=400, detail=f"Debt limit reached (${CREW_BANK_DEBT_LIMIT:,}). Win races to pay off debt.")
+    else:
+        if bank < cost:
+            raise HTTPException(status_code=400, detail="Insufficient crew bank (race to earn more)")
+
     await db.racing_profiles.update_one({"user_id": user_id}, {"$inc": {"crew_bank": -cost}})
 
 
@@ -809,6 +820,7 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "tyre_costs": {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD, "inter": TYRE_COST_INTER},
         "engine_repair_cost_per_pct": ENGINE_REPAIR_COST_PER_PCT,
         "engine_replace_cost": ENGINE_REPLACE_COST,
+        "crew_bank_debt_limit": CREW_BANK_DEBT_LIMIT,
         "racing_team_create_cost": RACING_TEAM_CREATE_COST,
         "max_racing_teams": MAX_RACING_TEAMS,
         "racing_team_count": await db.racing_profiles.count_documents({"team_name": {"$exists": True, "$ne": None, "$ne": ""}}),
@@ -1077,7 +1089,7 @@ async def repair_engine(body: RepairEngineRequest, current_user: dict = Depends(
             {"$set": {"free_engine_repair_used_season_start_utc": season_start}},
         )
     else:
-        await _deduct_crew_bank(current_user["id"], cost)
+        await _deduct_crew_bank(current_user["id"], cost, allow_debt=True)
 
     await db.user_racing_cars.update_one(
         {"user_id": current_user["id"], "id": instance_id},
@@ -1092,7 +1104,7 @@ async def replace_engine(body: ReplaceEngineRequest, current_user: dict = Depend
     doc = await _get_user_racing_car(current_user["id"], instance_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Racing car not found")
-    await _deduct_crew_bank(current_user["id"], ENGINE_REPLACE_COST)
+    await _deduct_crew_bank(current_user["id"], ENGINE_REPLACE_COST, allow_debt=True)
     await db.user_racing_cars.update_one(
         {"user_id": current_user["id"], "id": instance_id},
         {"$set": {"engine_wear": 0}},
@@ -1108,7 +1120,7 @@ async def buy_tyres(body: BuyTyresRequest, current_user: dict = Depends(get_curr
     quantity = max(1, min(20, int(body.quantity or 1)))
     cost_map = {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD, "inter": TYRE_COST_INTER}
     cost = cost_map[compound] * quantity
-    await _deduct_crew_bank(current_user["id"], cost)
+    await _deduct_crew_bank(current_user["id"], cost, allow_debt=True)
     await _ensure_racing_profile(current_user["id"])
     from pymongo import ReturnDocument
     updated = await db.racing_profiles.find_one_and_update(

@@ -223,22 +223,33 @@ async def get_head_family_id_for_state(state: str) -> Optional[str]:
 
 
 async def set_state_head(state: str, family_id: Optional[str]) -> None:
-    """Set or clear the head family for a state. Updates game_settings and family head_of_state."""
+    """Set or clear the head family for a state. Updates game_settings and family head_of_state.
+    A family can only be head of ONE state at a time - if they're already head elsewhere, clear that first.
+    """
     state = (state or "").strip()
     if state not in (STATES or []):
         return
     heads = await get_state_heads()
     old_fid = heads.get(state)
-    new_value = {**heads, state: (family_id or "").strip() or None}
+    fid = (family_id or "").strip() or None
+
+    # If setting a new family as head, first clear them from any other state they might head
+    if fid:
+        for other_state, other_fid in heads.items():
+            if other_fid == fid and other_state != state:
+                # This family is head of another state - clear it
+                heads[other_state] = None
+                await db.families.update_one({"id": fid}, {"$set": {"head_of_state": None}})
+
+    new_value = {**heads, state: fid}
     await db.game_settings.update_one(
         {"key": "state_heads"},
         {"$set": {"value": new_value}},
         upsert=True,
     )
-    if old_fid and old_fid != (family_id or "").strip():
+    if old_fid and old_fid != fid:
         await db.families.update_one({"id": old_fid}, {"$set": {"head_of_state": None}})
-    if family_id and (family_id or "").strip():
-        fid = (family_id or "").strip()
+    if fid:
         await db.families.update_one({"id": fid}, {"$set": {"head_of_state": state}})
 
 
