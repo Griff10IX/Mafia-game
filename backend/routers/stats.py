@@ -51,6 +51,8 @@ def register(router):
     db = srv.db
     get_current_user = srv.get_current_user
     get_rank_info = srv.get_rank_info
+    _is_admin = srv._is_admin
+    _is_moderator = srv._is_moderator
     RANKS = srv.RANKS
     CARS = srv.CARS
 
@@ -174,7 +176,8 @@ def register(router):
                 _, victim_rank_name = get_rank_info(int(victim.get("rank_points", 0) or 0))
 
             is_public = bool(a.get("make_public"))
-            killer_username = a.get("attacker_username") if is_public else None
+            staff_can_see = current_user and (_is_admin(current_user) or _is_moderator(current_user))
+            killer_username = a.get("attacker_username") if (is_public or staff_can_see) else None
             victim_username = a.get("target_username")
             if not victim_username:
                 continue

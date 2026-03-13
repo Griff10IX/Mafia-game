@@ -607,7 +607,7 @@ export default function Garage() {
   const hiddenCount = totalCount - displayedCars.length;
   
   const displayedEligibleForMelt = displayedCars.filter(
-    (c) => c.car_id !== 'car_custom' && !c.listed_for_sale && (meltScrapRarities.length === 0 || meltScrapRarities.includes(c.rarity))
+    (c) => !c.listed_for_sale && (meltScrapRarities.length === 0 || meltScrapRarities.includes(c.rarity))
   );
   const displayedEligibleIds = displayedEligibleForMelt.map((c) => c.user_car_id);
   const allDisplayedSelected = displayedEligibleIds.length > 0 && displayedEligibleIds.every((id) => selectedCars.includes(id));

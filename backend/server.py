@@ -404,7 +404,7 @@ CARS = [
     {"id": "car18", "name": "Bugatti Type 41 Royale", "rarity": "legendary", "min_difficulty": 5, "value": 25000, "travel_bonus": 50, "image": "/images/gta/car18.jpg"},
     {"id": "car19", "name": "Rolls-Royce Phantom II", "rarity": "legendary", "min_difficulty": 5, "value": 30000, "travel_bonus": 55, "image": "/images/gta/car19.jpg"},
     # Custom (store only) - just below exclusive
-    {"id": "car_custom", "name": "Custom Car", "rarity": "custom", "min_difficulty": 5, "value": 40000, "travel_bonus": 55, "image": None},
+    {"id": "car_custom", "name": "Custom Car", "rarity": "custom", "min_difficulty": 5, "value": 5000, "travel_bonus": 55, "image": None},
     # Exclusive (admin only) - no custom image
     {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 50000, "travel_bonus": 60, "image": "/images/gta/car20.png"},
     # Loot-exclusive (loot box only, cap 3 globally)
@@ -744,30 +744,35 @@ async def _family_war_start(family_a_id: str, family_b_id: str):
     """Start or ensure an active war between two families. Idempotent."""
     if not family_a_id or not family_b_id or family_a_id == family_b_id:
         return
-    existing = await db.family_wars.find_one({
-        "$or": [
-            {"family_a_id": family_a_id, "family_b_id": family_b_id},
-            {"family_a_id": family_b_id, "family_b_id": family_a_id},
-        ],
-        "status": {"$in": ["active", "truce_offered"]},
-    })
-    if existing:
-        return
     fa = await db.families.find_one({"id": family_a_id}, {"_id": 0, "name": 1, "tag": 1})
     fb = await db.families.find_one({"id": family_b_id}, {"_id": 0, "name": 1, "tag": 1})
     family_a_name = (fa or {}).get("name") or (fa or {}).get("tag") or family_a_id
     family_b_name = (fb or {}).get("name") or (fb or {}).get("tag") or family_b_id
     now = datetime.now(timezone.utc).isoformat()
-    await db.family_wars.insert_one({
-        "id": str(uuid.uuid4()),
-        "family_a_id": family_a_id,
-        "family_b_id": family_b_id,
-        "family_a_name": family_a_name,
-        "family_b_name": family_b_name,
-        "status": "active",
-        "created_at": now,
-        "ended_at": None,
-    })
+    result = await db.family_wars.update_one(
+        {
+            "$or": [
+                {"family_a_id": family_a_id, "family_b_id": family_b_id},
+                {"family_a_id": family_b_id, "family_b_id": family_a_id},
+            ],
+            "status": {"$in": ["active", "truce_offered"]},
+        },
+        {
+            "$setOnInsert": {
+                "id": str(uuid.uuid4()),
+                "family_a_id": family_a_id,
+                "family_b_id": family_b_id,
+                "family_a_name": family_a_name,
+                "family_b_name": family_b_name,
+                "status": "active",
+                "created_at": now,
+                "ended_at": None,
+            }
+        },
+        upsert=True,
+    )
+    if not result.upserted_id:
+        return
     await send_notification_to_family(
         family_a_id,
         "⚠️ Family War",

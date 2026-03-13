@@ -903,6 +903,83 @@ const WarDetailsModal = ({ warId, onClose }) => {
 };
 
 // ============================================================================
+// TRUCE BANNERS
+// ============================================================================
+
+const TruceOfferBanner = ({ war, family }) => {
+  const [secondsLeft, setSecondsLeft] = useState(null);
+  const weOffered = war.truce_offered_by_family_id === family?.id;
+
+  useEffect(() => {
+    if (!war.truce_offered_at) return;
+    const timeoutMinutes = war.truce_timeout_minutes || 30;
+    const offeredAt = new Date(war.truce_offered_at).getTime();
+    const deadline = offeredAt + timeoutMinutes * 60 * 1000;
+
+    const update = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, Math.floor((deadline - now) / 1000));
+      setSecondsLeft(remaining);
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [war.truce_offered_at, war.truce_timeout_minutes]);
+
+  const mins = secondsLeft !== null ? Math.floor(secondsLeft / 60) : '--';
+  const secs = secondsLeft !== null ? String(secondsLeft % 60).padStart(2, '0') : '--';
+
+  return (
+    <div className="mx-4 mt-3 text-[10px] rounded-lg px-3 py-2 bg-primary/10 text-primary border border-primary/25 font-heading font-bold text-center">
+      {weOffered ? (
+        <>✋ You offered a truce — waiting for response</>
+      ) : (
+        <>🤝 Enemy offered a truce — Boss/Underboss can accept</>
+      )}
+      {secondsLeft !== null && secondsLeft > 0 && (
+        <div className="mt-1 text-[9px] text-primary/70">
+          Expires in {mins}:{secs}
+        </div>
+      )}
+      {secondsLeft === 0 && (
+        <div className="mt-1 text-[9px] text-red-400">
+          Offer expired
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TruceCooldownBanner = ({ cooldownUntil }) => {
+  const [secondsLeft, setSecondsLeft] = useState(null);
+
+  useEffect(() => {
+    if (!cooldownUntil) return;
+    const deadline = new Date(cooldownUntil).getTime();
+
+    const update = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, Math.floor((deadline - now) / 1000));
+      setSecondsLeft(remaining);
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [cooldownUntil]);
+
+  if (secondsLeft === null || secondsLeft <= 0) return null;
+
+  const hours = Math.floor(secondsLeft / 3600);
+  const mins = Math.floor((secondsLeft % 3600) / 60);
+
+  return (
+    <div className="mx-4 mt-3 text-[10px] rounded-lg px-3 py-2 bg-zinc-800/60 text-zinc-400 border border-zinc-700/40 font-heading text-center">
+      ⏳ Truce cooldown: {hours}h {mins}m remaining
+    </div>
+  );
+};
+
+// ============================================================================
 // WAR MODAL — Boxing Match Card
 // ============================================================================
 
@@ -983,9 +1060,10 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
         </div>
 
         {war.status === 'truce_offered' && (
-          <div className="mx-4 mt-3 text-[10px] rounded-lg px-3 py-2 bg-primary/10 text-primary border border-primary/25 font-heading font-bold text-center">
-            ✋ Truce Offered — awaiting response
-          </div>
+          <TruceOfferBanner war={war} family={family} />
+        )}
+        {war.status === 'active' && war.truce_cooldown_until && (
+          <TruceCooldownBanner cooldownUntil={war.truce_cooldown_until} />
         )}
 
         {/* ── FIGHT CARD ── */}
@@ -1213,14 +1291,18 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
         {/* ── TRUCE BUTTONS ── */}
         {canManage && (war.status === 'active' || (war.status === 'truce_offered' && war.truce_offered_by_family_id !== family?.id)) && (
           <div className="flex gap-2 px-4 py-3 border-t border-zinc-800/60">
-            {war.status === 'active' && (
-              <button
-                onClick={onOfferTruce}
-                className="flex-1 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-zinc-800/60 border-zinc-700/40 text-zinc-400 hover:border-primary/40 hover:text-primary transition-all"
-              >
-                🤝 Offer Truce
-              </button>
-            )}
+            {war.status === 'active' && (() => {
+              const onCooldown = war.truce_cooldown_until && new Date(war.truce_cooldown_until) > new Date();
+              return (
+                <button
+                  onClick={onOfferTruce}
+                  disabled={onCooldown}
+                  className={`flex-1 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border transition-all ${onCooldown ? 'bg-zinc-900 border-zinc-800 text-zinc-600 cursor-not-allowed' : 'bg-zinc-800/60 border-zinc-700/40 text-zinc-400 hover:border-primary/40 hover:text-primary'}`}
+                >
+                  {onCooldown ? '⏳ Truce on Cooldown' : '🤝 Offer Truce'}
+                </button>
+              );
+            })()}
             {war.status === 'truce_offered' && war.truce_offered_by_family_id !== family?.id && (
               <button
                 onClick={onAcceptTruce}

@@ -893,10 +893,13 @@ async def families_deposit(request: FamilyDepositRequest, current_user: dict = D
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Invalid amount")
-    money = int(current_user.get("money", 0) or 0)
-    if money < amount:
+    result = await db.users.find_one_and_update(
+        {"id": current_user["id"], "money": {"$gte": amount}},
+        {"$inc": {"money": -amount}},
+        return_document=False,
+    )
+    if not result:
         raise HTTPException(status_code=400, detail="Not enough cash")
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -amount}})
     await db.families.update_one({"id": family_id}, {"$inc": {"treasury": amount}})
     _invalidate_my_cache(current_user["id"])
     return {"message": "Deposited to treasury"}
@@ -913,11 +916,13 @@ async def families_withdraw(request: FamilyWithdrawRequest, current_user: dict =
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Invalid amount")
-    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury": 1})
-    treasury = int((fam or {}).get("treasury", 0) or 0)
-    if treasury < amount:
+    result = await db.families.find_one_and_update(
+        {"id": family_id, "treasury": {"$gte": amount}},
+        {"$inc": {"treasury": -amount}},
+        return_document=False,
+    )
+    if not result:
         raise HTTPException(status_code=400, detail="Not enough treasury")
-    await db.families.update_one({"id": family_id}, {"$inc": {"treasury": -amount}})
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": amount}})
     _invalidate_my_cache(current_user["id"])
     return {"message": "Withdrew from treasury"}
@@ -1383,12 +1388,19 @@ async def families_crew_oc_reject(application_id: str, current_user: dict = Depe
         raise HTTPException(status_code=400, detail="Application already processed")
     await db.family_crew_oc_applications.update_one({"id": application_id}, {"$set": {"status": "rejected"}})
     amount_paid = int(app.get("amount_paid") or 0)
+    refunded = 0
     if amount_paid > 0:
-        await db.users.update_one({"id": app["user_id"]}, {"$inc": {"money": amount_paid}})
-        await db.families.update_one({"id": family_id}, {"$inc": {"treasury": -amount_paid}})
+        refund_result = await db.families.find_one_and_update(
+            {"id": family_id, "treasury": {"$gte": amount_paid}},
+            {"$inc": {"treasury": -amount_paid}},
+            return_document=False,
+        )
+        if refund_result:
+            await db.users.update_one({"id": app["user_id"]}, {"$inc": {"money": amount_paid}})
+            refunded = amount_paid
     _invalidate_my_cache(current_user["id"])
     _invalidate_my_cache(app["user_id"])
-    return {"message": "Application rejected." + (f" ${amount_paid:,} refunded." if amount_paid > 0 else "")}
+    return {"message": "Application rejected." + (f" ${refunded:,} refunded." if refunded > 0 else " (Treasury insufficient for refund)" if amount_paid > 0 else "")}
 
 
 async def families_crew_oc_kick(application_id: str, current_user: dict = Depends(get_current_user)):
@@ -1404,15 +1416,22 @@ async def families_crew_oc_kick(application_id: str, current_user: dict = Depend
         raise HTTPException(status_code=400, detail="Can only kick accepted crew members")
     await db.family_crew_oc_applications.update_one({"id": application_id}, {"$set": {"status": "kicked"}})
     amount_paid = int(app.get("amount_paid") or 0)
+    refunded = 0
     if amount_paid > 0:
-        await db.users.update_one({"id": app["user_id"]}, {"$inc": {"money": amount_paid}})
-        await db.families.update_one({"id": family_id}, {"$inc": {"treasury": -amount_paid}})
+        refund_result = await db.families.find_one_and_update(
+            {"id": family_id, "treasury": {"$gte": amount_paid}},
+            {"$inc": {"treasury": -amount_paid}},
+            return_document=False,
+        )
+        if refund_result:
+            await db.users.update_one({"id": app["user_id"]}, {"$inc": {"money": amount_paid}})
+            refunded = amount_paid
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "tag": 1})
     fam_name = (fam or {}).get("name") or (fam or {}).get("tag") or "the family"
-    await send_notification(app["user_id"], "Crew OC – Kicked", f"You were removed from {fam_name} Crew OC." + (f" ${amount_paid:,} has been refunded." if amount_paid > 0 else ""), "system", category="crew_oc")
+    await send_notification(app["user_id"], "Crew OC – Kicked", f"You were removed from {fam_name} Crew OC." + (f" ${refunded:,} has been refunded." if refunded > 0 else ""), "system", category="crew_oc")
     _invalidate_my_cache(current_user["id"])
     _invalidate_my_cache(app["user_id"])
-    return {"message": "Crew member kicked." + (f" ${amount_paid:,} refunded." if amount_paid > 0 else "")}
+    return {"message": "Crew member kicked." + (f" ${refunded:,} refunded." if refunded > 0 else " (Treasury insufficient for refund)" if amount_paid > 0 else "")}
 
 
 async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)):
@@ -1504,7 +1523,14 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
             pass
     now_iso = now.isoformat()
     rackets[racket_id] = {**state, "level": level, "last_collected_at": now_iso}
-    await db.families.update_one({"id": family_id}, {"$set": {"rackets": rackets}, "$inc": {"treasury": income_final}})
+    filter_cond = {"id": family_id}
+    if last_at:
+        filter_cond[f"rackets.{racket_id}.last_collected_at"] = last_at
+    else:
+        filter_cond[f"rackets.{racket_id}.last_collected_at"] = {"$exists": False}
+    collect_result = await db.families.update_one(filter_cond, {"$set": {"rackets": rackets}, "$inc": {"treasury": income_final}})
+    if collect_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Racket on cooldown")
     msg = random.choice(FAMILY_RACKET_COLLECT_SUCCESS_MESSAGES).format(income=income_final)
     _invalidate_my_cache(current_user["id"])
     return {"message": msg, "amount": income_final}
@@ -1632,8 +1658,15 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
             treasury = int((target_fam.get("treasury") or 0) or 0)
             actual = min(take, treasury)
             if actual > 0:
-                await db.families.update_one({"id": request.family_id}, {"$inc": {"treasury": -actual}})
-                await db.families.update_one({"id": my_family_id}, {"$inc": {"treasury": actual}})
+                raid_result = await db.families.find_one_and_update(
+                    {"id": request.family_id, "treasury": {"$gte": actual}},
+                    {"$inc": {"treasury": -actual}},
+                    return_document=False,
+                )
+                if raid_result:
+                    await db.families.update_one({"id": my_family_id}, {"$inc": {"treasury": actual}})
+                else:
+                    actual = 0
             msg = random.choice(FAMILY_RACKET_RAID_SUCCESS_MESSAGES).format(amount=actual, family_name=family_name, racket_name=racket_name)
             _invalidate_list_cache()
             _invalidate_my_cache(current_user["id"])
@@ -1726,6 +1759,9 @@ async def families_war_stats(current_user: dict = Depends(get_current_user)):
                 "other_family_name": other_name,
                 "other_family_tag": other_tag,
                 "truce_offered_by_family_id": w.get("truce_offered_by_family_id"),
+                "truce_offered_at": w.get("truce_offered_at"),
+                "truce_cooldown_until": w.get("truce_cooldown_until"),
+                "truce_timeout_minutes": 30,
             },
             "stats": {
                 "my_family_totals": my_totals,
@@ -1739,6 +1775,32 @@ async def families_war_stats(current_user: dict = Depends(get_current_user)):
     return {"wars": out}
 
 
+TRUCE_OFFER_TIMEOUT_MINUTES = 30
+TRUCE_COOLDOWN_HOURS = 24
+
+
+async def _check_and_expire_truce(war: dict) -> dict | None:
+    """Check if a truce offer has expired. If so, reset to active and set cooldown. Returns updated war or None."""
+    if war.get("status") != "truce_offered":
+        return None
+    offered_at = war.get("truce_offered_at")
+    if not offered_at:
+        return None
+    try:
+        offered_dt = datetime.fromisoformat(offered_at.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    now = datetime.now(timezone.utc)
+    if now > offered_dt + timedelta(minutes=TRUCE_OFFER_TIMEOUT_MINUTES):
+        cooldown_until = (now + timedelta(hours=TRUCE_COOLDOWN_HOURS)).isoformat()
+        await db.family_wars.update_one(
+            {"id": war["id"], "status": "truce_offered"},
+            {"$set": {"status": "active", "truce_cooldown_until": cooldown_until}, "$unset": {"truce_offered_by_family_id": "", "truce_offered_at": ""}},
+        )
+        return await db.family_wars.find_one({"id": war["id"]}, {"_id": 0})
+    return None
+
+
 async def families_war_truce_offer(request: WarTruceRequest, current_user: dict = Depends(get_current_user)):
     family_id = current_user.get("family_id")
     if not family_id:
@@ -1746,12 +1808,38 @@ async def families_war_truce_offer(request: WarTruceRequest, current_user: dict 
     if current_user.get("family_role") not in ("boss", "underboss"):
         raise HTTPException(status_code=403, detail="Only Boss or Underboss can offer truce")
     war = await db.family_wars.find_one({"id": request.war_id}, {"_id": 0})
-    if not war or war.get("status") != "active":
+    if not war or war.get("status") not in ("active", "truce_offered"):
         raise HTTPException(status_code=404, detail="War not found or not active")
     if family_id not in (war["family_a_id"], war["family_b_id"]):
         raise HTTPException(status_code=403, detail="Not your war")
-    await db.family_wars.update_one({"id": request.war_id}, {"$set": {"status": "truce_offered", "truce_offered_by_family_id": family_id}})
-    await send_notification_to_family(war["family_a_id"] if war["family_b_id"] == family_id else war["family_b_id"], "Truce offered", "The enemy family has offered a truce. Boss or Underboss can accept.", "system")
+    expired = await _check_and_expire_truce(war)
+    if expired:
+        war = expired
+    if war.get("status") == "truce_offered":
+        if war.get("truce_offered_by_family_id") == family_id:
+            return {"message": "Truce already offered"}
+        raise HTTPException(status_code=400, detail="A truce offer is already pending from the other side")
+    cooldown_until = war.get("truce_cooldown_until")
+    if cooldown_until:
+        try:
+            cooldown_dt = datetime.fromisoformat(cooldown_until.replace("Z", "+00:00"))
+            if datetime.now(timezone.utc) < cooldown_dt:
+                remaining = cooldown_dt - datetime.now(timezone.utc)
+                hours_left = int(remaining.total_seconds() // 3600)
+                mins_left = int((remaining.total_seconds() % 3600) // 60)
+                raise HTTPException(status_code=400, detail=f"Truce on cooldown. Try again in {hours_left}h {mins_left}m.")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    now_iso = datetime.now(timezone.utc).isoformat()
+    result = await db.family_wars.update_one(
+        {"id": request.war_id, "status": "active"},
+        {"$set": {"status": "truce_offered", "truce_offered_by_family_id": family_id, "truce_offered_at": now_iso}},
+    )
+    if result.modified_count == 0:
+        return {"message": "Truce already offered or war ended"}
+    await send_notification_to_family(war["family_a_id"] if war["family_b_id"] == family_id else war["family_b_id"], "Truce offered", f"The enemy family has offered a truce. Boss or Underboss has {TRUCE_OFFER_TIMEOUT_MINUTES} minutes to accept.", "system")
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
     return {"message": "Truce offered"}
@@ -1770,8 +1858,16 @@ async def families_war_truce_accept(request: WarTruceRequest, current_user: dict
         raise HTTPException(status_code=403, detail="Not your war")
     if war.get("truce_offered_by_family_id") == family_id:
         raise HTTPException(status_code=400, detail="You offered the truce; the other side must accept")
+    expired = await _check_and_expire_truce(war)
+    if expired:
+        raise HTTPException(status_code=400, detail="Truce offer has expired. A new truce cannot be offered for 24 hours.")
     now = datetime.now(timezone.utc).isoformat()
-    await db.family_wars.update_one({"id": request.war_id}, {"$set": {"status": "truce", "ended_at": now}})
+    result = await db.family_wars.update_one(
+        {"id": request.war_id, "status": "truce_offered"},
+        {"$set": {"status": "truce", "ended_at": now}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="War already ended or truce withdrawn")
     await send_notification_to_family(war["family_a_id"], "🤝 Truce accepted", "The war has ended by truce.", "system")
     await send_notification_to_family(war["family_b_id"], "🤝 Truce accepted", "The war has ended by truce.", "system")
     _invalidate_list_cache()
