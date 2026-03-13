@@ -354,15 +354,18 @@ export default function States() {
           setExpandedCities(all);
         }
       })
-      .catch(() => toast.error('Failed to load states'))
+      .catch(() => {
+        toast.error('Failed to load states');
+        setData({ cities: [], games: [], state_heads: {} });
+      })
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => { fetchStates(); }, [fetchStates]);
 
   useEffect(() => {
-    api.get('/bullet-factory/list').then((r) => setBulletFactories(r.data?.factories ?? [])).catch(() => {});
-    api.get('/airports').then((r) => setAirports(r.data?.airports ?? [])).catch(() => {});
+    api.get('/bullet-factory/list').then((r) => setBulletFactories(r.data?.factories ?? [])).catch(() => setBulletFactories([]));
+    api.get('/airports').then((r) => setAirports(r.data?.airports ?? [])).catch(() => setAirports([]));
   }, []);
 
   const cities = useMemo(() => (Array.isArray(data.cities) ? data.cities : []), [data.cities]);
