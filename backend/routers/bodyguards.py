@@ -943,6 +943,95 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
     return {"message": f"Generated {created} robot bodyguard(s) for {target_username}", "created": created, "count_requested": count}
 
 
+async def admin_reset_bodyguard_cooldown(current_user: dict = Depends(get_current_user)):
+    """Admin-only: Reset the bodyguard drop cooldown timer for yourself."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$unset": {"bodyguard_last_drop_at": ""}}
+    )
+    _invalidate_bodyguards_cache(current_user["id"])
+    return {"message": "Bodyguard drop cooldown reset. You can drop a bodyguard now."}
+
+
+async def admin_seed_human_bodyguards(current_user: dict = Depends(get_current_user)):
+    """Admin-only: Clear all robots and create 4 human bodyguards for testing.
+    Creates dummy human users as bodyguards if they don't exist."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    admin_id = current_user["id"]
+    
+    # Clear all existing bodyguards (robots and humans) for admin
+    await db.bodyguards.delete_many({"user_id": admin_id})
+    await db.users.delete_many({"is_bodyguard": True, "bodyguard_owner_id": admin_id})
+    
+    # Ensure admin has 4 slots
+    await db.users.update_one({"id": admin_id}, {"$set": {"bodyguard_slots": 4}})
+    
+    now = datetime.now(timezone.utc)
+    created = 0
+    
+    # Create 4 human bodyguards
+    for slot in range(1, 5):
+        # Create or find a dummy human bodyguard user
+        guard_username = f"TestGuard{slot}"
+        guard_user = await db.users.find_one({"username": guard_username}, {"_id": 0, "id": 1})
+        
+        if not guard_user:
+            # Create a new dummy user
+            guard_id = str(uuid.uuid4())
+            await db.users.insert_one({
+                "id": guard_id,
+                "username": guard_username,
+                "email": f"testguard{slot}@test.local",
+                "password_hash": "disabled",
+                "created_at": now.isoformat(),
+                "rank_points": 100,
+                "money": 10000,
+                "points": 100,
+                "health": 100,
+                "current_state": current_user.get("current_state", "New York"),
+                "is_bodyguard": True,
+                "bodyguard_owner_id": admin_id,
+            })
+        else:
+            guard_id = guard_user["id"]
+            # Mark existing user as bodyguard
+            await db.users.update_one(
+                {"id": guard_id},
+                {"$set": {"is_bodyguard": True, "bodyguard_owner_id": admin_id}}
+            )
+        
+        # Create bodyguard slot
+        await db.bodyguards.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": admin_id,
+            "owner_username": current_user.get("username"),
+            "slot_number": slot,
+            "is_robot": False,
+            "bodyguard_user_id": guard_id,
+            "bodyguard_username": guard_username,
+            "health": 100,
+            "armour_level": 0,
+            "payment_points": 10,
+            "payment_money": 1000,
+            "payout_weekday": 0,
+            "last_payout_date": None,
+            "hired_at": now.isoformat(),
+            "hire_cost": 100,
+        })
+        created += 1
+    
+    _invalidate_bodyguards_cache(admin_id)
+    return {
+        "message": f"Cleared all bodyguards and created {created} human bodyguards for testing",
+        "created": created,
+        "bodyguards": ["TestGuard1", "TestGuard2", "TestGuard3", "TestGuard4"],
+    }
+
+
 # ----- Weekly payout (human bodyguards) -----
 # bodyguard_payouts: one doc per (owner_id, slot_number, payout_date) for audit and crash safety.
 # Unique index on (owner_id, slot_number, payout_date) prevents double-pay; we check it before paying.
@@ -1164,3 +1253,5 @@ def register(router):
     router.add_api_route("/admin/bodyguards/drop-all-human", admin_drop_all_human_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/drop-all", admin_drop_all_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/generate", admin_generate_bodyguards, methods=["POST"])
+    router.add_api_route("/admin/bodyguards/seed-humans", admin_seed_human_bodyguards, methods=["POST"])
+    router.add_api_route("/admin/bodyguards/reset-cooldown", admin_reset_bodyguard_cooldown, methods=["POST"])

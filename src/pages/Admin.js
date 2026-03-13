@@ -1140,6 +1140,28 @@ export default function Admin() {
     }
   };
 
+  const [seedHumanBgLoading, setSeedHumanBgLoading] = useState(false);
+  const handleSeedHumanBodyguards = async () => {
+    setSeedHumanBgLoading(true);
+    try {
+      const res = await api.post('/admin/bodyguards/seed-humans');
+      toast.success(res.data?.message ?? 'Created 4 human bodyguards', { duration: 8000 });
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed', { duration: 8000 });
+    } finally {
+      setSeedHumanBgLoading(false);
+    }
+  };
+
+  const handleResetBgCooldown = async () => {
+    try {
+      const res = await api.post('/admin/bodyguards/reset-cooldown');
+      toast.success(res.data?.message ?? 'Cooldown reset', { duration: 5000 });
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed', { duration: 5000 });
+    }
+  };
+
   const handleGenerateBodyguards = async () => {
     try {
       const res = await api.post('/admin/bodyguards/generate', {
@@ -2995,6 +3017,16 @@ export default function Admin() {
                 <BtnPrimary onClick={handleTestBodyguardPayout} disabled={testPayoutLoading}>
                   {testPayoutLoading ? '...' : 'Run test payout'}
                 </BtnPrimary>
+              </ActionRow>
+
+              <ActionRow icon={Shield} label="Seed 4 Human Bodyguards" description="Clears robots, creates 4 test humans for you" color="text-emerald-400">
+                <BtnPrimary onClick={handleSeedHumanBodyguards} disabled={seedHumanBgLoading}>
+                  {seedHumanBgLoading ? '...' : 'Seed Humans'}
+                </BtnPrimary>
+              </ActionRow>
+
+              <ActionRow icon={Shield} label="Reset Drop Cooldown" description="Clear your bodyguard drop timer" color="text-amber-400">
+                <BtnPrimary onClick={handleResetBgCooldown}>Reset</BtnPrimary>
               </ActionRow>
             </div>
           )}
