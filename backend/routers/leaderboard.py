@@ -259,7 +259,7 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
         ),
         _top_by_field_for_week(
             database, "bust_events", "user_id", "at", False,
-            last_week_start, this_week_start, 10, None,
+            last_week_start, this_week_start, 10, {"success": True},
         ),
     )
 
@@ -326,7 +326,7 @@ async def get_top_leaderboards(
             _top_by_field_weekly("attack_attempts", "attacker_id", "created_at", True, user_id, limit, dead, {"outcome": "killed"}),
             _top_by_field_weekly("crime_events", "user_id", "at", False, user_id, limit, dead),
             _top_by_field_weekly("gta_events", "user_id", "at", False, user_id, limit, dead),
-            _top_by_field_weekly("bust_events", "user_id", "at", False, user_id, limit, dead),
+            _top_by_field_weekly("bust_events", "user_id", "at", False, user_id, limit, dead, {"success": True}),
         )
     else:
         kills, crimes, gta, jail_busts, points_spent = await asyncio.gather(
