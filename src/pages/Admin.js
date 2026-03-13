@@ -3091,9 +3091,10 @@ export default function Admin() {
               </div>
               <div>
                 <label className="text-[9px] text-mutedForeground uppercase font-heading block mb-1">New Max Bet</label>
-                <FormattedNumberInput
+                <input
+                  type="text"
                   value={casinoMaxBetValue}
-                  onChange={setCasinoMaxBetValue}
+                  onChange={(e) => setCasinoMaxBetValue(e.target.value)}
                   placeholder="e.g. 50,000,000"
                   className="w-32 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
                 />
