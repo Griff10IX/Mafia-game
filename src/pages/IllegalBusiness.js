@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Shield, ListChecks, Crosshair, TrendingUp, Lock, UserPlus, Star, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Shield, ListChecks, Crosshair, TrendingUp, Lock, UserPlus, Star, AlertTriangle, ChevronRight, ChevronDown } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -26,8 +24,6 @@ function formatMissionRewards(rewards) {
   return parts.length ? parts.join(' · ') : null;
 }
 
-// ─── Injected styles ──────────────────────────────────────────────────────────
-
 const RACKET_STYLES = `
   @keyframes incomeGlow {
     0%,100% { box-shadow: 0 0 10px rgba(var(--noir-primary-rgb),.12); }
@@ -45,13 +41,10 @@ const RACKET_STYLES = `
     0%,100% { box-shadow: 0 0 0 0 rgba(var(--noir-primary-rgb),.0); }
     50%     { box-shadow: 0 0 0 5px rgba(var(--noir-primary-rgb),.08); }
   }
-
   .racket-page { animation: rReveal .3s ease both; }
   .income-glow { animation: incomeGlow 3s ease-in-out infinite; }
-
   .r-card { transition: border-color .2s, transform .15s; }
   .r-card:hover { border-color: rgba(var(--noir-primary-rgb),.32) !important; transform: translateY(-1px); }
-
   .collect-btn { position: relative; overflow: hidden; animation: collectPulse 2.5s ease-in-out infinite; }
   .collect-btn::after {
     content: '';
@@ -60,22 +53,11 @@ const RACKET_STYLES = `
     background: linear-gradient(90deg, transparent, rgba(var(--noir-primary-rgb),.10), transparent);
     animation: shimmer 2.8s ease-in-out infinite;
   }
-
   .r-bar-fill { transition: width .6s cubic-bezier(.4,0,.2,1); }
-
-  .guard-empty { border-style: dashed !important; opacity: .45; }
-
-  .dot-pip { width:7px; height:7px; border-radius:50%; display:inline-block; }
-  .dot-on  { background: var(--noir-primary); box-shadow: 0 0 4px rgba(var(--noir-primary-rgb),.6); }
-  .dot-off { background: transparent; border: 1px solid rgba(var(--noir-primary-rgb),.22); }
-
   .kill-reward-card { border-left: 3px solid rgba(var(--noir-primary-rgb),.45); background: rgba(var(--noir-primary-rgb),.04); }
   .raid-win  { border-left: 3px solid #34d399; background: rgba(52,211,153,.06); }
   .raid-fail { border-left: 3px solid #f87171; background: rgba(248,113,113,.06); }
-  .mission-dot-done { background: var(--noir-primary); border-color: var(--noir-primary); box-shadow: 0 0 5px rgba(var(--noir-primary-rgb),.45); }
 `;
-
-// ─── Tiny reusables ───────────────────────────────────────────────────────────
 
 function CardHead({ icon: Icon, title, right }) {
   return (
@@ -89,60 +71,33 @@ function CardHead({ icon: Icon, title, right }) {
   );
 }
 
-function BarStat({ label, value, max = 10, display }) {
-  const pct = Math.min(100, Math.round((Number(value) / max) * 100));
+function Collapsible({ label, count, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-baseline justify-between">
-        <span className="text-[10px] font-heading uppercase tracking-widest text-mutedForeground">{label}</span>
-        <span className="font-heading font-bold text-primary text-sm">{display ?? value}</span>
-      </div>
-      <div className="h-1 rounded-full bg-primary/10">
-        <div className="r-bar-fill h-full rounded-full bg-gradient-to-r from-primary/55 to-primary" style={{ width: `${pct}%` }} />
-      </div>
+    <div className="border border-zinc-800/50 rounded-md overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-2 text-[10px] font-heading uppercase tracking-widest text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30 transition-all"
+      >
+        <span>{label}{count != null ? ` (${count})` : ''}</span>
+        <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && <div className="border-t border-zinc-800/50">{children}</div>}
     </div>
   );
 }
-
-function PipRow({ label, filled, total = 3 }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-[9px] font-heading text-zinc-600 uppercase tracking-wider w-12 shrink-0">{label}</span>
-      <div className="flex gap-1">
-        {Array.from({ length: total }).map((_, i) => (
-          <span key={i} className={`dot-pip ${i < filled ? 'dot-on' : 'dot-off'}`} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function Tag({ children, variant = 'amber' }) {
-  const c = {
-    amber: 'bg-primary/15 text-primary border-primary/30',
-    red:   'bg-red-500/12 text-red-400 border-red-500/28',
-    green: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/28',
-    zinc:  'bg-zinc-700/35 text-zinc-400 border-zinc-600/30',
-  };
-  return (
-    <span className={`inline-block border px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase tracking-wider ${c[variant]}`}>
-      {children}
-    </span>
-  );
-}
-
-// ─── Start-business screen ────────────────────────────────────────────────────
 
 function StartScreen({ types, saving, onStart }) {
   const [typeId, setTypeId] = useState('speakeasy');
-  const [name,   setName]   = useState('');
+  const [name, setName] = useState('');
 
   const fallback = [
     { id: 'stolen_goods_fence', name: 'Stolen Goods Fence' },
-    { id: 'booze_making',       name: 'Booze Making'       },
-    { id: 'speakeasy',          name: 'Speakeasy'          },
-    { id: 'numbers_racket',     name: 'Numbers Racket'     },
-    { id: 'protection_racket',  name: 'Protection Racket'  },
+    { id: 'booze_making', name: 'Booze Making' },
+    { id: 'speakeasy', name: 'Speakeasy' },
+    { id: 'numbers_racket', name: 'Numbers Racket' },
+    { id: 'protection_racket', name: 'Protection Racket' },
   ];
   const list = types.length ? types : fallback;
 
@@ -155,14 +110,11 @@ function StartScreen({ types, saving, onStart }) {
           Only a Capo or higher can run an operation. Choose your trade and stake your claim.
         </p>
       </div>
-
       <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
         <CardHead icon={TrendingUp} title="Choose Your Operation" />
         <div className="p-4 space-y-4">
           <div>
-            <label className="block text-[10px] font-heading uppercase tracking-widest text-mutedForeground mb-2">
-              Business Type
-            </label>
+            <label className="block text-[10px] font-heading uppercase tracking-widest text-mutedForeground mb-2">Business Type</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {list.map((t) => (
                 <button
@@ -184,9 +136,7 @@ function StartScreen({ types, saving, onStart }) {
               Name <span className="normal-case tracking-normal opacity-55">(optional)</span>
             </label>
             <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              type="text" value={name} onChange={(e) => setName(e.target.value)}
               placeholder="e.g. The Hideaway…"
               className="w-full px-3 py-2.5 bg-zinc-900/60 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 focus:border-primary/50 focus:outline-none"
             />
@@ -204,45 +154,56 @@ function StartScreen({ types, saving, onStart }) {
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+let _cachedBizData = null;
+let _cachedBizTypes = [];
+let _bizLastFetch = 0;
+const BIZ_REFRESH = 30_000;
 
 export default function IllegalBusiness() {
-  const [data,       setData]       = useState(null);
-  const [types,      setTypes]      = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [saving,     setSaving]     = useState(false);
+  const [data, setData] = useState(_cachedBizData);
+  const [types, setTypes] = useState(_cachedBizTypes);
+  const [loading, setLoading] = useState(!_cachedBizData);
+  const [saving, setSaving] = useState(false);
   const [raidTarget, setRaidTarget] = useState('');
-  const [raidState,  setRaidState]  = useState('');
+  const [raidState, setRaidState] = useState('');
   const [raidResult, setRaidResult] = useState(null);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [res, typesRes] = await Promise.all([
         api.get('/illegal-business').catch((e) => ({ ...e, response: e.response })),
         api.get('/illegal-business/types').catch(() => ({ data: { types: [] } })),
       ]);
-      if (typesRes?.data?.types) setTypes(typesRes.data.types);
+      if (typesRes?.data?.types) {
+        _cachedBizTypes = typesRes.data.types;
+        setTypes(typesRes.data.types);
+      }
       if (res.response?.status === 404) {
+        _cachedBizData = { noBusiness: true };
         setData({ noBusiness: true });
       } else if (res.data) {
+        _cachedBizData = res.data;
+        _bizLastFetch = Date.now();
         setData(res.data);
-      } else {
+      } else if (!silent) {
         toast.error(getApiErrorMessage(res));
       }
     } catch (e) {
-      if (e.response?.status === 404) setData({ noBusiness: true });
-      else toast.error(getApiErrorMessage(e));
+      if (e.response?.status === 404) { _cachedBizData = { noBusiness: true }; setData({ noBusiness: true }); }
+      else if (!silent) toast.error(getApiErrorMessage(e));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  // ── Actions ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const stale = Date.now() - _bizLastFetch > BIZ_REFRESH;
+    if (!_cachedBizData) fetchData(false);
+    else if (stale) fetchData(true);
+    const id = setInterval(() => fetchData(true), BIZ_REFRESH);
+    return () => clearInterval(id);
+  }, [fetchData]);
 
   const withSave = (fn) => async (...args) => {
     if (saving) return;
@@ -257,51 +218,41 @@ export default function IllegalBusiness() {
     toast.success("You've taken over a joint.");
     refreshUser(); fetchData();
   });
-
   const handleCollect = withSave(async () => {
     const res = await api.post('/illegal-business/collect');
     toast.success(res.data?.message || 'Collected.');
     if (res.data?.cash != null) refreshUser();
     fetchData();
   });
-
   const handleHireGuard = withSave(async (slotNumber, armourLevel = 0, weaponLevel = 0) => {
     await api.post('/illegal-business/guards/hire', { slot_number: slotNumber, armour_level: armourLevel, weapon_level: weaponLevel });
     toast.success('Another pair of hands on the door.');
     refreshUser(); fetchData();
   });
-
   const handleBuyGuardSlot = withSave(async () => {
     await api.post('/illegal-business/guards/buy-slot');
     toast.success('Another slot on the door.');
     refreshUser(); fetchData();
   });
-
   const handleUpgradeSecurity = withSave(async (upgradeId) => {
     await api.post(`/illegal-business/security/upgrade/${upgradeId}`);
     toast.success('Upgrade installed.');
     refreshUser(); fetchData();
   });
-
   const handleCompleteMission = withSave(async (missionId) => {
     const res = await api.post(`/illegal-business/missions/${missionId}/complete`);
     toast.success(res.data?.message || 'Mission complete.');
     fetchData();
   });
-
   const handleRaid = withSave(async () => {
     if (!raidTarget.trim()) return;
     setRaidResult(null);
-    const res = await api.post('/illegal-business/raid', {
-      target_username: raidTarget.trim(),
-      state: raidState || undefined,
-    });
+    const res = await api.post('/illegal-business/raid', { target_username: raidTarget.trim(), state: raidState || undefined });
     setRaidResult(res.data);
     toast.success(res.data?.message);
     if (res.data?.loot_cash) refreshUser();
     fetchData();
   });
-
   const handleRaidRandom = withSave(async () => {
     setRaidResult(null);
     const res = await api.post('/illegal-business/raid/random');
@@ -310,7 +261,6 @@ export default function IllegalBusiness() {
     if (res.data?.loot_cash) refreshUser();
     fetchData();
   });
-
   const handleClaimKillReward = withSave(async (victimId, choice) => {
     const res = await api.post('/illegal-business/claim-kill-reward', { victim_id: victimId, choice });
     toast.success(res.data?.message);
@@ -318,9 +268,7 @@ export default function IllegalBusiness() {
     fetchData();
   });
 
-  // ── Loading ────────────────────────────────────────────────────────────────
-
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className={styles.pageContent}>
         <div className="flex items-center justify-center min-h-[200px]">
@@ -342,48 +290,54 @@ export default function IllegalBusiness() {
     );
   }
 
-  // ── Derived ────────────────────────────────────────────────────────────────
-
-  const business       = data?.business;
-  const guards         = data?.guards || [];
-  const typeInfo       = data?.type_info || {};
+  const business = data?.business;
+  const guards = data?.guards || [];
+  const typeInfo = data?.type_info || {};
   const pendingRewards = data?.pending_kill_rewards || [];
-  const securityList   = data?.security_upgrades_list || [];
-  const guardSlots     = business?.guard_slots ?? 2;
-  const nextGuardSlotCostCash   = data?.next_guard_slot_cost_cash ?? null;
+  const securityList = data?.security_upgrades_list || [];
+  const guardSlots = business?.guard_slots ?? 2;
+  const nextGuardSlotCostCash = data?.next_guard_slot_cost_cash ?? null;
   const nextGuardSlotCostPoints = data?.next_guard_slot_cost_points ?? null;
-  const upgradesDone   = business?.security_upgrades || [];
+  const upgradesDone = business?.security_upgrades || [];
   const nextUpgradeIdx = upgradesDone.length;
-  const nextUpgrade    = nextUpgradeIdx < securityList.length ? securityList[nextUpgradeIdx] : null;
-  const missions       = Array.isArray(data?.missions) ? data.missions : [];
+  const nextUpgrade = nextUpgradeIdx < securityList.length ? securityList[nextUpgradeIdx] : null;
+  const totalUpgrades = securityList.length;
+  const missions = Array.isArray(data?.missions) ? data.missions : [];
+  const completedMissions = missions.filter(m => m.completed);
+  const activeMission = missions.find(m => !m.completed);
 
-  const heatLevel   = business?.heat_level ?? 0;
-  const heatVariant = heatLevel > 6 ? 'red' : heatLevel > 3 ? 'amber' : 'green';
-  const heatLabel   = heatLevel > 6 ? 'High Heat' : heatLevel > 3 ? 'Moderate' : 'Running Cold';
-
-  // ── Render ─────────────────────────────────────────────────────────────────
+  const heatLevel = business?.heat_level ?? 0;
+  const heatPct = Math.min(100, Math.round((heatLevel / 10) * 100));
+  const heatColor = heatLevel > 6 ? 'from-red-600 to-red-400' : heatLevel > 3 ? 'from-amber-600 to-amber-400' : 'from-emerald-600 to-emerald-400';
+  const heatLabel = heatLevel > 6 ? 'High Heat' : heatLevel > 3 ? 'Moderate' : 'Running Cold';
 
   return (
     <div className={`${styles.pageContent} racket-page`}>
       <style>{RACKET_STYLES}</style>
+      <div className="space-y-3">
 
-      <div className="space-y-4">
-
-        {/* ── Header ──────────────────────────────────────────── */}
+        {/* ── Header ── */}
         <div className="flex flex-wrap items-end justify-between gap-3 pb-3 border-b border-primary/15">
-          <div>
+          <div className="min-w-0">
             <div className="text-[9px] font-heading tracking-[.28em] text-mutedForeground uppercase mb-1">Illegal Business</div>
-            <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider leading-none">
+            <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider leading-none truncate">
               {business?.name || typeInfo?.name || 'Racket'}
             </h1>
             <div className="flex flex-wrap items-center gap-2 mt-1.5">
               <span className="text-xs font-body italic text-mutedForeground">{typeInfo?.name}</span>
               {business?.state && <span className="text-[10px] text-zinc-600">· {business.state}</span>}
-              <Tag variant={heatVariant}>{heatLabel}</Tag>
+            </div>
+            {/* Heat meter */}
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-[9px] font-heading uppercase tracking-widest text-zinc-600 w-16 shrink-0">Heat</span>
+              <div className="flex-1 h-1.5 rounded-full bg-zinc-800 max-w-[120px]">
+                <div className={`r-bar-fill h-full rounded-full bg-gradient-to-r ${heatColor}`} style={{ width: `${Math.max(heatPct, 5)}%` }} />
+              </div>
+              <span className={`text-[9px] font-heading font-bold ${heatLevel > 6 ? 'text-red-400' : heatLevel > 3 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                {heatLabel}
+              </span>
             </div>
           </div>
-
-          {/* Income badge */}
           <div className="income-glow border border-primary/25 rounded-md px-4 py-2.5 text-right bg-primary/5 shrink-0">
             <div className="text-[9px] font-heading tracking-[.2em] text-mutedForeground uppercase">Per Hour</div>
             <div className="text-2xl font-heading font-bold text-primary leading-none mt-0.5">
@@ -395,11 +349,11 @@ export default function IllegalBusiness() {
           </div>
         </div>
 
-        {/* ── Kill rewards ─────────────────────────────────────── */}
+        {/* ── Kill rewards ── */}
         {pendingRewards.length > 0 && (
           <div className={`${styles.panel} r-card border border-primary/25 rounded-md overflow-hidden`}>
             <CardHead icon={Star} title="Claim Your Reward" />
-            <div className="p-4 space-y-2.5">
+            <div className="p-3 space-y-2">
               {pendingRewards.map((p) => (
                 <div key={p.victim_id} className="kill-reward-card flex flex-wrap items-center gap-3 p-3 rounded">
                   <div className="flex-1 min-w-0">
@@ -407,19 +361,13 @@ export default function IllegalBusiness() {
                     <div className="text-[10px] text-mutedForeground">had {formatMoney(p.total_spent)} invested</div>
                   </div>
                   <div className="flex gap-2 flex-wrap">
-                    <button
-                      onClick={() => handleClaimKillReward(p.victim_id, 'cash')}
-                      disabled={saving}
-                      className="px-3 py-1.5 bg-primary/15 text-primary border border-primary/35 rounded text-[10px] font-heading font-bold uppercase tracking-wider hover:bg-primary/25 disabled:opacity-40 transition-all"
-                    >
+                    <button onClick={() => handleClaimKillReward(p.victim_id, 'cash')} disabled={saving}
+                      className="px-3 py-1.5 bg-primary/15 text-primary border border-primary/35 rounded text-[10px] font-heading font-bold uppercase tracking-wider hover:bg-primary/25 disabled:opacity-40 transition-all">
                       Take Cash
                     </button>
                     {p.moderately_upgraded && (
-                      <button
-                        onClick={() => handleClaimKillReward(p.victim_id, 'income_boost')}
-                        disabled={saving}
-                        className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/28 rounded text-[10px] font-heading font-bold uppercase tracking-wider hover:bg-emerald-500/18 disabled:opacity-40 transition-all"
-                      >
+                      <button onClick={() => handleClaimKillReward(p.victim_id, 'income_boost')} disabled={saving}
+                        className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/28 rounded text-[10px] font-heading font-bold uppercase tracking-wider hover:bg-emerald-500/18 disabled:opacity-40 transition-all">
                         +2% Income
                       </button>
                     )}
@@ -430,7 +378,7 @@ export default function IllegalBusiness() {
           </div>
         )}
 
-        {/* ── Collect banner ───────────────────────────────────── */}
+        {/* ── Collect ── */}
         <div className={`${styles.panel} r-card border border-primary/25 rounded-md overflow-hidden`}>
           <CardHead icon={TrendingUp} title="Cash on the Table" />
           <div className="p-4 flex flex-wrap items-center justify-between gap-4">
@@ -440,286 +388,239 @@ export default function IllegalBusiness() {
                 {formatMoney(business?.pending_cash ?? 0)}
               </div>
               <div className="text-[10px] text-zinc-500 mt-1 font-heading">
-                Level {business?.level ?? 1} &nbsp;·&nbsp; Security {business?.security_level ?? 0} &nbsp;·&nbsp; {guards.length}/{guardSlots} guards
+                Level {business?.level ?? 1} · Security {nextUpgradeIdx}/{totalUpgrades} · {guards.length}/{guardSlots} guards
               </div>
             </div>
-            <button
-              onClick={handleCollect}
-              disabled={saving}
-              className="collect-btn px-6 py-3 bg-primary/20 text-primary font-heading font-bold uppercase tracking-widest text-xs rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-40 transition-all"
-            >
+            <button onClick={handleCollect} disabled={saving}
+              className="collect-btn px-6 py-3 bg-primary/20 text-primary font-heading font-bold uppercase tracking-widest text-xs rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-40 transition-all">
               {saving ? 'Collecting…' : '⚑  Collect the Take'}
             </button>
           </div>
         </div>
 
-        {/* ── Two-column grid ──────────────────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-          {/* Status */}
-          <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
-            <CardHead icon={TrendingUp} title="Operation Status" />
-            <div className="p-4 space-y-4">
-              <BarStat label="Level"    value={business?.level ?? 1}          max={10} />
-              <BarStat label="Security" value={business?.security_level ?? 0} max={15} />
-              <BarStat
-                label="Guards"
-                value={guards.length}
-                max={guardSlots}
-                display={`${guards.length} / ${guardSlots}`}
-              />
-            </div>
-          </div>
-
-          {/* Guards */}
-          <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
-            <CardHead
-              icon={Shield}
-              title="Muscle"
-              right={
-                guards.length < guardSlots ? (
-                  <button
-                    onClick={() => handleHireGuard(guards.length + 1)}
-                    disabled={saving}
-                    className="flex items-center gap-1 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2 py-1 rounded hover:bg-primary/10 disabled:opacity-40 transition-all"
-                  >
-                    <UserPlus size={9} /> Hire
-                  </button>
-                ) : nextGuardSlotCostCash != null ? (
-                  <button
-                    onClick={handleBuyGuardSlot}
-                    disabled={saving}
-                    className="flex items-center gap-1 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2 py-1 rounded hover:bg-primary/10 disabled:opacity-40 transition-all"
-                    title={`${formatMoney(nextGuardSlotCostCash)}${nextGuardSlotCostPoints ? ` + ${nextGuardSlotCostPoints} pts` : ''}`}
-                  >
-                    <UserPlus size={9} /> Add slot — {formatMoney(nextGuardSlotCostCash)}{nextGuardSlotCostPoints ? ` / ${nextGuardSlotCostPoints} pts` : ''}
-                  </button>
-                ) : null
-              }
-            />
-            <div className="p-4">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-              {Array.from({ length: guardSlots }).map((_, i) => {
-                const g = guards[i];
-                return g ? (
-                  <div key={g.id} className="flex flex-col gap-1.5 p-2 rounded bg-primary/5 border border-primary/12 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-primary/15 border border-primary/25 flex items-center justify-center shrink-0">
-                        <span className="text-[9px] font-heading font-bold text-primary">{i + 1}</span>
-                      </div>
-                      <span className="text-[9px] font-heading text-zinc-500 truncate">Slot {g.slot_number}</span>
-                    </div>
-                    <div className="space-y-0.5">
-                      <PipRow label="Armour" filled={g.armour_level} total={3} />
-                      <PipRow label="Weapon" filled={g.weapon_level} total={3} />
-                    </div>
-                  </div>
-                ) : (
-                  <div key={i} className="guard-empty flex flex-col items-center justify-center gap-1 p-2 rounded border border-primary/12 min-h-[72px]">
-                    <div className="w-6 h-6 rounded-full border border-primary/12 flex items-center justify-center shrink-0">
-                      <span className="text-[9px] font-heading text-zinc-700">{i + 1}</span>
-                    </div>
-                    <span className="text-[9px] font-body italic text-zinc-600">Vacant</span>
-                  </div>
-                );
-              })}
-              </div>
-            </div>
-          </div>
-
-          {/* Security */}
-          <div id="illegal-business-security" className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
-            <CardHead icon={Lock} title="Security" />
-            <div className="p-4 space-y-2">
-              {securityList.length === 0 ? (
-                <p className="text-xs text-mutedForeground italic">No upgrades available.</p>
-              ) : (
-                securityList.map((upg, idx) => {
-                  const done   = idx < nextUpgradeIdx;
-                  const isNext = idx === nextUpgradeIdx;
-                  const locked = !!upg.locked && !done;
-                  return (
-                    <div
-                      key={upg.id}
-                      className={`flex items-center gap-3 p-2.5 rounded border transition-all ${
-                        done   ? 'border-primary/10 opacity-45' :
-                        locked ? 'border-zinc-800/50 bg-zinc-900/40 opacity-70' :
-                        isNext ? 'border-primary/25 bg-primary/5' :
-                                 'border-zinc-800/50 opacity-35'
-                      }`}
-                    >
-                      <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 text-[9px] ${
-                        done ? 'bg-primary/20 border-primary/40 text-primary' : locked ? 'border-zinc-600 bg-zinc-800/50' : 'border-zinc-700/55'
-                      }`}>
-                        {done ? '✓' : locked ? <Lock size={10} className="text-zinc-500" /> : ''}
-                      </div>
-                      <span className={`flex-1 text-xs ${done ? 'line-through text-zinc-600' : 'text-foreground'}`}>
-                        {upg.name}
-                      </span>
-                      {!done && locked && upg.unlock_mission_title && (
-                        <span className="text-[9px] text-mutedForeground font-heading shrink-0 max-w-[140px] text-right">
-                          Complete mission &quot;{upg.unlock_mission_title}&quot; to unlock
-                        </span>
-                      )}
-                      {!done && isNext && !locked && (
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[10px] text-mutedForeground font-heading">{formatMoney(upg.cost_cash)}</span>
-                          <button
-                            onClick={() => handleUpgradeSecurity(upg.id)}
-                            disabled={saving}
-                            className="px-2.5 py-1 bg-primary/15 text-primary border border-primary/35 rounded text-[9px] font-heading font-bold uppercase tracking-wider hover:bg-primary/25 disabled:opacity-40 transition-all"
-                          >
-                            Install
-                          </button>
-                        </div>
-                      )}
-                      {!done && !isNext && !locked && (
-                        <span className="text-[9px] text-zinc-700 font-heading shrink-0">{formatMoney(upg.cost_cash)}</span>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-              {nextUpgrade === null && securityList.length > 0 && (
-                <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-widest text-center pt-1">
-                  Fully upgraded
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Missions */}
-          {missions.length > 0 && (
+        {/* ── Current Mission ── */}
+        {activeMission && (() => {
+          const { mission, current, target } = activeMission;
+          const requirementsMet = target && Object.keys(target).every((k) => (Number(current?.[k]) ?? 0) >= (Number(target[k]) ?? 0));
+          return (
             <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
-              <CardHead icon={ListChecks} title="Missions" />
-              <div className="p-4 space-y-3">
-                <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-widest mb-1">
-                  Buy upgrades in the <button type="button" onClick={() => document.getElementById('illegal-business-security')?.scrollIntoView({ behavior: 'smooth' })} className="text-primary underline hover:no-underline">Security</button> section →
-                </p>
-                {missions.map(({ mission, completed, current, target }) => {
-                  const requirementsMet = target && Object.keys(target).every((k) => (Number(current?.[k]) ?? 0) >= (Number(target[k]) ?? 0));
-                  const progressLines = !completed && target && typeof current === 'object' && current !== null
-                    ? Object.entries(target).map(([key, need]) => {
-                        const cur = Number(current[key]) ?? 0;
-                        const n = Number(need) ?? 0;
-                        const fmt = key === 'business_income_7d' ? (x) => formatMoney(x) : (x) => Number(x).toLocaleString();
-                        return `${fmt(cur)} / ${fmt(n)}`;
-                      }).join(' · ')
-                    : null;
-                  return (
-                    <div key={mission.id} className="border-b border-zinc-800/40 last:border-b-0 pb-3 last:pb-0">
-                      <div className="flex items-start gap-3">
-                        <div className={`w-2 h-2 rounded-full border shrink-0 mt-1.5 ${completed ? 'mission-dot-done border-primary' : 'border-zinc-600'}`} />
-                        <div className="flex-1 min-w-0">
-                          <span className={`text-xs font-heading font-bold block ${completed ? 'line-through text-zinc-600' : 'text-foreground'}`}>
-                            {mission.title}
-                          </span>
-                          {mission.story && (
-                            <p className="text-[11px] text-mutedForeground italic mt-0.5">{mission.story}</p>
-                          )}
-                          {mission.how_to_complete && (
-                            <p className={`text-[11px] mt-1 ${completed ? 'text-zinc-600' : 'text-mutedForeground'}`}>
-                              {mission.how_to_complete}
-                            </p>
-                          )}
-                          {progressLines && (
-                            <p className="text-[10px] font-heading text-primary/90 mt-1 tracking-wide">{progressLines}</p>
-                          )}
-                          {mission.rewards && formatMissionRewards(mission.rewards) && (
-                            <p className="text-[10px] text-primary/80 font-heading mt-1">
-                              Rewards: {formatMissionRewards(mission.rewards)}
-                            </p>
-                          )}
-                        </div>
-                        {!completed && requirementsMet && (
-                          <button
-                            onClick={() => handleCompleteMission(mission.id)}
-                            disabled={saving}
-                            className="flex items-center gap-0.5 shrink-0 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2 py-1 rounded hover:bg-primary/10 disabled:opacity-40 transition-all"
-                          >
-                            <ChevronRight size={9} /> Complete
-                          </button>
-                        )}
+              <CardHead icon={ListChecks} title={`Mission ${mission.order ?? ''}/${missions.length}`}
+                right={completedMissions.length > 0 && (
+                  <span className="text-[9px] font-heading text-zinc-500">{completedMissions.length} completed</span>
+                )}
+              />
+              <div className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0 mt-0.5">
+                    <span className="text-[9px] font-heading font-bold text-primary">{mission.order ?? '?'}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-heading font-bold text-foreground block">{mission.title}</span>
+                    {mission.story && <p className="text-[11px] text-mutedForeground italic mt-1">{mission.story}</p>}
+                    {mission.how_to_complete && <p className="text-[11px] text-mutedForeground mt-1.5">{mission.how_to_complete}</p>}
+
+                    {/* Progress bars per requirement */}
+                    {target && typeof current === 'object' && current !== null && (
+                      <div className="mt-2.5 space-y-2">
+                        {Object.entries(target).map(([key, need]) => {
+                          const cur = Number(current[key]) ?? 0;
+                          const n = Number(need) ?? 1;
+                          const pct = Math.min(100, Math.round((cur / n) * 100));
+                          const fmt = key === 'business_income_7d' ? formatMoney : (x) => Number(x).toLocaleString();
+                          const label = key.replace(/_/g, ' ');
+                          return (
+                            <div key={key}>
+                              <div className="flex items-baseline justify-between mb-0.5">
+                                <span className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 capitalize">{label}</span>
+                                <span className="text-[10px] font-heading text-primary">{fmt(cur)} / {fmt(n)}</span>
+                              </div>
+                              <div className="h-1 rounded-full bg-zinc-800">
+                                <div className={`r-bar-fill h-full rounded-full ${pct >= 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-primary/55 to-primary'}`} style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </div>
-                  );
-                })}
+                    )}
+
+                    {mission.rewards && formatMissionRewards(mission.rewards) && (
+                      <p className="text-[10px] text-primary/80 font-heading mt-2">
+                        Rewards: {formatMissionRewards(mission.rewards)}
+                      </p>
+                    )}
+                  </div>
+                  {requirementsMet && (
+                    <button onClick={() => handleCompleteMission(mission.id)} disabled={saving}
+                      className="flex items-center gap-0.5 shrink-0 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2.5 py-1.5 rounded hover:bg-primary/10 disabled:opacity-40 transition-all">
+                      <ChevronRight size={9} /> Complete
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-          )}
+          );
+        })()}
+
+        {/* ── Security & Guards ── */}
+        <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
+          <CardHead icon={Lock} title="Defences" />
+          <div className="p-4 space-y-4">
+
+            {/* Security progress + next upgrade */}
+            <div>
+              <div className="flex items-baseline justify-between mb-1">
+                <span className="text-[10px] font-heading uppercase tracking-widest text-mutedForeground">Security Upgrades</span>
+                <span className="font-heading font-bold text-primary text-sm">{nextUpgradeIdx} / {totalUpgrades}</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-zinc-800">
+                <div className="r-bar-fill h-full rounded-full bg-gradient-to-r from-primary/55 to-primary"
+                  style={{ width: `${totalUpgrades ? Math.round((nextUpgradeIdx / totalUpgrades) * 100) : 0}%` }} />
+              </div>
+
+              {nextUpgrade ? (
+                <div className="mt-3 flex items-center gap-3 p-2.5 rounded border border-primary/25 bg-primary/5">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-heading font-bold text-foreground block">{nextUpgrade.name}</span>
+                    <span className="text-[10px] text-mutedForeground font-heading">{formatMoney(nextUpgrade.cost_cash)} + {nextUpgrade.cost_points} pts</span>
+                  </div>
+                  <button onClick={() => handleUpgradeSecurity(nextUpgrade.id)} disabled={saving}
+                    className="px-3 py-1.5 bg-primary/15 text-primary border border-primary/35 rounded text-[9px] font-heading font-bold uppercase tracking-wider hover:bg-primary/25 disabled:opacity-40 transition-all shrink-0">
+                    Install
+                  </button>
+                </div>
+              ) : totalUpgrades > 0 ? (
+                <p className="text-[10px] text-emerald-400 font-heading uppercase tracking-widest text-center mt-2">Fully fortified</p>
+              ) : null}
+            </div>
+
+            {/* Guards compact */}
+            <div>
+              <div className="flex items-baseline justify-between mb-2">
+                <span className="text-[10px] font-heading uppercase tracking-widest text-mutedForeground">Muscle</span>
+                <span className="font-heading font-bold text-primary text-sm">{guards.length} / {guardSlots}</span>
+              </div>
+
+              {guards.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {guards.map((g, i) => (
+                    <div key={g.id} className="flex items-center gap-1.5 px-2 py-1 rounded bg-primary/5 border border-primary/12">
+                      <span className="text-[9px] font-heading font-bold text-primary">#{i + 1}</span>
+                      <span className="text-[9px] text-zinc-500">A{g.armour_level} W{g.weapon_level}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                {guards.length < guardSlots && (
+                  <button onClick={() => handleHireGuard(guards.length + 1)} disabled={saving}
+                    className="flex items-center gap-1 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2.5 py-1.5 rounded hover:bg-primary/10 disabled:opacity-40 transition-all">
+                    <UserPlus size={9} /> Hire Guard (Slot {guards.length + 1})
+                  </button>
+                )}
+                {guards.length >= guardSlots && nextGuardSlotCostCash != null && (
+                  <button onClick={handleBuyGuardSlot} disabled={saving}
+                    className="flex items-center gap-1 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2.5 py-1.5 rounded hover:bg-primary/10 disabled:opacity-40 transition-all">
+                    <UserPlus size={9} /> Add Slot — {formatMoney(nextGuardSlotCostCash)}{nextGuardSlotCostPoints ? ` / ${nextGuardSlotCostPoints} pts` : ''}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* ── Raid — full width ────────────────────────────────── */}
+        {/* ── Raid ── */}
         <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
           <CardHead icon={Crosshair} title="Hit a Joint" />
           <div className="p-4">
-            <p className="text-xs text-mutedForeground font-body italic mb-4 leading-relaxed">
-              Send your crew to knock over a rival's operation. Come back with their green — or come back with nothing.
+            <p className="text-[11px] text-mutedForeground font-body italic mb-3">
+              Send your crew to knock over a rival&apos;s operation. Come back with their green — or come back with nothing.
             </p>
-            <div className="flex flex-wrap gap-3 items-end">
-              <div className="flex-1 min-w-[140px]">
-                <label className="block text-[10px] font-heading uppercase tracking-widest text-mutedForeground mb-1.5">
-                  Target Username
-                </label>
-                <input
-                  type="text"
-                  value={raidTarget}
-                  onChange={(e) => setRaidTarget(e.target.value)}
-                  placeholder="Who's gettin' hit…"
-                  className="w-full px-3 py-2.5 bg-zinc-900/60 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 focus:border-primary/50 focus:outline-none"
-                />
+            <div className="flex flex-wrap gap-2 items-end">
+              <div className="flex-1 min-w-[120px]">
+                <label className="block text-[9px] font-heading uppercase tracking-widest text-mutedForeground mb-1">Target</label>
+                <input type="text" value={raidTarget} onChange={(e) => setRaidTarget(e.target.value)}
+                  placeholder="Username…"
+                  className="w-full px-3 py-2 bg-zinc-900/60 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 focus:border-primary/50 focus:outline-none" />
               </div>
-              <div className="w-36">
-                <label className="block text-[10px] font-heading uppercase tracking-widest text-mutedForeground mb-1.5">
-                  State
-                </label>
-                <input
-                  type="text"
-                  value={raidState}
-                  onChange={(e) => setRaidState(e.target.value)}
-                  placeholder="Chicago…"
-                  className="w-full px-3 py-2.5 bg-zinc-900/60 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 focus:border-primary/50 focus:outline-none"
-                />
+              <div className="w-28">
+                <label className="block text-[9px] font-heading uppercase tracking-widest text-mutedForeground mb-1">State</label>
+                <input type="text" value={raidState} onChange={(e) => setRaidState(e.target.value)}
+                  placeholder="Optional…"
+                  className="w-full px-3 py-2 bg-zinc-900/60 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 focus:border-primary/50 focus:outline-none" />
               </div>
-              <button
-                onClick={handleRaid}
-                disabled={saving || !raidTarget.trim()}
-                className="px-5 py-2.5 bg-primary/20 text-primary font-heading font-bold uppercase tracking-wider text-xs rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-40 transition-all whitespace-nowrap"
-              >
-                {saving ? 'Sending crew…' : 'Execute Raid'}
+              <button onClick={handleRaid} disabled={saving || !raidTarget.trim()}
+                className="px-4 py-2 bg-primary/20 text-primary font-heading font-bold uppercase tracking-wider text-[10px] rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-40 transition-all whitespace-nowrap">
+                {saving ? 'Sending…' : 'Raid'}
               </button>
-              <button
-                onClick={handleRaidRandom}
-                disabled={saving}
-                className="px-5 py-2.5 bg-primary/10 text-primary font-heading font-bold uppercase tracking-wider text-xs rounded border border-primary/30 hover:bg-primary/20 disabled:opacity-40 transition-all whitespace-nowrap"
-              >
-                Random Raid
+              <button onClick={handleRaidRandom} disabled={saving}
+                className="px-4 py-2 bg-primary/10 text-primary font-heading font-bold uppercase tracking-wider text-[10px] rounded border border-primary/30 hover:bg-primary/20 disabled:opacity-40 transition-all whitespace-nowrap">
+                Random
               </button>
             </div>
 
             {raidResult && (
-              <div className={`mt-4 p-3 rounded ${raidResult.success ? 'raid-win' : 'raid-fail'}`}>
+              <div className={`mt-3 p-3 rounded ${raidResult.success ? 'raid-win' : 'raid-fail'}`}>
                 <div className="flex items-center gap-2 mb-1">
                   <AlertTriangle size={11} className={raidResult.success ? 'text-emerald-400' : 'text-red-400'} />
                   <span className={`text-[10px] font-heading font-bold uppercase tracking-wider ${raidResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
                     {raidResult.success ? 'Success' : 'Failed'}
                   </span>
                   {raidResult.loot_cash > 0 && (
-                    <span className="text-[10px] text-emerald-400 font-heading">
-                      · {formatMoney(raidResult.loot_cash)} taken
-                    </span>
+                    <span className="text-[10px] text-emerald-400 font-heading">· {formatMoney(raidResult.loot_cash)} taken</span>
                   )}
                 </div>
                 {raidResult.target_username && (
-                  <p className="text-[10px] text-mutedForeground font-heading mb-0.5">
-                    You hit {raidResult.target_username}&apos;s joint.
-                  </p>
+                  <p className="text-[10px] text-mutedForeground font-heading mb-0.5">You hit {raidResult.target_username}&apos;s joint.</p>
                 )}
                 <p className="text-xs text-foreground">{raidResult.message}</p>
               </div>
             )}
           </div>
         </div>
+
+        {/* ── Collapsible sections ── */}
+        {completedMissions.length > 0 && (
+          <Collapsible label="Mission Log" count={completedMissions.length}>
+            <div className="p-3 space-y-2">
+              {completedMissions.map(({ mission }) => (
+                <div key={mission.id} className="flex items-center gap-2.5 px-2 py-1.5">
+                  <div className="w-2 h-2 rounded-full bg-primary shrink-0" style={{ boxShadow: '0 0 5px rgba(var(--noir-primary-rgb),.45)' }} />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[11px] font-heading text-zinc-500 line-through block">{mission.title}</span>
+                    {mission.rewards && formatMissionRewards(mission.rewards) && (
+                      <span className="text-[9px] text-zinc-600 font-heading">{formatMissionRewards(mission.rewards)}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Collapsible>
+        )}
+
+        {totalUpgrades > 0 && nextUpgradeIdx > 0 && (
+          <Collapsible label="All Security Upgrades" count={`${nextUpgradeIdx}/${totalUpgrades}`}>
+            <div className="p-3 space-y-1">
+              {securityList.map((upg, idx) => {
+                const done = idx < nextUpgradeIdx;
+                const isNext = idx === nextUpgradeIdx;
+                return (
+                  <div key={upg.id} className={`flex items-center gap-2 px-2 py-1 rounded text-[11px] ${
+                    done ? 'text-zinc-600' : isNext ? 'text-foreground bg-primary/5' : 'text-zinc-700'
+                  }`}>
+                    <span className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 text-[8px] ${
+                      done ? 'bg-primary/20 border-primary/40 text-primary' : isNext ? 'border-primary/30' : 'border-zinc-800'
+                    }`}>
+                      {done ? '✓' : ''}
+                    </span>
+                    <span className={`flex-1 ${done ? 'line-through' : ''}`}>{upg.name}</span>
+                    {!done && <span className="text-[9px] text-zinc-600 font-heading shrink-0">{formatMoney(upg.cost_cash)}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </Collapsible>
+        )}
 
       </div>
     </div>
