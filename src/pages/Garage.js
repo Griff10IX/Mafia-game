@@ -232,8 +232,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
   const damage = car.damage_percent ?? 0;
   const isRepairing = repairingCarId === car.user_car_id;
   const handleClick = () => {
-    if (isCustom) onOpenCustomModal(car);
-    else if (!isListed) onToggle(car.user_car_id);
+    if (!isListed) onToggle(car.user_car_id);
   };
   const isExclusive = car.rarity === 'exclusive' || car.rarity === 'loot_exclusive';
   return (
@@ -263,7 +262,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
             Listed ${(car.sale_price ?? 0).toLocaleString()}
           </div>
         )}
-        {!isCustom && !isListed && (
+        {!isListed && (
           <div className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center bg-zinc-800/95 border border-primary/50 shadow">
             {isSelected ? (
               <CheckSquare size={12} className="text-primary" strokeWidth={2.5} />
@@ -286,8 +285,17 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
         {car.name}
       </Link>
       
-      <div className="text-[10px] text-primary font-heading font-bold">
-        ${car.value.toLocaleString()}
+      <div className="text-[10px] text-primary font-heading font-bold flex items-center justify-between">
+        <span>${car.value.toLocaleString()}</span>
+        {isCustom && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpenCustomModal(car); }}
+            className="text-[8px] px-1 py-0.5 rounded bg-zinc-700 text-zinc-300 hover:bg-zinc-600 font-heading"
+          >
+            Edit
+          </button>
+        )}
       </div>
       {damage >= 100 ? (
         <p className="text-[9px] font-heading text-red-400 mt-0.5">100% — scrap/melt only</p>

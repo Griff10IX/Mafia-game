@@ -152,7 +152,7 @@ def register(router):
         if max_bet is None:
             max_bet = DICE_MAX_BET
         buy_back_reward = doc.get("buy_back_reward")
-        is_owner = current_user.get("id") or "" == owner_id
+        is_owner = (current_user.get("id") or "") == owner_id
         owner = None
         if owner_id:
             u = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "money": 1})
