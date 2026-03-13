@@ -129,6 +129,69 @@ async def _top_by_field_weekly(
     ]
 
 
+async def _top_by_field_weekly_sum(
+    collection: str,
+    user_field: str,
+    time_field: str,
+    value_field: str,
+    current_user_id: str,
+    limit: int,
+    dead: bool,
+    extra_match: dict = None,
+) -> List[StatLeaderboardEntry]:
+    """Aggregate events since week start, sum value_field per user (e.g. profit_points), return top N.
+    Used for weekly stock market profit and booze run profit."""
+    limit = max(1, min(100, int(limit)))
+    now = datetime.now(timezone.utc)
+    week_start = _week_start(now)
+    match_stage = {"_lb_ts": {"$gte": week_start}}
+    if extra_match:
+        match_stage.update(extra_match)
+    pipeline = [
+        {"$addFields": {"_lb_ts": {"$toDate": f"${time_field}"}}},
+        {"$match": match_stage},
+        {"$group": {"_id": f"${user_field}", "value": {"$sum": {"$ifNull": [f"${value_field}", 0]}}}},
+        {"$sort": {"value": -1}},
+        {"$limit": limit * 2},
+    ]
+    coll = getattr(db, collection)
+    cursor = coll.aggregate(pipeline)
+    docs = await cursor.to_list(limit * 2)
+    if not docs:
+        return []
+    user_ids = [d["_id"] for d in docs if d.get("_id")]
+    q = {"id": {"$in": user_ids}}
+    q.update(_leaderboard_user_filter())
+    users_map = await db.users.find(
+        q,
+        {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1}
+    ).to_list(len(user_ids) + 1)
+    users_by_id = {u["id"]: u for u in users_map}
+    filtered = []
+    for d in docs:
+        uid = d.get("_id")
+        if not uid:
+            continue
+        u = users_by_id.get(uid)
+        if not u:
+            continue
+        if bool(dead) != bool(u.get("is_dead")):
+            continue
+        if u.get("is_bodyguard") or u.get("is_npc"):
+            continue
+        filtered.append({"user_id": uid, "value": int(d.get("value") or 0), "username": u["username"]})
+    filtered = filtered[:limit]
+    return [
+        StatLeaderboardEntry(
+            rank=i + 1,
+            username=e["username"],
+            value=e["value"],
+            is_current_user=e["user_id"] == current_user_id,
+        )
+        for i, e in enumerate(filtered)
+    ]
+
+
 async def _top_by_field_for_week(
     database,
     collection: str,
@@ -186,18 +249,19 @@ async def _top_by_field_for_week(
 
 
 LEADERBOARD_PAYOUT_CONFIG_ID = "leaderboard_weekly_payout"
-DEFAULT_TOP1_POINTS = 5000
-DEFAULT_TOP2_POINTS = 3000
-DEFAULT_TOP3_POINTS = 1000
-DEFAULT_TOP4_10_POINTS = 500
+# Weekly rewards are respect points (tripled from original points: 1000→3000, 500→1500, 250→750, 500→1500)
+DEFAULT_TOP1_POINTS = 3000
+DEFAULT_TOP2_POINTS = 1500
+DEFAULT_TOP3_POINTS = 750
+DEFAULT_TOP4_10_POINTS = 1500
 
 
 async def run_weekly_leaderboard_payout(database, test_run: bool = False):
     """
     Run weekly leaderboard payout for the previous week (Monday 00:00 UTC to next Monday 00:00 UTC).
     Uses game_config id leaderboard_weekly_payout with last_run_week_start (YYYY-MM-DD) for idempotency.
-    Rewards are read from game_config: top1_points, top2_points, top3_points, top4_10_points (defaults 5000, 3000, 1000, 500).
-    Pays points to top 10 per category (kills, crimes, gta, jail_busts) from database event collections.
+    Rewards are read from game_config: top1_points, top2_points, top3_points, top4_10_points (defaults 3000, 1500, 750, 1500).
+    Pays respect_points to top 10 per category (kills, crimes, gta, jail_busts) from database event collections.
     """
     log = logging.getLogger(__name__)
     now = datetime.now(timezone.utc)
@@ -273,7 +337,7 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
 
     if test_run:
         log.info(
-            "Weekly leaderboard payout (test_run): week %s would pay %d users total %d points",
+            "Weekly leaderboard payout (test_run): week %s would pay %d users total %d respect_points",
             last_week_start_str, len(user_points), sum(user_points.values()),
         )
         return
@@ -322,11 +386,15 @@ async def get_top_leaderboards(
     """Top N leaderboards per stat (kills, crimes, gta, jail busts). period=weekly or alltime. dead=true for top dead."""
     user_id = current_user["id"]
     if (period or "").lower() == "weekly":
-        kills, crimes, gta, jail_busts = await asyncio.gather(
+        kills, crimes, gta, jail_busts, stock_market_profit, booze_run_profit, respect_points, bullets_melted = await asyncio.gather(
             _top_by_field_weekly("attack_attempts", "attacker_id", "created_at", True, user_id, limit, dead, {"outcome": "killed"}),
             _top_by_field_weekly("crime_events", "user_id", "at", False, user_id, limit, dead),
             _top_by_field_weekly("gta_events", "user_id", "at", False, user_id, limit, dead),
             _top_by_field_weekly("bust_events", "user_id", "at", False, user_id, limit, dead, {"success": True}),
+            _top_by_field_weekly_sum("stock_transactions", "user_id", "created_at", "profit_points", user_id, limit, dead),
+            _top_by_field_weekly_sum("economy_events", "user_id", "at", "profit", user_id, limit, dead, {"type": "booze_run_sell"}),
+            _top_by_field_weekly_sum("respect_events", "user_id", "at", "amount", user_id, limit, dead),
+            _top_by_field_weekly_sum("melt_events", "user_id", "at", "bullets", user_id, limit, dead),
         )
     else:
         kills, crimes, gta, jail_busts, points_spent, respect_points, bullets_melted, stock_market_profit, booze_run_profit = await asyncio.gather(
@@ -349,10 +417,10 @@ async def get_top_leaderboards(
         result["booze_run_profit"] = booze_run_profit
     else:
         result["points_spent"] = []
-        result["respect_points"] = []
-        result["bullets_melted"] = []
-        result["stock_market_profit"] = []
-        result["booze_run_profit"] = []
+        result["respect_points"] = respect_points
+        result["bullets_melted"] = bullets_melted
+        result["stock_market_profit"] = stock_market_profit
+        result["booze_run_profit"] = booze_run_profit
     return result
 
 

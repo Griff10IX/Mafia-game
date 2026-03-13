@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from server import (
     db,
     get_current_user,
+    log_respect_earned,
     maybe_process_rank_up,
     send_notification,
     STATES,
@@ -544,6 +545,8 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         rp_before = int(user.get("rank_points") or 0)
         rp_added = int(inc.get("rank_points") or 0)
         await db.users.update_one({"id": user_id}, {"$set": {"objectives_daily_claimed": True}, "$inc": inc})
+        if inc.get("respect_points"):
+            await log_respect_earned(user_id, inc["respect_points"], "objectives_daily")
         if rp_added > 0:
             try:
                 await maybe_process_rank_up(user_id, rp_before, rp_added, user.get("username", ""))
@@ -570,6 +573,8 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         rp_before = int(user.get("rank_points") or 0)
         rp_added = int(inc.get("rank_points") or 0)
         await db.users.update_one({"id": user_id}, {"$set": {"objectives_weekly_claimed": True}, "$inc": inc})
+        if inc.get("respect_points"):
+            await log_respect_earned(user_id, inc["respect_points"], "objectives_weekly")
         if rp_added > 0:
             try:
                 await maybe_process_rank_up(user_id, rp_before, rp_added, user.get("username", ""))
@@ -596,6 +601,8 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         rp_before = int(user.get("rank_points") or 0)
         rp_added = int(inc.get("rank_points") or 0)
         await db.users.update_one({"id": user_id}, {"$set": {"objectives_monthly_claimed": True}, "$inc": inc})
+        if inc.get("respect_points"):
+            await log_respect_earned(user_id, inc["respect_points"], "objectives_monthly")
         if rp_added > 0:
             try:
                 await maybe_process_rank_up(user_id, rp_before, rp_added, user.get("username", ""))

@@ -33,6 +33,7 @@ from server import (
     GODFATHER_RANK_ID,
     get_rank_info,
     get_effective_event,
+    log_respect_earned,
     send_notification,
     send_notification_to_family,
     maybe_process_rank_up,
@@ -940,6 +941,8 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 if inc:
                     rp_before = int(current_user.get("rank_points") or 0)
                     await db.users.update_one({"id": killer_id}, {"$inc": inc})
+                    if inc.get("respect_points"):
+                        await log_respect_earned(killer_id, inc["respect_points"], "attack")
                     if rp_added > 0:
                         try:
                             await maybe_process_rank_up(killer_id, rp_before, rp_added, current_user.get("username", ""))

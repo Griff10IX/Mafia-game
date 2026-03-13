@@ -27,6 +27,7 @@ from server import (
     db,
     get_current_user,
     get_effective_event,
+    log_respect_earned,
     RANKS,
     send_notification,
     send_notification_to_family,
@@ -1383,6 +1384,8 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
         uid = u["id"]
         rp_before = int(u.get("rank_points") or 0)
         await db.users.update_one({"id": uid}, {"$inc": {"rank_points": CREW_OC_REWARD_RP, "money": CREW_OC_REWARD_CASH, "bullets": CREW_OC_REWARD_BULLETS, "respect_points": CREW_OC_REWARD_POINTS, "booze": CREW_OC_REWARD_BOOZE}})
+        if CREW_OC_REWARD_POINTS:
+            await log_respect_earned(uid, CREW_OC_REWARD_POINTS, "crew_oc")
         try:
             await maybe_process_rank_up(uid, rp_before, CREW_OC_REWARD_RP, u.get("username", ""))
         except Exception:

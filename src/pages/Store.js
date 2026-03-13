@@ -111,6 +111,16 @@ export default function Store() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [pointsTabLocked, setPointsTabLocked] = useState(false);
   const [pointsTabLockMessage, setPointsTabLockMessage] = useState('');
+  const [paymentTransactions, setPaymentTransactions] = useState([]);
+
+  const fetchPaymentTransactions = useCallback(async () => {
+    try {
+      const res = await api.get('/payments/my-transactions');
+      setPaymentTransactions(res.data?.transactions || []);
+    } catch {
+      setPaymentTransactions([]);
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -129,10 +139,11 @@ export default function Store() {
       const paths = locksRes?.data?.paths ?? {};
       setPointsTabLocked(!!paths['/store/points']);
       setPointsTabLockMessage(paths['/store/points'] || 'Points purchase temporarily unavailable');
+      await fetchPaymentTransactions();
     } catch {
       toast.error('Failed to load data');
     }
-  }, []);
+  }, [fetchPaymentTransactions]);
 
   const fetchPointsTransfers = useCallback(async () => {
     try {
@@ -176,6 +187,7 @@ export default function Store() {
         toast.success(`${res.data.points_added} points added.`);
         refreshUser();
         fetchData();
+        fetchPaymentTransactions();
       } else if (res.data.status === 'expired') {
         toast.error('Session expired.');
       } else {
@@ -608,10 +620,30 @@ export default function Store() {
         <div className="px-3 sm:px-4 py-2.5 bg-primary/8 border-b border-primary/20">
           <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Payments</p>
         </div>
-        <div className="px-3 sm:px-4 py-3">
+        <div className="px-3 sm:px-4 py-3 space-y-2">
           <p className="text-[10px] text-zinc-500 font-heading italic">
             Payments via Stripe. Points added after purchase.
           </p>
+          {paymentTransactions.length > 0 ? (
+            <div className="rounded border border-primary/20 bg-zinc-900/50 overflow-hidden">
+              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-2 py-1.5 text-[9px] font-heading font-bold text-primary uppercase tracking-wider border-b border-primary/20">
+                <span>Date</span>
+                <span>Package</span>
+                <span className="text-right">Points</span>
+                <span>Status</span>
+              </div>
+              {paymentTransactions.slice(0, 15).map((t, i) => (
+                <div key={t.session_id || i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-2 py-1.5 text-[10px] font-heading border-b border-zinc-800/50 last:border-0">
+                  <span className="text-mutedForeground truncate" title={t.created_at}>{t.created_at ? new Date(t.created_at).toLocaleString() : '—'}</span>
+                  <span className="capitalize">{t.package_id || '—'}</span>
+                  <span className="text-right font-mono">+{Number(t.points || 0).toLocaleString()}</span>
+                  <span className={t.payment_status === 'completed' ? 'text-green-400' : 'text-amber-400'}>{t.payment_status === 'completed' ? 'Credited' : t.payment_status || 'Pending'}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[10px] text-zinc-600 font-heading italic">No purchases yet.</p>
+          )}
         </div>
         <div className="store-art-line text-primary mx-3" />
       </div>

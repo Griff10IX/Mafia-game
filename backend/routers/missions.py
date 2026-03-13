@@ -14,6 +14,7 @@ from server import (
     get_current_user,
     get_rank_info,
     get_prestige_bonus,
+    log_respect_earned,
     maybe_process_rank_up,
     send_notification,
     STATES,
@@ -708,6 +709,8 @@ async def complete_mission(
         update.setdefault("$set", {})["unlocked_maps_up_to"] = unlocks_city
 
     await db.users.update_one({"id": user_id}, update)
+    if reward_respect:
+        await log_respect_earned(user_id, reward_respect, "missions")
 
     if reward_car_id and next((c for c in CARS if c.get("id") == reward_car_id), None):
         await db.user_cars.insert_one({
@@ -789,6 +792,8 @@ async def collect_tribute(current_user: dict = Depends(get_current_user)):
         update["$inc"]["respect_points"] = respect
         update["$set"]["tribute_respect"] = 0
     await db.users.update_one({"id": user_id}, update)
+    if respect > 0:
+        await log_respect_earned(user_id, respect, "missions_tribute")
     msg = []
     if bank > 0:
         msg.append(f"${bank:,} cash")

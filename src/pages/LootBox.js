@@ -177,7 +177,7 @@ function RewardIcon({ type, rarity }) {
     weapon: Swords, car: Car, armour: Shield,
     property: Building2, cash: Coins,
     points: Zap, rank_points: Zap, perk: Zap,
-    bullets: Package, cars: Car,
+    bullets: Package, cars: Car, token: Gift,
   };
   const Icon = iconMap[type] || Gift;
   return (
@@ -202,6 +202,7 @@ function rewardLabel(reward) {
       return `${reward.count ?? 0} cars`;
     case 'bullets':   return `${reward.amount ?? 0} bullets`;
     case 'perk':      return reward.name || 'Perk';
+    case 'token':     return `${reward.amount ?? 1} ${(reward.token_type || 'bonus').replace(/_/g, ' ')} token(s)`;
     default:          return JSON.stringify(reward);
   }
 }

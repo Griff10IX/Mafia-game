@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
-from server import db, get_current_user, log_activity
+from server import db, get_current_user, log_activity, log_respect_earned
 
 
 MAX_SCORE_ACCEPTED = 50_000
@@ -81,6 +81,8 @@ async def _apply_rewards(user_id: str, rewards: Dict[str, Any]) -> Dict[str, Any
 
     if inc:
         await db.users.update_one({"id": user_id}, {"$inc": inc})
+        if inc.get("respect_points"):
+            await log_respect_earned(user_id, inc["respect_points"], "snake")
 
     if jail_seconds:
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=jail_seconds)

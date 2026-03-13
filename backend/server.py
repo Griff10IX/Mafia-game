@@ -682,6 +682,22 @@ async def send_notification(user_id: str, title: str, message: str, notification
     return notification
 
 
+async def log_respect_earned(user_id: str, amount: int, source: str = ""):
+    """Log respect points earned for weekly leaderboard aggregation. Call after awarding respect_points (positive amount only)."""
+    if not amount or amount <= 0:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    await db.respect_events.insert_one({"user_id": user_id, "amount": amount, "at": now, "source": source or "misc"})
+
+
+async def log_melt_event(user_id: str, bullets: int):
+    """Log bullets melted for weekly leaderboard aggregation. Call after a melt-for-bullets action."""
+    if not bullets or bullets <= 0:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    await db.melt_events.insert_one({"user_id": user_id, "bullets": bullets, "at": now})
+
+
 async def send_notification_to_family(family_id: str, title: str, message: str, notification_type: str, category: Optional[str] = None, **extra):
     """Notify every member of a family. Pass actor_username= to make that username linkable in the inbox."""
     members = await db.family_members.find({"family_id": family_id}, {"_id": 0, "user_id": 1}).to_list(100)
@@ -1000,6 +1016,8 @@ async def check_and_process_rank_up(user_id: str, old_rank: int, new_rank: int, 
                 {"id": user_id},
                 {"$inc": inc}
             )
+            if total_respect > 0:
+                await log_respect_earned(user_id, total_respect, "rank_up")
 
         # Get new rank name
         new_rank_name = RANKS[new_rank - 1]["name"] if new_rank <= len(RANKS) else "Unknown"

@@ -41,6 +41,7 @@ from server import (
     get_current_user,
     get_current_user_verified,
     get_rank_info,
+    log_respect_earned,
     maybe_process_rank_up,
     send_notification,
     ADMIN_EMAILS,
@@ -244,6 +245,7 @@ async def _award_bust_milestones(user_id: str, new_total_busts: int, claimed: li
             {"id": user_id},
             {"$inc": {"respect_points": total_reward}, "$addToSet": {"respect_points_bust_milestones_claimed": {"$each": new_claimed}}},
         )
+        await log_respect_earned(user_id, total_reward, "jail_milestone")
         milestones_str = ", ".join(f"{m:,}" for m in sorted(new_claimed))
         await send_notification(
             user_id,

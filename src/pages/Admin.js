@@ -272,6 +272,8 @@ export default function Admin() {
   const [bankLogsUsername, setBankLogsUsername] = useState('');
   const [bankLogsLimit, setBankLogsLimit] = useState(100);
   const [bankLogsData, setBankLogsData] = useState(null);
+  const [donationsLogData, setDonationsLogData] = useState(null);
+  const [donationsLogLoading, setDonationsLogLoading] = useState(false);
   const [bankLogsLoading, setBankLogsLoading] = useState(false);
   const [stockLogsUsername, setStockLogsUsername] = useState('');
   const [stockLogsLimit, setStockLogsLimit] = useState(500);
@@ -1456,6 +1458,20 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load bank logs');
     } finally {
       setBankLogsLoading(false);
+    }
+  };
+
+  const handleFetchDonationsLog = async () => {
+    setDonationsLogLoading(true);
+    setDonationsLogData(null);
+    try {
+      const res = await api.get('/admin/payments');
+      setDonationsLogData(res.data?.transactions || []);
+      toast.success(`Loaded ${(res.data?.transactions?.length ?? 0)} payment transactions`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load donations log');
+    } finally {
+      setDonationsLogLoading(false);
     }
   };
 
@@ -4504,6 +4520,73 @@ export default function Admin() {
                     </div>
                   </div>
                 </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Donations / Payments (Stripe point purchases) */}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Zap}
+            title="Donations / Payments (Stripe)"
+            badge={donationsLogData ? <span className="text-[10px] font-heading text-primary">{donationsLogData.length} entries</span> : null}
+            isCollapsed={collapsed.donationsLog}
+            onToggle={() => toggleSection('donationsLog')}
+          />
+          {!collapsed.donationsLog && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">Stripe point purchases. Points before/after show balance at credit time; Match (✓) confirms points_after = points_before + points_added. Credited at = when points were applied.</p>
+              <BtnPrimary onClick={handleFetchDonationsLog} disabled={donationsLogLoading}>
+                {donationsLogLoading ? 'Loading…' : 'Load donations / payments log'}
+              </BtnPrimary>
+              {donationsLogData && donationsLogData.length > 0 && (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <table className="w-full text-left border-collapse text-[9px] font-heading">
+                    <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                      <tr className="border-b border-zinc-700/50">
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Date</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">User</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Package</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Points added</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Points before</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Points after</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Match</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Status</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Credited at</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {donationsLogData.map((row, idx) => {
+                        const before = row.points_before != null ? Number(row.points_before) : null;
+                        const after = row.points_after != null ? Number(row.points_after) : null;
+                        const added = row.points != null ? Number(row.points) : null;
+                        const match = (before != null && after != null && added != null && after === before + added);
+                        return (
+                          <tr key={row.session_id || idx} className="border-b border-zinc-700/30">
+                            <td className="py-1 pr-1 text-mutedForeground" title={row.created_at}>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1">{row.username ?? row.user_id ?? '—'}</td>
+                            <td className="py-1 pr-1 capitalize">{row.package_id ?? '—'}</td>
+                            <td className="py-1 pr-1 font-mono">{added != null ? added.toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1 font-mono text-mutedForeground">{before != null ? before.toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1 font-mono text-mutedForeground">{after != null ? after.toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1" title={match ? 'points_after = points_before + points_added' : (row.points_credited_at ? 'Mismatch or legacy record' : '—')}>
+                              {row.payment_status === 'completed' && added != null && before != null && after != null
+                                ? (match ? <span className="text-green-400">✓</span> : <span className="text-red-400" title={`${after} ≠ ${before} + ${added}`}>✗</span>)
+                                : '—'}
+                            </td>
+                            <td className="py-1 pr-1">{row.payment_status === 'completed' ? <span className="text-green-400">Completed</span> : <span className="text-amber-400">{row.payment_status || 'Pending'}</span>}</td>
+                            <td className="py-1 pr-1 text-mutedForeground" title={row.points_credited_at}>{row.points_credited_at ? new Date(row.points_credited_at).toLocaleString() : <span className="text-amber-400">No</span>}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {donationsLogData && donationsLogData.length === 0 && (
+                <p className="text-[10px] text-mutedForeground font-heading">No payment transactions.</p>
               )}
             </div>
           )}

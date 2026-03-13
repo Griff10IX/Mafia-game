@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
 
-from server import db, get_current_user, log_activity
+from server import db, get_current_user, log_activity, log_respect_earned
 
 
 # Base tiers (score threshold -> cash, respect for that tier only; cumulative applied in _get_reward)
@@ -164,6 +164,8 @@ def register(router):
             updates["respect_points"] = respect
         if updates:
             await db.users.update_one({"id": current_user["id"]}, {"$inc": updates})
+            if respect > 0:
+                await log_respect_earned(current_user["id"], respect, "gauntlet")
         try:
             await db.gauntlet_scores.insert_one(
                 {"id": str(uuid.uuid4()), "user_id": current_user["id"], "username": current_user.get("username") or "?", "score": score, "cash": cash, "respect": respect, "at": now_iso}

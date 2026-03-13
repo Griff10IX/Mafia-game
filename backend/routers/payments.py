@@ -1,4 +1,4 @@
-# Payments: Stripe Checkout (redirect), status, webhook
+# Payments: Stripe Checkout (redirect), status, webhook. Idempotent credit to prevent double-credit exploit.
 import os
 import asyncio
 import logging
@@ -20,12 +20,44 @@ def _get_stripe_key():
     return os.environ.get("STRIPE_SECRET_KEY") or os.environ.get("STRIPE_API_KEY")
 
 
+async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_id: str, points: int) -> bool:
+    """
+    Credit points only once per session (idempotent). Returns True if we credited this call, False if already completed.
+    Use server-side points from POINT_PACKAGES only; do not trust client/metadata for amount.
+    Logs points_before and points_after on the transaction for admin audit.
+    """
+    if not user_id or points <= 0:
+        return False
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "points": 1})
+    points_before = int(user.get("points") or 0) if user else 0
+    points_after = points_before + points
+    now = datetime.now(timezone.utc).isoformat()
+    result = await db.payment_transactions.update_one(
+        {"session_id": session_id, "payment_status": {"$ne": "completed"}},
+        {"$set": {
+            "payment_status": "completed",
+            "points_credited_at": now,
+            "points_before": points_before,
+            "points_after": points_after,
+        }},
+    )
+    if result.modified_count == 0:
+        return False
+    await db.users.update_one({"id": user_id}, {"$inc": {"points": points}})
+    logger.info(
+        "Payment credited: session_id=%s user_id=%s package_id=%s points_added=%s points_before=%s points_after=%s",
+        session_id, user_id, package_id, points, points_before, points_after,
+    )
+    return True
+
+
 def register(router):
     """Register payment routes. Dependencies from server to avoid circular imports."""
     import server as srv
 
     db = srv.db
     get_current_user = srv.get_current_user
+    _is_admin = srv._is_admin
     POINT_PACKAGES = srv.POINT_PACKAGES
 
     @router.post("/payments/checkout")
@@ -138,25 +170,13 @@ def register(router):
 
             if session.payment_status == "paid" and session.metadata:
                 user_id = session.metadata.get("user_id")
-                package_id = session.metadata.get("package_id")
+                package_id = session.metadata.get("package_id") or (transaction or {}).get("package_id")
                 if user_id != current_user["id"]:
                     raise HTTPException(status_code=403, detail="Unauthorized")
-                points_val = session.metadata.get("points")
-                if points_val is not None:
-                    try:
-                        points = int(points_val)
-                    except (TypeError, ValueError):
-                        points = POINT_PACKAGES.get(package_id, {}).get("points", 0) if package_id else (transaction or {}).get("points", 0)
-                else:
-                    points = POINT_PACKAGES.get(package_id, {}).get("points", 0) if package_id else (transaction or {}).get("points", 0)
-
-                if transaction and transaction.get("payment_status") != "completed":
-                    await db.payment_transactions.update_one(
-                        {"session_id": session_id},
-                        {"$set": {"payment_status": "completed"}},
-                    )
-                    await db.users.update_one({"id": user_id}, {"$inc": {"points": points}})
-                    return {"status": "completed", "payment_status": "paid", "points_added": points}
+                # Always use server-side points to prevent exploit (never trust metadata amount)
+                points = POINT_PACKAGES.get(package_id, {}).get("points", 0) if package_id else 0
+                if not points and transaction:
+                    points = transaction.get("points", 0)
 
                 if not transaction:
                     await db.payment_transactions.insert_one({
@@ -164,11 +184,16 @@ def register(router):
                         "user_id": user_id,
                         "package_id": package_id or "",
                         "points": points,
-                        "payment_status": "completed",
+                        "payment_status": "pending",
                         "created_at": datetime.now(timezone.utc).isoformat(),
                     })
-                    await db.users.update_one({"id": user_id}, {"$inc": {"points": points}})
+                credited = await _credit_payment_if_pending(db, session_id, user_id, package_id or "", points)
+                if credited:
                     return {"status": "completed", "payment_status": "paid", "points_added": points}
+                # Already completed (e.g. by webhook); return completed with points
+                t2 = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0, "points": 1, "payment_status": 1})
+                if t2 and t2.get("payment_status") == "completed":
+                    return {"status": "completed", "payment_status": "paid", "points_added": t2.get("points", points)}
 
             if session.status == "expired":
                 return {"status": "expired", "payment_status": "expired"}
@@ -205,18 +230,52 @@ def register(router):
             if session.payment_status == "paid" and session.metadata:
                 user_id = session.metadata.get("user_id")
                 package_id = session.metadata.get("package_id")
-                points_val = session.metadata.get("points")
-                if points_val is not None:
-                    try:
-                        points = int(points_val)
-                    except (TypeError, ValueError):
-                        points = POINT_PACKAGES.get(package_id, {}).get("points", 0)
+                # Use server-side points only (never trust metadata for amount — prevents exploit)
+                points = POINT_PACKAGES.get(package_id, {}).get("points", 0) if package_id else 0
+                if not user_id or points <= 0:
+                    logger.warning("Stripe webhook: missing user_id or invalid package_id, session_id=%s", session.id)
                 else:
-                    points = POINT_PACKAGES.get(package_id, {}).get("points", 0)
-                await db.payment_transactions.update_one(
-                    {"session_id": session.id},
-                    {"$set": {"payment_status": "completed"}},
-                )
-                await db.users.update_one({"id": user_id}, {"$inc": {"points": points}})
+                    # Ensure we have a transaction row (status poll may not have run)
+                    existing = await db.payment_transactions.find_one({"session_id": session.id}, {"_id": 1})
+                    if not existing:
+                        await db.payment_transactions.insert_one({
+                            "session_id": session.id,
+                            "user_id": user_id,
+                            "package_id": package_id or "",
+                            "points": points,
+                            "payment_status": "pending",
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        })
+                    await _credit_payment_if_pending(db, session.id, user_id, package_id or "", points)
 
         return {"received": True}
+
+    @router.get("/payments/my-transactions")
+    async def my_payment_transactions(current_user: dict = Depends(get_current_user)):
+        """List current user's payment transactions (for Store Payments section)."""
+        cursor = db.payment_transactions.find(
+            {"user_id": current_user["id"]},
+            {"_id": 0, "session_id": 1, "package_id": 1, "points": 1, "payment_status": 1, "created_at": 1, "points_credited_at": 1},
+        ).sort("created_at", -1).limit(50)
+        items = await cursor.to_list(50)
+        return {"transactions": items}
+
+    @router.get("/admin/payments")
+    async def admin_payment_log(current_user: dict = Depends(get_current_user)):
+        """Admin only: list all payment transactions (donations) with username for audit."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        cursor = db.payment_transactions.find(
+            {},
+            {"_id": 0, "session_id": 1, "user_id": 1, "package_id": 1, "points": 1, "payment_status": 1, "created_at": 1, "points_credited_at": 1, "points_before": 1, "points_after": 1},
+        ).sort("created_at", -1).limit(500)
+        items = await cursor.to_list(500)
+        user_ids = list({t["user_id"] for t in items if t.get("user_id")})
+        users = await db.users.find(
+            {"id": {"$in": user_ids}},
+            {"_id": 0, "id": 1, "username": 1},
+        ).to_list(len(user_ids) + 1)
+        by_id = {u["id"]: u.get("username", "?") for u in users}
+        for t in items:
+            t["username"] = by_id.get(t.get("user_id"), "?")
+        return {"transactions": items}

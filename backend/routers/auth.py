@@ -588,6 +588,7 @@ def register(router):
             {"id": record["user_id"]},
             {"$set": {"email_verified": True}, "$inc": {"bullets": 2000, "respect_points": 500}},
         )
+        await srv.log_respect_earned(record["user_id"], 500, "email_verify")
         await db.email_verifications.delete_one({"token": body.token})
         user = await db.users.find_one({"id": record["user_id"]}, {"_id": 0})
         if not user:

@@ -855,7 +855,14 @@ export default function Missions() {
   const bossMissions   = cityMissions.filter(m => m.is_boss);
   const activeNormal   = normalMissions.filter(m => !m.completed);
   const activeBoss     = bossMissions.filter(m => !m.completed);
-  const completedMissions = cityMissions.filter(m => m.completed).sort((a, b) => (a.completed_at || a.order) - (b.completed_at || b.order));
+  const completedMissions = cityMissions.filter(m => m.completed).sort((a, b) => {
+    const atA = a.completed_at ? new Date(a.completed_at).getTime() : null;
+    const atB = b.completed_at ? new Date(b.completed_at).getTime() : null;
+    if (atA != null && atB != null) return atA - atB;
+    if (atA != null) return 1;
+    if (atB != null) return -1;
+    return (a.order ?? 0) - (b.order ?? 0);
+  });
   const areaMap = {};
   activeNormal.forEach(m => {
     if (!areaMap[m.area]) areaMap[m.area] = [];
@@ -1044,7 +1051,7 @@ export default function Missions() {
           <div className="flex items-center gap-2">
             <Skull size={11} className={bossM.requirements_met ? 'text-primary' : 'text-mutedForeground'} />
             <span className="text-[10px] text-mutedForeground italic">
-              {bossM.requirements_met ? `All requirements met — report to ${bossM.title}.` : `${bossDoneCount}/${bossReqCount} district missions done. Complete more to unlock "${bossM.title}".`}
+              {bossM.requirements_met ? `All requirements met — report to ${bossM.title}.` : `${bossDoneCount}/${bossReqCount} requirements met. Complete more to unlock "${bossM.title}".`}
             </span>
           </div>
         </div>

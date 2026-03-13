@@ -79,6 +79,8 @@ from server import (
     maybe_process_rank_up,
     maybe_respect_points_drop,
     log_activity,
+    log_melt_event,
+    log_respect_earned,
     send_notification,
     RANKS,
     CARS,
@@ -128,6 +130,7 @@ async def _award_gta_milestones(user_id: str, new_total_gta: int, claimed: list)
             {"id": user_id},
             {"$inc": {"respect_points": total_reward}, "$addToSet": {"respect_points_gta_milestones_claimed": {"$each": new_claimed}}},
         )
+        await log_respect_earned(user_id, total_reward, "gta_milestone")
         milestones_str = ", ".join(f"{m:,}" for m in sorted(new_claimed))
         await send_notification(
             user_id,
@@ -433,6 +436,8 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             {"id": current_user["id"]},
             {"$inc": gta_inc},
         )
+        if gta_inc.get("respect_points"):
+            await log_respect_earned(current_user["id"], gta_inc["respect_points"], "gta")
         new_total_gta = (current_user.get("total_gta") or 0) + 1
         claimed = current_user.get("respect_points_gta_milestones_claimed") or []
         new_claimed = [m for m in GTA_MILESTONES if m <= new_total_gta and m not in claimed]
@@ -769,6 +774,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                 {"id": user["id"]},
                 {"$inc": {"bullets": total_bullets, "bullets_melted": total_bullets, "cars_melted": deleted_count, "uncommon_cars_scrapped": uncommon_count}, "$set": {"melt_bullets_cooldown_until": cooldown_until.isoformat()}},
             )
+            await log_melt_event(user["id"], total_bullets)
             await log_activity(
                 user["id"],
                 user.get("username") or "?",

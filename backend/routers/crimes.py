@@ -66,6 +66,7 @@ async def _award_crime_milestones(user_id: str, new_total_crimes: int, claimed: 
             {"id": user_id},
             {"$inc": {"respect_points": total_reward}, "$addToSet": {"respect_points_crime_milestones_claimed": {"$each": new_claimed}}},
         )
+        await log_respect_earned(user_id, total_reward, "crime_milestone")
         milestones_str = ", ".join(f"{m:,}" for m in sorted(new_claimed))
         await send_notification(
             user_id,
@@ -307,6 +308,7 @@ from server import (
     get_rank_info,
     get_effective_event,
     log_activity,
+    log_respect_earned,
     maybe_process_rank_up,
     maybe_respect_points_drop,
     send_notification,
@@ -571,6 +573,8 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
             {"id": current_user["id"]},
             {"$inc": inc},
         )
+        if inc.get("respect_points"):
+            await log_respect_earned(current_user["id"], inc["respect_points"], "crimes")
         if inc.get("loot_box_pieces"):
             try:
                 await db.economy_events.insert_one({
@@ -607,6 +611,8 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                     bonus_inc[f"booze_carrying.{b['id']}"] = b["amount"]
                 if bonus_inc:
                     await db.users.update_one({"id": current_user["id"]}, {"$inc": bonus_inc})
+                    if bonus_inc.get("respect_points"):
+                        await log_respect_earned(current_user["id"], bonus_inc["respect_points"], "crimes_prestige")
                 # Merge prestige bonuses into the response dict (preserving any global molotov drop)
                 if prestige_bonus_earned is None:
                     prestige_bonus_earned = dict(prestige_bonus_from_prestige)

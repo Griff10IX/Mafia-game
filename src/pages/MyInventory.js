@@ -34,7 +34,7 @@ export default function MyInventory() {
       .then((res) => {
         if (res?.data) setData(res.data);
       })
-      .catch(() => setData({ weapons: [], armour: { options: [] }, loot_exclusives: {} }))
+      .catch(() => setData({ weapons: [], armour: { options: [] }, loot_exclusives: {}, tokens: {} }))
       .finally(() => setLoading(false));
   };
 
@@ -272,9 +272,9 @@ export default function MyInventory() {
             </div>
             <div className="p-2.5 space-y-2">
               {exclusiveCars.map((c) => (
-                <div key={c.id || c.car_id} className="inv-item flex items-center gap-2 py-2">
+                <div key={c.id || c.car_id || c.name} className="inv-item flex items-center gap-2 py-2">
                   <Car size={12} className="text-amber-400 shrink-0" />
-                  <span className="text-[11px] font-heading text-foreground">{c.name}</span>
+                  <span className="text-[11px] font-heading text-foreground">{c.name ?? 'Car'}</span>
                   <span className="text-[9px] text-amber-400">Loot Exclusive</span>
                   <Link to="/garage" className="ml-auto text-[9px] text-primary hover:underline">View in Garage →</Link>
                 </div>

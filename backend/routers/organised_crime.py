@@ -15,7 +15,7 @@ _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
 
-from server import db, get_current_user, get_current_user_verified, get_rank_info, maybe_process_rank_up, maybe_respect_points_drop
+from server import db, get_current_user, get_current_user_verified, get_rank_info, log_respect_earned, maybe_process_rank_up, maybe_respect_points_drop
 
 # Equipment tiers for Organised Crime
 EQUIPMENT_TIERS = [
@@ -340,6 +340,8 @@ async def run_heist(
             {"id": current_user["id"]},
             {"$inc": oc_inc}
         )
+        if oc_inc.get("respect_points"):
+            await log_respect_earned(current_user["id"], oc_inc["respect_points"], "oc")
         try:
             await maybe_process_rank_up(current_user["id"], rp_before, rp_added, current_user.get("username", ""))
         except Exception as e:

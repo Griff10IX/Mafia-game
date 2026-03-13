@@ -14,6 +14,7 @@ from server import (
     get_rank_info,
     get_effective_event,
     get_prestige_bonus,
+    log_respect_earned,
     send_notification,
     STATES,
     RANKS,
@@ -477,6 +478,8 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
                 {"$inc": {f"booze_carrying.{default_booze_id}": booze_earned}},
             )
     await db.users.update_one({"id": current_user["id"]}, {"$inc": inc})
+    if respect_earned > 0:
+        await log_respect_earned(current_user["id"], respect_earned, "illegal_business")
     await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": updates})
     msg = f"The till's been cleared. ${income:,.2f}"
     if booze_earned:

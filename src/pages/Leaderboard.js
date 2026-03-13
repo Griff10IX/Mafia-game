@@ -254,44 +254,42 @@ export default function Leaderboard() {
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
         />
         {period === 'alltime' && (
-          <>
-            <StatBoard
-              title={viewMode === 'dead' ? 'Top dead · Points Spent' : 'Most Points Spent'}
-              icon={DollarSign}
-              entries={boards.points_spent || []}
-              valueLabel="pts"
-              topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
-            />
-            <StatBoard
-              title={viewMode === 'dead' ? 'Top dead · Respect Points' : 'Respect Points Earned'}
-              icon={Star}
-              entries={boards.respect_points || []}
-              valueLabel="respect"
-              topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
-            />
-            <StatBoard
-              title={viewMode === 'dead' ? 'Top dead · Bullets Melted' : 'Bullets Melted'}
-              icon={Zap}
-              entries={boards.bullets_melted || []}
-              valueLabel="bullets"
-              topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
-            />
-            <StatBoard
-              title={viewMode === 'dead' ? 'Top dead · Stock Market Profit' : 'Highest Stock Market Profit'}
-              icon={TrendingUp}
-              entries={boards.stock_market_profit || []}
-              valueLabel="pts"
-              topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
-            />
-            <StatBoard
-              title={viewMode === 'dead' ? 'Top dead · Booze Run Profit' : 'Booze Run Profit'}
-              icon={Wine}
-              entries={boards.booze_run_profit || []}
-              valueLabel="$"
-              topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
-            />
-          </>
+          <StatBoard
+            title={viewMode === 'dead' ? 'Top dead · Points Spent' : 'Most Points Spent'}
+            icon={DollarSign}
+            entries={boards.points_spent || []}
+            valueLabel="pts"
+            topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
+          />
         )}
+        <StatBoard
+          title={viewMode === 'dead' ? 'Top dead · Respect Points' : 'Respect Points Earned'}
+          icon={Star}
+          entries={boards.respect_points || []}
+          valueLabel="respect"
+          topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (${period === 'weekly' ? 'this week' : 'all-time'})`}
+        />
+        <StatBoard
+          title={viewMode === 'dead' ? 'Top dead · Bullets Melted' : 'Bullets Melted'}
+          icon={Zap}
+          entries={boards.bullets_melted || []}
+          valueLabel="bullets"
+          topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (${period === 'weekly' ? 'this week' : 'all-time'})`}
+        />
+        <StatBoard
+          title={viewMode === 'dead' ? 'Top dead · Stock Market Profit' : 'Highest Stock Market Profit'}
+          icon={TrendingUp}
+          entries={boards.stock_market_profit || []}
+          valueLabel="pts"
+          topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (${period === 'weekly' ? 'this week' : 'all-time'})`}
+        />
+        <StatBoard
+          title={viewMode === 'dead' ? 'Top dead · Booze Run Profit' : 'Booze Run Profit'}
+          icon={Wine}
+          entries={boards.booze_run_profit || []}
+          valueLabel="$"
+          topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (${period === 'weekly' ? 'this week' : 'all-time'})`}
+        />
       </div>
 
       {/* Weekly Rewards (alive only) */}
@@ -304,7 +302,7 @@ export default function Leaderboard() {
             <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Weekly Rewards</h2>
           </div>
           <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5 leading-tight">
-            Top 10 each week receive cash, points, and rare vehicles.
+            Top 10 each week receive cash, respect points, and rare vehicles.
           </p>
         </div>
         <div className="p-2">
@@ -315,7 +313,7 @@ export default function Leaderboard() {
                 1st Place
               </div>
               <div className="text-[10px] text-mutedForeground font-heading leading-tight">
-                $500,000 + 1,000 Points + Premium Car
+                $500,000 + 3,000 Respect Points + Premium Car
               </div>
             </div>
             <div className="bg-gradient-to-b from-zinc-600/20 to-zinc-800/20 border border-zinc-500/30 rounded-sm p-2">
@@ -324,7 +322,7 @@ export default function Leaderboard() {
                 2nd Place
               </div>
               <div className="text-[10px] text-mutedForeground font-heading leading-tight">
-                $300,000 + 500 Points + Luxury Car
+                $300,000 + 1,500 Respect Points + Luxury Car
               </div>
             </div>
             <div className="bg-gradient-to-b from-amber-700/20 to-amber-900/20 border border-amber-600/30 rounded-sm p-2">
@@ -333,7 +331,7 @@ export default function Leaderboard() {
                 3rd Place
               </div>
               <div className="text-[10px] text-mutedForeground font-heading leading-tight">
-                $150,000 + 250 Points + Classic Car
+                $150,000 + 750 Respect Points + Classic Car
               </div>
             </div>
           </div>
