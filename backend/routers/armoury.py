@@ -266,13 +266,10 @@ def _accumulated_bullets(factory: dict) -> int:
     last = factory.get("last_collected_at")
     if not last:
         return 0
-    try:
-        last_dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
-    except Exception:
+    last_dt = _parse_utc(last)
+    if last_dt is None:
         return 0
     now = datetime.now(timezone.utc)
-    if last_dt.tzinfo is None:
-        last_dt = last_dt.replace(tzinfo=timezone.utc)
     hours = (now - last_dt).total_seconds() / 3600
     raw = int(hours * BULLET_FACTORY_PRODUCTION_PER_HOUR)
     return min(raw, BULLET_FACTORY_TOTAL_PER_24H)
@@ -309,15 +306,11 @@ async def get_bullet_factory(
     buyer_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "last_bullet_factory_bought_at": 1})
     last_bought = (buyer_doc or {}).get("last_bullet_factory_bought_at")
     if last_bought:
-        try:
-            last_dt = datetime.fromisoformat(last_bought.replace("Z", "+00:00"))
-            if last_dt.tzinfo is None:
-                last_dt = last_dt.replace(tzinfo=timezone.utc)
+        last_dt = _parse_utc(last_bought)
+        if last_dt:
             next_ok = last_dt + timedelta(minutes=BULLET_FACTORY_BUY_COOLDOWN_MINUTES)
             if datetime.now(timezone.utc) < next_ok:
                 next_buy_available_at = next_ok.isoformat()
-        except Exception:
-            pass
     out = {
         "state": state,
         "production_per_hour": BULLET_FACTORY_PRODUCTION_PER_HOUR,
@@ -755,10 +748,8 @@ async def buy_bullets(
     user_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "last_bullet_factory_bought_at": 1})
     last_bought = (user_doc or {}).get("last_bullet_factory_bought_at")
     if last_bought:
-        try:
-            last_dt = datetime.fromisoformat(last_bought.replace("Z", "+00:00"))
-            if last_dt.tzinfo is None:
-                last_dt = last_dt.replace(tzinfo=timezone.utc)
+        last_dt = _parse_utc(last_bought)
+        if last_dt:
             elapsed = (datetime.now(timezone.utc) - last_dt).total_seconds()
             if elapsed < BULLET_FACTORY_BUY_COOLDOWN_MINUTES * 60:
                 wait_mins = max(0, int((BULLET_FACTORY_BUY_COOLDOWN_MINUTES * 60 - elapsed) / 60) + 1)
@@ -766,8 +757,6 @@ async def buy_bullets(
                     status_code=400,
                     detail=f"You can only buy bullets from the factory once every {BULLET_FACTORY_BUY_COOLDOWN_MINUTES} minutes. Try again in {wait_mins} min.",
                 )
-        except Exception:
-            pass
     accumulated = _accumulated_bullets(factory)
     if amount > accumulated:
         raise HTTPException(
@@ -790,12 +779,9 @@ async def buy_bullets(
             detail=f"You need ${total_cost:,} (${price:,} × {amount:,})",
         )
     # Advance last_collected_at so accumulated drops by amount
-    try:
-        last = datetime.fromisoformat(factory["last_collected_at"].replace("Z", "+00:00"))
-    except Exception:
+    last = _parse_utc(factory.get("last_collected_at"))
+    if last is None:
         last = datetime.now(timezone.utc)
-    if last.tzinfo is None:
-        last = last.replace(tzinfo=timezone.utc)
     hours_consumed = amount / BULLET_FACTORY_PRODUCTION_PER_HOUR
     new_last = last + timedelta(seconds=hours_consumed * 3600)
     await db.bullet_factory.update_one(
@@ -1417,34 +1403,20 @@ async def train_shooting_range(request: ShootingRangeTrainRequest, current_user:
         if not (1 <= hits <= MASTERY_LIVE_HITS_MAX_PER_REQUEST):
             raise HTTPException(status_code=400, detail=f"hits must be 1–{MASTERY_LIVE_HITS_MAX_PER_REQUEST} for live mode.")
         # Same 5-min cooldown as auto_sim (one 3D round per weapon per 5 min)
-        last = doc.get("last_trained_at") if doc else None
-        if last:
-            try:
-                last_dt = datetime.fromisoformat(last.replace("Z", "+00:00")) if isinstance(last, str) else last
-                if last_dt.tzinfo is None:
-                    last_dt = last_dt.replace(tzinfo=timezone.utc)
-                if (now - last_dt).total_seconds() < MASTERY_COOLDOWN_MINUTES * 60:
-                    wait_sec = MASTERY_COOLDOWN_MINUTES * 60 - int((now - last_dt).total_seconds())
-                    raise HTTPException(status_code=429, detail=f"Wait {max(1, wait_sec // 60)} min before playing the 3D range again (same as Train 5 min).")
-            except HTTPException:
-                raise
-            except Exception:
-                pass
+        last_raw = doc.get("last_trained_at") if doc else None
+        if last_raw:
+            last_dt = _parse_utc(last_raw)
+            if last_dt and (now - last_dt).total_seconds() < MASTERY_COOLDOWN_MINUTES * 60:
+                wait_sec = MASTERY_COOLDOWN_MINUTES * 60 - int((now - last_dt).total_seconds())
+                raise HTTPException(status_code=429, detail=f"Wait {max(1, wait_sec // 60)} min before playing the 3D range again (same as Train 5 min).")
         add_pct = min(hits * MASTERY_PCT_PER_LIVE_HIT, 100 - current_pct)
     else:
-        last = doc.get("last_trained_at") if doc else None
-        if last:
-            try:
-                last_dt = datetime.fromisoformat(last.replace("Z", "+00:00")) if isinstance(last, str) else last
-                if last_dt.tzinfo is None:
-                    last_dt = last_dt.replace(tzinfo=timezone.utc)
-                if (now - last_dt).total_seconds() < MASTERY_COOLDOWN_MINUTES * 60:
-                    wait_sec = MASTERY_COOLDOWN_MINUTES * 60 - int((now - last_dt).total_seconds())
-                    raise HTTPException(status_code=429, detail=f"Wait {max(1, wait_sec // 60)} min before training this weapon again.")
-            except HTTPException:
-                raise
-            except Exception:
-                pass
+        last_raw = doc.get("last_trained_at") if doc else None
+        if last_raw:
+            last_dt = _parse_utc(last_raw)
+            if last_dt and (now - last_dt).total_seconds() < MASTERY_COOLDOWN_MINUTES * 60:
+                wait_sec = MASTERY_COOLDOWN_MINUTES * 60 - int((now - last_dt).total_seconds())
+                raise HTTPException(status_code=429, detail=f"Wait {max(1, wait_sec // 60)} min before training this weapon again.")
         add_pct = min(MASTERY_AUTO_SIM_PCT_PER_CHUNK, 100 - current_pct)
 
     if add_pct <= 0:
@@ -1500,14 +1472,9 @@ def _tokens_from_user(user: dict) -> dict:
         until_raw = user.get(until_field)
         active_until = None
         if until_raw:
-            try:
-                until = datetime.fromisoformat(until_raw.replace("Z", "+00:00"))
-                if until.tzinfo is None:
-                    until = until.replace(tzinfo=timezone.utc)
-                if until > now:
-                    active_until = until.isoformat()
-            except Exception:
-                pass
+            until = _parse_utc(until_raw)
+            if until and until > now:
+                active_until = until.isoformat()
         out[t] = {"count": count, "active_until": active_until}
     return out
 

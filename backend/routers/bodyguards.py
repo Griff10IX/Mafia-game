@@ -50,8 +50,8 @@ BODYGUARD_ARMOUR_UPGRADE_COSTS = {0: 50, 1: 100, 2: 200, 3: 400, 4: 800}
 
 # Human bodyguard one-time hire cost is 25% cheaper than robot (deducted from inviter when invite is accepted)
 BODYGUARD_HUMAN_HIRE_DISCOUNT = 0.75  # 75% of robot price
-# Cooldown between dropping human bodyguards (owner can only drop once per period)
-BODYGUARD_DROP_COOLDOWN_HOURS = 3
+# Cooldown between dropping bodyguards (owner can only drop once per period)
+BODYGUARD_DROP_COOLDOWN_SECONDS = 110  # TODO: change back to 3 hours (10800) after testing
 
 # Bodyguard inflation: each purchase starts/resets a 3h timer; buying again before it expires adds % (2, 5, 7, 12, 17, 22, ...)
 BODYGUARD_INFLATION_HOURS = 3
@@ -1060,7 +1060,7 @@ async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_use
     """Owner drops a bodyguard (robot or human) from a slot. Payments stop; the slot becomes empty. Once every 3 hours (shared cooldown for all types)."""
     if slot < 1 or slot > 4:
         raise HTTPException(status_code=400, detail="Invalid slot")
-    # Cooldown: only one drop per BODYGUARD_DROP_COOLDOWN_HOURS
+    # Cooldown: only one drop per BODYGUARD_DROP_COOLDOWN_SECONDS
     owner_doc = await db.users.find_one(
         {"id": current_user["id"]},
         {"_id": 0, "bodyguard_last_drop_at": 1},
@@ -1069,11 +1069,11 @@ async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_use
         last_drop = _parse_iso_datetime(owner_doc.get("bodyguard_last_drop_at"))
         if last_drop:
             elapsed = (datetime.now(timezone.utc) - last_drop).total_seconds()
-            if elapsed < BODYGUARD_DROP_COOLDOWN_HOURS * 3600:
-                mins_left = int((BODYGUARD_DROP_COOLDOWN_HOURS * 3600 - elapsed) / 60)
+            if elapsed < BODYGUARD_DROP_COOLDOWN_SECONDS:
+                secs_left = int(BODYGUARD_DROP_COOLDOWN_SECONDS - elapsed)
                 raise HTTPException(
                     status_code=429,
-                    detail=f"You can only drop a bodyguard once every {BODYGUARD_DROP_COOLDOWN_HOURS} hours. Try again in {mins_left} minutes.",
+                    detail=f"You can only drop a bodyguard once every {BODYGUARD_DROP_COOLDOWN_SECONDS} seconds. Try again in {secs_left} seconds.",
                 )
     bg = await db.bodyguards.find_one(
         {"user_id": current_user["id"], "slot_number": slot},
@@ -1089,24 +1089,12 @@ async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_use
     guard_name = guard_user.get("username", "?") if guard_user else "?"
 
     if is_robot:
-        # Robot: delete the bodyguard slot and the robot user record entirely
+        # Robot: delete the bodyguard slot doc and the robot user record entirely
         await db.bodyguards.delete_one({"user_id": current_user["id"], "slot_number": slot})
         await db.users.delete_one({"id": guard_id, "is_bodyguard": True})
     else:
-        # Human: clear the slot, keep the user but remove bodyguard flags
-        await db.bodyguards.update_one(
-            {"user_id": current_user["id"], "slot_number": slot},
-            {
-                "$set": {
-                    "bodyguard_user_id": None,
-                    "payment_points": 0,
-                    "payment_money": 0,
-                    "payout_weekday": None,
-                    "last_payout_date": None,
-                },
-                "$unset": {"contract_end": "", "hired_at": "", "hire_cost": ""},
-            },
-        )
+        # Human: delete the bodyguard slot doc, remove bodyguard flags from user
+        await db.bodyguards.delete_one({"user_id": current_user["id"], "slot_number": slot})
         await db.users.update_one(
             {"id": guard_id},
             {"$unset": {"is_bodyguard": "", "bodyguard_owner_id": ""}},
@@ -1134,11 +1122,20 @@ async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_use
         {"id": current_user["id"]},
         {"$set": {"bodyguard_last_drop_at": now.isoformat()}},
     )
+
+    # Shift higher slots down to fill the gap (slot 4 -> 3, 3 -> 2, etc.)
+    # Process from lowest to highest to avoid conflicts
+    for higher_slot in range(slot + 1, 5):
+        await db.bodyguards.update_one(
+            {"user_id": current_user["id"], "slot_number": higher_slot},
+            {"$set": {"slot_number": higher_slot - 1}},
+        )
+
     _invalidate_bodyguards_cache(current_user["id"])
     if not is_robot:
         _invalidate_bodyguards_cache(guard_id)
     guard_type = "robot" if is_robot else "human"
-    return {"message": f"Dropped {guard_name} ({guard_type}) from slot {slot}. You can drop again in {BODYGUARD_DROP_COOLDOWN_HOURS} hours."}
+    return {"message": f"Dropped {guard_name} ({guard_type}) from slot {slot}. You can drop again in {BODYGUARD_DROP_COOLDOWN_SECONDS} seconds."}
 
 
 async def admin_test_bodyguard_payout(current_user: dict = Depends(get_current_user)):

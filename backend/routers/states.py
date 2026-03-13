@@ -4,6 +4,19 @@ from fastapi import Depends, HTTPException, Body
 from pydantic import BaseModel
 
 from server import db, get_current_user, get_wealth_rank, STATES, get_state_heads, set_state_head
+
+
+def _parse_iso_datetime(s):
+    """Parse ISO datetime string safely; return timezone-aware datetime or None."""
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
 from routers.dice import DICE_MAX_BET
 from routers.families import resolve_family_id, family_qualifies_for_state_head
 from routers.roulette import ROULETTE_MAX_BET
@@ -51,13 +64,10 @@ async def get_states(current_user: dict = Depends(get_current_user)):
     def _slots_expired(d):
         if not d or not d.get("expires_at"):
             return True
-        try:
-            t = datetime.fromisoformat(d["expires_at"].replace("Z", "+00:00"))
-            if t.tzinfo is None:
-                t = t.replace(tzinfo=timezone.utc)
-            return now_utc >= t
-        except Exception:
+        t = _parse_iso_datetime(d.get("expires_at"))
+        if not t:
             return True
+        return now_utc >= t
 
     for d in dice_docs:
         if not d.get("owner_id"):

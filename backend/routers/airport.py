@@ -28,6 +28,19 @@ MAX_TRAVELS_PER_HOUR = 15
 EXTRA_AIRMILES_COST = 25
 MAX_EXTRA_AIRMILES = 50
 
+
+def _parse_iso_datetime(s):
+    """Parse ISO datetime string safely; return timezone-aware datetime or None."""
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
 # Per-user cache for GET /travel/info
 _travel_info_cache: dict = {}
 _TRAVEL_INFO_TTL_SEC = 5
@@ -86,12 +99,10 @@ async def get_travel_status(current_user: dict = Depends(get_current_user)):
     travel_arrives_at = current_user.get("travel_arrives_at")
     seconds_remaining = None
     if travel_arrives_at and traveling_to:
-        try:
-            arrives_dt = datetime.fromisoformat(travel_arrives_at.replace("Z", "+00:00"))
+        arrives_dt = _parse_iso_datetime(travel_arrives_at)
+        if arrives_dt:
             secs = max(0, int((arrives_dt - datetime.now(timezone.utc)).total_seconds()))
             seconds_remaining = secs if secs > 0 else None
-        except Exception:
-            pass
     traveling = seconds_remaining is not None and seconds_remaining > 0
     return {
         "traveling": traveling,
@@ -111,16 +122,13 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
 
     reset_time = current_user.get("travel_reset_time")
     if reset_time:
-        try:
-            reset_dt = datetime.fromisoformat(reset_time.replace("Z", "+00:00"))
-            if datetime.now(timezone.utc) - reset_dt > timedelta(hours=1):
-                await db.users.update_one(
-                    {"id": uid},
-                    {"$set": {"travels_this_hour": 0, "travel_reset_time": datetime.now(timezone.utc).isoformat()}}
-                )
-                current_user["travels_this_hour"] = 0
-        except Exception:
-            pass
+        reset_dt = _parse_iso_datetime(reset_time)
+        if reset_dt and datetime.now(timezone.utc) - reset_dt > timedelta(hours=1):
+            await db.users.update_one(
+                {"id": uid},
+                {"$set": {"travels_this_hour": 0, "travel_reset_time": datetime.now(timezone.utc).isoformat()}}
+            )
+            current_user["travels_this_hour"] = 0
 
     user_cars = await db.user_cars.find({"user_id": uid}).to_list(50)
     cars_with_travel_times = []
@@ -166,12 +174,10 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
     travel_arrives_at = current_user.get("travel_arrives_at")
     seconds_remaining = None
     if travel_arrives_at and traveling_to:
-        try:
-            arrives_dt = datetime.fromisoformat(travel_arrives_at.replace("Z", "+00:00"))
+        arrives_dt = _parse_iso_datetime(travel_arrives_at)
+        if arrives_dt:
             secs = max(0, int((arrives_dt - datetime.now(timezone.utc)).total_seconds()))
             seconds_remaining = secs if secs > 0 else None
-        except Exception:
-            pass
 
     carrying_booze = _booze_user_carrying_total(current_user.get("booze_carrying") or {}) > 0
     user_owns_any_airport = await db.airport_ownership.find_one({"owner_id": uid}, {"_id": 1})
@@ -234,23 +240,15 @@ async def _start_travel_impl(
     now_utc = datetime.now(timezone.utc)
     current_location = user.get("current_state")
     if user.get("travel_arrives_at"):
-        try:
-            arrives_dt = datetime.fromisoformat(user["travel_arrives_at"].replace("Z", "+00:00"))
-            if now_utc >= arrives_dt:
-                current_location = user.get("traveling_to") or current_location
-        except Exception:
-            pass
+        arrives_dt = _parse_iso_datetime(user.get("travel_arrives_at"))
+        if arrives_dt and now_utc >= arrives_dt:
+            current_location = user.get("traveling_to") or current_location
     if destination == current_location:
         raise HTTPException(status_code=400, detail="Already at this location")
     if user.get("travel_arrives_at"):
-        try:
-            arrives_dt = datetime.fromisoformat(user["travel_arrives_at"].replace("Z", "+00:00"))
-            if now_utc < arrives_dt:
-                raise HTTPException(status_code=400, detail="You are already traveling. Wait for arrival.")
-        except HTTPException:
-            raise
-        except Exception:
-            pass
+        arrives_dt = _parse_iso_datetime(user.get("travel_arrives_at"))
+        if arrives_dt and now_utc < arrives_dt:
+            raise HTTPException(status_code=400, detail="You are already traveling. Wait for arrival.")
 
     travel_time = 45
     method_name = "Walking"
@@ -277,24 +275,14 @@ async def _start_travel_impl(
             airport_price = max(1, round(airport_price * 0.95))
         airport_perk_until = user.get("airport_cost_perk_until")
         if airport_perk_until:
-            try:
-                until = datetime.fromisoformat(airport_perk_until.replace("Z", "+00:00"))
-                if until.tzinfo is None:
-                    until = until.replace(tzinfo=timezone.utc)
-                if now_utc < until:
-                    airport_price = max(1, round(airport_price * 0.9))
-            except Exception:
-                pass
+            until = _parse_iso_datetime(airport_perk_until)
+            if until and now_utc < until:
+                airport_price = max(1, round(airport_price * 0.9))
         travel_until = user.get("travel_until")
         if travel_until:
-            try:
-                until = datetime.fromisoformat(travel_until.replace("Z", "+00:00"))
-                if until.tzinfo is None:
-                    until = until.replace(tzinfo=timezone.utc)
-                if now_utc < until:
-                    airport_price = max(1, round(airport_price * 0.9))
-            except Exception:
-                pass
+            until = _parse_iso_datetime(travel_until)
+            if until and now_utc < until:
+                airport_price = max(1, round(airport_price * 0.9))
         owner_id = airport_doc.get("owner_id")
         if user.get("points", 0) < airport_price:
             raise HTTPException(status_code=400, detail=f"Insufficient points for airport ({airport_price} pts)")
@@ -348,14 +336,9 @@ async def _start_travel_impl(
     if travel_method != "airport" and travel_time > 0:
         travel_until = user.get("travel_until")
         if travel_until:
-            try:
-                until = datetime.fromisoformat(travel_until.replace("Z", "+00:00"))
-                if until.tzinfo is None:
-                    until = until.replace(tzinfo=timezone.utc)
-                if now_utc < until:
-                    travel_time = max(1, int(travel_time * 0.98))
-            except Exception:
-                pass
+            until = _parse_iso_datetime(travel_until)
+            if until and now_utc < until:
+                travel_time = max(1, int(travel_time * 0.98))
 
     # Only count airport travel against the hourly limit; car travel is unlimited
     inc_travels = {} if booze_run or travel_method != "airport" else {"travels_this_hour": 1}
@@ -406,7 +389,7 @@ async def travel(request: TravelRequest, current_user: dict = Depends(get_curren
 
 
 async def buy_extra_airmiles(current_user: dict = Depends(get_current_user)):
-    if current_user["points"] < EXTRA_AIRMILES_COST:
+    if int(current_user.get("points") or 0) < EXTRA_AIRMILES_COST:
         raise HTTPException(status_code=400, detail="Insufficient points")
     current_airmiles = int(current_user.get("extra_airmiles", 0) or 0)
     if current_airmiles >= MAX_EXTRA_AIRMILES:

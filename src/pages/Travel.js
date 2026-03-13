@@ -340,7 +340,8 @@ export default function Travel() {
       setAutoRankBoozeOn(!!(meRes.data?.auto_rank_enabled && meRes.data?.auto_rank_booze));
     } catch (error) {
       toast.error('Failed to load travel info');
-      console.error('Error fetching travel info:', error);
+      setTravelInfo(null);
+      setAutoRankBoozeOn(false);
     } finally {
       setLoading(false);
     }
