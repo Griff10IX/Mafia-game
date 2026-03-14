@@ -581,6 +581,30 @@ def register(router):
             "global_enabled": enabled
         }
 
+    @router.post("/admin/security/rate-limits/set-all-interval")
+    async def admin_set_all_rate_limit_intervals(
+        min_interval_ms: float,
+        current_user: dict = Depends(get_current_user)
+    ):
+        """Set all rate limit intervals to the same value at once."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if min_interval_ms < 0 or min_interval_ms > 60000:
+            raise HTTPException(status_code=400, detail="Min interval must be between 0 and 60000 ms")
+        min_interval_sec = min_interval_ms / 1000.0
+        count = 0
+        for endpoint in security_module.RATE_LIMIT_CONFIG:
+            _, enabled = security_module.RATE_LIMIT_CONFIG[endpoint]
+            security_module.RATE_LIMIT_CONFIG[endpoint] = (min_interval_sec, enabled)
+            count += 1
+        label = f"{min_interval_ms}ms" if min_interval_ms < 1000 else f"{min_interval_sec}s"
+        return {
+            "message": f"Set all {count} endpoints to {label} between clicks",
+            "min_interval_ms": min_interval_ms,
+            "min_interval_sec": min_interval_sec,
+            "count": count
+        }
+
     @router.post("/admin/security/middleware-toggle")
     async def admin_toggle_security_middleware(
         enabled: bool,
@@ -597,6 +621,52 @@ def register(router):
             }
         except ImportError:
             raise HTTPException(status_code=500, detail="security_middleware module not found")
+
+    @router.get("/admin/security/spam-config")
+    async def admin_get_spam_config(current_user: dict = Depends(get_current_user)):
+        """Get current spam/burst detection configuration."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return {
+            "max_requests_per_second": security_module.MAX_REQUESTS_PER_SECOND,
+            "burst_window_seconds": security_module.BURST_WINDOW_SECONDS,
+            "burst_max_requests": security_module.BURST_MAX_REQUESTS,
+        }
+
+    @router.post("/admin/security/spam-config")
+    async def admin_set_spam_config(
+        max_requests_per_second: int = None,
+        burst_window_seconds: float = None,
+        burst_max_requests: int = None,
+        current_user: dict = Depends(get_current_user)
+    ):
+        """Configure spam/burst detection thresholds."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        changes = []
+        if max_requests_per_second is not None:
+            if max_requests_per_second < 1 or max_requests_per_second > 100:
+                raise HTTPException(status_code=400, detail="max_requests_per_second must be between 1 and 100")
+            security_module.MAX_REQUESTS_PER_SECOND = max_requests_per_second
+            changes.append(f"max_requests_per_second={max_requests_per_second}")
+        if burst_window_seconds is not None:
+            if burst_window_seconds < 0.1 or burst_window_seconds > 5.0:
+                raise HTTPException(status_code=400, detail="burst_window_seconds must be between 0.1 and 5.0")
+            security_module.BURST_WINDOW_SECONDS = burst_window_seconds
+            changes.append(f"burst_window_seconds={burst_window_seconds}")
+        if burst_max_requests is not None:
+            if burst_max_requests < 1 or burst_max_requests > 50:
+                raise HTTPException(status_code=400, detail="burst_max_requests must be between 1 and 50")
+            security_module.BURST_MAX_REQUESTS = burst_max_requests
+            changes.append(f"burst_max_requests={burst_max_requests}")
+        if not changes:
+            return {"message": "No changes made"}
+        return {
+            "message": f"Spam config updated: {', '.join(changes)}",
+            "max_requests_per_second": security_module.MAX_REQUESTS_PER_SECOND,
+            "burst_window_seconds": security_module.BURST_WINDOW_SECONDS,
+            "burst_max_requests": security_module.BURST_MAX_REQUESTS,
+        }
 
     @router.post("/admin/security/test-telegram")
     async def admin_test_telegram(current_user: dict = Depends(get_current_user)):

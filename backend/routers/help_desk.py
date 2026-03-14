@@ -51,7 +51,18 @@ def register(router):
 
     @router.post("/help-desk/tickets")
     async def create_ticket(body: TicketCreate, current_user: dict = Depends(get_current_user)):
-        """Create a new help desk ticket. Any authenticated user."""
+        """Create a new help desk ticket. Any authenticated user. Only one open ticket allowed at a time."""
+        # Check if user already has an open ticket
+        existing_open = await db.help_desk_tickets.find_one({
+            "user_id": current_user["id"],
+            "status": "open"
+        })
+        if existing_open:
+            raise HTTPException(
+                status_code=400, 
+                detail="You already have an open ticket. Please wait for it to be resolved before creating another."
+            )
+        
         subject = (body.subject or "").strip()[:200] or "No subject"
         body_text = (body.body or "").strip()[: 10_000] or "No message"
         ticket_id = str(uuid.uuid4())

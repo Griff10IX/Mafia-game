@@ -25,6 +25,10 @@ MAX_REQUESTS_PER_SECOND = 10  # Spam detection: 10+ requests per second
 MAX_FAILED_ATTACKS_PER_MINUTE = 20  # Bot-like failed attack spam
 MAX_SAME_ACTION_PER_SECOND = 3  # Same endpoint hit 3+ times in 1 second = bot
 
+# Burst detection - catches rapid clicking (e.g. autoclickers or macros)
+BURST_WINDOW_SECONDS = 0.5  # Time window for burst detection
+BURST_MAX_REQUESTS = 10  # Max requests allowed in burst window (10 clicks in 0.5s = 20 clicks/sec)
+
 # Exploit detection (off by default - enable in admin panel or here when ready for production)
 DETECT_NEGATIVE_BALANCE = False
 DETECT_IMPOSSIBLE_GAIN = 1_000_000_000_000  # $1T+ gain in single action = exploit
@@ -32,6 +36,7 @@ DETECT_DUPLICATE_REQUESTS = False
 
 # In-memory rate limiting (per user)
 user_request_counts = defaultdict(list)  # user_id -> [timestamp1, timestamp2, ...]
+user_burst_counts = defaultdict(list)    # user_id -> [timestamp1, timestamp2, ...] for burst detection
 user_action_counts = defaultdict(list)   # user_id -> [timestamp1, timestamp2, ...]
 user_failed_attacks = defaultdict(list)  # user_id -> [timestamp1, timestamp2, ...]
 
@@ -274,23 +279,39 @@ async def flag_user_suspicious(db, user_id: str, username: str, flag_type: str, 
 
 # Spam detection (not gameplay limits)
 async def check_request_spam(user_id: str, username: str, db) -> bool:
-    """Detect spam: 10+ requests in 1 second. Returns True if spam detected."""
+    """Detect spam: 10+ requests in 1 second OR burst clicking (10+ in 0.5s). Returns True if spam detected."""
     now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(seconds=1)
     
-    # Clean old timestamps
-    user_request_counts[user_id] = [ts for ts in user_request_counts[user_id] if ts > cutoff]
+    # Check 1: Standard spam detection (10+ requests in 1 second)
+    cutoff_1s = now - timedelta(seconds=1)
+    user_request_counts[user_id] = [ts for ts in user_request_counts[user_id] if ts > cutoff_1s]
     user_request_counts[user_id].append(now)
-    
-    count = len(user_request_counts[user_id])
-    if count > MAX_REQUESTS_PER_SECOND:
+
+    count_1s = len(user_request_counts[user_id])
+    if count_1s > MAX_REQUESTS_PER_SECOND:
         await flag_user_suspicious(
             db, user_id, username,
             "request_spam",
-            f"Request spam detected: {count} requests in 1 second",
-            {"count": count, "threshold": MAX_REQUESTS_PER_SECOND}
+            f"Request spam detected: {count_1s} requests in 1 second",
+            {"count": count_1s, "threshold": MAX_REQUESTS_PER_SECOND}
         )
         return True
+    
+    # Check 2: Burst detection (rapid clicking - catches autoclickers/macros)
+    cutoff_burst = now - timedelta(seconds=BURST_WINDOW_SECONDS)
+    user_burst_counts[user_id] = [ts for ts in user_burst_counts[user_id] if ts > cutoff_burst]
+    user_burst_counts[user_id].append(now)
+    
+    count_burst = len(user_burst_counts[user_id])
+    if count_burst >= BURST_MAX_REQUESTS:
+        await flag_user_suspicious(
+            db, user_id, username,
+            "burst_spam",
+            f"Burst spam detected: {count_burst} requests in {BURST_WINDOW_SECONDS}s",
+            {"count": count_burst, "threshold": BURST_MAX_REQUESTS, "window": BURST_WINDOW_SECONDS}
+        )
+        return True
+    
     return False
 
 
@@ -442,6 +463,8 @@ RATE_LIMIT_CONFIG = {
     "/api/boxing/": (1.0, False),
     "/api/racing/": (1.0, False),
     "/api/snake/": (0.5, False),
+    "/api/shooting-range/train": (2.0, False),
+    "/api/shooting-range/score": (1.0, False),
     
     # Travel & Booze Run
     "/api/travel": (3.0, False),
@@ -466,6 +489,22 @@ RATE_LIMIT_CONFIG = {
     "/api/meta/": (0.5, False),
     "/api/users/": (0.75, False),
     "/api/leaderboard/": (1.0, False),
+    
+    # Daily rewards & misc
+    "/api/daily-rewards/": (5.0, False),
+    "/api/prestige/": (10.0, False),
+    
+    # Communication
+    "/api/game-chat/": (1.0, False),
+    "/api/help-desk/": (3.0, False),
+    
+    # Economy
+    "/api/stock-market/": (2.0, False),
+    
+    # Activities
+    "/api/oc/": (2.0, False),
+    "/api/inventory/": (1.5, False),
+    "/api/profile/": (2.0, False),
 }
 
 # Per-endpoint last request time: key -> user_id -> datetime (for min-interval-between-clicks)

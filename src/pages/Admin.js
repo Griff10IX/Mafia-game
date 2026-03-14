@@ -2042,6 +2042,19 @@ export default function Admin() {
     finally { setSecurityLoading(false); }
   };
 
+  const handleSetAllRateLimitInterval = async (intervalMs) => {
+    if (!window.confirm(`Set ALL endpoints to ${intervalMs}ms between clicks?`)) return;
+    setSecurityLoading(true);
+    try {
+      const response = await api.post(`/admin/security/rate-limits/set-all-interval?min_interval_ms=${intervalMs}`);
+      toast.success(response.data.message);
+      await handleViewRateLimits();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to set rate limits');
+    }
+    finally { setSecurityLoading(false); }
+  };
+
   const fetchRateLimitLog = async () => {
     setRateLimitLogLoading(true);
     try {
@@ -3839,6 +3852,21 @@ export default function Admin() {
                     {securityLoading ? '...' : 'Enable'}
                   </BtnPrimary>
                 )}
+              </div>
+            </ActionRow>
+
+            <ActionRow icon={Shield} label="Set All Rate Limits" description="Set all endpoints to the same interval">
+              <div className="flex items-center gap-1 flex-wrap">
+                {[500, 1000, 1500, 2000, 3000, 5000].map(ms => (
+                  <button
+                    key={ms}
+                    onClick={() => handleSetAllRateLimitInterval(ms)}
+                    disabled={securityLoading}
+                    className="px-2 py-1 text-[10px] rounded bg-zinc-700/50 hover:bg-zinc-600 text-foreground border border-zinc-600/30 transition-colors"
+                  >
+                    {ms >= 1000 ? `${ms/1000}s` : `${ms}ms`}
+                  </button>
+                ))}
               </div>
             </ActionRow>
 
