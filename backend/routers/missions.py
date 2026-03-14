@@ -21,7 +21,7 @@ from server import (
     RANKS,
     CARS,
 )
-from routers.booze_run import BOOZE_TYPES
+from routers.money.booze_run import BOOZE_TYPES
 
 # Single first mission: no districts/cities
 FIRST_MISSION_ID = "m_first"

@@ -1321,12 +1321,12 @@ async def _user_owns_any_casino(user_id: str):
     return None
 
 
-from routers.dice import DICE_MAX_BET, DiceSellOnTradeRequest  # used by CASINO_GAMES and roulette/blackjack/horseracing sell-on-trade
-from routers.roulette import ROULETTE_MAX_BET, RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest  # CASINO_GAMES, blackjack/horseracing reuse these models
-from routers.blackjack import BLACKJACK_MAX_BET  # CASINO_GAMES
-from routers.horseracing import HORSERACING_MAX_BET  # CASINO_GAMES
-from routers.slots import SLOTS_MAX_BET  # CASINO_GAMES
-from routers.video_poker import VIDEO_POKER_MAX_BET  # CASINO_GAMES
+from routers.casinos.dice import DICE_MAX_BET, DiceSellOnTradeRequest  # used by CASINO_GAMES and roulette/blackjack/horseracing sell-on-trade
+from routers.casinos.roulette import ROULETTE_MAX_BET, RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest  # CASINO_GAMES, blackjack/horseracing reuse these models
+from routers.casinos.blackjack import BLACKJACK_MAX_BET  # CASINO_GAMES
+from routers.casinos.horseracing import HORSERACING_MAX_BET  # CASINO_GAMES
+from routers.casinos.slots import SLOTS_MAX_BET  # CASINO_GAMES
+from routers.casinos.video_poker import VIDEO_POKER_MAX_BET  # CASINO_GAMES
 
 
 async def _user_owns_any_property(user_id: str):
@@ -1346,13 +1346,23 @@ async def _user_owns_any_property(user_id: str):
     return None
 
 
-# Crime endpoints -> see routers/crimes.py
-# Register modular routers (crimes, gta, jail, attack, etc.)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, armoury, objectives, attack, bank, families, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, mp_blackjack, mp_poker, horseracing, slots, video_poker, mdg, stock_market, notifications, hitlist, properties, store, racket, leaderboard, meta, user_progress, states, events, security_admin, sports_betting, auth, profile, admin, payments, stats, dead_alive, users, giphy, crack_safe, prestige, game_chat, illegal_business, gauntlet, boxing, racing, snake
+# Crime endpoints -> see routers/crime/crimes.py
+# Register modular routers (organized by subfolder)
+from routers.account import auth, profile, prestige, user_progress, users
+from routers.admin import admin, security_admin, airport
+from routers.cars import gta
+from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, horseracing, slots, video_poker, mdg, sports_betting
+from routers.crime import crimes, jail, organised_crime, oc
+from routers.game import families, leaderboard, states, stats, store, dead_alive, events, notifications, meta, entertainer
+from routers.kill import attack, armoury, bodyguards, hitlist
+from routers.minigames import gauntlet, boxing, racing, snake
+from routers.money import bank, stock_market, properties, quicktrade, crack_safe, illegal_business, booze_run, racket, payments
+from routers.social import forum, game_chat, giphy
+from routers import objectives
 from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
-from routers.families import FAMILY_RACKETS, compute_loser_racket_cash, WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT  # used by _family_war_check_wipe_and_award and seed
-from routers.bodyguards import _create_robot_bodyguard_user  # used by seed
-from routers.booze_run import get_booze_rotation_interval_seconds, get_booze_rotation_index  # flash news
+from routers.game.families import FAMILY_RACKETS, compute_loser_racket_cash, WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT  # used by _family_war_check_wipe_and_award and seed
+from routers.kill.bodyguards import _create_robot_bodyguard_user  # used by seed
+from routers.money.booze_run import get_booze_rotation_interval_seconds, get_booze_rotation_index  # flash news
 CASINO_GAMES = [
     {"id": "blackjack", "name": "Blackjack", "max_bet": BLACKJACK_MAX_BET},
     {"id": "horseracing", "name": "Horse Racing", "max_bet": HORSERACING_MAX_BET},
@@ -1368,13 +1378,13 @@ organised_crime.register(api_router)
 oc.register(api_router)
 forum.register(api_router)
 entertainer.register(api_router)
-from routers import designer_competitions
+from routers.game import designer_competitions
 designer_competitions.register(api_router)
 armoury.register(api_router)
 objectives.register(api_router)
 from routers import missions
 missions.register(api_router)
-from routers import loot_box
+from routers.money import loot_box
 loot_box.register(api_router)
 attack.register(api_router)
 bank.register(api_router)
@@ -1410,7 +1420,7 @@ sports_betting.register(api_router)
 auth.register(api_router)
 profile.register(api_router)
 admin.register(api_router)
-from routers import help_desk
+from routers.game import help_desk
 help_desk.register(api_router)
 payments.register(api_router)
 stats.register(api_router)
@@ -1419,21 +1429,21 @@ users.register(api_router)
 giphy.register(api_router)
 crack_safe.register(api_router)
 prestige.register(api_router)
-from routers import daily_rewards
+from routers.game import daily_rewards
 daily_rewards.register(api_router)
 gauntlet.register(api_router)
 boxing.register(api_router)
 racing.register(api_router)
 snake.register(api_router)
-from routers import minigame_leaderboard
+from routers.minigames import minigame_leaderboard
 minigame_leaderboard.register(api_router)
-from routers import minesweeper
+from routers.minigames import minesweeper
 minesweeper.register(api_router)
-from routers import battleships
+from routers.minigames import battleships
 battleships.register(api_router)
-from routers import the_getaway
+from routers.minigames import the_getaway
 the_getaway.register(api_router)
-from routers import auto_rank as auto_rank_router
+from routers.account import auto_rank as auto_rank_router
 auto_rank_router.register(api_router)
 
 app.include_router(api_router)
@@ -1505,11 +1515,11 @@ logger = logging.getLogger(__name__)
 @app.on_event("startup")
 async def startup_db():
     await init_game_data()
-    from routers.profile import ensure_profile_indexes
+    from routers.account.profile import ensure_profile_indexes
     from ensure_indexes import ensure_all_indexes
     await ensure_profile_indexes(db)
     await ensure_all_indexes(db)
-    from routers.jail import spawn_jail_npcs
+    from routers.crime.jail import spawn_jail_npcs
     asyncio.create_task(spawn_jail_npcs())
     # Start security monitoring background task
     asyncio.create_task(security_module.security_monitor_task(db))
@@ -1537,7 +1547,7 @@ async def startup_db():
                 logging.exception("Entertainer auto-create: %s", e)
     asyncio.create_task(entertainer_auto_create_cycle())
     # Auto Rank: when AUTO_RANK_USE_CRON=1, all Auto Rank (main + bust + OC) is driven by cron only
-    from routers import auto_rank
+    from routers.account import auto_rank
     auto_rank_use_cron = (os.environ.get("AUTO_RANK_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
     if not auto_rank_use_cron:
         asyncio.create_task(auto_rank.run_auto_rank_loop())
@@ -1548,7 +1558,7 @@ async def startup_db():
             "Auto Rank: using cron only (AUTO_RANK_USE_CRON=1). Call POST /api/auto-rank/cron and POST /api/auto-rank/cron-bust every 5s. Header: X-Cron-Secret: <CRON_SECRET>"
         )
     # Racing: 2 automated races per day (morning/evening UTC); in-process ticker or cron
-    from routers import racing as racing_router
+    from routers.minigames import racing as racing_router
     racing_use_cron = (os.environ.get("RACING_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
     if not racing_use_cron:
         asyncio.create_task(racing_router.run_racing_automated_race_ticker())
@@ -1556,10 +1566,10 @@ async def startup_db():
         logging.getLogger(__name__).info(
             "Racing: using cron only (RACING_USE_CRON=1). Call POST /api/racing/cron/automated-races every minute. Header: X-Cron-Secret: <CRON_SECRET>"
         )
-    from routers import gta as gta_router
+    from routers.cars import gta as gta_router
     asyncio.create_task(gta_router.run_dealer_replenish_loop())
     # Slots: run lottery draw on schedule (every 5s check) so draws happen at next_draw_at even if no one is on the page
-    from routers import slots as slots_router
+    from routers.casinos import slots as slots_router
     async def slots_draw_ticker():
         while True:
             try:
@@ -1579,7 +1589,7 @@ async def startup_db():
             await asyncio.sleep(60)
     asyncio.create_task(tribute_deposit_ticker())
     # Bodyguard weekly payout: run once per day (check every 60s), pay human bodyguards on their payout_weekday
-    from routers import bodyguards as bodyguards_router
+    from routers.kill import bodyguards as bodyguards_router
     async def bodyguard_payout_ticker():
         while True:
             try:
@@ -1589,7 +1599,7 @@ async def startup_db():
             await asyncio.sleep(60)
     asyncio.create_task(bodyguard_payout_ticker())
     # Weekly leaderboard payout: run once per week (check every 60s), pay top 10 per category for previous week
-    from routers import leaderboard as leaderboard_router
+    from routers.game import leaderboard as leaderboard_router
     async def leaderboard_payout_ticker():
         while True:
             try:
@@ -1599,7 +1609,7 @@ async def startup_db():
             await asyncio.sleep(60)
     asyncio.create_task(leaderboard_payout_ticker())
     # Mini games weekly leaderboard payout: run once per week (check every 60s), pay top 5 for previous week (Sunday UTC)
-    from routers import minigame_leaderboard as minigame_lb_router
+    from routers.minigames import minigame_leaderboard as minigame_lb_router
     async def minigame_payout_ticker():
         while True:
             try:
@@ -1609,7 +1619,7 @@ async def startup_db():
             await asyncio.sleep(60)
     asyncio.create_task(minigame_payout_ticker())
     # Boxing: round-by-round match ticker (check every 1s), plus weekly league payout (check every 60s)
-    from routers import boxing as boxing_router
+    from routers.minigames import boxing as boxing_router
     async def boxing_match_ticker():
         while True:
             try:
@@ -1674,7 +1684,7 @@ async def init_game_data():
     If collections are empty, seed from backend/data/*.json (weapons, properties, crimes).
     NOTE: No user data is modified; only game config collections are seeded when empty.
     """
-    from routers import crimes as crimes_router
+    from routers.crime import crimes as crimes_router
     await crimes_router.init_crimes_data(db)
 
     logging.info("🔄 Initializing game data (weapons, properties...)...")
