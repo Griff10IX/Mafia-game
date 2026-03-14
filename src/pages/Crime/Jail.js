@@ -5,6 +5,7 @@ import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
+import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 
 const JAIL_STYLES = `
   @keyframes j-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -303,20 +304,23 @@ export default function Jail() {
   const [snitching, setSnitching] = useState(false);
 
   const [autoRankJailDisabled, setAutoRankJailDisabled] = useState(false);
+  const [user, setUser] = useState(null);
 
   const fetchJailData = async () => {
     try {
-      const [jailRes, playersRes, statsRes, autoRankRes] = await Promise.all([
+      const [jailRes, playersRes, statsRes, autoRankRes, meRes] = await Promise.all([
         api.get('/jail/status'),
         api.get('/jail/players'),
         api.get('/jail/stats').catch(() => ({ data: {} })),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
+        api.get('/auth/me').catch(() => ({ data: null })),
       ]);
       setJailStatus(jailRes.data || { in_jail: false });
       setJailedPlayers(Array.isArray(playersRes.data?.players) ? playersRes.data.players : []);
       setJailStats(statsRes.data || {});
       const ar = autoRankRes.data || {};
       setAutoRankJailDisabled(!!(ar.auto_rank_enabled && ar.auto_rank_bust_every_5_sec));
+      if (meRes.data) setUser(meRes.data);
     } catch (error) {
       console.error('Failed to load jail data:', error);
       toast.error('Failed to load jail data');
@@ -476,6 +480,13 @@ export default function Jail() {
       </div>
 
       {autoRankJailDisabled && <AutoRankJailNotice />}
+
+      {user?.jailbust_bonus_until && (
+        <div className="j-fade-in">
+          <ActiveTokenBadge tokenType="jailbust_bonus" untilIso={user.jailbust_bonus_until} />
+        </div>
+      )}
+
       <JailStatusCard
         inJail={jailStatus.in_jail}
         secondsRemaining={jailStatus.seconds_remaining}

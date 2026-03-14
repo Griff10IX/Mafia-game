@@ -4,6 +4,7 @@ import { Plane, Car, Clock, MapPin, Zap, ShoppingCart, Bot } from 'lucide-react'
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 
 const MAX_TRAVELS_PER_HOUR = 15;
 
@@ -329,15 +330,18 @@ export default function Travel() {
   const [travelTime, setTravelTime] = useState(0);
   const [selectedDest, setSelectedDest] = useState('');
   const [autoRankBoozeOn, setAutoRankBoozeOn] = useState(false);
+  const [user, setUser] = useState(null);
 
   const fetchTravelInfo = useCallback(async () => {
     try {
-      const [infoRes, meRes] = await Promise.all([
+      const [infoRes, autoRankRes, userRes] = await Promise.all([
         api.get('/travel/info'),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
+        api.get('/auth/me').catch(() => ({ data: null })),
       ]);
       setTravelInfo(infoRes.data);
-      setAutoRankBoozeOn(!!(meRes.data?.auto_rank_enabled && meRes.data?.auto_rank_booze));
+      setAutoRankBoozeOn(!!(autoRankRes.data?.auto_rank_enabled && autoRankRes.data?.auto_rank_booze));
+      if (userRes.data) setUser(userRes.data);
     } catch (error) {
       toast.error('Failed to load travel info');
       setTravelInfo(null);
@@ -439,6 +443,12 @@ export default function Travel() {
           <span className="text-amber-200/90">
             <strong className="text-amber-300">Auto Rank booze running is on.</strong> Manual travel is disabled. Turn off booze running in <Link to="/auto-rank" className="underline font-bold">Auto Rank</Link> to travel.
           </span>
+        </div>
+      )}
+
+      {user?.travel_until && (
+        <div className="trv-fade-in">
+          <ActiveTokenBadge tokenType="travel" untilIso={user.travel_until} />
         </div>
       )}
 

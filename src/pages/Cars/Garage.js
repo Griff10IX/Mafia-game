@@ -4,6 +4,7 @@ import { Car, Flame, DollarSign, CheckSquare, Square, Filter, ChevronDown, Chevr
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 
 const GARAGE_STYLES = `
   @keyframes gar-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -481,9 +482,11 @@ export default function Garage() {
   const [meltBulletsCooldownUntil, setMeltBulletsCooldownUntil] = useState(null);
   const [meltBulletsSecondsRemaining, setMeltBulletsSecondsRemaining] = useState(0);
   const [repairingCarId, setRepairingCarId] = useState(null);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     fetchGarage();
+    api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
   }, []);
 
   const fetchGarage = async () => {
@@ -666,6 +669,12 @@ export default function Garage() {
         <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Your Fleet</p>
         <p className="text-[10px] text-zinc-500 font-heading italic">View, melt, scrap, and list your cars.</p>
       </div>
+
+      {user?.melt_until && (
+        <div className="gar-fade-in">
+          <ActiveTokenBadge tokenType="melt" untilIso={user.melt_until} />
+        </div>
+      )}
 
       {cars.length === 0 ? (
         <EmptyGarageCard />

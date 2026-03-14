@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Car, Lock, ChevronDown, ChevronRight, Bot, Zap } from 'lucide-react';
+import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 
 const RARITY_COLORS = {
   common: 'text-gray-400',
@@ -401,16 +402,18 @@ export default function GTA() {
 
   const [autoRankGtaDisabled, setAutoRankGtaDisabled] = useState(false);
   const [activeLootPerks, setActiveLootPerks] = useState([]);
+  const [user, setUser] = useState(null);
 
   const fetchData = async () => {
     try {
-      const [optionsRes, recentStolenRes, eventsRes, statsRes, autoRankRes, lootStatusRes] = await Promise.allSettled([
+      const [optionsRes, recentStolenRes, eventsRes, statsRes, autoRankRes, lootStatusRes, meRes] = await Promise.allSettled([
         api.get('/gta/options'),
         api.get('/gta/recent-stolen'),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/gta/stats').catch(() => ({ data: {} })),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
         api.get('/loot-box/status').catch(() => ({ data: {} })),
+        api.get('/auth/me').catch(() => ({ data: null })),
       ]);
       
       if (optionsRes.status === 'fulfilled' && Array.isArray(optionsRes.value?.data)) {
@@ -442,6 +445,9 @@ export default function GTA() {
         setActiveLootPerks(rewards);
       } else {
         setActiveLootPerks([]);
+      }
+      if (meRes.status === 'fulfilled' && meRes.value?.data) {
+        setUser(meRes.value.data);
       }
     } catch (error) {
       toast.error('Failed to load GTA data');
@@ -542,6 +548,12 @@ export default function GTA() {
 
       {autoRankGtaDisabled && <AutoRankGtaNotice />}
       <EventBanner event={event} eventsEnabled={eventsEnabled} />
+
+      {user?.xp_gta_until && (
+        <div className="gta-fade-in">
+          <ActiveTokenBadge tokenType="xp_gta" untilIso={user.xp_gta_until} />
+        </div>
+      )}
 
       {activeLootPerks.length > 0 && (
         <div className="flex flex-wrap gap-1.5 gta-fade-in">

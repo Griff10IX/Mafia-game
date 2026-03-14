@@ -3,6 +3,7 @@ import { MapPin, Package, Clock, Wine, TrendingUp, DollarSign, ShoppingCart, Bot
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -622,6 +623,7 @@ export default function BoozeRun() {
   const [tradeMode, setTradeMode] = useState('buy');
   const [timer, setTimer] = useState('');
   const [autoRankBoozeDisabled, setAutoRankBoozeDisabled] = useState(false);
+  const [user, setUser] = useState(null);
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -641,6 +643,7 @@ export default function BoozeRun() {
 
   useEffect(() => {
     api.get('/auto-rank/me').then((r) => setAutoRankBoozeDisabled(!!(r.data?.auto_rank_enabled && r.data?.auto_rank_booze))).catch(() => setAutoRankBoozeDisabled(false));
+    api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
   }, []);
 
   const rotationEndRef = useRef(null);
@@ -797,6 +800,13 @@ export default function BoozeRun() {
       </div>
 
       {autoRankBoozeDisabled && <AutoRankBoozeNotice />}
+
+      {user?.booze_until && (
+        <div className="bz-fade-in">
+          <ActiveTokenBadge tokenType="booze" untilIso={user.booze_until} />
+        </div>
+      )}
+
       <StatsCard config={config} timer={timer} />
 
       {roundTripCities && (

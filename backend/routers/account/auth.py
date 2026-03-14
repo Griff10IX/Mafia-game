@@ -330,6 +330,16 @@ def register(router):
                 user_doc["points"] = 15000
                 user_doc["money"] = 1000000000  # $1 billion
                 user_doc["rank_points"] = 15000
+                # Give all consumable tokens (5 of each)
+                user_doc["xp_crimes_tokens"] = 5
+                user_doc["xp_gta_tokens"] = 5
+                user_doc["melt_tokens"] = 5
+                user_doc["oc_reduced_tokens"] = 5
+                user_doc["booze_tokens"] = 5
+                user_doc["racket_tokens"] = 5
+                user_doc["travel_tokens"] = 5
+                user_doc["properties_tokens"] = 5
+                user_doc["jailbust_tokens"] = 5
 
             await db.users.insert_one(user_doc.copy())
 
@@ -1101,6 +1111,16 @@ def register(router):
                 killed_by_family_name=u.get("killed_by_family_name"),
                 killer_revealed=bool(u.get("killer_revealed", False)),
                 family_name=family_name,
+                # Active consumable token expiry times
+                xp_crimes_until=u.get("xp_crimes_until"),
+                xp_gta_until=u.get("xp_gta_until"),
+                melt_until=u.get("melt_until"),
+                oc_reduced_until=u.get("oc_reduced_until"),
+                booze_until=u.get("booze_until"),
+                racket_until=u.get("racket_until"),
+                travel_until=u.get("travel_until"),
+                properties_until=u.get("properties_until"),
+                jailbust_bonus_until=u.get("jailbust_bonus_until"),
             )
         except HTTPException:
             raise

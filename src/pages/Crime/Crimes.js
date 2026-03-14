@@ -4,6 +4,7 @@ import api, { refreshUser } from '../../utils/api';
 import { getCrimesPrefetch, clearCrimesPrefetch } from '../../utils/prefetchCache';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 
 const CRIMES_STYLES = `
   @keyframes cr-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -664,6 +665,12 @@ export default function Crimes() {
       {autoRankCrimesDisabled === true && <AutoRankCrimesNotice />}
 
       {eventsEnabled && <EventBanner event={event} />}
+
+      {user?.xp_crimes_until && (
+        <div className="cr-fade-in">
+          <ActiveTokenBadge tokenType="xp_crimes" untilIso={user.xp_crimes_until} />
+        </div>
+      )}
 
       {activeLootPerks.length > 0 && (
         <div className="flex flex-wrap gap-1.5 cr-fade-in">

@@ -31,6 +31,7 @@ export default function MyInventory() {
   const [loading, setLoading] = useState(!_cachedInventory);
   const [equipping, setEquipping] = useState({ weapon: null, armour: null });
   const [usingToken, setUsingToken] = useState(null);
+  const [collectingSpeakeasy, setCollectingSpeakeasy] = useState(false);
 
   const fetchInventory = (silent = false) => {
     if (!silent) setLoading(true);
@@ -128,6 +129,20 @@ export default function MyInventory() {
     }
   };
 
+  const collectSpeakeasy = async () => {
+    setCollectingSpeakeasy(true);
+    try {
+      const res = await api.post('/loot-box/speakeasy/collect');
+      toast.success(res?.data?.message || 'Collected from Speakeasy!');
+      refreshUser();
+      fetchInventory();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to collect');
+    } finally {
+      setCollectingSpeakeasy(false);
+    }
+  };
+
   if (loading) return <LoadingSpinner />;
   if (!data) {
     return (
@@ -142,7 +157,23 @@ export default function MyInventory() {
   const loot = data.loot_exclusives || {};
   const exclusiveCars = loot.exclusive_cars || [];
   const hasSpeakeasy = loot.has_speakeasy === true;
+  const speakeasyInfo = loot.speakeasy || null;
   const tokens = data.tokens || {};
+
+  const getSpeakeasyCooldownText = () => {
+    if (!speakeasyInfo?.next_collect_at) return null;
+    try {
+      const next = new Date(speakeasyInfo.next_collect_at);
+      const now = new Date();
+      const diff = next - now;
+      if (diff <= 0) return null;
+      const hours = Math.floor(diff / 3600000);
+      const mins = Math.floor((diff % 3600000) / 60000);
+      return `${hours}h ${mins}m`;
+    } catch {
+      return null;
+    }
+  };
 
   const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus'];
   const tokenLabels = {
@@ -294,7 +325,35 @@ export default function MyInventory() {
                   <Link to="/cars/garage" className="ml-auto text-[9px] text-primary hover:underline">View in Garage →</Link>
                 </div>
               ))}
-              {hasSpeakeasy && (
+              {hasSpeakeasy && speakeasyInfo && (
+                <div className="inv-item p-3 rounded-md bg-amber-500/5 border border-amber-500/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Building2 size={14} className="text-amber-400 shrink-0" />
+                    <span className="text-[12px] font-heading font-bold text-foreground">Speakeasy</span>
+                    <span className="text-[9px] text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded">Loot Exclusive</span>
+                  </div>
+                  <div className="text-[10px] text-mutedForeground mb-2">
+                    Daily payout: <span className="text-emerald-400 font-bold">${speakeasyInfo.daily_cash?.toLocaleString()}</span> + <span className="text-blue-400 font-bold">{speakeasyInfo.daily_bullets} bullets</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {speakeasyInfo.can_collect ? (
+                      <button
+                        type="button"
+                        onClick={collectSpeakeasy}
+                        disabled={collectingSpeakeasy}
+                        className="px-3 py-1.5 rounded text-[10px] font-heading font-bold border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 transition-colors"
+                      >
+                        {collectingSpeakeasy ? 'Collecting...' : '$ Collect Daily'}
+                      </button>
+                    ) : (
+                      <span className="text-[9px] text-mutedForeground">
+                        Next collect in <span className="text-amber-400 font-bold">{getSpeakeasyCooldownText() || '...'}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {hasSpeakeasy && !speakeasyInfo && (
                 <div className="inv-item flex items-center gap-2 py-2">
                   <Building2 size={12} className="text-amber-400 shrink-0" />
                   <span className="text-[11px] font-heading text-foreground">Speakeasy</span>

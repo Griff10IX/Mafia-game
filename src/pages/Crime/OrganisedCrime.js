@@ -3,6 +3,7 @@ import { Users, Banknote, Star, Clock, AlertCircle, XCircle, UserCheck, ChevronD
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 
 const OC_STYLES = `
   @keyframes oc-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -431,6 +432,7 @@ export default function OrganisedCrime() {
     try { return localStorage.getItem(COLLAPSED_KEY) === 'true'; } catch { return true; }
   });
   const [autoRankOcDisabled, setAutoRankOcDisabled] = useState(false);
+  const [user, setUser] = useState(null);
 
   const toggleRules = () => {
     setRulesCollapsed((prev) => {
@@ -442,11 +444,12 @@ export default function OrganisedCrime() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [configRes, statusRes, equipmentRes, autoRankRes] = await Promise.all([
+      const [configRes, statusRes, equipmentRes, autoRankRes, meRes] = await Promise.all([
         api.get('/oc/config'),
         api.get('/oc/status'),
         api.get('/organised-crime/equipment').catch(() => ({ data: null })),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
+        api.get('/auth/me').catch(() => ({ data: null })),
       ]);
       
       if (configRes.data) {
@@ -463,6 +466,10 @@ export default function OrganisedCrime() {
       
       if (autoRankRes.data) {
         setAutoRankOcDisabled(!!(autoRankRes.data.auto_rank_enabled && autoRankRes.data.auto_rank_oc));
+      }
+      
+      if (meRes.data) {
+        setUser(meRes.data);
       }
       
       if (configRes.data?.jobs?.length && !selectedJobId) {
@@ -738,6 +745,13 @@ export default function OrganisedCrime() {
       </div>
 
       {autoRankOcDisabled && <AutoRankOCNotice />}
+
+      {user?.oc_reduced_until && (
+        <div className="oc-fade-in">
+          <ActiveTokenBadge tokenType="oc_reduced" untilIso={user.oc_reduced_until} />
+        </div>
+      )}
+
       {/* Pending Heist */}
       <PendingHeistSection
         status={status}

@@ -3,6 +3,7 @@ import { Shield, ListChecks, Crosshair, TrendingUp, Lock, UserPlus, Star, AlertT
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -167,6 +168,7 @@ export default function IllegalBusiness() {
   const [raidTarget, setRaidTarget] = useState('');
   const [raidState, setRaidState] = useState('');
   const [raidResult, setRaidResult] = useState(null);
+  const [user, setUser] = useState(null);
 
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -202,6 +204,7 @@ export default function IllegalBusiness() {
     if (!_cachedBizData) fetchData(false);
     else if (stale) fetchData(true);
     const id = setInterval(() => fetchData(true), BIZ_REFRESH);
+    api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
     return () => clearInterval(id);
   }, [fetchData]);
 
@@ -348,6 +351,10 @@ export default function IllegalBusiness() {
             )}
           </div>
         </div>
+
+        {user?.racket_until && (
+          <ActiveTokenBadge tokenType="racket" untilIso={user.racket_until} />
+        )}
 
         {/* ── Kill rewards ── */}
         {pendingRewards.length > 0 && (

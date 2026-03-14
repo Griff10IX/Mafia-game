@@ -326,9 +326,17 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
         {"id": current_user["id"]},
         {"$set": {"hitlist_npc_add_timestamps": timestamps[-10:]}}
     )
-    reward_desc = ", ".join(f"{k}: {v}" for k, v in rewards.items() if v and k != "booze") or "various"
+    reward_labels = {"rank_points": "XP", "bullets": "Bullets", "respect_points": "Respect", "cash": "Cash", "points": "Points"}
+    reward_parts = []
+    for k, v in rewards.items():
+        if not v or k == "booze":
+            continue
+        label = reward_labels.get(k, k.replace("_", " ").title())
+        formatted_val = f"{v:,}" if isinstance(v, (int, float)) else str(v)
+        reward_parts.append(f"{formatted_val} {label}")
+    reward_desc = ", ".join(reward_parts) or "various"
     if isinstance(rewards.get("booze"), dict) and rewards["booze"]:
-        reward_desc += ", booze"
+        reward_desc += ", Booze"
     await log_activity(
         current_user["id"],
         current_user.get("username") or "?",

@@ -493,6 +493,16 @@ class UserResponse(BaseModel):
     killed_by_family_name: Optional[str] = None
     killer_revealed: bool = False
     family_name: Optional[str] = None  # convenience for DeathScreen; mirrors gang_name for dead users
+    # Active consumable token expiry times (for flashing indicators on relevant pages)
+    xp_crimes_until: Optional[str] = None
+    xp_gta_until: Optional[str] = None
+    melt_until: Optional[str] = None
+    oc_reduced_until: Optional[str] = None
+    booze_until: Optional[str] = None
+    racket_until: Optional[str] = None
+    travel_until: Optional[str] = None
+    properties_until: Optional[str] = None
+    jailbust_bonus_until: Optional[str] = None
 
 class NotificationCreate(BaseModel):
     title: str

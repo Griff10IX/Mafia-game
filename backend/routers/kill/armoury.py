@@ -1559,7 +1559,36 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
         cinfo = next((c for c in cars_list if c.get("id") == uc.get("car_id")), None)
         if cinfo and cinfo.get("rarity") in ("loot_exclusive", "exclusive"):
             exclusive_cars.append({"id": uc.get("id"), "name": cinfo.get("name", "?"), "car_id": uc.get("car_id"), "rarity": cinfo.get("rarity", "loot_exclusive")})
-    speakeasy = await db.exclusive_properties.find_one({"owner_id": uid, "type": "speakeasy"}, {"_id": 1})
+    speakeasy = await db.exclusive_properties.find_one({"owner_id": uid, "type": "speakeasy"}, {"_id": 0, "last_speakeasy_collected_at": 1})
+    speakeasy_info = None
+    if speakeasy is not None:
+        from datetime import datetime, timezone
+        SPEAKEASY_DAILY_CASH = 25_000
+        SPEAKEASY_DAILY_BULLETS = 25
+        SPEAKEASY_COOLDOWN_HOURS = 24
+        last_collected = speakeasy.get("last_speakeasy_collected_at")
+        can_collect = True
+        next_collect_at = None
+        if last_collected:
+            try:
+                last_dt = datetime.fromisoformat(last_collected.replace("Z", "+00:00"))
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                next_dt = last_dt + __import__("datetime").timedelta(hours=SPEAKEASY_COOLDOWN_HOURS)
+                now = datetime.now(timezone.utc)
+                if now < next_dt:
+                    can_collect = False
+                    next_collect_at = next_dt.isoformat()
+            except Exception:
+                pass
+        speakeasy_info = {
+            "daily_cash": SPEAKEASY_DAILY_CASH,
+            "daily_bullets": SPEAKEASY_DAILY_BULLETS,
+            "cooldown_hours": SPEAKEASY_COOLDOWN_HOURS,
+            "can_collect": can_collect,
+            "next_collect_at": next_collect_at,
+            "last_collected_at": last_collected,
+        }
     tokens = _tokens_from_user(current_user)
     return {
         "weapons": [w.model_dump() if hasattr(w, "model_dump") else w for w in weapons],
@@ -1567,6 +1596,7 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
         "loot_exclusives": {
             "exclusive_cars": exclusive_cars,
             "has_speakeasy": speakeasy is not None,
+            "speakeasy": speakeasy_info,
         },
         "tokens": tokens,
     }
