@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
@@ -283,19 +283,8 @@ const ProfileInfoCard = ({
     },
   ];
   
-  // Add badges row if user has any (include Founding Member if they have the flag but not the badge)
-  let userBadges = [...(profile.badges || [])];
-  if (profile.founding_member && !userBadges.includes('Founding Member')) {
-    userBadges.unshift('Founding Member');
-  }
-  if (userBadges.length > 0) {
-    allRows.push({
-      label: 'Badges',
-      icon: Award,
-      isBadges: true,
-      badges: userBadges,
-    });
-  }
+  // Check if user is a founding member
+  const isFoundingMember = profile.founding_member || (profile.badges || []).includes('Founding Member');
   
   let profileRows = isStaffProfile
     ? allRows.filter((r) => r.label !== 'Status' && r.label !== 'Messages' && r.label !== 'Jailbusts')
@@ -313,9 +302,16 @@ const ProfileInfoCard = ({
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
-        <h2 className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase tracking-[0.12em] truncate">
-          {profile.username}
-        </h2>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <h2 className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase tracking-[0.12em] truncate">
+            {profile.username}
+          </h2>
+          {isFoundingMember && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/40 shrink-0">
+              ⭐ Founder
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1.5 md:gap-2 shrink-0 flex-wrap justify-end">
           {/* Rank + prestige side-by-side */}
           <div className="flex items-center gap-1 md:gap-1.5">
@@ -436,22 +432,6 @@ const ProfileInfoCard = ({
                       <span className="text-zinc-500">Alive (Offline)</span>
                     )}
                   </span>
-                ) : row.isBadges ? (
-                  <div className="flex flex-wrap items-center justify-end gap-1">
-                    {row.badges.map((badge, idx) => (
-                      <span
-                        key={idx}
-                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] md:text-[10px] font-heading font-bold uppercase tracking-wider border ${
-                          badge === 'Founding Member'
-                            ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
-                            : 'bg-primary/20 text-primary border-primary/40'
-                        }`}
-                      >
-                        {badge === 'Founding Member' && '⭐ '}
-                        {badge}
-                      </span>
-                    ))}
-                  </div>
                 ) : row.label === 'Crew' && profile.family_tag && profile.family_name ? (
                   <Link
                     to={`/families/${encodeURIComponent(profile.family_tag)}`}

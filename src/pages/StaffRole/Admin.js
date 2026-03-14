@@ -35,6 +35,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Search Users', categoryId: 'admin-players', collapseKey: 'searchUsers', keywords: ['search', 'users', 'email', 'find'] },
   { label: 'Change Rank', categoryId: 'admin-players', collapseKey: 'rank', keywords: ['rank', 'change', 'prestige', 'level'] },
   { label: 'Add Points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'add', 'give'] },
+  { label: 'Add Tokens', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['tokens', 'crime', 'gta', 'melt', 'booze', 'travel', 'oc', 'racket', 'jailbust'] },
   { label: 'Founding Member', categoryId: 'admin-players', collapseKey: 'founding', keywords: ['founding', 'member', 'badge', 'founder'] },
   { label: 'Add Money', categoryId: 'admin-players', collapseKey: 'money', keywords: ['money', 'cash', 'add', 'give'] },
   { label: 'Add Bullets', categoryId: 'admin-players', collapseKey: 'bullets', keywords: ['bullets', 'ammo', 'add'] },
@@ -234,7 +235,9 @@ export default function Admin() {
     lockMinutes: 5,
     searchMinutes: 1,
     adminNewEmail: '',
-    adminNewPassword: ''
+    adminNewPassword: '',
+    tokenType: 'xp_crimes',
+    tokenAmount: 5,
   });
 
   const [eventsEnabled, setEventsEnabled] = useState(true);
@@ -1086,6 +1089,13 @@ export default function Admin() {
   const handleSetFoundingMember = async (isFounding) => {
     try {
       const response = await api.post(`/admin/set-founding-member?target_username=${formData.targetUsername}&is_founding=${isFounding}`);
+      toast.success(response.data.message);
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleAddTokens = async () => {
+    try {
+      const response = await api.post(`/admin/add-tokens?target_username=${formData.targetUsername}&token_type=${formData.tokenType}&amount=${formData.tokenAmount}`);
       toast.success(response.data.message);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
@@ -3113,6 +3123,22 @@ export default function Admin() {
             <ActionRow icon={Coins} label="Add Points">
               <FormattedNumberInput value={formData.points != null ? String(formData.points) : ''} onChange={(raw) => setFormData((prev) => ({ ...prev, points: raw === '' ? 0 : parseInt(raw, 10) }))} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnPrimary onClick={handleAddPoints}>Add</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Zap} label="Add Tokens" description="Give consumable tokens (crime XP, GTA XP, melt, etc.)">
+              <Select value={formData.tokenType} onChange={(e) => setFormData((prev) => ({ ...prev, tokenType: e.target.value }))}>
+                <option value="xp_crimes">Crime XP</option>
+                <option value="xp_gta">GTA XP</option>
+                <option value="melt">Melt Speed</option>
+                <option value="oc_reduced">OC Reduced</option>
+                <option value="booze">Booze</option>
+                <option value="racket">Racket</option>
+                <option value="travel">Travel</option>
+                <option value="properties">Properties</option>
+                <option value="jailbust_bonus">Jailbust Bonus</option>
+              </Select>
+              <Input type="number" min="1" value={formData.tokenAmount} onChange={(e) => setFormData((prev) => ({ ...prev, tokenAmount: parseInt(e.target.value) || 1 }))} className="w-20" />
+              <BtnPrimary onClick={handleAddTokens}>Give</BtnPrimary>
             </ActionRow>
 
             <ActionRow icon={Award} label="Founding Member" description="Grant or remove Founding Member badge">

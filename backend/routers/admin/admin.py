@@ -321,6 +321,52 @@ def register(router):
         )
         return {"message": f"Added {pieces} loot box pieces to {target_username}"}
 
+    # Token types and their count fields
+    ADMIN_TOKEN_TYPES = {
+        "xp_crimes": "xp_crimes_tokens",
+        "xp_gta": "xp_gta_tokens",
+        "melt": "melt_tokens",
+        "oc_reduced": "oc_reduced_tokens",
+        "booze": "booze_tokens",
+        "racket": "racket_tokens",
+        "travel": "travel_tokens",
+        "properties": "properties_tokens",
+        "jailbust_bonus": "jailbust_tokens",
+    }
+
+    @router.get("/admin/token-types")
+    async def admin_get_token_types(current_user: dict = Depends(get_current_user)):
+        """Get list of available token types."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return {"token_types": list(ADMIN_TOKEN_TYPES.keys())}
+
+    @router.post("/admin/add-tokens")
+    async def admin_add_tokens(
+        target_username: str,
+        token_type: str,
+        amount: int,
+        current_user: dict = Depends(get_current_user)
+    ):
+        """Add tokens to a user. token_type: xp_crimes, xp_gta, melt, oc_reduced, booze, racket, travel, properties, jailbust_bonus"""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if token_type not in ADMIN_TOKEN_TYPES:
+            raise HTTPException(status_code=400, detail=f"Invalid token type. Valid types: {list(ADMIN_TOKEN_TYPES.keys())}")
+        if amount < 1:
+            raise HTTPException(status_code=400, detail="Amount must be at least 1")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        field = ADMIN_TOKEN_TYPES[token_type]
+        await db.users.update_one(
+            {"id": target["id"]},
+            {"$inc": {field: amount}}
+        )
+        token_label = token_type.replace("_", " ").title()
+        return {"message": f"Added {amount} {token_label} token(s) to {target['username']}"}
+
     @router.post("/admin/add-car")
     async def admin_add_car(target_username: str, car_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
