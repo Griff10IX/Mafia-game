@@ -370,7 +370,7 @@ def register(router):
             })
             # Send verification email in background so registration responds immediately (avoids timeout when SMTP is slow/blocked)
             import threading
-            from email_sender import send_verification_email
+            from utils.email_sender import send_verification_email
 
             def _send_in_background():
                 try:
@@ -731,7 +731,7 @@ def register(router):
         })
 
         import threading
-        from email_sender import send_password_reset_email
+        from utils.email_sender import send_password_reset_email
         def _send_reset_in_background():
             try:
                 send_password_reset_email(user["email"], user["username"], reset_token)
@@ -868,7 +868,7 @@ def register(router):
                 "expires_at": expires_at.isoformat(),
             })
             import threading
-            from email_sender import send_verification_email
+            from utils.email_sender import send_verification_email
             def _resend_in_background():
                 try:
                     send_verification_email(user["email"], user["username"], verification_token)
