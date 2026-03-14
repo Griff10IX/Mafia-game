@@ -324,6 +324,13 @@ def register(router):
                 user_doc["founding_member"] = True
                 user_doc["badges"] = [PREREGISTER_REWARDS.get("badge", "Founding Member")]
 
+            # Check if beta signup mode is enabled - give bonus resources
+            game_config = await db.game_config.find_one({"id": "main"}, {"_id": 0, "beta_signup_enabled": 1})
+            if game_config and game_config.get("beta_signup_enabled"):
+                user_doc["points"] = 15000
+                user_doc["money"] = 1000000000  # $1 billion
+                user_doc["rank_points"] = 15000
+
             await db.users.insert_one(user_doc.copy())
 
             # Check if login is locked (pre-registration mode) - don't auto-login

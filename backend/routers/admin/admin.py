@@ -3386,6 +3386,26 @@ def register(router):
         )
         return {"message": "All events for testing " + ("enabled" if enabled else "disabled"), "all_events_for_testing": bool(enabled)}
 
+    @router.get("/admin/beta-signup")
+    async def admin_get_beta_signup(current_user: dict = Depends(get_current_user)):
+        """Get beta signup mode status."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        doc = await db.game_config.find_one({"id": "main"}, {"_id": 0, "beta_signup_enabled": 1})
+        return {"beta_signup_enabled": bool(doc.get("beta_signup_enabled", False)) if doc else False}
+
+    @router.post("/admin/beta-signup/toggle")
+    async def admin_toggle_beta_signup(current_user: dict = Depends(get_current_user), enabled: bool = Body(..., embed=True)):
+        """Toggle beta signup mode. When enabled, new signups get 15k points, $1B cash, 15k respect."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        await db.game_config.update_one(
+            {"id": "main"},
+            {"$set": {"beta_signup_enabled": bool(enabled)}},
+            upsert=True,
+        )
+        return {"message": "Beta signup " + ("enabled" if enabled else "disabled"), "beta_signup_enabled": bool(enabled)}
+
     @router.post("/admin/seed-families")
     async def admin_seed_families(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

@@ -49,6 +49,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Activity Log', categoryId: 'admin-players', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
   // Game World
   { label: 'Events Toggle', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable'] },
+  { label: 'Beta Round Signup', categoryId: 'admin-gameworld', collapseKey: 'betaSignup', keywords: ['beta', 'signup', 'round', 'points', 'cash', 'testing'] },
   { label: 'Booze Run Rotation', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices'] },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
   { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
@@ -243,6 +244,7 @@ export default function Admin() {
   const [eventsEnabled, setEventsEnabled] = useState(true);
   const [allEventsForTesting, setAllEventsForTesting] = useState(false);
   const [todayEvent, setTodayEvent] = useState(null);
+  const [betaSignupEnabled, setBetaSignupEnabled] = useState(false);
   
   const [cfBotBlockEnabled, setCfBotBlockEnabled] = useState(null);
   const [cfBotBlockLoading, setCfBotBlockLoading] = useState(false);
@@ -496,6 +498,7 @@ export default function Admin() {
       if (admin) {
         fetchMeta();
         fetchEventsStatus();
+        fetchBetaSignupStatus();
         fetchBoozeRotation();
         fetchAdminSettings();
         fetchModerators();
@@ -666,6 +669,15 @@ export default function Admin() {
       setEventsEnabled(true);
       setAllEventsForTesting(false);
       setTodayEvent(null);
+    }
+  };
+
+  const fetchBetaSignupStatus = async () => {
+    try {
+      const res = await api.get('/admin/beta-signup');
+      setBetaSignupEnabled(!!res.data?.beta_signup_enabled);
+    } catch {
+      setBetaSignupEnabled(false);
     }
   };
 
@@ -969,6 +981,14 @@ export default function Admin() {
       setAllEventsForTesting(!!res.data?.all_events_for_testing);
       toast.success(res.data?.message || 'Toggled');
       fetchEventsStatus();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleToggleBetaSignup = async () => {
+    try {
+      const res = await api.post('/admin/beta-signup/toggle', { enabled: !betaSignupEnabled });
+      setBetaSignupEnabled(!!res.data?.beta_signup_enabled);
+      toast.success(res.data?.message || 'Beta signup toggled');
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
   };
 
@@ -3471,6 +3491,34 @@ export default function Admin() {
               </BtnSecondary>
             </div>
             <p className="text-[10px] text-mutedForeground">All events (testing): applies every multiplier at once.</p>
+          </div>
+        )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Gift}
+          title="Beta Round Signup"
+          badge={
+            <span className="text-[10px] font-heading">
+              <span className={betaSignupEnabled ? 'text-emerald-400' : 'text-red-400'}>{betaSignupEnabled ? 'On' : 'Off'}</span>
+            </span>
+          }
+          isCollapsed={collapsed.betaSignup}
+          onToggle={() => toggleSection('betaSignup')}
+        />
+        {!collapsed.betaSignup && (
+          <div className="p-3 space-y-2">
+            <div className="flex flex-wrap gap-2">
+              <BtnPrimary onClick={handleToggleBetaSignup}>{betaSignupEnabled ? 'Disable' : 'Enable'} Beta Signup</BtnPrimary>
+            </div>
+            <p className="text-[10px] text-mutedForeground">When enabled, new signups receive:</p>
+            <ul className="text-[10px] text-mutedForeground list-disc list-inside ml-2 space-y-0.5">
+              <li><span className="text-amber-400 font-bold">15,000</span> Points</li>
+              <li><span className="text-emerald-400 font-bold">$1,000,000,000</span> Cash</li>
+              <li><span className="text-primary font-bold">15,000</span> Respect Points</li>
+            </ul>
           </div>
         )}
         </div>
