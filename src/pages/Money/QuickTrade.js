@@ -20,6 +20,7 @@ export default function QuickTrade() {
   const [properties, setProperties] = useState([]);
 
   const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus'];
+  const formatTokenName = (t) => t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   
   // Create offer form
   const [sellPoints, setSellPoints] = useState('');
@@ -462,10 +463,10 @@ export default function QuickTrade() {
               <select
                 value={tokenType}
                 onChange={(e) => setTokenType(e.target.value)}
-                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                className="w-full bg-zinc-900 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none cursor-pointer capitalize"
               >
                 {TOKEN_TYPES.map((t) => (
-                  <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
+                  <option key={t} value={t} className="bg-zinc-900 text-foreground py-2">{formatTokenName(t)}</option>
                 ))}
               </select>
             </div>
@@ -492,7 +493,7 @@ export default function QuickTrade() {
               disabled={!tokenPrice || creatingToken}
               className="w-full px-4 py-2 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {creatingToken ? 'Creating…' : `List ${tokenQuantity || '0'} ${tokenType.replace(/_/g, ' ')} for ${tokenPrice ? formatNumber(tokenPrice) : '0'} pts`}
+              {creatingToken ? 'Creating…' : `List ${tokenQuantity || '0'} ${formatTokenName(tokenType)} for ${tokenPrice ? formatNumber(tokenPrice) : '0'} pts`}
             </button>
           </div>
           <div className="qt-art-line text-primary mx-3" />
@@ -518,7 +519,7 @@ export default function QuickTrade() {
                       </span>
                     </div>
                     <div className="text-[10px] text-mutedForeground mt-0.5">
-                      <span className="text-primary font-bold">{offer.quantity}</span> {offer.token_type?.replace(/_/g, ' ')} · <span className="text-foreground font-bold">{formatNumber(offer.price_points)}</span> pts
+                      <span className="text-primary font-bold">{offer.quantity}</span> {formatTokenName(offer.token_type || '')} · <span className="text-foreground font-bold">{formatNumber(offer.price_points)}</span> pts
                     </div>
                   </div>
                   <div className="shrink-0">

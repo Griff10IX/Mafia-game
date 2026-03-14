@@ -96,12 +96,12 @@ export default function MyProperties() {
 
   const handleCasinoSetBuyBack = async () => {
     const c = data.casino;
-    if (!c || saving || (c.type !== 'dice' && c.type !== 'blackjack')) return;
+    if (!c || saving || (c.type !== 'dice' && c.type !== 'blackjack' && c.type !== 'roulette')) return;
     const amount = parseInt(String(casinoBuyBack).replace(/\D/g, ''), 10);
     if (Number.isNaN(amount) || amount < 0) { toast.error('Enter 0 or more points'); return; }
     setSaving(true);
     try {
-      await api.post(`/casino/${c.type}/set-buy-back-reward`, (c.type === 'dice' || c.type === 'blackjack') ? { city: c.city, amount } : { amount });
+      await api.post(`/casino/${c.type}/set-buy-back-reward`, (c.type === 'dice' || c.type === 'blackjack' || c.type === 'roulette') ? { city: c.city, amount } : { amount });
       toast.success('Buy-back reward updated');
       fetchMyProperties();
     } catch (e) {
@@ -342,7 +342,7 @@ export default function MyProperties() {
                     {saving ? '...' : 'Set'}
                   </button>
                 </div>
-                {(data.casino.type === 'dice' || data.casino.type === 'blackjack') && (
+                {(data.casino.type === 'dice' || data.casino.type === 'blackjack' || data.casino.type === 'roulette') && (
                   <div className="flex flex-wrap gap-2 items-center mb-2">
                     <span className="text-[11px] text-mutedForeground w-16 shrink-0">Buy-back (pts)</span>
                     <input

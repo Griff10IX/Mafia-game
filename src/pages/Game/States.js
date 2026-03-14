@@ -185,7 +185,7 @@ const CityCard = ({
                     ) : (
                       <span className="text-[9px] text-zinc-500">Unclaimed</span>
                     )}
-                    {(game.id === 'dice' || game.id === 'blackjack' || game.id === 'slots') && owner?.buy_back_reward != null && Number(owner.buy_back_reward) > 0 && (
+                    {(game.id === 'dice' || game.id === 'blackjack' || game.id === 'slots' || game.id === 'roulette') && owner?.buy_back_reward != null && Number(owner.buy_back_reward) > 0 && (
                       <span className="text-[8px] text-amber-400/90">Buy-back: {Number(owner.buy_back_reward).toLocaleString()} pts</span>
                     )}
                   </div>

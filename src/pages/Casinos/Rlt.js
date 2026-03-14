@@ -300,6 +300,7 @@ export default function Rlt() {
   const pendingResultRef = useRef(null);
 
   const [newMaxBet, setNewMaxBet] = useState('');
+  const [ownerBuyBack, setOwnerBuyBack] = useState('');
   const [transferUsername, setTransferUsername] = useState('');
   const [sellPoints, setSellPoints] = useState('');
   const [ownerLoading, setOwnerLoading] = useState(false);
@@ -308,6 +309,7 @@ export default function Rlt() {
     api.get('/casino/roulette/ownership').then((r) => {
       setOwnership(r.data ?? null);
       if (r.data?.max_bet) setConfig((prev) => ({ ...prev, max_bet: r.data.max_bet }));
+      if (r.data?.buy_back_reward != null) setOwnerBuyBack(String(r.data.buy_back_reward));
     }).catch(() => {
       setOwnership(null);
     });
@@ -432,6 +434,18 @@ export default function Rlt() {
     finally { setOwnerLoading(false); }
   };
 
+  const handleSetBuyBack = async () => {
+    if (!ownership?.current_city) return;
+    const val = parseInt(String(ownerBuyBack).replace(/\D/g, ''), 10) || 0;
+    setOwnerLoading(true);
+    try {
+      await api.post('/casino/roulette/set-buy-back-reward', { city: ownership.current_city, amount: val });
+      toast.success('Buy-back reward updated');
+      fetchOwnership();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setOwnerLoading(false); }
+  };
+
   const handleTransfer = async () => {
     if (!ownership?.current_city || !transferUsername.trim() || !window.confirm(`Transfer to ${transferUsername}?`)) return;
     setOwnerLoading(true);
@@ -518,6 +532,11 @@ export default function Rlt() {
               <span className="text-[10px] text-mutedForeground w-20 shrink-0">Max Bet</span>
               <FormattedNumberInput placeholder="e.g. 100,000,000" value={newMaxBet} onChange={setNewMaxBet} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
               <button onClick={handleSetMaxBet} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">Set</button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-mutedForeground w-20 shrink-0">Buy-back</span>
+              <FormattedNumberInput placeholder="Points offered if taken" value={ownerBuyBack} onChange={setOwnerBuyBack} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
+              <button onClick={handleSetBuyBack} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">Set</button>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-mutedForeground w-20 shrink-0">Transfer</span>
