@@ -300,13 +300,19 @@ export default function Racing() {
       if (race) {
         await api.post(`/racing/races/${race.id}/start`);
         const r2 = await api.get(`/racing/races/${race.id}`);
-        setActiveRace(r2.data?.race);
-        await fetchOpenRaces();
-        await fetchProfile();
-        refreshUser();
-        toast.success("Race started — run it live");
+        const startedRace = r2.data?.race;
+        if (!startedRace || startedRace.state !== "running") {
+          toast.error("Race could not be started. Please try again.");
+          return;
+        }
+        setTab("races");
+        setActiveRace(startedRace);
         navigate(`/racing?race=${race.id}`, { replace: true });
         window.scrollTo({ top: 0, behavior: "smooth" });
+        toast.success("Race started — run it live");
+        fetchOpenRaces();
+        fetchProfile();
+        refreshUser();
       }
     } catch (e) { toast.error(apiDetail(e)); }
     finally { setCreating(false); }
