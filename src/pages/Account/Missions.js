@@ -34,6 +34,19 @@ function cityDisplayName(city) {
   return city === 'Start' ? 'Starting City' : (city || '—');
 }
 
+// Token type labels for display
+const TOKEN_LABELS = {
+  xp_crimes: 'Crime XP',
+  xp_gta: 'GTA XP',
+  melt: 'Melt',
+  oc_reduced: 'OC Reduced',
+  booze: 'Booze',
+  racket: 'Racket',
+  travel: 'Travel',
+  properties: 'Properties',
+  jailbust_bonus: 'Jailbust'
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -913,13 +926,23 @@ export default function Missions() {
       const collectedLoot = res.data?.collected_loot_box_pieces ?? 0;
       const collectedRespect = res.data?.collected_respect ?? 0;
       const collectedTokens = res.data?.collected_tokens ?? 0;
+      const tokensAwarded = res.data?.tokens_awarded ?? {};
       if (collectedCash > 0 || collectedBullets > 0 || collectedLoot > 0 || collectedRespect > 0 || collectedTokens > 0) {
         const parts = [];
         if (collectedCash > 0) parts.push(`${fmt(collectedCash)} cash`);
         if (collectedBullets > 0) parts.push(`${collectedBullets.toLocaleString()} bullets`);
         if (collectedLoot > 0) parts.push(`${collectedLoot} loot piece(s)`);
         if (collectedRespect > 0) parts.push(`${collectedRespect} respect`);
-        if (collectedTokens > 0) parts.push(`${collectedTokens} token(s)`);
+        if (collectedTokens > 0) {
+          const tokenParts = Object.entries(tokensAwarded)
+            .filter(([, count]) => count > 0)
+            .map(([type, count]) => `${count} ${TOKEN_LABELS[type] || type}`);
+          if (tokenParts.length > 0) {
+            parts.push(`${tokenParts.join(', ')} token(s)`);
+          } else {
+            parts.push(`${collectedTokens} token(s)`);
+          }
+        }
         toast.success(`Collected ${parts.join(' and ')}`);
         refreshUser();
         const mapRes = await api.get('/missions/map');
