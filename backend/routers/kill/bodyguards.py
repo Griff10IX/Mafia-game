@@ -467,6 +467,7 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
         )
     if not is_robot:
         raise HTTPException(status_code=400, detail="Human bodyguards are temporarily disabled. Use robot bodyguards.")
+    slots = int(current_user.get("bodyguard_slots") or 0)
     if slot < 1 or slot > 4:
         raise HTTPException(status_code=400, detail="Invalid bodyguard slot")
     existing = await db.bodyguards.find_one(
@@ -476,6 +477,7 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
     if existing:
         raise HTTPException(status_code=400, detail="Slot already occupied")
     ev = await get_effective_event()
+    event_cost_mult = ev.get("bodyguard_cost", 1.0)
     base_cost = BODYGUARD_SLOT_COSTS[slot - 1]
     # Bodyguard inflation: each hire within 3h adds % (0%, 2%, 5%, 7%, 12%, 17%, ...)
     user_inflation = await db.users.find_one(
@@ -485,26 +487,26 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
     user_for_inflation = user_inflation or {}
     inflation_level = _bodyguard_inflation_level_now(user_for_inflation)
     inflation_mult = 1.0 + _bodyguard_inflation_percent_for_level(inflation_level)
-    cost = int(base_cost * ev.get("bodyguard_cost", 1.0) * inflation_mult)
-    if int(current_user.get("points") or 0) < cost:
+    total_cost = int(base_cost * event_cost_mult * inflation_mult)
+    if int(current_user.get("points") or 0) < total_cost:
         raise HTTPException(status_code=400, detail="Insufficient points")
     now = datetime.now(timezone.utc)
     window_end = now + timedelta(hours=BODYGUARD_INFLATION_HOURS)
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {
-            "$inc": {
-                "points": -cost,
-                "bodyguard_lifetime_hires": 1,
-                "bodyguard_lifetime_spent_hires": cost,
-                "lifetime_points_spent": cost,
-            },
-            "$set": {
-                "bodyguard_inflation_until": window_end.isoformat(),
-                "bodyguard_inflation_level": inflation_level + 1,
-            },
+    update_op = {
+        "$inc": {
+            "points": -total_cost,
+            "bodyguard_lifetime_hires": 1,
+            "bodyguard_lifetime_spent_hires": total_cost,
+            "lifetime_points_spent": total_cost,
         },
-    )
+        "$set": {
+            "bodyguard_inflation_until": window_end.isoformat(),
+            "bodyguard_inflation_level": inflation_level + 1,
+        },
+    }
+    if slot > slots:
+        update_op["$inc"]["bodyguard_slots"] = slot - slots
+    await db.users.update_one({"id": current_user["id"]}, update_op)
     robot_name = None
     robot_user_id = None
     if is_robot:
@@ -520,7 +522,7 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
         "health": 100,
         "armour_level": 0,
         "hired_at": datetime.now(timezone.utc).isoformat(),
-        "hire_cost": cost,
+        "hire_cost": total_cost,
     }
     await db.bodyguards.insert_one(bodyguard_doc)
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -531,17 +533,18 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
         "owner_username": current_user.get("username") or "",
         "slot": slot,
         "is_robot": is_robot,
-        "hire_cost": cost,
+        "hire_cost": total_cost,
         "bodyguard_username": robot_name if is_robot else None,
     })
+    msg = f"You've hired {robot_name if is_robot else 'a human bodyguard slot'} for {total_cost} points."
     asyncio.create_task(send_notification(
         current_user["id"],
         "🛡️ Bodyguard Hired",
-        f"You've hired {robot_name if is_robot else 'a human bodyguard slot'} for {cost} points.",
+        msg,
         "bodyguard"
     ))
     _invalidate_bodyguards_cache(current_user["id"])
-    return {"message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {cost} points", "bodyguard_name": robot_name}
+    return {"message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {total_cost} points", "bodyguard_name": robot_name}
 
 
 def _weekday_name(weekday: int) -> str:

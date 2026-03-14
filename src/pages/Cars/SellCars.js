@@ -138,7 +138,6 @@ export default function SellCars() {
     for (const userCarId of toList) {
       const car = cars.find((c) => c.user_car_id === userCarId);
       if (car?.listed_for_sale) continue;
-      if (car?.car_id === 'car_custom') continue;
       try {
         await api.post('/gta/list-car', { user_car_id: userCarId, price });
         listed++;
@@ -275,8 +274,8 @@ export default function SellCars() {
               <tr className={`${styles.surface} text-[10px] uppercase tracking-wider font-heading text-primary/80 border-b border-border`}>
                 <th className="w-7 py-1 pl-1.5 pr-0">
                   <button type="button" onClick={toggleSelectAll} className="p-0.5 rounded hover:bg-primary/10" title="Check all">
-                    {paginatedCars.filter((c) => c.car_id !== 'car_custom').length > 0 &&
-                    paginatedCars.filter((c) => c.car_id !== 'car_custom').every((c) => selectedIds.has(c.user_car_id)) ? (
+                    {paginatedCars.length > 0 &&
+                    paginatedCars.every((c) => selectedIds.has(c.user_car_id)) ? (
                       <CheckSquare size={12} className="text-primary" />
                     ) : (
                       <Square size={12} className="text-mutedForeground" />
@@ -297,21 +296,17 @@ export default function SellCars() {
                 return (
                   <tr key={car.user_car_id} className="sc-row transition-colors">
                     <td className="py-1 pl-1.5 pr-0">
-                      {car.car_id !== 'car_custom' ? (
-                        <button
-                          type="button"
-                          onClick={() => toggleSelect(car.user_car_id)}
-                          className="p-0.5 rounded hover:bg-primary/10"
-                        >
-                          {selectedIds.has(car.user_car_id) ? (
-                            <CheckSquare size={12} className="text-primary" />
-                          ) : (
-                            <Square size={12} className="text-mutedForeground" />
-                          )}
-                        </button>
-                      ) : (
-                        <span className="inline-block w-4" />
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => toggleSelect(car.user_car_id)}
+                        className="p-0.5 rounded hover:bg-primary/10"
+                      >
+                        {selectedIds.has(car.user_car_id) ? (
+                          <CheckSquare size={12} className="text-primary" />
+                        ) : (
+                          <Square size={12} className="text-mutedForeground" />
+                        )}
+                      </button>
                     </td>
                     <td className="py-1 px-2">
                       <span className={`font-heading font-bold ${RARITY_COLOR[rarity] || 'text-foreground'}`}>

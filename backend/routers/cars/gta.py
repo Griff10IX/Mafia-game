@@ -823,7 +823,7 @@ async def melt_cars(
     return result
 
 
-# Dealer: buy cars for cash (price = value * multiplier). Custom and exclusive are not for sale.
+# Dealer: buy cars for cash (price = value * multiplier). Custom, exclusive, and loot_exclusive are not for sale.
 # Stock per model and price multiplier vary by rarity: rarer = less stock, more overpriced.
 DEALER_EXCLUDED_IDS = {"car_custom", "car20"}
 # Replenish at random intervals so restocks are spread throughout the day
@@ -879,7 +879,7 @@ async def _ensure_dealer_stock_seeded():
     now = datetime.now(timezone.utc).isoformat()
     to_insert = []
     for c in CARS:
-        if c.get("id") in DEALER_EXCLUDED_IDS:
+        if c.get("id") in DEALER_EXCLUDED_IDS or c.get("rarity") == "loot_exclusive":
             continue
         max_stock = _dealer_max_stock(c)
         for _ in range(max_stock):
@@ -896,7 +896,7 @@ async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
     stock_by_car = {d["_id"]: d["count"] for d in counts}
     out = []
     for c in CARS:
-        if c.get("id") in DEALER_EXCLUDED_IDS:
+        if c.get("id") in DEALER_EXCLUDED_IDS or c.get("rarity") == "loot_exclusive":
             continue
         car_id = c.get("id")
         in_stock = stock_by_car.get(car_id, 0)
@@ -917,7 +917,7 @@ async def buy_car(
     car_info = next((c for c in CARS if c.get("id") == request.car_id), None)
     if not car_info:
         raise HTTPException(status_code=400, detail="Car not found")
-    if car_info.get("id") in DEALER_EXCLUDED_IDS:
+    if car_info.get("id") in DEALER_EXCLUDED_IDS or car_info.get("rarity") == "loot_exclusive":
         raise HTTPException(status_code=400, detail="That car is not for sale")
     # Remove one from dealer stock (so it disappears from listing)
     result = await db.dealer_stock.delete_one({"car_id": request.car_id})
@@ -1385,7 +1385,7 @@ async def run_dealer_replenish_loop():
             await _ensure_dealer_stock_seeded()
             now = datetime.now(timezone.utc).isoformat()
             for c in CARS:
-                if c.get("id") in DEALER_EXCLUDED_IDS:
+                if c.get("id") in DEALER_EXCLUDED_IDS or c.get("rarity") == "loot_exclusive":
                     continue
                 r = c.get("rarity") or "common"
                 restock_chance = DEALER_RESTOCK_CHANCE_BY_RARITY.get(r, 0.8)

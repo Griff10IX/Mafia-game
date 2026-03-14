@@ -136,6 +136,7 @@ const ActionsBar = ({
   onMelt,
   onScrap,
   meltBulletsSecondsRemaining,
+  predictedMeltBullets,
 }) => {
   const meltOnCooldown = meltBulletsSecondsRemaining != null && meltBulletsSecondsRemaining > 0;
   return (
@@ -211,6 +212,9 @@ const ActionsBar = ({
             >
               <Flame size={12} />
               Melt (1/45s)
+              {predictedMeltBullets != null && predictedMeltBullets > 0 && (
+                <span className="font-normal normal-case text-amber-400/90">→ {predictedMeltBullets.toLocaleString()} bullets</span>
+              )}
             </button>
             <button
               onClick={onScrap}
@@ -625,6 +629,14 @@ export default function Garage() {
   const filterActive = meltScrapRarities.length > 0;
   const noEligibleInView = filterActive && displayedEligibleIds.length === 0;
 
+  const batchLimit = user?.garage_batch_limit ?? 6;
+  const selectedCarsForMelt = allFilteredCars.filter(
+    (c) => selectedCars.includes(c.user_car_id) && !c.listed_for_sale
+  );
+  const predictedMeltBullets = selectedCarsForMelt
+    .slice(0, batchLimit)
+    .reduce((sum, c) => sum + Math.floor((c.value || 0) / 500), 0);
+
   const toggleSelectAllDisplayed = () => {
     if (noEligibleInView) return;
     setSelectedCars((prev) => {
@@ -701,6 +713,7 @@ export default function Garage() {
             onMelt={meltCars}
             onScrap={scrapCars}
             meltBulletsSecondsRemaining={meltBulletsSecondsRemaining > 0 ? meltBulletsSecondsRemaining : null}
+            predictedMeltBullets={selectedCars.length > 0 ? predictedMeltBullets : null}
           />
 
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">

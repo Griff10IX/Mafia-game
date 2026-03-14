@@ -33,7 +33,7 @@ MIN_OC_INTERVAL_SECONDS = 10
 DEFAULT_OC_INTERVAL_SECONDS = 63  # was 60; 5% slower
 OC_LOOP_INTERVAL_SECONDS = 63  # fallback when config not used
 OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60
-AUTO_RANK_IDLE_TIMEOUT_SECONDS = 3 * 60 * 60  # 3 hours - if no real user activity, auto-rank goes idle
+AUTO_RANK_IDLE_TIMEOUT_SECONDS = 12 * 60 * 60  # 12 hours - if no real user activity, auto-rank goes idle (normal users)
 
 
 # ─── Config helpers ───────────────────────────────────────────────
@@ -325,7 +325,7 @@ async def _set_user_idle(db, user_id: str, username: str = "?"):
         {"id": user_id},
         {"$set": {"auto_rank_idle": True, **saved_prefs, **disabled_prefs}}
     )
-    logger.info("Auto rank: user %s went idle (no activity for 3h) - tasks disabled, prefs saved", username)
+    logger.info("Auto rank: user %s went idle (no activity for 12h) - tasks disabled, prefs saved", username)
 
 
 def _is_staff(user: dict) -> bool:
@@ -940,7 +940,7 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
     """Find users whose auto_rank_next_run_at is due, run each once, set next_run_at.
     Use cycle_start (e.g. when the loop iteration began) for scheduling the next run so that
     delays from run_booze_arrivals() don't stretch the effective interval.
-    Skips users who have been inactive for 3+ hours (auto_rank_idle)."""
+    Skips users who have been inactive for 12+ hours (auto_rank_idle)."""
     import server as srv
     db = srv.db
     now = datetime.now(timezone.utc)
@@ -1003,7 +1003,7 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
 
 async def run_bust_5sec_once():
     """Single pass: for bust-every-5-sec users, try one jail bust each. Target pool = NPCs + jailed players (random pick so both can be busted).
-    Skips users who have been inactive for 3+ hours (auto_rank_idle)."""
+    Skips users who have been inactive for 12+ hours (auto_rank_idle)."""
     import random
     import server as srv
     db = srv.db
@@ -1075,7 +1075,7 @@ async def run_bust_5sec_loop():
 
 async def run_auto_rank_oc_once():
     """Single pass: for OC users, run OC with NPC when timer ready. Used by cron or loop.
-    Skips users who have been inactive for 3+ hours (auto_rank_idle)."""
+    Skips users who have been inactive for 12+ hours (auto_rank_idle)."""
     import server as srv
     from routers.crime.oc import run_oc_heist_npc_only
     from middleware.security import send_telegram_to_chat
@@ -1567,7 +1567,7 @@ def register(router):
         is_idle = bool((u or {}).get("auto_rank_idle"))
         activity_detail = None
         if is_idle:
-            activity_detail = "Idle — no activity for 3h (will wake on next page visit)"
+            activity_detail = "Idle — no activity for 12h (will wake on next page visit)"
         elif in_jail:
             activity_detail = "In jail — cycles paused"
         elif (u or {}).get("travel_arrives_at") and (u or {}).get("auto_rank_booze"):
