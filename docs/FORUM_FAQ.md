@@ -107,6 +107,38 @@ Hire bodyguards to protect you. They absorb damage before you do.
 [*][color=#888888]Human bodyguards need weekly wages[/color]
 [*][color=#888888]NPC bodyguards are cheaper but weaker[/color]
 [/list]
+
+[color=#FFD700][b]Molotovs[/b][/color]
+High-damage throwable weapons for devastating attacks.
+
+[list]
+[*][color=#FF6B6B]Each molotov deals 5,000 bullets worth of damage[/color]
+[*][color=#888888]Can be used alongside regular bullet attacks[/color]
+[*][color=#888888]Obtained from loot boxes or special events[/color]
+[*][color=#888888]Great for taking down heavily armoured targets[/color]
+[*][color=#888888]One-time use - consumed on attack[/color]
+[/list]
+
+[color=#FFD700][b]Health System[/b][/color]
+Your health affects combat effectiveness.
+
+[list]
+[*][color=#888888]Health ranges from 0% to 100%[/color]
+[*][color=#888888]Low health makes you easier to kill[/color]
+[*][color=#888888]Health regenerates slowly over time[/color]
+[*][color=#888888]Restore health instantly with points (15 pts)[/color]
+[*][color=#888888]Always check your health before attacking[/color]
+[/list]
+
+[color=#FFD700][b]Witness Statements[/b][/color]
+When you attack or kill someone, witnesses may see it happen.
+
+[list]
+[*][color=#888888]Random online players receive a notification of your attack[/color]
+[*][color=#888888]Witnesses see who attacked whom[/color]
+[*][color=#888888]Buy a Silencer (150 pts) to reduce witness statements[/color]
+[*][color=#888888]Fewer witnesses = less attention on you[/color]
+[/list]
 [/quote]
 
 [hr]
@@ -182,6 +214,57 @@ Lock cash for a period to earn interest:
 [*][color=#888888]Buy/sell points with other players[/color]
 [*][color=#888888]Set your own exchange rate[/color]
 [*][color=#888888]Great for converting cash to points or vice versa[/color]
+[/list]
+
+[color=#2ECC71][b]Illegal Business (Personal Racket)[/b][/color]
+Own your own illegal business for passive income.
+
+[b]Business Types:[/b]
+[list]
+[*][color=#888888]Stolen Goods Fence - Sell hot merchandise[/color]
+[*][color=#888888]Booze Making - Produce your own liquor[/color]
+[*][color=#888888]Speakeasy - Hidden bar for clientele[/color]
+[*][color=#888888]Numbers Racket - Run illegal lottery[/color]
+[*][color=#FFD700]Protection Racket - Extort local businesses[/color]
+[/list]
+
+[b]Business Features:[/b]
+[list]
+[*][color=#888888]Collect income regularly[/color]
+[*][color=#888888]Buy security upgrades to protect earnings[/color]
+[*][color=#888888]Hire guards to defend against raids[/color]
+[*][color=#888888]Risk of being raided if unprotected[/color]
+[/list]
+
+[color=#2ECC71][b]Stock Market (Crypto Trading)[/b][/color]
+Invest points in cryptocurrency for potential gains.
+
+[list]
+[*][color=#888888]Buy/sell crypto positions using points[/color]
+[*][color=#888888]Real-time prices from live market data[/color]
+[*][color=#888888]Positions auto-sell after 7 days[/color]
+[*][color=#888888]High risk, high reward - prices fluctuate![/color]
+[*][color=#FFD700]Great way to multiply your points[/color]
+[/list]
+
+[color=#2ECC71][b]Sports Betting[/b][/color]
+Bet on real-world sports events.
+
+[list]
+[*][color=#888888]Bet on live sports matches[/color]
+[*][color=#888888]Various betting options per event[/color]
+[*][color=#888888]Odds update in real-time[/color]
+[*][color=#888888]Winnings paid out after event ends[/color]
+[/list]
+
+[color=#2ECC71][b]Crack Safe[/b][/color]
+Mini-game for instant rewards.
+
+[list]
+[*][color=#888888]Crack the safe combination[/color]
+[*][color=#888888]Multiple difficulty levels[/color]
+[*][color=#888888]Rewards: cash, bullets, loot pieces[/color]
+[*][color=#888888]Limited attempts per day[/color]
 [/list]
 [/quote]
 
@@ -369,6 +452,17 @@ Based on your car rarity:
 [*][color=#888888]Escape enemies hunting you[/color]
 [*][color=#888888]Join family members for protection[/color]
 [/list]
+
+[color=#FFD700][b]Airport Ownership[/b][/color]
+Own airport slots for passive income!
+
+[list]
+[*][color=#FFD700]Kill an airport slot owner to take their slot[/color]
+[*][color=#888888]Earn money from every player who travels[/color]
+[*][color=#888888]Multiple slots available per airport[/color]
+[*][color=#888888]Passive income even while offline[/color]
+[*][color=#888888]Lose ownership if someone kills you[/color]
+[/list]
 [/quote]
 
 [hr]
@@ -395,7 +489,29 @@ Family-owned businesses that generate income:
 [*][color=#888888]Rackets can be stolen in family wars[/color]
 [/list]
 
-[color=#F39C12][b]Family Wars[/b][/color]
+[b]Racket Types:[/b]
+[list]
+[*][color=#888888]Protection - Extort local businesses[/color]
+[*][color=#888888]Gambling - Run illegal betting[/color]
+[*][color=#888888]Loansharking - High-interest loans[/color]
+[*][color=#888888]Labour - Control union workers[/color]
+[*][color=#888888]Distillery - Produce bootleg liquor[/color]
+[*][color=#888888]Warehouse - Store and move goods[/color]
+[*][color=#888888]Restaurant - Front for illegal activities[/color]
+[*][color=#888888]Funeral Home - Dispose of evidence[/color]
+[*][color=#888888]Garment Shop - Money laundering[/color]
+[/list]
+
+[color=#F39C12][b]Racket Raids[/b][/color]
+Attack other families' rackets to steal income:
+[list]
+[*][color=#888888]Raid enemy family rackets for quick cash[/color]
+[*][color=#888888]Success rate depends on your stats[/color]
+[*][color=#888888]Failed raids alert the target family[/color]
+[*][color=#888888]Can trigger family wars if repeated[/color]
+[/list]
+
+[color=#F39C12][b]Family Wars (Vendetta)[/b][/color]
 [list]
 [*][color=#888888]Declare war on rival families[/color]
 [*][color=#888888]Kill enemy members to score points[/color]
@@ -442,6 +558,17 @@ Family-owned businesses that generate income:
 [*][color=#888888]Blackjack has best odds if played well[/color]
 [*][color=#888888]Slots are pure luck but have big jackpots[/color]
 [/list]
+
+[color=#FFD700][b]Casino Ownership[/b][/color]
+Own casino tables and earn from the house edge!
+
+[list]
+[*][color=#FFD700]Kill a casino table owner to take their table[/color]
+[*][color=#888888]Earn a percentage of all bets placed at your table[/color]
+[*][color=#888888]Passive income from other players gambling[/color]
+[*][color=#888888]Multiple tables available to own[/color]
+[*][color=#888888]Lose ownership if someone kills you[/color]
+[/list]
 [/quote]
 
 [hr]
@@ -467,13 +594,75 @@ Classic snake game with rewards:
 [*][color=#888888]Rewards: cash, RP, loot pieces[/color]
 [/list]
 
-[color=#00BCD4][b]Minesweeper[/b][/color]
+[color=#00BCD4][b]Minesweeper (Minefield)[/b][/color]
 Classic puzzle game:
 [list]
 [*][color=#888888]Easy - 8x8 grid, 10 mines[/color]
 [*][color=#888888]Medium - 16x16 grid, 40 mines[/color]
 [*][color=#888888]Hard - 30x16 grid, 99 mines[/color]
 [*][color=#888888]Higher difficulty = better rewards[/color]
+[/list]
+
+[color=#00BCD4][b]Racing[/b][/color]
+Compete in car races against other players:
+[list]
+[*][color=#888888]Join or create race lobbies[/color]
+[*][color=#888888]Team-based racing system[/color]
+[*][color=#888888]Bet on races for extra rewards[/color]
+[*][color=#888888]Car rarity affects performance[/color]
+[/list]
+
+[color=#00BCD4][b]Boxing[/b][/color]
+PvP fighting matches:
+[list]
+[*][color=#888888]Challenge other players to boxing matches[/color]
+[*][color=#888888]Bet cash on the outcome[/color]
+[*][color=#888888]Stats affect fighting ability[/color]
+[*][color=#888888]Winner takes the pot[/color]
+[/list]
+
+[color=#00BCD4][b]Flappy Gangster (Gauntlet)[/b][/color]
+Dodge obstacles and survive:
+[list]
+[*][color=#888888]Flappy Bird-style gameplay[/color]
+[*][color=#888888]Avoid obstacles to earn points[/color]
+[*][color=#888888]Higher scores = better rewards[/color]
+[*][color=#888888]Compete on the leaderboard[/color]
+[/list]
+
+[color=#00BCD4][b]Rum Runner (Battleships)[/b][/color]
+Naval combat strategy game:
+[list]
+[*][color=#888888]Place your ships on the grid[/color]
+[*][color=#888888]Find and sink enemy vessels[/color]
+[*][color=#888888]Classic battleship rules[/color]
+[*][color=#888888]Rewards for winning matches[/color]
+[/list]
+
+[color=#00BCD4][b]The Getaway[/b][/color]
+Escape and driving challenge:
+[list]
+[*][color=#888888]Outrun pursuers in your car[/color]
+[*][color=#888888]Navigate through city streets[/color]
+[*][color=#888888]Distance traveled = score[/color]
+[*][color=#888888]Cash and RP rewards[/color]
+[/list]
+
+[color=#00BCD4][b]Family Run[/b][/color]
+Family-based running game:
+[list]
+[*][color=#888888]Play with your family members[/color]
+[*][color=#888888]Cooperative gameplay[/color]
+[*][color=#888888]Rewards split among participants[/color]
+[*][color=#888888]Builds family teamwork[/color]
+[/list]
+
+[color=#00BCD4][b]Mini-Games Leaderboard[/b][/color]
+Compete for top rankings:
+[list]
+[*][color=#888888]Each mini-game has its own leaderboard[/color]
+[*][color=#888888]Weekly and all-time rankings[/color]
+[*][color=#888888]Top players earn bonus rewards[/color]
 [/list]
 [/quote]
 
@@ -508,6 +697,45 @@ Progress from Rat to Godfather VI by earning rank points.
 [b]Godfather Ranks:[/b]
 [list]
 [*][color=#FFD700]Godfather I → II → III → IV → V → VI[/color]
+[/list]
+
+[color=#FFD700][b]Prestige System[/b][/color]
+Reached Godfather VI? Keep progressing with Prestige!
+
+[b]Prestige Levels (1-5):[/b]
+[list]
+[*][color=#C0C0C0]Prestige 1 - Reset rank, keep points, +10% RP multiplier[/color]
+[*][color=#C0C0C0]Prestige 2 - +20% RP multiplier, unlock Prestige Crime 2[/color]
+[*][color=#FFD700]Prestige 3 - +30% RP multiplier, unlock Prestige Crime 3[/color]
+[*][color=#FFD700]Prestige 4 - +40% RP multiplier, unlock Prestige Crime 4[/color]
+[*][color=#FF6B6B]Prestige 5 (MAX) - +50% RP multiplier, all Prestige Crimes unlocked[/color]
+[/list]
+
+[b]Prestige Benefits:[/b]
+[list]
+[*][color=#888888]Exclusive Prestige Crimes with higher rewards[/color]
+[*][color=#888888]Permanent RP multiplier that stacks[/color]
+[*][color=#888888]Prestige badge displayed on your profile[/color]
+[*][color=#888888]Bragging rights - show off your dedication![/color]
+[/list]
+
+[color=#FFD700][b]Missions[/b][/color]
+Story-based challenges with requirements and rewards.
+
+[b]Mission Types:[/b]
+[list]
+[*][color=#888888]Prove Yourself - Introductory missions for new players[/color]
+[*][color=#888888]New York Run - Travel and complete city-based tasks[/color]
+[*][color=#888888]Family Business - Complete tasks for your family[/color]
+[*][color=#888888]The Big Score - High-difficulty challenges[/color]
+[/list]
+
+[b]Mission Rewards:[/b]
+[list]
+[*][color=#888888]Cash bonuses upon completion[/color]
+[*][color=#888888]Rank points and respect[/color]
+[*][color=#FFD700]Daily Tribute - Complete missions to unlock passive daily income![/color]
+[*][color=#888888]Some missions unlock new features[/color]
 [/list]
 
 [color=#FFD700][b]Objectives[/b][/color]
@@ -567,10 +795,19 @@ Collect 100 loot box pieces to open a loot box. Pieces drop from crimes and acti
 [list]
 [*][color=#FFD700]Auto Rank (5,000 pts)[/color] - Auto-commit crimes & GTAs while offline
 [*][color=#888888]OC Timer Reduction (300 pts)[/color] - 4h cooldown instead of 8h
+[*][color=#888888]Crew OC Timer (350 pts)[/color] - 6h family OC cooldown instead of 8h
 [*][color=#888888]Custom Car (500 pts)[/color] - Design your own unique car
 [*][color=#888888]Name Change (200 pts)[/color] - Change your username
 [*][color=#888888]Extra Bodyguard Slots (150 pts each)[/color]
 [*][color=#888888]Booze Capacity Upgrade (100 pts)[/color]
+[*][color=#888888]Premium Rank Bar (50 pts)[/color] - Enhanced rank display on profile
+[/list]
+
+[color=#8E44AD][b]Combat Upgrades[/b][/color]
+[list]
+[*][color=#888888]Silencer (150 pts)[/color] - Fewer witness statements when you kill
+[*][color=#888888]Anti-Snitch (120 pts)[/color] - Cannot be snitched on while in jail
+[*][color=#888888]Health Restore (15 pts)[/color] - Instantly restore to 100% health
 [/list]
 
 [color=#8E44AD][b]Bullets[/b][/color]
@@ -790,6 +1027,18 @@ Contact support FIRST if there's any issue with a transaction.
 
 [color=#3498DB][b]Q: How do family wars work?[/b][/color]
 [color=#AAAAAA]A: Boss declares war, both families fight by killing each other's members. War ends when one side surrenders or is wiped. Winner takes treasury and rackets.[/color]
+
+[color=#3498DB][b]Q: What is Dead to Alive?[/b][/color]
+[color=#AAAAAA]A: A feature that lets you resurrect a dead account. If someone you know died, you can bring their character back to life (with some restrictions). Check the Dead to Alive page in-game.[/color]
+
+[color=#3498DB][b]Q: What is Prestige?[/b][/color]
+[color=#AAAAAA]A: After reaching Godfather VI, you can Prestige to reset your rank but gain permanent RP multipliers and access to exclusive Prestige Crimes. There are 5 Prestige levels.[/color]
+
+[color=#3498DB][b]Q: What are Daily Rewards?[/b][/color]
+[color=#AAAAAA]A: Mini-games (Rock Paper Scissors, Noughts & Crosses) you can play every 6 hours for free cash and car rewards. Don't miss them![/color]
+
+[color=#3498DB][b]Q: How do I own a casino table or airport slot?[/b][/color]
+[color=#AAAAAA]A: Kill the current owner! Casino tables and airport slots transfer to whoever kills the owner. Great passive income source.[/color]
 [/quote]
 
 [hr]

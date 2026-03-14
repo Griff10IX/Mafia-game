@@ -43,6 +43,26 @@ function escapeRegex(str) {
 // IMPORTANT: Longer codes MUST come before shorter ones to avoid partial matches
 // e.g. :prayge: must come before :p, :sadge: must come before :s
 // ---------------------------------------------------------------------------
+
+// Longer emoji codes that could conflict with short image smileys - process first as Unicode
+const LONG_EMOJI_CODES = [
+  [':speech_balloon:', '💬'],
+  [':scales:', '⚖️'],
+  [':sparkles:', '✨'],
+  [':star:', '⭐'],
+  [':sunglasses:', '😎'],
+  [':smile:', '😊'],
+  [':sweat:', '😅'],
+  [':skull:', '💀'],
+  [':scream:', '😱'],
+  [':sleeping:', '😴'],
+  [':sob:', '😭'],
+  [':stuck_out_tongue:', '😛'],
+  [':smirk:', '😏'],
+  [':slight_smile:', '🙂'],
+  [':sick:', '🤒'],
+];
+
 const IMAGE_SMILEYS = [
   // --- Meme smileys (longer codes first) ---
   [':feelsbadman:', '/images/smileys/feelsbadman.png'],
@@ -686,7 +706,10 @@ export function parseForumContent(content) {
       : escapeHtml(url.trim());
   });
 
-  // 6) Smileys - image smileys first, then text emojis
+  // 6) Smileys - long emoji codes first, then image smileys, then text emojis
+  for (const [from, emoji] of LONG_EMOJI_CODES) {
+    s = s.replace(new RegExp(escapeRegex(from), 'g'), emoji);
+  }
   for (const [from, imgPath] of IMAGE_SMILEYS) {
     const imgTag = `<img src="${imgPath}" alt="${escapeAttr(from)}" class="inline-smiley" style="display:inline;vertical-align:middle;width:1.2em;height:1.2em;" />`;
     s = s.replace(new RegExp(escapeRegex(from), 'g'), imgTag);

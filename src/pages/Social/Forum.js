@@ -411,12 +411,12 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
           <Link to={`/forum/topic/${topic.id}`} className="flex items-center gap-1.5 min-w-0 flex-1 truncate">
             {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
             {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
+            {topic.is_important && <span className="text-amber-400 font-heading shrink-0">IMPORTANT:&nbsp;</span>}
+            {topic.is_sticky && !topic.is_important && <span className="text-amber-400 font-heading shrink-0">STICKY:&nbsp;</span>}
             <span
-              className={`truncate font-heading ${topic.is_important || topic.is_sticky ? 'text-amber-400' : ''}`}
-              style={topic.title_color && !topic.is_important && !topic.is_sticky ? { color: topic.title_color } : {}}
-              dangerouslySetInnerHTML={{
-                __html: `${topic.is_important ? 'IMPORTANT: ' : ''}${topic.is_sticky && !topic.is_important ? 'STICKY: ' : ''}${titleHtml}`,
-              }}
+              className="truncate font-heading"
+              style={topic.title_color ? { color: topic.title_color } : {}}
+              dangerouslySetInnerHTML={{ __html: titleHtml }}
             />
             {topic.is_locked && <Lock size={10} className="text-mutedForeground shrink-0" />}
           </Link>
