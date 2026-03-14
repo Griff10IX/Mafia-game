@@ -350,25 +350,6 @@ export default function Store() {
 
       {activeTab === 'points' && (
         <div className="space-y-3">
-          {/* Pre-order banner - shown when preorder mode is active */}
-          {preorderActive && (
-            <div className="relative rounded-lg border border-amber-500/40 overflow-hidden bg-amber-500/10">
-              <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/60 to-transparent" />
-              <div className="px-4 py-3 flex items-center gap-3">
-                <span className="text-2xl">⏳</span>
-                <div>
-                  <p className="text-[11px] font-heading font-bold text-amber-400 uppercase tracking-[0.12em]">Pre-Order Mode</p>
-                  <p className="text-[10px] text-zinc-300 font-heading mt-0.5">
-                    Points purchased now will be credited on{' '}
-                    <span className="text-amber-400 font-bold">
-                      {preorderReleaseDate ? new Date(preorderReleaseDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'launch date'}
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
           {pointsTabLocked ? (
             <div className={`${styles.panel} rounded-lg border border-primary/20 p-6 text-center`}>
               <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">{pointsTabLockMessage}</p>

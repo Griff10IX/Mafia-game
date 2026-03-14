@@ -304,14 +304,24 @@ export default function Rlt() {
   const [transferUsername, setTransferUsername] = useState('');
   const [sellPoints, setSellPoints] = useState('');
   const [ownerLoading, setOwnerLoading] = useState(false);
+  const [buyBackOffer, setBuyBackOffer] = useState(null);
+  const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
+  const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
 
   const fetchOwnership = () => {
     api.get('/casino/roulette/ownership').then((r) => {
-      setOwnership(r.data ?? null);
-      if (r.data?.max_bet) setConfig((prev) => ({ ...prev, max_bet: r.data.max_bet }));
-      if (r.data?.buy_back_reward != null) setOwnerBuyBack(String(r.data.buy_back_reward));
+      const data = r.data ?? null;
+      setOwnership(data);
+      if (data?.max_bet) setConfig((prev) => ({ ...prev, max_bet: data.max_bet }));
+      if (data?.buy_back_reward != null) setOwnerBuyBack(String(data.buy_back_reward));
+      if (data?.buy_back_offer) {
+        setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
+      } else {
+        setBuyBackOffer(null);
+      }
     }).catch(() => {
       setOwnership(null);
+      setBuyBackOffer(null);
     });
   };
 
@@ -323,6 +333,19 @@ export default function Rlt() {
   }, []);
 
   useEffect(() => () => { if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current); }, []);
+
+  useEffect(() => {
+    if (!buyBackOffer?.expires_at) { setBuyBackSecondsLeft(null); return; }
+    const update = () => {
+      const exp = new Date(buyBackOffer.expires_at).getTime();
+      const left = Math.max(0, Math.ceil((exp - Date.now()) / 1000));
+      setBuyBackSecondsLeft(left);
+      if (left <= 0) setBuyBackOffer(null);
+    };
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [buyBackOffer]);
 
   const startWheelSpin = (resultNum) => {
     const idx = WHEEL_ORDER.indexOf(resultNum);
@@ -447,6 +470,31 @@ export default function Rlt() {
     finally { setOwnerLoading(false); }
   };
 
+  const acceptBuyBack = async () => {
+    if (!buyBackOffer?.offer_id || buyBackActionLoading) return;
+    setBuyBackActionLoading(true);
+    try {
+      const res = await api.post('/casino/roulette/buy-back/accept', { offer_id: buyBackOffer.offer_id });
+      toast.success(res.data?.message || 'Accepted! You received the points.');
+      setBuyBackOffer(null);
+      refreshUser();
+      fetchOwnership();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setBuyBackActionLoading(false); }
+  };
+
+  const rejectBuyBack = async () => {
+    if (!buyBackOffer?.offer_id || buyBackActionLoading) return;
+    setBuyBackActionLoading(true);
+    try {
+      await api.post('/casino/roulette/buy-back/reject', { offer_id: buyBackOffer.offer_id });
+      toast.success('You kept the table!');
+      setBuyBackOffer(null);
+      fetchOwnership();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setBuyBackActionLoading(false); }
+  };
+
   const handleTransfer = async () => {
     if (!ownership?.current_city || !transferUsername.trim() || !window.confirm(`Transfer to ${transferUsername}?`)) return;
     setOwnerLoading(true);
@@ -517,6 +565,40 @@ export default function Rlt() {
           )}
         </div>
       </div>
+
+      {/* Buy-back offer */}
+      {buyBackOffer && (
+        <div
+          className="p-4 rounded-lg border-2 space-y-3"
+          style={{
+            borderColor: '#c9a84c',
+            background: 'linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.03))',
+          }}
+        >
+          <h3 className="font-heading font-bold text-primary uppercase tracking-wider text-sm">Buy-Back Offer</h3>
+          <p className="text-xs text-mutedForeground">
+            House could only pay {formatMoney(buyBackOffer.owner_paid)}. Accept to return the table for {(buyBackOffer.points_offered || 0).toLocaleString()} points, or reject to keep ownership.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            {buyBackSecondsLeft !== null && (
+              <span className="text-sm font-heading font-medium text-primary tabular-nums">
+                {Math.floor(buyBackSecondsLeft / 60)}:{String(buyBackSecondsLeft % 60).padStart(2, '0')}
+              </span>
+            )}
+            <button onClick={acceptBuyBack} disabled={buyBackActionLoading || (buyBackSecondsLeft !== null && buyBackSecondsLeft <= 0)}
+              className="rounded-lg px-5 py-2 text-xs font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40"
+              style={{ background: 'linear-gradient(180deg, #d4af37, #8a6e18)', borderColor: '#c9a84c', color: '#1a1200' }}
+            >
+              {buyBackActionLoading ? '...' : `Accept (${(buyBackOffer.points_offered || 0).toLocaleString()} pts)`}
+            </button>
+            <button onClick={rejectBuyBack} disabled={buyBackActionLoading}
+              className="bg-zinc-800 border border-zinc-600 text-foreground px-5 py-2 rounded-lg text-xs font-heading font-bold uppercase disabled:opacity-40"
+            >
+              {buyBackActionLoading ? '...' : 'Reject'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ═══ Owner Controls ═══ */}
       {isOwner && (

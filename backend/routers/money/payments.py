@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from server import send_notification
+
 logger = logging.getLogger(__name__)
 
 
@@ -85,6 +87,13 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
         "Payment credited: session_id=%s user_id=%s package_id=%s points_added=%s points_before=%s points_after=%s",
         session_id, user_id, package_id, points, points_before, points_after,
     )
+    await send_notification(
+        user_id,
+        "Points Credited",
+        f"Your purchase of {points:,} points has been credited to your account. Balance: {points_before:,} → {points_after:,} points.",
+        "points_credited",
+        category="system",
+    )
     return {"credited": True, "preorder": False}
 
 
@@ -119,6 +128,13 @@ async def _credit_preorder_points(db, txn: dict) -> bool:
     logger.info(
         "Preorder points released: session_id=%s user_id=%s package_id=%s points=%s",
         session_id, user_id, package_id, points,
+    )
+    await send_notification(
+        user_id,
+        "Pre-Order Points Released",
+        f"Your pre-order of {points:,} points has been credited to your account. Balance: {points_before:,} → {points_after:,} points.",
+        "preorder_released",
+        category="system",
     )
     return True
 
