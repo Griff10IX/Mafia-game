@@ -175,6 +175,7 @@ export default function ForumTopic() {
   const [myEntryCommentId, setMyEntryCommentId] = useState(null);
   const [designerSubmitLoading, setDesignerSubmitLoading] = useState(false);
   const [designerSubmittingCommentId, setDesignerSubmittingCommentId] = useState(null);
+  const [deletingCommentId, setDeletingCommentId] = useState(null);
 
   const fetchTopic = useCallback(async (silent = false) => {
     if (!topicId) return;
@@ -465,6 +466,20 @@ export default function ForumTopic() {
       toast.error('Failed');
     } finally {
       setDislikingId(null);
+    }
+  };
+
+  const deleteComment = async (commentId) => {
+    if (!window.confirm('Delete this comment? This cannot be undone.')) return;
+    setDeletingCommentId(commentId);
+    try {
+      await api.delete(`/forum/topics/${topicId}/comments/${commentId}`);
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      toast.success('Comment deleted');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to delete comment');
+    } finally {
+      setDeletingCommentId(null);
     }
   };
 
@@ -915,6 +930,17 @@ export default function ForumTopic() {
                   >
                     <MessageCircle size={10} /> Reply
                   </button>
+                  {/* Staff: delete comment */}
+                  {(isAdmin || isModerator || isHdo) && (
+                    <button
+                      type="button"
+                      onClick={() => deleteComment(c.id)}
+                      disabled={deletingCommentId === c.id}
+                      className="flex items-center gap-1 text-[10px] font-heading px-2 py-1 rounded text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50"
+                    >
+                      <Trash2 size={10} /> {deletingCommentId === c.id ? '...' : 'Delete'}
+                    </button>
+                  )}
                   {/* Designer competition: submit this post as my entry (only on competition topic, only my comments) */}
                   {topicId === activeDesignerComp?.competition_topic_id && user && c.author_id === user.id && activeDesignerComp && (
                     myEntryCommentId === c.id ? (

@@ -609,6 +609,23 @@ async def delete_topic(
     return {"message": "Topic deleted"}
 
 
+async def delete_comment(
+    topic_id: str,
+    comment_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin/Mod/HDO: delete a single comment from a topic."""
+    if not (_is_admin(current_user) or _is_moderator(current_user) or _is_hdo(current_user)):
+        raise HTTPException(status_code=403, detail="Staff only")
+    comment = await db.forum_comments.find_one({"id": comment_id, "topic_id": topic_id}, {"_id": 0})
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    await db.forum_comment_likes.delete_many({"comment_id": comment_id})
+    await db.forum_comment_dislikes.delete_many({"comment_id": comment_id})
+    await db.forum_comments.delete_one({"id": comment_id})
+    return {"message": "Comment deleted"}
+
+
 def register(router):
     router.add_api_route("/forum/topics", get_topics, methods=["GET"])
     router.add_api_route("/forum/topics", create_topic, methods=["POST"])
@@ -616,5 +633,6 @@ def register(router):
     router.add_api_route("/forum/topics/{topic_id}/comments", add_comment, methods=["POST"])
     router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/like", like_comment, methods=["POST"])
     router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/dislike", dislike_comment, methods=["POST"])
+    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}", delete_comment, methods=["DELETE"])
     router.add_api_route("/forum/topics/{topic_id}", update_topic, methods=["PATCH"])
     router.add_api_route("/forum/topics/{topic_id}", delete_topic, methods=["DELETE"])
