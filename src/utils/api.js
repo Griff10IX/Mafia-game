@@ -71,6 +71,9 @@ const NETWORK_ERROR_MSG = 'Connection problem. Please check your network and try
 /** Key used to pass profile/auth error to login page after redirect (e.g. session invalidated). */
 export const AUTH_ERROR_KEY = 'auth_profile_error';
 
+/** Event to show full-screen "server restarted" overlay with auto-refresh. Dispatched on 502/503/504 or network error. */
+export const SERVER_UNAVAILABLE_EVENT = 'app:server-unavailable';
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -98,14 +101,20 @@ api.interceptors.response.use(
       }
     }
     // Normalize 502/503/504 and network errors so pages can show a friendly message instead of breaking
+    const isServerUnavailable = (status) => status === 502 || status === 503 || status === 504;
     if (error.response) {
       const status = error.response.status;
-      if (status === 502 || status === 503 || status === 504) {
+      if (isServerUnavailable(status)) {
         error.response.data = { ...error.response.data, detail: SERVER_UNAVAILABLE_MSG };
       }
     } else {
-      // No response: network error, timeout, or server unreachable
+      // No response: network error, timeout, or server unreachable (often after server restart)
       error.response = { status: 0, data: { detail: NETWORK_ERROR_MSG } };
+    }
+    // Show full-screen overlay with auto-refresh for server-down scenarios (skip 401/403 — those redirect)
+    const status = error.response?.status;
+    if ((status === 0 || isServerUnavailable(status)) && typeof window !== 'undefined' && !isPublicPath()) {
+      window.dispatchEvent(new CustomEvent(SERVER_UNAVAILABLE_EVENT));
     }
     return Promise.reject(error);
   }

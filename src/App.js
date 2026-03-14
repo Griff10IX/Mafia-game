@@ -10,6 +10,7 @@ import VerifyEmail from "./pages/Auth/VerifyEmail";
 import VerifyComplete from "./pages/Auth/VerifyComplete";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
+import ServerUnavailableOverlay from "./components/ServerUnavailableOverlay";
 import { ThemeProvider } from "./context/ThemeContext";
 import "@/App.css";
 
@@ -195,6 +196,7 @@ function App() {
 
   return (
     <div className="App">
+      <ServerUnavailableOverlay />
       <BrowserRouter>
         <ThemeProvider>
         <Suspense fallback={<PageLoader />}>
