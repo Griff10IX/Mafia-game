@@ -1,93 +1,114 @@
 import { useState, useEffect, Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { ThemedToaster } from "./components/ThemedToaster";
-import Landing from "./pages/Landing";
-import StaffLogin from "./pages/StaffLogin";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import VerifyEmail from "./pages/VerifyEmail";
-import VerifyComplete from "./pages/VerifyComplete";
+import Landing from "./pages/Auth/Landing";
+import StaffLogin from "./pages/Auth/StaffLogin";
+import ForgotPassword from "./pages/Auth/ForgotPassword";
+import ResetPassword from "./pages/Auth/ResetPassword";
+import VerifyEmail from "./pages/Auth/VerifyEmail";
+import VerifyComplete from "./pages/Auth/VerifyComplete";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./context/ThemeContext";
 import "@/App.css";
 
 // Lazy-load authenticated pages to shrink initial bundle
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const UsersOnline = lazy(() => import("./pages/UsersOnline"));
-const Ranking = lazy(() => import("./pages/Ranking"));
-const Crimes = lazy(() => import("./pages/Crimes"));
-const GTA = lazy(() => import("./pages/GTA"));
-const Garage = lazy(() => import("./pages/Garage"));
-const SellCars = lazy(() => import("./pages/SellCars"));
-const BuyCars = lazy(() => import("./pages/BuyCars"));
-const CarProfile = lazy(() => import("./pages/CarProfile"));
-const ViewCar = lazy(() => import("./pages/ViewCar"));
-const Jail = lazy(() => import("./pages/Jail"));
-const OrganisedCrime = lazy(() => import("./pages/OrganisedCrime"));
-const Attack = lazy(() => import("./pages/Attack"));
-const Bodyguards = lazy(() => import("./pages/Bodyguards"));
-const HitlistPage = lazy(() => import("./pages/HitlistPage"));
-const FamilyPage = lazy(() => import("./pages/FamilyPage.js"));
-const FamilyProfilePage = lazy(() => import("./pages/FamilyProfilePage.js"));
-const Properties = lazy(() => import("./pages/Properties"));
-const Casino = lazy(() => import("./pages/Casino"));
-const Dice = lazy(() => import("./pages/Casinos/Dice.js"));
-const Rlt = lazy(() => import("./pages/Casinos/Rlt.js"));
+// Account pages
+const Dashboard = lazy(() => import("./pages/Account/Dashboard"));
+const AutoRank = lazy(() => import("./pages/Account/AutoRank"));
+const IPRules = lazy(() => import("./pages/Account/IPRules"));
+const Missions = lazy(() => import("./pages/Account/Missions"));
+const MyInventory = lazy(() => import("./pages/Account/MyInventory"));
+const MyStats = lazy(() => import("./pages/Account/MyStats"));
+const Objectives = lazy(() => import("./pages/Account/Objectives"));
+const Prestige = lazy(() => import("./pages/Account/Prestige"));
+const Profile = lazy(() => import("./pages/Account/Profile"));
+
+// Auth pages
+const LockedPage = lazy(() => import("./pages/Auth/LockedPage"));
+
+// Cars pages
+const BuyCars = lazy(() => import("./pages/Cars/BuyCars"));
+const CarProfile = lazy(() => import("./pages/Cars/CarProfile"));
+const Garage = lazy(() => import("./pages/Cars/Garage"));
+const SellCars = lazy(() => import("./pages/Cars/SellCars"));
+const ViewCar = lazy(() => import("./pages/Cars/ViewCar"));
+
+// Crime pages
+const Crimes = lazy(() => import("./pages/Crime/Crimes"));
+const GTA = lazy(() => import("./pages/Crime/GTA"));
+const Jail = lazy(() => import("./pages/Crime/Jail"));
+const OrganisedCrime = lazy(() => import("./pages/Crime/OrganisedCrime"));
+
+// Game pages
+const DailyRewards = lazy(() => import("./pages/Game/DailyRewards"));
+const DeadAlive = lazy(() => import("./pages/Game/DeadAlive"));
+const FamilyPage = lazy(() => import("./pages/Game/FamilyPage"));
+const FamilyProfilePage = lazy(() => import("./pages/Game/FamilyProfilePage"));
+const HelpDesk = lazy(() => import("./pages/Game/HelpDesk"));
+const Leaderboard = lazy(() => import("./pages/Game/Leaderboard"));
+const Ranking = lazy(() => import("./pages/Game/Ranking"));
+const States = lazy(() => import("./pages/Game/States"));
+const Stats = lazy(() => import("./pages/Game/Stats"));
+const Store = lazy(() => import("./pages/Game/Store"));
+const Travel = lazy(() => import("./pages/Game/Travel"));
+const UsersOnline = lazy(() => import("./pages/Game/UsersOnline"));
+
+// Kill pages
+const ArmourWeapons = lazy(() => import("./pages/Kill/ArmourWeapons"));
+const Attack = lazy(() => import("./pages/Kill/Attack"));
+const Attemps = lazy(() => import("./pages/Kill/Attemps"));
+const Bodyguards = lazy(() => import("./pages/Kill/Bodyguards"));
+const HitlistPage = lazy(() => import("./pages/Kill/HitlistPage"));
+
+// MiniGames pages
+const Battleships = lazy(() => import("./pages/MiniGames/Battleships"));
+const Boxing = lazy(() => import("./pages/MiniGames/Boxing"));
+const Gauntlet = lazy(() => import("./pages/MiniGames/Gauntlet"));
+const Minesweeper = lazy(() => import("./pages/MiniGames/Minesweeper"));
+const MiniGamesLeaderboard = lazy(() => import("./pages/MiniGames/MiniGamesLeaderboard"));
+const Racing = lazy(() => import("./pages/MiniGames/Racing"));
+const ShootingRange = lazy(() => import("./pages/MiniGames/ShootingRange"));
+const ShootingRange3D = lazy(() => import("./pages/MiniGames/ShootingRange3D"));
+const Snake = lazy(() => import("./pages/MiniGames/Snake"));
+const TheGetaway = lazy(() => import("./pages/MiniGames/TheGetaway"));
+
+// Money pages
+const Bank = lazy(() => import("./pages/Money/Bank"));
+const BoozeRun = lazy(() => import("./pages/Money/BoozeRun"));
+const CrackSafe = lazy(() => import("./pages/Money/CrackSafe"));
+const IllegalBusiness = lazy(() => import("./pages/Money/IllegalBusiness"));
+const LootBox = lazy(() => import("./pages/Money/LootBox"));
+const MyProperties = lazy(() => import("./pages/Money/MyProperties"));
+const Properties = lazy(() => import("./pages/Money/Properties"));
+const QuickTrade = lazy(() => import("./pages/Money/QuickTrade"));
+const StockMarket = lazy(() => import("./pages/Money/StockMarket"));
+
+// Social pages
+const Forum = lazy(() => import("./pages/Social/Forum"));
+const ForumTopic = lazy(() => import("./pages/Social/ForumTopic"));
+const Inbox = lazy(() => import("./pages/Social/Inbox"));
+const InboxChat = lazy(() => import("./pages/Social/InboxChat"));
+
+// StaffRole pages
+const Admin = lazy(() => import("./pages/StaffRole/Admin"));
+const AdminLocked = lazy(() => import("./pages/StaffRole/AdminLocked"));
+const AdminUsersOnline = lazy(() => import("./pages/StaffRole/AdminUsersOnline"));
+
+// Casinos pages
+const Casino = lazy(() => import("./pages/Casinos/Casino"));
+const Dice = lazy(() => import("./pages/Casinos/Dice"));
+const Rlt = lazy(() => import("./pages/Casinos/Rlt"));
 const Blackjack = lazy(() => import("./pages/Casinos/BlackjackPage"));
 const HorseRacing = lazy(() => import("./pages/Casinos/HorseRacingPage"));
 const Slots = lazy(() => import("./pages/Casinos/SlotsPage"));
-const CrackSafe = lazy(() => import("./pages/CrackSafe"));
-const DailyRewards = lazy(() => import("./pages/DailyRewards"));
-const Prestige = lazy(() => import("./pages/Prestige"));
 const VideoPoker = lazy(() => import("./pages/Casinos/VideoPokerPage"));
 const MDG = lazy(() => import("./pages/Casinos/MDGPage"));
 const MPBlackjack = lazy(() => import("./pages/Casinos/MPBlackjackPage"));
 const MPBlackjackGame = lazy(() => import("./pages/Casinos/MPBlackjackGamePage"));
 const MPPoker = lazy(() => import("./pages/Casinos/MPPokerPage"));
 const MPPokerGame = lazy(() => import("./pages/Casinos/MPPokerGamePage"));
-const SportsBetting = lazy(() => import("./pages/SportsBetting"));
-const StockMarket = lazy(() => import("./pages/StockMarket"));
-const Bank = lazy(() => import("./pages/Bank"));
-const ArmourWeapons = lazy(() => import("./pages/ArmourWeapons"));
-const ShootingRange = lazy(() => import("./pages/ShootingRange"));
-const ShootingRange3D = lazy(() => import("./pages/ShootingRange3D"));
-const Attemps = lazy(() => import("./pages/Attemps"));
-const Leaderboard = lazy(() => import("./pages/Leaderboard"));
-const MiniGamesLeaderboard = lazy(() => import("./pages/MiniGamesLeaderboard"));
-const Minesweeper = lazy(() => import("./pages/Minesweeper"));
-const Battleships = lazy(() => import("./pages/Battleships"));
-const TheGetaway = lazy(() => import("./pages/TheGetaway"));
-const Store = lazy(() => import("./pages/Store"));
-const Admin = lazy(() => import("./pages/Admin"));
-const AdminLocked = lazy(() => import("./pages/AdminLocked"));
-const AdminUsersOnline = lazy(() => import("./pages/AdminUsersOnline"));
-const AutoRank = lazy(() => import("./pages/AutoRank"));
-const Travel = lazy(() => import("./pages/Travel"));
-const States = lazy(() => import("./pages/States"));
-const MyProperties = lazy(() => import("./pages/MyProperties"));
-const BoozeRun = lazy(() => import("./pages/BoozeRun.js"));
-const Inbox = lazy(() => import("./pages/Inbox"));
-const InboxChat = lazy(() => import("./pages/InboxChat"));
-const Forum = lazy(() => import("./pages/Forum"));
-const ForumTopic = lazy(() => import("./pages/ForumTopic"));
-const DeadAlive = lazy(() => import("./pages/DeadAlive"));
-const Profile = lazy(() => import("./pages/Profile"));
-const Stats = lazy(() => import("./pages/Stats"));
-const MyStats = lazy(() => import("./pages/MyStats"));
-const MyInventory = lazy(() => import("./pages/MyInventory"));
-const Objectives = lazy(() => import("./pages/Objectives"));
-const Missions = lazy(() => import("./pages/Missions"));
-const LootBox = lazy(() => import("./pages/LootBox"));
-const QuickTrade = lazy(() => import("./pages/QuickTrade"));
-const LockedPage = lazy(() => import("./pages/LockedPage"));
-const IPRules = lazy(() => import("./pages/IPRules"));
-const HelpDesk = lazy(() => import("./pages/HelpDesk"));
-const IllegalBusiness = lazy(() => import("./pages/IllegalBusiness"));
-const Gauntlet = lazy(() => import("./pages/Gauntlet"));
-const Boxing = lazy(() => import("./pages/Boxing"));
-const Racing = lazy(() => import("./pages/Racing"));
-const Snake = lazy(() => import("./pages/Snake"));
+const SportsBetting = lazy(() => import("./pages/Casinos/SportsBetting"));
 
 const PageLoader = () => (
   <div className="min-h-[200px] flex items-center justify-center text-primary text-sm font-heading">Loading...</div>
