@@ -211,7 +211,9 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
             actual_owner_pay = min(bet, owner_money)
             shortfall = bet - actual_owner_pay
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": bet + actual_owner_pay}})
-            await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay}})
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay, "total_casino_payouts": actual_owner_pay}})
+            # Track biggest payout for owner
+            await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": actual_owner_pay}}, {"$set": {"biggest_casino_payout": actual_owner_pay}})
             stored_city_bj, doc_bj = await _get_blackjack_ownership_doc(bj_city)
             buy_back_reward = int((doc_bj or {}).get("buy_back_reward") or 0)
             if shortfall > 0:
@@ -600,7 +602,9 @@ def register(router):
                 actual_payout = bet + actual_owner_pay
                 shortfall = owner_pay - actual_owner_pay
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay, "total_casino_payouts": actual_owner_pay}})
+                # Track biggest payout for owner
+                await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": actual_owner_pay}}, {"$set": {"biggest_casino_payout": actual_owner_pay}})
                 buy_back_reward = int((doc or {}).get("buy_back_reward") or 0)
                 if shortfall > 0:
                     ownership_transferred = True
@@ -822,7 +826,9 @@ def register(router):
                 actual_owner_pay = min(bet, owner_money)
                 shortfall = bet - actual_owner_pay
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": bet + actual_owner_pay}})
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay, "total_casino_payouts": actual_owner_pay}})
+                # Track biggest payout for owner
+                await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": actual_owner_pay}}, {"$set": {"biggest_casino_payout": actual_owner_pay}})
                 stored_city_bj, doc_bj = await _get_blackjack_ownership_doc(bj_city)
                 buy_back_reward = int((doc_bj or {}).get("buy_back_reward") or 0)
                 if shortfall > 0:

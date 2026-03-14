@@ -1120,7 +1120,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 )
         # Transfer properties with stacking cap - extras auto-sell for cash
         from routers.money.properties import MAX_STACK_COUNT, calculate_property_value
-from routers.kill.armoury import TOKEN_CONFIG
+        from routers.kill.armoury import TOKEN_CONFIG
         # Get killer's current property counts
         killer_props = await db.user_properties.find({"user_id": killer_id}, {"_id": 0, "property_id": 1}).to_list(100)
         killer_prop_counts = {}

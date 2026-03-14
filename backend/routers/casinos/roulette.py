@@ -367,7 +367,9 @@ def register(router):
             if head_family_id and edge > 0:
                 net_cost += edge
                 await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.roulette": edge}})
-            await db.users.update_one({"id": owner_id}, {"$inc": {"money": -net_cost}})
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": -net_cost, "total_casino_payouts": net_cost}})
+            # Track biggest payout for owner
+            await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": net_cost}}, {"$set": {"biggest_casino_payout": net_cost}})
             await db.roulette_ownership.update_one(
                 {"city": stored_city or city},
                 {"$inc": {"total_earnings": -net_cost}}

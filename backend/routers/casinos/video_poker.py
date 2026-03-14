@@ -557,7 +557,9 @@ def register(router):
                 actual_payout = min(payout, owner_money)
                 shortfall = payout - actual_payout
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout, "total_casino_payouts": actual_payout}})
+                # Track biggest payout for owner
+                await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": actual_payout}}, {"$set": {"biggest_casino_payout": actual_payout}})
                 await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"profit": bet - actual_payout}})
                 payout = actual_payout
                 if shortfall > 0:
@@ -566,6 +568,9 @@ def register(router):
                     if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
                         vp_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
                     await db.videopoker_ownership.update_one({"city": city}, {"$set": vp_owner_set})
+                    # Track casino won/lost stats
+                    await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"casinos_seized": 1}})
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"casinos_lost": 1}})
                     if points_offered <= 0:
                         head_family_id = await get_head_family_id_for_state(city) if city else None
                         if head_family_id:
