@@ -502,8 +502,58 @@ export default function Snake() {
     const nd = DIR[dir];
     if (!nd) return;
     if (nd[0] === -cx && nd[1] === -cy) return;
-    s.nextDir = nd;
+    if (nd[0] !== cx || nd[1] !== cy) {
+      s.nextDir = nd;
+      const queue = dirQueueRef.current;
+      if (queue.length < 2) queue.push(nd);
+      lastTickRef.current = performance.now() - s.speed;
+    }
   }, [phase, startGame]);
+
+  // Swipe gesture handling for mobile
+  const touchStartRef = useRef(null);
+  const handleTouchStart = useCallback((e) => {
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+  }, []);
+
+  const handleTouchEnd = useCallback((e) => {
+    if (!touchStartRef.current) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = touch.clientY - touchStartRef.current.y;
+    const dt = Date.now() - touchStartRef.current.time;
+    
+    const minSwipe = 30;
+    const maxTime = 300;
+    
+    if (dt > maxTime) { touchStartRef.current = null; return; }
+    
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+    
+    if (absDx < minSwipe && absDy < minSwipe) { touchStartRef.current = null; return; }
+    
+    if (absDx > absDy) {
+      dpad(dx > 0 ? "RIGHT" : "LEFT");
+    } else {
+      dpad(dy > 0 ? "DOWN" : "UP");
+    }
+    
+    touchStartRef.current = null;
+  }, [dpad]);
+
+  // Add swipe listeners to canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.addEventListener("touchstart", handleTouchStart, { passive: true });
+    canvas.addEventListener("touchend", handleTouchEnd, { passive: true });
+    return () => {
+      canvas.removeEventListener("touchstart", handleTouchStart);
+      canvas.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [handleTouchStart, handleTouchEnd]);
 
   const C = cellSize;
   const canvasW = GRID * C;
@@ -762,7 +812,17 @@ export default function Snake() {
           )}
         </div>
 
-        <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "repeat(3, minmax(44px, 56px))", gridTemplateRows: "repeat(2, minmax(44px, 56px))", gap: 6, justifyContent: "center" }}>
+        {/* Mobile D-Pad - Optimized for touch */}
+        <div style={{ 
+          marginTop: 16, 
+          display: "grid", 
+          gridTemplateColumns: "repeat(3, 1fr)", 
+          gridTemplateRows: "repeat(2, 1fr)", 
+          gap: 8, 
+          justifyContent: "center",
+          width: "min(220px, 60vw)",
+          aspectRatio: "3/2",
+        }}>
           {[
             { label: "▲", dir: "UP",    col: 2, row: 1 },
             { label: "◀", dir: "LEFT",  col: 1, row: 2 },
@@ -771,20 +831,44 @@ export default function Snake() {
           ].map(({ label, dir, col, row }) => (
             <button
               key={dir}
-              onPointerDown={(e) => { e.preventDefault(); dpad(dir); }}
+              onPointerDown={(e) => { e.preventDefault(); e.currentTarget.style.transform = "scale(0.92)"; e.currentTarget.style.background = "rgba(201,164,96,0.25)"; dpad(dir); }}
+              onPointerUp={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.background = "rgba(201,164,96,0.1)"; }}
+              onPointerLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.background = "rgba(201,164,96,0.1)"; }}
+              onContextMenu={(e) => e.preventDefault()}
               style={{
                 gridColumn: col, gridRow: row,
-                minHeight: 44, minWidth: 44,
-                background: "rgba(201,164,96,0.08)", border: "1px solid rgba(201,164,96,0.3)",
-                color: "var(--noir-primary)", fontSize: "clamp(16px,4vw,22px)", cursor: "pointer",
+                minHeight: 54, minWidth: 54,
+                background: "rgba(201,164,96,0.1)", 
+                border: "2px solid rgba(201,164,96,0.4)",
+                borderRadius: 8,
+                color: "var(--noir-primary)", 
+                fontSize: "clamp(20px,5vw,28px)", 
+                cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontFamily: "sans-serif", userSelect: "none", WebkitUserSelect: "none",
-                touchAction: "none",
+                fontFamily: "sans-serif", 
+                userSelect: "none", 
+                WebkitUserSelect: "none",
+                WebkitTapHighlightColor: "transparent",
+                touchAction: "manipulation",
+                transition: "transform 0.08s, background 0.08s",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)",
               }}
             >
               {label}
             </button>
           ))}
+        </div>
+        
+        {/* Swipe hint for mobile */}
+        <div style={{ 
+          marginTop: 10, 
+          fontSize: "clamp(9px,2.2vw,11px)", 
+          color: "var(--noir-muted)", 
+          letterSpacing: ".08em",
+          textAlign: "center",
+          opacity: 0.7,
+        }}>
+          Swipe on game area or use buttons
         </div>
       </div>
 

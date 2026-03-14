@@ -576,7 +576,7 @@ export default function Rlt() {
                 {/* Result display */}
                 <div className="min-h-[56px] flex flex-col items-center justify-center">
                   {spinning ? (
-                    <p className="text-xs text-emerald-200/70 font-heading animate-pulse uppercase tracking-wider">Spinning...</p>
+                    <div className="h-14" />
                   ) : lastResult !== null ? (
                     <div className="flex flex-col items-center animate-result-pop">
                       <div
@@ -656,7 +656,7 @@ export default function Rlt() {
                     boxShadow: '0 4px 16px rgba(212,175,55,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
                   }}
                 >
-                  {spinning ? 'Spinning...' : 'Spin'}
+                  Spin
                 </button>
 
                 {/* Animation toggle */}
