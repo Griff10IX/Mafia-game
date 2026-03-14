@@ -136,6 +136,36 @@ def register(router):
             return True
         return bool(doc.get("value"))
 
+    @router.get("/auth/launch-status")
+    async def get_launch_status():
+        """Public endpoint to check if login is locked until launch date."""
+        settings = await db.game_settings.find_one({"_id": "main"})
+        lock_until = settings.get("login_lock_until") if settings else None
+        lock_message = settings.get("login_lock_message") if settings else None
+        preorder_release = settings.get("preorder_points_release_date") if settings else None
+        now = datetime.now(timezone.utc)
+        login_locked = False
+        if lock_until:
+            try:
+                lock_dt = datetime.fromisoformat(lock_until.replace("Z", "+00:00"))
+                login_locked = now < lock_dt
+            except (ValueError, TypeError):
+                pass
+        preorder_active = False
+        if preorder_release:
+            try:
+                preorder_dt = datetime.fromisoformat(preorder_release.replace("Z", "+00:00"))
+                preorder_active = now < preorder_dt
+            except (ValueError, TypeError):
+                pass
+        return {
+            "login_locked": login_locked,
+            "lock_until": lock_until,
+            "lock_message": lock_message,
+            "preorder_active": preorder_active,
+            "preorder_release_date": preorder_release,
+        }
+
     @router.post("/auth/register")
     async def register_user(user_data: UserRegister, request: Request):
         try:
@@ -426,6 +456,18 @@ def register(router):
         if not (user_data.password or "").strip():
             raise HTTPException(status_code=422, detail="Password is required.")
 
+        # Check for login lock (skip for staff route - admins can still log in)
+        if not staff_route:
+            settings = await db.game_settings.find_one({"_id": "main"})
+            lock_until_str = settings.get("login_lock_until") if settings else None
+            if lock_until_str:
+                try:
+                    lock_until = datetime.fromisoformat(lock_until_str.replace("Z", "+00:00"))
+                    if now < lock_until:
+                        raise HTTPException(status_code=423, detail="Login is not available until launch. Please check back later.")
+                except (ValueError, TypeError):
+                    pass
+
         ip = _client_ip(request)
 
         # Find user by email or username (case-insensitive)
@@ -573,6 +615,23 @@ def register(router):
             "email": user.get("email") or "",
             "session_id": session_id,
         })
+        
+        # Release any pending preorder points if release date has passed
+        try:
+            settings = await db.game_settings.find_one({"_id": "main"})
+            preorder_release_str = settings.get("preorder_points_release_date") if settings else None
+            if preorder_release_str:
+                preorder_release = datetime.fromisoformat(preorder_release_str.replace("Z", "+00:00"))
+                if now >= preorder_release:
+                    from routers.money.payments import _credit_preorder_points
+                    pending_txns = await db.payment_transactions.find(
+                        {"user_id": user["id"], "payment_status": "preorder_pending"}
+                    ).to_list(100)
+                    for txn in pending_txns:
+                        await _credit_preorder_points(db, txn)
+        except Exception as e:
+            logging.warning("Failed to release preorder points on login: %s", e)
+        
         user_safe = _login_response_user(user)
         return {"token": token, "user": user_safe}
 

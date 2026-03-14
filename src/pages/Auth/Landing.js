@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { getBaseURL, AUTH_ERROR_KEY } from '../../utils/api';
@@ -8,6 +8,14 @@ export default function Landing({ setIsAuthenticated }) {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [verifySentForEmail, setVerifySentForEmail] = useState(null);
+
+  // Launch lock state
+  const [launchStatus, setLaunchStatus] = useState({
+    loginLocked: false,
+    lockUntil: null,
+    lockMessage: null,
+  });
+  const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
   useEffect(() => {
     const msg = sessionStorage.getItem(AUTH_ERROR_KEY);
@@ -35,6 +43,46 @@ export default function Landing({ setIsAuthenticated }) {
   const [resendLoading, setResendLoading]           = useState(false);
   const [resendCooldownSeconds, setResendCooldownSeconds] = useState(0);
   const [bannerEnabled, setBannerEnabled]           = useState(false);
+
+  // Fetch launch status on mount
+  useEffect(() => {
+    api.get('/auth/launch-status')
+      .then((r) => {
+        setLaunchStatus({
+          loginLocked: !!r.data?.login_locked,
+          lockUntil: r.data?.lock_until || null,
+          lockMessage: r.data?.lock_message || null,
+        });
+      })
+      .catch(() => {});
+  }, []);
+
+  // Calculate countdown
+  const calculateCountdown = useCallback(() => {
+    if (!launchStatus.lockUntil) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+    const target = new Date(launchStatus.lockUntil).getTime();
+    const now = Date.now();
+    const diff = Math.max(0, target - now);
+    if (diff <= 0) {
+      setLaunchStatus(prev => ({ ...prev, loginLocked: false }));
+      return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+    }
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    return { days, hours, minutes, seconds };
+  }, [launchStatus.lockUntil]);
+
+  // Update countdown every second when locked
+  useEffect(() => {
+    if (!launchStatus.loginLocked || !launchStatus.lockUntil) return;
+    setCountdown(calculateCountdown());
+    const interval = setInterval(() => {
+      setCountdown(calculateCountdown());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [launchStatus.loginLocked, launchStatus.lockUntil, calculateCountdown]);
 
   useEffect(() => {
     api.get('/landing-banner')
@@ -303,6 +351,53 @@ export default function Landing({ setIsAuthenticated }) {
               </button>
             </div>
 
+            {/* Launch Countdown - shown when login is locked and on Login tab */}
+            {launchStatus.loginLocked && isLogin ? (
+              <div className="p-6 space-y-6 text-center">
+                {launchStatus.lockMessage && (
+                  <p className="text-sm font-heading" style={{ color: 'var(--noir-foreground)' }}>
+                    {launchStatus.lockMessage}
+                  </p>
+                )}
+                <div>
+                  <p className="text-[10px] font-heading uppercase tracking-wider mb-4" style={{ color: 'var(--noir-primary)', opacity: 0.7 }}>
+                    Game Launches In
+                  </p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { value: countdown.days, label: 'Days' },
+                      { value: countdown.hours, label: 'Hours' },
+                      { value: countdown.minutes, label: 'Mins' },
+                      { value: countdown.seconds, label: 'Secs' },
+                    ].map(({ value, label }) => (
+                      <div
+                        key={label}
+                        className="flex flex-col items-center p-3 rounded"
+                        style={{ backgroundColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.08)' }}
+                      >
+                        <span
+                          className="text-2xl md:text-3xl font-heading font-bold tabular-nums"
+                          style={{ color: 'var(--noir-primary)' }}
+                        >
+                          {String(value).padStart(2, '0')}
+                        </span>
+                        <span
+                          className="text-[8px] font-heading uppercase tracking-wider mt-1"
+                          style={{ color: 'var(--noir-muted)' }}
+                        >
+                          {label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                  You can register an account now to secure your username.
+                  <br />
+                  Login will be available when the countdown ends.
+                </p>
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="p-6 space-y-4" autoComplete="on">
 
               {/* Email / username */}
@@ -450,6 +545,7 @@ export default function Landing({ setIsAuthenticated }) {
                 </div>
               )}
             </form>
+            )}
 
             {/* ── STAT STRIP ─────────────────────────────────── */}
             {/*   4-column grid, same panel style as rest of app  */}

@@ -112,6 +112,9 @@ export default function Store() {
   const [pointsTabLocked, setPointsTabLocked] = useState(false);
   const [pointsTabLockMessage, setPointsTabLockMessage] = useState('');
   const [paymentTransactions, setPaymentTransactions] = useState([]);
+  const [preorderActive, setPreorderActive] = useState(false);
+  const [preorderReleaseDate, setPreorderReleaseDate] = useState(null);
+  const [pendingPoints, setPendingPoints] = useState(0);
 
   const fetchPaymentTransactions = useCallback(async () => {
     try {
@@ -124,12 +127,14 @@ export default function Store() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [userRes, boozeRes, eventsRes, adminRes, locksRes] = await Promise.all([
+      const [userRes, boozeRes, eventsRes, adminRes, locksRes, launchRes, pendingRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/booze-run/config').catch(() => ({ data: null })),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/admin/check').catch(() => ({ data: { is_admin: false } })),
         api.get('/page-locks').catch(() => ({ data: { paths: {} } })),
+        api.get('/auth/launch-status').catch(() => ({ data: {} })),
+        api.get('/payments/pending-points').catch(() => ({ data: { pending_points: 0 } })),
       ]);
       setUser(userRes.data);
       setBoozeConfig(boozeRes?.data || null);
@@ -139,6 +144,9 @@ export default function Store() {
       const paths = locksRes?.data?.paths ?? {};
       setPointsTabLocked(!!paths['/store/points']);
       setPointsTabLockMessage(paths['/store/points'] || 'Points purchase temporarily unavailable');
+      setPreorderActive(!!launchRes.data?.preorder_active);
+      setPreorderReleaseDate(launchRes.data?.preorder_release_date || null);
+      setPendingPoints(pendingRes.data?.pending_points || 0);
       await fetchPaymentTransactions();
     } catch {
       toast.error('Failed to load data');
@@ -184,7 +192,12 @@ export default function Store() {
     try {
       const res = await api.get(`/payments/status/${sessionId}`);
       if (res.data.payment_status === 'paid') {
-        toast.success(`${res.data.points_added} points added.`);
+        if (res.data.preorder) {
+          const releaseDate = res.data.preorder_release_date ? new Date(res.data.preorder_release_date).toLocaleDateString() : 'launch';
+          toast.success(`Payment received. ${res.data.points_added} points will be credited on ${releaseDate}.`);
+        } else {
+          toast.success(`${res.data.points_added} points added.`);
+        }
         refreshUser();
         fetchData();
         fetchPaymentTransactions();
@@ -286,6 +299,40 @@ export default function Store() {
             <p className="text-[10px] text-zinc-500 font-heading italic mt-0.5">{event.message}</p>
           </div>
           <div className="store-art-line text-primary mx-3" />
+        </div>
+      )}
+
+      {preorderActive && (
+        <div className="relative rounded-lg border border-amber-500/30 overflow-hidden bg-amber-500/5">
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+          <div className="px-4 py-3">
+            <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">Pre-Order Mode Active</p>
+            <p className="text-[10px] text-zinc-400 font-heading mt-1">
+              Points purchased now will be credited on{' '}
+              <span className="text-amber-400 font-bold">
+                {preorderReleaseDate ? new Date(preorderReleaseDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'launch date'}
+              </span>
+            </p>
+            {pendingPoints > 0 && (
+              <p className="text-[10px] text-amber-400 font-heading font-bold mt-2">
+                You have {pendingPoints.toLocaleString()} points pending release
+              </p>
+            )}
+          </div>
+          <div className="h-px bg-amber-500/20 mx-3" />
+        </div>
+      )}
+
+      {!preorderActive && pendingPoints > 0 && (
+        <div className="relative rounded-lg border border-green-500/30 overflow-hidden bg-green-500/5">
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-green-500/50 to-transparent" />
+          <div className="px-4 py-3">
+            <p className="text-[10px] font-heading font-bold text-green-400 uppercase tracking-[0.15em]">Pending Points</p>
+            <p className="text-[10px] text-zinc-400 font-heading mt-1">
+              You have <span className="text-green-400 font-bold">{pendingPoints.toLocaleString()}</span> points awaiting release. They will be credited automatically on your next login.
+            </p>
+          </div>
+          <div className="h-px bg-green-500/20 mx-3" />
         </div>
       )}
 

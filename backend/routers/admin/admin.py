@@ -43,6 +43,9 @@ class AdminSettingsUpdate(BaseModel):
     require_email_verification: Optional[bool] = None
     stock_market_max_points: Optional[int] = None
     landing_banner_enabled: Optional[bool] = None
+    login_lock_until: Optional[str] = None  # ISO datetime - block logins until this date
+    login_lock_message: Optional[str] = None  # Custom message shown on login page during lock
+    preorder_points_release_date: Optional[str] = None  # ISO datetime - points held until this date
 
 
 class TestUsersAutoRankRequest(BaseModel):

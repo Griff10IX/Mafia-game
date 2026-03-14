@@ -1,5 +1,5 @@
 import { useState, useEffect, Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from "react-router-dom";
 import { ThemedToaster } from "./components/ThemedToaster";
 import Landing from "./pages/Auth/Landing";
 import StaffLogin from "./pages/Auth/StaffLogin";
@@ -117,7 +117,9 @@ const PageLoader = () => (
 // Redirect helpers for parameterized routes
 function ProfileRedirect() {
   const { username } = useParams();
-  return <Navigate to={username ? `/account/profile/${username}` : '/account/profile'} replace />;
+  const location = useLocation();
+  const search = location.search || '';
+  return <Navigate to={username ? `/account/profile/${username}${search}` : `/account/profile${search}`} replace />;
 }
 function FamilyRedirect() {
   const { familyId } = useParams();

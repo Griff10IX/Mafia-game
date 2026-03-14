@@ -331,6 +331,10 @@ export default function Admin() {
   const [landingBannerEnabled, setLandingBannerEnabled] = useState(false);
   const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);
   const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
+  const [loginLockUntil, setLoginLockUntil] = useState('');
+  const [loginLockMessage, setLoginLockMessage] = useState('');
+  const [preorderReleaseDate, setPreorderReleaseDate] = useState('');
+  const [launchSettingsSaving, setLaunchSettingsSaving] = useState(false);
   const [pageLocks, setPageLocks] = useState({});
   const [pageLockPath, setPageLockPath] = useState('');
   const [pageLockMessage, setPageLockMessage] = useState('Down for maintenance');
@@ -577,11 +581,17 @@ export default function Admin() {
       setRequireEmailVerification(!!res.data?.require_email_verification);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setStockMarketMaxPoints(Math.max(1, parseInt(res.data?.stock_market_max_points, 10) || 3000));
+      setLoginLockUntil(res.data?.login_lock_until || '');
+      setLoginLockMessage(res.data?.login_lock_message || '');
+      setPreorderReleaseDate(res.data?.preorder_points_release_date || '');
     } catch {
       setAdminOnlineColor('#a78bfa');
       setModDefaultOnlineColor('#1e3a5f');
       setRequireEmailVerification(false);
       setStockMarketMaxPoints(3000);
+      setLoginLockUntil('');
+      setLoginLockMessage('');
+      setPreorderReleaseDate('');
     }
   };
 
@@ -632,6 +642,54 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to save');
     } finally {
       setAdminSettingsSaving(false);
+    }
+  };
+
+  const handleSaveLaunchSettings = async () => {
+    setLaunchSettingsSaving(true);
+    try {
+      await api.patch('/admin/settings', {
+        login_lock_until: loginLockUntil || null,
+        login_lock_message: loginLockMessage || null,
+        preorder_points_release_date: preorderReleaseDate || null,
+      });
+      toast.success('Launch settings saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to save launch settings');
+    } finally {
+      setLaunchSettingsSaving(false);
+    }
+  };
+
+  const handleClearLoginLock = async () => {
+    setLaunchSettingsSaving(true);
+    try {
+      await api.patch('/admin/settings', {
+        login_lock_until: null,
+        login_lock_message: null,
+      });
+      setLoginLockUntil('');
+      setLoginLockMessage('');
+      toast.success('Login lock cleared');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to clear');
+    } finally {
+      setLaunchSettingsSaving(false);
+    }
+  };
+
+  const handleClearPreorder = async () => {
+    setLaunchSettingsSaving(true);
+    try {
+      await api.patch('/admin/settings', {
+        preorder_points_release_date: null,
+      });
+      setPreorderReleaseDate('');
+      toast.success('Preorder mode cleared');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to clear');
+    } finally {
+      setLaunchSettingsSaving(false);
     }
   };
 
@@ -2948,6 +3006,92 @@ export default function Admin() {
           <LayoutGrid size={12} />
           Game World
         </h2>
+
+        {/* Launch Settings */}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-500/30`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+        <SectionHeader
+          icon={Clock}
+          title="Launch Settings"
+          color="text-amber-400"
+          badge={
+            <span className="text-[10px] font-heading">
+              {loginLockUntil ? <span className="text-amber-400">Login locked</span> : null}
+              {loginLockUntil && preorderReleaseDate ? ' · ' : null}
+              {preorderReleaseDate ? <span className="text-amber-400">Preorder active</span> : null}
+              {!loginLockUntil && !preorderReleaseDate ? <span className="text-mutedForeground">Not set</span> : null}
+            </span>
+          }
+          isCollapsed={collapsed.launchSettings}
+          onToggle={() => toggleSection('launchSettings')}
+        />
+        {!collapsed.launchSettings && (
+          <div className="p-3 space-y-4">
+            <div className="space-y-3">
+              <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">Login Lock (Launch Date)</p>
+              <p className="text-[10px] text-mutedForeground">Block all logins until this date. Users can still register. Staff can login via /staff-login.</p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="datetime-local"
+                  value={loginLockUntil ? loginLockUntil.slice(0, 16) : ''}
+                  onChange={(e) => setLoginLockUntil(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                  className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-amber-500/50 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleClearLoginLock}
+                  disabled={launchSettingsSaving || !loginLockUntil}
+                  className="px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 disabled:opacity-50"
+                >
+                  Clear
+                </button>
+              </div>
+              <input
+                type="text"
+                placeholder="Custom lock message (shown on login page)"
+                value={loginLockMessage}
+                onChange={(e) => setLoginLockMessage(e.target.value)}
+                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-amber-500/50 focus:outline-none"
+              />
+            </div>
+
+            <div className="h-px bg-zinc-700/30" />
+
+            <div className="space-y-3">
+              <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">Preorder Points Release</p>
+              <p className="text-[10px] text-mutedForeground">Points purchased before this date will be held and credited when this date arrives. After this date, points are credited immediately.</p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="datetime-local"
+                  value={preorderReleaseDate ? preorderReleaseDate.slice(0, 16) : ''}
+                  onChange={(e) => setPreorderReleaseDate(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                  className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-amber-500/50 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleClearPreorder}
+                  disabled={launchSettingsSaving || !preorderReleaseDate}
+                  className="px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 disabled:opacity-50"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div className="h-px bg-zinc-700/30" />
+
+            <button
+              type="button"
+              onClick={handleSaveLaunchSettings}
+              disabled={launchSettingsSaving}
+              className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50"
+            >
+              {launchSettingsSaving ? 'Saving...' : 'Save Launch Settings'}
+            </button>
+          </div>
+        )}
+        </div>
+
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
