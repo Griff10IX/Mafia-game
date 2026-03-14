@@ -1118,7 +1118,41 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     {"_id": uc["_id"]},
                     {"$set": {"user_id": killer_id}, "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}},
                 )
-        await db.user_properties.update_many({"user_id": victim_id}, {"$set": {"user_id": killer_id}})
+        # Transfer properties with stacking cap - extras auto-sell for cash
+        from routers.money.properties import MAX_STACK_COUNT, calculate_property_value
+        # Get killer's current property counts
+        killer_props = await db.user_properties.find({"user_id": killer_id}, {"_id": 0, "property_id": 1}).to_list(100)
+        killer_prop_counts = {}
+        for kp in killer_props:
+            pid = kp["property_id"]
+            killer_prop_counts[pid] = killer_prop_counts.get(pid, 0) + 1
+        # Process victim's properties
+        auto_sell_cash = 0
+        auto_sold_props = []
+        for vp in victim_props:
+            vpid = vp["property_id"]
+            vp_full = await db.user_properties.find_one({"user_id": victim_id, "property_id": vpid})
+            if not vp_full:
+                continue
+            current_count = killer_prop_counts.get(vpid, 0)
+            if current_count >= MAX_STACK_COUNT:
+                # At cap - auto-sell this property
+                prop_def = await db.properties.find_one({"id": vpid}, {"_id": 0, "price": 1, "name": 1})
+                if prop_def:
+                    level = max(1, int(vp_full.get("level") or 1))
+                    sell_value = calculate_property_value(prop_def, level)
+                    auto_sell_cash += sell_value
+                    auto_sold_props.append(f"{prop_def.get('name', vpid)} (${sell_value:,})")
+                # Delete instead of transfer
+                await db.user_properties.delete_one({"_id": vp_full["_id"]})
+            else:
+                # Transfer to killer
+                await db.user_properties.update_one({"_id": vp_full["_id"]}, {"$set": {"user_id": killer_id}})
+                killer_prop_counts[vpid] = current_count + 1
+        # Add auto-sell cash to killer (separate from initial loot since kill_inc already applied)
+        if auto_sell_cash > 0:
+            await db.users.update_one({"id": killer_id}, {"$inc": {"money": auto_sell_cash}})
+            cash_loot += auto_sell_cash  # For message display
         now_iso = datetime.now(timezone.utc).isoformat()
         killer_family_doc = None
         if current_user.get("family_id"):
@@ -1343,11 +1377,17 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             attempt_base["bodyguard_owner_username"] = bodyguard_owner_username
         success_message = f"You killed {target_name}! You got ${cash_loot:,}"
         extras = []
-        if victim_props_count:
-            p = f"their {victim_props_count} propert{'y' if victim_props_count == 1 else 'ies'}"
+        transferred_props_count = victim_props_count - len(auto_sold_props)
+        if transferred_props_count > 0:
+            p = f"their {transferred_props_count} propert{'y' if transferred_props_count == 1 else 'ies'}"
             if prop_names:
-                p += f" ({', '.join(prop_names)})"
+                # Filter out auto-sold property names from display
+                kept_names = [n for n in prop_names if not any(n in asp for asp in auto_sold_props)]
+                if kept_names:
+                    p += f" ({', '.join(kept_names)})"
             extras.append(p)
+        if auto_sold_props:
+            extras.append(f"auto-sold {len(auto_sold_props)} propert{'y' if len(auto_sold_props) == 1 else 'ies'} (at stack cap)")
         if victim_cars_count:
             c = f"their {victim_cars_count} car{'s' if victim_cars_count != 1 else ''}"
             if exclusive_car_count:

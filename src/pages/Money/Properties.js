@@ -188,9 +188,16 @@ export default function Properties() {
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2 bg-primary/8 border-b border-primary/15 flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] truncate">{property.name}</h3>
+                <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] truncate">
+                  {property.owned_count > 1 ? `${property.owned_count}x ` : ''}{property.name}
+                </h3>
                 <p className="text-[9px] text-mutedForeground capitalize font-heading tracking-wider">
                   {property.property_type}
+                  {property.stack_bonus_pct > 0 && (
+                    <span className="ml-1 text-emerald-400/90">
+                      · +{property.stack_bonus_pct}% stack
+                    </span>
+                  )}
                   {property.collection_streak_days > 1 && (
                     <span className="ml-1 text-amber-400/90">
                       · Streak {property.collection_streak_days}d
