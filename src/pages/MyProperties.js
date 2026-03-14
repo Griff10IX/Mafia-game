@@ -463,7 +463,7 @@ export default function MyProperties() {
                   </button>
                 </div>
                 <div className="pt-1 border-t border-zinc-700/30 mt-2">
-                  <Link to="/travel" className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/50 text-primary text-xs font-heading hover:bg-primary/10">
+                  <Link to="/game/travel" className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/50 text-primary text-xs font-heading hover:bg-primary/10">
                     <LinkIcon size={12} /> Travel
                   </Link>
                 </div>

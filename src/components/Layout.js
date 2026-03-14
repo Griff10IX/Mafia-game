@@ -15,8 +15,8 @@ import styles from '../styles/noir.module.css';
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
 function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
   const goItems = [
-    { path: '/travel', label: 'Travel' },
-    { path: '/states', label: 'States' },
+    { path: '/game/travel', label: 'Travel' },
+    { path: '/game/states', label: 'States' },
     ...(hasCasinoOrProperty ? [{ path: '/my-properties', label: 'My Properties' }] : []),
     { path: '/money/property', label: 'Properties' },
     { path: '/cars/garage', label: 'Garage' },
@@ -50,14 +50,14 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       icon: Gamepad2,
       label: 'Mini games',
       items: [
-        { path: '/games/racing', label: 'Racing' },
-        { path: '/games/boxing', label: 'Boxing' },
-        { path: '/games/flappy', label: 'Flappy Gangster' },
-        { path: '/games/shooting-range', label: 'Shooting range' },
-        { path: '/games/snake', label: 'Package Run' },
-        { path: '/games/minesweeper', label: 'Minefield' },
-        { path: '/games/battleships', label: 'Rum Runner' },
-        { path: '/games/leaderboard', label: 'Leaderboard' },
+        { path: '/casino/mini-games/racing', label: 'Racing' },
+        { path: '/casino/mini-games/boxing', label: 'Boxing' },
+        { path: '/casino/mini-games/flappy', label: 'Flappy Gangster' },
+        { path: '/casino/mini-games/shooting-range', label: 'Shooting range' },
+        { path: '/casino/mini-games/snake', label: 'Package Run' },
+        { path: '/casino/mini-games/minesweeper', label: 'Minefield' },
+        { path: '/casino/mini-games/battleships', label: 'Rum Runner' },
+        { path: '/casino/mini-games/leaderboard', label: 'Leaderboard' },
       ],
     },
     {
@@ -97,16 +97,16 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       icon: User,
       label: 'You',
       items: [
-        { path: '/dashboard', label: 'Dashboard' },
-        { path: '/objectives', label: 'Objectives' },
+        { path: '/account/dashboard', label: 'Dashboard' },
+        { path: '/account/objectives', label: 'Objectives' },
         { path: '/missions', label: 'Missions' },
         { path: '/account/inventory', label: 'My Inventory' },
-        { path: '/loot-box', label: 'Loot Box' },
+        { path: '/money/loot-box', label: 'Loot Box' },
         { path: '/account/profile', label: 'Edit Profile' },
         { path: '/account/settings', label: 'IP & Devices' },
-        { path: '/stats', label: 'Stats' },
+        { path: '/game/stats', label: 'Stats' },
         { path: '/account/stats', label: 'My Stats' },
-        { path: '/dead-alive', label: 'Dead > Alive' },
+        { path: '/game/dead-alive', label: 'Dead > Alive' },
         { path: '/money/bank', label: 'Bank' },
         { path: '/money/stocks', label: 'Stock Market' },
         { action: 'theme', label: 'Theme' },
@@ -126,15 +126,15 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/social/forum', label: 'Entertainer Forum', search: '?tab=entertainer' },
         { path: '/social/forum', label: 'Designer Forum', search: '?tab=designer' },
         { path: '/social/inbox', label: 'Inbox' },
-        { path: '/help-desk', label: 'Help Desk' },
-        { path: '/booze-run', label: 'Booze Run' },
-        { path: '/racket', label: 'Racket' },
+        { path: '/game/help-desk', label: 'Help Desk' },
+        { path: '/money/booze-run', label: 'Booze Run' },
+        { path: '/money/racket', label: 'Racket' },
         { path: '/users-online', label: 'Users Online' },
-        { path: '/family/list', label: 'Families' },
-        { path: '/daily-rewards', label: 'Daily Rewards' },
-        { path: '/leaderboard', label: 'Leaderboard' },
-        { path: '/store', label: 'Store' },
-        { path: '/quick-trade', label: 'Quick Trade' },
+        { path: '/game/family/list', label: 'Families' },
+        { path: '/game/daily-rewards', label: 'Daily Rewards' },
+        { path: '/game/leaderboard', label: 'Leaderboard' },
+        { path: '/game/store', label: 'Store' },
+        { path: '/money/quick-trade', label: 'Quick Trade' },
       ],
     },
   ];
@@ -681,29 +681,29 @@ export default function Layout({ children }) {
   const isCategorizedClassic = sidebarLayout === 'categorized_classic';
   const PATH_TO_CATEGORY = isCategorizedClassic
     ? {
-        '/dashboard': 'information', '/verify-email': 'information', '/objectives': 'information', '/missions': 'information',
-        '/account/profile': 'information', '/account/settings': 'information', '/stats': 'information', '/account/stats': 'information',
-        '/users-online': 'information', '/money/property': 'information', '/help-desk': 'information', '/leaderboard': 'information',
-        '/ranking': 'ranking', '/account/prestige': 'ranking',
-        '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/games/shooting-range': 'combat',
-        '/travel': 'travel', '/states': 'travel', '/my-properties': 'travel', '/booze-run': 'travel',
+        '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/missions': 'information',
+        '/account/profile': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
+        '/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information', '/game/leaderboard': 'information',
+        '/game/ranking': 'ranking', '/account/prestige': 'ranking',
+        '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
+        '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '/social/forum': 'messaging', '/social/inbox': 'messaging',
-        '/money/bank': 'money', '/money/stocks': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money',
-        '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/crack-safe': 'money', '/casino': 'money', '/loot-box': 'money',
-        '/family/list': 'other', '/dead-alive': 'other', '/account/autorank': 'other',
+        '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game/daily-rewards': 'money',
+        '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/casino': 'money', '/money/loot-box': 'money',
+        '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
         '/mini-games': 'minigames',
       }
     : {
-        '/dashboard': 'information', '/verify-email': 'information', '/objectives': 'information', '/missions': 'information',
-        '/account/inventory': 'information', '/loot-box': 'information', '/account/profile': 'information', '/account/settings': 'information', '/stats': 'information', '/account/stats': 'information',
-        '/users-online': 'information', '/money/property': 'information', '/help-desk': 'information',
-        '/ranking': 'ranking', '/account/prestige': 'ranking',
-        '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/games/shooting-range': 'combat',
-        '/travel': 'travel', '/states': 'travel', '/my-properties': 'travel', '/booze-run': 'travel',
+        '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/missions': 'information',
+        '/account/inventory': 'information', '/money/loot-box': 'information', '/account/profile': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
+        '/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information',
+        '/game/ranking': 'ranking', '/account/prestige': 'ranking',
+        '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
+        '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '/social/forum': 'messaging', '/social/inbox': 'messaging',
-        '/money/bank': 'money', '/money/stocks': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money', '/games/flappy': 'money',
-        '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/crack-safe': 'money', '/casino': 'money', '/leaderboard': 'money',
-        '/family/list': 'other', '/dead-alive': 'other', '/account/autorank': 'other',
+        '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game/daily-rewards': 'money', '/casino/mini-games/flappy': 'money',
+        '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/casino': 'money', '/game/leaderboard': 'money',
+        '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
         '/mini-games': 'minigames',
       };
   const SIDEBAR_CATEGORIES = isCategorizedClassic
@@ -719,15 +719,15 @@ export default function Layout({ children }) {
       ];
 
   const navItems = [
-    { path: '/dashboard', icon: Home, label: 'Dashboard' },
+    { path: '/account/dashboard', icon: Home, label: 'Dashboard' },
     ...(needsEmailVerification ? [{ path: '/verify-email', icon: Mail, label: 'Verify email' }] : []),
-    { path: '/objectives', icon: ListChecks, label: 'Objectives' },
+    { path: '/account/objectives', icon: ListChecks, label: 'Objectives' },
     { path: '/missions', icon: Map, label: 'Missions' },
     { path: '/account/inventory', icon: Package, label: 'My Inventory' },
-    { path: '/loot-box', icon: Gift, label: 'Loot Box' },
+    { path: '/money/loot-box', icon: Gift, label: 'Loot Box' },
     { path: '/account/profile', icon: User, label: 'Edit Profile' },
     { path: '/account/settings', icon: Globe, label: 'IP & Devices' },
-    { path: '/stats', icon: TrendingUp, label: 'Stats' },
+    { path: '/game/stats', icon: TrendingUp, label: 'Stats' },
     { path: '/account/stats', icon: BarChart3, label: 'My Stats' },
     { path: '/money/bank', icon: Landmark, label: 'Bank' },
     { path: '/money/stocks', icon: TrendingUp, label: 'Stock Market' },
@@ -735,16 +735,16 @@ export default function Layout({ children }) {
     { path: '/kill/attempts', icon: Crosshair, label: 'Attempts' },
     { path: '/kill/hitlist', icon: ScrollText, label: 'Hitlist' },
     { path: '/kill/bodyguards', icon: Shield, label: 'Bodyguards' },
-    { path: '/travel', icon: Plane, label: 'Travel' },
-    { path: '/states', icon: MapPin, label: 'States' },
+    { path: '/game/travel', icon: Plane, label: 'Travel' },
+    { path: '/game/states', icon: MapPin, label: 'States' },
     ...(hasCasinoOrProperty ? [{ path: '/my-properties', icon: Building2, label: 'My Properties' }] : []),
-    { path: '/booze-run', icon: Wine, label: 'Booze Run' },
-    { path: '/racket', icon: Building2, label: 'Racket' },
+    { path: '/money/booze-run', icon: Wine, label: 'Booze Run' },
+    { path: '/money/racket', icon: Building2, label: 'Racket' },
     { path: '/users-online', icon: Users, label: 'Users Online' },
     { path: '/social/forum', icon: MessageSquare, label: 'Forum' },
     { path: '/social/inbox', icon: Mail, label: 'Inbox', badge: unreadCount },
-    { path: '/help-desk', icon: HelpCircle, label: 'Help Desk', badge: helpDeskOpenCount },
-    { path: '/ranking', icon: Target, label: 'Ranking' },
+    { path: '/game/help-desk', icon: HelpCircle, label: 'Help Desk', badge: helpDeskOpenCount },
+    { path: '/game/ranking', icon: Target, label: 'Ranking' },
     { path: '/cars/garage', icon: Car, label: 'Garage' },
     { path: '/cars/sell', icon: DollarSign, label: 'Sell Cars' },
     { path: '/cars/buy', icon: ShoppingBag, label: 'Buy Cars' },
@@ -752,13 +752,13 @@ export default function Layout({ children }) {
     { path: '/kill/armour-weapons', icon: Sword, label: 'Armoury' },
     { path: '/mini-games', icon: Gamepad2, label: 'Mini games' },
     { path: '/casino', icon: Dice5, label: 'Casino' },
-    { path: '/crack-safe', icon: Lock, label: 'Crack the Safe' },
-    { path: '/daily-rewards', icon: Gift, label: 'Daily Rewards' },
-    { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
-    { path: '/store', icon: ShoppingBag, label: 'Store' },
-    { path: '/quick-trade', icon: ArrowLeftRight, label: 'Quick Trade' },
-    { path: '/family/list', icon: Building2, label: 'Families' },
-    { path: '/dead-alive', icon: Skull, label: 'Dead > Alive' },
+    { path: '/money/crack-safe', icon: Lock, label: 'Crack the Safe' },
+    { path: '/game/daily-rewards', icon: Gift, label: 'Daily Rewards' },
+    { path: '/game/leaderboard', icon: Trophy, label: 'Leaderboard' },
+    { path: '/game/store', icon: ShoppingBag, label: 'Store' },
+    { path: '/money/quick-trade', icon: ArrowLeftRight, label: 'Quick Trade' },
+    { path: '/game/family/list', icon: Building2, label: 'Families' },
+    { path: '/game/dead-alive', icon: Skull, label: 'Dead > Alive' },
     { path: '/account/autorank', icon: Bot, label: 'Auto Rank' },
   ];
 
@@ -874,8 +874,8 @@ export default function Layout({ children }) {
   const miniGamesNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-minigames-group" onClick={() => setMiniGamesOpen((v) => !v)}
-        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname.startsWith('/games/') ? styles.navItemActive : styles.sidebarNavLink}`}
-        style={location.pathname.startsWith('/games/') ? sidebarActiveGroupStyle : undefined}>
+        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname.startsWith('/casino/mini-games/') ? styles.navItemActive : styles.sidebarNavLink}`}
+        style={location.pathname.startsWith('/casino/mini-games/') ? sidebarActiveGroupStyle : undefined}>
         <Gamepad2 size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
         <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Mini games</span>
         {miniGamesOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
@@ -883,14 +883,14 @@ export default function Layout({ children }) {
       {miniGamesOpen && (
         <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
           {[
-            { to: '/games/racing', label: 'Racing', testId: 'nav-racing' },
-            { to: '/games/boxing', label: 'Boxing', testId: 'nav-boxing', matchPrefix: true },
-            { to: '/games/flappy', label: 'Flappy Gangster', testId: 'nav-flappygangster' },
-            { to: '/games/shooting-range', label: 'Shooting range', testId: 'nav-shooting-range', matchPrefix: true },
-            { to: '/games/snake', label: 'Package Run', testId: 'nav-snake' },
-            { to: '/games/minesweeper', label: 'Minefield', testId: 'nav-minesweeper' },
-            { to: '/games/battleships', label: 'Rum Runner', testId: 'nav-battleships' },
-            { to: '/games/leaderboard', label: 'Leaderboard', testId: 'nav-minigames-leaderboard' },
+            { to: '/casino/mini-games/racing', label: 'Racing', testId: 'nav-racing' },
+            { to: '/casino/mini-games/boxing', label: 'Boxing', testId: 'nav-boxing', matchPrefix: true },
+            { to: '/casino/mini-games/flappy', label: 'Flappy Gangster', testId: 'nav-flappygangster' },
+            { to: '/casino/mini-games/shooting-range', label: 'Shooting range', testId: 'nav-shooting-range', matchPrefix: true },
+            { to: '/casino/mini-games/snake', label: 'Package Run', testId: 'nav-snake' },
+            { to: '/casino/mini-games/minesweeper', label: 'Minefield', testId: 'nav-minesweeper' },
+            { to: '/casino/mini-games/battleships', label: 'Rum Runner', testId: 'nav-battleships' },
+            { to: '/casino/mini-games/leaderboard', label: 'Leaderboard', testId: 'nav-minigames-leaderboard' },
           ].map((item, idx) => {
             const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;
             return (
@@ -914,11 +914,11 @@ export default function Layout({ children }) {
     if (item.path === '/mini-games') return <Fragment key="nav-minigames-group">{navDivider}{miniGamesNavBlock}</Fragment>;
     const Icon = item.icon;
     const isActive = location.pathname === item.path;
-    const isFamiliesAtWar = item.path === '/family/list' && atWar;
+    const isFamiliesAtWar = item.path === '/game/family/list' && atWar;
     return (
       <Fragment key={item.path}>
         {navDivider}
-        <Link to={item.path} data-testid={`nav-${item.label.toLowerCase()}`} data-at-war={atWar && item.path === '/family/list' ? 'true' : undefined}
+        <Link to={item.path} data-testid={`nav-${item.label.toLowerCase()}`} data-at-war={atWar && item.path === '/game/family/list' ? 'true' : undefined}
           className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${isFamiliesAtWar ? (isActive ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10') : (isActive ? styles.navItemActivePage : styles.sidebarNavLink)}`}
           style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
           onClick={() => setSidebarOpen(false)}
@@ -1494,7 +1494,7 @@ export default function Layout({ children }) {
                 <div className="rounded-xl border-2 p-8 max-w-md w-full" style={{ borderColor: 'var(--noir-primary)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.08)' }}>
                   <p className="text-lg font-heading font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--noir-primary)' }}>Down for maintenance</p>
                   <p className="text-sm font-heading text-muted-foreground mb-6">{msg}</p>
-                  <Link to="/dashboard" className="text-sm font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Back to Dashboard</Link>
+                  <Link to="/account/dashboard" className="text-sm font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Back to Dashboard</Link>
                 </div>
               </div>
             );
@@ -1562,7 +1562,7 @@ export default function Layout({ children }) {
                   { label: 'Weapon', value: user.gun_name || 'None', isLink: true, to: '/kill/armour-weapons' },
                   { label: 'Armour', value: user.armour_name || 'None', isLink: true, to: '/kill/armour-weapons' },
                   { label: 'Location', value: user.current_state || user.location || '—', truncate: true, isLink: true, to: '/travel' },
-                  { label: 'Family', value: user.gang_name || 'None', truncate: true, isLink: true, to: '/family/list' },
+                  { label: 'Family', value: user.gang_name || 'None', truncate: true, isLink: true, to: '/game/family/list' },
                   { label: 'Guards', value: typeof user.bodyguard_count === 'number' ? `${user.bodyguard_count}/${user.bodyguard_slots ?? 1}` : '—', isLink: true, to: '/kill/bodyguards' },
                   ...(hasCasinoOrProperty ? [
                     { label: 'Casino', value: formatMoney(user.casino_profit ?? 0), className: (user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400', isLink: true, to: '/my-properties' },
@@ -1630,7 +1630,7 @@ export default function Layout({ children }) {
               <div className="h-px shrink-0" style={dividerStyle} />
 
               <div className="space-y-1 pt-1">
-                <Link to="/leaderboard" onClick={() => isMobileViewport && setRightSidebarOpen(false)}
+                <Link to="/game/leaderboard" onClick={() => isMobileViewport && setRightSidebarOpen(false)}
                   className="flex items-center gap-1.5 text-[10px] font-heading font-bold py-0.5 px-1 rounded-sm"
                   style={{ color: 'var(--noir-primary)' }}>
                   <Trophy size={12} /> Leaderboard
@@ -1768,7 +1768,7 @@ export default function Layout({ children }) {
                 <Fragment key={item.path || item.id}>
                   {index > 0 && showBottomNavDividers && <div className="shrink-0 min-h-[24px]" style={bottomNavDividerStyle} aria-hidden="true" />}
                   {item.type === 'link' && (() => {
-                    const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/'));
+                    const isActive = location.pathname === item.path || (item.path !== '/account/dashboard' && location.pathname.startsWith(item.path + '/'));
                     const isInbox = item.path === '/social/inbox';
                     return (
                       <Link key={item.path} to={item.path} onClick={() => { setSidebarOpen(false); setMobileBottomMenuOpen(null); }}

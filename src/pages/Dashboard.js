@@ -65,7 +65,7 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
         </h2>
         {!hasPremiumBar && (
           <Link 
-            to="/store" 
+            to="/game/store" 
             className="text-[9px] font-heading font-bold text-primary hover:text-primary/80 transition-colors"
           >
             Premium bar →

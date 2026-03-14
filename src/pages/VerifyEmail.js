@@ -135,7 +135,7 @@ export default function VerifyEmail({ setIsAuthenticated }) {
                   {resendLoading ? 'Sending…' : resendCooldownSeconds > 0 ? `Resend in ${resendCooldownSeconds}s` : 'Resend verification email'}
                 </button>
               </div>
-              <Link to="/dashboard" className="text-sm font-heading underline" style={{ color: 'var(--noir-primary)' }}>Back to Dashboard</Link>
+              <Link to="/account/dashboard" className="text-sm font-heading underline" style={{ color: 'var(--noir-primary)' }}>Back to Dashboard</Link>
             </>
           )}
           {status === 'error' && (

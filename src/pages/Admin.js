@@ -2180,7 +2180,7 @@ export default function Admin() {
   }
 
   if (!isAdmin && !isModerator) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/account/dashboard" replace />;
   }
 
   const Input = AdminInput;
@@ -3236,7 +3236,7 @@ export default function Admin() {
                 '/leaderboard',
                 '/store',
                 '/store/points',
-                '/quick-trade',
+                '/money/quick-trade',
                 '/travel',
                 '/states',
                 '/my-properties',

@@ -347,35 +347,35 @@ export default function MiniGamesLeaderboard() {
         <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-2">Play Now</h2>
         <div className="flex flex-wrap gap-2">
           <Link
-            to="/games/snake"
+            to="/casino/mini-games/snake"
             className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20 hover:border-primary/40`}
           >
             <Package size={12} className="text-primary" />
             Snake
           </Link>
           <Link
-            to="/games/flappy"
+            to="/casino/mini-games/flappy"
             className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20 hover:border-primary/40`}
           >
             <Gamepad2 size={12} className="text-primary" />
             Flappy Gangster
           </Link>
           <Link
-            to="/games/shooting-range"
+            to="/casino/mini-games/shooting-range"
             className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20 hover:border-primary/40`}
           >
             <Crosshair size={12} className="text-primary" />
             Shooting Range
           </Link>
           <Link
-            to="/games/minesweeper"
+            to="/casino/mini-games/minesweeper"
             className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20 hover:border-primary/40`}
           >
             <Bomb size={12} className="text-primary" />
             Minefield
           </Link>
           <Link
-            to="/games/battleships"
+            to="/casino/mini-games/battleships"
             className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20 hover:border-primary/40`}
           >
             <Ship size={12} className="text-primary" />

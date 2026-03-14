@@ -312,7 +312,7 @@ export default function Blackjack() {
     const points = parseInt(String(sellPoints).replace(/\D/g, ''), 10);
     if (!points || points <= 0) { toast.error('Enter valid points'); return; }
     setOwnerLoading(true);
-    try { await api.post('/casino/blackjack/sell-on-trade', { city, points }); toast.success(`Listed for ${points.toLocaleString()} pts!`); setSellPoints(''); setTimeout(() => navigate('/quick-trade'), 1500); }
+    try { await api.post('/casino/blackjack/sell-on-trade', { city, points }); toast.success(`Listed for ${points.toLocaleString()} pts!`); setSellPoints(''); setTimeout(() => navigate('/money/quick-trade'), 1500); }
     catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setOwnerLoading(false); }
   };

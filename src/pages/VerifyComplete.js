@@ -29,7 +29,7 @@ export default function VerifyComplete() {
             You received {bullets.toLocaleString()} bullets and {respectPoints.toLocaleString()} Respect Points as a thank you.
           </p>
           <Link
-            to="/dashboard"
+            to="/account/dashboard"
             className={`${styles.btnPrimary} inline-block px-6 py-3 rounded-sm font-heading font-bold uppercase tracking-wider`}
           >
             Go to dashboard

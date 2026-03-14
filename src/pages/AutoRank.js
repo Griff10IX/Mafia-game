@@ -174,7 +174,7 @@ const SetupCard = ({ canEnable, hasTelegram }) => (
             <Lock size={14} className="text-amber-400 shrink-0 mt-0.5 sm:w-4 sm:h-4" />
             <p className="text-[10px] sm:text-xs font-heading text-zinc-300 leading-relaxed">
               Purchase Auto Rank in the{' '}
-              <Link to="/store" className="text-primary underline font-bold hover:text-primary/80">
+              <Link to="/game/store" className="text-primary underline font-bold hover:text-primary/80">
                 Store
               </Link>{' '}
               to enable automation
