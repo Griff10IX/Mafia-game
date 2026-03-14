@@ -31,9 +31,9 @@ def register(router):
         ships_lost = int(body.ships_lost or 0)
         time_seconds = int(body.time_seconds or 0)
 
-        if shots_fired < 17:
+        if shots_fired < 5:
             raise HTTPException(status_code=400, detail="Invalid game data.")
-        if ships_lost < 0 or ships_lost > 5:
+        if ships_lost < 0 or ships_lost > 8:
             raise HTTPException(status_code=400, detail="Invalid ships lost value.")
         if time_seconds < 10:
             raise HTTPException(status_code=400, detail="Game too short.")

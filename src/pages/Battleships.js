@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 // CONSTANTS & SHIP CATALOGUE
 // ─────────────────────────────────────────────────────────────────────────────
 const GRID = 10;
-const CELL = 44;
+// CELL size is now dynamic — computed at runtime via useCellSize()
 const COLS = ["A","B","C","D","E","F","G","H","I","J"];
 
 const SHIP_CATALOGUE = [
@@ -27,6 +27,37 @@ const DEFAULT_SETTINGS = {
   aiDelay: 1100,
   gridSize: 10,
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RESPONSIVE CELL SIZE HOOK
+// ─────────────────────────────────────────────────────────────────────────────
+function useCellSize() {
+  const [cell, setCell] = useState(44);
+  useEffect(() => {
+    const update = () => {
+      // On mobile (<= 600px), fit two grids side by side with labels & padding
+      // On tablet (601–900px), slightly smaller
+      // On desktop, keep 44
+      const w = window.innerWidth;
+      if (w <= 480) {
+        // Single grid = (w - 48px padding - 20px row-label) / 10 cols, but
+        // we show grids stacked so use full width for one grid
+        setCell(Math.floor((w - 48 - 22) / 10));
+      } else if (w <= 700) {
+        setCell(Math.floor((w - 48 - 22) / 10));
+      } else if (w <= 1000) {
+        // Two grids side by side — each gets roughly half
+        setCell(Math.floor((w / 2 - 48) / 10));
+      } else {
+        setCell(44);
+      }
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return Math.max(28, Math.min(44, cell)); // clamp 28–44
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GRID HELPERS
@@ -84,13 +115,11 @@ function addTargets(targets,r,c,grid,size=GRID) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PARTICLE FACTORIES
+// PARTICLE FACTORIES — accept CELL as argument
 // ─────────────────────────────────────────────────────────────────────────────
-function makeHitExplosion(cx,cy) {
+function makeHitExplosion(cx,cy,CELL) {
   const p=[];
-  // Core flash ring
   p.push({kind:"ring",x:cx,y:cy,life:1,decay:0.04,size:2,r:CELL*0.6});
-  // Sparks & embers
   for (let i=0;i<60;i++) {
     const angle=(Math.PI*2*i)/60+(Math.random()-0.5)*0.8;
     const spd=2.5+Math.random()*6;
@@ -100,7 +129,6 @@ function makeHitExplosion(cx,cy) {
       size:kind==="smoke"?8+Math.random()*10:1.5+Math.random()*3,
       hue:kind==="ember"?15+Math.random()*25:kind==="smoke"?0:35+Math.random()*15});
   }
-  // Flying debris chunks
   for (let i=0;i<12;i++) {
     const angle=Math.random()*Math.PI*2;
     const spd=3+Math.random()*8;
@@ -111,7 +139,7 @@ function makeHitExplosion(cx,cy) {
   return p;
 }
 
-function makeMissExplosion(cx,cy) {
+function makeMissExplosion(cx,cy,CELL) {
   const p=[];
   for (let i=0;i<22;i++) {
     const angle=(Math.PI*2*i)/22+(Math.random()-0.5)*0.6;
@@ -123,7 +151,7 @@ function makeMissExplosion(cx,cy) {
   return p;
 }
 
-function makeSunkVolley(cells) {
+function makeSunkVolley(cells,CELL) {
   const p=[];
   cells.forEach(([r,c],idx)=>{
     const cx=c*CELL+CELL/2, cy=r*CELL+CELL/2;
@@ -137,7 +165,6 @@ function makeSunkVolley(cells) {
         hue:kind==="smoke"?0:kind==="ember"?12+Math.random()*20:32+Math.random()*12,
         rot:Math.random()*Math.PI,rotV:(Math.random()-0.5)*0.25});
     }
-    // Upward steel debris
     for (let i=0;i<10;i++) {
       p.push({kind:"steel",x:cx+(Math.random()-0.5)*CELL*0.8,y:cy,
         vx:(Math.random()-0.5)*3,vy:-5-Math.random()*7,
@@ -209,7 +236,7 @@ function ExplosionCanvas({particlesRef,width,height}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // WATER CANVAS
 // ─────────────────────────────────────────────────────────────────────────────
-function WaterCanvas({width,height,size}) {
+function WaterCanvas({width,height,size,CELL}) {
   const ref=useRef(null),t=useRef(0);
   useEffect(()=>{
     const canvas=ref.current;if(!canvas)return;
@@ -233,185 +260,440 @@ function WaterCanvas({width,height,size}) {
     };
     requestAnimationFrame(loop);
     return()=>{running=false;};
-  },[width,height,size]);
+  },[width,height,size,CELL]);
   return <canvas ref={ref} width={width} height={height} style={{position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:1}}/>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SINKING CUTSCENE — full canvas animation
+// SINKING CUTSCENE - Enhanced with proper ship rendering and smooth animations
 // ─────────────────────────────────────────────────────────────────────────────
 function SinkingCutscene({ship,cells,onDone}) {
   const ref=useRef(null);
   const frameRef=useRef(null);
-  const stateRef=useRef({t:0,particles:[],waterLevel:0,tilt:0,alpha:1,phase:"explode"});
+  const stateRef=useRef({
+    t:0,particles:[],bubbles:[],splashes:[],
+    waterLevel:0,tilt:0,tiltVel:0,shipY:0,shipYVel:0,
+    alpha:1,phase:"explode",smokeTrails:[]
+  });
+
+  // Easing functions for smooth animations
+  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+  const easeInOutSine = (t) => -(Math.cos(Math.PI * t) - 1) / 2;
+  const easeOutQuad = (t) => 1 - (1 - t) * (1 - t);
 
   useEffect(()=>{
     const canvas=ref.current;if(!canvas)return;
     const ctx=canvas.getContext("2d");
     const W=canvas.width,H=canvas.height;
 
-    // Seed initial particles
-    const initP=[];
-    cells.forEach(([r,c])=>{
-      const cx=c*80+40,cy=r*80+40;
-      for (let i=0;i<60;i++) {
-        const angle=Math.random()*Math.PI*2,spd=3+Math.random()*9;
-        const kind=i%5===0?"ember":i%4===0?"smoke":i%7===0?"chunk":"spark";
-        initP.push({kind,x:cx,y:cy,vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd-4-Math.random()*6,
-          life:1,decay:0.007+Math.random()*0.011,
-          size:kind==="smoke"?12+Math.random()*18:kind==="chunk"?4+Math.random()*7:2+Math.random()*4,
-          hue:kind==="smoke"?0:kind==="ember"?10+Math.random()*20:30+Math.random()*15,
-          rot:Math.random()*Math.PI,rotV:(Math.random()-0.5)*0.25});
-      }
-    });
-    stateRef.current.particles=initP;
-
-    // Ship bounding box in scene coords (each cell = 80px)
+    // Calculate ship dimensions - center in canvas
     const minC=Math.min(...cells.map(([,c])=>c));
     const maxC=Math.max(...cells.map(([,c])=>c));
     const minR=Math.min(...cells.map(([r])=>r));
     const maxR=Math.max(...cells.map(([r])=>r));
-    const shipCX=(minC+maxC+1)*40, shipCY=(minR+maxR+1)*40;
-    const shipW=(maxC-minC+1)*80, shipH=(maxR-minR+1)*80;
-    const isHoriz=maxC>minC;
+    const isHoriz=maxC>minC||(maxC===minC&&maxR===minR);
+    const shipSize = ship.size;
+    
+    // Ship dimensions scaled to fit nicely in the canvas
+    const shipScale = Math.min(W*0.7, H*0.5) / (shipSize * 40);
+    const shipW = isHoriz ? shipSize * 40 * shipScale : 40 * shipScale;
+    const shipH = isHoriz ? 40 * shipScale : shipSize * 40 * shipScale;
+    const shipCX = W/2;
+    const shipStartY = H * 0.35;
+    const waterBaseY = H * 0.55;
+
+    // Initialize explosion particles centered on ship
+    const initP=[];
+    for (let i=0;i<80;i++) {
+      const ox = (Math.random()-0.5) * shipW * 0.8;
+      const oy = (Math.random()-0.5) * shipH * 0.8;
+      const angle=Math.random()*Math.PI*2;
+      const spd=2+Math.random()*8;
+      const kind=i%6===0?"ember":i%5===0?"smoke":i%8===0?"chunk":"spark";
+      initP.push({
+        kind,x:shipCX+ox,y:shipStartY+oy,
+        vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd-3-Math.random()*5,
+        life:1,decay:0.006+Math.random()*0.01,
+        size:kind==="smoke"?14+Math.random()*20:kind==="chunk"?5+Math.random()*8:2+Math.random()*4,
+        hue:kind==="smoke"?0:kind==="ember"?8+Math.random()*25:28+Math.random()*18,
+        rot:Math.random()*Math.PI,rotV:(Math.random()-0.5)*0.2
+      });
+    }
+    stateRef.current.particles=initP;
+    stateRef.current.shipY = shipStartY;
+
+    // Draw detailed ship based on ship type
+    function drawShip(ctx, cx, cy, w, h, horiz, shipId, alpha, damage) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.globalAlpha = alpha;
+      
+      const gold = `rgb(${180-damage*60},${140-damage*40},${40-damage*20})`;
+      const dark = `rgb(${50-damage*20},${35-damage*15},0)`;
+      const bright = `rgb(${220-damage*70},${180-damage*50},${50-damage*25})`;
+      const fireGlow = damage > 0 ? `rgba(255,${100-damage*50},0,${damage*0.4})` : 'transparent';
+      
+      if (horiz) {
+        // Hull
+        ctx.fillStyle = gold;
+        ctx.beginPath();
+        ctx.moveTo(-w/2+w*0.05, -h*0.35);
+        ctx.lineTo(w/2-w*0.08, -h*0.4);
+        ctx.quadraticCurveTo(w/2+w*0.02, 0, w/2-w*0.08, h*0.4);
+        ctx.lineTo(-w/2+w*0.05, h*0.35);
+        ctx.quadraticCurveTo(-w/2-w*0.02, 0, -w/2+w*0.05, -h*0.35);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = bright;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Deck details
+        ctx.fillStyle = dark;
+        const deckW = w * 0.5;
+        const deckH = h * 0.5;
+        ctx.fillRect(-deckW/2, -deckH/2, deckW, deckH);
+        ctx.strokeStyle = bright;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-deckW/2, -deckH/2, deckW, deckH);
+        
+        // Bridge/superstructure
+        if (shipId === "carrier" || shipId === "battleship" || shipId === "cruiser") {
+          ctx.fillStyle = dark;
+          ctx.fillRect(w*0.1, -h*0.6, w*0.15, h*0.35);
+          ctx.strokeStyle = bright;
+          ctx.strokeRect(w*0.1, -h*0.6, w*0.15, h*0.35);
+          // Mast
+          ctx.beginPath();
+          ctx.moveTo(w*0.175, -h*0.6);
+          ctx.lineTo(w*0.175, -h*0.9);
+          ctx.strokeStyle = bright;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        
+        // Gun turrets for battleships
+        if (shipId === "battleship" || shipId === "cruiser" || shipId === "destroyer") {
+          ctx.fillStyle = dark;
+          ctx.beginPath();
+          ctx.arc(-w*0.25, 0, h*0.2, 0, Math.PI*2);
+          ctx.fill();
+          ctx.strokeStyle = bright;
+          ctx.stroke();
+          // Gun barrel
+          ctx.fillStyle = bright;
+          ctx.fillRect(-w*0.25, -h*0.05, w*0.15, h*0.1);
+        }
+        
+        // Submarine conning tower
+        if (shipId === "submarine") {
+          ctx.fillStyle = dark;
+          ctx.fillRect(-w*0.05, -h*0.7, w*0.1, h*0.4);
+          ctx.strokeStyle = bright;
+          ctx.strokeRect(-w*0.05, -h*0.7, w*0.1, h*0.4);
+          // Periscope
+          ctx.beginPath();
+          ctx.moveTo(0, -h*0.7);
+          ctx.lineTo(0, -h*1.0);
+          ctx.strokeStyle = bright;
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
+        
+        // Fire/damage glow
+        if (damage > 0.1) {
+          ctx.fillStyle = fireGlow;
+          ctx.beginPath();
+          ctx.ellipse(0, -h*0.3, w*0.3*damage, h*0.5*damage, 0, 0, Math.PI*2);
+          ctx.fill();
+        }
+      } else {
+        // Vertical orientation - rotate the ship
+        ctx.rotate(Math.PI/2);
+        // Same hull but swapped dimensions
+        ctx.fillStyle = gold;
+        ctx.beginPath();
+        ctx.moveTo(-h/2+h*0.05, -w*0.35);
+        ctx.lineTo(h/2-h*0.08, -w*0.4);
+        ctx.quadraticCurveTo(h/2+h*0.02, 0, h/2-h*0.08, w*0.4);
+        ctx.lineTo(-h/2+h*0.05, w*0.35);
+        ctx.quadraticCurveTo(-h/2-h*0.02, 0, -h/2+h*0.05, -w*0.35);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = bright;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        ctx.fillStyle = dark;
+        ctx.fillRect(-h*0.25, -w*0.25, h*0.5, w*0.5);
+      }
+      
+      ctx.restore();
+    }
+
+    // Add bubble particle
+    function addBubble(x, y) {
+      stateRef.current.bubbles.push({
+        x, y,
+        vx: (Math.random()-0.5)*0.5,
+        vy: -1-Math.random()*2,
+        size: 2+Math.random()*4,
+        life: 1,
+        decay: 0.015+Math.random()*0.01
+      });
+    }
+
+    // Add splash particle
+    function addSplash(x, y) {
+      const angle = -Math.PI/2 + (Math.random()-0.5)*1.2;
+      const spd = 2+Math.random()*4;
+      stateRef.current.splashes.push({
+        x, y,
+        vx: Math.cos(angle)*spd,
+        vy: Math.sin(angle)*spd,
+        size: 3+Math.random()*5,
+        life: 1,
+        decay: 0.025+Math.random()*0.02
+      });
+    }
+
+    // Add smoke trail
+    function addSmokeTrail(x, y) {
+      stateRef.current.smokeTrails.push({
+        x, y,
+        vx: (Math.random()-0.5)*0.3,
+        vy: -0.5-Math.random()*1,
+        size: 8+Math.random()*12,
+        life: 1,
+        decay: 0.008+Math.random()*0.006
+      });
+    }
 
     const animate=()=>{
       const s=stateRef.current;
       ctx.clearRect(0,0,W,H);
-
-      // Dark ocean bg
-      ctx.fillStyle=`rgba(3,12,28,${s.alpha})`;ctx.fillRect(0,0,W,H);
-
-      // Ocean surface line
-      const waterY=H*0.62+s.waterLevel*H*0.25;
-      const grd=ctx.createLinearGradient(0,waterY-20,0,H);
-      grd.addColorStop(0,"rgba(5,25,65,0.9)");grd.addColorStop(1,"rgba(2,10,30,0.95)");
-      ctx.fillStyle=grd;ctx.fillRect(0,waterY,W,H-waterY);
-
-      // Water shimmer
-      ctx.strokeStyle="rgba(30,100,180,0.25)";ctx.lineWidth=1;
-      for (let i=0;i<5;i++) {
-        const y=waterY+i*8+Math.sin(s.t*2+i)*3;
-        ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
-      }
-
-      // Ship body — tilting and sinking
-      ctx.save();
-      ctx.translate(shipCX,Math.min(shipCY+s.waterLevel*shipH*1.8, waterY+shipH*0.3));
-      ctx.rotate(s.tilt);
-      const gold=`rgba(180,140,40,${0.85-s.waterLevel*0.7})`;
-      const dark=`rgba(50,35,0,${0.9-s.waterLevel*0.5})`;
-      const bright=`rgba(220,180,50,${0.9-s.waterLevel*0.7})`;
-
-      if (isHoriz) {
-        ctx.fillStyle=gold;
+      
+      // Sky gradient
+      const skyGrad = ctx.createLinearGradient(0,0,0,H*0.6);
+      skyGrad.addColorStop(0, "rgb(3,8,20)");
+      skyGrad.addColorStop(1, "rgb(8,20,45)");
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0,0,W,H);
+      
+      // Water level rises during sink phase
+      const waterY = waterBaseY - s.waterLevel * H * 0.15;
+      
+      // Water gradient
+      const waterGrad=ctx.createLinearGradient(0,waterY,0,H);
+      waterGrad.addColorStop(0,"rgba(10,40,80,0.95)");
+      waterGrad.addColorStop(0.3,"rgba(5,25,60,0.97)");
+      waterGrad.addColorStop(1,"rgba(2,12,35,0.99)");
+      ctx.fillStyle=waterGrad;
+      ctx.fillRect(0,waterY,W,H-waterY);
+      
+      // Animated waves
+      ctx.strokeStyle="rgba(40,120,200,0.2)";
+      ctx.lineWidth=1.5;
+      for (let i=0;i<6;i++) {
+        const waveY = waterY + i*12;
         ctx.beginPath();
-        ctx.moveTo(-shipW/2+8,-shipH/2+shipH*0.18);
-        ctx.lineTo(shipW/2-12,-shipH/2+shipH*0.12);
-        ctx.lineTo(shipW/2-2,0);
-        ctx.lineTo(shipW/2-12,shipH/2-shipH*0.12);
-        ctx.lineTo(-shipW/2+8,shipH/2-shipH*0.18);
-        ctx.lineTo(-shipW/2+2,0);
-        ctx.closePath();ctx.fill();
-        ctx.strokeStyle=bright;ctx.lineWidth=1.5;ctx.stroke();
-        // Superstructure
-        ctx.fillStyle=dark;
-        ctx.fillRect(-shipW*0.2,-shipH/2,shipW*0.4,shipH*0.45);
-        ctx.fillRect(-shipW*0.1,-shipH/2-shipH*0.2,shipW*0.18,shipH*0.25);
-        // Funnel smoke (early phase)
-        if (s.phase==="explode") {
-          ctx.fillStyle="rgba(40,30,20,0.6)";
-          ctx.beginPath();ctx.ellipse(0,-shipH/2-shipH*0.3,8,18,0,0,Math.PI*2);ctx.fill();
+        for (let x=0;x<=W;x+=10) {
+          const y = waveY + Math.sin(s.t*1.5 + x*0.02 + i*0.8)*4;
+          if (x===0) ctx.moveTo(x,y);
+          else ctx.lineTo(x,y);
         }
-      } else {
-        ctx.fillStyle=gold;
-        ctx.beginPath();
-        ctx.moveTo(-shipH/2+shipH*0.18,-shipW/2+8);
-        ctx.lineTo(-shipH/2+shipH*0.12,shipW/2-12);
-        ctx.lineTo(0,shipW/2-2);
-        ctx.lineTo(shipH/2-shipH*0.12,shipW/2-12);
-        ctx.lineTo(shipH/2-shipH*0.18,-shipW/2+8);
-        ctx.lineTo(0,-shipW/2+2);
-        ctx.closePath();ctx.fill();
-        ctx.strokeStyle=bright;ctx.lineWidth=1.5;ctx.stroke();
+        ctx.stroke();
       }
-      ctx.restore();
-
-      // Particles
+      
+      // Calculate ship position with smooth physics
+      const sinkProgress = s.phase === "sink" ? easeInOutSine(Math.min(1, (s.t - 1.8) / 4)) : 0;
+      const targetY = shipStartY + sinkProgress * H * 0.5;
+      
+      // Smooth ship movement
+      s.shipYVel += (targetY - s.shipY) * 0.02;
+      s.shipYVel *= 0.92;
+      s.shipY += s.shipYVel;
+      
+      // Smooth tilt with slight oscillation
+      const targetTilt = s.phase === "sink" ? 0.3 + Math.sin(s.t*0.8)*0.05 : Math.sin(s.t*2)*0.02;
+      s.tiltVel += (targetTilt - s.tilt) * 0.03;
+      s.tiltVel *= 0.9;
+      s.tilt += s.tiltVel;
+      
+      // Draw ship
+      const shipAlpha = Math.max(0, 1 - sinkProgress * 0.7);
+      const damage = Math.min(1, s.t * 0.15);
       ctx.save();
-      stateRef.current.particles=stateRef.current.particles.filter(p=>{
+      ctx.translate(shipCX, s.shipY);
+      ctx.rotate(s.tilt);
+      drawShip(ctx, 0, 0, shipW, shipH, isHoriz, ship.id, shipAlpha, damage);
+      ctx.restore();
+      
+      // Generate bubbles during sinking
+      if (s.phase === "sink" && s.shipY > waterY && Math.random() < 0.4) {
+        addBubble(shipCX + (Math.random()-0.5)*shipW*0.6, s.shipY + shipH*0.3);
+      }
+      
+      // Generate splashes when ship hits water
+      if (s.phase === "sink" && s.shipY > waterY - 10 && s.shipY < waterY + 30 && Math.random() < 0.3) {
+        addSplash(shipCX + (Math.random()-0.5)*shipW, waterY);
+      }
+      
+      // Generate smoke trails
+      if (s.phase === "explode" || (s.phase === "sink" && s.t < 3)) {
+        if (Math.random() < 0.3) {
+          addSmokeTrail(shipCX + (Math.random()-0.5)*shipW*0.5, s.shipY - shipH*0.3);
+        }
+      }
+      
+      // Draw and update bubbles (behind water surface)
+      s.bubbles = s.bubbles.filter(b => {
+        if (b.life <= 0 || b.y < waterY - 20) return false;
+        const a = b.life * 0.6;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.size, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(100,180,255,${a*0.3})`;
+        ctx.fill();
+        ctx.strokeStyle = `rgba(150,200,255,${a*0.5})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        b.x += b.vx + Math.sin(s.t*3+b.x*0.1)*0.3;
+        b.y += b.vy;
+        b.life -= b.decay;
+        return true;
+      });
+      
+      // Draw and update explosion particles
+      s.particles = s.particles.filter(p=>{
         if (p.life<=0) return false;
         const a=Math.max(0,p.life);
         if (p.kind==="smoke"){
-          ctx.beginPath();ctx.arc(p.x,p.y,p.size*(1.8-p.life*0.5),0,Math.PI*2);
-          ctx.fillStyle=`rgba(55,40,22,${a*0.3})`;ctx.fill();
+          const r = p.size*(1.8-p.life*0.5);
+          ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);
+          ctx.fillStyle=`rgba(50,35,20,${a*0.35})`;ctx.fill();
         } else if (p.kind==="chunk"){
           ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot||0);
-          ctx.fillStyle=`hsla(${p.hue},60%,38%,${a*0.9})`;
-          const s2=p.size*a;ctx.fillRect(-s2/2,-s2/2,s2,s2);ctx.restore();
+          ctx.fillStyle=`hsla(${p.hue},55%,35%,${a*0.9})`;
+          const sz=p.size*a;ctx.fillRect(-sz/2,-sz/2,sz,sz);
+          ctx.restore();
         } else if (p.kind==="ember"){
           ctx.beginPath();ctx.arc(p.x,p.y,Math.max(0.1,p.size*a),0,Math.PI*2);
-          ctx.fillStyle=`hsla(${p.hue},100%,${55+p.life*15}%,${a})`;ctx.fill();
+          ctx.fillStyle=`hsla(${p.hue},100%,${50+p.life*20}%,${a})`;ctx.fill();
+          // Glow
+          ctx.beginPath();ctx.arc(p.x,p.y,p.size*a*2,0,Math.PI*2);
+          ctx.fillStyle=`hsla(${p.hue},100%,50%,${a*0.2})`;ctx.fill();
         } else {
           ctx.beginPath();ctx.arc(p.x,p.y,Math.max(0.1,p.size*a),0,Math.PI*2);
-          ctx.fillStyle=`hsla(${p.hue},88%,65%,${a*0.85})`;ctx.fill();
+          ctx.fillStyle=`hsla(${p.hue},85%,60%,${a*0.85})`;ctx.fill();
         }
-        p.x+=p.vx||0;p.y+=(p.vy||0)+0.1;p.vx=(p.vx||0)*0.962;p.vy=(p.vy||0)*0.962;
-        if (p.rot!==undefined)p.rot+=p.rotV||0;p.life-=p.decay;return true;
+        p.x+=p.vx||0;p.y+=(p.vy||0)+0.12;
+        p.vx=(p.vx||0)*0.97;p.vy=(p.vy||0)*0.97;
+        if (p.rot!==undefined)p.rot+=p.rotV||0;
+        p.life-=p.decay;
+        return true;
       });
+      
+      // Draw smoke trails
+      s.smokeTrails = s.smokeTrails.filter(sm => {
+        if (sm.life <= 0) return false;
+        const a = sm.life;
+        const r = sm.size * (2 - sm.life * 0.7);
+        ctx.beginPath();ctx.arc(sm.x, sm.y, r, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(40,30,25,${a*0.25})`;ctx.fill();
+        sm.x += sm.vx;
+        sm.y += sm.vy;
+        sm.life -= sm.decay;
+        return true;
+      });
+      
+      // Draw splashes (on top of water)
+      s.splashes = s.splashes.filter(sp => {
+        if (sp.life <= 0) return false;
+        const a = sp.life;
+        ctx.beginPath();
+        ctx.moveTo(sp.x, sp.y);
+        ctx.lineTo(sp.x - sp.vx*3, sp.y - sp.vy*3);
+        ctx.strokeStyle = `rgba(150,200,255,${a*0.7})`;
+        ctx.lineWidth = sp.size * 0.5;
+        ctx.stroke();
+        ctx.beginPath();ctx.arc(sp.x, sp.y, sp.size*0.4, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(180,220,255,${a*0.5})`;ctx.fill();
+        sp.x += sp.vx;
+        sp.y += sp.vy + 0.15;
+        sp.vy *= 0.96;
+        sp.life -= sp.decay;
+        return true;
+      });
+      
+      // Ship name with glow
+      ctx.save();
+      ctx.font = `bold ${Math.round(W*0.04)}px 'Cinzel', serif`;
+      ctx.textAlign = "center";
+      const textAlpha = Math.max(0, 0.9 - sinkProgress * 0.6);
+      ctx.shadowColor = "rgba(212,175,55,0.5)";
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = `rgba(212,175,55,${textAlpha})`;
+      ctx.fillText(ship.name.toUpperCase(), W/2, H*0.88);
       ctx.restore();
-
-      // Ship name
-      ctx.font=`bold 16px 'Cinzel', serif`;ctx.textAlign="center";
-      ctx.fillStyle=`rgba(212,175,55,${0.8-s.waterLevel*0.6})`;
-      ctx.fillText(ship.name.toUpperCase(),W/2,H*0.88);
-
-      // Progress text
-      if (s.waterLevel>0.5) {
-        ctx.font=`italic 13px 'Crimson Text',serif`;
-        ctx.fillStyle=`rgba(180,80,40,${(s.waterLevel-0.5)*2})`;
-        ctx.fillText("Going down...",W/2,H*0.93);
+      
+      // "Going down..." text with fade in
+      if (sinkProgress > 0.3) {
+        const msgAlpha = easeOutQuad(Math.min(1, (sinkProgress - 0.3) * 2));
+        ctx.font = `italic ${Math.round(W*0.03)}px 'Crimson Text', serif`;
+        ctx.textAlign = "center";
+        ctx.fillStyle = `rgba(180,80,40,${msgAlpha})`;
+        ctx.fillText("Going down...", W/2, H*0.93);
       }
-
-      // Fade out
-      if (s.phase==="fadeout") {
-        ctx.fillStyle=`rgba(3,10,22,${Math.min(1,s.fadeAlpha||0)})`;
+      
+      // Fadeout overlay
+      if (s.phase === "fadeout") {
+        ctx.fillStyle = `rgba(3,10,22,${easeOutCubic(Math.min(1, s.fadeAlpha||0))})`;
         ctx.fillRect(0,0,W,H);
       }
-
-      // Advance state
-      s.t+=0.04;
-      if (s.phase==="explode") {
-        if (s.t>1.5) s.phase="sink";
-      } else if (s.phase==="sink") {
-        s.waterLevel=Math.min(1,(s.t-1.5)/3.5);
-        s.tilt+=(0.35-s.tilt)*0.04;
-        if (s.waterLevel>=1) { s.phase="fadeout"; s.fadeAlpha=0; }
-      } else if (s.phase==="fadeout") {
-        s.fadeAlpha=Math.min(1,(s.fadeAlpha||0)+0.03);
-        if (s.fadeAlpha>=1) { cancelAnimationFrame(frameRef.current); onDone(); return; }
+      
+      // Phase transitions
+      s.t += 0.025;
+      if (s.phase === "explode") {
+        if (s.t > 1.8) s.phase = "sink";
+      } else if (s.phase === "sink") {
+        if (sinkProgress >= 0.95) { s.phase = "fadeout"; s.fadeAlpha = 0; }
+      } else if (s.phase === "fadeout") {
+        s.fadeAlpha = (s.fadeAlpha||0) + 0.025;
+        if (s.fadeAlpha >= 1) { cancelAnimationFrame(frameRef.current); onDone(); return; }
       }
-
-      frameRef.current=requestAnimationFrame(animate);
+      
+      frameRef.current = requestAnimationFrame(animate);
     };
-    frameRef.current=requestAnimationFrame(animate);
-    return()=>cancelAnimationFrame(frameRef.current);
-  },[]);
+    
+    frameRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frameRef.current);
+  },[ship, cells, onDone]);
+
+  // Responsive canvas size
+  const cw = Math.min(520, window.innerWidth - 32);
+  const ch = Math.round(cw * 0.68);
 
   return (
     <div style={{position:"fixed",inset:0,zIndex:1000,display:"flex",flexDirection:"column",
-      alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.85)"}}>
+      alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.92)",
+      padding:"0 16px",backdropFilter:"blur(4px)"}}>
       <div style={{position:"relative",marginBottom:16}}>
-        <div style={{fontSize:11,color:"rgba(212,175,55,0.5)",letterSpacing:"0.3em",
-          textTransform:"uppercase",textAlign:"center",marginBottom:8,fontFamily:"'Cinzel',serif"}}>
-          — Sinking —
+        <div style={{fontSize:12,color:"rgba(212,175,55,0.6)",letterSpacing:"0.35em",
+          textTransform:"uppercase",textAlign:"center",marginBottom:10,fontFamily:"'Cinzel',serif",
+          textShadow:"0 0 20px rgba(212,175,55,0.3)"}}>
+          — Ship Sinking —
         </div>
-        <canvas ref={ref} width={500} height={320}
-          style={{border:"1px solid rgba(212,175,55,0.25)",display:"block"}}/>
+        <canvas ref={ref} width={cw} height={ch}
+          style={{border:"1px solid rgba(212,175,55,0.3)",borderRadius:4,
+            display:"block",width:cw,height:ch,
+            boxShadow:"0 0 40px rgba(0,0,0,0.5), inset 0 0 60px rgba(0,0,0,0.3)"}}/>
       </div>
-      <button onClick={onDone} style={{background:"transparent",border:"1px solid rgba(212,175,55,0.3)",
-        color:"rgba(212,175,55,0.5)",fontFamily:"'Cinzel',serif",fontSize:10,
-        letterSpacing:"0.12em",padding:"5px 14px",cursor:"pointer",textTransform:"uppercase"}}>
+      <button onClick={onDone} style={{background:"rgba(212,175,55,0.08)",
+        border:"1px solid rgba(212,175,55,0.35)",borderRadius:4,
+        color:"rgba(212,175,55,0.7)",fontFamily:"'Cinzel',serif",fontSize:11,
+        letterSpacing:"0.15em",padding:"10px 28px",cursor:"pointer",textTransform:"uppercase",
+        WebkitTapHighlightColor:"transparent",transition:"all 0.2s",
+        boxShadow:"0 2px 10px rgba(0,0,0,0.3)"}}>
         Skip
       </button>
     </div>
@@ -419,130 +701,371 @@ function SinkingCutscene({ship,cells,onDone}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SHIP SVGS — each one unique
+// SHIP SVGS - Enhanced with realistic details, gradients, and effects
 // ─────────────────────────────────────────────────────────────────────────────
 function ShipSVG({id,w,h,sunk}) {
-  const g=sunk?"rgba(70,30,5,0.8)":"rgba(212,175,55,0.88)";
-  const d=sunk?"rgba(30,8,0,0.95)":"rgba(65,45,0,0.95)";
-  const b=sunk?"rgba(110,50,10,0.7)":"rgba(255,215,65,1)";
-  const flt=sunk?"brightness(0.38) saturate(0.12) drop-shadow(0 3px 8px rgba(255,50,0,0.55))":"drop-shadow(0 0 5px rgba(212,175,55,0.5))";
+  const gradId = `hull-grad-${id}-${Math.random().toString(36).substr(2,9)}`;
+  const deckGradId = `deck-grad-${id}-${Math.random().toString(36).substr(2,9)}`;
+  const fireGradId = `fire-grad-${id}-${Math.random().toString(36).substr(2,9)}`;
+  
+  const gold = sunk ? "rgb(70,30,5)" : "rgb(200,165,45)";
+  const goldLight = sunk ? "rgb(90,45,10)" : "rgb(235,200,80)";
+  const goldDark = sunk ? "rgb(45,18,0)" : "rgb(145,110,20)";
+  const dark = sunk ? "rgb(30,8,0)" : "rgb(55,40,0)";
+  const darkLight = sunk ? "rgb(50,20,5)" : "rgb(80,60,10)";
+  const bright = sunk ? "rgb(110,50,10)" : "rgb(255,215,65)";
+  const flt = sunk 
+    ? "brightness(0.42) saturate(0.15) drop-shadow(0 4px 12px rgba(255,60,0,0.6))"
+    : "drop-shadow(0 2px 6px rgba(0,0,0,0.4)) drop-shadow(0 0 8px rgba(212,175,55,0.35))";
+
+  const waveColor = sunk ? "rgba(60,30,10,0.4)" : "rgba(100,180,220,0.35)";
+  const portHoleColor = sunk ? "rgba(80,30,5,0.8)" : "rgba(30,60,90,0.7)";
+
+  // Common defs for gradients
+  const commonDefs = (
+    <defs>
+      <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stopColor={goldLight}/>
+        <stop offset="50%" stopColor={gold}/>
+        <stop offset="100%" stopColor={goldDark}/>
+      </linearGradient>
+      <linearGradient id={deckGradId} x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stopColor={darkLight}/>
+        <stop offset="100%" stopColor={dark}/>
+      </linearGradient>
+      {sunk && (
+        <radialGradient id={fireGradId} cx="50%" cy="30%" r="60%">
+          <stop offset="0%" stopColor="rgba(255,200,50,0.8)"/>
+          <stop offset="40%" stopColor="rgba(255,100,20,0.6)"/>
+          <stop offset="100%" stopColor="rgba(180,40,0,0)"/>
+        </radialGradient>
+      )}
+    </defs>
+  );
+
+  // Wave ripples component
+  const WaveRipples = ({cx, w: rw}) => (
+    <g opacity="0.5">
+      <ellipse cx={cx} cy={h*0.75} rx={rw*0.5} ry={h*0.08} fill="none" stroke={waveColor} strokeWidth="0.8"/>
+      <ellipse cx={cx} cy={h*0.8} rx={rw*0.6} ry={h*0.06} fill="none" stroke={waveColor} strokeWidth="0.6"/>
+      <ellipse cx={cx} cy={h*0.84} rx={rw*0.7} ry={h*0.04} fill="none" stroke={waveColor} strokeWidth="0.4"/>
+    </g>
+  );
+
+  // Fire effect for sunk ships
+  const FireEffect = () => sunk ? (
+    <g>
+      <ellipse cx={w*0.35} cy={h*0.15} rx={w*0.15} ry={h*0.25} fill={`url(#${fireGradId})`}/>
+      <ellipse cx={w*0.55} cy={h*0.2} rx={w*0.12} ry={h*0.2} fill={`url(#${fireGradId})`}/>
+      <ellipse cx={w*0.45} cy={h*0.1} rx={w*0.08} ry={h*0.15} fill="rgba(255,220,100,0.5)"/>
+    </g>
+  ) : null;
 
   if (id==="carrier") return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{display:"block",filter:flt}}>
-      <path d={`M8,${h*.55} L${w-9},${h*.48} L${w-2},${h*.7} L${w-9},${h*.88} L8,${h*.9} L2,${h*.72} Z`} fill={g} stroke={b} strokeWidth="1"/>
-      <rect x={w*.04} y={h*.26} width={w*.9} height={h*.3} rx="1" fill={d} stroke={b} strokeWidth="0.7"/>
-      <rect x={w*.7} y={h*.04} width={w*.14} height={h*.26} rx="1.5" fill={d} stroke={b} strokeWidth="0.8"/>
-      <line x1={w*.06} y1={h*.4} x2={w*.68} y2={h*.38} stroke={b} strokeWidth="0.6" strokeDasharray="5,3.5" opacity="0.6"/>
-      {[.12,.25,.38,.51,.64].map((x,i)=><rect key={i} x={w*x} y={h*.32} width={7} height={4} rx="1" fill={b} opacity="0.4"/>)}
-      <rect x={w*.73} y={h*.07} width={5} height={h*.11} rx="1" fill={d} stroke={b} strokeWidth="0.5"/>
-      <rect x={w*.8} y={h*.09} width={4} height={h*.09} rx="1" fill={d} stroke={b} strokeWidth="0.5"/>
-      <line x1={w*.77} y1={h*.04} x2={w*.77} y2={0} stroke={b} strokeWidth="1"/>
-      <line x1={w*.7} y1={h*.02} x2={w*.84} y2={h*.02} stroke={b} strokeWidth="0.7"/>
+      {commonDefs}
+      <WaveRipples cx={w*0.5} w={w*0.9}/>
+      {/* Hull with gradient */}
+      <path d={`M8,${h*.52} Q4,${h*.65} 8,${h*.88} L${w-9},${h*.85} Q${w-2},${h*.68} ${w-9},${h*.5} Z`} 
+        fill={`url(#${gradId})`} stroke={bright} strokeWidth="1.2"/>
+      {/* Hull waterline detail */}
+      <path d={`M10,${h*.7} L${w-10},${h*.68}`} stroke={goldDark} strokeWidth="1" opacity="0.6"/>
+      {/* Flight deck */}
+      <rect x={w*.03} y={h*.24} width={w*.92} height={h*.32} rx="1" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.8"/>
+      {/* Deck markings - runway lines */}
+      <line x1={w*.05} y1={h*.4} x2={w*.7} y2={h*.38} stroke={bright} strokeWidth="0.8" strokeDasharray="8,4" opacity="0.5"/>
+      <line x1={w*.08} y1={h*.32} x2={w*.65} y2={h*.3} stroke={bright} strokeWidth="0.5" opacity="0.3"/>
+      {/* Aircraft spots */}
+      {[.1,.22,.35,.48,.61].map((x,i)=>(
+        <g key={i}>
+          <rect x={w*x} y={h*.3} width={9} height={5} rx="1" fill={bright} opacity="0.35"/>
+          <rect x={w*x+2} y={h*.31} width={5} height={3} rx="0.5" fill={dark} opacity="0.5"/>
+        </g>
+      ))}
+      {/* Island/superstructure */}
+      <rect x={w*.68} y={h*.02} width={w*.16} height={h*.28} rx="2" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.9"/>
+      <rect x={w*.71} y={h*.05} width={6} height={h*.12} rx="1" fill={dark} stroke={bright} strokeWidth="0.5"/>
+      <rect x={w*.78} y={h*.07} width={5} height={h*.1} rx="1" fill={dark} stroke={bright} strokeWidth="0.5"/>
+      {/* Radar/antenna array */}
+      <line x1={w*.755} y1={h*.02} x2={w*.755} y2={-2} stroke={bright} strokeWidth="1.2"/>
+      <line x1={w*.68} y1={0} x2={w*.83} y2={0} stroke={bright} strokeWidth="0.8"/>
+      <circle cx={w*.755} cy={-4} r="2" fill={bright} opacity="0.7"/>
+      {/* Bridge windows */}
+      {[.06,.11,.16].map((y,i)=>(
+        <rect key={i} x={w*.72} y={h*y} width={3} height={2} rx="0.5" fill={portHoleColor}/>
+      ))}
+      {/* Portholes along hull */}
+      {[.15,.28,.42,.55,.68].map((x,i)=>(
+        <circle key={i} cx={w*x} cy={h*.62} r="2" fill={portHoleColor} stroke={bright} strokeWidth="0.4"/>
+      ))}
+      <FireEffect/>
     </svg>
   );
+
   if (id==="battleship") return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{display:"block",filter:flt}}>
-      <path d={`M9,${h*.28} L${w-10},${h*.2} L${w-3},${h*.5} L${w-10},${h*.8} L9,${h*.72} L2,${h*.5} Z`} fill={g} stroke={b} strokeWidth="1.2"/>
-      <rect x={w*.28} y={h*.13} width={w*.37} height={h*.4} rx="2" fill={d} stroke={b} strokeWidth="0.9"/>
-      <rect x={w*.37} y={h*.03} width={w*.17} height={h*.18} rx="1.5" fill={d} stroke={b} strokeWidth="0.8"/>
-      <rect x={w*.09} y={h*.4} width={w*.14} height={h*.18} rx="2" fill={d} stroke={b} strokeWidth="0.8"/>
-      <rect x={w*.06} y={h*.44} width={w*.13} height={4} rx="2" fill={b} opacity="0.8"/>
-      <rect x={w*.06} y={h*.51} width={w*.13} height={4} rx="2" fill={b} opacity="0.8"/>
-      <rect x={w*.77} y={h*.4} width={w*.13} height={h*.18} rx="2" fill={d} stroke={b} strokeWidth="0.8"/>
-      <rect x={w*.77} y={h*.44} width={w*.13} height={4} rx="2" fill={b} opacity="0.8"/>
-      <rect x={w*.77} y={h*.51} width={w*.13} height={4} rx="2" fill={b} opacity="0.8"/>
-      <rect x={w*.46} y={h*.06} width={7} height={h*.22} rx="1.5" fill={d} stroke={b} strokeWidth="0.7"/>
-      <rect x={w*.56} y={h*.08} width={6} height={h*.18} rx="1.5" fill={d} stroke={b} strokeWidth="0.6"/>
-      <line x1={w*.41} y1={h*.03} x2={w*.41} y2={0} stroke={b} strokeWidth="1"/>
-      <line x1={w*.34} y1={h*.018} x2={w*.48} y2={h*.018} stroke={b} strokeWidth="0.7"/>
-      {[.3,.42,.54,.65].map((x,i)=><circle key={i} cx={w*x} cy={h*.62} r="2.5" fill={b} opacity="0.5"/>)}
+      {commonDefs}
+      <WaveRipples cx={w*0.5} w={w*0.85}/>
+      {/* Hull */}
+      <path d={`M9,${h*.25} Q3,${h*.5} 9,${h*.75} L${w-10},${h*.78} Q${w-2},${h*.5} ${w-10},${h*.22} Z`} 
+        fill={`url(#${gradId})`} stroke={bright} strokeWidth="1.4"/>
+      <path d={`M12,${h*.52} L${w-12},${h*.5}`} stroke={goldDark} strokeWidth="1.2" opacity="0.5"/>
+      {/* Main superstructure */}
+      <rect x={w*.26} y={h*.1} width={w*.4} height={h*.45} rx="2.5" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="1"/>
+      {/* Bridge tower */}
+      <rect x={w*.35} y={h*.01} width={w*.2} height={h*.2} rx="2" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.9"/>
+      <rect x={w*.39} y={h*.04} width={w*.12} height={h*.08} rx="1" fill={dark}/>
+      {/* Bridge windows */}
+      {[.38,.43,.48,.52].map((x,i)=>(
+        <rect key={i} x={w*x} y={h*.05} width={3} height={2} rx="0.5" fill={portHoleColor}/>
+      ))}
+      {/* Forward turret */}
+      <ellipse cx={w*.12} cy={h*.48} rx={w*.08} ry={h*.12} fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="1"/>
+      <rect x={w*.04} y={h*.44} width={w*.16} height={h*.08} rx="2" fill={bright} opacity="0.85"/>
+      <rect x={w*.02} y={h*.46} width={w*.08} height={h*.04} rx="1" fill={goldDark}/>
+      {/* Aft turret */}
+      <ellipse cx={w*.82} cy={h*.48} rx={w*.08} ry={h*.12} fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="1"/>
+      <rect x={w*.74} y={h*.44} width={w*.16} height={h*.08} rx="2" fill={bright} opacity="0.85"/>
+      <rect x={w*.84} y={h*.46} width={w*.08} height={h*.04} rx="1" fill={goldDark}/>
+      {/* Secondary turrets */}
+      <rect x={w*.44} y={h*.04} width={8} height={h*.25} rx="2" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.8"/>
+      <rect x={w*.55} y={h*.06} width={7} height={h*.2} rx="1.5" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.7"/>
+      {/* Mast */}
+      <line x1={w*.39} y1={h*.01} x2={w*.39} y2={-4} stroke={bright} strokeWidth="1.5"/>
+      <line x1={w*.32} y1={-2} x2={w*.46} y2={-2} stroke={bright} strokeWidth="0.8"/>
+      {/* Portholes */}
+      {[.18,.3,.42,.54,.66,.78].map((x,i)=>(
+        <circle key={i} cx={w*x} cy={h*.66} r="2.5" fill={portHoleColor} stroke={bright} strokeWidth="0.4"/>
+      ))}
+      {/* Deck details */}
+      {[.28,.38,.48,.58].map((x,i)=>(
+        <rect key={i} x={w*x} y={h*.56} width={4} height={2} rx="0.5" fill={bright} opacity="0.4"/>
+      ))}
+      <FireEffect/>
     </svg>
   );
+
   if (id==="cruiser") return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{display:"block",filter:flt}}>
-      <path d={`M7,${h*.27} L${w-9},${h*.19} L${w-2},${h*.5} L${w-9},${h*.81} L7,${h*.73} L2,${h*.5} Z`} fill={g} stroke={b} strokeWidth="1.1"/>
-      <rect x={w*.23} y={h*.15} width={w*.36} height={h*.38} rx="2" fill={d} stroke={b} strokeWidth="0.9"/>
-      <rect x={w*.29} y={h*.04} width={w*.19} height={h*.18} rx="1.5" fill={d} stroke={b} strokeWidth="0.8"/>
-      <rect x={w*.48} y={h*.08} width={9} height={h*.27} rx="2.5" fill={d} stroke={b} strokeWidth="0.8"/>
-      <rect x={w*.07} y={h*.43} width={w*.13} height={5} rx="2.5" fill={b} opacity="0.82"/>
-      <rect x={w*.08} y={h*.38} width={w*.11} height={h*.22} rx="1.5" fill={d} stroke={b} strokeWidth="0.7"/>
-      <rect x={w*.73} y={h*.43} width={w*.1} height={4} rx="2" fill={b} opacity="0.7"/>
-      <line x1={w*.33} y1={h*.04} x2={w*.33} y2={0} stroke={b} strokeWidth="1"/>
-      <line x1={w*.26} y1={h*.02} x2={w*.4} y2={h*.02} stroke={b} strokeWidth="0.7"/>
-      {[.27,.39,.51].map((x,i)=><circle key={i} cx={w*x} cy={h*.63} r="2.5" fill={b} opacity="0.5"/>)}
+      {commonDefs}
+      <WaveRipples cx={w*0.5} w={w*0.8}/>
+      {/* Hull */}
+      <path d={`M7,${h*.24} Q2,${h*.5} 7,${h*.76} L${w-9},${h*.8} Q${w-2},${h*.5} ${w-9},${h*.2} Z`} 
+        fill={`url(#${gradId})`} stroke={bright} strokeWidth="1.2"/>
+      <path d={`M10,${h*.52} L${w-10},${h*.5}`} stroke={goldDark} strokeWidth="1" opacity="0.5"/>
+      {/* Superstructure */}
+      <rect x={w*.21} y={h*.12} width={w*.4} height={h*.42} rx="2" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="1"/>
+      {/* Bridge */}
+      <rect x={w*.27} y={h*.02} width={w*.22} height={h*.2} rx="1.5" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.9"/>
+      {/* Bridge windows */}
+      {[.29,.35,.41,.46].map((x,i)=>(
+        <rect key={i} x={w*x} y={h*.05} width={2.5} height={2} rx="0.5" fill={portHoleColor}/>
+      ))}
+      {/* Funnel/stack */}
+      <rect x={w*.46} y={h*.06} width={10} height={h*.3} rx="3" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.9"/>
+      <ellipse cx={w*.49} cy={h*.06} rx={5} ry={2} fill={dark} stroke={bright} strokeWidth="0.5"/>
+      {/* Forward gun */}
+      <ellipse cx={w*.1} cy={h*.46} rx={w*.07} ry={h*.1} fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.9"/>
+      <rect x={w*.05} y={h*.43} width={w*.12} height={5} rx="2.5" fill={bright} opacity="0.85"/>
+      {/* Aft guns */}
+      <rect x={w*.72} y={h*.42} width={w*.12} height={4} rx="2" fill={bright} opacity="0.75"/>
+      {/* Mast */}
+      <line x1={w*.31} y1={h*.02} x2={w*.31} y2={-3} stroke={bright} strokeWidth="1.2"/>
+      <line x1={w*.24} y1={-1} x2={w*.38} y2={-1} stroke={bright} strokeWidth="0.8"/>
+      {/* Portholes */}
+      {[.15,.28,.42,.55,.68,.8].map((x,i)=>(
+        <circle key={i} cx={w*x} cy={h*.64} r="2" fill={portHoleColor} stroke={bright} strokeWidth="0.4"/>
+      ))}
+      {/* Railings */}
+      <line x1={w*.08} y1={h*.22} x2={w*.18} y2={h*.22} stroke={bright} strokeWidth="0.4" opacity="0.5"/>
+      <line x1={w*.75} y1={h*.24} x2={w*.9} y2={h*.24} stroke={bright} strokeWidth="0.4" opacity="0.5"/>
+      <FireEffect/>
     </svg>
   );
+
   if (id==="destroyer") return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{display:"block",filter:flt}}>
-      <path d={`M6,${h*.28} L${w-7},${h*.17} L${w-1},${h*.5} L${w-7},${h*.83} L6,${h*.72} L1,${h*.5} Z`} fill={g} stroke={b} strokeWidth="1.1"/>
-      <rect x={w*.28} y={h*.2} width={w*.32} height={h*.36} rx="1.5" fill={d} stroke={b} strokeWidth="0.8"/>
-      <rect x={w*.46} y={h*.1} width={5} height={h*.24} rx="1.5" fill={d} stroke={b} strokeWidth="0.7"/>
-      <rect x={w*.07} y={h*.42} width={w*.2} height={5} rx="2.5" fill={b} opacity="0.85"/>
-      <rect x={w*.08} y={h*.37} width={w*.13} height={h*.22} rx="1.5" fill={d} stroke={b} strokeWidth="0.7"/>
-      <line x1={w*.35} y1={h*.2} x2={w*.35} y2={0} stroke={b} strokeWidth="1"/>
-      <line x1={w*.28} y1={h*.04} x2={w*.42} y2={h*.04} stroke={b} strokeWidth="0.7"/>
-      {[.32,.44].map((x,i)=><circle key={i} cx={w*x} cy={h*.65} r="2" fill={b} opacity="0.5"/>)}
+      {commonDefs}
+      <WaveRipples cx={w*0.5} w={w*0.75}/>
+      {/* Hull - sleek destroyer shape */}
+      <path d={`M6,${h*.25} Q1,${h*.5} 6,${h*.75} L${w-7},${h*.82} Q${w-1},${h*.5} ${w-7},${h*.18} Z`} 
+        fill={`url(#${gradId})`} stroke={bright} strokeWidth="1.2"/>
+      <path d={`M9,${h*.52} L${w-9},${h*.5}`} stroke={goldDark} strokeWidth="0.9" opacity="0.5"/>
+      {/* Superstructure */}
+      <rect x={w*.26} y={h*.16} width={w*.36} height={h*.4} rx="2" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.9"/>
+      {/* Bridge */}
+      <rect x={w*.32} y={h*.04} width={w*.18} height={h*.18} rx="1.5" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.8"/>
+      {/* Bridge windows */}
+      {[.34,.4,.46].map((x,i)=>(
+        <rect key={i} x={w*x} y={h*.07} width={2} height={1.5} rx="0.4" fill={portHoleColor}/>
+      ))}
+      {/* Funnel */}
+      <rect x={w*.44} y={h*.08} width={6} height={h*.26} rx="1.5" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.7"/>
+      {/* Forward gun mount */}
+      <ellipse cx={w*.12} cy={h*.44} rx={w*.08} ry={h*.1} fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.8"/>
+      <rect x={w*.05} y={h*.41} width={w*.22} height={5} rx="2.5" fill={bright} opacity="0.88"/>
+      {/* Aft torpedo tubes */}
+      <rect x={w*.65} y={h*.38} width={w*.18} height={h*.2} rx="1" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.7"/>
+      {[.67,.73,.79].map((x,i)=>(
+        <rect key={i} x={w*x} y={h*.42} width={3} height={h*.12} rx="1" fill={dark} stroke={bright} strokeWidth="0.4"/>
+      ))}
+      {/* Mast */}
+      <line x1={w*.35} y1={h*.04} x2={w*.35} y2={-2} stroke={bright} strokeWidth="1.1"/>
+      <line x1={w*.28} y1={h*.02} x2={w*.42} y2={h*.02} stroke={bright} strokeWidth="0.7"/>
+      {/* Portholes */}
+      {[.18,.35,.52,.7].map((x,i)=>(
+        <circle key={i} cx={w*x} cy={h*.62} r="1.8" fill={portHoleColor} stroke={bright} strokeWidth="0.3"/>
+      ))}
+      <FireEffect/>
     </svg>
   );
+
   if (id==="submarine") return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{display:"block",filter:flt}}>
-      <path d={`M${w*.08},${h*.4} Q${w*.03},${h*.5} ${w*.08},${h*.6} L${w*.92},${h*.6} Q${w*.97},${h*.5} ${w*.92},${h*.4} Z`} fill={g} stroke={b} strokeWidth="1.2"/>
-      <rect x={w*.36} y={h*.1} width={w*.2} height={h*.32} rx="2.5" fill={d} stroke={b} strokeWidth="0.9"/>
-      <line x1={w*.47} y1={h*.1} x2={w*.47} y2={0} stroke={b} strokeWidth="2"/>
-      <circle cx={w*.47} cy={3} r="3.5" fill={b} opacity="0.9"/>
-      <line x1={w*.4} y1={3} x2={w*.54} y2={3} stroke={b} strokeWidth="1"/>
-      <line x1={w*.1} y1={h*.4} x2={w*.9} y2={h*.4} stroke={b} strokeWidth="0.7" opacity="0.38"/>
-      <circle cx={w*.06} cy={h*.46} r="3" fill={d} stroke={b} strokeWidth="0.8"/>
-      <circle cx={w*.06} cy={h*.54} r="3" fill={d} stroke={b} strokeWidth="0.8"/>
-      <path d={`M${w*.17},${h*.4} L${w*.11},${h*.29} L${w*.23},${h*.4}`} fill={g} stroke={b} strokeWidth="0.7"/>
-      <path d={`M${w*.79},${h*.6} L${w*.73},${h*.71} L${w*.85},${h*.6}`} fill={g} stroke={b} strokeWidth="0.7"/>
-      <path d={`M${w*.86},${h*.4} L${w*.92},${h*.3} L${w*.94},${h*.4}`} fill={g} stroke={b} strokeWidth="0.6"/>
+      {commonDefs}
+      {/* Underwater effect - subtle waves */}
+      <ellipse cx={w*0.5} cy={h*0.7} rx={w*0.45} ry={h*0.06} fill="none" stroke={waveColor} strokeWidth="0.6" opacity="0.4"/>
+      {/* Main hull - smooth submarine shape */}
+      <ellipse cx={w*0.5} cy={h*0.5} rx={w*0.44} ry={h*0.22} fill={`url(#${gradId})`} stroke={bright} strokeWidth="1.3"/>
+      {/* Hull details - horizontal lines */}
+      <path d={`M${w*.08},${h*.5} L${w*.92},${h*.5}`} stroke={goldDark} strokeWidth="0.8" opacity="0.4"/>
+      <path d={`M${w*.12},${h*.38} L${w*.88},${h*.38}`} stroke={bright} strokeWidth="0.5" opacity="0.3"/>
+      <path d={`M${w*.12},${h*.62} L${w*.88},${h*.62}`} stroke={bright} strokeWidth="0.5" opacity="0.3"/>
+      {/* Conning tower */}
+      <rect x={w*.34} y={h*.08} width={w*.24} height={h*.35} rx="3" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="1"/>
+      <rect x={w*.38} y={h*.12} width={w*.16} height={h*.18} rx="2" fill={dark}/>
+      {/* Periscope */}
+      <line x1={w*.46} y1={h*.08} x2={w*.46} y2={-3} stroke={bright} strokeWidth="2.5"/>
+      <ellipse cx={w*.46} cy={-5} rx="4" ry="3" fill={bright} opacity="0.9"/>
+      <line x1={w*.38} y1={-3} x2={w*.54} y2={-3} stroke={bright} strokeWidth="1"/>
+      {/* Conning tower windows */}
+      {[.14,.2,.26].map((y,i)=>(
+        <rect key={i} x={w*.44} y={h*y} width={4} height={2} rx="0.5" fill={portHoleColor}/>
+      ))}
+      {/* Bow torpedo tubes */}
+      <circle cx={w*.06} cy={h*.46} r="3.5" fill={dark} stroke={bright} strokeWidth="0.9"/>
+      <circle cx={w*.06} cy={h*.54} r="3.5" fill={dark} stroke={bright} strokeWidth="0.9"/>
+      <circle cx={w*.06} cy={h*.46} r="1.5" fill={goldDark}/>
+      <circle cx={w*.06} cy={h*.54} r="1.5" fill={goldDark}/>
+      {/* Diving planes */}
+      <path d={`M${w*.15},${h*.38} L${w*.08},${h*.28} L${w*.22},${h*.38}`} fill={`url(#${gradId})`} stroke={bright} strokeWidth="0.8"/>
+      <path d={`M${w*.78},${h*.62} L${w*.72},${h*.72} L${w*.84},${h*.62}`} fill={`url(#${gradId})`} stroke={bright} strokeWidth="0.8"/>
+      {/* Stern planes and rudder */}
+      <path d={`M${w*.88},${h*.38} L${w*.95},${h*.3} L${w*.96},${h*.5} L${w*.95},${h*.7} L${w*.88},${h*.62}`} 
+        fill={`url(#${gradId})`} stroke={bright} strokeWidth="0.7"/>
+      {/* Propeller */}
+      <ellipse cx={w*.96} cy={h*.5} rx="3" ry="6" fill={dark} stroke={bright} strokeWidth="0.6"/>
+      <FireEffect/>
     </svg>
   );
+
   if (id==="frigate") return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{display:"block",filter:flt}}>
-      <path d={`M6,${h*.3} L${w-8},${h*.22} L${w-2},${h*.5} L${w-8},${h*.78} L6,${h*.7} L1,${h*.5} Z`} fill={g} stroke={b} strokeWidth="1"/>
-      <rect x={w*.22} y={h*.18} width={w*.3} height={h*.36} rx="1.5" fill={d} stroke={b} strokeWidth="0.8"/>
-      <rect x={w*.27} y={h*.06} width={w*.14} height={h*.16} rx="1" fill={d} stroke={b} strokeWidth="0.7"/>
-      <rect x={w*.44} y={h*.1} width={6} height={h*.22} rx="1.5" fill={d} stroke={b} strokeWidth="0.6"/>
-      {/* Helicopter pad aft */}
-      <rect x={w*.65} y={h*.38} width={w*.24} height={h*.22} rx="1" fill={d} stroke={b} strokeWidth="0.7" opacity="0.8"/>
-      <line x1={w*.66} y1={h*.49} x2={w*.88} y2={h*.49} stroke={b} strokeWidth="0.5" opacity="0.5"/>
-      <line x1={w*.77} y1={h*.39} x2={w*.77} y2={h*.6} stroke={b} strokeWidth="0.5" opacity="0.5"/>
-      <rect x={w*.06} y={h*.43} width={w*.11} height={4} rx="2" fill={b} opacity="0.8"/>
-      <line x1={w*.31} y1={h*.06} x2={w*.31} y2={0} stroke={b} strokeWidth="1"/>
-      <line x1={w*.24} y1={h*.02} x2={w*.38} y2={h*.02} stroke={b} strokeWidth="0.7"/>
+      {commonDefs}
+      <WaveRipples cx={w*0.5} w={w*0.7}/>
+      {/* Hull */}
+      <path d={`M6,${h*.28} Q1,${h*.5} 6,${h*.72} L${w-8},${h*.78} Q${w-2},${h*.5} ${w-8},${h*.22} Z`} 
+        fill={`url(#${gradId})`} stroke={bright} strokeWidth="1.1"/>
+      <path d={`M9,${h*.52} L${w-9},${h*.5}`} stroke={goldDark} strokeWidth="0.9" opacity="0.5"/>
+      {/* Superstructure */}
+      <rect x={w*.2} y={h*.14} width={w*.34} height={h*.4} rx="1.5" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.9"/>
+      {/* Bridge */}
+      <rect x={w*.25} y={h*.04} width={w*.16} height={h*.18} rx="1" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.8"/>
+      {/* Bridge windows */}
+      {[.27,.32,.37].map((x,i)=>(
+        <rect key={i} x={w*x} y={h*.07} width={2} height={1.5} rx="0.4" fill={portHoleColor}/>
+      ))}
+      {/* Funnel */}
+      <rect x={w*.42} y={h*.08} width={7} height={h*.24} rx="2" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.7"/>
+      {/* Helipad */}
+      <rect x={w*.63} y={h*.36} width={w*.26} height={h*.26} rx="1" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.7"/>
+      <circle cx={w*.76} cy={h*.49} r={h*.1} fill="none" stroke={bright} strokeWidth="0.6" strokeDasharray="3,2"/>
+      <line x1={w*.72} y1={h*.49} x2={w*.8} y2={h*.49} stroke={bright} strokeWidth="0.4"/>
+      <line x1={w*.76} y1={h*.42} x2={w*.76} y2={h*.56} stroke={bright} strokeWidth="0.4"/>
+      {/* Forward gun */}
+      <ellipse cx={w*.1} cy={h*.44} rx={w*.06} ry={h*.08} fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.8"/>
+      <rect x={w*.05} y={h*.42} width={w*.12} height={4} rx="2" fill={bright} opacity="0.82"/>
+      {/* Mast */}
+      <line x1={w*.3} y1={h*.04} x2={w*.3} y2={-2} stroke={bright} strokeWidth="1"/>
+      <line x1={w*.23} y1={h*.01} x2={w*.37} y2={h*.01} stroke={bright} strokeWidth="0.7"/>
+      {/* Portholes */}
+      {[.15,.3,.45,.6].map((x,i)=>(
+        <circle key={i} cx={w*x} cy={h*.62} r="1.8" fill={portHoleColor} stroke={bright} strokeWidth="0.3"/>
+      ))}
+      <FireEffect/>
     </svg>
   );
+
   if (id==="gunboat") return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{display:"block",filter:flt}}>
-      <path d={`M4,${h*.3} L${w-5},${h*.18} L${w-1},${h*.5} L${w-5},${h*.82} L4,${h*.7} L1,${h*.5} Z`} fill={g} stroke={b} strokeWidth="1.1"/>
-      <rect x={w*.3} y={h*.22} width={w*.28} height={h*.34} rx="1.5" fill={d} stroke={b} strokeWidth="0.8"/>
-      <rect x={w*.44} y={h*.1} width={4} height={h*.2} rx="1" fill={d} stroke={b} strokeWidth="0.6"/>
-      <rect x={w*.07} y={h*.4} width={w*.2} height={5} rx="2.5" fill={b} opacity="0.85"/>
-      <rect x={w*.7} y={h*.4} width={w*.17} height={5} rx="2.5" fill={b} opacity="0.7"/>
-      <line x1={w*.37} y1={h*.22} x2={w*.37} y2={0} stroke={b} strokeWidth="1.2"/>
-      <line x1={w*.3} y1={h*.06} x2={w*.44} y2={h*.06} stroke={b} strokeWidth="0.7"/>
+      {commonDefs}
+      <WaveRipples cx={w*0.5} w={w*0.65}/>
+      {/* Hull - small fast attack craft */}
+      <path d={`M4,${h*.28} Q1,${h*.5} 4,${h*.72} L${w-5},${h*.8} Q${w-1},${h*.5} ${w-5},${h*.2} Z`} 
+        fill={`url(#${gradId})`} stroke={bright} strokeWidth="1.2"/>
+      <path d={`M8,${h*.52} L${w-8},${h*.5}`} stroke={goldDark} strokeWidth="0.8" opacity="0.5"/>
+      {/* Pilot house */}
+      <rect x={w*.28} y={h*.18} width={w*.32} height={h*.38} rx="2" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.9"/>
+      <rect x={w*.32} y={h*.22} width={w*.24} height={h*.12} rx="1" fill={dark}/>
+      {/* Bridge windows */}
+      {[.34,.42,.5].map((x,i)=>(
+        <rect key={i} x={w*x} y={h*.24} width={2} height={1.5} rx="0.4" fill={portHoleColor}/>
+      ))}
+      {/* Mast */}
+      <rect x={w*.42} y={h*.06} width={5} height={h*.22} rx="1" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.6"/>
+      <line x1={w*.44} y1={h*.06} x2={w*.44} y2={-1} stroke={bright} strokeWidth="1.3"/>
+      <line x1={w*.36} y1={h*.04} x2={w*.52} y2={h*.04} stroke={bright} strokeWidth="0.7"/>
+      {/* Forward gun */}
+      <rect x={w*.05} y={h*.38} width={w*.22} height={5} rx="2.5" fill={bright} opacity="0.88"/>
+      <ellipse cx={w*.12} cy={h*.44} rx={w*.05} ry={h*.08} fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.7"/>
+      {/* Aft gun */}
+      <rect x={w*.68} y={h*.38} width={w*.18} height={5} rx="2.5" fill={bright} opacity="0.75"/>
+      {/* Portholes */}
+      {[.2,.38,.58,.76].map((x,i)=>(
+        <circle key={i} cx={w*x} cy={h*.62} r="1.5" fill={portHoleColor} stroke={bright} strokeWidth="0.3"/>
+      ))}
+      <FireEffect/>
     </svg>
   );
-  // minelayer
+
+  // Default/patrol boat
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{display:"block",filter:flt}}>
-      <path d={`M5,${h*.32} L${w-6},${h*.24} L${w-2},${h*.5} L${w-6},${h*.76} L5,${h*.68} L1,${h*.5} Z`} fill={g} stroke={b} strokeWidth="1"/>
-      <rect x={w*.26} y={h*.22} width={w*.3} height={h*.32} rx="1.5" fill={d} stroke={b} strokeWidth="0.8"/>
-      {/* Mine rollers on stern */}
-      {[.65,.74,.83].map((x,i)=><circle key={i} cx={w*x} cy={h*.5} r="5" fill={d} stroke={b} strokeWidth="0.8"/>)}
-      {[.65,.74,.83].map((x,i)=><circle key={i} cx={w*x} cy={h*.5} r="2" fill={b} opacity="0.6"/>)}
-      <rect x={w*.39} y={h*.12} width={5} height={h*.18} rx="1" fill={d} stroke={b} strokeWidth="0.6"/>
-      <line x1={w*.33} y1={h*.22} x2={w*.33} y2={0} stroke={b} strokeWidth="1"/>
-      <line x1={w*.26} y1={h*.04} x2={w*.4} y2={h*.04} stroke={b} strokeWidth="0.7"/>
+      {commonDefs}
+      <WaveRipples cx={w*0.5} w={w*0.6}/>
+      {/* Hull */}
+      <path d={`M5,${h*.3} Q1,${h*.5} 5,${h*.7} L${w-6},${h*.76} Q${w-2},${h*.5} ${w-6},${h*.24} Z`} 
+        fill={`url(#${gradId})`} stroke={bright} strokeWidth="1.1"/>
+      <path d={`M8,${h*.52} L${w-8},${h*.5}`} stroke={goldDark} strokeWidth="0.8" opacity="0.5"/>
+      {/* Cabin */}
+      <rect x={w*.24} y={h*.2} width={w*.34} height={h*.36} rx="1.5" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.9"/>
+      <rect x={w*.28} y={h*.24} width={w*.26} height={h*.1} rx="1" fill={dark}/>
+      {/* Windows */}
+      {[.3,.38,.46].map((x,i)=>(
+        <rect key={i} x={w*x} y={h*.26} width={2.5} height={1.5} rx="0.4" fill={portHoleColor}/>
+      ))}
+      {/* Cargo/equipment pods */}
+      {[.65,.74,.83].map((x,i)=>(
+        <g key={i}>
+          <circle cx={w*x} cy={h*.5} r="6" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.8"/>
+          <circle cx={w*x} cy={h*.5} r="2.5" fill={bright} opacity="0.5"/>
+        </g>
+      ))}
+      {/* Mast */}
+      <rect x={w*.37} y={h*.1} width={5} height={h*.2} rx="1" fill={`url(#${deckGradId})`} stroke={bright} strokeWidth="0.6"/>
+      <line x1={w*.39} y1={h*.1} x2={w*.39} y2={0} stroke={bright} strokeWidth="1.1"/>
+      <line x1={w*.32} y1={h*.03} x2={w*.46} y2={h*.03} stroke={bright} strokeWidth="0.7"/>
+      {/* Portholes */}
+      {[.14,.32,.5].map((x,i)=>(
+        <circle key={i} cx={w*x} cy={h*.58} r="1.5" fill={portHoleColor} stroke={bright} strokeWidth="0.3"/>
+      ))}
+      <FireEffect/>
     </svg>
   );
 }
 
 function ShipRenderer({shipId,isHoriz,isSunk,w,h}) {
   if (isHoriz) return <ShipSVG id={shipId} w={w} h={h} sunk={isSunk}/>;
-  // Vertical: render as horizontal then rotate with CSS
   return (
     <div style={{width:w,height:h,position:"relative",overflow:"visible"}}>
       <div style={{position:"absolute",left:0,top:0,width:h,height:w,
@@ -554,7 +1077,7 @@ function ShipRenderer({shipId,isHoriz,isSunk,w,h}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SETTINGS SCREEN
+// SETTINGS SCREEN — mobile-first layout
 // ─────────────────────────────────────────────────────────────────────────────
 function SettingsScreen({settings,onSave}) {
   const [s,setS]=useState({...settings});
@@ -563,21 +1086,22 @@ function SettingsScreen({settings,onSave}) {
     if (sel.length>=2) setS(p=>({...p,ships:sel}));
   };
   return (
-    <div style={{maxWidth:520,margin:"0 auto",padding:"1.5rem 1rem"}}>
+    <div style={{width:"100%",maxWidth:520,margin:"0 auto",padding:"0 0 1rem"}}>
       <div style={{fontSize:10,letterSpacing:"0.3em",color:"rgba(212,175,55,0.4)",textTransform:"uppercase",marginBottom:4,textAlign:"center"}}>Pre-Game</div>
-      <h2 style={{fontSize:22,fontWeight:700,color:"#d4af37",margin:"0 0 20px",textAlign:"center",letterSpacing:"0.1em"}}>BRIEFING ROOM</h2>
+      <h2 style={{fontSize:20,fontWeight:700,color:"#d4af37",margin:"0 0 16px",textAlign:"center",letterSpacing:"0.1em"}}>BRIEFING ROOM</h2>
 
-      <div style={{background:"rgba(0,0,0,0.4)",border:"1px solid rgba(212,175,55,0.18)",padding:"1rem 1.25rem",marginBottom:12}}>
-        <div style={{fontSize:10,color:"rgba(212,175,55,0.45)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:12}}>Select Fleet Composition</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+      <div style={{background:"rgba(0,0,0,0.4)",border:"1px solid rgba(212,175,55,0.18)",padding:"0.85rem 1rem",marginBottom:10}}>
+        <div style={{fontSize:10,color:"rgba(212,175,55,0.45)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:10}}>Fleet Composition</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
           {SHIP_CATALOGUE.map(ship=>{
             const sel=s.ships.includes(ship.id);
             return (
               <div key={ship.id} onClick={()=>toggle(ship.id)} style={{
-                display:"flex",alignItems:"center",gap:8,padding:"7px 10px",cursor:"pointer",
+                display:"flex",alignItems:"center",gap:7,padding:"8px 9px",cursor:"pointer",
                 border:`1px solid ${sel?"rgba(212,175,55,0.45)":"rgba(212,175,55,0.1)"}`,
                 background:sel?"rgba(212,175,55,0.08)":"transparent",
-                transition:"all 0.15s",borderRadius:2,
+                borderRadius:2,WebkitTapHighlightColor:"transparent",
+                minHeight:44, // touch-friendly tap target
               }}>
                 <div style={{width:14,height:14,borderRadius:2,border:`1px solid ${sel?"#d4af37":"rgba(212,175,55,0.3)"}`,
                   background:sel?"#d4af37":"transparent",flexShrink:0,
@@ -585,10 +1109,11 @@ function SettingsScreen({settings,onSave}) {
                   {sel&&<span style={{fontSize:9,color:"#000",fontWeight:700}}>✓</span>}
                 </div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:11,color:sel?"rgba(212,175,55,0.9)":"rgba(212,175,55,0.45)",letterSpacing:"0.05em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ship.name}</div>
+                  <div style={{fontSize:11,color:sel?"rgba(212,175,55,0.9)":"rgba(212,175,55,0.45)",letterSpacing:"0.04em",
+                    whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ship.name}</div>
                   <div style={{display:"flex",gap:2,marginTop:2}}>
                     {Array.from({length:ship.size}).map((_,i)=>(
-                      <div key={i} style={{width:7,height:3,borderRadius:1,background:sel?"rgba(212,175,55,0.6)":"rgba(212,175,55,0.2)"}}/>
+                      <div key={i} style={{width:6,height:3,borderRadius:1,background:sel?"rgba(212,175,55,0.6)":"rgba(212,175,55,0.2)"}}/>
                     ))}
                   </div>
                 </div>
@@ -596,25 +1121,25 @@ function SettingsScreen({settings,onSave}) {
             );
           })}
         </div>
-        <div style={{fontSize:10,color:"rgba(212,175,55,0.35)",marginTop:8,fontFamily:"'Crimson Text',serif",fontStyle:"italic"}}>
+        <div style={{fontSize:10,color:"rgba(212,175,55,0.35)",marginTop:7,fontFamily:"'Crimson Text',serif",fontStyle:"italic"}}>
           {s.ships.length} ships selected — min. 2 required
         </div>
       </div>
 
-      <div style={{background:"rgba(0,0,0,0.4)",border:"1px solid rgba(212,175,55,0.18)",padding:"1rem 1.25rem",marginBottom:12}}>
-        <div style={{fontSize:10,color:"rgba(212,175,55,0.45)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:12}}>Visual Effects</div>
+      <div style={{background:"rgba(0,0,0,0.4)",border:"1px solid rgba(212,175,55,0.18)",padding:"0.85rem 1rem",marginBottom:10}}>
+        <div style={{fontSize:10,color:"rgba(212,175,55,0.45)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:10}}>Visual Effects</div>
         {[
           {key:"sinkingCutscene",label:"Sinking Cutscene",desc:"Full-screen animation when a ship sinks"},
           {key:"hitDebris",label:"Hit Debris & Sparks",desc:"Flying metal chunks on direct hits"},
         ].map(({key,label,desc})=>(
           <div key={key} onClick={()=>setS(p=>({...p,[key]:!p[key]}))} style={{
-            display:"flex",alignItems:"center",gap:10,padding:"8px 0",cursor:"pointer",
-            borderBottom:"1px solid rgba(212,175,55,0.07)",
+            display:"flex",alignItems:"center",gap:10,padding:"10px 0",cursor:"pointer",
+            borderBottom:"1px solid rgba(212,175,55,0.07)",WebkitTapHighlightColor:"transparent",
+            minHeight:44,
           }}>
             <div style={{width:36,height:20,borderRadius:10,position:"relative",flexShrink:0,
               background:s[key]?"rgba(212,175,55,0.35)":"rgba(255,255,255,0.08)",
-              border:`1px solid ${s[key]?"rgba(212,175,55,0.6)":"rgba(255,255,255,0.15)"}`,
-              transition:"all 0.2s"}}>
+              border:`1px solid ${s[key]?"rgba(212,175,55,0.6)":"rgba(255,255,255,0.15)"}`,}}>
               <div style={{width:14,height:14,borderRadius:7,background:s[key]?"#d4af37":"rgba(255,255,255,0.25)",
                 position:"absolute",top:2,left:s[key]?19:2,transition:"all 0.2s"}}/>
             </div>
@@ -626,18 +1151,18 @@ function SettingsScreen({settings,onSave}) {
         ))}
       </div>
 
-      <div style={{background:"rgba(0,0,0,0.4)",border:"1px solid rgba(212,175,55,0.18)",padding:"1rem 1.25rem",marginBottom:16}}>
-        <div style={{fontSize:10,color:"rgba(212,175,55,0.45)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:12}}>Rules of Engagement</div>
+      <div style={{background:"rgba(0,0,0,0.4)",border:"1px solid rgba(212,175,55,0.18)",padding:"0.85rem 1rem",marginBottom:14}}>
+        <div style={{fontSize:10,color:"rgba(212,175,55,0.45)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:10}}>Rules</div>
         {[
           "Each player deploys their fleet on a 10×10 grid",
           "Players alternate firing at enemy coordinates",
           "A hit is marked ✕ in red — a miss marked in blue",
           "When all cells of a ship are hit, it sinks",
           "First to sink the entire enemy fleet wins",
-          "Right-click during placement to rotate a ship",
+          "Tap rotate button or right-click to rotate a ship",
         ].map((rule,i)=>(
-          <div key={i} style={{display:"flex",gap:10,marginBottom:7,alignItems:"flex-start"}}>
-            <div style={{width:16,height:16,borderRadius:"50%",background:"rgba(212,175,55,0.12)",
+          <div key={i} style={{display:"flex",gap:9,marginBottom:6,alignItems:"flex-start"}}>
+            <div style={{width:15,height:15,borderRadius:"50%",background:"rgba(212,175,55,0.12)",
               border:"1px solid rgba(212,175,55,0.25)",display:"flex",alignItems:"center",justifyContent:"center",
               fontSize:9,color:"rgba(212,175,55,0.6)",flexShrink:0,marginTop:1}}>{i+1}</div>
             <div style={{fontSize:11,color:"rgba(212,175,55,0.6)",lineHeight:1.5,fontFamily:"'Crimson Text',serif"}}>{rule}</div>
@@ -646,13 +1171,11 @@ function SettingsScreen({settings,onSave}) {
       </div>
 
       <button onClick={()=>onSave(s)} style={{
-        width:"100%",padding:"10px 0",background:"rgba(212,175,55,0.1)",
+        width:"100%",padding:"12px 0",background:"rgba(212,175,55,0.1)",
         border:"1px solid rgba(212,175,55,0.45)",color:"#d4af37",
         fontFamily:"'Cinzel',serif",fontSize:12,letterSpacing:"0.15em",
-        cursor:"pointer",textTransform:"uppercase",transition:"all 0.2s",
-      }}
-      onMouseEnter={e=>e.target.style.background="rgba(212,175,55,0.2)"}
-      onMouseLeave={e=>e.target.style.background="rgba(212,175,55,0.1)"}>
+        cursor:"pointer",textTransform:"uppercase",WebkitTapHighlightColor:"transparent",
+      }}>
         ⚔ Deploy Fleet
       </button>
     </div>
@@ -660,27 +1183,29 @@ function SettingsScreen({settings,onSave}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BOARD
+// BOARD — now receives CELL as prop
 // ─────────────────────────────────────────────────────────────────────────────
-function Board({grid,isAi,interactive,phase,hoverCells,hoverValid,onHover,onLeave,onPlace,onFire,sunkShips,particlesRef,label,size}) {
+function Board({grid,isAi,interactive,phase,hoverCells,hoverValid,onHover,onLeave,onPlace,onFire,sunkShips,particlesRef,label,size,CELL}) {
   const W=size*CELL,H=size*CELL;
   const cols=Array.from({length:size},(_,i)=>COLS[i]||String.fromCharCode(75+i));
   const shipMap={};
   const showShips=!isAi||phase==="won"||phase==="lost";
   if (showShips) grid.forEach(row=>row.forEach(cell=>{if(cell.ship){if(!shipMap[cell.ship])shipMap[cell.ship]=[];shipMap[cell.ship].push([cell.r,cell.c]);}}));
+  const labelFontSize = CELL < 32 ? 8 : 9;
+  const rowLabelW = CELL < 32 ? 14 : 18;
 
   return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
-      <div style={{fontSize:10,color:isAi?"rgba(200,70,50,0.65)":"rgba(212,175,55,0.45)",letterSpacing:"0.22em",textTransform:"uppercase",marginBottom:5,fontFamily:"'Cinzel',serif"}}>{label}</div>
-      <div style={{display:"flex",paddingLeft:20}}>
-        {cols.map(c=><div key={c} style={{width:CELL,textAlign:"center",fontSize:9,color:"rgba(212,175,55,0.3)",fontFamily:"'Cinzel',serif",marginBottom:2}}>{c}</div>)}
+      <div style={{fontSize:labelFontSize,color:isAi?"rgba(200,70,50,0.65)":"rgba(212,175,55,0.45)",letterSpacing:"0.22em",textTransform:"uppercase",marginBottom:4,fontFamily:"'Cinzel',serif"}}>{label}</div>
+      <div style={{display:"flex",paddingLeft:rowLabelW}}>
+        {cols.map(c=><div key={c} style={{width:CELL,textAlign:"center",fontSize:labelFontSize,color:"rgba(212,175,55,0.3)",fontFamily:"'Cinzel',serif",marginBottom:2}}>{c}</div>)}
       </div>
       <div style={{display:"flex"}}>
         <div style={{display:"flex",flexDirection:"column"}}>
-          {Array.from({length:size},(_,i)=><div key={i} style={{height:CELL,width:18,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:"rgba(212,175,55,0.3)",fontFamily:"'Cinzel',serif"}}>{i+1}</div>)}
+          {Array.from({length:size},(_,i)=><div key={i} style={{height:CELL,width:rowLabelW,display:"flex",alignItems:"center",justifyContent:"center",fontSize:labelFontSize,color:"rgba(212,175,55,0.3)",fontFamily:"'Cinzel',serif"}}>{i+1}</div>)}
         </div>
         <div style={{position:"relative",width:W,height:H,overflow:"hidden"}}>
-          <WaterCanvas width={W} height={H} size={size}/>
+          <WaterCanvas width={W} height={H} size={size} CELL={CELL}/>
           <div style={{position:"absolute",inset:0,zIndex:2,background:"rgba(3,12,25,0.52)",border:"1px solid rgba(212,175,55,0.17)",boxSizing:"border-box",pointerEvents:"none"}}/>
           <svg style={{position:"absolute",inset:0,zIndex:3,pointerEvents:"none"}} width={W} height={H}>
             {Array.from({length:size+1}).map((_,i)=>(
@@ -717,21 +1242,22 @@ function Board({grid,isAi,interactive,phase,hoverCells,hoverValid,onHover,onLeav
           {grid.map(row=>row.map(cell=>{
             if (!cell.hit&&!cell.miss) return null;
             const sk=cell.ship&&sunkShips.includes(cell.ship);
+            const iconSize = Math.max(8, CELL * 0.32);
             return (
               <div key={`m${cell.r},${cell.c}`} style={{position:"absolute",left:cell.c*CELL,top:cell.r*CELL,width:CELL,height:CELL,zIndex:9,display:"flex",alignItems:"center",justifyContent:"center"}}>
                 {cell.hit?(
-                  <div style={{width:CELL-10,height:CELL-10,borderRadius:"50%",
+                  <div style={{width:CELL-Math.max(4,CELL*0.18),height:CELL-Math.max(4,CELL*0.18),borderRadius:"50%",
                     background:sk?"rgba(155,28,6,0.5)":"rgba(195,52,16,0.32)",
                     border:`2px solid ${sk?"rgba(255,65,12,0.95)":"rgba(255,105,32,0.68)"}`,
                     display:"flex",alignItems:"center",justifyContent:"center",
                     boxShadow:sk?"0 0 14px rgba(255,55,0,0.5)":"none"}}>
-                    <svg width="14" height="14" viewBox="0 0 14 14">
+                    <svg width={iconSize} height={iconSize} viewBox="0 0 14 14">
                       <line x1="2.5" y1="2.5" x2="11.5" y2="11.5" stroke={sk?"#ff4010":"#ff7028"} strokeWidth="2.5" strokeLinecap="round"/>
                       <line x1="11.5" y1="2.5" x2="2.5" y2="11.5" stroke={sk?"#ff4010":"#ff7028"} strokeWidth="2.5" strokeLinecap="round"/>
                     </svg>
                   </div>
                 ):(
-                  <div style={{width:7,height:7,borderRadius:"50%",background:"rgba(85,140,205,0.45)",border:"1px solid rgba(105,160,225,0.42)"}}/>
+                  <div style={{width:Math.max(4,CELL*0.18),height:Math.max(4,CELL*0.18),borderRadius:"50%",background:"rgba(85,140,205,0.45)",border:"1px solid rgba(105,160,225,0.42)"}}/>
                 )}
               </div>
             );
@@ -739,7 +1265,8 @@ function Board({grid,isAi,interactive,phase,hoverCells,hoverValid,onHover,onLeav
 
           {grid.map(row=>row.map(cell=>(
             <div key={`c${cell.r},${cell.c}`} style={{position:"absolute",left:cell.c*CELL,top:cell.r*CELL,width:CELL,height:CELL,zIndex:11,
-              cursor:isAi&&interactive&&!cell.hit&&!cell.miss?"crosshair":!isAi&&phase==="place"?"pointer":"default"}}
+              cursor:isAi&&interactive&&!cell.hit&&!cell.miss?"crosshair":!isAi&&phase==="place"?"pointer":"default",
+              WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}
               onClick={()=>{if(isAi&&interactive)onFire(cell.r,cell.c);if(!isAi&&phase==="place")onPlace(cell.r,cell.c);}}
               onContextMenu={(e)=>{e.preventDefault();if(!isAi&&phase==="place")onPlace(cell.r,cell.c,true);}}
               onMouseEnter={()=>!isAi&&onHover(cell.r,cell.c)}
@@ -754,10 +1281,33 @@ function Board({grid,isAi,interactive,phase,hoverCells,hoverValid,onHover,onLeav
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// FLEET ROSTER — compact horizontal strip for mobile battle view
+// ─────────────────────────────────────────────────────────────────────────────
+function FleetRoster({ships, sunkList, label, accent}) {
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:2,minWidth:0}}>
+      <div style={{fontSize:8,color:accent,letterSpacing:"0.18em",textTransform:"uppercase",marginBottom:3}}>{label}</div>
+      {ships.map(ship=>{
+        const gone = sunkList.includes(ship.id);
+        return (
+          <div key={ship.id} style={{display:"flex",alignItems:"center",gap:5,opacity:gone?0.22:1,transition:"opacity 0.8s"}}>
+            <div style={{width:5,height:5,borderRadius:"50%",flexShrink:0,background:gone?"#e05050":accent}}/>
+            <span style={{fontSize:9,color:gone?"rgba(224,80,80,0.4)":accent,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:80}}>{ship.name}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Battleships() {
-  const [screen,setScreen]=useState("settings"); // settings | place | battle | won | lost
+  const CELL = useCellSize();
+  const isMobile = CELL < 38;
+
+  const [screen,setScreen]=useState("settings");
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
   const [activeShips,setActiveShips]=useState([]);
   const [playerGrid,setPlayerGrid]=useState(()=>emptyGrid());
@@ -771,11 +1321,13 @@ export default function Battleships() {
   const [sunkByPlayer,setSunkByPlayer]=useState([]);
   const [sunkByAi,setSunkByAi]=useState([]);
   const [events,setEvents]=useState([]);
-  const [cutscene,setCutscene]=useState(null); // {ship,cells}
+  const [cutscene,setCutscene]=useState(null);
   const [pendingAfterCutscene,setPendingAfterCutscene]=useState(null);
   const [shotsFired,setShotsFired]=useState(0);
   const [gameStartTime,setGameStartTime]=useState(null);
   const [winSubmitted,setWinSubmitted]=useState(false);
+  // Mobile battle tab: "yours" | "enemy"
+  const [battleTab, setBattleTab] = useState("enemy");
   const aiTimerRef=useRef(null);
   const playerFxRef=useRef({add:()=>{}});
   const aiFxRef=useRef({add:()=>{}});
@@ -817,6 +1369,7 @@ export default function Battleships() {
     setAiState({mode:"hunt",targets:[],hits:[]}); setPlayerTurn(true);
     setSunkByPlayer([]); setSunkByAi([]); setEvents([]); setCutscene(null);
     setShotsFired(0); setGameStartTime(null); setWinSubmitted(false);
+    setBattleTab("enemy");
     setScreen("place");
   };
 
@@ -850,7 +1403,7 @@ export default function Battleships() {
   const fireAndProcess=(r,c,grid,setGrid,isPlayer,sunkList,setSunk,fxRef,oppGrid,setOppGrid,allShips)=>{
     const cell=grid[r][c]; if (cell.hit||cell.miss) return false;
     const isHit=!!cell.ship;
-    if (settings.hitDebris) fxRef.current.add(isHit?makeHitExplosion(c*CELL+CELL/2,r*CELL+CELL/2):makeMissExplosion(c*CELL+CELL/2,r*CELL+CELL/2));
+    if (settings.hitDebris) fxRef.current.add(isHit?makeHitExplosion(c*CELL+CELL/2,r*CELL+CELL/2,CELL):makeMissExplosion(c*CELL+CELL/2,r*CELL+CELL/2,CELL));
     const ng=grid.map(row=>row.map(cl=>cl.r===r&&cl.c===c?{...cl,hit:isHit,miss:!isHit}:cl));
     setGrid(ng);
     const newSunk=allShips.filter(s=>isShipSunk(ng,s.id)&&!sunkList.includes(s.id));
@@ -858,13 +1411,13 @@ export default function Battleships() {
       setSunk(p=>[...p,...newSunk.map(s=>s.id)]);
       newSunk.forEach(ship=>{
         const cells=getShipCells(ng,ship.id);
-        setTimeout(()=>fxRef.current.add(makeSunkVolley(cells)),250);
+        setTimeout(()=>fxRef.current.add(makeSunkVolley(cells,CELL)),250);
         pushEvent(isPlayer?`You sunk their ${ship.name}!`:`They sunk your ${ship.name}!`, isPlayer?"#d4af37":"#e05050");
         if (settings.sinkingCutscene) {
           const pending={result:allSunk(ng,allShips)?isPlayer?"won":"lost":null};
           setCutscene({ship,cells:cells.map(([rr,cc])=>[rr,cc])});
           setPendingAfterCutscene(pending);
-          return; // defer win/lose
+          return;
         } else if (allSunk(ng,allShips)) { setScreen(isPlayer?"won":"lost"); }
       });
       return "sunk";
@@ -881,7 +1434,7 @@ export default function Battleships() {
     if (res===false) return;
     setShotsFired(s=>s+1);
     if (res!=="sunk"||!settings.sinkingCutscene) setPlayerTurn(false);
-    else setPlayerTurn(false); // AI goes after cutscene dismiss
+    else setPlayerTurn(false);
   };
 
   const handleCutsceneDone=()=>{
@@ -895,7 +1448,7 @@ export default function Battleships() {
     aiTimerRef.current=setTimeout(()=>{
       const {r,c,newTargets,newMode}=aiShot(aiState,playerGrid);
       const cell=playerGrid[r][c]; const isHit=!!cell.ship;
-      if (settings.hitDebris) playerFxRef.current.add(isHit?makeHitExplosion(c*CELL+CELL/2,r*CELL+CELL/2):makeMissExplosion(c*CELL+CELL/2,r*CELL+CELL/2));
+      if (settings.hitDebris) playerFxRef.current.add(isHit?makeHitExplosion(c*CELL+CELL/2,r*CELL+CELL/2,CELL):makeMissExplosion(c*CELL+CELL/2,r*CELL+CELL/2,CELL));
       const ng=playerGrid.map(row=>row.map(cl=>cl.r===r&&cl.c===c?{...cl,hit:isHit,miss:!isHit}:cl));
       let ut=newTargets,um=newMode;
       if (isHit){ut=addTargets(newTargets,r,c,playerGrid);um="target";}
@@ -904,7 +1457,7 @@ export default function Battleships() {
         setSunkByAi(p=>[...p,...ns.map(s=>s.id)]);
         ns.forEach(ship=>{
           const cells=getShipCells(ng,ship.id);
-          setTimeout(()=>playerFxRef.current.add(makeSunkVolley(cells)),250);
+          setTimeout(()=>playerFxRef.current.add(makeSunkVolley(cells,CELL)),250);
           pushEvent(`They sunk your ${ship.name}!`,"#e05050");
           if (settings.sinkingCutscene) { setCutscene({ship,cells}); setPendingAfterCutscene({result:allSunk(ng,activeShips)?"lost":null}); }
           else if (allSunk(ng,activeShips)) setScreen("lost");
@@ -915,40 +1468,52 @@ export default function Battleships() {
       setPlayerGrid(ng);
       if (!settings.sinkingCutscene&&allSunk(ng,activeShips)){setScreen("lost");return;}
       setPlayerTurn(true);
+      // On mobile, switch to player view briefly when AI hits
+      if (isMobile && isHit) { setBattleTab("yours"); setTimeout(()=>setBattleTab("enemy"),1800); }
     },settings.aiDelay);
     return()=>clearTimeout(aiTimerRef.current);
-  },[playerTurn,screen,cutscene]);
+  },[playerTurn,screen,cutscene,CELL,isMobile]);
 
   const resetToSettings=()=>setScreen("settings");
 
   const playerLeft=activeShips.filter(s=>!sunkByAi.includes(s.id)).length;
   const aiLeft=activeShips.filter(s=>!sunkByPlayer.includes(s.id)).length;
 
+  const inGame = screen==="battle"||screen==="won"||screen==="lost";
+
   return (
     <div style={{minHeight:"100vh",background:"var(--noir-background,#060810)",
       backgroundImage:"radial-gradient(ellipse at 50% -10%,rgba(15,45,90,0.38) 0%,transparent 65%)",
       display:"flex",flexDirection:"column",alignItems:"center",
-      padding:"1.5rem 1rem 2.5rem",fontFamily:"'Cinzel',serif"}}>
+      padding:"1rem 12px 2.5rem",fontFamily:"'Cinzel',serif",
+      WebkitTextSizeAdjust:"100%",overflowX:"hidden"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
         @keyframes ev-in{0%{opacity:0;transform:translateY(-10px)}12%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
         @keyframes tglow{0%,100%{text-shadow:0 0 25px rgba(212,175,55,0.25)}50%{text-shadow:0 0 45px rgba(212,175,55,0.55),0 0 80px rgba(212,175,55,0.18)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
         .nb{background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.32);color:#d4af37;
-          font-family:'Cinzel',serif;font-size:11px;letter-spacing:0.1em;padding:7px 16px;
-          cursor:pointer;transition:all 0.2s;text-transform:uppercase;}
+          font-family:'Cinzel',serif;font-size:11px;letter-spacing:0.1em;padding:9px 14px;
+          cursor:pointer;transition:all 0.2s;text-transform:uppercase;
+          -webkit-tap-highlight-color:transparent;touch-action:manipulation;}
         .nb:hover{background:rgba(212,175,55,0.16);border-color:rgba(212,175,55,0.6);}
         .nb:disabled{opacity:0.28;cursor:default;}
-        .fr{display:flex;align-items:center;gap:8px;padding:4px 8px;margin-bottom:3px;border:1px solid transparent;border-radius:2px;transition:all 0.15s;}
+        .fr{display:flex;align-items:center;gap:8px;padding:3px 7px;margin-bottom:2px;border:1px solid transparent;border-radius:2px;transition:all 0.15s;}
         .fr.active{border-color:rgba(212,175,55,0.38);background:rgba(212,175,55,0.07);}
         .fr.gone{opacity:0.2;}
+        /* Tab buttons on mobile */
+        .tab-btn{flex:1;padding:8px 0;background:transparent;border:1px solid rgba(212,175,55,0.2);
+          color:rgba(212,175,55,0.45);font-family:'Cinzel',serif;font-size:10px;letter-spacing:0.08em;
+          cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all 0.2s;}
+        .tab-btn.active{background:rgba(212,175,55,0.12);border-color:rgba(212,175,55,0.5);color:#d4af37;}
+        * { box-sizing: border-box; }
       `}</style>
 
       {/* Title */}
-      <div style={{textAlign:"center",marginBottom:"1.2rem"}}>
-        <div style={{fontSize:10,letterSpacing:"0.35em",color:"rgba(212,175,55,0.38)",marginBottom:4,textTransform:"uppercase"}}>The Family's Navy</div>
-        <h1 style={{fontSize:30,fontWeight:900,color:"#d4af37",margin:0,letterSpacing:"0.1em",textTransform:"uppercase",animation:"tglow 4s ease-in-out infinite"}}>Rum Runner</h1>
-        <div style={{fontSize:11,color:"rgba(212,175,55,0.28)",letterSpacing:"0.14em",marginTop:4,fontFamily:"'Crimson Text',serif",fontStyle:"italic"}}>Sink the Feds before they sink you</div>
+      <div style={{textAlign:"center",marginBottom:"0.9rem"}}>
+        <div style={{fontSize:9,letterSpacing:"0.35em",color:"rgba(212,175,55,0.38)",marginBottom:3,textTransform:"uppercase"}}>The Family's Navy</div>
+        <h1 style={{fontSize:isMobile?22:28,fontWeight:900,color:"#d4af37",margin:0,letterSpacing:"0.1em",textTransform:"uppercase",animation:"tglow 4s ease-in-out infinite"}}>Rum Runner</h1>
+        <div style={{fontSize:10,color:"rgba(212,175,55,0.28)",letterSpacing:"0.12em",marginTop:3,fontFamily:"'Crimson Text',serif",fontStyle:"italic"}}>Sink the Feds before they sink you</div>
       </div>
 
       {/* SETTINGS */}
@@ -956,123 +1521,167 @@ export default function Battleships() {
 
       {/* PLACEMENT */}
       {screen==="place"&&(
-        <div style={{display:"flex",gap:24,flexWrap:"wrap",justifyContent:"center",alignItems:"flex-start",animation:"fadeIn 0.3s ease"}}>
-          <div>
-            <div style={{fontSize:10,color:"rgba(212,175,55,0.5)",letterSpacing:"0.18em",textTransform:"uppercase",marginBottom:8,textAlign:"center"}}>
-              {placingIdx<activeShips.length?`Deploy: ${currentShip.name} (${currentShip.size} cells)`:"Fleet Ready — Engage"}
-            </div>
-            <Board grid={playerGrid} isAi={false} interactive={false} phase="place"
-              hoverCells={getHoverCells()} hoverValid={hoverValid}
-              onHover={(r,c)=>setHoverCell({r,c})} onLeave={()=>setHoverCell(null)}
-              onPlace={handlePlace} onFire={null}
-              sunkShips={[]} particlesRef={playerFxRef} label="Your Waters" size={GRID}/>
-            <div style={{marginTop:10,display:"flex",gap:8,flexWrap:"wrap"}}>
-              <button className="nb" onClick={()=>setHoriz(h=>!h)} disabled={placingIdx>=activeShips.length}>↺ {horiz?"Horiz":"Vert"}</button>
-              <button className="nb" onClick={handleAutoPlace}>⚡ Auto</button>
-              <button className="nb" disabled={placedShips.length<activeShips.length} onClick={()=>{setScreen("battle");setGameStartTime(Date.now());setShotsFired(0);setWinSubmitted(false);}}>⚔ Go to War</button>
-              <button className="nb" onClick={resetToSettings} style={{borderColor:"rgba(212,175,55,0.18)",color:"rgba(212,175,55,0.45)"}}>⚙ Settings</button>
-            </div>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12,width:"100%",animation:"fadeIn 0.3s ease"}}>
+          <div style={{fontSize:10,color:"rgba(212,175,55,0.5)",letterSpacing:"0.15em",textTransform:"uppercase",textAlign:"center"}}>
+            {placingIdx<activeShips.length?`Deploy: ${currentShip.name} (${currentShip.size} cells)`:"Fleet Ready — Engage"}
           </div>
-          <div style={{minWidth:155,paddingTop:22}}>
-            <div style={{fontSize:9,color:"rgba(212,175,55,0.38)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:10}}>Your Fleet</div>
-            {activeShips.map((ship,i)=>(
-              <div key={ship.id} className={`fr${i===placingIdx?" active":""}`}>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:11,color:placedShips.includes(ship.id)?"rgba(212,175,55,0.3)":"rgba(212,175,55,0.88)",letterSpacing:"0.05em"}}>{ship.name}</div>
-                  <div style={{display:"flex",gap:2,marginTop:2}}>
-                    {Array.from({length:ship.size}).map((_,j)=>(
-                      <div key={j} style={{width:8,height:4,borderRadius:1,background:placedShips.includes(ship.id)?"rgba(212,175,55,0.2)":"rgba(212,175,55,0.6)"}}/>
-                    ))}
+          <Board grid={playerGrid} isAi={false} interactive={false} phase="place"
+            hoverCells={getHoverCells()} hoverValid={hoverValid}
+            onHover={(r,c)=>setHoverCell({r,c})} onLeave={()=>setHoverCell(null)}
+            onPlace={handlePlace} onFire={null}
+            sunkShips={[]} particlesRef={playerFxRef} label="Your Waters" size={GRID} CELL={CELL}/>
+          {/* Controls row */}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"center",width:"100%",maxWidth:GRID*CELL+20}}>
+            <button className="nb" onClick={()=>setHoriz(h=>!h)} disabled={placingIdx>=activeShips.length}>↺ {horiz?"Horiz":"Vert"}</button>
+            <button className="nb" onClick={handleAutoPlace}>⚡ Auto</button>
+            <button className="nb" disabled={placedShips.length<activeShips.length} onClick={()=>{setScreen("battle");setGameStartTime(Date.now());setShotsFired(0);setWinSubmitted(false);}}>⚔ Go to War</button>
+            <button className="nb" onClick={resetToSettings} style={{borderColor:"rgba(212,175,55,0.18)",color:"rgba(212,175,55,0.45)"}}>⚙</button>
+          </div>
+          {/* Fleet list — horizontal scrolling on mobile */}
+          <div style={{width:"100%",maxWidth:GRID*CELL+20,overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+            <div style={{display:"flex",gap:6,paddingBottom:4,minWidth:"min-content"}}>
+              {activeShips.map((ship,i)=>(
+                <div key={ship.id} className={`fr${i===placingIdx?" active":""}`} style={{flexShrink:0}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:10,color:placedShips.includes(ship.id)?"rgba(212,175,55,0.3)":"rgba(212,175,55,0.88)",letterSpacing:"0.04em",whiteSpace:"nowrap"}}>{ship.name}</div>
+                    <div style={{display:"flex",gap:2,marginTop:2}}>
+                      {Array.from({length:ship.size}).map((_,j)=>(
+                        <div key={j} style={{width:7,height:3,borderRadius:1,background:placedShips.includes(ship.id)?"rgba(212,175,55,0.2)":"rgba(212,175,55,0.6)"}}/>
+                      ))}
+                    </div>
                   </div>
+                  {placedShips.includes(ship.id)&&<span style={{fontSize:11,color:"#639922"}}>✓</span>}
                 </div>
-                {placedShips.includes(ship.id)&&<span style={{fontSize:12,color:"#639922"}}>✓</span>}
-              </div>
-            ))}
-            <div style={{marginTop:10,fontSize:10,color:"rgba(212,175,55,0.3)",fontFamily:"'Crimson Text',serif",fontStyle:"italic",lineHeight:1.5}}>
-              Right-click to rotate
+              ))}
             </div>
           </div>
+          {isMobile&&<div style={{fontSize:10,color:"rgba(212,175,55,0.3)",fontFamily:"'Crimson Text',serif",fontStyle:"italic"}}>Tap to place · Use ↺ to rotate</div>}
         </div>
       )}
 
       {/* BATTLE */}
-      {(screen==="battle"||screen==="won"||screen==="lost")&&(
-        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,width:"100%",maxWidth:1120,animation:"fadeIn 0.3s ease"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",maxWidth:990,
-            padding:"7px 18px",background:"rgba(0,0,0,0.55)",border:"1px solid rgba(212,175,55,0.12)"}}>
-            <div style={{fontSize:11,color:"rgba(212,175,55,0.55)"}}>Your ships: <span style={{color:"#d4af37",fontWeight:700}}>{playerLeft}</span></div>
-            <div style={{fontSize:12,letterSpacing:"0.1em",fontWeight:600,
+      {inGame&&(
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,width:"100%",maxWidth:1120,animation:"fadeIn 0.3s ease"}}>
+          {/* Status bar */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",
+            maxWidth:isMobile?GRID*CELL+20:990,
+            padding:"6px 12px",background:"rgba(0,0,0,0.55)",border:"1px solid rgba(212,175,55,0.12)"}}>
+            <div style={{fontSize:10,color:"rgba(212,175,55,0.55)"}}>Yours: <span style={{color:"#d4af37",fontWeight:700}}>{playerLeft}</span></div>
+            <div style={{fontSize:isMobile?10:12,letterSpacing:"0.08em",fontWeight:600,
               color:screen==="won"?"#d4af37":screen==="lost"?"#e05050":playerTurn?"#d4af37":"rgba(212,175,55,0.4)"}}>
               {screen==="won"?"✦ VICTORY":screen==="lost"?"✕ DEFEATED":playerTurn?"▶ YOUR MOVE":"⧗ INCOMING..."}
             </div>
-            <div style={{fontSize:11,color:"rgba(212,175,55,0.55)"}}>Fed ships: <span style={{color:"#e05c5c",fontWeight:700}}>{aiLeft}</span></div>
+            <div style={{fontSize:10,color:"rgba(212,175,55,0.55)"}}>Feds: <span style={{color:"#e05c5c",fontWeight:700}}>{aiLeft}</span></div>
           </div>
 
-          <div style={{minHeight:22,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+          {/* Events */}
+          <div style={{minHeight:20,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
             {events.map(ev=>(
-              <div key={ev.id} style={{fontSize:13,color:ev.color,letterSpacing:"0.08em",fontFamily:"'Crimson Text',serif",fontStyle:"italic",
-                animation:"ev-in 3.5s ease forwards",textShadow:`0 0 10px ${ev.color}`}}>{ev.msg}</div>
+              <div key={ev.id} style={{fontSize:12,color:ev.color,letterSpacing:"0.07em",fontFamily:"'Crimson Text',serif",fontStyle:"italic",
+                animation:"ev-in 3.5s ease forwards",textShadow:`0 0 10px ${ev.color}`,textAlign:"center"}}>{ev.msg}</div>
             ))}
           </div>
 
-          <div style={{display:"flex",gap:16,flexWrap:"wrap",justifyContent:"center",alignItems:"flex-start"}}>
-            <Board grid={playerGrid} isAi={false} interactive={false} phase={screen}
-              hoverCells={new Set()} hoverValid={false}
-              onHover={()=>{}} onLeave={()=>{}} onPlace={()=>{}} onFire={null}
-              sunkShips={sunkByAi} particlesRef={playerFxRef} label="Your Waters" size={GRID}/>
+          {/* MOBILE: tab switcher + single board */}
+          {isMobile ? (
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,width:"100%"}}>
+              {/* Tab buttons */}
+              <div style={{display:"flex",width:"100%",maxWidth:GRID*CELL+20,gap:0,border:"1px solid rgba(212,175,55,0.2)"}}>
+                <button className={`tab-btn${battleTab==="enemy"?" active":""}`} onClick={()=>setBattleTab("enemy")}>
+                  ⚔ Fed Waters {!playerTurn&&screen==="battle"?"":""}
+                </button>
+                <button className={`tab-btn${battleTab==="yours"?" active":""}`} onClick={()=>setBattleTab("yours")}>
+                  🛡 Your Waters
+                </button>
+              </div>
 
-            <div style={{minWidth:125,paddingTop:22,display:"flex",flexDirection:"column",gap:14}}>
-              <div>
-                <div style={{fontSize:9,color:"rgba(212,175,55,0.3)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:6}}>Your Fleet</div>
-                {activeShips.map(ship=>(
-                  <div key={ship.id} className={`fr${sunkByAi.includes(ship.id)?" gone":""}`}>
-                    <div style={{width:6,height:6,borderRadius:"50%",flexShrink:0,background:sunkByAi.includes(ship.id)?"#e05050":"#d4af37"}}/>
-                    <span style={{fontSize:10,color:sunkByAi.includes(ship.id)?"rgba(224,80,80,0.4)":"rgba(212,175,55,0.7)"}}>{ship.name}</span>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div style={{fontSize:9,color:"rgba(200,70,50,0.4)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:6}}>Fed Fleet</div>
-                {activeShips.map(ship=>(
-                  <div key={ship.id} className={`fr${sunkByPlayer.includes(ship.id)?" gone":""}`}>
-                    <div style={{width:6,height:6,borderRadius:"50%",flexShrink:0,background:sunkByPlayer.includes(ship.id)?"#639922":"rgba(200,70,50,0.4)"}}/>
-                    <span style={{fontSize:10,color:sunkByPlayer.includes(ship.id)?"rgba(99,153,34,0.75)":"rgba(200,70,50,0.4)"}}>{ship.name}</span>
-                  </div>
-                ))}
-              </div>
-              {(screen==="won"||screen==="lost")&&(
-                <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:4}}>
-                  <button className="nb" onClick={()=>handleSaveSettings(settings)}>New Game</button>
-                  <button className="nb" onClick={resetToSettings} style={{fontSize:10,opacity:0.6}}>⚙ Settings</button>
-                </div>
+              {battleTab==="enemy"&&(
+                <Board grid={aiGrid} isAi={true} interactive={playerTurn&&screen==="battle"} phase={screen}
+                  hoverCells={new Set()} hoverValid={false}
+                  onHover={()=>{}} onLeave={()=>{}} onPlace={()=>{}} onFire={handleFireAtAi}
+                  sunkShips={sunkByPlayer} particlesRef={aiFxRef} label="Fed Waters" size={GRID} CELL={CELL}/>
               )}
+              {battleTab==="yours"&&(
+                <Board grid={playerGrid} isAi={false} interactive={false} phase={screen}
+                  hoverCells={new Set()} hoverValid={false}
+                  onHover={()=>{}} onLeave={()=>{}} onPlace={()=>{}} onFire={null}
+                  sunkShips={sunkByAi} particlesRef={playerFxRef} label="Your Waters" size={GRID} CELL={CELL}/>
+              )}
+
+              {/* Compact fleet strips */}
+              <div style={{display:"flex",gap:16,justifyContent:"center",padding:"4px 8px",
+                background:"rgba(0,0,0,0.3)",border:"1px solid rgba(212,175,55,0.1)",width:"100%",maxWidth:GRID*CELL+20}}>
+                <FleetRoster ships={activeShips} sunkList={sunkByAi} label="Your Fleet" accent="rgba(212,175,55,0.7)"/>
+                <div style={{width:1,background:"rgba(212,175,55,0.1)"}}/>
+                <FleetRoster ships={activeShips} sunkList={sunkByPlayer} label="Fed Fleet" accent="rgba(200,70,50,0.55)"/>
+              </div>
             </div>
+          ) : (
+            /* DESKTOP: original side-by-side layout */
+            <div style={{display:"flex",gap:16,flexWrap:"wrap",justifyContent:"center",alignItems:"flex-start"}}>
+              <Board grid={playerGrid} isAi={false} interactive={false} phase={screen}
+                hoverCells={new Set()} hoverValid={false}
+                onHover={()=>{}} onLeave={()=>{}} onPlace={()=>{}} onFire={null}
+                sunkShips={sunkByAi} particlesRef={playerFxRef} label="Your Waters" size={GRID} CELL={CELL}/>
 
-            <Board grid={aiGrid} isAi={true} interactive={playerTurn&&screen==="battle"} phase={screen}
-              hoverCells={new Set()} hoverValid={false}
-              onHover={()=>{}} onLeave={()=>{}} onPlace={()=>{}} onFire={handleFireAtAi}
-              sunkShips={sunkByPlayer} particlesRef={aiFxRef} label="Fed Waters" size={GRID}/>
-          </div>
+              <div style={{minWidth:125,paddingTop:22,display:"flex",flexDirection:"column",gap:14}}>
+                <div>
+                  <div style={{fontSize:9,color:"rgba(212,175,55,0.3)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:6}}>Your Fleet</div>
+                  {activeShips.map(ship=>(
+                    <div key={ship.id} className={`fr${sunkByAi.includes(ship.id)?" gone":""}`}>
+                      <div style={{width:6,height:6,borderRadius:"50%",flexShrink:0,background:sunkByAi.includes(ship.id)?"#e05050":"#d4af37"}}/>
+                      <span style={{fontSize:10,color:sunkByAi.includes(ship.id)?"rgba(224,80,80,0.4)":"rgba(212,175,55,0.7)"}}>{ship.name}</span>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div style={{fontSize:9,color:"rgba(200,70,50,0.4)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:6}}>Fed Fleet</div>
+                  {activeShips.map(ship=>(
+                    <div key={ship.id} className={`fr${sunkByPlayer.includes(ship.id)?" gone":""}`}>
+                      <div style={{width:6,height:6,borderRadius:"50%",flexShrink:0,background:sunkByPlayer.includes(ship.id)?"#639922":"rgba(200,70,50,0.4)"}}/>
+                      <span style={{fontSize:10,color:sunkByPlayer.includes(ship.id)?"rgba(99,153,34,0.75)":"rgba(200,70,50,0.4)"}}>{ship.name}</span>
+                    </div>
+                  ))}
+                </div>
+                {(screen==="won"||screen==="lost")&&(
+                  <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:4}}>
+                    <button className="nb" onClick={()=>handleSaveSettings(settings)}>New Game</button>
+                    <button className="nb" onClick={resetToSettings} style={{fontSize:10,opacity:0.6}}>⚙ Settings</button>
+                  </div>
+                )}
+              </div>
 
+              <Board grid={aiGrid} isAi={true} interactive={playerTurn&&screen==="battle"} phase={screen}
+                hoverCells={new Set()} hoverValid={false}
+                onHover={()=>{}} onLeave={()=>{}} onPlace={()=>{}} onFire={handleFireAtAi}
+                sunkShips={sunkByPlayer} particlesRef={aiFxRef} label="Fed Waters" size={GRID} CELL={CELL}/>
+            </div>
+          )}
+
+          {/* End game panel */}
           {(screen==="won"||screen==="lost")&&(
-            <div style={{marginTop:10,textAlign:"center",padding:"1.25rem 2.5rem",background:"rgba(4,7,12,0.97)",
-              border:`1px solid ${screen==="won"?"rgba(212,175,55,0.4)":"rgba(192,57,43,0.4)"}`,maxWidth:480}}>
-              <div style={{fontSize:22,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",
+            <div style={{marginTop:8,textAlign:"center",padding:"1rem 1.5rem",background:"rgba(4,7,12,0.97)",
+              border:`1px solid ${screen==="won"?"rgba(212,175,55,0.4)":"rgba(192,57,43,0.4)"}`,
+              maxWidth:isMobile?"100%":480,width:"100%"}}>
+              <div style={{fontSize:isMobile?18:22,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",
                 color:screen==="won"?"#d4af37":"#c0392b",
                 textShadow:`0 0 25px ${screen==="won"?"rgba(212,175,55,0.45)":"rgba(192,57,43,0.45)"}`}}>
                 {screen==="won"?"The Feds Are Sunk":"Your Fleet Is Gone"}
               </div>
-              <div style={{fontSize:13,marginTop:8,fontFamily:"'Crimson Text',serif",fontStyle:"italic",lineHeight:1.6,
+              <div style={{fontSize:12,marginTop:7,fontFamily:"'Crimson Text',serif",fontStyle:"italic",lineHeight:1.6,
                 color:screen==="won"?"rgba(212,175,55,0.55)":"rgba(192,57,43,0.65)"}}>
                 {screen==="won"?"The rum runs free tonight. The Don raises a glass to your name."
                   :"Prohibition wins this round. The Feds got their man."}
+              </div>
+              <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:12}}>
+                <button className="nb" onClick={()=>handleSaveSettings(settings)}>New Game</button>
+                <button className="nb" onClick={resetToSettings} style={{fontSize:10,opacity:0.6}}>⚙ Settings</button>
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* SINKING CUTSCENE OVERLAY */}
       {cutscene&&<SinkingCutscene ship={cutscene.ship} cells={cutscene.cells} onDone={handleCutsceneDone}/>}
     </div>
   );
