@@ -1,6 +1,6 @@
 /**
  * Parse forum topic/comment content: [b], [i], [u], [s], [center], [color]/[colour],
- * [size], [spoiler], [quote], [url], [img], [gif], [ytube], and smileys.
+ * [size], [spoiler], [quote], [url], [img], [gif], [ytube], [list], [*], [hr], and smileys.
  * Output is safe HTML (we only emit our own tags). URLs restricted to http/https.
  */
 
@@ -369,6 +369,10 @@ const SMILEYS = [
  *   [img]URL[/img]        image (centres itself inside [center])
  *   [gif]URL[/gif]        gif image
  *   [ytube]…[/ytube]      YouTube embed
+ *   [list]…[/list]        unordered (bullet) list
+ *   [list=1]…[/list]      ordered (numbered) list
+ *   [*]…                  list item (inside [list])
+ *   [hr]                  horizontal rule / divider
  *   :smiley: codes        see SMILEYS list above
  */
 export function parseForumContent(content) {
@@ -445,6 +449,44 @@ export function parseForumContent(content) {
   s = s.replace(
     /\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi,
     '<details class="forum-content-spoiler" style="margin:0.4em 0;border:1px solid rgba(234,179,8,0.25);border-radius:4px;padding:0.25em 0.6em;"><summary style="cursor:pointer;font-size:0.8em;opacity:0.6;user-select:none;">Spoiler</summary><div style="padding-top:0.3em;">$1</div></details>'
+  );
+
+  // [hr] - horizontal rule
+  s = s.replace(
+    /\[hr\]\s*\[\/hr\]/gi,
+    '<hr style="border:none;border-top:1px solid rgba(255,255,255,0.15);margin:0.8em 0;">'
+  );
+  s = s.replace(
+    /\[hr\]/gi,
+    '<hr style="border:none;border-top:1px solid rgba(255,255,255,0.15);margin:0.8em 0;">'
+  );
+
+  // [list=1] - ordered (numbered) list
+  s = s.replace(
+    /\[list=1\]([\s\S]*?)\[\/list\]/gi,
+    (_, inner) => {
+      const items = inner
+        .split(/\[\*\]/gi)
+        .map(item => item.trim())
+        .filter(item => item.length > 0);
+      if (items.length === 0) return '';
+      const listItems = items.map(item => `<li style="margin:0.2em 0;color:inherit;">${item}</li>`).join('');
+      return `<ol style="margin:0.4em 0;padding-left:1.5em;list-style-type:decimal;">${listItems}</ol>`;
+    }
+  );
+
+  // [list] - unordered (bullet) list
+  s = s.replace(
+    /\[list\]([\s\S]*?)\[\/list\]/gi,
+    (_, inner) => {
+      const items = inner
+        .split(/\[\*\]/gi)
+        .map(item => item.trim())
+        .filter(item => item.length > 0);
+      if (items.length === 0) return '';
+      const listItems = items.map(item => `<li style="margin:0.2em 0;color:inherit;">${item}</li>`).join('');
+      return `<ul style="margin:0.4em 0;padding-left:1.5em;list-style-type:disc;">${listItems}</ul>`;
+    }
   );
 
   // 5) Inline formatting

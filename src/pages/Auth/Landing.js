@@ -598,6 +598,23 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
             Omertà — silence is the first rule
           </p>
 
+          {/* ── TRADEMARK & WARNING ─────────────────────────────────────── */}
+          <div className="mt-6 text-center landing-fade-up-3">
+            <p
+              className="font-heading text-[9px] uppercase tracking-[0.15em]"
+              style={{ color: 'var(--noir-primary)', opacity: 0.5 }}
+            >
+              MafiaWars.co.uk™
+            </p>
+            <p
+              className="font-heading text-[8px] mt-1 max-w-xs mx-auto"
+              style={{ color: 'var(--noir-muted)', opacity: 0.6, lineHeight: '1.4' }}
+            >
+              This is an online text-based game. All in-game currency and items have no real-world value. 
+              You must be 18+ to play. Play responsibly.
+            </p>
+          </div>
+
         </div>
       </div>
     </div>

@@ -1,515 +1,587 @@
-<div style="background:#2a2b2e;color:#b8c4d0;padding:1.4em;border-radius:10px;max-width:800px;border:1px solid #3d3d42;">
-<style>
-.faq-box details { margin:0.75em 0; border:1px solid #3d3d42; border-radius:8px; overflow:hidden; }
-.faq-box summary { background:#35363a; color:#e8d4a8; padding:0.75em 1.1em; cursor:pointer; font-weight:bold; list-style:none; font-size:1em; }
-.faq-box summary::-webkit-details-marker { display:none; }
-.faq-box summary:hover { background:#404145; color:#f0e0b8; }
-.faq-box details[open] summary { border-bottom:1px solid #3d3d42; }
-.faq-box details > div { padding:1.1em 1.3em; background:#252628; color:#b8c4d0; line-height:1.6; }
-.faq-box strong { color:#d4a574; }
-.faq-box p { margin:0.5em 0; color:#b8c4d0; }
-.faq-box ul, .faq-box ol { margin:0.5em 0; padding-left:1.5em; color:#b8c4d0; }
-.faq-box li { color:#c0ccd8; margin:0.25em 0; }
-.faq-box table { border-collapse:collapse; width:100%; margin-top:0.6em; border-radius:6px; overflow:hidden; }
-.faq-box th, .faq-box td { border:1px solid #3d3d42; padding:0.55em 0.8em; text-align:left; color:#b8c4d0; }
-.faq-box th { background:#35363a; color:#e8d4a8; }
-.faq-box tr:nth-child(even) { background:#2a2b2e; }
-</style>
-<div class="faq-box">
-
-<details>
-<summary><strong>Users & Online</strong></summary>
-<div>
-
-**Who shows as “online”?**  
-Anyone active in the **last 5 minutes**. Dead and bodyguard accounts are excluded.
-
-**How do I search for a player?**  
-Search by username (substring, case-insensitive). Results: online, offline, and dead. Robot bodyguards only show when you search their exact full name.
-</div>
-</details>
-
-<details>
-<summary><strong>Ranks & Prestige</strong></summary>
-<div>
-
-**How does rank work?**  
-Rank is based on **rank points**. You earn them from: crimes, GTA, jail busts, Organised Crime heists, and kills.
-
-**Rank ladder (by rank points):**
-- Rat (0)
-- Street Thug (250)
-- Hustler (1,000)
-- Goon (3,000)
-- Made Man (6,000)
-- Capo (12,000)
-- Underboss (24,000)
-- Consigliere (50,000)
-- Boss (100,000)
-- Don (200,000)
-- **Godfather (400,000)**
-
-**Wealth rank:**  
-Based only on **cash on hand** (not bank or Swiss). Shown on your profile.
-- Broke ($0) → … → Millionaire ($1M) → Billionaire ($1B) → Multi Trillionaire ($10T+)
-
-**Prestige (after Godfather):**  
-Once you reach **Godfather** you can **Prestige** from the Prestige page. You keep your prestige level and bonuses forever; your **rank** and **rank points** reset to Rat and 0. Each prestige level makes the next climb to Godfather harder (you need more effective RP to reach the same ranks).
-
-**Prestige levels (5 total):**
-<table>
-<thead><tr><th>Level</th><th>Name</th><th>RP to prestige again</th><th>Crime cash</th><th>OC payout</th><th>GTA rare</th><th>Hitlist NPC</th></tr></thead>
-<tbody>
-<tr><td>1</td><td>Made</td><td>400,000</td><td>+10%</td><td>+10%</td><td>+0.5</td><td>+10%</td></tr>
-<tr><td>2</td><td>Earner</td><td>600,000</td><td>+20%</td><td>+20%</td><td>+1.0</td><td>+20%</td></tr>
-<tr><td>3</td><td>Capo di Capi</td><td>900,000</td><td>+30%</td><td>+30%</td><td>+1.5</td><td>+30%</td></tr>
-<tr><td>4</td><td>The Don</td><td>1,400,000</td><td>+40%</td><td>+40%</td><td>+2.0</td><td>+40%</td></tr>
-<tr><td>5</td><td>Godfather Legacy</td><td>2,000,000 (max)</td><td>+50%</td><td>+50%</td><td>+2.5</td><td>+50%</td></tr>
-</tbody>
-</table>
-After prestiging you must reach Godfather again and meet the next level’s RP requirement to prestige again. Level 5 is the maximum; bonuses stay at +50% etc.
-</div>
-</details>
-
-<details>
-<summary><strong>Crimes</strong></summary>
-<div>
-
-**How do crimes work?**  
-Each crime has a **minimum rank**, **reward range** (cash + RP), and a **cooldown**. You must not be in jail.
-
-**Success chance:**  
-A **progress bar (10%–92%)**. Success +6–8%; failure −1–3%. At 92% the floor is 77%. Daily events can change cash/RP multipliers.
-
-**RP on success:**
-- Petty: 3 RP
-- Medium: 7 RP
-- Major: 15 RP
-
-**Examples:**  
-Petty: Pickpocket, Mug a Pedestrian. Medium: Bootlegging, Armed Robbery, Extortion. Major: Jewelry Heist, Bank Heist, Casino Heist. Higher ranks unlock harder crimes (bigger rewards, longer cooldowns).
-
-**Stats:**  
-Crimes page shows: crimes today/week, successful attempts, profit (today, 24h, week).
-</div>
-</details>
-
-<details>
-<summary><strong>GTA (Grand Theft Auto)</strong></summary>
-<div>
-
-**What is GTA?**  
-Pick a **location**: Street Parking, Residential Area, Downtown, Luxury Garage, Private Estate. Each has: unlock rank, success rate, jail time if caught, cooldown (e.g. 20s–180s). One global cooldown per attempt.
-
-**Progress bar:**  
-**25–92%**. Success +4–6%; failure −1–2%. At 92%, floor 80%. Daily events can boost (e.g. 2× GTA day).
-
-**On success:**  
-Random car (common → legendary). Often **15–77% damage** (uncommon sometimes 0–14%). You get cash (car value) and RP (5 common → 100 legendary). Prestige improves rare car chance.
-
-**On failure:**  
-40% **caught** → jail (location’s time, e.g. 8–50s). Otherwise escape, no car.
-
-**Garage:**
-- **Melt for bullets:** value ÷ 10 per car. 45s cooldown per melt; batch limit (Store).
-- **Scrap for cash:** 50% value. No cooldown; batch limit.  
-Cannot melt/scrap **listed** cars — delist first.
-
-**Dealer:**  
-Buy at **1.2× value** (cash). Limited stock per model, restocks. No custom/exclusive.
-
-**Marketplace:**  
-List cars (set price); others buy for cash. You can buy others’ listed cars.
-
-**Repair / Travel:**  
-Repair reduces damage % (cost). Travel time by rarity (common ~45s, legendary ~12s, airport instant).
-</div>
-</details>
-
-<details>
-<summary><strong>Casinos</strong></summary>
-<div>
-
-**Cities:**  
-Per **city/state**: Chicago, New York, Las Vegas, Atlantic City. Your location sets which casino (e.g. slots: one per state, state-owned).
-
-**Slots:**  
-State-owned. Max bet $5M. 3 reels; three of a kind pays (multiplier × bet), **5% house edge**. Symbols: Cherry, Lemon, Bar, Bell, Seven.
-
-**Dice:**  
-Pick **sides** (2–5000) and a **number**; win if roll matches. **5% house edge**, max bet $5M. Tables **claimable** (one per player, all cities; free). Owner sets max bet, earns edge on losses; buy-back and send-to-user.
-
-**Roulette:**  
-Max bet $50M (owner can lower). **2.7%** to owner. Claim $500M. One table per player. Bets: straight, red/black, even/odd, low/high, dozen, column.
-
-**Blackjack:**  
-Max bet $50M (configurable). **2%** to owner on loss. Claim $500M. One table per player. Owner: buy-back, send table.
-
-**Horse racing:**  
-City-based; bet on races. Claimable; owner sets max bet, earns from play. See Horseracing page for events and odds.
-
-**Video poker / Sports betting:**  
-City-based; Casino page. Sports: when events are available.
-
-**E-Games (Forum → Entertainer):**  
-Community games (e.g. dice) run by entertainers; random rewards (cash, points, bullets, cars).
-</div>
-</details>
-
-<details>
-<summary><strong>Families</strong></summary>
-<div>
-
-**Basics:**  
-Up to **10 families**. Each has a **name** and **tag** (2–4 chars). **Create** (you’re Boss) or **join** (start as Associate).
-
-**Roles:**  
-Boss (1) → Underboss (1) → Consigliere (1) → Capo (4) → Soldier (15) → Associate (30).  
-- **Boss** assigns roles. Boss & Underboss can **kick**.  
-- Boss, Underboss, Consigliere: **withdraw** treasury, manage rackets (unlock/upgrade).
-
-**Treasury:**  
-Members **deposit**; Boss/Underboss/Consigliere **withdraw**. Used for rackets and operations.
-
-**Rackets:**  
-Nine types (Protection, Gambling, Loan Sharking, Labour, Distillery, Warehouse, Restaurant & Bar, Funeral Home, Garment Shop). Cooldown + base income per level.
-- First racket: level 1. **Unlock** next: $100k from treasury; previous racket must be level 5.
-- **Upgrade:** $50k per level (max 5). **Collect** when cooldown passed; income = base × level. Events can change payout % and cooldown.
-
-**Racket raids (war):**  
-During war, **raid** enemy rackets. Success chance by racket level. Success = share of their revenue; failure = nothing.
-
-**Crew OC:**  
-- Boss/Underboss/Capo set **join fee** and **advertise** (Crew OC forum topic).  
-- Non-members **apply** (fee or free); family accepts/rejects.  
-- **Commit:** living members + accepted applicants get rewards (RP, cash, bullets, points, booze); treasury gets lump sum. Then **8h cooldown** (6h with timer reduction). Applications clear after each commit.
-
-**Wars (Vendetta):**  
-**Any** family member killing another family's member or bodyguard starts a war — loyalty and trust matter. Track kills, deaths, bodyguard kills. Truce: offer/accept. **Wiped** family (all dead) → winner can get rackets and treasury. Kill feed and stats.
-</div>
-</details>
-
-<details>
-<summary><strong>Attacks & Combat</strong></summary>
-<div>
-
-**Flow:**  
-1. **Search** by username (~2–3 min).  
-2. Target **found** in a random **city**.  
-3. **Travel** there if needed (car or airport).  
-4. **Execute** when in same city.
-
-**Who can I attack?**  
-Any living player (not you). NPCs only if on your hitlist. Bodyguards can be targeted; kills count for war stats if at war with owner’s family.
-
-**Bullets to kill:**  
-Depends on target armour/rank and your weapon/rank. Use the **Attack page calculator**. Result clamped 5,000–100,000 bullets.
-
-**Bodyguards:**  
-Targets can have **bodyguards** (players or robots). You go through them in slot order; each has armour, absorbs bullets, then is removed. You choose how many bullets to use.
-
-**On kill:**  
-- **25% of victim’s cash on hand** + RP.  
-- Events can double kill cash or RP.  
-- Hitlist bounty reward if applicable.  
-- War stats updated if both in a family war.
-
-**Attempts:**  
-Attempts page: recent attacks by you and on you (search, travel, execute, result).
-</div>
-</details>
-
-<details>
-<summary><strong>Hitlist</strong></summary>
-<div>
-
-**Place a bounty:**  
-On a **player** (you or someone else) or their **bodyguards**. Reward: **cash**, **points**, or both. You pay the reward (more for hidden).
-
-**Hidden bounty:**  
-Costs **50% more**. Placer’s name not shown.
-
-**Buy off:**  
-Remove a bounty for **150%** of total reward (e.g. $100 → $150 to clear). Same for points.
-
-**Claiming:**  
-**Kill** the target (player or bodyguard) → you get the reward. Only the killer.
-
-**Hitlist NPCs:**  
-Special NPCs with set rewards (cash, points, bullets, booze, cars, RP). Cooldown between spawns. Kills count for hitlist-NPC objectives.
-</div>
-</details>
-
-<details>
-<summary><strong>Jail</strong></summary>
-<div>
-
-**How do I end up in jail?**  
-Failing a **crime**, **GTA**, or **jail bust**. Attack does not send you to jail.
-
-**Jail list:**  
-Real players and **jail NPCs**. **Bust** either: player = 15 RP + their set bust reward; NPC = 25 RP + optional reward.
-
-**Bust success rate:**  
-Based on **total bust attempts**. Rises with experience (6% → 90%). **Fail** = 30s jail and streak resets.
-
-**Bust reward:**  
-In jail you set a **cash reward** for your rescuer. They get it on success (capped by what you have). Set 0 to clear.
-
-**Leave early:**  
-**3 points** (Jail → Leave).
-</div>
-</details>
-
-<details>
-<summary><strong>Bank</strong></summary>
-<div>
-
-**Transfers:**  
-Send **cash** to any player (username, case-insensitive). Not to yourself or dead accounts. Rate limits may apply.
-
-**Interest deposits:**  
-Fixed term; at **maturity** = principal + interest. **No early withdrawal.**  
-- 3h: 0.5% | 6h: 1.2% | 12h: 2.5% | 24h: 5% | 48h: 12% | 72h: 20%  
-Max total in unclaimed deposits (e.g. $50M) — see Bank page.
-
-**Swiss bank:**  
-**Deposit** from hand ↔ **withdraw** to hand. **Swiss limit** (e.g. $50M) caps balance. Not lootable in attacks (only cash on hand is).
-</div>
-</details>
-
-<details>
-<summary><strong>Organised Crime (OC)</strong></summary>
-<div>
-
-**Team heists:**  
-**4 roles:** Driver, Weapons, Explosives, Hacker. Each slot: **you**, **NPC**, or **invited player**. Set **split %** per role (e.g. 25% each).
-
-**Jobs:**  
-Country Bank → State Bank → City Bank → Government Vault. Each: success rate, cash pool (split on success), RP. You pay **setup cost**; reward exceeds cost on success.
-
-**Equipment:**  
-Tiers (basic → master) add **success bonus** (+10% to +40%). Paid in cash when creating heist.
-
-**Cooldown:**  
-**6h** between heists (**4h** with Store OC timer — 300 points).
-
-**Flow:**  
-Create heist (job + roles + splits), **invite** players (expire 5 min). When all accepted or NPCs fill slots, **run**. Success = cash + RP by split %; failure = nothing. NPCs get 35% of a full cash share.
-</div>
-</details>
-
-<details>
-<summary><strong>Bodyguards</strong></summary>
-<div>
-
-**Slots:**  
-First **free**; extra: **100, 200, 300, 400 points**.
-
-**Armour:**  
-Levels 0→5; points: 50, 100, 200, 400, 800. Higher = more bullets absorbed. Events: **50% off** or **10% more** costs.
-
-**Hire:**  
-**Players** or **robots**. Defend in slot order; when “killed” they’re removed. Attacker may get hitlist bounty.
-</div>
-</details>
-
-<details>
-<summary><strong>Travel & Locations</strong></summary>
-<div>
-
-**Cities:**  
-Chicago, New York, Las Vegas, Atlantic City. **Current state** (dashboard) sets casinos, bullet factory, airport, booze prices.
-
-**Travels per hour:**  
-**15/hour** default. Each trip (car or airport) = 1 travel. Store: **+5/hour** (25 points, stacks to cap).
-
-**Car / Airport:**  
-Car: time by rarity (common ~45s, legendary ~12s, airport 0). Airport: 1 per city; unowned = **10 points**; owner sets 0–50, earns from use. You can own **one property** (airport or bullet factory) only.
-</div>
-</details>
-
-<details>
-<summary><strong>Bullet Factory & Armoury</strong></summary>
-<div>
-
-**Bullet factory:**  
-One per **city**. **3,000 bullets/hour**, cap 24h (72k) uncollected.  
-- **Unowned:** Buy at random $2,500–$4,000/bullet.  
-- **Claim:** **$5M** in current city. One property (factory or airport) only.  
-- **Owner:** Set price ($1–$100k), **collect** accumulated as cash, buy from own stock.  
-- **Buying (non-owner):** Up to 3,000/purchase, **15 min** cooldown.
-
-**Armoury (owner only):**  
-Produce **armour** (1–5) and **weapons** at set rate/hour. Cost: cash or points. Stock sold to players in city (Armour/Weapons page). Max stock per item.
-</div>
-</details>
-
-<details>
-<summary><strong>Booze Run</strong></summary>
-<div>
-
-**What it is:**  
-Buy booze in one city, sell in another. Six types: Bathtub Gin, Moonshine, Rum Runner’s Rum, Speakeasy Whiskey, Needle Beer, Jamaica Ginger.
-
-**Capacity:**  
-**50 units** at rank 1; **+25** per rank (e.g. rank 5 = 150). Store: **+100 units** (30 points) up to 1,000 bonus total.
-
-**Prices:**  
-Rotate **every 3 hours** per city. Game pairs cities for buy/sell routes.
-
-**Risk:**  
-Each buy or sell: **2–6%** bust chance → **20s** jail.
-</div>
-</details>
-
-<details>
-<summary><strong>Crack the Safe</strong></summary>
-<div>
-
-**What it is:**  
-Guess a **5-digit combo** (digits 1–9). Correct = jackpot (90% to winner, rest to next pool).
-
-**Attempts:**  
-**$1M per attempt.** As many attempts as you can afford — no free attempts, no purchasable bundles.
-
-**Clues:**  
-Unlock as total attempts (all players) rise: even digits (always), sum (after 5), highest digit (after 15), first digit (after 30).
-</div>
-</details>
-
-<details>
-<summary><strong>Objectives</strong></summary>
-<div>
-
-**Daily, weekly, monthly** targets (e.g. X crimes, GTAs, busts, booze runs, city crimes, interest deposit, hitlist NPCs). Complete one → **RP**, **cash**, sometimes **points**.
-
-**Completion bonus:**  
-**All** dailies in a day → extra bonus. Same for **all** weeklies and **all** monthlies (bigger bonuses).
-
-See **Objectives** page for targets and progress.
-</div>
-</details>
-
-<details>
-<summary><strong>Armour & Weapons</strong></summary>
-<div>
-
-**Armour:**  
-Five tiers (Padded Wool → … → Custom Armored Suit). Tiers 1–3: **cash**; 4–5: **points**. More bullets to kill you. Buy: Armour page or city factory owner. Sell: cost × 1.35. Events: **50% off** or **10% more**.
-
-**Weapons:**  
-Increase **damage** (fewer bullets to kill). Rank requirement; often need previous weapon. Buy: **cash** or **points** (Weapons page or factory armoury). Same 35% margin and events as armour.
-</div>
-</details>
-
-<details>
-<summary><strong>Properties (passive income)</strong></summary>
-<div>
-
-**Properties page:**  
-Passive income buildings: **Speakeasy** → **Bullet Factory** → **Underground Casino** → **Luxury Casino**. Buy in order; you must **max the previous** (level 10) to unlock the next.
-
-**Income:**  
-Each property has **income per hour** (base × level). **Upgrade** with cash to increase level (1–10); income per hour increases with each level. Income accumulates up to **24 hours**; collect regularly to maximise earnings.
-
-**Rule:**  
-You may own **one** of these at a time (plus one casino from Dice/Blackjack/Roulette/Horse Racing). See My Properties for your current casino and property.
-</div>
-</details>
-
-<details>
-<summary><strong>Store & Points</strong></summary>
-<div>
-
-**Points:**  
-From objectives, events, in-game actions. Spend in **Store** and **Quick Trade**.
-
-**Store (examples):**  
-Premium rank bar · Silencer · OC timer 4h (300 pts) · Garage batch +10 (25 pts, max 100) · Booze +100 (30 pts, up to 1000) · +5 travels/hour (25 pts) · Bullet packs · Custom car name · Bodyguard slots/armour · Auto Rank unlock
-</div>
-</details>
-
-<details>
-<summary><strong>Quick Trade</strong></summary>
-<div>
-
-**Sell points:**  
-Offer **points** for **cash** (amount + price). Buyers pay; you get cash (minus any fee). Option: **hide name** (Anonymous).
-
-**Buy points:**  
-Offer to **buy** points for **cash**. Sellers fulfil.
-
-**Property trade:**  
-List **casino tables** (dice, roulette, blackjack, horseracing) or other properties for **points**. Buyer pays points, gets ownership.
-</div>
-</details>
-
-<details>
-<summary><strong>Auto Rank</strong></summary>
-<div>
-
-**What it is:**  
-Store feature: game runs **crimes**, **GTA**, **jail busts**, **OC**, **booze** on a timer. **Telegram** (Profile): optional notifications.
-
-**Preferences:**  
-Toggle each activity on/off. Enable or disable Auto Rank on the Auto Rank page.
-
-**Stats:**  
-Page shows since last start: busts, crimes, GTAs, booze runs, cash earned, best cars. Handy for afk progress.
-</div>
-</details>
-
-<details>
-<summary><strong>Profile, Inbox & Forum</strong></summary>
-<div>
-
-**Profile:**  
-Stats, rank, wealth rank, family, kills/deaths, busts, honours, avatar. **Yours:** avatar, **settings** (notifications: E-Games, OC invites, attacks, system, messages; password).
-
-**Inbox:**  
-Notifications and DMs. Reply, threads, mark read.
-
-**Forum:**  
-**General** and **Entertainer** (E-Games). Create topics, reply, like. **Crew OC** topics when a family advertises; apply there to join a run.
-</div>
-</details>
-
-<details>
-<summary><strong>Dead / Alive</strong></summary>
-<div>
-
-**Dead** = killed in game. From a new account, use **Dead > Alive**: enter the dead account’s username and password. You receive **95% of that account’s money and points (5% tax)** on this account — **once per dead account**. After that, that dead account cannot be used again for a transfer.
-</div>
-</details>
-
-<details>
-<summary><strong>Daily Events</strong></summary>
-<div>
-
-**Daily events** (UTC) change multipliers for the day, e.g.:  
-- Double RP · Double kill cash · 2× GTA success  
-- Bodyguards 50% off or 10% more  
-- Rackets: ±10% payout; 50% faster/longer cooldown; or bonus (+10% payout, 25% faster)  
-- Armour & weapons 50% off or 10% more  
-
-**Dashboard** or event banner shows today’s event.
-</div>
-</details>
-
-<details>
-<summary><strong>Leaderboard & Stats</strong></summary>
-<div>
-
-**Leaderboard:**  
-Two views: **Weekly** (this week, Mon–Sun UTC; resets each week) and **All-Time** (lifetime totals). Top players by **kills**, **crimes**, **GTA**, **jail busts**. Toggle “Top dead” to see rankings for dead accounts. Weekly top 10 can earn rewards (cash, points, cars).
-
-**Stats:**  
-Your totals: kills, deaths, crimes, GTA, vehicles, busts, and more. Stats page also shows **wiped families** (families eliminated in war) where applicable.
-</div>
-</details>
-
-<p style="margin-top:1.2em;font-size:0.85em;color:#6b7280;">This FAQ is based on the current game code. Exact numbers may be tuned in updates; refer to in-game screens for live values.</p>
-
-</div>
-</div>
+[center][size=2][b][color=#FFD700]:crown: GAME FAQ & RULES :crown:[/color][/b][/size][/center]
+
+[center][i][color=#AAAAAA]Everything you need to know to become a Godfather[/color][/i][/center]
+
+[hr][/hr]
+
+[size=1.5][b][color=#D4AF37]:gun: COMBAT[/color][/b][/size]
+
+[quote]
+[color=#FFD700][b]Attacking[/b][/color]
+Players must be in the same city to attack. Bullets required depend on target's armour level. Kill rewards include a % of victim's cash and rank points.
+[list]
+[*][color=#888888]Same city requirement[/color]
+[*][color=#888888]Armour determines bullets needed[/color]
+[*][color=#888888]Earn cash + rank points from kills[/color]
+[/list]
+
+[color=#FFD700][b]Weapons[/b][/color]
+11 weapons from Brass Knuckles to Tommy Gun. Must own previous tier before buying the next. Train at the Shooting Range to increase weapon mastery (up to 10% bullet reduction).
+[list]
+[*][color=#888888]Brass Knuckles → Knife → Baseball Bat → Crowbar → Pistol → Revolver → Shotgun → Rifle → SMG → AK-47 → Tommy Gun[/color]
+[*][color=#888888]Cannot skip weapon tiers[/color]
+[*][color=#888888]Weapon mastery reduces bullets needed[/color]
+[/list]
+
+[color=#FFD700][b]Armour[/b][/color]
+6 armour levels - higher levels require more bullets to kill you. Must buy in order (no skipping tiers).
+[list]
+[*][color=#888888]Level 1: Leather Jacket (3 bullets)[/color]
+[*][color=#888888]Level 2: Heavy Coat (5 bullets)[/color]
+[*][color=#888888]Level 3: Kevlar Vest (10 bullets)[/color]
+[*][color=#888888]Level 4: Full Kevlar (15 bullets)[/color]
+[*][color=#888888]Level 5: Steel Plates (25 bullets)[/color]
+[*][color=#888888]Level 6: Steel Plate Vest - Loot Exclusive (40 bullets)[/color]
+[/list]
+
+[color=#FFD700][b]Hitlist[/b][/color]
+Place bounties on players using cash and/or points. Hidden option (+50% cost) conceals your identity. You can buy off your own bounty for bounty amount + 50%. NPC targets available for practice and rewards.
+
+[color=#FFD700][b]Bodyguards[/b][/color]
+Up to 4 bodyguard slots (expandable via point store). They absorb damage before you do. Robot bodyguards can be upgraded; human bodyguards use their own armour and require weekly pay.
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#2ECC71]:money: MONEY MAKING[/color][/b][/size]
+
+[quote]
+[color=#2ECC71][b]Properties[/b][/color]
+Generate hourly passive income. Upgrade to level 5 for max income. Collect daily for streak bonus (up to +7%). Must max current property before unlocking next tier. Reinvest option available for +10% income boost.
+[list]
+[*][color=#888888]7 property types with increasing income[/color]
+[*][color=#888888]Upgrade each to level 5[/color]
+[*][color=#888888]Daily collection streaks matter![/color]
+[/list]
+
+[color=#2ECC71][b]Booze Runs[/b][/color]
+Buy booze cheap in one city, sell high in another. 6 booze types available. Prices change every 3 hours. Capacity increases with rank. Small risk of jail per transaction.
+[list]
+[*][color=#888888]Beer → Wine → Whiskey → Vodka → Champagne → Moonshine[/color]
+[*][color=#888888]Check prices before travelling![/color]
+[*][color=#888888]Higher rank = more carrying capacity[/color]
+[/list]
+
+[color=#2ECC71][b]Stock Market[/b][/color]
+Trade 10 cryptocurrencies using points. Real-time prices via CoinGecko. 3-minute cooldown between buy/sell. Auto-sells after 7 days.
+[list]
+[*][color=#888888]BTC, ETH, DOGE, ADA, SOL, XRP, DOT, AVAX, MATIC, LINK[/color]
+[*][color=#888888]Real market prices - timing is everything[/color]
+[/list]
+
+[color=#2ECC71][b]Banks[/b][/color]
+[list]
+[*][color=#888888]Interest Bank: Lock cash for 12h-7 days, earn 1-12% return[/color]
+[*][color=#888888]Swiss Bank: Protected storage - safe from theft when killed[/color]
+[*][color=#888888]Quick Trade: Buy/sell points with other players[/color]
+[/list]
+
+[color=#2ECC71][b]Illegal Businesses (Speakeasys)[/b][/color]
+Own and operate illegal establishments. Generate passive income. Upgrade for better returns. Can be attacked/raided by other players.
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#9B59B6]:detective: CRIMES[/color][/b][/size]
+
+[quote]
+[color=#9B59B6][b]Regular Crimes[/b][/color]
+8 crime types unlocked by rank. Success builds progress; failure reduces it. Rare drops include loot box pieces and tokens.
+[list]
+[*][color=#888888]Pickpocket (Rat)[/color]
+[*][color=#888888]Mug a Pedestrian (Pickpocket)[/color]
+[*][color=#888888]Bootlegging (Mugger)[/color]
+[*][color=#888888]Armed Robbery (Hitman)[/color]
+[*][color=#888888]Extortion (Enforcer)[/color]
+[*][color=#888888]Jewelry Heist (Associate)[/color]
+[*][color=#888888]Bank Heist (Capo)[/color]
+[*][color=#888888]Casino Heist (Kingpin)[/color]
+[/list]
+
+[color=#9B59B6][b]Organised Crime (Heists)[/b][/color]
+Team-based jobs requiring 4 roles: Driver, Weapons, Explosives, Hacker. 4 job tiers with increasing rewards. Equipment upgrades (5 tiers) boost success rate up to 40%. Failed heists = jail time.
+[list]
+[*][color=#888888]Tier 1: Warehouse Robbery[/color]
+[*][color=#888888]Tier 2: Jewel Store Heist[/color]
+[*][color=#888888]Tier 3: Bank Vault[/color]
+[*][color=#888888]Tier 4: Federal Reserve[/color]
+[/list]
+
+[color=#9B59B6][b]GTA (Car Theft)[/b][/color]
+5 difficulty levels. Stolen cars can be melted for bullets, scrapped for cash, or sold to other players. Dealer restocks every 1-4 hours.
+[list]
+[*][color=#888888]Street Parking - Common cars[/color]
+[*][color=#888888]Parking Garage - Uncommon cars[/color]
+[*][color=#888888]Dealership - Rare cars[/color]
+[*][color=#888888]Showroom - Epic cars[/color]
+[*][color=#888888]Private Estate - Legendary cars[/color]
+[/list]
+
+[color=#9B59B6][b]Prestige Crimes[/b][/color]
+5 exclusive crimes unlocked at each prestige level with better rewards and longer cooldowns.
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#E74C3C]:jail: JAIL SYSTEM[/color][/b][/size]
+
+[quote]
+[color=#E74C3C][b]Getting Jailed[/b][/color]
+Failed crimes, GTAs, or OC jobs can land you in jail. Time varies based on offence severity.
+
+[color=#E74C3C][b]Getting Out[/b][/color]
+[list]
+[*][color=#888888]Wait out your sentence[/color]
+[*][color=#888888]Get busted out by another player[/color]
+[*][color=#888888]Pay bail (expensive!)[/color]
+[*][color=#888888]Set a bounty reward for being busted out[/color]
+[/list]
+
+[color=#E74C3C][b]Busting Others[/b][/color]
+Bust players or NPCs from jail. Success rate based on your stats. Rewards include cash, respect, and gratitude!
+
+[color=#E74C3C][b]Snitching[/b][/color]
+Add time to another player's sentence. Use sparingly - it makes enemies! Snitches get stitches...
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#3498DB]:airplane: TRAVEL[/color][/b][/size]
+
+[quote]
+[color=#3498DB][b]Cities[/b][/color]
+4 cities available, each with unique opportunities:
+[list]
+[*][color=#888888]Chicago - The birthplace of organised crime[/color]
+[*][color=#888888]New York - High risk, high reward[/color]
+[*][color=#888888]Los Angeles - Hollywood money[/color]
+[*][color=#888888]Detroit - Industrial opportunities[/color]
+[/list]
+
+[color=#3498DB][b]Travel Time[/b][/color]
+Based on your car rarity: 20-45 seconds. Better cars = faster travel.
+[list]
+[*][color=#888888]Common: 45 seconds[/color]
+[*][color=#888888]Uncommon: 35 seconds[/color]
+[*][color=#888888]Rare: 28 seconds[/color]
+[*][color=#888888]Epic: 23 seconds[/color]
+[*][color=#888888]Legendary: 20 seconds[/color]
+[/list]
+
+[color=#3498DB][b]Why Travel?[/b][/color]
+[list]
+[*][color=#888888]Attack players in other cities[/color]
+[*][color=#888888]Different booze prices per city[/color]
+[*][color=#888888]Access different casinos and businesses[/color]
+[*][color=#888888]State-owned armouries vary by location[/color]
+[*][color=#888888]Escape enemies hunting you[/color]
+[/list]
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#F39C12]:handshake: FAMILIES[/color][/b][/size]
+
+[quote]
+[color=#F39C12][b]Creating & Joining[/b][/color]
+Create a family for $6.25M. Max 10 families in the game.
+[b]Hierarchy:[/b]
+[list]
+[*][color=#FFD700]Boss (1) - Full control[/color]
+[*][color=#C0C0C0]Underboss (1) - Second in command[/color]
+[*][color=#CD7F32]Consigliere (1) - Advisor[/color]
+[*][color=#888888]Capo (4) - Crew leaders[/color]
+[*][color=#888888]Soldier (15) - Made members[/color]
+[*][color=#888888]Associate (30) - Prospects[/color]
+[/list]
+
+[color=#F39C12][b]Rackets[/b][/color]
+9 racket types generating income for the family:
+[list]
+[*][color=#888888]Protection, Gambling, Loan Sharking[/color]
+[*][color=#888888]Labour, Distillery, Warehouse[/color]
+[*][color=#888888]Restaurant/Bar, Funeral Home, Garment Shop[/color]
+[/list]
+Upgrade to level 5. Can raid other families' rackets for 25% of their revenue!
+
+[color=#F39C12][b]Family Wars[/b][/color]
+Declare war and track kills. Winner gets:
+[list]
+[*][color=#888888]Loser's treasury[/color]
+[*][color=#888888]Their rackets (if higher level)[/color]
+[*][color=#888888]+2.5% permanent income bonus (capped at 25%)[/color]
+[/list]
+
+[color=#F39C12][b]Crew OC[/b][/color]
+Family heists every 6-8 hours. Rewards: RP, cash, bullets, points, booze. $50K goes to family treasury.
+
+[color=#F39C12][b]Family Compound[/b][/color]
+Upgrade your family's headquarters for bonuses including defence, income, and member capacity.
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#E91E63]:dice: CASINOS[/color][/b][/size]
+
+[quote]
+[color=#E91E63][b]Solo Games[/b][/color]
+
+[b]Dice[/b] - Pick a number and sides (2-5000). Payout = stake x sides (minus 5% house edge).
+
+[b]Roulette[/b] - Standard bets: Straight (35:1), Red/Black (1:1), Dozens (2:1), Columns (2:1).
+
+[b]Blackjack[/b] - Standard rules. Hit, Stand, Double Down. 2% house edge.
+
+[b]Slots[/b] - 3-reel slots with lottery system. Enter draws to win the pot.
+
+[b]Video Poker[/b] - Jacks or Better. Payouts from Pair (1x) to Royal Flush (250x).
+
+[b]Horse Racing[/b] - 7 horses with odds from 1:1 to 40:1.
+
+[color=#E91E63][b]Multiplayer Games[/b][/color]
+
+[b]MDG (Million Dollar Game)[/b] - Pot game for 2-100 players. Roll determines winner by join order. Winner takes all.
+
+[b]MP Blackjack[/b] - Multiplayer blackjack against other players. Buy-in pot, winner takes all.
+
+[b]MP Poker[/b] - Texas Hold'em against other players or vs dealer mode.
+
+[b]Sports Betting[/b] - Bet on real-world and custom events.
+
+[color=#E91E63][b]Casino Ownership[/b][/color]
+Capo+ rank can claim casino tables for $500M-$1.25B. Earn house edge from all bets placed!
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#00BCD4]:joystick: MINI-GAMES[/color][/b][/size]
+
+[quote]
+[color=#00BCD4][b]Racing[/b][/color]
+Own historical cars (Ford Model T to Duesenberg), upgrade them, manage tyres and engine wear.
+[list]
+[*][color=#888888]4 tracks with different reward multipliers[/color]
+[*][color=#888888]Daily automated races[/color]
+[*][color=#888888]Upgrade: Engine, Tyres, Suspension, Brakes[/color]
+[/list]
+
+[color=#00BCD4][b]Snake (Package Run)[/b][/color]
+Collect rewards on the board. Rewards: cash, respect, bullets, booze. Max 15 plays/hour.
+
+[color=#00BCD4][b]Minesweeper[/b][/color]
+3 difficulties with scaling rewards:
+[list]
+[*][color=#888888]Snitch - Easy, small rewards[/color]
+[*][color=#888888]Capo - Medium difficulty[/color]
+[*][color=#888888]Godfather - Hard, big rewards[/color]
+[/list]
+Max 20 wins/hour.
+
+[color=#00BCD4][b]Shooting Range[/b][/color]
+Train weapon mastery. 3D mode for faster gains (+1% per hit). Essential for combat efficiency!
+
+[color=#00BCD4][b]Boxing[/b][/color]
+Bet on fights or compete yourself. Train your fighter and climb the rankings.
+
+[color=#00BCD4][b]Other Games[/b][/color]
+The Getaway, Gauntlet, Battleships, Family Run - various rewards and challenges.
+
+[color=#00BCD4][b]Weekly Leaderboard[/b][/color]
+Top minigame players earn bonus rewards weekly. Compete for glory and prizes!
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#FFD700]:trophy: PROGRESSION[/color][/b][/size]
+
+[quote]
+[color=#FFD700][b]Ranks (22 Total)[/b][/color]
+[list]
+[*][color=#666666]Rat → Lookout → Pickpocket → Thief → Mugger → Dealer[/color]
+[*][color=#888888]Hitman → Assassin → Enforcer → Local Chief[/color]
+[*][color=#AAAAAA]Associate → Soldier → Capo → Boss[/color]
+[*][color=#CCCCCC]Kingpin → Don[/color]
+[*][color=#FFD700]Godfather I → II → III → IV → V → VI[/color]
+[/list]
+
+[color=#FFD700][b]Prestige (5 Levels)[/b][/color]
+After reaching Godfather VI, prestige to reset rank and unlock permanent bonuses:
+[list]
+[*][color=#CD7F32]Prestige 1: Crime cash multiplier[/color]
+[*][color=#C0C0C0]Prestige 2: OC reward multiplier[/color]
+[*][color=#FFD700]Prestige 3: GTA rare car boost[/color]
+[*][color=#E5E4E2]Prestige 4: NPC reward multiplier[/color]
+[*][color=#B9F2FF]Prestige 5: Exclusive prestige crimes[/color]
+[/list]
+
+[color=#FFD700][b]Missions[/b][/color]
+25 story missions with increasing difficulty. Complete objectives for one-time rewards + daily tribute (passive income including cash, bullets, respect, and tokens).
+
+[color=#FFD700][b]Objectives[/b][/color]
+[list]
+[*][color=#888888]Daily: 7 objective types, reset every 24h[/color]
+[*][color=#888888]Weekly: Higher targets, 5x rewards[/color]
+[*][color=#888888]Monthly: Even higher targets, 15x rewards[/color]
+[*][color=#FFD700]Lifetime "Completed It": 10 massive goals for $15B, 15K points, 1M bullets + permanent combat perks[/color]
+[/list]
+
+[color=#FFD700][b]Daily Tribute[/b][/color]
+Passive rewards that stack until collected. Don't miss a day!
+[list]
+[*][color=#888888]Cash, bullets, respect[/color]
+[*][color=#888888]Loot box pieces[/color]
+[*][color=#888888]Consumable tokens[/color]
+[/list]
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#9C27B0]:gift: LOOT BOXES[/color][/b][/size]
+
+[quote]
+[color=#9C27B0][b]How to Get Pieces[/b][/color]
+Loot box pieces drop from crimes, activities, and purchases. 100 pieces = 1 box opening.
+
+[color=#9C27B0][b]Possible Rewards[/b][/color]
+[list]
+[*][color=#888888]Points and rank points[/color]
+[*][color=#888888]Cash and bullets[/color]
+[*][color=#888888]Cars (including exclusives)[/color]
+[*][color=#888888]Consumable tokens[/color]
+[/list]
+
+[color=#FFD700][b]Exclusive Items (Rare!)[/b][/color]
+[list]
+[*][color=#FFD700]Loot Weapon - Unique combat advantage[/color]
+[*][color=#FFD700]Loot Car - Fastest travel in the game[/color]
+[*][color=#FFD700]Steel Plate Vest - Armour level 6 (40 bullets to kill!)[/color]
+[*][color=#FFD700]Speakeasy Property - Best passive income[/color]
+[/list]
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#607D8B]:factory: ARMOURIES (State-Owned)[/color][/b][/size]
+
+[quote]
+[color=#607D8B][b]Bullet Factories[/b][/color]
+Each state has a bullet factory producing 5,000 bullets/day. Owners set prices and control supply.
+
+[color=#607D8B][b]Armour & Weapon Production[/b][/color]
+Factories also produce armour and weapons for sale. Great passive income!
+
+[color=#607D8B][b]Claiming[/b][/color]
+[list]
+[*][color=#888888]Requires Capo rank minimum[/color]
+[*][color=#888888]Costs $1.25M to claim[/color]
+[*][color=#888888]Ownership can be challenged by other players[/color]
+[*][color=#888888]Defend your business or lose it![/color]
+[/list]
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#E74C3C]:skull: DEATH & RESPAWN[/color][/b][/size]
+
+[quote]
+[color=#E74C3C][b]When You Die[/b][/color]
+[list]
+[*][color=#FF6B6B]Lose a % of cash on hand (Swiss Bank is safe!)[/color]
+[*][color=#FF6B6B]Lose ALL your properties[/color]
+[*][color=#FF6B6B]Killer gains your rank points[/color]
+[*][color=#FF6B6B]Your account is GONE - permadeath![/color]
+[/list]
+
+[color=#E74C3C][b]Starting Over[/b][/color]
+Create a new account after death. Previous account stats are gone forever. Points purchased remain tied to your player account (contact support).
+
+[color=#2ECC71][b]Staying Alive - Tips[/b][/color]
+[list]
+[*][color=#888888]Keep cash in Swiss Bank - ALWAYS[/color]
+[*][color=#888888]Maintain highest armour level you can afford[/color]
+[*][color=#888888]Hire bodyguards - they die first[/color]
+[*][color=#888888]Travel frequently to avoid being tracked[/color]
+[*][color=#888888]Don't make unnecessary enemies[/color]
+[*][color=#888888]Join a strong family for protection[/color]
+[/list]
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#8E44AD]:star: POINT STORE[/color][/b][/size]
+
+[quote]
+[color=#8E44AD][b]Premium Items[/b][/color]
+[list]
+[*][color=#FFD700]Auto Rank (5,000 pts)[/color] - Auto-commit crimes & GTAs while offline
+[*][color=#888888]OC Timer Reduction (300 pts)[/color] - 4h cooldown instead of 8h
+[*][color=#888888]Crew OC Timer (350 pts)[/color] - 6h cooldown instead of 8h
+[*][color=#888888]Silencer (150 pts)[/color] - Fewer witness statements
+[*][color=#888888]Anti-Snitch (120 pts)[/color] - Can't be snitched on
+[*][color=#888888]Bullets (100-1,525 pts)[/color] - 5K to 100K bullets
+[*][color=#888888]Custom Car (500 pts)[/color] - Design your own car
+[*][color=#888888]Health Restore (15 pts)[/color] - Restore to 100 HP
+[*][color=#888888]Booze Capacity (30 pts per +100, max +1,000)[/color]
+[*][color=#888888]Bodyguard slots (75-450 pts each)[/color]
+[*][color=#888888]Garage upgrades for bulk operations[/color]
+[/list]
+
+[color=#8E44AD][b]Consumable Tokens (1-Hour Boosts)[/b][/color]
+9 types, stackable up to 2-6 hours:
+[list]
+[*][color=#888888]Crime XP Token - Faster crime leveling[/color]
+[*][color=#888888]GTA XP Token - Faster car theft leveling[/color]
+[*][color=#888888]Melt Bonus Token - More bullets from melting[/color]
+[*][color=#888888]OC Cooldown Token - Faster heist cooldowns[/color]
+[*][color=#888888]Booze Bonus Token - Better booze profits[/color]
+[*][color=#888888]Racket Bonus Token - Family income boost[/color]
+[*][color=#888888]Travel Speed Token - Faster city travel[/color]
+[*][color=#888888]Property Income Token - Better property returns[/color]
+[*][color=#888888]Jailbust Bonus Token - Higher bust success rate[/color]
+[/list]
+[/quote]
+
+[hr][/hr]
+
+[center][size=1.8][b][color=#FF4444]:warning: RULES & POLICIES :warning:[/color][/b][/size][/center]
+
+[quote]
+[size=1.4][color=#FF4444][b]General Rules[/b][/color][/size]
+
+:x: [b][color=#FF6B6B]No multi-accounting[/color][/b] - One account per person. Alts will be banned.
+:x: [b][color=#FF6B6B]No exploiting bugs[/color][/b] - Report bugs to staff. Exploiters will be punished.
+:x: [b][color=#FF6B6B]No harassment[/color][/b] - Keep it in-game. Real-life threats = permanent ban.
+:x: [b][color=#FF6B6B]No sharing accounts[/color][/b] - Your account is your responsibility.
+:x: [b][color=#FF6B6B]No botting/scripting[/color][/b] - Automated play is prohibited (Auto Rank is the only exception).
+:x: [b][color=#FF6B6B]No real-money trading[/color][/b] - Do not sell/buy in-game items for real money outside the official store.
+:x: [b][color=#FF6B6B]No VPN abuse[/color][/b] - Using VPNs to evade bans will result in permanent ban.
+
+[size=1.4][color=#FF4444][b]Combat Rules[/b][/color][/size]
+
+:check: [color=#2ECC71]PvP is allowed and encouraged - it's a mafia game![/color]
+:check: [color=#2ECC71]Hitlist bounties are fair game[/color]
+:check: [color=#2ECC71]Family wars are part of the game[/color]
+:x: [color=#FF6B6B]No targeting staff accounts maliciously[/color]
+:x: [color=#FF6B6B]No coordinated harassment of single players across multiple accounts[/color]
+
+[size=1.4][color=#FF4444][b]Forum Rules[/b][/color][/size]
+
+:x: [color=#FF6B6B]No spam or off-topic posts[/color]
+:x: [color=#FF6B6B]No advertising other games[/color]
+:x: [color=#FF6B6B]No posting NSFW content[/color]
+:x: [color=#FF6B6B]No impersonating staff[/color]
+:x: [color=#FF6B6B]No sharing personal information of others[/color]
+:check: [color=#2ECC71]Be respectful to other players[/color]
+:check: [color=#2ECC71]Use appropriate language[/color]
+:check: [color=#2ECC71]Keep discussions constructive[/color]
+
+[size=1.4][color=#FF4444][b]Chat Rules[/b][/color][/size]
+
+:x: [color=#FF6B6B]No flooding or spamming[/color]
+:x: [color=#FF6B6B]No begging for items/money[/color]
+:x: [color=#FF6B6B]No advertising[/color]
+:x: [color=#FF6B6B]No toxic behaviour[/color]
+:check: [color=#2ECC71]English in global chat preferred[/color]
+[/quote]
+
+[hr][/hr]
+
+[center][size=1.8][b][color=#FF4444]:moneybag: POINT STORE POLICY :moneybag:[/color][/b][/size][/center]
+
+[quote]
+[center][size=1.3][b][color=#FF4444]All point purchases are FINAL and NON-REFUNDABLE.[/color][/b][/size][/center]
+
+[size=1.4][color=#FF4444][b]:fire: Chargebacks[/b][/color][/size]
+Filing a chargeback with your bank/PayPal will result in:
+[list=1]
+[*][b][color=#FF6B6B]Immediate permanent ban[/color][/b] of your account
+[*][b][color=#FF6B6B]Ban of all associated accounts[/color][/b] (same IP, device, payment method)
+[*][b][color=#FF6B6B]Removal of all items/points[/color][/b] from the transaction
+[*][b][color=#FF6B6B]No appeal[/color][/b] - This decision is final
+[*][b][color=#FF6B6B]Potential legal action[/color][/b] for fraud
+[/list]
+
+[size=1.4][color=#F39C12][b]:warning: Before purchasing:[/b][/color][/size]
+[list]
+[*][color=#888888]Ensure you have sufficient funds[/color]
+[*][color=#888888]Verify you want the items[/color]
+[*][color=#888888]Check you're buying the correct package[/color]
+[*][color=#888888]Contact support FIRST if there's an issue[/color]
+[/list]
+
+[size=1.4][color=#FF4444][b]:fire: Disputed Transactions[/b][/color][/size]
+If you believe a transaction was fraudulent (stolen card, unauthorized access), contact us BEFORE disputing with your bank. We will investigate and resolve legitimate issues.
+
+[size=1.4][color=#F39C12][b]:warning: Age Requirement[/b][/color][/size]
+You must be 18+ to make purchases. Minors using parents' payment methods without permission is fraud and will be treated as such.
+
+[center][b][color=#FF4444]We reserve the right to ban any account involved in payment fraud or abuse.[/color][/b][/center]
+[/quote]
+
+[hr][/hr]
+
+[center][size=1.8][b][color=#3498DB]:question: FREQUENTLY ASKED QUESTIONS :question:[/color][/b][/size][/center]
+
+[quote]
+[color=#3498DB][b]Q: How do I make money fast?[/b][/color]
+[color=#AAAAAA]A: Complete missions, do booze runs, collect property income, and grind crimes. Booze runs are the fastest early game![/color]
+
+[color=#3498DB][b]Q: How do I get more bullets?[/b][/color]
+[color=#AAAAAA]A: Buy from armouries, melt cars (GTA), or purchase with points. Melting legendary cars gives the most bullets.[/color]
+
+[color=#3498DB][b]Q: What happens when I die?[/b][/color]
+[color=#AAAAAA]A: You lose cash on hand and properties. Swiss Bank cash is safe. You must start a new account - this is permadeath![/color]
+
+[color=#3498DB][b]Q: How do I join a family?[/b][/color]
+[color=#AAAAAA]A: Visit the Families page and apply to join, or wait for an invite. Building reputation helps get accepted![/color]
+
+[color=#3498DB][b]Q: What rank do I need to claim businesses?[/b][/color]
+[color=#AAAAAA]A: Capo rank for most claimable businesses (armouries, casinos, airports).[/color]
+
+[color=#3498DB][b]Q: How does Auto Rank work?[/b][/color]
+[color=#AAAAAA]A: It automatically commits crimes and GTAs for you based on your settings while offline. You still gain all rewards normally.[/color]
+
+[color=#3498DB][b]Q: Can I transfer items between accounts?[/b][/color]
+[color=#AAAAAA]A: No. This is considered multi-accounting and will result in bans for all accounts involved.[/color]
+
+[color=#3498DB][b]Q: How do I report a bug or player?[/b][/color]
+[color=#AAAAAA]A: Use the Help Desk in-game or message a staff member directly.[/color]
+
+[color=#3498DB][b]Q: What's the best way to stay alive?[/b][/color]
+[color=#AAAAAA]A: Keep cash in Swiss Bank, maintain high armour, hire bodyguards, and don't make unnecessary enemies. Join a strong family for backup.[/color]
+
+[color=#3498DB][b]Q: How do prestige bonuses work?[/b][/color]
+[color=#AAAAAA]A: Each prestige level gives a permanent multiplier that applies forever, even after death. They're worth the grind![/color]
+
+[color=#3498DB][b]Q: Can I get my points back if I die?[/b][/color]
+[color=#AAAAAA]A: Contact support - points are tied to your player account, not character. Unused points can be transferred to a new character.[/color]
+
+[color=#3498DB][b]Q: What's the fastest way to rank up?[/b][/color]
+[color=#AAAAAA]A: Grind crimes, complete objectives, do heists, and kill players. Auto Rank helps tremendously if you can afford it.[/color]
+[/quote]
+
+[hr][/hr]
+
+[center][size=1.5][b][color=#FFD700]:bulb: PRO TIPS :bulb:[/color][/b][/size][/center]
+
+[quote]
+[list]
+[*][color=#FFD700][b]Always bank your cash[/b][/color] - Swiss Bank protects you from losing everything on death
+[*][color=#FFD700][b]Collect properties daily[/b][/color] - Streak bonuses add up to +7% extra income
+[*][color=#FFD700][b]Train weapon mastery[/b][/color] - 10% bullet reduction is huge in combat
+[*][color=#FFD700][b]Join a family ASAP[/b][/color] - Protection, Crew OC rewards, and social benefits
+[*][color=#FFD700][b]Check booze prices[/b][/color] - Prices change every 3 hours, timing is everything
+[*][color=#FFD700][b]Don't skip armour tiers[/b][/color] - Buy them in order or you can't upgrade
+[*][color=#FFD700][b]Use tokens wisely[/b][/color] - Stack them during grinding sessions for maximum effect
+[*][color=#FFD700][b]Complete daily objectives[/b][/color] - Easy rewards you shouldn't miss
+[*][color=#FFD700][b]Upgrade OC equipment[/b][/color] - 40% success boost makes a huge difference
+[*][color=#FFD700][b]Watch the hitlist[/b][/color] - Free money if you can catch targets!
+[/list]
+[/quote]
+
+[hr][/hr]
+
+[center][size=1.5][b][color=#FFD700]Questions?[/color][/b][/size]
+[color=#AAAAAA]Use the Help Desk or message staff. Good luck, and welcome to the family![/color] :gun:
+
+[i][color=#666666]Omertà™ - All rights reserved[/color][/i][/center]
