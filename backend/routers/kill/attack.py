@@ -1072,11 +1072,13 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             car_info = next((c for c in CARS if c["id"] == uc.get("car_id")), None)
             if car_info and car_info.get("rarity") == "exclusive":
                 exclusive_car_count += 1
-        prop_names = []
+        prop_name_counts = {}
         for up in victim_props:
             p = await db.properties.find_one({"id": up["property_id"]}, {"_id": 0, "name": 1})
             if p:
-                prop_names.append(p["name"])
+                name = p["name"]
+                prop_name_counts[name] = prop_name_counts.get(name, 0) + 1
+        prop_names = [f"{count}x {name}" if count > 1 else name for name, count in prop_name_counts.items()]
         killer_doc = await db.users.find_one({"id": killer_id}, {"_id": 0, "rank_points": 1, "username": 1})
         killer_rp_before = int((killer_doc or {}).get("rank_points") or 0)
         kill_inc = {"money": cash_loot, "total_kills": 1, "rank_points": rank_points}

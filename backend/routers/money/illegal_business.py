@@ -453,7 +453,8 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
         inc["points"] = points_earned
     if loot_pieces_earned > 0:
         inc["loot_box_pieces"] = loot_pieces_earned
-    if random.random() < 0.02:
+    # Ultra-rare token drop (0.001% = 1 in 100,000) - same as crimes
+    if random.random() < 0.00001:
         token_type = random.choice(TOKEN_TYPES)
         field = TOKEN_CONFIG[token_type]["count_field"]
         inc[field] = inc.get(field, 0) + 1

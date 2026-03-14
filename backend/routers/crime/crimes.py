@@ -167,6 +167,10 @@ LOOT_PIECE_CHANCE_NORMAL = 0.0005
 LOOT_PIECE_CHANCE_PRESTIGE = 0.0015
 LOOT_PIECE_AMOUNT = 1
 
+# Ultra-rare token drop from any successful crime
+# 0.001% = 1 in 100,000 successful crimes
+TOKEN_GLOBAL_DROP_CHANCE = 0.00001
+
 
 # ---------------------------------------------------------------------------
 # Game data init (called from server on startup)
@@ -315,6 +319,7 @@ from server import (
     RANKS,
 )
 from routers.account.objectives import update_objectives_progress
+from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
 
 
 async def get_crimes(current_user: dict = Depends(get_current_user)):
@@ -575,6 +580,15 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                 prestige_bonus_earned = {"loot_box_pieces": LOOT_PIECE_AMOUNT}
             else:
                 prestige_bonus_earned["loot_box_pieces"] = prestige_bonus_earned.get("loot_box_pieces", 0) + LOOT_PIECE_AMOUNT
+        # Ultra-rare random token drop (1 in 100,000)
+        if random.random() < TOKEN_GLOBAL_DROP_CHANCE:
+            token_type = random.choice(TOKEN_TYPES)
+            token_field = TOKEN_CONFIG[token_type]["count_field"]
+            inc[token_field] = inc.get(token_field, 0) + 1
+            if prestige_bonus_earned is None:
+                prestige_bonus_earned = {"token": token_type}
+            else:
+                prestige_bonus_earned["token"] = token_type
         await db.users.update_one(
             {"id": current_user["id"]},
             {"$inc": inc},
