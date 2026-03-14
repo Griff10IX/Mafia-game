@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -335,6 +335,9 @@ export default function Admin() {
   const [loginLockMessage, setLoginLockMessage] = useState('');
   const [preorderReleaseDate, setPreorderReleaseDate] = useState('');
   const [launchSettingsSaving, setLaunchSettingsSaving] = useState(false);
+  const [casinoGlobalMaxBet, setCasinoGlobalMaxBet] = useState(1000000000);
+  const [casinoBuybackMaxPoints, setCasinoBuybackMaxPoints] = useState(15000);
+  const [casinoCapsSaving, setCasinoCapsSaving] = useState(false);
   const [pageLocks, setPageLocks] = useState({});
   const [pageLockPath, setPageLockPath] = useState('');
   const [pageLockMessage, setPageLockMessage] = useState('Down for maintenance');
@@ -584,6 +587,8 @@ export default function Admin() {
       setLoginLockUntil(res.data?.login_lock_until || '');
       setLoginLockMessage(res.data?.login_lock_message || '');
       setPreorderReleaseDate(res.data?.preorder_points_release_date || '');
+      setCasinoGlobalMaxBet(res.data?.casino_global_max_bet || 1000000000);
+      setCasinoBuybackMaxPoints(res.data?.casino_buyback_max_points || 15000);
     } catch {
       setAdminOnlineColor('#a78bfa');
       setModDefaultOnlineColor('#1e3a5f');
@@ -592,6 +597,8 @@ export default function Admin() {
       setLoginLockUntil('');
       setLoginLockMessage('');
       setPreorderReleaseDate('');
+      setCasinoGlobalMaxBet(1000000000);
+      setCasinoBuybackMaxPoints(15000);
     }
   };
 
@@ -671,6 +678,21 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to save preorder settings');
     } finally {
       setLaunchSettingsSaving(false);
+    }
+  };
+
+  const handleSaveCasinoCaps = async () => {
+    setCasinoCapsSaving(true);
+    try {
+      await api.patch('/admin/settings', {
+        casino_global_max_bet: Math.max(1000000, parseInt(String(casinoGlobalMaxBet).replace(/\D/g, ''), 10) || 1000000000),
+        casino_buyback_max_points: Math.max(0, parseInt(String(casinoBuybackMaxPoints).replace(/\D/g, ''), 10) || 15000),
+      });
+      toast.success('Casino caps saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to save casino caps');
+    } finally {
+      setCasinoCapsSaving(false);
     }
   };
 
@@ -3106,6 +3128,56 @@ export default function Admin() {
                 {launchSettingsSaving ? 'Saving...' : 'Save Preorder Settings'}
               </button>
             </div>
+          </div>
+        )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={DollarSign}
+          title="Casino Limits"
+          badge={
+            <span className="text-[10px] font-heading text-mutedForeground">
+              Max bet: ${(casinoGlobalMaxBet || 1000000000).toLocaleString()} · Buy-back: {(casinoBuybackMaxPoints || 15000).toLocaleString()} pts
+            </span>
+          }
+          isCollapsed={collapsed.casinoLimits}
+          onToggle={() => toggleSection('casinoLimits')}
+        />
+        {!collapsed.casinoLimits && (
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground">Set global caps that apply to all casinos. Owners cannot set values higher than these limits.</p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-mutedForeground w-32 shrink-0">Global Max Bet ($)</span>
+                <input
+                  type="text"
+                  value={casinoGlobalMaxBet.toLocaleString()}
+                  onChange={(e) => setCasinoGlobalMaxBet(parseInt(e.target.value.replace(/\D/g, ''), 10) || 0)}
+                  className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none font-mono"
+                  placeholder="1,000,000,000"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-mutedForeground w-32 shrink-0">Buy-back Max (pts)</span>
+                <input
+                  type="text"
+                  value={casinoBuybackMaxPoints.toLocaleString()}
+                  onChange={(e) => setCasinoBuybackMaxPoints(parseInt(e.target.value.replace(/\D/g, ''), 10) || 0)}
+                  className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none font-mono"
+                  placeholder="15,000"
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveCasinoCaps}
+              disabled={casinoCapsSaving}
+              className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+            >
+              {casinoCapsSaving ? 'Saving...' : 'Save Casino Limits'}
+            </button>
           </div>
         )}
         </div>

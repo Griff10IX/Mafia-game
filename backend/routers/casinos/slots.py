@@ -20,6 +20,7 @@ from server import (
     maybe_auto_relinquish_below_capo,
     log_gambling,
     get_head_family_id_for_state,
+    get_casino_caps,
 )
 
 # ----- Constants -----
@@ -424,7 +425,8 @@ def register(router):
         stored_state, doc = await _get_slots_ownership_doc(state)
         if not doc or doc.get("owner_id") != current_user.get("id") or "" or _is_slots_ownership_expired(doc):
             raise HTTPException(status_code=403, detail="You do not own the slots here")
-        new_max = max(1, min(int(request.max_bet), SLOTS_MAX_BET))
+        global_cap, _ = await get_casino_caps()
+        new_max = max(1_000_000, min(int(request.max_bet), global_cap))
         await db.slots_ownership.update_one({"state": stored_state or state}, {"$set": {"max_bet": new_max}})
         return {"message": f"Max bet set to ${new_max:,}"}
 
@@ -438,7 +440,8 @@ def register(router):
         stored_state, doc = await _get_slots_ownership_doc(state)
         if not doc or doc.get("owner_id") != current_user.get("id") or "" or _is_slots_ownership_expired(doc):
             raise HTTPException(status_code=403, detail="You do not own the slots here")
-        amount = max(0, int(request.amount))
+        _, buyback_cap = await get_casino_caps()
+        amount = max(0, min(int(request.amount), buyback_cap))
         await db.slots_ownership.update_one({"state": stored_state or state}, {"$set": {"buy_back_reward": amount}})
         return {"message": "Buy-back reward updated."}
 

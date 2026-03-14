@@ -47,6 +47,8 @@ class AdminSettingsUpdate(BaseModel):
     login_lock_until: Optional[str] = None  # ISO datetime - block logins until this date
     login_lock_message: Optional[str] = None  # Custom message shown on login page during lock
     preorder_points_release_date: Optional[str] = None  # ISO datetime - points held until this date
+    casino_global_max_bet: Optional[int] = None  # Max bet cap for all casinos (default 1B)
+    casino_buyback_max_points: Optional[int] = None  # Max points for buy-back reward (default 15000)
 
 
 class TestUsersAutoRankRequest(BaseModel):
@@ -1675,6 +1677,8 @@ def register(router):
         login_lock_until = main_doc.get("login_lock_until") if main_doc else None
         login_lock_message = main_doc.get("login_lock_message") if main_doc else None
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
+        casino_global_max_bet = int(main_doc.get("casino_global_max_bet") or 1_000_000_000) if main_doc else 1_000_000_000
+        casino_buyback_max_points = int(main_doc.get("casino_buyback_max_points") or 15_000) if main_doc else 15_000
         return {
             "admin_online_color": admin_online_color.strip(),
             "mod_default_online_color": mod_default_online_color.strip(),
@@ -1684,6 +1688,8 @@ def register(router):
             "login_lock_until": login_lock_until,
             "login_lock_message": login_lock_message,
             "preorder_points_release_date": preorder_points_release_date,
+            "casino_global_max_bet": casino_global_max_bet,
+            "casino_buyback_max_points": casino_buyback_max_points,
         }
 
     @router.patch("/admin/settings")
@@ -1748,6 +1754,18 @@ def register(router):
                 {"$set": {"preorder_points_release_date": body.preorder_points_release_date if body.preorder_points_release_date else None}},
                 upsert=True,
             )
+        if body.casino_global_max_bet is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"casino_global_max_bet": max(1_000_000, int(body.casino_global_max_bet))}},
+                upsert=True,
+            )
+        if body.casino_buyback_max_points is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"casino_buyback_max_points": max(0, int(body.casino_buyback_max_points))}},
+                upsert=True,
+            )
         MOD_DEFAULT = "#1e3a5f"
         doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
         admin_online_color = (doc.get("value") or "#a78bfa") if doc else "#a78bfa"
@@ -1766,6 +1784,8 @@ def register(router):
         login_lock_until = main_doc.get("login_lock_until") if main_doc else None
         login_lock_message = main_doc.get("login_lock_message") if main_doc else None
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
+        casino_global_max_bet = int(main_doc.get("casino_global_max_bet") or 1_000_000_000) if main_doc else 1_000_000_000
+        casino_buyback_max_points = int(main_doc.get("casino_buyback_max_points") or 15_000) if main_doc else 15_000
         return {
             "admin_online_color": admin_online_color,
             "mod_default_online_color": mod_default_online_color.strip() if isinstance(mod_default_online_color, str) else MOD_DEFAULT,
@@ -1775,6 +1795,8 @@ def register(router):
             "login_lock_until": login_lock_until,
             "login_lock_message": login_lock_message,
             "preorder_points_release_date": preorder_points_release_date,
+            "casino_global_max_bet": casino_global_max_bet,
+            "casino_buyback_max_points": casino_buyback_max_points,
         }
 
     PAGE_LOCKS_KEY = "page_locks"

@@ -21,6 +21,7 @@ from server import (
     _user_owns_any_casino,
     _username_pattern,
     get_head_family_id_for_state,
+    get_casino_caps,
 )
 from routers.casinos.roulette import RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest
 from routers.casinos.dice import DiceSellOnTradeRequest
@@ -294,7 +295,8 @@ def register(router):
         stored_city, doc = await _get_horseracing_ownership_doc(city)
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this track")
-        new_max = max(1_000_000, request.max_bet)
+        global_cap, _ = await get_casino_caps()
+        new_max = max(1_000_000, min(request.max_bet, global_cap))
         await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": new_max}})
         return {"message": f"Max bet set to ${new_max:,}"}
 
@@ -308,7 +310,8 @@ def register(router):
         stored_city, doc = await _get_horseracing_ownership_doc(city)
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this track")
-        amount = max(0, int(request.amount))
+        _, buyback_cap = await get_casino_caps()
+        amount = max(0, min(int(request.amount), buyback_cap))
         await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"buy_back_reward": amount}})
         return {"message": "Buy-back reward updated."}
 

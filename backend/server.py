@@ -1291,6 +1291,15 @@ async def _get_casino_property_profit(user_id: str):
     return (casino_cash, property_pts, has_casino, has_property)
 
 
+async def get_casino_caps():
+    """Returns (global_max_bet, buyback_max_points) from game settings."""
+    doc = await db.game_settings.find_one({"_id": "main"})
+    return (
+        int((doc or {}).get("casino_global_max_bet") or 1_000_000_000),
+        int((doc or {}).get("casino_buyback_max_points") or 15_000),
+    )
+
+
 async def _user_owns_any_casino(user_id: str):
     """Return first casino owned by user: {type, city, max_bet, buy_back_reward?, profit?} or None. Rule: 1 casino only. profit is $ (total_earnings or profit field)."""
     for game_type, coll in [
