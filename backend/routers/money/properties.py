@@ -87,6 +87,8 @@ BUFF_COST_POINTS = 100
 
 def _property_order(properties: list) -> list:
     """Return properties in progression order (first = worst pay, last = best)."""
+    # Filter out any properties missing required "id" field
+    properties = [p for p in properties if p.get("id")]
     by_id = {p["id"]: p for p in properties}
     ordered = []
     next_id = None
@@ -95,13 +97,13 @@ def _property_order(properties: list) -> list:
             for p in properties:
                 if p.get("required_property_id") is None:
                     ordered.append(p)
-                    next_id = p["id"]
+                    next_id = p.get("id")
                     break
         else:
             for p in properties:
                 if p.get("required_property_id") == next_id:
                     ordered.append(p)
-                    next_id = p["id"]
+                    next_id = p.get("id")
                     break
             else:
                 break
