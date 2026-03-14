@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Trophy, Medal, Award, RefreshCw, Gamepad2, Clock, Gift, DollarSign, Heart, Package, Crosshair, Bomb } from 'lucide-react';
+import { Trophy, Medal, Award, RefreshCw, Gamepad2, Clock, Gift, DollarSign, Heart, Package, Crosshair, Bomb, Ship } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -19,6 +19,7 @@ const GAME_ICONS = {
   gauntlet: Gamepad2,
   shooting_range: Crosshair,
   minesweeper: Bomb,
+  battleships: Ship,
 };
 
 const GAME_LABELS = {
@@ -26,6 +27,7 @@ const GAME_LABELS = {
   gauntlet: 'Flappy Gangster',
   shooting_range: 'Shooting Range',
   minesweeper: 'Minefield',
+  battleships: 'Rum Runner',
 };
 
 function formatTimeUntil(isoDate) {
@@ -130,7 +132,7 @@ export default function MiniGamesLeaderboard() {
           </h1>
         </div>
         <p className="text-[9px] text-zinc-500 font-heading italic">
-          Play Snake, Flappy Gangster, Shooting Range, and Minefield to earn points. Top 5 rewarded every Sunday!
+          Play Snake, Flappy Gangster, Shooting Range, Minefield, and Rum Runner to earn points. Top 5 rewarded every Sunday!
         </p>
         <button
           type="button"
@@ -371,6 +373,13 @@ export default function MiniGamesLeaderboard() {
           >
             <Bomb size={12} className="text-primary" />
             Minefield
+          </Link>
+          <Link
+            to="/battleships"
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20 hover:border-primary/40`}
+          >
+            <Ship size={12} className="text-primary" />
+            Rum Runner
           </Link>
         </div>
       </section>

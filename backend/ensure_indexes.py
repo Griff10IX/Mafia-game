@@ -293,6 +293,10 @@ async def ensure_all_indexes(db):
         await db.minesweeper_wins.create_index([("time_seconds", 1)])
         await db.minesweeper_wins.create_index([("user_id", 1), ("difficulty", 1)])
 
+        # --- Battleships ---
+        await db.battleships_wins.create_index([("shots_fired", 1), ("time_seconds", 1)])
+        await db.battleships_wins.create_index([("user_id", 1)])
+
         logger.info("All non-profile indexes ensured.")
     except Exception as e:
         logger.warning("ensure_all_indexes: %s", e)

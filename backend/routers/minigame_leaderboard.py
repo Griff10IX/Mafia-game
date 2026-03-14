@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from server import db, get_current_user, ADMIN_EMAILS
 
 MINIGAME_LB_CONFIG_ID = "minigame_weekly_leaderboard"
-VALID_GAMES = ["snake", "gauntlet", "shooting_range", "minesweeper"]
+VALID_GAMES = ["snake", "gauntlet", "shooting_range", "minesweeper", "battleships"]
 PARTICIPATION_POINTS = 10
 SCORE_BONUS_DIVISOR = 100
 SCORE_BONUS_CAP = 50

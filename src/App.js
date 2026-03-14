@@ -56,6 +56,7 @@ const Attemps = lazy(() => import("./pages/Attemps"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const MiniGamesLeaderboard = lazy(() => import("./pages/MiniGamesLeaderboard"));
 const Minesweeper = lazy(() => import("./pages/Minesweeper"));
+const Battleships = lazy(() => import("./pages/Battleships"));
 const Store = lazy(() => import("./pages/Store"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminLocked = lazy(() => import("./pages/AdminLocked"));
@@ -862,6 +863,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Minesweeper />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/battleships"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Battleships />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

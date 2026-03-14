@@ -1429,6 +1429,8 @@ from routers import minigame_leaderboard
 minigame_leaderboard.register(api_router)
 from routers import minesweeper
 minesweeper.register(api_router)
+from routers import battleships
+battleships.register(api_router)
 from routers import auto_rank as auto_rank_router
 auto_rank_router.register(api_router)
 
