@@ -13,6 +13,7 @@ const STORE_STYLES = `
 `;
 
 const PACKAGES = [
+  { id: 'test', name: '10 pts', points: 10, price: 0.50, popular: false, isTest: true },
   { id: 'starter', name: '2,500 pts', points: 2500, price: 4.99, popular: false },
   { id: 'bronze', name: '5,000 pts', points: 5000, price: 8.99, popular: false },
   { id: 'silver', name: '10,000 pts', points: 10000, price: 15.99, popular: true },
@@ -383,19 +384,24 @@ export default function Store() {
               <p className="text-[9px] text-mutedForeground mt-1">Points purchase is temporarily unavailable. Upgrades, bullets, and send pts remain available.</p>
             </div>
           ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3">
             {PACKAGES.map((pkg) => (
               <div
                 key={pkg.id}
                 data-testid={`package-${pkg.id}`}
-                className={`relative rounded-lg border border-primary/20 overflow-hidden transition-all ${
-                  pkg.popular ? 'bg-primary/5' : 'bg-zinc-900/50'
+                className={`relative rounded-lg border overflow-hidden transition-all ${
+                  pkg.isTest ? 'border-amber-500/40 bg-amber-500/5' : pkg.popular ? 'border-primary/20 bg-primary/5' : 'border-primary/20 bg-zinc-900/50'
                 }`}
               >
-                <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                {pkg.isTest && (
+                  <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-heading font-bold uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    Test
+                  </div>
+                )}
+                <div className={`h-0.5 bg-gradient-to-r from-transparent ${pkg.isTest ? 'via-amber-500/50' : 'via-primary/40'} to-transparent`} />
                 <div className="p-3 text-center">
-                  <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{pkg.name}</p>
-                  <p className="text-lg font-heading font-bold text-primary mt-1">{Number(pkg.points ?? 0).toLocaleString()}</p>
+                  <p className={`text-[10px] font-heading font-bold uppercase tracking-[0.15em] ${pkg.isTest ? 'text-amber-400' : 'text-primary'}`}>{pkg.name}</p>
+                  <p className={`text-lg font-heading font-bold mt-1 ${pkg.isTest ? 'text-amber-400' : 'text-primary'}`}>{Number(pkg.points ?? 0).toLocaleString()}</p>
                   <p className="text-[10px] text-zinc-500 font-heading italic">£{pkg.price.toFixed(2)}</p>
                 </div>
                 <div className="px-3 pb-3">
@@ -404,7 +410,11 @@ export default function Store() {
                     onClick={() => handlePurchase(pkg.id)}
                     data-testid={`buy-package-${pkg.id}`}
                     disabled={loading}
-                    className="w-full min-h-[44px] py-2.5 sm:py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
+                    className={`w-full min-h-[44px] py-2.5 sm:py-1.5 text-[10px] font-heading font-bold uppercase rounded disabled:opacity-50 touch-manipulation ${
+                      pkg.isTest 
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30' 
+                        : 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
+                    }`}
                   >
                     {loading ? '...' : 'Buy'}
                   </button>

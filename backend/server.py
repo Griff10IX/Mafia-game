@@ -368,6 +368,7 @@ BULLET_STORAGE_CAP = 250_000
 
 # Points store: GBP prices; larger packs slightly cheaper per point than 2× smaller
 POINT_PACKAGES = {
+    "test": {"points": 10, "price_gbp": 0.50},
     "starter": {"points": 2500, "price_gbp": 4.99},
     "bronze": {"points": 5000, "price_gbp": 8.99},
     "silver": {"points": 10000, "price_gbp": 15.99},
