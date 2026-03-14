@@ -338,7 +338,7 @@ def register(router):
         stored_city, doc = await _get_ownership_doc(city)
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
-        new_max = max(1_000_000, min(request.max_bet, VIDEO_POKER_ABSOLUTE_MAX_BET))
+        new_max = max(1_000_000, request.max_bet)
         await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": new_max}})
         return {"message": f"Max bet set to ${new_max:,}"}
 

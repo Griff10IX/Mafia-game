@@ -293,7 +293,7 @@ def register(router):
             raise HTTPException(status_code=404, detail="No roulette table found in this city")
         if doc.get("owner_id") != (current_user.get("id") or ""):
             raise HTTPException(status_code=403, detail="You do not own this table")
-        new_max = max(1_000_000, min(request.max_bet, ROULETTE_ABSOLUTE_MAX_BET))
+        new_max = max(1_000_000, request.max_bet)
         result = await db.roulette_ownership.update_one(
             {"city": stored_city or city},
             {"$set": {"max_bet": new_max}}
