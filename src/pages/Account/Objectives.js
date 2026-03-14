@@ -412,6 +412,9 @@ export default function Objectives() {
             {!lifetime.claimed && !lifetime.all_complete && lifetime.claim_reward && (
               <div className="px-3 py-2.5 rounded bg-zinc-800/30 border border-zinc-700/30 text-[10px] font-heading min-w-0 space-y-2">
                 <div className="text-amber-400 font-bold">Rewards on completion:</div>
+                <div className="text-[9px] text-mutedForeground/70 italic border-l-2 border-amber-500/30 pl-2">
+                  Note: Rewards may be adjusted based on the current game economy at the time your account is close to completion.
+                </div>
                 <div className="text-foreground space-y-1">
                   <div className="text-mutedForeground font-bold text-[9px] uppercase tracking-wide">One-Time Rewards:</div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 ml-2">

@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -27,6 +27,77 @@ const ADMIN_CATEGORIES = [
   { id: 'admin-mod-tools', label: 'Mod Tools', icon: Palette },
 ];
 const MOD_ONLY_CATEGORY_IDS = ['admin-cheat', 'admin-logs', 'admin-staff', 'admin-mod-tools'];
+
+// Searchable tools list - each item has: label (searchable), categoryId (scroll target), collapseKey (optional - to expand section)
+const SEARCHABLE_TOOLS = [
+  // Player Management
+  { label: 'Target Username', categoryId: 'admin-players', keywords: ['target', 'username', 'player'] },
+  { label: 'Search Users', categoryId: 'admin-players', collapseKey: 'searchUsers', keywords: ['search', 'users', 'email', 'find'] },
+  { label: 'Change Rank', categoryId: 'admin-players', collapseKey: 'rank', keywords: ['rank', 'change', 'prestige', 'level'] },
+  { label: 'Add Points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'add', 'give'] },
+  { label: 'Add Money', categoryId: 'admin-players', collapseKey: 'money', keywords: ['money', 'cash', 'add', 'give'] },
+  { label: 'Add Bullets', categoryId: 'admin-players', collapseKey: 'bullets', keywords: ['bullets', 'ammo', 'add'] },
+  { label: 'Give Car', categoryId: 'admin-players', collapseKey: 'cars', keywords: ['car', 'vehicle', 'give'] },
+  { label: 'Ghost Mode', categoryId: 'admin-players', collapseKey: 'ghost', keywords: ['ghost', 'invisible', 'hide'] },
+  { label: 'Lock Account', categoryId: 'admin-players', collapseKey: 'lock', keywords: ['lock', 'ban', 'account'] },
+  { label: 'Kill Player', categoryId: 'admin-players', collapseKey: 'kill', keywords: ['kill', 'death', 'player'] },
+  { label: 'Revive Player', categoryId: 'admin-players', collapseKey: 'revive', keywords: ['revive', 'resurrect', 'alive'] },
+  { label: 'User Details', categoryId: 'admin-players', collapseKey: 'userDetails', keywords: ['user', 'details', 'info', 'profile'] },
+  { label: 'Gambling Log', categoryId: 'admin-players', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
+  { label: 'Activity Log', categoryId: 'admin-players', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
+  // Game World
+  { label: 'Events Toggle', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable'] },
+  { label: 'Booze Run Rotation', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices'] },
+  { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
+  { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
+  { label: 'Hitlist NPCs', categoryId: 'admin-gameworld', collapseKey: 'hitlistNpcs', keywords: ['hitlist', 'npc', 'bounty'] },
+  { label: 'Jail NPCs', categoryId: 'admin-gameworld', collapseKey: 'jailNpcs', keywords: ['jail', 'npc', 'prisoner'] },
+  { label: 'Casino Settings', categoryId: 'admin-gameworld', collapseKey: 'casinoCaps', keywords: ['casino', 'caps', 'max bet', 'buyback'] },
+  { label: 'Admin Settings', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['admin', 'settings', 'config', 'banner', 'stock'] },
+  { label: 'Pre-order Settings', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['preorder', 'points', 'release'] },
+  { label: 'Login Lock', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['login', 'lock', 'maintenance'] },
+  // Security
+  { label: 'Security Summary', categoryId: 'admin-security', collapseKey: 'securitySummary', keywords: ['security', 'summary', 'flags'] },
+  { label: 'IP Bans', categoryId: 'admin-security', collapseKey: 'ipBans', keywords: ['ip', 'ban', 'block'] },
+  { label: 'Rate Limits', categoryId: 'admin-security', collapseKey: 'rateLimits', keywords: ['rate', 'limit', 'throttle'] },
+  { label: 'Cloudflare Bot Block', categoryId: 'admin-security', collapseKey: 'cfBotBlock', keywords: ['cloudflare', 'bot', 'block', 'cf'] },
+  // Cheat Detection
+  { label: 'Cheat Detection', categoryId: 'admin-cheat', collapseKey: 'cheat', keywords: ['cheat', 'detection', 'suspicious'] },
+  { label: 'Find Duplicates', categoryId: 'admin-cheat', collapseKey: 'duplicates', keywords: ['duplicate', 'multi', 'account'] },
+  // Analytics
+  { label: 'User Analytics', categoryId: 'admin-analytics', collapseKey: 'analytics', keywords: ['analytics', 'stats', 'users'] },
+  // Logs
+  { label: 'Attack Logs', categoryId: 'admin-logs', collapseKey: 'attackLogs', keywords: ['attack', 'log', 'kill'] },
+  { label: 'Mod Action Logs', categoryId: 'admin-logs', collapseKey: 'modLogs', keywords: ['mod', 'action', 'log'] },
+  // Testing Tools
+  { label: 'Search & Attack Tools', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['search', 'attack', 'time'] },
+  { label: 'Set Search Time', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['search', 'time', 'minutes'] },
+  { label: 'Clear All Searches', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['clear', 'searches', 'delete'] },
+  { label: 'Reset Hitlist NPC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['hitlist', 'npc', 'timer', 'reset'] },
+  { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
+  { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
+  { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate'] },
+  { label: 'Generate Bodyguards', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'generate', 'robot'] },
+  { label: 'Test Bodyguard Payout', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'payout', 'test'] },
+  { label: 'Lifetime Objectives Testing', categoryId: 'admin-testing', collapseKey: 'lifetimeObjectives', keywords: ['lifetime', 'objectives', 'completed it', 'test'] },
+  // Quick & Bulk
+  { label: 'Seed Families', categoryId: 'admin-quick', collapseKey: 'quick', keywords: ['seed', 'families', 'create'] },
+  { label: 'Give All Points', categoryId: 'admin-quick', collapseKey: 'quick', keywords: ['give', 'all', 'points', 'bulk'] },
+  { label: 'Give All Money', categoryId: 'admin-quick', collapseKey: 'quick', keywords: ['give', 'all', 'money', 'bulk'] },
+  { label: 'Bulk User Action', categoryId: 'admin-quick', collapseKey: 'bulkAction', keywords: ['bulk', 'action', 'multiple', 'users'] },
+  // Database
+  { label: 'Wipe Database', categoryId: 'admin-database', collapseKey: 'wipe', keywords: ['wipe', 'database', 'reset', 'delete'] },
+  { label: 'New Release', categoryId: 'admin-database', collapseKey: 'newRelease', keywords: ['new', 'release', 'season'] },
+  { label: 'Delete User', categoryId: 'admin-database', collapseKey: 'deleteUser', keywords: ['delete', 'user', 'remove'] },
+  { label: 'Create Test Users', categoryId: 'admin-database', collapseKey: 'testUsers', keywords: ['test', 'users', 'create', 'seed'] },
+  // Staff Management
+  { label: 'Staff Management', categoryId: 'admin-staff', collapseKey: 'staff', keywords: ['staff', 'mod', 'helper', 'promote'] },
+  { label: 'Add Moderator', categoryId: 'admin-staff', collapseKey: 'staff', keywords: ['mod', 'moderator', 'add', 'promote'] },
+  { label: 'Add Helper', categoryId: 'admin-staff', collapseKey: 'staff', keywords: ['helper', 'help desk', 'add', 'promote'] },
+  // Mod Tools
+  { label: 'Mod Online Colour', categoryId: 'admin-mod-tools', collapseKey: 'modColour', keywords: ['mod', 'colour', 'color', 'online'] },
+  { label: 'Admin Credentials', categoryId: 'admin-mod-tools', collapseKey: 'adminCreds', keywords: ['admin', 'credentials', 'email', 'password'] },
+];
 
 function scrollToCategory(id) {
   const el = document.getElementById(id);
@@ -189,7 +260,30 @@ export default function Admin() {
   const [clearSearchesLoading, setClearSearchesLoading] = useState(false);
   const [dropHumanBgLoading, setDropHumanBgLoading] = useState(false);
   const [testPayoutLoading, setTestPayoutLoading] = useState(false);
+  const [lifetimeTestLoading, setLifetimeTestLoading] = useState(false);
   const [resetNpcTimersLoading, setResetNpcTimersLoading] = useState(false);
+  const [toolSearch, setToolSearch] = useState('');
+  const [toolSearchFocused, setToolSearchFocused] = useState(false);
+  const searchInputRef = useRef(null);
+
+  const filteredTools = useMemo(() => {
+    if (!toolSearch.trim()) return [];
+    const q = toolSearch.toLowerCase().trim();
+    return SEARCHABLE_TOOLS.filter(tool => 
+      tool.label.toLowerCase().includes(q) || 
+      tool.keywords.some(kw => kw.toLowerCase().includes(q))
+    ).slice(0, 8);
+  }, [toolSearch]);
+
+  const handleToolSelect = (tool) => {
+    scrollToCategory(tool.categoryId);
+    if (tool.collapseKey) {
+      setCollapsed(prev => ({ ...prev, [tool.collapseKey]: false }));
+    }
+    setToolSearch('');
+    setToolSearchFocused(false);
+    searchInputRef.current?.blur();
+  };
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
   const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
   const [viewRegistrationInfo, setViewRegistrationInfo] = useState(null);
@@ -1453,6 +1547,19 @@ export default function Admin() {
     }
   };
 
+  const handleTestLifetimeObjectivesAlmostComplete = async () => {
+    if (!window.confirm('Set your account to almost complete lifetime objectives (5 crimes away)? This will reset your lifetime progress flags.')) return;
+    setLifetimeTestLoading(true);
+    try {
+      const res = await api.post('/admin/test-lifetime-objectives-almost-complete');
+      toast.success(res.data?.message ?? 'Lifetime objectives set to almost complete', { duration: 8000 });
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed', { duration: 5000 });
+    } finally {
+      setLifetimeTestLoading(false);
+    }
+  };
+
   const handleGenerateBodyguards = async () => {
     try {
       const res = await api.post('/admin/bodyguards/generate', {
@@ -2314,18 +2421,73 @@ export default function Admin() {
 
       {/* Sticky category navigation */}
       <nav className="sticky top-0 z-20 -mx-2 px-2 py-2 bg-background/95 border-b border-primary/20 rounded-b-md admin-category-nav backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {(isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => MOD_ONLY_CATEGORY_IDS.includes(c.id))).map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => scrollToCategory(id)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-heading font-bold uppercase tracking-wide border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-            >
-              <Icon size={12} />
-              {label}
-            </button>
-          ))}
+        <div className="flex flex-col gap-2">
+          {/* Search bar */}
+          <div className="relative">
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-mutedForeground" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={toolSearch}
+                onChange={(e) => setToolSearch(e.target.value)}
+                onFocus={() => setToolSearchFocused(true)}
+                onBlur={() => setTimeout(() => setToolSearchFocused(false), 150)}
+                placeholder="Search tools... (e.g. lock, casino, bodyguard)"
+                className="w-full pl-8 pr-3 py-1.5 rounded-md border border-primary/30 bg-zinc-900/80 text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:border-primary/60 focus:outline-none"
+              />
+              {toolSearch && (
+                <button
+                  type="button"
+                  onClick={() => { setToolSearch(''); searchInputRef.current?.focus(); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-mutedForeground hover:text-foreground"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            {/* Search suggestions dropdown */}
+            {toolSearchFocused && filteredTools.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-primary/30 rounded-md shadow-lg max-h-64 overflow-y-auto z-30">
+                {filteredTools.map((tool, idx) => {
+                  const category = ADMIN_CATEGORIES.find(c => c.id === tool.categoryId);
+                  return (
+                    <button
+                      key={tool.label + idx}
+                      type="button"
+                      onMouseDown={(e) => { e.preventDefault(); handleToolSelect(tool); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-primary/20 transition-colors border-b border-zinc-800 last:border-b-0"
+                    >
+                      {category?.icon && <category.icon size={12} className="text-primary shrink-0" />}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] font-heading font-bold text-foreground truncate">{tool.label}</div>
+                        <div className="text-[9px] text-mutedForeground">{category?.label || ''}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {toolSearchFocused && toolSearch && filteredTools.length === 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-primary/30 rounded-md shadow-lg p-3 z-30">
+                <p className="text-[10px] text-mutedForeground text-center">No tools found for &quot;{toolSearch}&quot;</p>
+              </div>
+            )}
+          </div>
+          {/* Category buttons */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => MOD_ONLY_CATEGORY_IDS.includes(c.id))).map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => scrollToCategory(id)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-heading font-bold uppercase tracking-wide border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              >
+                <Icon size={12} />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </nav>
 
@@ -5905,6 +6067,25 @@ export default function Admin() {
 
               <ActionRow icon={Shield} label="Reset Drop Cooldown" description="Clear your bodyguard drop timer" color="text-amber-400">
                 <BtnPrimary onClick={handleResetBgCooldown}>Reset</BtnPrimary>
+              </ActionRow>
+            </div>
+          )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+          <SectionHeader
+            icon={Trophy}
+            title="Lifetime Objectives Testing"
+            isCollapsed={collapsed.lifetimeObjectives}
+            onToggle={() => toggleSection('lifetimeObjectives')}
+          />
+          {!collapsed.lifetimeObjectives && (
+            <div className="p-2 space-y-1">
+              <ActionRow icon={Trophy} label="Set Almost Complete" description="Sets your account to 5 crimes away from completing 'Completed it'. Triggers admin notification on objectives page." color="text-amber-400">
+                <BtnPrimary onClick={handleTestLifetimeObjectivesAlmostComplete} disabled={lifetimeTestLoading}>
+                  {lifetimeTestLoading ? '...' : 'Populate'}
+                </BtnPrimary>
               </ActionRow>
             </div>
           )}

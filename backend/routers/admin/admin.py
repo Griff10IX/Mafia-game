@@ -4171,3 +4171,79 @@ def register(router):
         cursor = db.minigame_payout_history.find({}, {"_id": 0}).sort("paid_at", -1).limit(10)
         history = await cursor.to_list(10)
         return {"history": history}
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Lifetime Objectives Testing (Admin Only)
+    # ─────────────────────────────────────────────────────────────────────────────
+    from routers.account.objectives import OBJECTIVE_TYPES_LIFETIME
+
+    @router.post("/admin/test-lifetime-objectives-almost-complete")
+    async def admin_test_lifetime_objectives_almost_complete(current_user: dict = Depends(get_current_user)):
+        """Populate admin's account to be almost complete on lifetime objectives (5 crimes away).
+        Sets all lifetime objective progress fields to target - 5 (crimes) or target (others).
+        This is for testing the admin notification when a user is close to completing."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+
+        user_id = current_user["id"]
+
+        # Build update doc: set all lifetime stats to near-completion values
+        update_set = {
+            "objectives_lifetime_close_notified": False,  # Reset so notification triggers again
+            "objectives_lifetime_claimed": False,  # Reset so they can test claiming
+        }
+        update_inc = {}
+
+        # Set direct user fields for lifetime objectives
+        # crimes is set to target - 5, all others to target
+        for obj in OBJECTIVE_TYPES_LIFETIME:
+            key = obj["progress_key"]
+            target = obj["target"]
+            if obj["id"] == "crimes":
+                update_set["total_crimes"] = target - 5  # 5 crimes away from completion
+            elif key == "total_gta":
+                update_set["total_gta"] = target
+            elif key == "total_oc_heists":
+                update_set["total_oc_heists"] = target
+            elif key == "jail_busts":
+                update_set["jail_busts"] = target
+            elif key == "bullets_melted":
+                update_set["bullets_melted"] = target
+            elif key == "crime_profit":
+                update_set["crime_profit"] = target
+            elif key == "booze_runs_count":
+                update_set["booze_runs_count"] = target
+            elif key == "hitlist_npc_kills":
+                update_set["hitlist_npc_kills"] = target
+
+        # For lifetime_respect_earned (aggregate) - insert respect events
+        # Delete existing and insert new to reach target
+        respect_target = 15000
+        await db.respect_events.delete_many({"user_id": user_id})
+        await db.respect_events.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "amount": respect_target,
+            "reason": "Admin test - lifetime objectives",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+        # For minigame_plays (aggregate) - insert minigame play records
+        minigame_target = 1000
+        await db.minigame_plays.delete_many({"user_id": user_id})
+        for i in range(minigame_target):
+            await db.minigame_plays.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "game": "test",
+                "score": 0,
+                "played_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+        await db.users.update_one({"id": user_id}, {"$set": update_set})
+
+        return {
+            "message": "Lifetime objectives set to almost complete (5 crimes away). Visit objectives page to trigger admin notification.",
+            "total_crimes_set_to": update_set.get("total_crimes"),
+            "all_other_objectives": "completed",
+        }

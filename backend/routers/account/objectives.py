@@ -564,6 +564,23 @@ async def get_objectives(current_user: dict = Depends(get_current_user)):
             "perks": LIFETIME_PERKS,
         }
 
+    # Notify admins when a user is close to completing lifetime objectives (8+ done)
+    # Only notify once per user (tracked by objectives_lifetime_close_notified flag)
+    completed_count = sum(1 for obj in lifetime_list if obj.get("done"))
+    if completed_count >= 8 and not lifetime_claimed and not user.get("objectives_lifetime_close_notified"):
+        await db.users.update_one({"id": user_id}, {"$set": {"objectives_lifetime_close_notified": True}})
+        remaining = [obj["label"] for obj in lifetime_list if not obj.get("done")]
+        remaining_str = ", ".join(remaining[:3]) + ("..." if len(remaining) > 3 else "") if remaining else "none"
+        admin_users = await db.users.find({"email": {"$in": ["jake@gangsterparadise.com", "reece@gangsterparadise.com"]}}, {"_id": 0, "id": 1}).to_list(10)
+        for admin in admin_users:
+            await send_notification(
+                admin["id"],
+                "Lifetime Objectives Alert",
+                f"User {user.get('username', 'Unknown')} is close to completing 'Completed it' objectives ({completed_count}/10 done). Remaining: {remaining_str}",
+                "warning",
+                category="admin",
+            )
+
     out = {
         "daily": {
             "objectives": daily_list,
