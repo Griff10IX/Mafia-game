@@ -214,9 +214,8 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPla
         ) : null}
       </div>
 
-      {/* Stats: RP and cash reward only (bust chance is your skill, not per-target) */}
+      {/* Stats: cash reward only */}
       <div className="flex items-center gap-2 text-[10px] font-heading shrink-0">
-        <span className="text-primary font-bold">+{rp} RP</span>
         <span className="text-mutedForeground w-12 text-right">
           {(player.bust_reward_cash ?? 0) > 0 ? `$${Number(player.bust_reward_cash ?? 0).toLocaleString()}` : '—'}
         </span>
@@ -393,7 +392,7 @@ export default function Jail() {
     try {
       const response = await api.post('/jail/bust', { target_username: username });
       if (response.data.success) {
-        let msg = `${response.data.message} (+${response.data.rank_points_earned} RP)`;
+        let msg = response.data.message;
         if (response.data.cash_reward > 0) {
           msg += ` +$${Number(response.data.cash_reward).toLocaleString()}`;
         }

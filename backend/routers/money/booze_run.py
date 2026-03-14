@@ -155,7 +155,11 @@ def _booze_user_capacity(current_user: dict) -> int:
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
     capacity_from_rank = BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK
     bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
-    return max(1, capacity_from_rank + bonus)
+    capacity = max(1, capacity_from_rank + bonus)
+    # "Completed it" perk: 2x booze capacity
+    if current_user.get("completed_it_booze_capacity"):
+        capacity = capacity * 2
+    return capacity
 
 
 def _booze_user_carrying_total(carrying: dict) -> int:

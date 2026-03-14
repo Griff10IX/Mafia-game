@@ -65,6 +65,36 @@ MONTHLY_COMPLETION_BONUS = {"rank_points": 1800, "money": 360000, "points": 1500
 WEEKLY_REWARD_MULTIPLIER = 5
 MONTHLY_REWARD_MULTIPLIER = 15
 
+# ─────────────────────────────────────────────────────────────────────────────
+# LIFETIME OBJECTIVES: "Completed it" - end-game achievement set (one-time)
+# ─────────────────────────────────────────────────────────────────────────────
+OBJECTIVE_TYPES_LIFETIME = [
+    {"id": "crimes", "label": "Commit 15,000,000 crimes", "target": 15_000_000, "progress_key": "total_crimes"},
+    {"id": "gta", "label": "Complete 1,000,000 GTAs", "target": 1_000_000, "progress_key": "total_gta"},
+    {"id": "oc", "label": "Complete 100,000 Organised Crimes", "target": 100_000, "progress_key": "total_oc_heists"},
+    {"id": "busts", "label": "Bust 1,000,000 players/NPCs from jail", "target": 1_000_000, "progress_key": "jail_busts"},
+    {"id": "melt", "label": "Melt 5,000,000 bullets", "target": 5_000_000, "progress_key": "bullets_melted"},
+    {"id": "crime_profit", "label": "Earn $5,000,000,000 from crimes", "target": 5_000_000_000, "progress_key": "crime_profit"},
+    {"id": "respect", "label": "Earn 15,000 respect points", "target": 15_000, "progress_key": "lifetime_respect_earned"},
+    {"id": "booze", "label": "Complete 1,000,000 booze runs", "target": 1_000_000, "progress_key": "booze_runs_count"},
+    {"id": "minigames", "label": "Play 1,000 minigames", "target": 1_000, "progress_key": "minigame_plays"},
+    {"id": "hitlist_npc", "label": "Kill 5,000 hitlist NPCs", "target": 5_000, "progress_key": "hitlist_npc_kills"},
+]
+
+# Lifetime rewards: one-time cash, points, bullets + permanent perks
+LIFETIME_COMPLETION_REWARD = {
+    "money": 15_000_000_000,
+    "points": 15_000,
+    "bullets": 1_000_000,
+}
+# Permanent perks granted on lifetime completion (stored on user doc)
+LIFETIME_PERKS = [
+    "completed_it_bullet_reduction",   # 65% fewer bullets needed when attacking
+    "completed_it_armour_bonus",       # Enemies need 2x bullets to attack you
+    "completed_it_booze_capacity",     # 2x booze capacity
+    "completed_it_daily_tokens",       # 5 of each token daily in tribute
+]
+
 
 def _date_seed(date_str: str) -> int:
     """Deterministic seed from date string for reproducible daily objectives."""
@@ -306,6 +336,54 @@ def _build_objective_list(objectives: list, progress: dict, current_state: str):
     return result, all_done, total_rewards
 
 
+async def _get_lifetime_progress(user_id: str, user: dict) -> dict:
+    """Fetch lifetime progress for all OBJECTIVE_TYPES_LIFETIME from user doc and aggregations."""
+    progress = {}
+    # Direct user fields
+    progress["total_crimes"] = int(user.get("total_crimes") or 0)
+    progress["total_gta"] = int(user.get("total_gta") or 0)
+    progress["total_oc_heists"] = int(user.get("total_oc_heists") or 0)
+    progress["jail_busts"] = int(user.get("jail_busts") or 0)
+    progress["bullets_melted"] = int(user.get("bullets_melted") or 0)
+    progress["crime_profit"] = int(user.get("crime_profit") or 0)
+    progress["booze_runs_count"] = int(user.get("booze_runs_count") or 0)
+    progress["hitlist_npc_kills"] = int(user.get("hitlist_npc_kills") or 0)
+    
+    # Aggregate lifetime respect earned from respect_events collection
+    pipeline = [
+        {"$match": {"user_id": user_id}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
+    ]
+    result = await db.respect_events.aggregate(pipeline).to_list(1)
+    progress["lifetime_respect_earned"] = int(result[0]["total"]) if result else 0
+    
+    # Count minigame plays from minigame_plays collection
+    minigame_count = await db.minigame_plays.count_documents({"user_id": user_id})
+    progress["minigame_plays"] = minigame_count
+    
+    return progress
+
+
+def _build_lifetime_objective_list(progress: dict) -> tuple:
+    """Build lifetime objectives list from progress dict. Returns (list, all_done)."""
+    result = []
+    all_done = True
+    for obj in OBJECTIVE_TYPES_LIFETIME:
+        current = int(progress.get(obj["progress_key"], 0) or 0)
+        target = obj["target"]
+        done = current >= target
+        if not done:
+            all_done = False
+        result.append({
+            "id": obj["id"],
+            "label": obj["label"],
+            "target": target,
+            "current": current,
+            "done": done,
+        })
+    return result, all_done
+
+
 def _assess_difficulty(eligible: int, claimed: int) -> str:
     """Return 'too_easy' | 'too_hard' | 'about_right' | 'low_sample' based on completion rate."""
     if eligible < OBJ_MIN_SAMPLE:
@@ -387,7 +465,10 @@ async def get_objectives(current_user: dict = Depends(get_current_user)):
         {"_id": 0, "objectives_daily_date": 1, "objectives_daily_progress": 1, "objectives_daily_claimed": 1,
          "objectives_daily_claim_notified": 1, "objectives_weekly_start": 1, "objectives_weekly_progress": 1,
          "objectives_weekly_claimed": 1, "objectives_weekly_claim_notified": 1, "objectives_monthly_start": 1,
-         "objectives_monthly_progress": 1, "objectives_monthly_claimed": 1, "objectives_monthly_claim_notified": 1, "current_state": 1}
+         "objectives_monthly_progress": 1, "objectives_monthly_claimed": 1, "objectives_monthly_claim_notified": 1,
+         "objectives_lifetime_claimed": 1, "current_state": 1,
+         "total_crimes": 1, "total_gta": 1, "total_oc_heists": 1, "jail_busts": 1, "bullets_melted": 1,
+         "crime_profit": 1, "booze_runs_count": 1, "hitlist_npc_kills": 1}
     )
     user = user or {}
 
@@ -470,6 +551,19 @@ async def get_objectives(current_user: dict = Depends(get_current_user)):
             await send_notification(user_id, "Objectives", "Your monthly objectives are complete! Claim your rewards on the Objectives page.", "reward", category="system")
             await db.users.update_one({"id": user_id}, {"$set": {"objectives_monthly_claim_notified": month_start_str}})
 
+    # Lifetime objectives: "Completed it" - one-time achievement set
+    lifetime_claimed = bool(user.get("objectives_lifetime_claimed"))
+    lifetime_progress = await _get_lifetime_progress(user_id, user)
+    lifetime_list, lifetime_all_done = _build_lifetime_objective_list(lifetime_progress)
+    lifetime_claim_reward = None
+    if lifetime_all_done and not lifetime_claimed:
+        lifetime_claim_reward = {
+            "money": LIFETIME_COMPLETION_REWARD["money"],
+            "points": LIFETIME_COMPLETION_REWARD["points"],
+            "bullets": LIFETIME_COMPLETION_REWARD["bullets"],
+            "perks": LIFETIME_PERKS,
+        }
+
     out = {
         "daily": {
             "objectives": daily_list,
@@ -492,6 +586,13 @@ async def get_objectives(current_user: dict = Depends(get_current_user)):
             "claim_reward": monthly_claim_reward,
             "month_start": month_start_str,
         },
+        "lifetime": {
+            "name": "Completed it",
+            "objectives": lifetime_list,
+            "all_complete": lifetime_all_done,
+            "claimed": lifetime_claimed,
+            "claim_reward": lifetime_claim_reward,
+        },
     }
     if _is_admin(current_user):
         out["admin_stats"] = await _get_objectives_admin_stats(today_str, week_start_str, month_start_str)
@@ -499,14 +600,14 @@ async def get_objectives(current_user: dict = Depends(get_current_user)):
 
 
 class ObjectivesClaimRequest(BaseModel):
-    type: str  # "daily" | "weekly" | "monthly"
+    type: str  # "daily" | "weekly" | "monthly" | "lifetime"
 
 
 async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_user: dict = Depends(get_current_user)):
-    """Claim rewards for completed daily, weekly, or monthly objectives. No auto-payout; user must call this."""
+    """Claim rewards for completed daily, weekly, monthly, or lifetime objectives. No auto-payout; user must call this."""
     claim_type = (body.type or "").strip().lower()
-    if claim_type not in ("daily", "weekly", "monthly"):
-        raise HTTPException(status_code=400, detail="type must be daily, weekly, or monthly")
+    if claim_type not in ("daily", "weekly", "monthly", "lifetime"):
+        raise HTTPException(status_code=400, detail="type must be daily, weekly, monthly, or lifetime")
 
     now = datetime.now(timezone.utc)
     today_str = now.strftime("%Y-%m-%d")
@@ -520,11 +621,49 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         {"id": user_id},
         {"_id": 0, "objectives_daily_date": 1, "objectives_daily_progress": 1, "objectives_daily_claimed": 1,
          "objectives_weekly_start": 1, "objectives_weekly_progress": 1, "objectives_weekly_claimed": 1,
-         "objectives_monthly_start": 1, "objectives_monthly_progress": 1, "objectives_monthly_claimed": 1, "current_state": 1}
+         "objectives_monthly_start": 1, "objectives_monthly_progress": 1, "objectives_monthly_claimed": 1,
+         "objectives_lifetime_claimed": 1, "current_state": 1,
+         "total_crimes": 1, "total_gta": 1, "total_oc_heists": 1, "jail_busts": 1, "bullets_melted": 1,
+         "crime_profit": 1, "booze_runs_count": 1, "hitlist_npc_kills": 1, "rank_points": 1, "username": 1}
     )
     user = user or {}
 
     current_state = (user.get("current_state") or "").strip() or (current_user.get("current_state") or "")
+
+    # Handle lifetime claim first (one-time, never resets)
+    if claim_type == "lifetime":
+        lifetime_claimed = bool(user.get("objectives_lifetime_claimed"))
+        if lifetime_claimed:
+            raise HTTPException(status_code=400, detail="Lifetime objectives already claimed")
+        lifetime_progress = await _get_lifetime_progress(user_id, user)
+        lifetime_list, lifetime_all_done = _build_lifetime_objective_list(lifetime_progress)
+        if not lifetime_all_done:
+            raise HTTPException(status_code=400, detail="Lifetime objectives not complete")
+        # Grant rewards: cash, points, bullets + permanent perks
+        reward = {
+            "money": LIFETIME_COMPLETION_REWARD["money"],
+            "points": LIFETIME_COMPLETION_REWARD["points"],
+            "bullets": LIFETIME_COMPLETION_REWARD["bullets"],
+            "perks": LIFETIME_PERKS,
+        }
+        perk_set = {perk: True for perk in LIFETIME_PERKS}
+        await db.users.update_one(
+            {"id": user_id},
+            {
+                "$set": {"objectives_lifetime_claimed": True, **perk_set},
+                "$inc": {
+                    "money": LIFETIME_COMPLETION_REWARD["money"],
+                    "points": LIFETIME_COMPLETION_REWARD["points"],
+                    "bullets": LIFETIME_COMPLETION_REWARD["bullets"],
+                }
+            }
+        )
+        await send_notification(
+            user_id, "Completed it!",
+            "You've completed all lifetime objectives! $15B cash, 15K points, 1M bullets, and permanent perks granted.",
+            "reward", category="system"
+        )
+        return {"claimed": True, "type": "lifetime", "reward": reward}
 
     if claim_type == "daily":
         daily_date = user.get("objectives_daily_date")

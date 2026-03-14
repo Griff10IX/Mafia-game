@@ -818,10 +818,10 @@ async def spawn_jail_npcs():
                 existing = await db.jail_npcs.find_one({"username": npc_name})
                 if not existing:
                     rank_name = random.choices(rank_names, weights=weights, k=1)[0]
-                    # Cash reward scales with rank (75% reduction for beta)
+                    # Cash reward scales with rank (low for beta - few hundred max)
                     rank_index = rank_names.index(rank_name) if rank_name in rank_names else 0
-                    cash_min = 250 + rank_index * 375
-                    cash_max = 750 + rank_index * 625
+                    cash_min = 50 + rank_index * 30
+                    cash_max = 150 + rank_index * 50
                     bust_reward_cash = random.randint(cash_min, cash_max)
                     await db.jail_npcs.insert_one({
                         "username": npc_name,

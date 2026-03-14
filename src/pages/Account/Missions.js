@@ -874,7 +874,6 @@ export default function Missions() {
         const tributeTotal = (res.data.reward_money || 0) + (res.data.reward_tribute || 0);
         if (tributeTotal > 0) parts.push(`+${fmt(tributeTotal)} tribute`);
         if (res.data.reward_cash_immediate > 0) parts.push(`+${fmt(res.data.reward_cash_immediate)} cash`);
-        if (res.data.reward_points > 0) parts.push(`+${res.data.reward_points} RP`);
         if (res.data.reward_respect > 0) parts.push(`+${res.data.reward_respect} respect`);
         if (res.data.reward_bullets > 0) parts.push(`+${res.data.reward_bullets} bullets`);
         if (res.data.reward_car_id) parts.push('1 car');

@@ -709,6 +709,20 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     discount = (mastery_pct / 100.0) * (MASTERY_MAX_BULLET_REDUCTION_PCT / 100.0)
     bullets_required = int(math.ceil(bullets_after_inflation * (1.0 - discount)))
     mastery_discount_pct = round(discount * 100, 1)
+    # "Completed it" perk on target: 2x bullets required to attack them
+    # Also applies to bodyguards if their owner has the perk
+    target_armour_bonus = bool(target.get("completed_it_armour_bonus"))
+    if not target_armour_bonus and target.get("is_bodyguard"):
+        bg_owner_doc = await db.bodyguards.find_one({"bodyguard_user_id": target["id"]}, {"_id": 0, "user_id": 1})
+        if bg_owner_doc:
+            owner_user = await db.users.find_one({"id": bg_owner_doc["user_id"]}, {"_id": 0, "completed_it_armour_bonus": 1})
+            target_armour_bonus = bool((owner_user or {}).get("completed_it_armour_bonus"))
+    if target_armour_bonus:
+        bullets_required = bullets_required * 2
+    # "Completed it" perk: 65% fewer bullets needed when attacking
+    completed_it_discount = bool(current_user.get("completed_it_bullet_reduction"))
+    if completed_it_discount:
+        bullets_required = max(1, int(bullets_required * 0.35))
     return {
         "target_username": target["username"],
         "target_rank": target_rank_id,
@@ -725,6 +739,8 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
         "mastery_pct": mastery_pct,
         "mastery_discount_pct": mastery_discount_pct,
         "needed_before_clamp": breakdown["needed_before_clamp"],
+        "completed_it_discount": completed_it_discount,
+        "target_armour_bonus": target_armour_bonus,
     }
 
 async def get_attack_inflation(current_user: dict = Depends(get_current_user)):
@@ -799,6 +815,19 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     mastery_pct = await _get_weapon_mastery_pct(current_user["id"], equipped_weapon_id)
     discount = (mastery_pct / 100.0) * (MASTERY_MAX_BULLET_REDUCTION_PCT / 100.0)
     bullets_required = int(math.ceil(bullets_base * (1.0 + inflation) * (1.0 - discount)))
+    # "Completed it" perk on target: 2x bullets required to attack them
+    # Also applies to bodyguards if their owner has the perk
+    target_has_armour_bonus = bool(target.get("completed_it_armour_bonus"))
+    if not target_has_armour_bonus and target.get("is_bodyguard"):
+        bg_owner_doc = await db.bodyguards.find_one({"bodyguard_user_id": target["id"]}, {"_id": 0, "user_id": 1})
+        if bg_owner_doc:
+            owner_user = await db.users.find_one({"id": bg_owner_doc["user_id"]}, {"_id": 0, "completed_it_armour_bonus": 1})
+            target_has_armour_bonus = bool((owner_user or {}).get("completed_it_armour_bonus"))
+    if target_has_armour_bonus:
+        bullets_required = bullets_required * 2
+    # "Completed it" perk: 65% fewer bullets needed when attacking
+    if current_user.get("completed_it_bullet_reduction"):
+        bullets_required = max(1, int(bullets_required * 0.35))
     if attacker_bullets <= 0:
         await _log_attack_error(current_user["id"], current_user.get("username"), "You need bullets to attack.", req)
         raise HTTPException(status_code=400, detail="You need bullets to attack.")

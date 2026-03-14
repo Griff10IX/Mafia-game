@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ListChecks, Calendar, CalendarDays, CalendarRange, CheckCircle2, Circle, Gift, BarChart3, ChevronDown, ChevronUp, AlertTriangle, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ListChecks, Calendar, CalendarDays, CalendarRange, CheckCircle2, Circle, Gift, BarChart3, ChevronDown, ChevronUp, AlertTriangle, ThumbsUp, ThumbsDown, Trophy } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -25,8 +25,16 @@ function formatReward(reward) {
   if (reward.money) parts.push(`$${Number(reward.money).toLocaleString()}`);
   if (reward.points) parts.push(`${Number(reward.points).toLocaleString()} pts`);
   if (reward.respect_points) parts.push(`${Number(reward.respect_points).toLocaleString()} respect`);
+  if (reward.bullets) parts.push(`${Number(reward.bullets).toLocaleString()} bullets`);
   return parts.join(', ') || '—';
 }
+
+const LIFETIME_PERK_LABELS = {
+  completed_it_bullet_reduction: '65% fewer bullets needed when attacking anyone',
+  completed_it_armour_bonus: 'Enemies need 2x bullets to attack you AND your bodyguards',
+  completed_it_booze_capacity: '2x booze carrying capacity (stacks with upgrades)',
+  completed_it_daily_tokens: '5 of each token type automatically added daily (crimes, GTA, melt, OC, booze, racket, travel, properties, jailbust)',
+};
 
 const ObjectiveRow = ({ obj, delay = 0 }) => {
   const progressPct = obj.target > 0 ? Math.min(100, (obj.current / obj.target) * 100) : 0;
@@ -56,11 +64,11 @@ const ObjectiveRow = ({ obj, delay = 0 }) => {
             aria-valuemax={obj.target}
           />
         </div>
-        <span className="text-[10px] font-heading font-bold text-primary tabular-nums shrink-0 w-14 sm:w-16 text-right">
+        <span className="text-[10px] font-heading font-bold text-primary tabular-nums shrink-0 text-right">
           {Number(obj.current).toLocaleString()}/{Number(obj.target).toLocaleString()}
         </span>
         {obj.reward && (
-          <span className="text-[9px] text-primary/80 font-heading shrink-0 whitespace-nowrap" title={formatReward(obj.reward)}>
+          <span className="text-[9px] text-mutedForeground font-heading shrink-0 whitespace-nowrap ml-1" title={formatReward(obj.reward)}>
             {formatReward(obj.reward)}
           </span>
         )}
@@ -124,6 +132,7 @@ export default function Objectives() {
   const daily = data?.daily ?? {};
   const weekly = data?.weekly ?? {};
   const monthly = data?.monthly ?? {};
+  const lifetime = data?.lifetime ?? {};
   const adminStats = data?.admin_stats;
 
   const getAssessmentLabel = (a) => {
@@ -329,6 +338,124 @@ export default function Objectives() {
             )}
           </div>
           <div className="obj-art-line text-primary mx-3" />
+        </section>
+
+        {/* Lifetime: "Completed it" - one-time end-game achievement */}
+        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-amber-500/30 flex flex-col min-w-0 md:col-span-2 obj-card obj-fade-in`} style={{ animationDelay: '0.15s' }}>
+          <div className="absolute top-0 left-0 w-24 h-24 bg-amber-500/10 rounded-full blur-3xl pointer-events-none obj-glow" />
+          <div className="h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+          <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/20 shrink-0 min-w-0">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
+                <h2 className="text-[11px] font-heading font-bold text-amber-400 uppercase tracking-wider truncate">{lifetime.name || 'Completed it'}</h2>
+              </div>
+              <span className="text-[10px] text-amber-400/70 font-heading shrink-0">Lifetime Achievement</span>
+            </div>
+            <p className="text-[10px] text-amber-400/60 font-heading mt-1 break-words">Complete all 10 objectives to unlock permanent perks and massive rewards. One-time only.</p>
+          </div>
+          <div className="px-3 py-2 space-y-1.5 flex-1 min-h-0 overflow-auto min-w-0">
+            {lifetime.claimed && (
+              <div className="flex items-center gap-1.5 px-3 py-2 rounded bg-amber-500/20 border border-amber-500/30 text-[12px] font-heading text-amber-400 obj-fade-in min-w-0">
+                <Trophy className="w-4 h-4 shrink-0" />
+                <span className="break-words min-w-0">All lifetime objectives complete! Perks and rewards claimed.</span>
+              </div>
+            )}
+            {!lifetime.claimed && lifetime.all_complete && lifetime.claim_reward && (
+              <div className="flex flex-col gap-3 px-3 py-2.5 rounded bg-amber-500/15 border border-amber-500/30 obj-fade-in min-w-0">
+                <div className="text-[11px] font-heading text-amber-300 font-bold">Ready to Claim!</div>
+                <div className="text-[10px] text-foreground space-y-1">
+                  <div className="text-amber-400 font-bold mb-1.5">One-Time Rewards:</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 ml-2">
+                    {lifetime.claim_reward.money && (
+                      <div className="bg-green-900/20 border border-green-700/30 rounded px-2 py-1">
+                        <span className="text-green-400 font-bold">${Number(lifetime.claim_reward.money).toLocaleString()}</span>
+                        <span className="text-mutedForeground ml-1">cash</span>
+                      </div>
+                    )}
+                    {lifetime.claim_reward.points && (
+                      <div className="bg-blue-900/20 border border-blue-700/30 rounded px-2 py-1">
+                        <span className="text-blue-400 font-bold">{Number(lifetime.claim_reward.points).toLocaleString()}</span>
+                        <span className="text-mutedForeground ml-1">points</span>
+                      </div>
+                    )}
+                    {lifetime.claim_reward.bullets && (
+                      <div className="bg-red-900/20 border border-red-700/30 rounded px-2 py-1">
+                        <span className="text-red-400 font-bold">{Number(lifetime.claim_reward.bullets).toLocaleString()}</span>
+                        <span className="text-mutedForeground ml-1">bullets</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {lifetime.claim_reward.perks?.length > 0 && (
+                  <div className="text-[10px] text-foreground">
+                    <div className="text-amber-400 font-bold mb-1.5">Permanent Perks (forever):</div>
+                    <div className="space-y-1.5 ml-2">
+                      {lifetime.claim_reward.perks.map(p => (
+                        <div key={p} className="bg-amber-900/20 border border-amber-700/30 rounded px-2 py-1.5">
+                          <span className="text-amber-300">{LIFETIME_PERK_LABELS[p] || p}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleClaim('lifetime')}
+                  disabled={claiming === 'lifetime'}
+                  className="mt-1 px-4 py-1.5 rounded bg-amber-500 text-black text-[11px] font-heading font-bold hover:bg-amber-400 disabled:opacity-50 border border-amber-400/50 self-start"
+                >
+                  {claiming === 'lifetime' ? 'Claiming...' : 'Claim Lifetime Rewards'}
+                </button>
+              </div>
+            )}
+            {!lifetime.claimed && !lifetime.all_complete && lifetime.claim_reward && (
+              <div className="px-3 py-2.5 rounded bg-zinc-800/30 border border-zinc-700/30 text-[10px] font-heading min-w-0 space-y-2">
+                <div className="text-amber-400 font-bold">Rewards on completion:</div>
+                <div className="text-foreground space-y-1">
+                  <div className="text-mutedForeground font-bold text-[9px] uppercase tracking-wide">One-Time Rewards:</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 ml-2">
+                    {lifetime.claim_reward.money && (
+                      <div className="bg-green-900/10 border border-green-700/20 rounded px-2 py-1">
+                        <span className="text-green-400/80 font-bold">${Number(lifetime.claim_reward.money).toLocaleString()}</span>
+                        <span className="text-mutedForeground ml-1">cash</span>
+                      </div>
+                    )}
+                    {lifetime.claim_reward.points && (
+                      <div className="bg-blue-900/10 border border-blue-700/20 rounded px-2 py-1">
+                        <span className="text-blue-400/80 font-bold">{Number(lifetime.claim_reward.points).toLocaleString()}</span>
+                        <span className="text-mutedForeground ml-1">points</span>
+                      </div>
+                    )}
+                    {lifetime.claim_reward.bullets && (
+                      <div className="bg-red-900/10 border border-red-700/20 rounded px-2 py-1">
+                        <span className="text-red-400/80 font-bold">{Number(lifetime.claim_reward.bullets).toLocaleString()}</span>
+                        <span className="text-mutedForeground ml-1">bullets</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {lifetime.claim_reward.perks?.length > 0 && (
+                  <div className="text-foreground space-y-1">
+                    <div className="text-mutedForeground font-bold text-[9px] uppercase tracking-wide">Permanent Perks (forever):</div>
+                    <div className="space-y-1 ml-2">
+                      {lifetime.claim_reward.perks.map(p => (
+                        <div key={p} className="bg-amber-900/10 border border-amber-700/20 rounded px-2 py-1.5 text-mutedForeground">
+                          {LIFETIME_PERK_LABELS[p] || p}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {lifetime.objectives?.length ? (
+              lifetime.objectives.map((obj, i) => <ObjectiveRow key={obj.id + obj.label} obj={obj} delay={i * 0.04} />)
+            ) : (
+              <p className="text-[12px] text-mutedForeground">Loading lifetime objectives...</p>
+            )}
+          </div>
+          <div className="obj-art-line text-amber-500 mx-3" />
         </section>
       </div>
     </div>

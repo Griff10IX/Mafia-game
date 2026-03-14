@@ -548,7 +548,7 @@ export default function Racing() {
                       {isDnf && <span className="text-red-400 font-heading ml-1.5">DNF</span>}
                     </span>
                     {rew && !isDnf && (
-                      <span className="text-[10px] text-[var(--noir-muted)]">{formatMoney(rew.cash)} · {rew.rank_points}RP · {rew.racing_rep}rep</span>
+                      <span className="text-[10px] text-[var(--noir-muted)]">{formatMoney(rew.cash)} · {rew.racing_rep}rep</span>
                     )}
                   </li>
                 );
@@ -616,7 +616,7 @@ export default function Racing() {
                               <span style={{ color: isYou ? "var(--noir-primary)" : "var(--noir-foreground)", fontWeight: isYou ? 700 : 400 }}>
                                 #{i + 1} {p?.username || p?.car_name || "?"}{isYou && " (you)"}{isDnf && <span className="text-red-400 ml-1">DNF</span>}
                               </span>
-                              {rew && !isDnf && <span className="text-[9px] text-[var(--noir-muted)]">{formatMoney(rew.cash)} · {rew.rank_points}RP</span>}
+                              {rew && !isDnf && <span className="text-[9px] text-[var(--noir-muted)]">{formatMoney(rew.cash)}</span>}
                             </div>
                           );
                         })}

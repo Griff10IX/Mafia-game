@@ -952,12 +952,31 @@ async def run_daily_tribute_deposit():
             {"$inc": inc},
         )
         counts[mid] = r.modified_count
+    
+    # "Completed it" perk: Award 5 of each token type daily
+    completed_it_token_inc = {
+        "xp_crimes_tokens": 5,
+        "xp_gta_tokens": 5,
+        "melt_tokens": 5,
+        "oc_reduced_tokens": 5,
+        "booze_tokens": 5,
+        "racket_tokens": 5,
+        "travel_tokens": 5,
+        "properties_tokens": 5,
+        "jailbust_tokens": 5,
+    }
+    completed_it_result = await db.users.update_many(
+        {"completed_it_daily_tokens": True},
+        {"$inc": completed_it_token_inc},
+    )
+    
     logging.getLogger(__name__).info(
-        "Daily tribute deposit: %s cash + %s loot to %d users; per-mission bonuses %s at %s UTC",
+        "Daily tribute deposit: %s cash + %s loot to %d users; per-mission bonuses %s; completed_it tokens to %d users at %s UTC",
         DAILY_TRIBUTE_AMOUNT,
         DAILY_TRIBUTE_LOOT_BOX_PIECES,
         result.modified_count,
         counts,
+        completed_it_result.modified_count,
         today,
     )
 

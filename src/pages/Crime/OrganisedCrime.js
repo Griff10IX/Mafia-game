@@ -187,9 +187,6 @@ const JobCard = ({ job, selected, onSelect }) => (
     <div className="flex items-center justify-between gap-1 text-[10px] font-heading">
       <span className="text-primary font-bold">${(job.cash || 0).toLocaleString()}</span>
     </div>
-    <div className="text-[9px] text-mutedForeground font-heading mt-0.5">
-      +{job.rp || 0} RP
-    </div>
   </button>
 );
 
@@ -618,7 +615,7 @@ export default function OrganisedCrime() {
       if (res.data.success) {
         toast.success(res.data.message, {
           description: res.data.cash_earned != null && (
-            <span className="text-xs">+${res.data.cash_earned?.toLocaleString()} cash, +{res.data.rp_earned} RP</span>
+            <span className="text-xs">+${res.data.cash_earned?.toLocaleString()} cash</span>
           ),
         });
         refreshUser();
@@ -666,7 +663,7 @@ export default function OrganisedCrime() {
       if (res.data.success) {
         toast.success(res.data.message, {
           description: res.data.cash_earned != null && (
-            <span className="text-xs">+${res.data.cash_earned?.toLocaleString()} cash, +{res.data.rp_earned} RP</span>
+            <span className="text-xs">+${res.data.cash_earned?.toLocaleString()} cash</span>
           ),
         });
         refreshUser();
