@@ -310,7 +310,7 @@ def register(router):
             raise HTTPException(status_code=400, detail=f"You need ${VIDEO_POKER_CLAIM_COST:,} to claim")
         res = await db.videopoker_ownership.update_one(
             {"city": stored_city or city, "owner_id": None},
-            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": VIDEO_POKER_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0, "buy_back_reward": 0}},
+            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": VIDEO_POKER_DEFAULT_MAX_BET, "buy_back_reward": 0}},
             upsert=True,
         )
         if not res.modified_count and not res.upserted_id:
@@ -329,6 +329,19 @@ def register(router):
             raise HTTPException(status_code=403, detail="You do not own this table")
         await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None, "owner_username": None}})
         return {"message": "Ownership relinquished."}
+
+    @router.post("/casino/videopoker/reset-profit")
+    async def casino_videopoker_reset_profit(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user_verified)):
+        """Reset profit counter to zero (owner only)."""
+        _invalidate_ownership_cache(current_user.get("id") or "")
+        city = _normalize_city((request.city or "").strip())
+        if not city or city not in STATES:
+            raise HTTPException(status_code=400, detail="Invalid city")
+        stored_city, doc = await _get_ownership_doc(city)
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
+            raise HTTPException(status_code=403, detail="You do not own this table")
+        await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": {"profit": 0}})
+        return {"message": "Profit reset to zero."}
 
     @router.post("/casino/videopoker/set-max-bet")
     async def casino_videopoker_set_max_bet(request: RouletteSetMaxBetRequest, current_user: dict = Depends(get_current_user_verified)):

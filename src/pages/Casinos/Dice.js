@@ -414,6 +414,19 @@ export default function Dice() {
     finally { setOwnerLoading(false); }
   };
 
+  const handleResetProfit = async () => {
+    const city = ownership?.current_city;
+    if (!city || ownerLoading) return;
+    if (!window.confirm('Reset profit counter to zero? This cannot be undone.')) return;
+    setOwnerLoading(true);
+    try {
+      await api.post('/casino/dice/reset-profit', { city });
+      toast.success('Profit reset to zero');
+      fetchConfigAndOwnership();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setOwnerLoading(false); }
+  };
+
   const acceptBuyBack = async () => {
     if (!buyBackOffer?.offer_id || buyBackActionLoading) return;
     setBuyBackActionLoading(true);
@@ -579,7 +592,8 @@ export default function Dice() {
               <FormattedNumberInput value={sellPoints} onChange={setSellPoints} placeholder="10,000" className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
               <button onClick={handleSellOnTrade} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">List</button>
             </div>
-            <div className="flex justify-end">
+            <div className="flex justify-between">
+              <button onClick={handleResetProfit} disabled={ownerLoading} className="text-[10px] text-amber-400 hover:text-amber-300 font-heading">Reset Profit</button>
               <button onClick={handleRelinquish} disabled={ownerLoading} className="text-[10px] text-red-400 hover:text-red-300 font-heading">Relinquish</button>
             </div>
           </div>

@@ -465,6 +465,20 @@ export default function SlotsPage() {
     }
   };
 
+  const resetProfit = async () => {
+    if (!window.confirm('Reset profit counter to zero? This cannot be undone.')) return;
+    setOwnerActionLoading(true);
+    try {
+      await api.post('/casino/slots/reset-profit', { state: config.current_state });
+      toast.success('Profit reset to zero');
+      fetchOwnership();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Failed');
+    } finally {
+      setOwnerActionLoading(false);
+    }
+  };
+
   const acceptBuyBack = async () => {
     if (!buyBackOffer?.offer_id) return;
     setOwnerActionLoading(true);
@@ -616,7 +630,10 @@ export default function SlotsPage() {
                 />
                 <button type="button" onClick={setBuyBackReward} disabled={ownerActionLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50">Set</button>
               </div>
-              <button type="button" onClick={relinquish} disabled={ownerActionLoading} className="text-[10px] font-heading text-amber-400 hover:text-amber-300 border border-amber-500/40 rounded px-2 py-1">Relinquish</button>
+              <div className="flex gap-2">
+                <button type="button" onClick={resetProfit} disabled={ownerActionLoading} className="text-[10px] font-heading text-amber-400 hover:text-amber-300 border border-amber-500/40 rounded px-2 py-1">Reset Profit</button>
+                <button type="button" onClick={relinquish} disabled={ownerActionLoading} className="text-[10px] font-heading text-red-400 hover:text-red-300 border border-red-500/40 rounded px-2 py-1">Relinquish</button>
+              </div>
             </div>
           </div>
         )}

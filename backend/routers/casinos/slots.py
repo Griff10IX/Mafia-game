@@ -171,7 +171,6 @@ async def _run_slots_draw_if_needed(state: str):
                 "max_bet": SLOTS_MAX_BET,
                 "buy_back_reward": 0,
                 "expires_at": expires_at,
-                "profit": 0,
                 "next_draw_at": next_draw_iso,
             }
             if winner_rank_id < CAPO_RANK_ID:
@@ -414,6 +413,19 @@ def register(router):
             {"$set": {"owner_id": None, "owner_username": None}},
         )
         return {"message": "You have relinquished the slots. You cannot enter the next draw for 3 hours."}
+
+    @router.post("/casino/slots/reset-profit")
+    async def casino_slots_reset_profit(request: SlotsEnterRequest, current_user: dict = Depends(get_current_user_verified)):
+        """Reset profit counter to zero (owner only)."""
+        _invalidate_slots_ownership_cache(current_user.get("id") or "")
+        state = _normalize_state((request.state or "").strip())
+        if not state or state not in (STATES or []):
+            raise HTTPException(status_code=400, detail="Invalid state")
+        stored_state, doc = await _get_slots_ownership_doc(state)
+        if not doc or doc.get("owner_id") != current_user.get("id") or "" or _is_slots_ownership_expired(doc):
+            raise HTTPException(status_code=403, detail="You do not own the slots here")
+        await db.slots_ownership.update_one({"state": stored_state or state}, {"$set": {"profit": 0}})
+        return {"message": "Profit reset to zero."}
 
     @router.post("/casino/slots/set-max-bet")
     async def casino_slots_set_max_bet(request: SlotsSetMaxBetRequest, current_user: dict = Depends(get_current_user_verified)):

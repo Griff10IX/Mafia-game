@@ -328,7 +328,6 @@ def register(router):
                     "owner_id": current_user.get("id") or "",
                     "owner_username": current_user.get("username") or "",
                     "buy_back_reward": 0,
-                    "profit": 0,
                 },
                 "$setOnInsert": {"max_bet": DICE_MAX_BET},
             },

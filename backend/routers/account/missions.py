@@ -606,7 +606,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         m = next((x for x in MISSIONS if x["id"] == mid), None)
         if m:
             daily_tokens_total += int(m.get("reward_tribute_tokens_daily") or 0)
-    tribute_tokens = int(user.get("tribute_tokens") or 0)
+    tribute_tokens = int(current_user.get("tribute_tokens") or 0)
     return {
         "current_city": current_city,
         "unlocked_cities": unlocked,
