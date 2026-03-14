@@ -158,10 +158,15 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
     }
     setSending(true);
     try {
-      await api.post('/game-chat/send', { message: text });
+      const res = await api.post('/game-chat/send', { message: text });
       setInput('');
       shouldScrollToTopRef.current = true;
-      await fetchMessages();
+      // Optimistically add sent message so we don't depend on fetchMessages; it may fail with 500
+      const sent = res.data?.message;
+      if (sent) {
+        setMessages((prev) => [...prev, sent].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)));
+      }
+      fetchMessages().catch(() => {}); // Refresh in background; ignore errors (poll will retry)
     } catch (err) {
       toast.error(getApiErrorMessage(err));
     } finally {
@@ -174,9 +179,13 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
     setSending(true);
     setShowGifPicker(false);
     try {
-      await api.post('/game-chat/send', { message: '(GIF)', gif_url: gifUrl });
+      const res = await api.post('/game-chat/send', { message: '(GIF)', gif_url: gifUrl });
       shouldScrollToTopRef.current = true;
-      await fetchMessages();
+      const sent = res.data?.message;
+      if (sent) {
+        setMessages((prev) => [...prev, sent].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)));
+      }
+      fetchMessages().catch(() => {});
     } catch (err) {
       toast.error(getApiErrorMessage(err));
     } finally {

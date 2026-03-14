@@ -941,6 +941,23 @@ async def buy_car(
         {"id": current_user.get("id") or ""},
         {"$inc": {"money": -price}},
     )
+    now_iso = now.isoformat()
+    await db.money_transfers.insert_one({
+        "id": str(uuid.uuid4()),
+        "from_user_id": current_user.get("id") or "",
+        "from_username": current_user.get("username") or "",
+        "to_user_id": "__dealer__",
+        "to_username": "Dealer",
+        "amount": price,
+        "created_at": now_iso,
+        "car_name": car_info.get("name"),
+        "transfer_type": "car_purchase",
+    })
+    try:
+        from routers.money.bank import _invalidate_overview_cache
+        _invalidate_overview_cache(current_user.get("id") or "")
+    except Exception:
+        pass
     await log_activity(
         current_user.get("id") or "",
         current_user.get("username") or "?",
@@ -1112,6 +1129,23 @@ async def buy_listed_car(
         "car_name": car_name,
         "price": price,
     })
+    await db.money_transfers.insert_one({
+        "id": str(uuid.uuid4()),
+        "from_user_id": buyer_id,
+        "from_username": current_user.get("username") or "",
+        "to_user_id": seller_id,
+        "to_username": (seller or {}).get("username") or "?",
+        "amount": price,
+        "created_at": now_iso,
+        "car_name": car_name,
+        "transfer_type": "car_trade",
+    })
+    try:
+        from routers.money.bank import _invalidate_overview_cache
+        _invalidate_overview_cache(buyer_id)
+        _invalidate_overview_cache(seller_id)
+    except Exception:
+        pass
     await log_activity(
         buyer_id,
         current_user.get("username") or "?",

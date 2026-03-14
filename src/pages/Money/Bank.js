@@ -345,17 +345,25 @@ const SendMoneyCard = ({
   </div>
 );
 
-const TransferCard = ({ transfer, delay = 0 }) => (
+const TransferCard = ({ transfer, delay = 0 }) => {
+  const isCar = !!transfer.car_name;
+  const line1 = transfer.direction === 'sent' ? '📤 Sent' : '📥 Received';
+  const line2 = isCar
+    ? (transfer.direction === 'sent'
+      ? (transfer.to_username === 'Dealer' ? `Car: ${transfer.car_name}` : `To: ${transfer.to_username} · ${transfer.car_name}`)
+      : `From: ${transfer.from_username} · Sold: ${transfer.car_name}`)
+    : (transfer.direction === 'sent' ? `To: ${transfer.to_username}` : `From: ${transfer.from_username}`);
+  return (
   <div className={`${styles.panel} border border-primary/20 rounded-md p-2 bank-row bank-fade-in`} style={{ animationDelay: `${delay}s` }}>
     <div className="flex items-center justify-between gap-2">
       <div className="flex-1 min-w-0">
         <div className={`text-[10px] font-heading font-bold mb-0.5 ${
           transfer.direction === 'sent' ? 'text-red-400' : 'text-emerald-400'
         }`}>
-          {transfer.direction === 'sent' ? '📤 Sent' : '📥 Received'}
+          {line1}
         </div>
         <div className="text-[9px] text-mutedForeground truncate">
-          {transfer.direction === 'sent' ? `To: ${transfer.to_username}` : `From: ${transfer.from_username}`}
+          {line2}
         </div>
       </div>
       <div className="text-right">
@@ -368,7 +376,8 @@ const TransferCard = ({ transfer, delay = 0 }) => (
       </div>
     </div>
   </div>
-);
+  );
+};
 
 // Main component
 export default function Bank() {

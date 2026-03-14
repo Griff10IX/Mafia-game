@@ -1,4 +1,5 @@
 # Crack the Safe: jackpot game. Every attempt costs 1M. No free entries, no purchasable extra. Admins unlimited.
+# Reward pool: cash jackpot (always) + 25% chance for 1 bonus token (Crimes XP, GTA XP, Melt, etc.)
 from datetime import datetime, timezone
 import random
 from typing import List
@@ -7,6 +8,16 @@ from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, get_current_user_verified, _is_admin, log_activity
+
+# Token types that can drop as bonus reward (matches armoury TOKEN_TYPES)
+SAFE_TOKEN_REWARD_TYPES = (
+    "xp_crimes", "xp_gta", "melt", "oc_reduced", "booze", "racket", "travel", "properties", "jailbust_bonus"
+)
+SAFE_TOKEN_REWARD_CHANCE = 0.25  # 25% chance for bonus tokens on win
+SAFE_TOKEN_REWARD_MIN_TYPES = 1   # 1–3 different token types
+SAFE_TOKEN_REWARD_MAX_TYPES = 3
+SAFE_TOKEN_REWARD_MIN_AMOUNT = 1  # 1–2 per type
+SAFE_TOKEN_REWARD_MAX_AMOUNT = 2
 
 # 75% reduction for beta
 SAFE_ENTRY_COST = 250_000
@@ -91,6 +102,24 @@ def register(router):
                 "amount_won": None,
             }]
 
+        # Possible rewards for UI key (cash + token types)
+        _token_desc = {
+            "xp_crimes": "2x XP from crimes, 1h",
+            "xp_gta": "2x XP from GTA, 1h",
+            "melt": "Reduced melt cooldown, 1h",
+            "oc_reduced": "Reduced OC cost & cooldown, 1h",
+            "booze": "Cheaper booze, 1h",
+            "racket": "Increased racket profit, 1h",
+            "travel": "Cheaper & faster travel, 1h",
+            "properties": "3x property income, 1h",
+            "jailbust_bonus": "+10% bust success, 1h",
+        }
+        possible_rewards = [{"id": "cash", "name": "Cash Jackpot", "desc": "Full jackpot amount (always)"}]
+        for t in SAFE_TOKEN_REWARD_TYPES:
+            name = t.replace("_", " ").title() + " Token"
+            desc = (_token_desc.get(t, "1h bonus") + " — 1–3 types, 1–2 each (25% chance)")
+            possible_rewards.append({"id": t, "name": name, "desc": desc})
+
         base = {
             "jackpot": safe.get("jackpot", SAFE_JACKPOT_SEED),
             "total_attempts": total_attempts,
@@ -102,6 +131,7 @@ def register(router):
             "entry_cost": SAFE_ENTRY_COST,
             "clues": clues,
             "is_admin": is_admin,
+            "possible_rewards": possible_rewards,
         }
         if is_admin:
             base["admin_combination"] = combo
@@ -141,7 +171,30 @@ def register(router):
         if cracked:
             fresh = await db.safe_game.find_one({})
             jackpot_amount = fresh.get("jackpot", SAFE_JACKPOT_SEED)
-            await db.users.update_one({"id": user.get("id") or ""}, {"$inc": {"money": jackpot_amount}})
+            uid = user.get("id") or ""
+            await db.users.update_one({"id": uid}, {"$inc": {"money": jackpot_amount}})
+
+            # 25% chance for 1–3 different token types, each 1–2 amount
+            bonus_tokens = []
+            if random.random() < SAFE_TOKEN_REWARD_CHANCE:
+                try:
+                    from routers.kill.armoury import TOKEN_CONFIG
+                    types_list = list(SAFE_TOKEN_REWARD_TYPES)
+                    num_types = random.randint(SAFE_TOKEN_REWARD_MIN_TYPES, SAFE_TOKEN_REWARD_MAX_TYPES)
+                    chosen = random.sample(types_list, min(num_types, len(types_list)))
+                    incs = {}
+                    for token_type in chosen:
+                        cfg = TOKEN_CONFIG.get(token_type)
+                        if cfg:
+                            amt = random.randint(SAFE_TOKEN_REWARD_MIN_AMOUNT, SAFE_TOKEN_REWARD_MAX_AMOUNT)
+                            count_field = cfg["count_field"]
+                            incs[count_field] = incs.get(count_field, 0) + amt
+                            bonus_tokens.append({"token_type": token_type, "amount": amt})
+                    if incs:
+                        await db.users.update_one({"id": uid}, {"$inc": incs})
+                except Exception:
+                    pass
+
             new_combo = [random.randint(SAFE_MIN, SAFE_MAX) for _ in range(SAFE_DIGITS)]
             await db.safe_game.update_one(
                 {},
@@ -155,21 +208,27 @@ def register(router):
             )
             await db.safe_winners.insert_one({
                 "username": user.get("username", "?"),
-                "user_id": user.get("id") or "",
+                "user_id": uid,
                 "won_at": now,
                 "amount_won": jackpot_amount,
+                "bonus_tokens": bonus_tokens,
             })
             await log_activity(
-                user.get("id") or "",
+                uid,
                 user.get("username") or "?",
                 "crack_safe_jackpot",
-                {"jackpot_won": jackpot_amount},
+                {"jackpot_won": jackpot_amount, "bonus_tokens": bonus_tokens},
             )
+            msg = f"YOU CRACKED THE SAFE! ${jackpot_amount:,} is yours!"
+            if bonus_tokens:
+                parts = [f"{b['amount']} {b['token_type'].replace('_', ' ').title()}" for b in bonus_tokens]
+                msg += f" Plus {'; '.join(parts)} token(s)!"
             return {
                 "cracked": True,
                 "correct_positions": SAFE_DIGITS,
                 "jackpot_won": jackpot_amount,
-                "message": f"YOU CRACKED THE SAFE! ${jackpot_amount:,} is yours!",
+                "bonus_tokens": bonus_tokens,
+                "message": msg,
             }
 
         fresh = await db.safe_game.find_one({})

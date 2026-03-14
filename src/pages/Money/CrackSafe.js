@@ -455,7 +455,7 @@ export default function CrackSafe() {
       setResult(res.data);
 
       if (res.data.cracked) {
-        toast.success('🔓 SAFE CRACKED! Check your balance!');
+        toast.success((res.data.bonus_tokens?.length > 0) ? '🔓 SAFE CRACKED! Check your balance and tokens!' : '🔓 SAFE CRACKED! Check your balance!');
         await refreshUser();
       } else {
         setShaking(true);
@@ -565,7 +565,7 @@ export default function CrackSafe() {
             {result?.cracked && (
               <div className="w-full rounded-lg px-3 py-2.5 text-center border border-yellow-500/40 bg-yellow-950/20 cs-win-glow cs-fade-in">
                 <p className="text-sm text-yellow-300 font-heading font-bold">
-                  🔓 SAFE CRACKED! {formatMoney(result.jackpot_won)} is yours!
+                  🔓 {result.message || `SAFE CRACKED! ${formatMoney(result.jackpot_won)} is yours!`}
                 </p>
               </div>
             )}
@@ -633,6 +633,37 @@ export default function CrackSafe() {
               <p className="text-zinc-400">Current Jackpot: <span className="text-yellow-400 font-bold">{formatMoney(info?.jackpot ?? 0)}</span></p>
               <p className="text-zinc-400">Total attempts: <span className="text-primary font-semibold">{(info?.total_attempts ?? 0).toLocaleString()}</span></p>
               <p className="text-zinc-400">Previous Winner: <span className="text-primary font-semibold">{info?.last_winner_username ?? 'None yet'}</span></p>
+            </div>
+          </div>
+
+          {/* Possible Rewards */}
+          <div
+            className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-600/25 cs-fade-in`}
+            style={{ animationDelay: '0.14s' }}
+          >
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-amber-950/20 border-b border-amber-600/20 flex items-center gap-2">
+              <Trophy size={11} className="text-amber-400" />
+              <h2 className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">Possible Rewards</h2>
+            </div>
+            <div className="p-2.5 space-y-1.5">
+              {(info?.possible_rewards ?? [
+                { id: 'cash', name: 'Cash Jackpot', desc: 'Full jackpot amount (always)' },
+                { id: 'xp_crimes', name: 'Crimes XP Token', desc: '2x XP from crimes, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'xp_gta', name: 'GTA XP Token', desc: '2x XP from GTA, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'melt', name: 'Melt Token', desc: 'Reduced melt cooldown, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'oc_reduced', name: 'OC Token', desc: 'Reduced OC cost, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'booze', name: 'Booze Token', desc: 'Cheaper booze, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'racket', name: 'Racket Token', desc: 'Increased racket profit, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'travel', name: 'Travel Token', desc: 'Cheaper & faster travel, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'properties', name: 'Property Token', desc: '3x property income, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'jailbust_bonus', name: 'Jailbust Token', desc: '+10% bust success, 1h — 1–3 types, 1–2 each (25% chance)' },
+              ]).map((r) => (
+                <div key={r.id} className="flex items-start gap-2 px-2 py-1 rounded border border-amber-500/10 bg-amber-950/10">
+                  <span className="text-[10px] font-heading font-bold text-amber-400 shrink-0">{r.name}</span>
+                  <span className="text-[9px] text-zinc-400 font-heading flex-1">{r.desc}</span>
+                </div>
+              ))}
             </div>
           </div>
 
