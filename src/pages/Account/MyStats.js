@@ -194,8 +194,14 @@ export default function MyStats() {
   const casinoRows = [
     { label: 'Casino Owned', value: casinos.owned_casino ? `${casinoTypeLabel(casinos.owned_casino.type)} (${casinos.owned_casino?.location ?? '—'})` : '—', valueColor: casinos.owned_casino ? 'text-emerald-400' : 'text-mutedForeground' },
     { label: 'Property Owned', value: casinos.owned_property ? `${propertyTypeLabel(casinos.owned_property.type)} (${casinos.owned_property?.location ?? '—'})` : '—', valueColor: casinos.owned_property ? 'text-emerald-400' : 'text-mutedForeground' },
-    { label: 'Profit from Owning Casino', value: formatMoney(casinos.casino_profit), valueColor: casinos.casino_profit > 0 ? 'text-emerald-400' : 'text-foreground' },
+    { label: 'Profit from Casino', value: formatMoney(casinos.casino_profit), valueColor: casinos.casino_profit > 0 ? 'text-emerald-400' : 'text-foreground' },
     { label: 'Profit from Property', value: formatNumber(casinos.property_profit), valueColor: casinos.property_profit > 0 ? 'text-emerald-400' : 'text-foreground' },
+    { label: 'Casinos Won', value: formatNumber(casinos.casinos_seized), valueColor: casinos.casinos_seized > 0 ? 'text-amber-400' : 'text-foreground' },
+    { label: 'Casinos Lost', value: formatNumber(casinos.casinos_lost), valueColor: casinos.casinos_lost > 0 ? 'text-rose-400' : 'text-foreground' },
+    { label: 'Properties Won', value: formatNumber(casinos.properties_seized), valueColor: casinos.properties_seized > 0 ? 'text-amber-400' : 'text-foreground' },
+    { label: 'Properties Lost', value: formatNumber(casinos.properties_lost), valueColor: casinos.properties_lost > 0 ? 'text-rose-400' : 'text-foreground' },
+    { label: 'Total Payouts (as Owner)', value: formatMoney(casinos.total_casino_payouts), valueColor: casinos.total_casino_payouts > 0 ? 'text-rose-400' : 'text-foreground' },
+    { label: 'Biggest Payout', value: formatMoney(casinos.biggest_casino_payout), valueColor: casinos.biggest_casino_payout > 0 ? 'text-rose-400' : 'text-foreground' },
   ];
 
   const boozeRows = [

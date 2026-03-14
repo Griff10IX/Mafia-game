@@ -300,6 +300,8 @@ def register(router):
                 "auto_rank_total_cash": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1,
                 "auto_rank_total_cars_melted": 1, "auto_rank_total_bullets_from_melt": 1,
                 "auto_rank_total_cars_scrapped": 1, "auto_rank_total_cash_from_scrap": 1,
+                "casinos_seized": 1, "casinos_lost": 1, "properties_seized": 1, "properties_lost": 1,
+                "total_casino_payouts": 1, "biggest_casino_payout": 1,
             },
         )
         u = u or {}
@@ -423,6 +425,12 @@ def register(router):
                 "has_property": has_property,
                 "owned_casino": {"type": owned_casino.get("type"), "location": owned_casino.get("city") or owned_casino.get("state")} if owned_casino else None,
                 "owned_property": {"type": owned_property.get("type"), "location": owned_property.get("state")} if owned_property else None,
+                "casinos_seized": int(u.get("casinos_seized") or 0),
+                "casinos_lost": int(u.get("casinos_lost") or 0),
+                "properties_seized": int(u.get("properties_seized") or 0),
+                "properties_lost": int(u.get("properties_lost") or 0),
+                "total_casino_payouts": int(u.get("total_casino_payouts") or 0),
+                "biggest_casino_payout": int(u.get("biggest_casino_payout") or 0),
             },
             "gambling": {
                 "total_profit": gambling_total_profit,
