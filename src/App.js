@@ -54,6 +54,8 @@ const ShootingRange = lazy(() => import("./pages/ShootingRange"));
 const ShootingRange3D = lazy(() => import("./pages/ShootingRange3D"));
 const Attemps = lazy(() => import("./pages/Attemps"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
+const MiniGamesLeaderboard = lazy(() => import("./pages/MiniGamesLeaderboard"));
+const Minesweeper = lazy(() => import("./pages/Minesweeper"));
 const Store = lazy(() => import("./pages/Store"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminLocked = lazy(() => import("./pages/AdminLocked"));
@@ -836,6 +838,30 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Leaderboard />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/minigames-leaderboard"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <MiniGamesLeaderboard />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/minesweeper"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Minesweeper />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

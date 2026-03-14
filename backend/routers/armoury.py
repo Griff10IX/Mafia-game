@@ -15,6 +15,7 @@ from bson.objectid import ObjectId
 
 from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS
 from routers.store import _store_cost_inc
+from routers.minigame_leaderboard import log_minigame_play
 
 # 5k bullets per 24h, effectively delivered every 20 mins (72 ticks per day)
 BULLET_FACTORY_TOTAL_PER_24H = 5000
@@ -1445,6 +1446,10 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
         "created_at": now.isoformat(),
     }
     await db.shooting_range_scores.insert_one(doc)
+    try:
+        await log_minigame_play(current_user["id"], current_user.get("username"), "shooting_range", score)
+    except Exception:
+        pass
     return {"message": "Score recorded.", "score": score}
 
 

@@ -55,6 +55,8 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/flappygangster', label: 'Flappy Gangster' },
         { path: '/shooting-range', label: 'Shooting range' },
         { path: '/snake', label: 'Package Run' },
+        { path: '/minesweeper', label: 'Minefield' },
+        { path: '/minigames-leaderboard', label: 'Leaderboard' },
       ],
     },
     {
@@ -872,8 +874,8 @@ export default function Layout({ children }) {
   const miniGamesNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-minigames-group" onClick={() => setMiniGamesOpen((v) => !v)}
-        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/racing' || location.pathname === '/boxing' || location.pathname === '/flappygangster' || location.pathname === '/shooting-range' || location.pathname === '/snake' || location.pathname.startsWith('/boxing/')) ? styles.navItemActive : styles.sidebarNavLink}`}
-        style={(location.pathname === '/racing' || location.pathname === '/boxing' || location.pathname === '/flappygangster' || location.pathname === '/shooting-range' || location.pathname === '/snake' || location.pathname.startsWith('/boxing/')) ? sidebarActiveGroupStyle : undefined}>
+        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/racing' || location.pathname === '/boxing' || location.pathname === '/flappygangster' || location.pathname === '/shooting-range' || location.pathname === '/snake' || location.pathname === '/minesweeper' || location.pathname === '/minigames-leaderboard' || location.pathname.startsWith('/boxing/')) ? styles.navItemActive : styles.sidebarNavLink}`}
+        style={(location.pathname === '/racing' || location.pathname === '/boxing' || location.pathname === '/flappygangster' || location.pathname === '/shooting-range' || location.pathname === '/snake' || location.pathname === '/minesweeper' || location.pathname === '/minigames-leaderboard' || location.pathname.startsWith('/boxing/')) ? sidebarActiveGroupStyle : undefined}>
         <Gamepad2 size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
         <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Mini games</span>
         {miniGamesOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
@@ -886,6 +888,8 @@ export default function Layout({ children }) {
             { to: '/flappygangster', label: 'Flappy Gangster', testId: 'nav-flappygangster' },
             { to: '/shooting-range', label: 'Shooting range', testId: 'nav-shooting-range', matchPrefix: true },
             { to: '/snake', label: 'Package Run', testId: 'nav-snake' },
+            { to: '/minesweeper', label: 'Minefield', testId: 'nav-minesweeper' },
+            { to: '/minigames-leaderboard', label: 'Leaderboard', testId: 'nav-minigames-leaderboard' },
           ].map((item, idx) => {
             const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;
             return (

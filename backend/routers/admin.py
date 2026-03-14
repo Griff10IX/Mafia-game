@@ -4024,3 +4024,66 @@ def register(router):
             "cleared_family_name": (old_fam or {}).get("name", "?"),
             "cleared": True,
         }
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Mini Games Weekly Leaderboard Admin
+    # ─────────────────────────────────────────────────────────────────────────────
+    from routers.minigame_leaderboard import MINIGAME_LB_CONFIG_ID, DEFAULT_REWARDS, run_minigame_weekly_payout
+
+    @router.get("/admin/minigame-leaderboard/config")
+    async def get_minigame_lb_config(current_user: dict = Depends(get_current_user)):
+        """Get mini games weekly leaderboard reward configuration."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        cfg = await db.game_config.find_one({"id": MINIGAME_LB_CONFIG_ID}, {"_id": 0})
+        rewards = (cfg or {}).get("rewards") or DEFAULT_REWARDS
+        rewards_out = {}
+        for k, v in rewards.items():
+            rewards_out[str(k)] = v
+        return {
+            "config_id": MINIGAME_LB_CONFIG_ID,
+            "rewards": rewards_out,
+            "last_payout_week_start": (cfg or {}).get("last_payout_week_start"),
+        }
+
+    class MinigameLBRewardsUpdate(BaseModel):
+        rewards: dict
+
+    @router.post("/admin/minigame-leaderboard/config")
+    async def update_minigame_lb_config(body: MinigameLBRewardsUpdate, current_user: dict = Depends(get_current_user)):
+        """Update mini games weekly leaderboard rewards. rewards = {1: {cash, respect, loot_pieces, bullets}, ...}"""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        rewards = body.rewards or {}
+        clean_rewards = {}
+        for rank in range(1, 6):
+            r = rewards.get(rank) or rewards.get(str(rank)) or DEFAULT_REWARDS.get(rank, {})
+            clean_rewards[rank] = {
+                "cash": int(r.get("cash") or 0),
+                "respect": int(r.get("respect") or 0),
+                "loot_pieces": int(r.get("loot_pieces") or 0),
+                "bullets": int(r.get("bullets") or 0),
+            }
+        await db.game_config.update_one(
+            {"id": MINIGAME_LB_CONFIG_ID},
+            {"$set": {"rewards": clean_rewards}},
+            upsert=True,
+        )
+        return {"message": "Mini games leaderboard rewards updated", "rewards": clean_rewards}
+
+    @router.post("/admin/minigame-leaderboard/test-payout")
+    async def test_minigame_lb_payout(current_user: dict = Depends(get_current_user)):
+        """Test mini games weekly payout (no actual rewards given)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        await run_minigame_weekly_payout(db, test_run=True)
+        return {"message": "Test payout completed (no rewards given). Check logs for details."}
+
+    @router.get("/admin/minigame-leaderboard/history")
+    async def get_minigame_lb_payout_history(current_user: dict = Depends(get_current_user)):
+        """Get past mini games payout history."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        cursor = db.minigame_payout_history.find({}, {"_id": 0}).sort("paid_at", -1).limit(10)
+        history = await cursor.to_list(10)
+        return {"history": history}

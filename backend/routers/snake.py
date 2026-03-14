@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
 from server import db, get_current_user, log_activity, log_respect_earned
+from routers.minigame_leaderboard import log_minigame_play
 
 
 MAX_SCORE_ACCEPTED = 50_000
@@ -209,6 +210,11 @@ def register(router):
         }
         try:
             await db.snake_scores.insert_one(doc)
+        except Exception:
+            pass
+
+        try:
+            await log_minigame_play(current_user["id"], current_user.get("username"), "snake", score)
         except Exception:
             pass
 

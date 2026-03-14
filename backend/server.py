@@ -1425,6 +1425,10 @@ gauntlet.register(api_router)
 boxing.register(api_router)
 racing.register(api_router)
 snake.register(api_router)
+from routers import minigame_leaderboard
+minigame_leaderboard.register(api_router)
+from routers import minesweeper
+minesweeper.register(api_router)
 from routers import auto_rank as auto_rank_router
 auto_rank_router.register(api_router)
 
@@ -1590,6 +1594,16 @@ async def startup_db():
                 logging.exception("Weekly leaderboard payout ticker: %s", e)
             await asyncio.sleep(60)
     asyncio.create_task(leaderboard_payout_ticker())
+    # Mini games weekly leaderboard payout: run once per week (check every 60s), pay top 5 for previous week (Sunday UTC)
+    from routers import minigame_leaderboard as minigame_lb_router
+    async def minigame_payout_ticker():
+        while True:
+            try:
+                await minigame_lb_router.run_minigame_weekly_payout(db)
+            except Exception as e:
+                logging.exception("Mini games weekly payout ticker: %s", e)
+            await asyncio.sleep(60)
+    asyncio.create_task(minigame_payout_ticker())
     # Boxing: round-by-round match ticker (check every 1s), plus weekly league payout (check every 60s)
     from routers import boxing as boxing_router
     async def boxing_match_ticker():

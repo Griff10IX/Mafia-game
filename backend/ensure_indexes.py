@@ -285,6 +285,14 @@ async def ensure_all_indexes(db):
         await db.users.create_index("in_jail")
         await db.users.create_index([("auto_rank_enabled", 1), ("auto_rank_next_run_at", 1)])
 
+        # --- Mini games leaderboard ---
+        await db.minigame_plays.create_index([("week_start", 1), ("user_id", 1)])
+        await db.minigame_plays.create_index([("week_start", 1), ("points", -1)])
+
+        # --- Minesweeper ---
+        await db.minesweeper_wins.create_index([("time_seconds", 1)])
+        await db.minesweeper_wins.create_index([("user_id", 1), ("difficulty", 1)])
+
         logger.info("All non-profile indexes ensured.")
     except Exception as e:
         logger.warning("ensure_all_indexes: %s", e)

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from server import db, get_current_user, log_activity, log_respect_earned
+from routers.minigame_leaderboard import log_minigame_play
 
 
 # Base tiers (score threshold -> cash, respect for that tier only; cumulative applied in _get_reward)
@@ -155,6 +156,10 @@ def register(router):
                 )
             except Exception:
                 pass
+            try:
+                await log_minigame_play(current_user["id"], current_user.get("username"), "gauntlet", score)
+            except Exception:
+                pass
             return {"cash_awarded": 0, "respect_awarded": 0, "label": reward["label"], "tier": reward["tier"], "plays_left": plays_left, "resets_at": reset_iso}
 
         updates = {}
@@ -170,6 +175,10 @@ def register(router):
             await db.gauntlet_scores.insert_one(
                 {"id": str(uuid.uuid4()), "user_id": current_user["id"], "username": current_user.get("username") or "?", "score": score, "cash": cash, "respect": respect, "at": now_iso}
             )
+        except Exception:
+            pass
+        try:
+            await log_minigame_play(current_user["id"], current_user.get("username"), "gauntlet", score)
         except Exception:
             pass
         await db.user_meta.update_one(
