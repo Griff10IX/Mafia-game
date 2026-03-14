@@ -812,7 +812,6 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
     members = await db.family_members.find({"family_id": victim_family_id}, {"_id": 0, "user_id": 1}).to_list(100)
     alive = 0
     for m in members:
-        # Include 'id' in projection to ensure we get a non-empty dict when user exists
         u = await db.users.find_one({"id": m["user_id"]}, {"_id": 0, "id": 1, "is_dead": 1})
         if u and u.get("id") and not u.get("is_dead"):
             alive += 1
@@ -823,7 +822,7 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
     now_dt = datetime.now(timezone.utc)
     now = now_dt.isoformat()
     loser_family = await db.families.find_one({"id": loser_id}, {"_id": 0, "name": 1, "tag": 1, "rackets": 1, "treasury": 1, "compound_cash": 1, "compound_points": 1, "compound_loot_pieces": 1})
-    winner_family = await db.families.find_one({"id": winner_id}, {"_id": 0, "name": 1, "tag": 1, "boss_id": 1, "racket_income_bonus_percent": 1})
+    winner_family = await db.families.find_one({"id": winner_id}, {"_id": 0, "name": 1, "tag": 1, "boss_id": 1, "racket_income_bonus_percent": 1, "rackets": 1})
     winner_family_name = (winner_family or {}).get("name") or (winner_family or {}).get("tag") or winner_id
     loser_family_name = (loser_family or {}).get("name") or (loser_family or {}).get("tag") or loser_id
     if not winner_family:
@@ -834,12 +833,68 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
         return
     winner_boss_id = winner_family.get("boss_id")
     loser_rackets = (loser_family or {}).get("rackets") or {}
+    winner_rackets = (winner_family.get("rackets") or {}).copy()
     loser_treasury = int((loser_family or {}).get("treasury", 0) or 0)
     loser_compound_cash = int((loser_family or {}).get("compound_cash", 0) or 0)
     loser_compound_points = int((loser_family or {}).get("compound_points", 0) or 0)
     loser_compound_loot_pieces = int((loser_family or {}).get("compound_loot_pieces", 0) or 0)
     ev = await get_effective_event()
-    prize_racket_cash = compute_loser_racket_cash(loser_rackets, ev, now=now_dt, war_doc=war)
+
+    # Calculate racket cash prize: uncollected income + upgrade costs
+    prize_racket_income = compute_loser_racket_cash(loser_rackets, ev, now=now_dt, war_doc=war)
+    prize_racket_upgrade_cost = 0
+    for racket_id, state in loser_rackets.items():
+        level = int(state.get("level", 0) or 0)
+        if level > 0:
+            # Upgrade cost = unlock cost + (level-1) * upgrade cost per level
+            prize_racket_upgrade_cost += RACKET_UNLOCK_COST + max(0, level - 1) * RACKET_UPGRADE_COST
+    prize_racket_cash = prize_racket_income + prize_racket_upgrade_cost
+
+    # Racket transfer/bonus logic
+    # If loser has higher level racket -> winner takes it
+    # If not higher -> winner gets +0.5% passive income bonus (capped at 25%)
+    RACKET_NO_UPGRADE_BONUS_PCT = 0.5
+    rackets_taken = []
+    rackets_bonus_count = 0
+    for racket_id, state in loser_rackets.items():
+        loser_level = int(state.get("level", 0) or 0)
+        if loser_level <= 0:
+            continue
+        winner_level = int((winner_rackets.get(racket_id) or {}).get("level", 0) or 0)
+        if loser_level > winner_level:
+            # Winner takes the higher level racket
+            winner_rackets[racket_id] = {"level": loser_level, "last_collected_at": now}
+            racket_def = next((r for r in FAMILY_RACKETS if r["id"] == racket_id), None)
+            racket_name = racket_def["name"] if racket_def else racket_id
+            rackets_taken.append(f"{racket_name} (Lv{loser_level})")
+        else:
+            # Winner already has equal or higher, get bonus instead
+            rackets_bonus_count += 1
+
+    # Update winner's rackets if any were taken
+    if rackets_taken:
+        await db.families.update_one({"id": winner_id}, {"$set": {"rackets": winner_rackets}})
+
+    # Calculate total income bonus: base 2.5% + 0.5% per non-upgraded racket
+    current_bonus = float((winner_family.get("racket_income_bonus_percent") or 0) or 0)
+    bonus_from_war = WAR_WIN_RACKET_INCOME_BONUS_PERCENT
+    bonus_from_rackets = rackets_bonus_count * RACKET_NO_UPGRADE_BONUS_PCT
+    total_bonus_add = bonus_from_war + bonus_from_rackets
+    new_bonus = min(current_bonus + total_bonus_add, RACKET_INCOME_BONUS_CAP_PERCENT)
+    bonus_actually_added = new_bonus - current_bonus
+
+    await db.families.update_one(
+        {"id": winner_id},
+        {"$set": {"racket_income_bonus_percent": new_bonus}}
+    )
+
+    # Reset loser's rackets to empty
+    await db.families.update_one(
+        {"id": loser_id},
+        {"$set": {"rackets": {}, "treasury": 0, "compound_cash": 0, "compound_points": 0, "compound_loot_pieces": 0, "compound_deposits_by_user": {}}}
+    )
+
+    # Cash prize: treasury + racket cash (income + upgrade costs) + compound
     total_cash_prize = loser_treasury + prize_racket_cash + loser_compound_cash
     if total_cash_prize > 0:
         await db.families.update_one({"id": winner_id}, {"$inc": {"treasury": total_cash_prize}})
@@ -848,22 +903,13 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
             {"id": winner_id},
             {"$inc": {"compound_points": loser_compound_points, "compound_loot_pieces": loser_compound_loot_pieces}},
         )
-    await db.families.update_one(
-        {"id": loser_id},
-        {"$set": {"compound_cash": 0, "compound_points": 0, "compound_loot_pieces": 0, "compound_deposits_by_user": {}}},
-    )
-    current_bonus = float((winner_family.get("racket_income_bonus_percent") or 0) or 0)
-    new_bonus = min(current_bonus + WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT)
-    await db.families.update_one(
-        {"id": winner_id},
-        {"$set": {"racket_income_bonus_percent": new_bonus}}
-    )
+
+    # Transfer exclusive cars
     loser_member_ids = [m["user_id"] for m in members]
     exclusive_cars = await db.user_cars.find({"user_id": {"$in": loser_member_ids}}).to_list(500)
     for uc in exclusive_cars:
         car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
         if car_info and car_info.get("rarity") == "exclusive":
-            # New id so old view-car link is dead; new owner keeps it private until listed or shown on profile
             await db.user_cars.update_one(
                 {"_id": uc["_id"]},
                 {
@@ -871,7 +917,9 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
                     "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""},
                 },
             )
-    prize_count = sum(1 for uc in exclusive_cars if next((c for c in CARS if c.get("id") == uc.get("car_id")), {}).get("rarity") == "exclusive")
+    prize_car_count = sum(1 for uc in exclusive_cars if next((c for c in CARS if c.get("id") == uc.get("car_id")), {}).get("rarity") == "exclusive")
+
+    # Record war result
     await db.family_wars.update_one(
         {"id": war["id"]},
         {"$set": {
@@ -881,8 +929,9 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
             "loser_family_id": loser_id,
             "winner_family_name": winner_family_name,
             "loser_family_name": loser_family_name,
-            "prize_exclusive_cars": prize_count,
-            "prize_rackets": None,
+            "prize_exclusive_cars": prize_car_count,
+            "prize_rackets_taken": rackets_taken,
+            "prize_racket_bonus_count": rackets_bonus_count,
             "prize_treasury": loser_treasury,
             "prize_racket_cash": prize_racket_cash,
             "prize_compound_cash": loser_compound_cash,
@@ -890,11 +939,18 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
             "prize_compound_loot_pieces": loser_compound_loot_pieces,
         }},
     )
-    msg = f"Your family won the war. You received ${total_cash_prize:,} (their treasury + racket cash + compound) and a permanent +{WAR_WIN_RACKET_INCOME_BONUS_PERCENT}% on all racket income."
-    if prize_count:
-        msg += f" You also took {prize_count} exclusive car(s)."
+
+    # Build notification message
+    msg = f"Your family won the war against {loser_family_name}!"
+    msg += f" You received ${total_cash_prize:,} (treasury ${loser_treasury:,} + racket value ${prize_racket_cash:,} + compound ${loser_compound_cash:,})."
+    if rackets_taken:
+        msg += f" Rackets taken: {', '.join(rackets_taken)}."
+    if bonus_actually_added > 0:
+        msg += f" Permanent racket income bonus: +{bonus_actually_added:.1f}% (now {new_bonus:.1f}%)."
+    if prize_car_count:
+        msg += f" {prize_car_count} exclusive car(s) seized."
     if loser_compound_points > 0 or loser_compound_loot_pieces > 0:
-        msg += f" Their compound yielded {loser_compound_points:,} points and {loser_compound_loot_pieces:,} loot pieces."
+        msg += f" Compound loot: {loser_compound_points:,} points, {loser_compound_loot_pieces:,} loot pieces."
     await send_notification_to_family(winner_id, "🏆 War Won", msg, "reward")
 
 
@@ -1370,7 +1426,7 @@ from routers.money import bank, stock_market, properties, quicktrade, crack_safe
 from routers.social import forum, game_chat, giphy
 from routers.account import objectives
 from routers.account.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
-from routers.game.families import FAMILY_RACKETS, compute_loser_racket_cash, WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT  # used by _family_war_check_wipe_and_award and seed
+from routers.game.families import FAMILY_RACKETS, compute_loser_racket_cash, WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT, RACKET_UNLOCK_COST, RACKET_UPGRADE_COST  # used by _family_war_check_wipe_and_award and seed
 from routers.kill.bodyguards import _create_robot_bodyguard_user  # used by seed
 from routers.money.booze_run import get_booze_rotation_interval_seconds, get_booze_rotation_index  # flash news
 CASINO_GAMES = [

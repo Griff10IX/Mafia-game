@@ -8,7 +8,7 @@ const FEATURES = [
   { icon: '🎰', title: 'Deep Casino System', desc: 'Roulette, Blackjack, Dice, Horse Racing, Slots, Video Poker' },
   { icon: '💰', title: 'Organized Crime', desc: 'Team-based heists with equipment tiers and strategic planning' },
   { icon: '🏎️', title: 'Bootleg Racing', desc: 'Unique 1920s themed racing with upgrades and competitions' },
-  { icon: '👨‍👩‍👧‍👦', title: 'Families & Crews', desc: 'Join or create families, rise through the ranks together' },
+  { icon: '🤝', title: 'Families & Crews', desc: 'Join or create families, rise through the ranks together' },
   { icon: '🥃', title: 'Prohibition Era', desc: 'Authentic 1920s-30s setting with booze runs and speakeasys' },
   { icon: '⚔️', title: 'PvP Combat', desc: 'Attack rivals, defend your turf, hire bodyguards' },
 ];
