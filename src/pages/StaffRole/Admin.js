@@ -431,6 +431,7 @@ export default function Admin() {
   const [preorderReleaseDate, setPreorderReleaseDate] = useState('');
   const [launchSettingsSaving, setLaunchSettingsSaving] = useState(false);
   const [preorderReleaseLoading, setPreorderReleaseLoading] = useState(false);
+  const [manualCreditLoading, setManualCreditLoading] = useState(null);
   const [casinoGlobalMaxBet, setCasinoGlobalMaxBet] = useState(1000000000);
   const [casinoBuybackMaxPoints, setCasinoBuybackMaxPoints] = useState(15000);
   const [casinoCapsSaving, setCasinoCapsSaving] = useState(false);
@@ -1938,6 +1939,20 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load donations log');
     } finally {
       setDonationsLogLoading(false);
+    }
+  };
+
+  const handleManualCreditTransaction = async (sessionId) => {
+    if (!window.confirm('Manually credit this transaction? Points will be added to the user immediately.')) return;
+    setManualCreditLoading(sessionId);
+    try {
+      const res = await api.post('/admin/payments/manual-credit', { session_id: sessionId });
+      toast.success(res.data?.message || 'Transaction credited');
+      handleFetchDonationsLog();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to credit transaction');
+    } finally {
+      setManualCreditLoading(null);
     }
   };
 
@@ -5879,35 +5894,43 @@ export default function Admin() {
                         <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Date</th>
                         <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">User</th>
                         <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Package</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Points added</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Points before</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Points after</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Match</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Points</th>
                         <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Status</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Credited at</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {donationsLogData.map((row, idx) => {
-                        const before = row.points_before != null ? Number(row.points_before) : null;
-                        const after = row.points_after != null ? Number(row.points_after) : null;
-                        const added = row.points != null ? Number(row.points) : null;
-                        const match = (before != null && after != null && added != null && after === before + added);
+                        const added = row.preorder_points || row.points || 0;
+                        const isPending = row.payment_status !== 'completed';
                         return (
                           <tr key={row.session_id || idx} className="border-b border-zinc-700/30">
                             <td className="py-1 pr-1 text-mutedForeground" title={row.created_at}>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
                             <td className="py-1 pr-1">{row.username ?? row.user_id ?? '—'}</td>
                             <td className="py-1 pr-1 capitalize">{row.package_id ?? '—'}</td>
-                            <td className="py-1 pr-1 font-mono">{added != null ? added.toLocaleString() : '—'}</td>
-                            <td className="py-1 pr-1 font-mono text-mutedForeground">{before != null ? before.toLocaleString() : '—'}</td>
-                            <td className="py-1 pr-1 font-mono text-mutedForeground">{after != null ? after.toLocaleString() : '—'}</td>
-                            <td className="py-1 pr-1" title={match ? 'points_after = points_before + points_added' : (row.points_credited_at ? 'Mismatch or legacy record' : '—')}>
-                              {row.payment_status === 'completed' && added != null && before != null && after != null
-                                ? (match ? <span className="text-green-400">✓</span> : <span className="text-red-400" title={`${after} ≠ ${before} + ${added}`}>✗</span>)
-                                : '—'}
+                            <td className="py-1 pr-1 font-mono">{Number(added).toLocaleString()}</td>
+                            <td className="py-1 pr-1">
+                              {row.payment_status === 'completed' ? (
+                                <span className="text-green-400">Completed</span>
+                              ) : row.payment_status === 'preorder_pending' ? (
+                                <span className="text-amber-400">Pre-order</span>
+                              ) : (
+                                <span className="text-red-400">{row.payment_status || 'Pending'}</span>
+                              )}
                             </td>
-                            <td className="py-1 pr-1">{row.payment_status === 'completed' ? <span className="text-green-400">Completed</span> : <span className="text-amber-400">{row.payment_status || 'Pending'}</span>}</td>
-                            <td className="py-1 pr-1 text-mutedForeground" title={row.points_credited_at}>{row.points_credited_at ? new Date(row.points_credited_at).toLocaleString() : <span className="text-amber-400">No</span>}</td>
+                            <td className="py-1 pr-1">
+                              {isPending && row.session_id && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleManualCreditTransaction(row.session_id)}
+                                  disabled={manualCreditLoading === row.session_id}
+                                  className="px-2 py-0.5 text-[8px] font-heading font-bold uppercase rounded bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50"
+                                >
+                                  {manualCreditLoading === row.session_id ? '...' : 'Credit'}
+                                </button>
+                              )}
+                              {!isPending && <span className="text-mutedForeground">—</span>}
+                            </td>
                           </tr>
                         );
                       })}

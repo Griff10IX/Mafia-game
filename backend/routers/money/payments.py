@@ -475,7 +475,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin only")
         cursor = db.payment_transactions.find(
             {},
-            {"_id": 0, "session_id": 1, "user_id": 1, "package_id": 1, "points": 1, "payment_status": 1, "created_at": 1, "points_credited_at": 1, "points_before": 1, "points_after": 1},
+            {"_id": 0, "session_id": 1, "user_id": 1, "package_id": 1, "points": 1, "payment_status": 1, "created_at": 1, "points_credited_at": 1, "points_before": 1, "points_after": 1, "preorder_points": 1},
         ).sort("created_at", -1).limit(500)
         items = await cursor.to_list(500)
         user_ids = list({t["user_id"] for t in items if t.get("user_id")})
@@ -487,3 +487,64 @@ def register(router):
         for t in items:
             t["username"] = by_id.get(t.get("user_id"), "?")
         return {"transactions": items}
+
+    class ManualCreditRequest(BaseModel):
+        session_id: str
+
+    @router.post("/admin/payments/manual-credit")
+    async def admin_manual_credit_transaction(body: ManualCreditRequest, current_user: dict = Depends(get_current_user)):
+        """Admin only: Manually credit a pending transaction (for testing). 
+        Works for both 'pending' and 'preorder_pending' status transactions."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        
+        txn = await db.payment_transactions.find_one({"session_id": body.session_id})
+        if not txn:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        
+        if txn.get("payment_status") == "completed":
+            return {"message": "Transaction already completed", "credited": False}
+        
+        user_id = txn.get("user_id")
+        package_id = txn.get("package_id")
+        points = txn.get("preorder_points") or txn.get("points") or POINT_PACKAGES.get(package_id, {}).get("points", 0)
+        
+        if not user_id or points <= 0:
+            raise HTTPException(status_code=400, detail="Invalid transaction: missing user_id or points")
+        
+        user = await db.users.find_one({"id": user_id}, {"_id": 0, "points": 1, "username": 1})
+        points_before = int(user.get("points") or 0) if user else 0
+        points_after = points_before + points
+        now_iso = datetime.now(timezone.utc).isoformat()
+        
+        await db.payment_transactions.update_one(
+            {"session_id": body.session_id},
+            {"$set": {
+                "payment_status": "completed",
+                "points_credited_at": now_iso,
+                "points_before": points_before,
+                "points_after": points_after,
+                "manual_credit_by": current_user.get("username"),
+                "manual_credit_at": now_iso,
+            }},
+        )
+        await db.users.update_one({"id": user_id}, {"$inc": {"points": points}})
+        
+        logger.info(
+            "Admin manual credit: session_id=%s user_id=%s points=%s by=%s",
+            body.session_id, user_id, points, current_user.get("username"),
+        )
+        await send_notification(
+            user_id,
+            "Points Credited",
+            f"Your purchase of {points:,} points has been credited. Balance: {points_before:,} → {points_after:,} points.",
+            "points_credited",
+            category="system",
+        )
+        
+        return {
+            "message": f"Credited {points:,} points to {user.get('username', 'user')}",
+            "credited": True,
+            "points": points,
+            "username": user.get("username"),
+        }
