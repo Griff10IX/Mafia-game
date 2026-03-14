@@ -265,6 +265,8 @@ def register(router):
                     raise HTTPException(status_code=404, detail="Transaction not found")
                 return {"status": "pending", "payment_status": "unknown"}
 
+            logger.info("Stripe session status: id=%s payment_status=%s status=%s", session_id, session.payment_status, session.status)
+            
             if session.payment_status == "paid" and session.metadata:
                 user_id = session.metadata.get("user_id")
                 package_id = session.metadata.get("package_id") or (transaction or {}).get("package_id")
@@ -490,6 +492,76 @@ def register(router):
 
     class ManualCreditRequest(BaseModel):
         session_id: str
+
+    @router.post("/admin/payments/check-stripe-session")
+    async def admin_check_stripe_session(body: ManualCreditRequest, current_user: dict = Depends(get_current_user)):
+        """Admin only: Check a Stripe session status and process it if paid."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        
+        api_key = _get_stripe_key()
+        if not api_key:
+            raise HTTPException(status_code=503, detail="Stripe API key not configured")
+        
+        def _retrieve():
+            import stripe
+            stripe.api_key = api_key
+            return stripe.checkout.Session.retrieve(body.session_id)
+        
+        try:
+            session = await asyncio.to_thread(_retrieve)
+        except Exception as e:
+            logger.exception("Admin Stripe session check failed: %s", e)
+            raise HTTPException(status_code=400, detail=f"Failed to retrieve session: {str(e)}")
+        
+        result = {
+            "session_id": body.session_id,
+            "stripe_status": session.status,
+            "stripe_payment_status": session.payment_status,
+            "metadata": dict(session.metadata) if session.metadata else {},
+            "amount_total": session.amount_total,
+            "currency": session.currency,
+        }
+        
+        # Check our transaction record
+        txn = await db.payment_transactions.find_one({"session_id": body.session_id}, {"_id": 0})
+        result["our_transaction"] = txn
+        
+        # If Stripe shows paid but we haven't processed, process now
+        if session.payment_status == "paid" and session.metadata:
+            user_id = session.metadata.get("user_id")
+            package_id = session.metadata.get("package_id")
+            points = POINT_PACKAGES.get(package_id, {}).get("points", 0) if package_id else 0
+            
+            if not points and txn:
+                points = txn.get("points", 0)
+            
+            if user_id and points > 0:
+                # Ensure transaction exists
+                if not txn:
+                    await db.payment_transactions.insert_one({
+                        "session_id": body.session_id,
+                        "user_id": user_id,
+                        "package_id": package_id or "",
+                        "points": points,
+                        "payment_status": "pending",
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                
+                credit_result = await _credit_payment_if_pending(db, body.session_id, user_id, package_id or "", points)
+                result["credit_attempted"] = True
+                result["credit_result"] = credit_result
+                
+                if credit_result.get("credited"):
+                    result["message"] = f"Successfully processed: {points} points {'held for preorder' if credit_result.get('preorder') else 'credited'}"
+                else:
+                    result["message"] = "Already processed or failed to credit"
+            else:
+                result["message"] = "Missing user_id or points in metadata"
+        else:
+            result["message"] = f"Stripe payment_status is '{session.payment_status}', not 'paid'"
+        
+        return result
 
     @router.post("/admin/payments/manual-credit")
     async def admin_manual_credit_transaction(body: ManualCreditRequest, current_user: dict = Depends(get_current_user)):

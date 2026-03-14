@@ -432,6 +432,9 @@ export default function Admin() {
   const [launchSettingsSaving, setLaunchSettingsSaving] = useState(false);
   const [preorderReleaseLoading, setPreorderReleaseLoading] = useState(false);
   const [manualCreditLoading, setManualCreditLoading] = useState(null);
+  const [stripeSessionInput, setStripeSessionInput] = useState('');
+  const [checkStripeLoading, setCheckStripeLoading] = useState(false);
+  const [stripeCheckResult, setStripeCheckResult] = useState(null);
   const [casinoGlobalMaxBet, setCasinoGlobalMaxBet] = useState(1000000000);
   const [casinoBuybackMaxPoints, setCasinoBuybackMaxPoints] = useState(15000);
   const [casinoCapsSaving, setCasinoCapsSaving] = useState(false);
@@ -1953,6 +1956,28 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to credit transaction');
     } finally {
       setManualCreditLoading(null);
+    }
+  };
+
+  const handleCheckStripeSession = async () => {
+    const sid = stripeSessionInput.trim();
+    if (!sid) return;
+    setCheckStripeLoading(true);
+    setStripeCheckResult(null);
+    try {
+      const res = await api.post('/admin/payments/check-stripe-session', { session_id: sid });
+      setStripeCheckResult(res.data);
+      if (res.data?.credit_result?.credited) {
+        toast.success(res.data.message || 'Payment processed!');
+        handleFetchDonationsLog();
+      } else {
+        toast.info(res.data?.message || 'Check result');
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to check session');
+      setStripeCheckResult({ error: e.response?.data?.detail || 'Failed' });
+    } finally {
+      setCheckStripeLoading(false);
     }
   };
 
@@ -5882,10 +5907,27 @@ export default function Admin() {
           />
           {!collapsed.donationsLog && (
             <div className="p-3 space-y-3">
-              <p className="text-[10px] text-mutedForeground font-heading">Stripe point purchases. Points before/after show balance at credit time; Match (✓) confirms points_after = points_before + points_added. Credited at = when points were applied.</p>
-              <BtnPrimary onClick={handleFetchDonationsLog} disabled={donationsLogLoading}>
-                {donationsLogLoading ? 'Loading…' : 'Load donations / payments log'}
-              </BtnPrimary>
+              <p className="text-[10px] text-mutedForeground font-heading">Stripe point purchases. Click &quot;Credit&quot; to manually credit pending transactions. Use &quot;Check Stripe&quot; to verify and process a session directly from Stripe.</p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <BtnPrimary onClick={handleFetchDonationsLog} disabled={donationsLogLoading}>
+                  {donationsLogLoading ? 'Loading…' : 'Load payments log'}
+                </BtnPrimary>
+                <input
+                  type="text"
+                  value={stripeSessionInput}
+                  onChange={(e) => setStripeSessionInput(e.target.value)}
+                  placeholder="Stripe session ID (cs_test_...)"
+                  className="flex-1 min-w-[200px] px-2 py-1 rounded border border-input bg-transparent text-[10px] font-heading"
+                />
+                <BtnSecondary onClick={handleCheckStripeSession} disabled={checkStripeLoading || !stripeSessionInput.trim()}>
+                  {checkStripeLoading ? '...' : 'Check & Process'}
+                </BtnSecondary>
+              </div>
+              {stripeCheckResult && (
+                <div className="mt-2 p-2 rounded bg-zinc-800/50 border border-zinc-700/50 text-[9px] font-mono overflow-x-auto">
+                  <pre className="whitespace-pre-wrap">{JSON.stringify(stripeCheckResult, null, 2)}</pre>
+                </div>
+              )}
               {donationsLogData && donationsLogData.length > 0 && (
                 <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
                   <table className="w-full text-left border-collapse text-[9px] font-heading">
