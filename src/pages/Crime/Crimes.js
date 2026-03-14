@@ -657,20 +657,15 @@ export default function Crimes() {
     <div className={`space-y-2 ${styles.pageContent}`} data-testid="crimes-page">
       <style>{CRIMES_STYLES}</style>
 
-      <div className="relative cr-fade-in">
+      <div className="relative cr-fade-in flex items-center gap-1.5">
         <p className="text-[9px] text-zinc-500 font-heading italic">Commit crimes for cash and rank. Fail and you risk jail.</p>
+        {user?.xp_crimes_until && <ActiveTokenBadge tokenType="xp_crimes" untilIso={user.xp_crimes_until} symbol />}
       </div>
 
       {user?.in_jail && <JailNotice />}
       {autoRankCrimesDisabled === true && <AutoRankCrimesNotice />}
 
       {eventsEnabled && <EventBanner event={event} />}
-
-      {user?.xp_crimes_until && (
-        <div className="cr-fade-in">
-          <ActiveTokenBadge tokenType="xp_crimes" untilIso={user.xp_crimes_until} />
-        </div>
-      )}
 
       {activeLootPerks.length > 0 && (
         <div className="flex flex-wrap gap-1.5 cr-fade-in">

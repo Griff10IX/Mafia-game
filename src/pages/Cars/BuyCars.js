@@ -13,11 +13,12 @@ const BUY_STYLES = `
 `;
 
 // Rarities and travel times – must match backend GTA (server CARS + gta.py TRAVEL_TIMES)
-const GTA_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'exclusive'];
+const GTA_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive'];
 const RARITY_ORDER = [...GTA_RARITIES].reverse();
 
 const TRAVEL_TIMES = {
   exclusive: 7,
+  loot_exclusive: 7,
   legendary: 12,
   ultra_rare: 18,
   rare: 25,
@@ -33,6 +34,7 @@ const RARITY_LABELS = {
   ultra_rare: 'Ultra Rare',
   legendary: 'Legendary',
   custom: 'Customs',
+  loot_exclusive: 'Loot Exclusives',
   exclusive: 'Exclusives',
 };
 const RARITY_COLOR = {
@@ -42,6 +44,7 @@ const RARITY_COLOR = {
   ultra_rare: 'text-purple-400',
   legendary: 'text-yellow-400',
   custom: 'text-orange-400',
+  loot_exclusive: 'text-amber-400',
   exclusive: 'text-red-400',
 };
 

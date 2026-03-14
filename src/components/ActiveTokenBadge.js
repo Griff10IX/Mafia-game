@@ -48,12 +48,24 @@ export function getTimeRemaining(untilIso) {
   }
 }
 
-export default function ActiveTokenBadge({ tokenType, untilIso, compact = false }) {
+export default function ActiveTokenBadge({ tokenType, untilIso, compact = false, symbol = false }) {
   const active = isTokenActive(untilIso);
   if (!active) return null;
   
   const info = TOKEN_INFO[tokenType] || { name: 'Boost', desc: 'Active bonus' };
   const timeLeft = getTimeRemaining(untilIso);
+  const title = `${info.name}: ${info.desc}${timeLeft ? ` (${timeLeft} left)` : ''}`;
+  
+  if (symbol) {
+    return (
+      <span
+        className="inline-flex items-center justify-center w-6 h-6 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0"
+        title={title}
+      >
+        <Zap size={12} />
+      </span>
+    );
+  }
   
   if (compact) {
     return (
@@ -61,7 +73,7 @@ export default function ActiveTokenBadge({ tokenType, untilIso, compact = false 
         <style>{BADGE_STYLES}</style>
         <span 
           className="token-badge-pulse inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-400"
-          title={`${info.name}: ${info.desc}${timeLeft ? ` (${timeLeft} left)` : ''}`}
+          title={title}
         >
           <Zap size={10} className="shrink-0" />
           <span className="text-[9px] font-heading font-bold uppercase tracking-wide">{info.name}</span>
