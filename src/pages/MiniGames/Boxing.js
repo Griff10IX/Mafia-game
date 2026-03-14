@@ -1204,7 +1204,7 @@ export default function Boxing3D() {
     return (
       <div className={styles.page} style={{height:"100vh",overflow:"hidden",fontFamily:"'Cinzel',serif",display:"flex",flexDirection:"column"}}>
         <div className={styles.pageContent} style={{padding:"6px 10px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--noir-border-light)",minHeight:40}}>
-          <Link to="/boxing" className={styles.btnGoldDarkText} style={{padding:"8px 12px",minHeight:40,fontSize:10,textDecoration:"none",touchAction:"manipulation"}}>← Back</Link>
+          <Link to="/boxing" className={styles.btnPrimary} style={{padding:"8px 12px",minHeight:40,fontSize:10,textDecoration:"none",touchAction:"manipulation"}}>← Back</Link>
           <div style={{fontSize:11,letterSpacing:"0.12em",color:gold}}>{nameA} vs {nameB}</div>
           <div style={{display:"flex",gap:3}}>
             {[1,2,4].map(s=>(
@@ -1512,7 +1512,7 @@ export default function Boxing3D() {
         <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90`} style={{minHeight:120}}>
           <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20 flex items-center justify-between">
             <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">Matches</h2>
-            <button onClick={refreshMatches} disabled={matchesLoading} className={styles.btnGoldDarkText} style={{padding:narrowLayout?"10px 12px":"6px 10px",minHeight:36,fontSize:narrowLayout?11:9,cursor:matchesLoading?"wait":"pointer",touchAction:"manipulation"}}>Refresh</button>
+            <button onClick={refreshMatches} disabled={matchesLoading} className={styles.btnPrimary} style={{padding:narrowLayout?"10px 12px":"6px 10px",minHeight:36,fontSize:narrowLayout?11:9,cursor:matchesLoading?"wait":"pointer",touchAction:"manipulation"}}>Refresh</button>
           </div>
           <div className="p-2.5 sm:p-3">
           {matchError && <div style={{fontSize:9,color:"#ff6666",marginBottom:4}}>{matchError}</div>}
@@ -1542,7 +1542,7 @@ export default function Boxing3D() {
                     key={npc.id}
                     onClick={()=>startNpcFight(npc)}
                     disabled={npcFightState && !npcFightState.result}
-                    className={styles.btnGoldDarkText}
+                    className={styles.btnPrimary}
                     style={{padding:narrowLayout?"10px 12px":"6px 10px",minHeight:44,fontSize:narrowLayout?11:8,cursor:npcFightState && !npcFightState.result ? "wait" : "pointer",touchAction:"manipulation"}}
                   >
                     {npc.name}
@@ -1591,7 +1591,7 @@ export default function Boxing3D() {
                     {mine && m.state==="running" && (
                       <button
                         onClick={()=>navigate(`/boxing/arena/${m.id}`)}
-                        className={styles.btnGoldDarkText}
+                        className={styles.btnPrimary}
                         style={{padding:"2px 5px",fontSize:8,cursor:"pointer"}}
                       >
                         Watch
@@ -1611,7 +1611,7 @@ export default function Boxing3D() {
                       <button
                         onClick={()=>handleReadyMatch(m.id,false)}
                         disabled={busyAction===`ready:${m.id}`}
-                        className={styles.btnGoldDarkText}
+                        className={styles.btnPrimary}
                         style={{padding:"2px 5px",fontSize:8,cursor:busyAction===`ready:${m.id}`?"wait":"pointer"}}
                       >
                         Unready
@@ -1661,7 +1661,7 @@ export default function Boxing3D() {
                   <button
                     onClick={()=>handlePlaceBet(m.id,"b")}
                     disabled={busyAction===`bet:${m.id}:b`}
-                    className={styles.btnGoldDarkText}
+                    className={styles.btnPrimary}
                     style={{padding:"2px 6px",fontSize:9,cursor:busyAction===`bet:${m.id}:b`?"wait":"pointer"}}
                   >
                     Bet B

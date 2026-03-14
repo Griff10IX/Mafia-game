@@ -350,6 +350,25 @@ export default function Store() {
 
       {activeTab === 'points' && (
         <div className="space-y-3">
+          {/* Pre-order banner - shown when preorder mode is active */}
+          {preorderActive && (
+            <div className="relative rounded-lg border border-amber-500/40 overflow-hidden bg-amber-500/10">
+              <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/60 to-transparent" />
+              <div className="px-4 py-3 flex items-center gap-3">
+                <span className="text-2xl">⏳</span>
+                <div>
+                  <p className="text-[11px] font-heading font-bold text-amber-400 uppercase tracking-[0.12em]">Pre-Order Mode</p>
+                  <p className="text-[10px] text-zinc-300 font-heading mt-0.5">
+                    Points purchased now will be credited on{' '}
+                    <span className="text-amber-400 font-bold">
+                      {preorderReleaseDate ? new Date(preorderReleaseDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'launch date'}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {pointsTabLocked ? (
             <div className={`${styles.panel} rounded-lg border border-primary/20 p-6 text-center`}>
               <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">{pointsTabLockMessage}</p>
@@ -673,7 +692,7 @@ export default function Store() {
         </div>
         <div className="px-3 sm:px-4 py-3 space-y-2">
           <p className="text-[10px] text-zinc-500 font-heading italic">
-            Payments via Stripe. Points added after purchase.
+            Payments via Stripe. {preorderActive ? 'Pre-order points will be credited on release date.' : 'Points added after purchase.'}
           </p>
           {paymentTransactions.length > 0 ? (
             <div className="rounded border border-primary/20 bg-zinc-900/50 overflow-hidden">
@@ -683,14 +702,18 @@ export default function Store() {
                 <span className="text-right">Points</span>
                 <span>Status</span>
               </div>
-              {paymentTransactions.slice(0, 15).map((t, i) => (
-                <div key={t.session_id || i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-2 py-1.5 text-[10px] font-heading border-b border-zinc-800/50 last:border-0">
-                  <span className="text-mutedForeground truncate" title={t.created_at}>{t.created_at ? new Date(t.created_at).toLocaleString() : '—'}</span>
-                  <span className="capitalize">{t.package_id || '—'}</span>
-                  <span className="text-right font-mono">+{Number(t.points || 0).toLocaleString()}</span>
-                  <span className={t.payment_status === 'completed' ? 'text-green-400' : 'text-amber-400'}>{t.payment_status === 'completed' ? 'Credited' : t.payment_status || 'Pending'}</span>
-                </div>
-              ))}
+              {paymentTransactions.slice(0, 15).map((t, i) => {
+                const statusClass = t.payment_status === 'completed' ? 'text-green-400' : t.payment_status === 'preorder_pending' ? 'text-amber-400' : 'text-zinc-400';
+                const statusText = t.payment_status === 'completed' ? 'Credited' : t.payment_status === 'preorder_pending' ? 'Pre-order' : t.payment_status || 'Pending';
+                return (
+                  <div key={t.session_id || i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-2 py-1.5 text-[10px] font-heading border-b border-zinc-800/50 last:border-0">
+                    <span className="text-mutedForeground truncate" title={t.created_at}>{t.created_at ? new Date(t.created_at).toLocaleString() : '—'}</span>
+                    <span className="capitalize">{t.package_id || '—'}</span>
+                    <span className="text-right font-mono">+{Number(t.points || 0).toLocaleString()}</span>
+                    <span className={statusClass}>{statusText}</span>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p className="text-[10px] text-zinc-600 font-heading italic">No purchases yet.</p>

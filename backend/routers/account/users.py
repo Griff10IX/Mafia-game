@@ -29,7 +29,7 @@ def register(router):
 
     @router.get("/users/online", response_model=OnlineUsersResponse)
     async def get_online_users(current_user: dict = Depends(get_current_user)):
-        """Online = last 5 min, forced-online, or Auto Rank enabled. When Auto Rank is disabled, normal rules only."""
+        """Online = last 5 min, forced-online, or Auto Rank enabled (and not idle). When Auto Rank is idle, user appears offline."""
         now = datetime.now(timezone.utc)
         five_min_ago = now - timedelta(minutes=5)
         users = await db.users.find(
@@ -39,7 +39,7 @@ def register(router):
                 "$or": [
                     {"last_seen": {"$gte": five_min_ago.isoformat()}},
                     {"forced_online_until": {"$gt": now.isoformat()}},
-                    {"auto_rank_enabled": True},  # when disabled, only the two above apply
+                    {"$and": [{"auto_rank_enabled": True}, {"auto_rank_idle": {"$ne": True}}]},  # only online if not idle
                 ],
             },
             {"_id": 0, "password_hash": 0}

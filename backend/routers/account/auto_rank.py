@@ -304,24 +304,68 @@ def _is_user_idle(user: dict, now: datetime) -> bool:
     return elapsed > AUTO_RANK_IDLE_TIMEOUT_SECONDS
 
 
+_IDLE_SAVE_FIELDS = ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze", "auto_rank_melt"]
+
+
+async def _set_user_idle(db, user_id: str, username: str = "?"):
+    """Set user to idle: save current preferences, disable all tasks, set auto_rank_idle=True."""
+    # Fetch current preferences to save them
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "auto_rank_idle": 1, **{k: 1 for k in _IDLE_SAVE_FIELDS}}
+    )
+    if not user or user.get("auto_rank_idle"):
+        return  # Already idle or user not found
+    
+    # Save current preferences before disabling
+    saved_prefs = {f"auto_rank_idle_saved_{k}": user.get(k, False) for k in _IDLE_SAVE_FIELDS}
+    # Disable all task toggles while idle
+    disabled_prefs = {k: False for k in _IDLE_SAVE_FIELDS}
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"auto_rank_idle": True, **saved_prefs, **disabled_prefs}}
+    )
+    logger.info("Auto rank: user %s went idle (no activity for 3h) - tasks disabled, prefs saved", username)
+
+
 async def _check_and_set_idle(db, user_id: str, user: dict, now: datetime) -> bool:
-    """Check if user should be idle. If so, set auto_rank_idle=True and return True. Otherwise return False."""
+    """Check if user should be idle. If so, save preferences, disable all tasks, set auto_rank_idle=True. Return True if idle."""
     if _is_user_idle(user, now):
         if not user.get("auto_rank_idle"):
-            await db.users.update_one({"id": user_id}, {"$set": {"auto_rank_idle": True}})
-            logger.info("Auto rank: user %s went idle (no activity for 3h)", user.get("username", user_id))
+            await _set_user_idle(db, user_id, user.get("username", user_id))
         return True
     return False
 
 
 async def wake_auto_rank_if_idle(db, user_id: str):
-    """Called when user makes a real request. If they were idle, wake up auto-rank."""
-    result = await db.users.update_one(
+    """Called when user makes a real request. If they were idle, restore preferences and wake up auto-rank."""
+    # First fetch user to get saved preferences
+    user = await db.users.find_one(
         {"id": user_id, "auto_rank_idle": True},
-        {"$set": {"auto_rank_idle": False}, "$unset": {"auto_rank_next_run_at": ""}}
+        {"_id": 0, **{f"auto_rank_idle_saved_{k}": 1 for k in _IDLE_SAVE_FIELDS}}
     )
-    if result.modified_count > 0:
-        logger.info("Auto rank: user %s woke up from idle", user_id)
+    if not user:
+        return  # Not idle, nothing to do
+    
+    # Restore saved preferences
+    restored_prefs = {}
+    for k in _IDLE_SAVE_FIELDS:
+        saved_key = f"auto_rank_idle_saved_{k}"
+        if saved_key in user:
+            restored_prefs[k] = user[saved_key]
+    
+    # Clear idle status and saved prefs, restore original settings
+    unset_fields = {f"auto_rank_idle_saved_{k}": "" for k in _IDLE_SAVE_FIELDS}
+    unset_fields["auto_rank_next_run_at"] = ""
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {"auto_rank_idle": False, **restored_prefs},
+            "$unset": unset_fields
+        }
+    )
+    logger.info("Auto rank: user %s woke up from idle - preferences restored", user_id)
 
 
 # ─── Telegram helper ──────────────────────────────────────────────
@@ -854,8 +898,7 @@ async def run_booze_arrivals():
     active_users = []
     for u in users:
         if _is_user_idle(u, now):
-            await db.users.update_one({"id": u["id"]}, {"$set": {"auto_rank_idle": True}})
-            logger.info("Auto rank booze: user %s went idle (no activity for 3h)", u.get("username", u["id"]))
+            await _set_user_idle(db, u["id"], u.get("username", u["id"]))
         else:
             active_users.append(u)
     users = active_users
@@ -911,8 +954,7 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
     active_users = []
     for u in users:
         if _is_user_idle(u, now):
-            await db.users.update_one({"id": u["id"]}, {"$set": {"auto_rank_idle": True}})
-            logger.info("Auto rank: user %s went idle (no activity for 3h)", u.get("username", u["id"]))
+            await _set_user_idle(db, u["id"], u.get("username", u["id"]))
         else:
             active_users.append(u)
     users = active_users
@@ -972,8 +1014,7 @@ async def run_bust_5sec_once():
         active_users = []
         for u in users:
             if _is_user_idle(u, now):
-                await db.users.update_one({"id": u["id"]}, {"$set": {"auto_rank_idle": True}})
-                logger.info("Auto rank bust: user %s went idle (no activity for 3h)", u.get("username", u["id"]))
+                await _set_user_idle(db, u["id"], u.get("username", u["id"]))
             else:
                 active_users.append(u)
         users = active_users
@@ -1041,8 +1082,7 @@ async def run_auto_rank_oc_once():
         active_users = []
         for u in users:
             if _is_user_idle(u, now):
-                await db.users.update_one({"id": u["id"]}, {"$set": {"auto_rank_idle": True}})
-                logger.info("Auto rank OC: user %s went idle (no activity for 3h)", u.get("username", u["id"]))
+                await _set_user_idle(db, u["id"], u.get("username", u["id"]))
             else:
                 active_users.append(u)
         users = active_users
