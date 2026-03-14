@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Lock, ThumbsUp, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil } from 'lucide-react';
+import { Lock, ThumbsUp, ThumbsDown, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil } from 'lucide-react';
 import api from '../../utils/api';
 import GifPicker from '../../components/GifPicker';
 import { toast } from 'sonner';
@@ -9,6 +9,44 @@ import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 
 const EMOJI_STRIP = ['😀', '😂', '👍', '❤️', '🔥', '😎', '👋', '🎉', '💀', '😢', '💰', '💎', '🔫', '👑', '🏆', '✨'];
+
+const TITLE_COLORS = [
+  // Default
+  { name: 'Default', value: '' },
+  // Standard colors
+  { name: 'White', value: '#FFFFFF' },
+  { name: 'Silver', value: '#C0C0C0' },
+  { name: 'Grey', value: '#808080' },
+  { name: 'Red', value: '#FF0000' },
+  { name: 'Maroon', value: '#800000' },
+  { name: 'Orange', value: '#FF8C00' },
+  { name: 'Gold', value: '#FFD700' },
+  { name: 'Yellow', value: '#FFFF00' },
+  { name: 'Lime', value: '#00FF00' },
+  { name: 'Green', value: '#008000' },
+  { name: 'Teal', value: '#008080' },
+  { name: 'Cyan', value: '#00FFFF' },
+  { name: 'Blue', value: '#0000FF' },
+  { name: 'Navy', value: '#000080' },
+  { name: 'Purple', value: '#800080' },
+  { name: 'Pink', value: '#FFC0CB' },
+  { name: 'Brown', value: '#8B4513' },
+  // Neon colors
+  { name: 'Neon Pink', value: '#FF10F0' },
+  { name: 'Neon Green', value: '#39FF14' },
+  { name: 'Neon Blue', value: '#00BFFF' },
+  { name: 'Neon Purple', value: '#BF00FF' },
+  { name: 'Neon Orange', value: '#FF6600' },
+  { name: 'Neon Cyan', value: '#00FFFF' },
+  { name: 'Neon Red', value: '#FF3131' },
+  { name: 'Electric Lime', value: '#CCFF00' },
+  { name: 'Hot Magenta', value: '#FF00FF' },
+  { name: 'Laser Lemon', value: '#FFFF66' },
+  { name: 'Electric Blue', value: '#7DF9FF' },
+  { name: 'Neon Coral', value: '#FF6F61' },
+  { name: 'Toxic Green', value: '#61FF00' },
+  { name: 'Plasma Purple', value: '#8B00FF' },
+];
 
 /** FAQ: compact noir theme to match the rest of the app. */
 const FORUM_FAQ_STYLES = `
@@ -56,6 +94,7 @@ export default function ForumTopic() {
   const [commentText, setCommentText] = useState('');
   const [posting, setPosting] = useState(false);
   const [likingId, setLikingId] = useState(null);
+  const [dislikingId, setDislikingId] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [isHdo, setIsHdo] = useState(false);
@@ -72,6 +111,8 @@ export default function ForumTopic() {
   const [user, setUser] = useState(null);
   const [showEditTopic, setShowEditTopic] = useState(false);
   const [editTitle, setEditTitle] = useState('');
+  const [editTitleColor, setEditTitleColor] = useState('');
+  const [showEditTitleColors, setShowEditTitleColors] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [editGifUrl, setEditGifUrl] = useState('');
   const [editShowGifPicker, setEditShowGifPicker] = useState(false);
@@ -144,6 +185,7 @@ export default function ForumTopic() {
   const openEditTopic = () => {
     if (!topic) return;
     setEditTitle(topic.title || '');
+    setEditTitleColor(topic.title_color || '');
     setEditContent(topic.content || '');
     setEditGifUrl(topic.gif_url || '');
     setShowEditTopic(true);
@@ -157,6 +199,7 @@ export default function ForumTopic() {
     try {
       await api.patch(`/forum/topics/${topicId}`, {
         title,
+        title_color: editTitleColor || '',
         content: editContent.trim(),
         gif_url: editGifUrl.trim(),
       });
@@ -211,7 +254,7 @@ export default function ForumTopic() {
       }, { timeout: 30000 });
       setCommentText('');
       setReplyToComment(null);
-      const newComment = res.data?.comment ? { ...res.data.comment, liked: res.data.comment.liked ?? false } : null;
+      const newComment = res.data?.comment ? { ...res.data.comment, liked: res.data.comment.liked ?? false, disliked: res.data.comment.disliked ?? false, dislikes: res.data.comment.dislikes ?? 0 } : null;
       if (newComment) setComments((prev) => [newComment, ...prev]);
       toast.success('Posted');
       setReplyToComment(null);
@@ -243,7 +286,7 @@ export default function ForumTopic() {
         gif_url: gifUrl,
         reply_to_comment_id: replyToComment?.id || undefined,
       }, { timeout: 30000 });
-      const newComment = res.data?.comment ? { ...res.data.comment, liked: res.data.comment.liked ?? false } : null;
+      const newComment = res.data?.comment ? { ...res.data.comment, liked: res.data.comment.liked ?? false, disliked: res.data.comment.disliked ?? false, dislikes: res.data.comment.dislikes ?? 0 } : null;
       if (newComment) setComments((prev) => [newComment, ...prev]);
       setReplyToComment(null);
       toast.success('GIF posted');
@@ -322,7 +365,13 @@ export default function ForumTopic() {
       setComments((prev) =>
         prev.map((c) =>
           c.id === commentId
-            ? { ...c, likes: res.data?.likes ?? c.likes, liked: res.data?.liked ?? false }
+            ? { 
+                ...c, 
+                likes: res.data?.likes ?? c.likes, 
+                liked: res.data?.liked ?? false,
+                dislikes: res.data?.dislikes ?? c.dislikes ?? 0,
+                disliked: res.data?.disliked ?? false
+              }
             : c
         )
       );
@@ -330,6 +379,30 @@ export default function ForumTopic() {
       toast.error('Failed');
     } finally {
       setLikingId(null);
+    }
+  };
+
+  const dislikeComment = async (commentId) => {
+    setDislikingId(commentId);
+    try {
+      const res = await api.post(`/forum/topics/${topicId}/comments/${commentId}/dislike`);
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === commentId
+            ? { 
+                ...c, 
+                dislikes: res.data?.dislikes ?? c.dislikes ?? 0, 
+                disliked: res.data?.disliked ?? false,
+                likes: res.data?.likes ?? c.likes,
+                liked: res.data?.liked ?? false
+              }
+            : c
+        )
+      );
+    } catch {
+      toast.error('Failed');
+    } finally {
+      setDislikingId(null);
     }
   };
 
@@ -370,7 +443,8 @@ export default function ForumTopic() {
               {topic.is_important && <AlertCircle size={14} className="text-amber-400" />}
               {topic.is_sticky && !topic.is_important && <Pin size={14} className="text-amber-400" />}
               <h1
-                className="text-lg sm:text-xl font-heading font-bold text-primary prof-banner-content"
+                className="text-lg sm:text-xl font-heading font-bold prof-banner-content"
+                style={topic.title_color ? { color: topic.title_color } : { color: 'var(--noir-primary)' }}
                 dangerouslySetInnerHTML={{ __html: parseForumContent(topic.title || '') }}
               />
               {topic.is_locked && <Lock size={14} className="text-red-400" />}
@@ -455,13 +529,46 @@ export default function ForumTopic() {
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Edit topic</h2>
             </div>
             <form onSubmit={saveEditTopic} className="p-3 space-y-3">
-              <input
-                type="text"
-                placeholder="Title..."
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
-              />
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Title..."
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    style={editTitleColor ? { color: editTitleColor } : {}}
+                    className="flex-1 px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowEditTitleColors(!showEditTitleColors)}
+                    className="px-2 py-1 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 flex items-center gap-1"
+                    title="Title Color"
+                  >
+                    <Palette size={14} />
+                    {editTitleColor && <span className="w-3 h-3 rounded-full" style={{ backgroundColor: editTitleColor }} />}
+                  </button>
+                </div>
+                {showEditTitleColors && (
+                  <div className="flex flex-wrap gap-1 p-2 bg-zinc-900/50 border border-zinc-700/50 rounded">
+                    {TITLE_COLORS.map((c) => (
+                      <button
+                        key={c.value || 'default'}
+                        type="button"
+                        onClick={() => { setEditTitleColor(c.value); setShowEditTitleColors(false); }}
+                        className={`px-2 py-1 text-[10px] font-heading rounded border transition-all ${
+                          editTitleColor === c.value 
+                            ? 'border-primary bg-primary/20 text-primary' 
+                            : 'border-zinc-700/50 hover:border-primary/50'
+                        }`}
+                        style={c.value ? { color: c.value } : {}}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               {editShowGifPicker && (
                 <div className="rounded border border-zinc-700/50 overflow-hidden">
                   <GifPicker
@@ -652,11 +759,18 @@ export default function ForumTopic() {
                       {getTimeAgo(c.created_at)}
                     </div>
                   </div>
-                  {c.likes > 0 && (
-                    <span className="text-[10px] text-emerald-400 flex items-center gap-0.5 whitespace-nowrap">
-                      <ThumbsUp size={10} /> {c.likes}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {c.likes > 0 && (
+                      <span className="text-[10px] text-emerald-400 flex items-center gap-0.5 whitespace-nowrap">
+                        <ThumbsUp size={10} /> {c.likes}
+                      </span>
+                    )}
+                    {(c.dislikes || 0) > 0 && (
+                      <span className="text-[10px] text-red-400 flex items-center gap-0.5 whitespace-nowrap">
+                        <ThumbsDown size={10} /> {c.dislikes}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Quoted parent when this is a reply */}
@@ -703,18 +817,29 @@ export default function ForumTopic() {
                   />
                 )}
                 
-                {/* Like + Reply */}
+                {/* Like + Dislike + Reply */}
                 <div className="mt-2 flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => likeComment(c.id)}
-                    disabled={likingId === c.id}
+                    disabled={likingId === c.id || dislikingId === c.id}
                     className={`flex items-center gap-1 text-[10px] font-heading px-2 py-1 rounded transition-all ${
                       c.liked 
-                        ? 'bg-primary/20 text-primary' 
-                        : 'text-mutedForeground hover:text-primary hover:bg-primary/10'
+                        ? 'bg-emerald-500/20 text-emerald-400' 
+                        : 'text-mutedForeground hover:text-emerald-400 hover:bg-emerald-500/10'
                     }`}
                   >
-                    <ThumbsUp size={10} /> {c.liked ? 'Liked' : 'Like'}
+                    <ThumbsUp size={10} /> {c.likes > 0 ? c.likes : ''} {c.liked ? 'Liked' : 'Like'}
+                  </button>
+                  <button
+                    onClick={() => dislikeComment(c.id)}
+                    disabled={likingId === c.id || dislikingId === c.id}
+                    className={`flex items-center gap-1 text-[10px] font-heading px-2 py-1 rounded transition-all ${
+                      c.disliked 
+                        ? 'bg-red-500/20 text-red-400' 
+                        : 'text-mutedForeground hover:text-red-400 hover:bg-red-500/10'
+                    }`}
+                  >
+                    <ThumbsDown size={10} /> {(c.dislikes || 0) > 0 ? c.dislikes : ''} {c.disliked ? 'Disliked' : 'Dislike'}
                   </button>
                   <button
                     type="button"

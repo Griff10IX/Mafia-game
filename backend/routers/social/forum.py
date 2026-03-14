@@ -77,6 +77,7 @@ class TopicCreate(BaseModel):
     category: Optional[str] = "general"
     crew_oc_family_id: Optional[str] = None  # set when creating a Crew OC ad (category becomes crew_oc)
     gif_url: Optional[str] = None  # optional GIF URL (Giphy etc.); shown with topic body
+    title_color: Optional[str] = None  # hex color for title (e.g. #FFD700)
 
 
 class CommentCreate(BaseModel):
@@ -93,6 +94,7 @@ class TopicUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     gif_url: Optional[str] = None
+    title_color: Optional[str] = None  # hex color for title
 
 
 async def _delete_topic_fully(topic_id: str) -> None:
@@ -211,11 +213,13 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
         c_author_id = c.get("author_id") or username_to_id.get((c.get("author_username") or "").strip().lower())
         if c_author_id and colors.get(c_author_id):
             c["author_online_color"] = colors[c_author_id]
-    # Attach like status for current user
+    # Attach like/dislike status for current user
     uid = current_user.get("id") or ""
     for c in comments:
         liked = await db.forum_comment_likes.find_one({"comment_id": c["id"], "user_id": uid})
         c["liked"] = liked is not None
+        disliked = await db.forum_comment_dislikes.find_one({"comment_id": c["id"], "user_id": uid})
+        c["disliked"] = disliked is not None
     if topic.get("crew_oc_family_id"):
         fam = await db.families.find_one({"id": topic["crew_oc_family_id"]}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_join_fee": 1, "crew_oc_cooldown_until": 1})
         if fam:
@@ -295,6 +299,9 @@ async def create_topic(
     gif_url = (request.gif_url or "").strip()
     if gif_url and not (gif_url.startswith("http://") or gif_url.startswith("https://")):
         raise HTTPException(status_code=400, detail="Invalid GIF URL")
+    title_color = (request.title_color or "").strip()
+    if title_color and not (title_color.startswith("#") and len(title_color) <= 9):
+        title_color = ""  # Invalid color, ignore
     topic_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     doc = {
@@ -313,6 +320,8 @@ async def create_topic(
     }
     if gif_url:
         doc["gif_url"] = gif_url
+    if title_color:
+        doc["title_color"] = title_color
     if crew_oc_family_id:
         doc["crew_oc_family_id"] = crew_oc_family_id
     await db.forum_topics.insert_one(doc)
@@ -455,7 +464,7 @@ async def add_comment(
                 )
                 notified_ids.add(uid)
 
-    return {"id": comment_id, "message": "Comment posted", "comment": {**doc, "liked": False}}
+    return {"id": comment_id, "message": "Comment posted", "comment": {**doc, "liked": False, "disliked": False, "dislikes": 0}}
 
 
 async def like_comment(
@@ -463,7 +472,7 @@ async def like_comment(
     comment_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Toggle like on a comment (one like per user)."""
+    """Toggle like on a comment (one like per user). Removes dislike if present."""
     comment = await db.forum_comments.find_one({"id": comment_id, "topic_id": topic_id}, {"_id": 0})
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
@@ -472,10 +481,44 @@ async def like_comment(
     if existing:
         await db.forum_comment_likes.delete_one({"comment_id": comment_id, "user_id": uid})
         await db.forum_comments.update_one({"id": comment_id}, {"$inc": {"likes": -1}})
-        return {"liked": False, "likes": max(0, comment.get("likes", 0) - 1)}
+        return {"liked": False, "likes": max(0, comment.get("likes", 0) - 1), "disliked": False, "dislikes": comment.get("dislikes", 0)}
+    # Remove dislike if user is now liking
+    existing_dislike = await db.forum_comment_dislikes.find_one({"comment_id": comment_id, "user_id": uid})
+    dislikes = comment.get("dislikes", 0)
+    if existing_dislike:
+        await db.forum_comment_dislikes.delete_one({"comment_id": comment_id, "user_id": uid})
+        await db.forum_comments.update_one({"id": comment_id}, {"$inc": {"dislikes": -1}})
+        dislikes = max(0, dislikes - 1)
     await db.forum_comment_likes.insert_one({"comment_id": comment_id, "user_id": uid})
     await db.forum_comments.update_one({"id": comment_id}, {"$inc": {"likes": 1}})
-    return {"liked": True, "likes": comment.get("likes", 0) + 1}
+    return {"liked": True, "likes": comment.get("likes", 0) + 1, "disliked": False, "dislikes": dislikes}
+
+
+async def dislike_comment(
+    topic_id: str,
+    comment_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Toggle dislike on a comment (one dislike per user). Removes like if present."""
+    comment = await db.forum_comments.find_one({"id": comment_id, "topic_id": topic_id}, {"_id": 0})
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    uid = current_user.get("id") or ""
+    existing = await db.forum_comment_dislikes.find_one({"comment_id": comment_id, "user_id": uid})
+    if existing:
+        await db.forum_comment_dislikes.delete_one({"comment_id": comment_id, "user_id": uid})
+        await db.forum_comments.update_one({"id": comment_id}, {"$inc": {"dislikes": -1}})
+        return {"disliked": False, "dislikes": max(0, comment.get("dislikes", 0) - 1), "liked": False, "likes": comment.get("likes", 0)}
+    # Remove like if user is now disliking
+    existing_like = await db.forum_comment_likes.find_one({"comment_id": comment_id, "user_id": uid})
+    likes = comment.get("likes", 0)
+    if existing_like:
+        await db.forum_comment_likes.delete_one({"comment_id": comment_id, "user_id": uid})
+        await db.forum_comments.update_one({"id": comment_id}, {"$inc": {"likes": -1}})
+        likes = max(0, likes - 1)
+    await db.forum_comment_dislikes.insert_one({"comment_id": comment_id, "user_id": uid})
+    await db.forum_comments.update_one({"id": comment_id}, {"$inc": {"dislikes": 1}})
+    return {"disliked": True, "dislikes": comment.get("dislikes", 0) + 1, "liked": False, "likes": likes}
 
 
 async def update_topic(
@@ -519,15 +562,26 @@ async def update_topic(
                 updates["gif_url"] = gif_url
             else:
                 updates["_unset_gif"] = True  # signal to $unset gif_url
+        if request.title_color is not None:
+            title_color = (request.title_color or "").strip()
+            if title_color and title_color.startswith("#") and len(title_color) <= 9:
+                updates["title_color"] = title_color
+            elif not title_color:
+                updates["_unset_title_color"] = True  # signal to $unset title_color
     if not (is_admin or is_mod or is_hdo or is_author):
         raise HTTPException(status_code=403, detail="Not allowed to edit this topic")
     if not updates:
         return {"message": "No changes", "topic": topic}
-    set_fields = {k: v for k, v in updates.items() if k != "_unset_gif"}
+    set_fields = {k: v for k, v in updates.items() if not k.startswith("_unset")}
     set_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
     update_doc = {"$set": set_fields}
+    unset_fields = {}
     if updates.get("_unset_gif"):
-        update_doc["$unset"] = {"gif_url": 1}
+        unset_fields["gif_url"] = 1
+    if updates.get("_unset_title_color"):
+        unset_fields["title_color"] = 1
+    if unset_fields:
+        update_doc["$unset"] = unset_fields
     await db.forum_topics.update_one(
         {"id": topic_id},
         update_doc,
@@ -556,5 +610,6 @@ def register(router):
     router.add_api_route("/forum/topics/{topic_id}", get_topic, methods=["GET"])
     router.add_api_route("/forum/topics/{topic_id}/comments", add_comment, methods=["POST"])
     router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/like", like_comment, methods=["POST"])
+    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/dislike", dislike_comment, methods=["POST"])
     router.add_api_route("/forum/topics/{topic_id}", update_topic, methods=["PATCH"])
     router.add_api_route("/forum/topics/{topic_id}", delete_topic, methods=["DELETE"])

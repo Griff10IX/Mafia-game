@@ -54,8 +54,48 @@ function formatTimeUntil(seconds) {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
+const TITLE_COLORS = [
+  // Default
+  { name: 'Default', value: '' },
+  // Standard colors
+  { name: 'White', value: '#FFFFFF' },
+  { name: 'Silver', value: '#C0C0C0' },
+  { name: 'Grey', value: '#808080' },
+  { name: 'Red', value: '#FF0000' },
+  { name: 'Maroon', value: '#800000' },
+  { name: 'Orange', value: '#FF8C00' },
+  { name: 'Gold', value: '#FFD700' },
+  { name: 'Yellow', value: '#FFFF00' },
+  { name: 'Lime', value: '#00FF00' },
+  { name: 'Green', value: '#008000' },
+  { name: 'Teal', value: '#008080' },
+  { name: 'Cyan', value: '#00FFFF' },
+  { name: 'Blue', value: '#0000FF' },
+  { name: 'Navy', value: '#000080' },
+  { name: 'Purple', value: '#800080' },
+  { name: 'Pink', value: '#FFC0CB' },
+  { name: 'Brown', value: '#8B4513' },
+  // Neon colors
+  { name: 'Neon Pink', value: '#FF10F0' },
+  { name: 'Neon Green', value: '#39FF14' },
+  { name: 'Neon Blue', value: '#00BFFF' },
+  { name: 'Neon Purple', value: '#BF00FF' },
+  { name: 'Neon Orange', value: '#FF6600' },
+  { name: 'Neon Cyan', value: '#00FFFF' },
+  { name: 'Neon Red', value: '#FF3131' },
+  { name: 'Electric Lime', value: '#CCFF00' },
+  { name: 'Hot Magenta', value: '#FF00FF' },
+  { name: 'Laser Lemon', value: '#FFFF66' },
+  { name: 'Electric Blue', value: '#7DF9FF' },
+  { name: 'Neon Coral', value: '#FF6F61' },
+  { name: 'Toxic Green', value: '#61FF00' },
+  { name: 'Plasma Purple', value: '#8B00FF' },
+];
+
 const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) => {
   const [title, setTitle] = useState('');
+  const [titleColor, setTitleColor] = useState('');
+  const [showTitleColors, setShowTitleColors] = useState(false);
   const [content, setContent] = useState('');
   const [topicGifUrl, setTopicGifUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -88,9 +128,11 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) 
     try {
       const payload = { title: title.trim(), content: content.trim(), category };
       if (topicGifUrl.trim()) payload.gif_url = topicGifUrl.trim();
+      if (titleColor) payload.title_color = titleColor;
       await api.post('/forum/topics', payload);
       toast.success('Topic created');
       setTitle('');
+      setTitleColor('');
       setContent('');
       setTopicGifUrl('');
       onClose();
@@ -114,13 +156,46 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) 
           </h2>
         </div>
         <form onSubmit={handleSubmit} className="p-3 space-y-3">
-          <input
-            type="text"
-            placeholder="Title..."
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
-          />
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Title..."
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                style={titleColor ? { color: titleColor } : {}}
+                className="flex-1 px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowTitleColors(!showTitleColors)}
+                className="px-2 py-1 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 flex items-center gap-1"
+                title="Title Color"
+              >
+                <Palette size={14} />
+                {titleColor && <span className="w-3 h-3 rounded-full" style={{ backgroundColor: titleColor }} />}
+              </button>
+            </div>
+            {showTitleColors && (
+              <div className="flex flex-wrap gap-1 p-2 bg-zinc-900/50 border border-zinc-700/50 rounded">
+                {TITLE_COLORS.map((c) => (
+                  <button
+                    key={c.value || 'default'}
+                    type="button"
+                    onClick={() => { setTitleColor(c.value); setShowTitleColors(false); }}
+                    className={`px-2 py-1 text-[10px] font-heading rounded border transition-all ${
+                      titleColor === c.value 
+                        ? 'border-primary bg-primary/20 text-primary' 
+                        : 'border-zinc-700/50 hover:border-primary/50'
+                    }`}
+                    style={c.value ? { color: c.value } : {}}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {showGifPicker && (
             <div className="rounded border border-zinc-700/50 overflow-hidden">
               <GifPicker
@@ -277,7 +352,8 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
             {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
             {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
             <span
-              className={`truncate font-heading ${topic.is_important || topic.is_sticky ? 'text-amber-400' : 'text-foreground'}`}
+              className={`truncate font-heading ${topic.is_important || topic.is_sticky ? 'text-amber-400' : ''}`}
+              style={topic.title_color && !topic.is_important && !topic.is_sticky ? { color: topic.title_color } : {}}
               dangerouslySetInnerHTML={{
                 __html: `${topic.is_important ? 'IMPORTANT: ' : ''}${topic.is_sticky && !topic.is_important ? 'STICKY: ' : ''}${titleHtml}`,
               }}
@@ -359,7 +435,8 @@ const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating
           {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
           {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
           <span
-            className={`text-xs font-heading truncate ${topic.is_important || topic.is_sticky ? 'text-amber-400 font-bold' : 'text-foreground'}`}
+            className={`text-xs font-heading truncate ${topic.is_important || topic.is_sticky ? 'text-amber-400 font-bold' : ''}`}
+            style={topic.title_color && !topic.is_important && !topic.is_sticky ? { color: topic.title_color } : {}}
             dangerouslySetInnerHTML={{ __html: titleHtml }}
           />
           {topic.is_locked && <Lock size={10} className="text-mutedForeground shrink-0" />}

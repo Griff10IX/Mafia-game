@@ -443,6 +443,275 @@ Create a new account after death. Previous account stats are gone forever. Point
 
 [hr][/hr]
 
+[size=1.5][b][color=#FF5722]:car: GARAGE & VEHICLES[/color][/b][/size]
+
+[quote]
+[color=#FF5722][b]Car Collection[/b][/color]
+Store stolen cars in your garage. Each car has a rarity tier affecting its value and uses.
+[list]
+[*][color=#888888]Common - Basic cars, low value[/color]
+[*][color=#3498DB]Uncommon - Decent value[/color]
+[*][color=#9B59B6]Rare - Good for melting[/color]
+[*][color=#F39C12]Epic - High bullet yield[/color]
+[*][color=#E74C3C]Legendary - Best in game[/color]
+[*][color=#FFD700]Exclusive - Loot box only, rarest![/color]
+[/list]
+
+[color=#FF5722][b]Car Uses[/b][/color]
+[list]
+[*][color=#888888]Melt for Bullets - Convert cars to ammunition[/color]
+[*][color=#888888]Scrap for Cash - Quick money[/color]
+[*][color=#888888]Sell to Players - Player marketplace[/color]
+[*][color=#888888]Use for Travel - Better cars = faster travel[/color]
+[*][color=#888888]Racing - Enter cars in races[/color]
+[/list]
+
+[color=#FF5722][b]Garage Upgrades[/b][/color]
+[list]
+[*][color=#888888]Capacity - Store more cars[/color]
+[*][color=#888888]Bulk Melt - Melt multiple cars at once[/color]
+[*][color=#888888]Bulk Scrap - Scrap multiple cars at once[/color]
+[*][color=#888888]Auto-Sort - Organize by rarity[/color]
+[/list]
+
+[color=#FF5722][b]Custom Cars[/b][/color]
+Purchase from the point store (500 pts). Design your own unique vehicle with custom name and appearance. Shows off your style!
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#4CAF50]:gift: DAILY REWARDS[/color][/b][/size]
+
+[quote]
+[color=#4CAF50][b]Daily Spin Wheel[/b][/color]
+Free spin every 24 hours! Possible rewards:
+[list]
+[*][color=#888888]Cash prizes ($10K - $1M)[/color]
+[*][color=#888888]Bullets (100 - 10,000)[/color]
+[*][color=#888888]Rank points[/color]
+[*][color=#888888]Loot box pieces[/color]
+[*][color=#888888]Consumable tokens[/color]
+[*][color=#FFD700]Jackpot - Massive rewards![/color]
+[/list]
+
+[color=#4CAF50][b]Login Streaks[/b][/color]
+Consecutive daily logins increase rewards:
+[list]
+[*][color=#888888]Day 1-7: Base rewards[/color]
+[*][color=#888888]Day 8-14: +25% bonus[/color]
+[*][color=#888888]Day 15-21: +50% bonus[/color]
+[*][color=#FFD700]Day 22-30: +100% bonus[/color]
+[*][color=#FFD700]Day 30+: Special milestone rewards[/color]
+[/list]
+
+[color=#4CAF50][b]Daily Bonus Activities[/b][/color]
+[list]
+[*][color=#888888]First crime of the day - Bonus cash[/color]
+[*][color=#888888]First GTA - Bonus car rarity chance[/color]
+[*][color=#888888]First heist - Bonus rewards[/color]
+[*][color=#888888]Property collection streak - Up to +7%[/color]
+[/list]
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#795548]:airplane: AIRPORTS[/color][/b][/size]
+
+[quote]
+[color=#795548][b]Airport Ownership[/b][/color]
+Each city has an airport that can be claimed by Capo+ rank players. Owners earn fees from all travel!
+
+[color=#795548][b]Benefits[/b][/color]
+[list]
+[*][color=#888888]Earn a cut of all travel fees[/color]
+[*][color=#888888]Set custom travel prices[/color]
+[*][color=#888888]Passive income 24/7[/color]
+[*][color=#888888]Prestige and visibility[/color]
+[/list]
+
+[color=#795548][b]Claiming[/b][/color]
+[list]
+[*][color=#888888]Requires Capo rank[/color]
+[*][color=#888888]Costs $1B+ to claim[/color]
+[*][color=#888888]Can be challenged by other players[/color]
+[*][color=#888888]Defend or lose ownership[/color]
+[/list]
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#03A9F4]:speech_balloon: SOCIAL FEATURES[/color][/b][/size]
+
+[quote]
+[color=#03A9F4][b]Global Chat[/b][/color]
+Real-time chat with all online players. English preferred in global. Be respectful!
+
+[color=#03A9F4][b]Private Messages[/b][/color]
+Send direct messages to any player. Great for deals, diplomacy, or threats!
+
+[color=#03A9F4][b]Family Chat[/b][/color]
+Private chat channel for family members only. Coordinate attacks, plan heists, and bond with your crew.
+
+[color=#03A9F4][b]Forum[/b][/color]
+[list]
+[*][color=#888888]General Discussion - Talk about anything[/color]
+[*][color=#888888]Entertainer - Memes, jokes, creative content[/color]
+[*][color=#888888]Crew OC - Find heist partners[/color]
+[*][color=#888888]Designer - Custom artwork showcase[/color]
+[/list]
+
+[color=#03A9F4][b]Player Profiles[/b][/color]
+Customize your profile with:
+[list]
+[*][color=#888888]Custom banner/background[/color]
+[*][color=#888888]BBCode formatted bio[/color]
+[*][color=#888888]Display your achievements[/color]
+[*][color=#888888]Show off your stats[/color]
+[/list]
+
+[color=#03A9F4][b]Notifications[/b][/color]
+Stay informed with alerts for:
+[list]
+[*][color=#888888]Attacks on you[/color]
+[*][color=#888888]Family events[/color]
+[*][color=#888888]Forum replies[/color]
+[*][color=#888888]Mentions (@username)[/color]
+[*][color=#888888]Heist invites[/color]
+[*][color=#888888]War declarations[/color]
+[/list]
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#FF9800]:chart: LEADERBOARDS[/color][/b][/size]
+
+[quote]
+[color=#FF9800][b]Player Rankings[/b][/color]
+[list]
+[*][color=#888888]Rank Points - Overall progression[/color]
+[*][color=#888888]Kills - Combat prowess[/color]
+[*][color=#888888]Net Worth - Total wealth[/color]
+[*][color=#888888]Crimes - Criminal activity[/color]
+[*][color=#888888]Heists - Team player[/color]
+[*][color=#888888]Respect - Community standing[/color]
+[/list]
+
+[color=#FF9800][b]Family Rankings[/b][/color]
+[list]
+[*][color=#888888]Total Kills - Family power[/color]
+[*][color=#888888]Wars Won - Dominance[/color]
+[*][color=#888888]Treasury - Family wealth[/color]
+[*][color=#888888]Racket Income - Business empire[/color]
+[/list]
+
+[color=#FF9800][b]Weekly Competitions[/b][/color]
+[list]
+[*][color=#888888]Top Killer - Most kills this week[/color]
+[*][color=#888888]Top Criminal - Most crimes[/color]
+[*][color=#888888]Top Earner - Most money made[/color]
+[*][color=#888888]Minigame Champions - Best scores[/color]
+[/list]
+
+[color=#FFD700][b]Rewards[/b][/color]
+Top leaderboard positions earn bonus cash, points, and exclusive bragging rights!
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#9E9E9E]:link: REFERRAL SYSTEM[/color][/b][/size]
+
+[quote]
+[color=#9E9E9E][b]How It Works[/b][/color]
+Share your unique referral link. When someone signs up and plays, you both earn rewards!
+
+[color=#9E9E9E][b]Referrer Rewards[/b][/color]
+[list]
+[*][color=#888888]Cash bonus when they reach certain ranks[/color]
+[*][color=#888888]Points bonus for active referrals[/color]
+[*][color=#888888]Loot box pieces[/color]
+[*][color=#888888]Special referral badges[/color]
+[/list]
+
+[color=#9E9E9E][b]New Player Rewards[/b][/color]
+[list]
+[*][color=#888888]Starting cash bonus[/color]
+[*][color=#888888]Extra loot box pieces[/color]
+[*][color=#888888]Welcome package[/color]
+[/list]
+
+[color=#9E9E9E][b]Find Your Link[/b][/color]
+Check your Profile or Settings page for your unique referral URL!
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#673AB7]:shield: STAFF & SUPPORT[/color][/b][/size]
+
+[quote]
+[color=#673AB7][b]Staff Roles[/b][/color]
+[list]
+[*][color=#a78bfa]Admins[/color] - Full game management, development
+[*][color=#1e3a5f]Moderators[/color] - Forum/chat moderation, player support
+[*][color=#888888]HDO (Help Desk Officers)[/color] - Ticket support, basic help
+[/list]
+
+[color=#673AB7][b]Getting Help[/b][/color]
+[list]
+[*][color=#888888]Help Desk - Submit tickets for issues[/color]
+[*][color=#888888]Forum - Ask community questions[/color]
+[*][color=#888888]Discord - Real-time community support[/color]
+[*][color=#888888]DM Staff - Direct message for urgent issues[/color]
+[/list]
+
+[color=#673AB7][b]Report Players[/b][/color]
+Use the Help Desk to report:
+[list]
+[*][color=#888888]Multi-accounting[/color]
+[*][color=#888888]Bug exploits[/color]
+[*][color=#888888]Harassment[/color]
+[*][color=#888888]Botting/scripting[/color]
+[*][color=#888888]Real-money trading[/color]
+[/list]
+Include evidence (screenshots) when possible!
+
+[color=#673AB7][b]Appeal Bans[/b][/color]
+If you believe your ban was unjust, submit an appeal through the Help Desk with:
+[list]
+[*][color=#888888]Your username[/color]
+[*][color=#888888]Ban reason (if known)[/color]
+[*][color=#888888]Your explanation[/color]
+[*][color=#888888]Any relevant evidence[/color]
+[/list]
+[/quote]
+
+[hr][/hr]
+
+[size=1.5][b][color=#E91E63]:calendar: EVENTS & SEASONS[/color][/b][/size]
+
+[quote]
+[color=#E91E63][b]Seasonal Events[/b][/color]
+Special limited-time events throughout the year:
+[list]
+[*][color=#888888]Holiday Events - Christmas, Halloween, etc.[/color]
+[*][color=#888888]Anniversary Events - Game milestones[/color]
+[*][color=#888888]Community Events - Player-driven competitions[/color]
+[*][color=#888888]Double XP Weekends - Faster progression[/color]
+[/list]
+
+[color=#E91E63][b]Event Rewards[/b][/color]
+[list]
+[*][color=#FFD700]Exclusive items only available during events[/color]
+[*][color=#FFD700]Limited edition cars[/color]
+[*][color=#FFD700]Special badges and titles[/color]
+[*][color=#FFD700]Bonus cash and points[/color]
+[/list]
+
+[color=#E91E63][b]Stay Updated[/b][/color]
+Watch the forum announcements and in-game notifications for event news!
+[/quote]
+
+[hr][/hr]
+
 [center][size=1.8][b][color=#FF4444]:warning: RULES & POLICIES :warning:[/color][/b][/size][/center]
 
 [quote]
@@ -558,6 +827,39 @@ You must be 18+ to make purchases. Minors using parents' payment methods without
 
 [color=#3498DB][b]Q: What's the fastest way to rank up?[/b][/color]
 [color=#AAAAAA]A: Grind crimes, complete objectives, do heists, and kill players. Auto Rank helps tremendously if you can afford it.[/color]
+
+[color=#3498DB][b]Q: How do I get a custom car?[/b][/color]
+[color=#AAAAAA]A: Purchase from the point store for 500 points. You can design your own unique vehicle with a custom name![/color]
+
+[color=#3498DB][b]Q: What are tokens and how do I use them?[/b][/color]
+[color=#AAAAAA]A: Tokens are consumable 1-hour boosts. Activate them from your inventory before grinding for maximum effect. They stack up to 2-6 hours![/color]
+
+[color=#3498DB][b]Q: How do family wars work?[/b][/color]
+[color=#AAAAAA]A: The Boss declares war, then both families track kills. First to the kill target wins. Winner takes treasury, rackets, and gets a permanent income bonus.[/color]
+
+[color=#3498DB][b]Q: Can I leave a family?[/b][/color]
+[color=#AAAAAA]A: Yes, but there may be a cooldown before joining another. Bosses cannot leave without transferring ownership first.[/color]
+
+[color=#3498DB][b]Q: What's the Interest Bank vs Swiss Bank?[/b][/color]
+[color=#AAAAAA]A: Interest Bank locks money for a set time and pays interest. Swiss Bank protects money from being lost when you die - no interest, just safety.[/color]
+
+[color=#3498DB][b]Q: How do I increase my booze capacity?[/b][/color]
+[color=#AAAAAA]A: Your base capacity increases with rank. You can also buy additional capacity from the point store (30 pts per +100, up to +1,000 max).[/color]
+
+[color=#3498DB][b]Q: What happens to my stuff if my family gets disbanded?[/b][/color]
+[color=#AAAAAA]A: Personal items stay with you. Family treasury and rackets are lost if disbanded. You'll need to join or create a new family.[/color]
+
+[color=#3498DB][b]Q: How do casino tables make money?[/b][/color]
+[color=#AAAAAA]A: As owner, you earn the house edge (2-5%) from every bet placed at your table. High-traffic tables = big passive income![/color]
+
+[color=#3498DB][b]Q: Is there a mobile app?[/b][/color]
+[color=#AAAAAA]A: The game is fully responsive and works great on mobile browsers. No separate app needed - just visit the site![/color]
+
+[color=#3498DB][b]Q: How do I change my username?[/b][/color]
+[color=#AAAAAA]A: Contact support through the Help Desk. Username changes may have restrictions or costs.[/color]
+
+[color=#3498DB][b]Q: What's the difference between cash and points?[/b][/color]
+[color=#AAAAAA]A: Cash is earned in-game and used for most purchases. Points are premium currency (purchased or earned) for special items and boosts.[/color]
 [/quote]
 
 [hr][/hr]
@@ -565,18 +867,91 @@ You must be 18+ to make purchases. Minors using parents' payment methods without
 [center][size=1.5][b][color=#FFD700]:bulb: PRO TIPS :bulb:[/color][/b][/size][/center]
 
 [quote]
+[color=#FFD700][b]Early Game Tips[/b][/color]
 [list]
 [*][color=#FFD700][b]Always bank your cash[/b][/color] - Swiss Bank protects you from losing everything on death
 [*][color=#FFD700][b]Collect properties daily[/b][/color] - Streak bonuses add up to +7% extra income
-[*][color=#FFD700][b]Train weapon mastery[/b][/color] - 10% bullet reduction is huge in combat
 [*][color=#FFD700][b]Join a family ASAP[/b][/color] - Protection, Crew OC rewards, and social benefits
-[*][color=#FFD700][b]Check booze prices[/b][/color] - Prices change every 3 hours, timing is everything
-[*][color=#FFD700][b]Don't skip armour tiers[/b][/color] - Buy them in order or you can't upgrade
-[*][color=#FFD700][b]Use tokens wisely[/b][/color] - Stack them during grinding sessions for maximum effect
 [*][color=#FFD700][b]Complete daily objectives[/b][/color] - Easy rewards you shouldn't miss
-[*][color=#FFD700][b]Upgrade OC equipment[/b][/color] - 40% success boost makes a huge difference
-[*][color=#FFD700][b]Watch the hitlist[/b][/color] - Free money if you can catch targets!
+[*][color=#FFD700][b]Don't skip armour tiers[/b][/color] - Buy them in order or you can't upgrade
+[*][color=#FFD700][b]Grind booze runs[/b][/color] - Best early-game money maker
 [/list]
+
+[color=#FFD700][b]Combat Tips[/b][/color]
+[list]
+[*][color=#FFD700][b]Train weapon mastery[/b][/color] - 10% bullet reduction is huge in combat
+[*][color=#FFD700][b]Watch the hitlist[/b][/color] - Free money if you can catch targets!
+[*][color=#FFD700][b]Travel to avoid enemies[/b][/color] - Can't be attacked in a different city
+[*][color=#FFD700][b]Hire bodyguards[/b][/color] - They absorb damage before you do
+[*][color=#FFD700][b]Check your target's armour[/b][/color] - Know how many bullets you need
+[*][color=#FFD700][b]Hidden hitlist bounties[/b][/color] - +50% cost but nobody knows it's you
+[/list]
+
+[color=#FFD700][b]Money Tips[/b][/color]
+[list]
+[*][color=#FFD700][b]Check booze prices[/b][/color] - Prices change every 3 hours, timing is everything
+[*][color=#FFD700][b]Max properties before buying new ones[/b][/color] - Better ROI than spreading thin
+[*][color=#FFD700][b]Melt legendary cars[/b][/color] - Highest bullet yield for combat
+[*][color=#FFD700][b]Use Interest Bank[/b][/color] - Free money for locking cash temporarily
+[*][color=#FFD700][b]Reinvest properties[/b][/color] - +10% income boost is worth it
+[/list]
+
+[color=#FFD700][b]Advanced Tips[/b][/color]
+[list]
+[*][color=#FFD700][b]Use tokens wisely[/b][/color] - Stack them during grinding sessions for maximum effect
+[*][color=#FFD700][b]Upgrade OC equipment[/b][/color] - 40% success boost makes a huge difference
+[*][color=#FFD700][b]Coordinate with family[/b][/color] - Wars are won together, not alone
+[*][color=#FFD700][b]Claim businesses at Capo[/b][/color] - Passive income from casinos, armouries, airports
+[*][color=#FFD700][b]Prestige when ready[/b][/color] - Permanent bonuses are worth the reset
+[*][color=#FFD700][b]Auto Rank is worth it[/b][/color] - Grind while you sleep
+[/list]
+[/quote]
+
+[hr][/hr]
+
+[center][size=1.5][b][color=#607D8B]:book: GLOSSARY :book:[/color][/b][/size][/center]
+
+[quote]
+[color=#607D8B][b]Common Terms[/b][/color]
+
+[b]RP[/b] - Rank Points, determines your rank
+[b]OC[/b] - Organised Crime (team heists)
+[b]GTA[/b] - Grand Theft Auto (car theft)
+[b]Crew OC[/b] - Family-wide heist activity
+[b]NPC[/b] - Non-Player Character (computer-controlled)
+[b]Melt[/b] - Convert cars to bullets
+[b]Scrap[/b] - Convert cars to cash
+[b]Bust[/b] - Free someone from jail
+[b]Snitch[/b] - Add time to someone's jail sentence
+[b]Hitlist[/b] - Bounty board for player kills
+[b]Swiss Bank[/b] - Protected cash storage (survives death)
+[b]Interest Bank[/b] - Lock cash for time-based returns
+[b]Racket[/b] - Family-owned income generator
+[b]Compound[/b] - Family headquarters
+
+[color=#607D8B][b]Rank Abbreviations[/b][/color]
+
+[b]GF[/b] - Godfather
+[b]Don[/b] - Don rank
+[b]KP[/b] - Kingpin
+
+[color=#607D8B][b]Family Roles[/b][/color]
+
+[b]Boss[/b] - Family leader, full control
+[b]UB[/b] - Underboss, second in command
+[b]Consi[/b] - Consigliere, advisor
+[b]Capo[/b] - Crew leader
+[b]Soldier[/b] - Made member
+[b]Associate[/b] - Prospect/new member
+
+[color=#607D8B][b]Other Terms[/b][/color]
+
+[b]Perma[/b] - Permanent (ban or death)
+[b]Alt[/b] - Alternative account (against rules!)
+[b]Grind[/b] - Repetitive activity for rewards
+[b]Whale[/b] - Big spender
+[b]Newbie/Noob[/b] - New player
+[b]Vet[/b] - Veteran/experienced player
 [/quote]
 
 [hr][/hr]
