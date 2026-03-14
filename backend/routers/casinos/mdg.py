@@ -172,16 +172,18 @@ def register(router):
         auto_roll_at = game.get("auto_roll_at")
         should_roll = (auto_roll_at is not None and len(new_entries) >= auto_roll_at) or len(new_entries) >= max_players
         if should_roll and len(new_entries) >= MDG_MIN_PLAYERS:
-            roll = random.randint(1, 6) + random.randint(1, 6)  # 2d6: 2–12
+            # Roll between 1 and number of players; winner is the player at that position (1=creator, 2=first joiner, etc.)
             entry_ids = [e["user_id"] for e in new_entries]
             alive_users = await db.users.find(
                 {"id": {"$in": entry_ids}, "is_dead": {"$ne": True}},
                 {"_id": 0, "id": 1},
             ).to_list(len(entry_ids))
             alive_ids = {u["id"] for u in alive_users}
+            # Build pool preserving order, only alive players
             alive_entries = [e for e in new_entries if e["user_id"] in alive_ids]
             pool = alive_entries if alive_entries else new_entries
-            winner_entry = random.choice(pool)
+            roll = random.randint(1, len(pool))
+            winner_entry = pool[roll - 1]  # roll is 1-indexed, list is 0-indexed
             winner_id = winner_entry["user_id"]
             winner_user = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
             winner_username = (winner_user and winner_user.get("username")) or winner_entry.get("username") or "?"
@@ -219,16 +221,18 @@ def register(router):
         if len(entries) < 1:
             raise HTTPException(status_code=400, detail="No players in game")
 
-        roll = random.randint(1, 6) + random.randint(1, 6)  # 2d6: 2–12
+        # Roll between 1 and number of players; winner is the player at that position (1=creator, 2=first joiner, etc.)
         entry_ids = [e["user_id"] for e in entries]
         alive_users = await db.users.find(
             {"id": {"$in": entry_ids}, "is_dead": {"$ne": True}},
             {"_id": 0, "id": 1},
         ).to_list(len(entry_ids))
         alive_ids = {u["id"] for u in alive_users}
+        # Build pool preserving order, only alive players
         alive_entries = [e for e in entries if e["user_id"] in alive_ids]
         pool = alive_entries if alive_entries else entries
-        winner_entry = random.choice(pool)
+        roll = random.randint(1, len(pool))
+        winner_entry = pool[roll - 1]  # roll is 1-indexed, list is 0-indexed
         winner_id = winner_entry["user_id"]
         winner_user = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
         winner_username = (winner_user and winner_user.get("username")) or winner_entry.get("username") or "?"

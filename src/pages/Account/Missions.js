@@ -785,9 +785,7 @@ function TributeBanner({
             {dailyTotalLoot > 0 && (
               <RewardBadge icon={Star} value={dailyTotalLoot} label="loot" color="border-violet-500/30" bgColor="bg-violet-500/10" />
             )}
-            {dailyTokensTotal > 0 && (
-              <RewardBadge icon={Zap} value={dailyTokensTotal} label="tokens" color="border-amber-500/30" bgColor="bg-amber-500/10" />
-            )}
+            <RewardBadge icon={Zap} value={dailyTokensTotal} label="tokens" color="border-amber-500/30" bgColor="bg-amber-500/10" />
           </div>
           
           <div className="text-[8px] text-mutedForeground mt-1.5 italic flex items-center gap-1">
