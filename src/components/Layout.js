@@ -18,10 +18,10 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
     { path: '/travel', label: 'Travel' },
     { path: '/states', label: 'States' },
     ...(hasCasinoOrProperty ? [{ path: '/my-properties', label: 'My Properties' }] : []),
-    { path: '/properties', label: 'Properties' },
-    { path: '/garage', label: 'Garage' },
-    { path: '/sell-cars', label: 'Sell Cars' },
-    { path: '/buy-cars', label: 'Buy Cars' },
+    { path: '/money/property', label: 'Properties' },
+    { path: '/cars/garage', label: 'Garage' },
+    { path: '/cars/sell', label: 'Sell Cars' },
+    { path: '/cars/buy', label: 'Buy Cars' },
   ];
   return [
     {
@@ -37,11 +37,11 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       icon: Sword,
       label: 'Combat',
       items: [
-        { path: '/attack', label: 'Attack' },
-        { path: '/attempts', label: 'Attempts' },
-        { path: '/hitlist', label: 'Hitlist' },
-        { path: '/bodyguards', label: 'Bodyguards' },
-        { path: '/armour-weapons', label: 'Armoury' },
+        { path: '/kill/attack', label: 'Attack' },
+        { path: '/kill/attempts', label: 'Attempts' },
+        { path: '/kill/hitlist', label: 'Hitlist' },
+        { path: '/kill/bodyguards', label: 'Bodyguards' },
+        { path: '/kill/armour-weapons', label: 'Armoury' },
       ],
     },
     {
@@ -50,14 +50,14 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       icon: Gamepad2,
       label: 'Mini games',
       items: [
-        { path: '/racing', label: 'Racing' },
-        { path: '/boxing', label: 'Boxing' },
-        { path: '/flappygangster', label: 'Flappy Gangster' },
-        { path: '/shooting-range', label: 'Shooting range' },
-        { path: '/snake', label: 'Package Run' },
-        { path: '/minesweeper', label: 'Minefield' },
-        { path: '/battleships', label: 'Rum Runner' },
-        { path: '/minigames-leaderboard', label: 'Leaderboard' },
+        { path: '/games/racing', label: 'Racing' },
+        { path: '/games/boxing', label: 'Boxing' },
+        { path: '/games/flappy', label: 'Flappy Gangster' },
+        { path: '/games/shooting-range', label: 'Shooting range' },
+        { path: '/games/snake', label: 'Package Run' },
+        { path: '/games/minesweeper', label: 'Minefield' },
+        { path: '/games/battleships', label: 'Rum Runner' },
+        { path: '/games/leaderboard', label: 'Leaderboard' },
       ],
     },
     {
@@ -66,11 +66,11 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       icon: Target,
       label: 'Rank',
       items: [
-        { path: '/crimes', label: 'Crimes' },
-        { path: '/gta', label: 'GTA' },
-        { path: '/jail', label: 'Jail' },
+        { path: '/crime/crimes', label: 'Crimes' },
+        { path: '/crime/gta', label: 'GTA' },
+        { path: '/crime/jail', label: 'Jail' },
         { path: '/organised-crime', label: 'Organised Crime' },
-        { path: '/prestige', label: 'Prestige' },
+        { path: '/account/prestige', label: 'Prestige' },
       ],
     },
     {
@@ -100,20 +100,20 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/dashboard', label: 'Dashboard' },
         { path: '/objectives', label: 'Objectives' },
         { path: '/missions', label: 'Missions' },
-        { path: '/inventory', label: 'My Inventory' },
+        { path: '/account/inventory', label: 'My Inventory' },
         { path: '/loot-box', label: 'Loot Box' },
-        { path: '/profile', label: 'Edit Profile' },
-        { path: '/ip-rules', label: 'IP & Devices' },
+        { path: '/account/profile', label: 'Edit Profile' },
+        { path: '/account/settings', label: 'IP & Devices' },
         { path: '/stats', label: 'Stats' },
-        { path: '/my-stats', label: 'My Stats' },
+        { path: '/account/stats', label: 'My Stats' },
         { path: '/dead-alive', label: 'Dead > Alive' },
-        { path: '/bank', label: 'Bank' },
-        { path: '/stock-market', label: 'Stock Market' },
+        { path: '/money/bank', label: 'Bank' },
+        { path: '/money/stocks', label: 'Stock Market' },
         { action: 'theme', label: 'Theme' },
         { action: 'logout', label: 'Logout' },
-        { path: '/auto-rank', label: 'Auto Rank' },
-        ...(isAdmin ? [{ path: '/admin', label: 'Admin Tools' }, { path: '/admin/locked', label: 'Locked accounts' }] : []),
-        ...(isModerator && !isAdmin ? [{ path: '/admin', label: 'Moderator tools' }] : []),
+        { path: '/account/autorank', label: 'Auto Rank' },
+        ...(isAdmin ? [{ path: '/staffrole/admin', label: 'Admin Tools' }, { path: '/staffrole/locked', label: 'Locked accounts' }] : []),
+        ...(isModerator && !isAdmin ? [{ path: '/staffrole/mod', label: 'Moderator tools' }] : []),
       ],
     },
     {
@@ -122,15 +122,15 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       icon: LayoutGrid,
       label: 'Misc',
       items: [
-        { path: '/forum', label: 'Forum' },
-        { path: '/forum', label: 'Entertainer Forum', search: '?tab=entertainer' },
-        { path: '/forum', label: 'Designer Forum', search: '?tab=designer' },
-        { path: '/inbox', label: 'Inbox' },
+        { path: '/social/forum', label: 'Forum' },
+        { path: '/social/forum', label: 'Entertainer Forum', search: '?tab=entertainer' },
+        { path: '/social/forum', label: 'Designer Forum', search: '?tab=designer' },
+        { path: '/social/inbox', label: 'Inbox' },
         { path: '/help-desk', label: 'Help Desk' },
         { path: '/booze-run', label: 'Booze Run' },
         { path: '/racket', label: 'Racket' },
         { path: '/users-online', label: 'Users Online' },
-        { path: '/families', label: 'Families' },
+        { path: '/family/list', label: 'Families' },
         { path: '/daily-rewards', label: 'Daily Rewards' },
         { path: '/leaderboard', label: 'Leaderboard' },
         { path: '/store', label: 'Store' },
@@ -682,28 +682,28 @@ export default function Layout({ children }) {
   const PATH_TO_CATEGORY = isCategorizedClassic
     ? {
         '/dashboard': 'information', '/verify-email': 'information', '/objectives': 'information', '/missions': 'information',
-        '/profile': 'information', '/ip-rules': 'information', '/stats': 'information', '/my-stats': 'information',
-        '/users-online': 'information', '/properties': 'information', '/help-desk': 'information', '/leaderboard': 'information',
-        '/ranking': 'ranking', '/prestige': 'ranking',
-        '/attack': 'combat', '/attempts': 'combat', '/hitlist': 'combat', '/bodyguards': 'combat', '/armour-weapons': 'combat', '/shooting-range': 'combat',
+        '/account/profile': 'information', '/account/settings': 'information', '/stats': 'information', '/account/stats': 'information',
+        '/users-online': 'information', '/money/property': 'information', '/help-desk': 'information', '/leaderboard': 'information',
+        '/ranking': 'ranking', '/account/prestige': 'ranking',
+        '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/games/shooting-range': 'combat',
         '/travel': 'travel', '/states': 'travel', '/my-properties': 'travel', '/booze-run': 'travel',
-        '/forum': 'messaging', '/inbox': 'messaging',
-        '/bank': 'money', '/stock-market': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money',
-        '/garage': 'money', '/sell-cars': 'money', '/buy-cars': 'money', '/crack-safe': 'money', '/casino': 'money', '/loot-box': 'money',
-        '/families': 'other', '/dead-alive': 'other', '/auto-rank': 'other',
+        '/social/forum': 'messaging', '/social/inbox': 'messaging',
+        '/money/bank': 'money', '/money/stocks': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money',
+        '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/crack-safe': 'money', '/casino': 'money', '/loot-box': 'money',
+        '/family/list': 'other', '/dead-alive': 'other', '/account/autorank': 'other',
         '/mini-games': 'minigames',
       }
     : {
         '/dashboard': 'information', '/verify-email': 'information', '/objectives': 'information', '/missions': 'information',
-        '/inventory': 'information', '/loot-box': 'information', '/profile': 'information', '/ip-rules': 'information', '/stats': 'information', '/my-stats': 'information',
-        '/users-online': 'information', '/properties': 'information', '/help-desk': 'information',
-        '/ranking': 'ranking', '/prestige': 'ranking',
-        '/attack': 'combat', '/attempts': 'combat', '/hitlist': 'combat', '/bodyguards': 'combat', '/armour-weapons': 'combat', '/shooting-range': 'combat',
+        '/account/inventory': 'information', '/loot-box': 'information', '/account/profile': 'information', '/account/settings': 'information', '/stats': 'information', '/account/stats': 'information',
+        '/users-online': 'information', '/money/property': 'information', '/help-desk': 'information',
+        '/ranking': 'ranking', '/account/prestige': 'ranking',
+        '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/games/shooting-range': 'combat',
         '/travel': 'travel', '/states': 'travel', '/my-properties': 'travel', '/booze-run': 'travel',
-        '/forum': 'messaging', '/inbox': 'messaging',
-        '/bank': 'money', '/stock-market': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money', '/flappygangster': 'money',
-        '/garage': 'money', '/sell-cars': 'money', '/buy-cars': 'money', '/crack-safe': 'money', '/casino': 'money', '/leaderboard': 'money',
-        '/families': 'other', '/dead-alive': 'other', '/auto-rank': 'other',
+        '/social/forum': 'messaging', '/social/inbox': 'messaging',
+        '/money/bank': 'money', '/money/stocks': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money', '/games/flappy': 'money',
+        '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/crack-safe': 'money', '/casino': 'money', '/leaderboard': 'money',
+        '/family/list': 'other', '/dead-alive': 'other', '/account/autorank': 'other',
         '/mini-games': 'minigames',
       };
   const SIDEBAR_CATEGORIES = isCategorizedClassic
@@ -723,33 +723,33 @@ export default function Layout({ children }) {
     ...(needsEmailVerification ? [{ path: '/verify-email', icon: Mail, label: 'Verify email' }] : []),
     { path: '/objectives', icon: ListChecks, label: 'Objectives' },
     { path: '/missions', icon: Map, label: 'Missions' },
-    { path: '/inventory', icon: Package, label: 'My Inventory' },
+    { path: '/account/inventory', icon: Package, label: 'My Inventory' },
     { path: '/loot-box', icon: Gift, label: 'Loot Box' },
-    { path: '/profile', icon: User, label: 'Edit Profile' },
-    { path: '/ip-rules', icon: Globe, label: 'IP & Devices' },
+    { path: '/account/profile', icon: User, label: 'Edit Profile' },
+    { path: '/account/settings', icon: Globe, label: 'IP & Devices' },
     { path: '/stats', icon: TrendingUp, label: 'Stats' },
-    { path: '/my-stats', icon: BarChart3, label: 'My Stats' },
-    { path: '/bank', icon: Landmark, label: 'Bank' },
-    { path: '/stock-market', icon: TrendingUp, label: 'Stock Market' },
-    { path: '/attack', icon: Sword, label: 'Attack' },
-    { path: '/attempts', icon: Crosshair, label: 'Attempts' },
-    { path: '/hitlist', icon: ScrollText, label: 'Hitlist' },
-    { path: '/bodyguards', icon: Shield, label: 'Bodyguards' },
+    { path: '/account/stats', icon: BarChart3, label: 'My Stats' },
+    { path: '/money/bank', icon: Landmark, label: 'Bank' },
+    { path: '/money/stocks', icon: TrendingUp, label: 'Stock Market' },
+    { path: '/kill/attack', icon: Sword, label: 'Attack' },
+    { path: '/kill/attempts', icon: Crosshair, label: 'Attempts' },
+    { path: '/kill/hitlist', icon: ScrollText, label: 'Hitlist' },
+    { path: '/kill/bodyguards', icon: Shield, label: 'Bodyguards' },
     { path: '/travel', icon: Plane, label: 'Travel' },
     { path: '/states', icon: MapPin, label: 'States' },
     ...(hasCasinoOrProperty ? [{ path: '/my-properties', icon: Building2, label: 'My Properties' }] : []),
     { path: '/booze-run', icon: Wine, label: 'Booze Run' },
     { path: '/racket', icon: Building2, label: 'Racket' },
     { path: '/users-online', icon: Users, label: 'Users Online' },
-    { path: '/forum', icon: MessageSquare, label: 'Forum' },
-    { path: '/inbox', icon: Mail, label: 'Inbox', badge: unreadCount },
+    { path: '/social/forum', icon: MessageSquare, label: 'Forum' },
+    { path: '/social/inbox', icon: Mail, label: 'Inbox', badge: unreadCount },
     { path: '/help-desk', icon: HelpCircle, label: 'Help Desk', badge: helpDeskOpenCount },
     { path: '/ranking', icon: Target, label: 'Ranking' },
-    { path: '/garage', icon: Car, label: 'Garage' },
-    { path: '/sell-cars', icon: DollarSign, label: 'Sell Cars' },
-    { path: '/buy-cars', icon: ShoppingBag, label: 'Buy Cars' },
-    { path: '/properties', icon: Building, label: 'Properties' },
-    { path: '/armour-weapons', icon: Sword, label: 'Armoury' },
+    { path: '/cars/garage', icon: Car, label: 'Garage' },
+    { path: '/cars/sell', icon: DollarSign, label: 'Sell Cars' },
+    { path: '/cars/buy', icon: ShoppingBag, label: 'Buy Cars' },
+    { path: '/money/property', icon: Building, label: 'Properties' },
+    { path: '/kill/armour-weapons', icon: Sword, label: 'Armoury' },
     { path: '/mini-games', icon: Gamepad2, label: 'Mini games' },
     { path: '/casino', icon: Dice5, label: 'Casino' },
     { path: '/crack-safe', icon: Lock, label: 'Crack the Safe' },
@@ -757,19 +757,19 @@ export default function Layout({ children }) {
     { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { path: '/store', icon: ShoppingBag, label: 'Store' },
     { path: '/quick-trade', icon: ArrowLeftRight, label: 'Quick Trade' },
-    { path: '/families', icon: Building2, label: 'Families' },
+    { path: '/family/list', icon: Building2, label: 'Families' },
     { path: '/dead-alive', icon: Skull, label: 'Dead > Alive' },
-    { path: '/auto-rank', icon: Bot, label: 'Auto Rank' },
+    { path: '/account/autorank', icon: Bot, label: 'Auto Rank' },
   ];
 
   const adminNavItems = isAdmin ? [
-    { path: '/admin', icon: Settings, label: 'Admin Tools' },
-    { path: '/admin/locked', icon: Lock, label: 'Locked accounts' },
-    { path: '/admin/users-online', icon: Users, label: 'Users online (live)' },
+    { path: '/staffrole/admin', icon: Settings, label: 'Admin Tools' },
+    { path: '/staffrole/locked', icon: Lock, label: 'Locked accounts' },
+    { path: '/staffrole/users-online', icon: Users, label: 'Users online (live)' },
   ] : [];
   const moderatorNavItems = isModerator && !isAdmin ? [
-    { path: '/admin', icon: Shield, label: 'Moderator tools' },
-    { path: '/admin/users-online', icon: Users, label: 'Users online (live)' },
+    { path: '/staffrole/mod', icon: Shield, label: 'Moderator tools' },
+    { path: '/staffrole/users-online', icon: Users, label: 'Users online (live)' },
   ] : [];
 
   const sidebarBgStyle = { backgroundColor: 'var(--noir-content)' };
@@ -785,11 +785,10 @@ export default function Layout({ children }) {
   const rankingNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-ranking-group" onClick={() => setRankingOpen((v) => !v)}
-        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/ranking' || location.pathname === '/crimes' || location.pathname === '/gta' || location.pathname === '/jail' || location.pathname === '/organised-crime' || location.pathname === '/prestige') ? styles.navItemActive : styles.sidebarNavLink}`}
-        style={(location.pathname === '/ranking' || location.pathname === '/crimes' || location.pathname === '/gta' || location.pathname === '/jail' || location.pathname === '/organised-crime' || location.pathname === '/prestige') ? sidebarActiveGroupStyle : undefined}>
+        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/ranking' || location.pathname.startsWith('/crime/') || location.pathname === '/organised-crime' || location.pathname === '/account/prestige') ? styles.navItemActive : styles.sidebarNavLink}`}
+        style={(location.pathname === '/ranking' || location.pathname.startsWith('/crime/') || location.pathname === '/organised-crime' || location.pathname === '/account/prestige') ? sidebarActiveGroupStyle : undefined}>
         <Target size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
         <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Ranking</span>
-        {/* Roll up badge: show total available if collapsed */}
         {!rankingOpen && (rankingCounts.crimes > 0 || rankingCounts.gta > 0) && (
           <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30 shrink-0">
             {rankingCounts.crimes + rankingCounts.gta}
@@ -799,20 +798,20 @@ export default function Layout({ children }) {
       </button>
       {rankingOpen && (
         <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
-          <Link to="/crimes" onClick={() => setSidebarOpen(false)} onMouseEnter={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }} onFocus={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }}
-            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crimes' ? styles.navItemActivePage : styles.sidebarNavLink}`}
-            style={location.pathname === '/crimes' ? sidebarActiveStyle : undefined} data-testid="nav-crimes">
+          <Link to="/crime/crimes" onClick={() => setSidebarOpen(false)} onMouseEnter={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }} onFocus={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }}
+            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/crimes' ? styles.navItemActivePage : styles.sidebarNavLink}`}
+            style={location.pathname === '/crime/crimes' ? sidebarActiveStyle : undefined} data-testid="nav-crimes">
             <span className="uppercase tracking-widest font-heading flex-1">Crimes</span>
             {rankingCounts.crimes > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30">{rankingCounts.crimes}</span>}
           </Link>
           {showSidebarDividers && navDividerEl('rd1')}
           <Link
-            to="/gta"
+            to="/crime/gta"
             onClick={() => setSidebarOpen(false)}
-            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/gta' ? styles.navItemActivePage : styles.sidebarNavLink} ${gtaExclusiveInPool ? 'gta-exclusive-flash' : ''}`}
+            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/gta' ? styles.navItemActivePage : styles.sidebarNavLink} ${gtaExclusiveInPool ? 'gta-exclusive-flash' : ''}`}
             style={gtaExclusiveInPool
               ? { background: 'var(--noir-raised)', backgroundImage: 'none', borderLeft: '3px solid #a78bfa', color: '#a78bfa' }
-              : (location.pathname === '/gta' ? sidebarActiveStyle : undefined)}
+              : (location.pathname === '/crime/gta' ? sidebarActiveStyle : undefined)}
             data-testid="nav-gta"
             title={gtaExclusiveInPool ? 'Exclusive car in GTA pool!' : undefined}
           >
@@ -821,7 +820,7 @@ export default function Layout({ children }) {
             {rankingCounts.gta > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30">{rankingCounts.gta}</span>}
           </Link>
           {showSidebarDividers && navDividerEl('rd2')}
-          <Link to="/jail" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/jail' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/jail' ? sidebarActiveStyle : undefined} data-testid="nav-jail">
+          <Link to="/crime/jail" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/jail' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/crime/jail' ? sidebarActiveStyle : undefined} data-testid="nav-jail">
             <span className="uppercase tracking-widest font-heading flex-1">Jail</span>
             {rankingCounts.jail > 0 && <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30">{rankingCounts.jail}</span>}
           </Link>
@@ -875,8 +874,8 @@ export default function Layout({ children }) {
   const miniGamesNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-minigames-group" onClick={() => setMiniGamesOpen((v) => !v)}
-        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/racing' || location.pathname === '/boxing' || location.pathname === '/flappygangster' || location.pathname === '/shooting-range' || location.pathname === '/snake' || location.pathname === '/minesweeper' || location.pathname === '/battleships' || location.pathname === '/minigames-leaderboard' || location.pathname.startsWith('/boxing/')) ? styles.navItemActive : styles.sidebarNavLink}`}
-        style={(location.pathname === '/racing' || location.pathname === '/boxing' || location.pathname === '/flappygangster' || location.pathname === '/shooting-range' || location.pathname === '/snake' || location.pathname === '/minesweeper' || location.pathname === '/battleships' || location.pathname === '/minigames-leaderboard' || location.pathname.startsWith('/boxing/')) ? sidebarActiveGroupStyle : undefined}>
+        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname.startsWith('/games/') ? styles.navItemActive : styles.sidebarNavLink}`}
+        style={location.pathname.startsWith('/games/') ? sidebarActiveGroupStyle : undefined}>
         <Gamepad2 size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
         <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Mini games</span>
         {miniGamesOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
@@ -884,14 +883,14 @@ export default function Layout({ children }) {
       {miniGamesOpen && (
         <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
           {[
-            { to: '/racing', label: 'Racing', testId: 'nav-racing' },
-            { to: '/boxing', label: 'Boxing', testId: 'nav-boxing', matchPrefix: true },
-            { to: '/flappygangster', label: 'Flappy Gangster', testId: 'nav-flappygangster' },
-            { to: '/shooting-range', label: 'Shooting range', testId: 'nav-shooting-range', matchPrefix: true },
-            { to: '/snake', label: 'Package Run', testId: 'nav-snake' },
-            { to: '/minesweeper', label: 'Minefield', testId: 'nav-minesweeper' },
-            { to: '/battleships', label: 'Rum Runner', testId: 'nav-battleships' },
-            { to: '/minigames-leaderboard', label: 'Leaderboard', testId: 'nav-minigames-leaderboard' },
+            { to: '/games/racing', label: 'Racing', testId: 'nav-racing' },
+            { to: '/games/boxing', label: 'Boxing', testId: 'nav-boxing', matchPrefix: true },
+            { to: '/games/flappy', label: 'Flappy Gangster', testId: 'nav-flappygangster' },
+            { to: '/games/shooting-range', label: 'Shooting range', testId: 'nav-shooting-range', matchPrefix: true },
+            { to: '/games/snake', label: 'Package Run', testId: 'nav-snake' },
+            { to: '/games/minesweeper', label: 'Minefield', testId: 'nav-minesweeper' },
+            { to: '/games/battleships', label: 'Rum Runner', testId: 'nav-battleships' },
+            { to: '/games/leaderboard', label: 'Leaderboard', testId: 'nav-minigames-leaderboard' },
           ].map((item, idx) => {
             const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;
             return (
@@ -915,11 +914,11 @@ export default function Layout({ children }) {
     if (item.path === '/mini-games') return <Fragment key="nav-minigames-group">{navDivider}{miniGamesNavBlock}</Fragment>;
     const Icon = item.icon;
     const isActive = location.pathname === item.path;
-    const isFamiliesAtWar = item.path === '/families' && atWar;
+    const isFamiliesAtWar = item.path === '/family/list' && atWar;
     return (
       <Fragment key={item.path}>
         {navDivider}
-        <Link to={item.path} data-testid={`nav-${item.label.toLowerCase()}`} data-at-war={atWar && item.path === '/families' ? 'true' : undefined}
+        <Link to={item.path} data-testid={`nav-${item.label.toLowerCase()}`} data-at-war={atWar && item.path === '/family/list' ? 'true' : undefined}
           className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${isFamiliesAtWar ? (isActive ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10') : (isActive ? styles.navItemActivePage : styles.sidebarNavLink)}`}
           style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
           onClick={() => setSidebarOpen(false)}
@@ -1132,9 +1131,9 @@ export default function Layout({ children }) {
                         {cat.id === 'ranking' && (
                           <>
                             {navDividerEl('prestige-div')}
-                            <Link to="/prestige" data-testid="nav-prestige"
-                              className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname === '/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
-                              style={location.pathname === '/prestige' ? sidebarActiveStyle : undefined}
+                            <Link to="/account/prestige" data-testid="nav-prestige"
+                              className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname === '/account/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
+                              style={location.pathname === '/account/prestige' ? sidebarActiveStyle : undefined}
                               onClick={() => setSidebarOpen(false)}>
                               <Trophy size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
                               <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">Prestige</span>
@@ -1150,9 +1149,9 @@ export default function Layout({ children }) {
                 <>
                   {navItems.map((item, index) => renderNavItem(item, index > 0))}
                   {navDividerEl('prestige-div')}
-                  <Link to="/prestige" data-testid="nav-prestige"
-                    className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname === '/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
-                    style={location.pathname === '/prestige' ? sidebarActiveStyle : undefined}
+                  <Link to="/account/prestige" data-testid="nav-prestige"
+                    className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname === '/account/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
+                    style={location.pathname === '/account/prestige' ? sidebarActiveStyle : undefined}
                     onClick={() => setSidebarOpen(false)}>
                     <Trophy size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
                     <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">Prestige</span>
@@ -1559,12 +1558,12 @@ export default function Layout({ children }) {
                   { label: 'Respect', value: formatInt(user.respect_points ?? 0), isLink: true, to: '/store?tab=upgrades' },
                   { label: 'Bullets', value: formatInt(user.bullets), isLink: true, to: '/store?tab=bullets' },
                   { label: 'Health', value: Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%', className: Number(user.health) > 50 ? 'text-emerald-400' : Number(user.health) > 25 ? 'text-amber-400' : 'text-red-400', isLink: true, to: '/store?tab=upgrades' },
-                  { label: 'Kills', value: formatInt(user.total_kills), className: 'text-red-400', isLink: true, to: '/attack' },
-                  { label: 'Weapon', value: user.gun_name || 'None', isLink: true, to: '/armour-weapons' },
-                  { label: 'Armour', value: user.armour_name || 'None', isLink: true, to: '/armour-weapons' },
+                  { label: 'Kills', value: formatInt(user.total_kills), className: 'text-red-400', isLink: true, to: '/kill/attack' },
+                  { label: 'Weapon', value: user.gun_name || 'None', isLink: true, to: '/kill/armour-weapons' },
+                  { label: 'Armour', value: user.armour_name || 'None', isLink: true, to: '/kill/armour-weapons' },
                   { label: 'Location', value: user.current_state || user.location || '—', truncate: true, isLink: true, to: '/travel' },
-                  { label: 'Family', value: user.gang_name || 'None', truncate: true, isLink: true, to: '/families' },
-                  { label: 'Guards', value: typeof user.bodyguard_count === 'number' ? `${user.bodyguard_count}/${user.bodyguard_slots ?? 1}` : '—', isLink: true, to: '/bodyguards' },
+                  { label: 'Family', value: user.gang_name || 'None', truncate: true, isLink: true, to: '/family/list' },
+                  { label: 'Guards', value: typeof user.bodyguard_count === 'number' ? `${user.bodyguard_count}/${user.bodyguard_slots ?? 1}` : '—', isLink: true, to: '/kill/bodyguards' },
                   ...(hasCasinoOrProperty ? [
                     { label: 'Casino', value: formatMoney(user.casino_profit ?? 0), className: (user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400', isLink: true, to: '/my-properties' },
                     { label: 'Property', value: `${formatInt(user.property_profit ?? 0)} pts`, isLink: true, to: '/my-properties' },
@@ -1636,7 +1635,7 @@ export default function Layout({ children }) {
                   style={{ color: 'var(--noir-primary)' }}>
                   <Trophy size={12} /> Leaderboard
                 </Link>
-                <Link to="/inbox" onClick={() => isMobileViewport && setRightSidebarOpen(false)}
+                <Link to="/social/inbox" onClick={() => isMobileViewport && setRightSidebarOpen(false)}
                   className="flex items-center justify-between gap-1 text-[10px] font-heading py-0.5 px-1 rounded-sm"
                   style={{ color: 'var(--noir-foreground)' }}>
                   <span className="flex items-center gap-1.5">
@@ -1722,10 +1721,10 @@ export default function Layout({ children }) {
                     const isActive = sub.search
                       ? location.pathname === sub.path && location.search === sub.search
                       : sub.state ? location.pathname === sub.path && location.state?.category === sub.state?.category
-                      : sub.path === '/forum' ? location.pathname === '/forum' && !location.search?.includes('tab=entertainer') && !location.search?.includes('tab=designer')
+                      : sub.path === '/social/forum' ? location.pathname === '/social/forum' && !location.search?.includes('tab=entertainer') && !location.search?.includes('tab=designer')
                       : location.pathname === sub.path || location.pathname.startsWith(sub.path + '/');
-                    const prefetchCrimes = sub.path === '/crimes' ? () => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); } : undefined;
-                    const isGtaExclusive = sub.path === '/gta' && gtaExclusiveInPool;
+                    const prefetchCrimes = sub.path === '/crime/crimes' ? () => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); } : undefined;
+                    const isGtaExclusive = sub.path === '/crime/gta' && gtaExclusiveInPool;
                     return (
                       <Link key={sub.path ? `${sub.path}-${sub.label}` : idx} to={to}
                         onClick={() => setMobileBottomMenuOpen(null)}
@@ -1770,7 +1769,7 @@ export default function Layout({ children }) {
                   {index > 0 && showBottomNavDividers && <div className="shrink-0 min-h-[24px]" style={bottomNavDividerStyle} aria-hidden="true" />}
                   {item.type === 'link' && (() => {
                     const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/'));
-                    const isInbox = item.path === '/inbox';
+                    const isInbox = item.path === '/social/inbox';
                     return (
                       <Link key={item.path} to={item.path} onClick={() => { setSidebarOpen(false); setMobileBottomMenuOpen(null); }}
                         className={boxBase} style={isActive ? boxActive : boxInactive} aria-current={isActive ? 'page' : undefined} title={item.label}>
@@ -1787,9 +1786,9 @@ export default function Layout({ children }) {
                     const isActive = item.items.some((sub) => {
                       if (sub.search) return location.pathname === sub.path && location.search === sub.search;
                       if (sub.state) return location.pathname === sub.path && location.state?.category === sub.state?.category;
-                      return location.pathname === sub.path || (sub.path !== '/casino' && sub.path !== '/forum' && location.pathname.startsWith(sub.path + '/'));
+                      return location.pathname === sub.path || (sub.path !== '/casino' && sub.path !== '/social/forum' && location.pathname.startsWith(sub.path + '/'));
                     });
-                    const showInboxBadge = item.items.some((sub) => sub.path === '/inbox') && unreadCount > 0;
+                    const showInboxBadge = item.items.some((sub) => sub.path === '/social/inbox') && unreadCount > 0;
                     const showGtaExclusiveStar = item.id === 'rank' && gtaExclusiveInPool;
                     return (
                       <button key={item.id} type="button" onClick={(e) => { e.stopPropagation(); setMobileBottomMenuOpen(isOpen ? null : item.id); }}
@@ -1956,7 +1955,7 @@ export default function Layout({ children }) {
                   ) : (
                     <div className="space-y-0 rounded-lg overflow-hidden border" style={{ borderColor: 'var(--noir-border)' }}>
                       {notificationList.slice(0, 8).map((n) => (
-                        <button key={n.id} type="button" onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
+                        <button key={n.id} type="button" onClick={() => { setNotificationPanelOpen(false); navigate('/social/inbox'); }}
                           className="w-full text-left px-3 py-2 border-b font-heading text-xs last:border-b-0"
                           style={{ borderColor: 'var(--noir-border)', color: n.read ? 'var(--noir-muted)' : 'var(--noir-foreground)', backgroundColor: n.read ? 'transparent' : 'rgba(var(--noir-primary-rgb), 0.08)' }}>
                           <span className="font-semibold block truncate">{n.title}</span>
@@ -1968,7 +1967,7 @@ export default function Layout({ children }) {
                 </div>
               </div>
               <div className="p-2 border-t shrink-0 flex flex-wrap gap-2" style={{ borderColor: 'var(--noir-border)' }}>
-                <button type="button" onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }} className="py-1.5 px-3 rounded-lg text-xs font-heading border" style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}>View inbox</button>
+                <button type="button" onClick={() => { setNotificationPanelOpen(false); navigate('/social/inbox'); }} className="py-1.5 px-3 rounded-lg text-xs font-heading border" style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}>View inbox</button>
                 <button type="button" onClick={() => markAllNotificationsRead()} className="py-1.5 px-3 rounded-lg text-xs font-heading border" style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-foreground)' }}>Clear all</button>
                 <button type="button" onClick={() => { setNotificationPanelOpen(false); setTopBarCustomizeOpen(true); }} className="py-1.5 px-3 rounded-lg text-xs font-heading border ml-auto" style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}>Customize bar</button>
               </div>

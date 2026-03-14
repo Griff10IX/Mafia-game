@@ -535,8 +535,15 @@ function pt2xy(p, sx, sy) { return [sx(p.x), sy(p.y)]; }
 /** Approximate curvature at track position t (0..1). Higher = sharper corner. */
 function getCurvature(track, t) {
   const eps = 0.008;
-  const t0 = (t - eps + 1) % 1;
-  const t1 = (t + eps) % 1;
+  
+  // Near the finish line (start/end boundary), skip curvature calculation
+  // to avoid false corner detection from geometry discontinuity at lap boundary
+  if (t < eps * 2 || t > 1 - eps * 2) {
+    return 0; // Treat finish line area as straight
+  }
+  
+  const t0 = t - eps;
+  const t1 = t + eps;
   const p0 = track.getPoint(t0);
   const p1 = track.getPoint(t);
   const p2 = track.getPoint(t1);
@@ -626,6 +633,7 @@ export default function CircuitRaceView({
   onReset, // when provided (e.g. live mode from Racing.js), Reset returns to parent instead of going to setup
   // Props for standalone / pre-race mode (new usage)
   mode = "replay", // "replay" | "live"
+  raceId = null, // unique race ID for state persistence
   initialTrackId = "chicago",
   initialCondition = "clear",
   playerCarName = "Stutz Bearcat",
@@ -662,6 +670,147 @@ export default function CircuitRaceView({
   }, []);
 
   useEffect(() => { speedMultRef.current = speedMultiplier; }, [speedMultiplier]);
+
+  // ── RACE STATE PERSISTENCE (for live races) ──
+  // Race continues in real-time even when user navigates away
+  const STORAGE_KEY = raceId ? `race_state_${raceId}` : null;
+  const lastSaveTimeRef = useRef(0);
+  const raceStartTimeRef = useRef(null); // Real wall-clock time when race started
+  const simulatedSecondsRef = useRef(0); // Simulated time elapsed in race
+  const restoredFromStorageRef = useRef(false);
+
+  // Save race state to localStorage (called periodically during race)
+  const saveRaceState = useCallback(() => {
+    if (!STORAGE_KEY || !stateRef.current) return;
+    const { racers, nLaps, safetyCar, fastestLap } = stateRef.current;
+    if (!racers || racers.length === 0) return;
+    
+    // Check if all racers finished - if so, trigger completion
+    const activeRacers = racers.filter(r => !r.finished && !r.dnf);
+    const allFinished = activeRacers.length === 0;
+    
+    const saveData = {
+      timestamp: Date.now(),
+      raceStartRealTime: raceStartTimeRef.current, // When race actually started
+      uiPhase: allFinished ? "done" : uiPhase,
+      numLaps: nLaps,
+      allFinished,
+      racers: racers.map(r => ({
+        id: r.id,
+        trackPos: r.trackPos,
+        totalLapsDone: r.totalLapsDone,
+        lapCount: r.lapCount,
+        finished: r.finished,
+        finishOrder: r.finishOrder,
+        dnf: r.dnf,
+        tyreWear: r.tyreWear,
+        currentTyre: r.currentTyre,
+        pitStops: r.pitStops,
+        fuelLoad: r.fuelLoad,
+        lapTimes: r.lapTimes,
+        position: r.position,
+        inPit: r.inPit,
+        baseSpeed: r.baseSpeed,
+        baseGrip: r.baseGrip,
+      })),
+      safetyCar: { active: safetyCar?.active, endsAtSec: safetyCar?.endsAtSec },
+      fastestLap: { holderId: fastestLap?.holderId, time: fastestLap?.time },
+    };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saveData));
+    } catch (e) { /* ignore storage errors */ }
+  }, [STORAGE_KEY, uiPhase]);
+
+  // Clear saved state (on race completion)
+  const clearSavedRaceState = useCallback(() => {
+    if (!STORAGE_KEY) return;
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+  }, [STORAGE_KEY]);
+
+  // Restore race state from localStorage (on mount for live races)
+  const getSavedRaceState = useCallback(() => {
+    if (!STORAGE_KEY) return null;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return null;
+      const data = JSON.parse(saved);
+      // Only restore if saved within last 60 minutes
+      if (Date.now() - data.timestamp > 60 * 60 * 1000) {
+        localStorage.removeItem(STORAGE_KEY);
+        return null;
+      }
+      return data;
+    } catch (e) { return null; }
+  }, [STORAGE_KEY]);
+
+  // Fast-forward race simulation by elapsed real time (runs without rendering)
+  const fastForwardRace = useCallback((racers, track, nLaps, elapsedSeconds, cond) => {
+    const wd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
+    const dt = 0.1; // Simulate in 100ms increments
+    let simTime = 0;
+    let finishOrder = Math.max(0, ...racers.map(r => r.finishOrder || 0));
+    
+    while (simTime < elapsedSeconds) {
+      simTime += dt;
+      const nowSec = simTime;
+      
+      for (const r of racers) {
+        if (r.finished || r.dnf) continue;
+        
+        // Pit stop handling
+        if (r.inPit) {
+          if (nowSec >= (r.pitEndAt || 0)) {
+            r.inPit = false;
+            r.tyreWear = 100;
+            r.pitStops = (r.pitStops || 0) + 1;
+            r.fuelLoad = 100;
+            r.trackPos = track.pitExit || 0.1;
+          }
+          continue;
+        }
+        
+        // Movement calculation (simplified)
+        const td = TYRE_DEFS[r.currentTyre] || TYRE_DEFS.medium;
+        const wearFactor = Math.max(0.4, (r.tyreWear || 100) / 100);
+        const fuelMult = 1.0 + 0.03 * ((r.fuelLoad ?? 100) / 100);
+        const effSpeed = ((r.baseSpeed || 1) * (td.gripMult || 1) * (wd.speedMult || 1) * wearFactor) / fuelMult;
+        
+        const lapTime = (track.lapBase || 90) / effSpeed;
+        const advance = (1.0 / lapTime) * dt * 0.95; // Slightly slower for corners avg
+        
+        const prevPos = r.trackPos;
+        r.trackPos = (r.trackPos + advance) % 1;
+        
+        // Lap completion
+        if (r.trackPos < prevPos && prevPos > 0.9) {
+          r.totalLapsDone = (r.totalLapsDone || 0) + 1;
+          r.lapCount = (r.lapCount || 1) + 1;
+          
+          // Tyre wear
+          r.tyreWear = Math.max(0, (r.tyreWear || 100) - (100 / ((td.lapsPerStintBase || 3) * 1.2)));
+          r.fuelLoad = Math.max(0, (r.fuelLoad || 100) - (100 / nLaps));
+          
+          // Check finish
+          if (r.totalLapsDone >= nLaps) {
+            r.finished = true;
+            finishOrder++;
+            r.finishOrder = finishOrder;
+          }
+          
+          // Pit stop check
+          if (!r.finished && r.tyreWear < 25 && Math.random() < 0.7) {
+            r.inPit = true;
+            r.pitEndAt = nowSec + (r.pitDurationSeconds || 3);
+          }
+        }
+      }
+      
+      // Stop if all finished
+      if (racers.every(r => r.finished || r.dnf)) break;
+    }
+    
+    return racers;
+  }, []);
 
   // In replay mode, derive condition from weather prop; in live mode weather is automatic (from race)
   const effectiveCondition = mode === "replay" || mode === "live"
@@ -1539,6 +1688,12 @@ export default function CircuitRaceView({
       // Draw
       drawTrackCanvas(track, currentCond, sorted, nowSec);
 
+      // Periodic save for race state persistence (every 2 seconds)
+      if (now - lastSaveTimeRef.current > 2000) {
+        lastSaveTimeRef.current = now;
+        saveRaceState();
+      }
+
       // Update standings
       const leaderProgress = sorted.length ? sorted[0].totalLapsDone + sorted[0].trackPos : 0;
       setStandings(sorted.map(r=>{
@@ -1611,6 +1766,8 @@ export default function CircuitRaceView({
         })));
         const resultOrderIds = finalOrder.map((r) => r.id);
         const dnfIds = finalOrder.filter((r) => r.dnf).map((r) => r.id);
+        // Clear saved race state on completion
+        clearSavedRaceState();
         setTimeout(()=>onComplete?.(resultOrderIds, dnfIds), 1200);
         return;
       }
@@ -1618,8 +1775,9 @@ export default function CircuitRaceView({
       rafRef.current = requestAnimationFrame(loop);
     };
 
+    raceStartTimeRef.current = Date.now();
     rafRef.current = requestAnimationFrame(loop);
-  }, [drawTrackCanvas, onComplete]);
+  }, [drawTrackCanvas, onComplete, clearSavedRaceState, saveRaceState]);
 
   // ── REPLAY MODE ──
   // When mode==="replay", auto-start using backend data (pre-computed result)
@@ -1697,6 +1855,119 @@ export default function CircuitRaceView({
   useEffect(() => {
     if (mode !== "live") return;
     if (!participants.length || !(qualifying_order && qualifying_order.length)) return;
+    
+    // Check for saved race state (user navigated away and came back)
+    const savedState = getSavedRaceState();
+    if (savedState && (savedState.uiPhase === "racing" || savedState.uiPhase === "qualifying" || savedState.uiPhase === "done") && !restoredFromStorageRef.current) {
+      restoredFromStorageRef.current = true;
+      resizeCanvas();
+      const track = TRACKS.find((t) => t.id === initialTrackId) || TRACKS[0];
+      const cond = WEATHER_MAP[weatherIdProp] || "clear";
+      
+      // Calculate how much real time has passed since we saved
+      const realTimeElapsed = (Date.now() - savedState.timestamp) / 1000; // seconds
+      
+      // Rebuild racers with saved progress
+      const seen = new Set();
+      const order = qualifying_order.filter((id) => {
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+      const wd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
+      const weatherWear = wd.wearMult != null ? wd.wearMult : 1;
+      let racers = order.map((id, i) => {
+        const p = participants.find((x) => (x.user_id || x.id) === id) || {};
+        const saved = savedState.racers.find(r => r.id === id);
+        const isPlayer = currentUserId != null && (id === currentUserId || p.user_id === currentUserId);
+        const effSpeed = p.effective_speed != null ? p.effective_speed : 15;
+        const effGrip = p.effective_grip != null ? p.effective_grip : 0.85;
+        const baseSpeed = saved?.baseSpeed ?? (effSpeed / 15);
+        const tyreId = saved?.currentTyre || (p.tyre_compound || "medium").toLowerCase();
+        const pitLvl = p.pit_level != null ? p.pit_level : 0;
+        const relLevel = p.reliability_level != null ? p.reliability_level : 0;
+        const reliabilityWearMult = 1 - 0.08 * relLevel;
+        const npcStrat = isPlayer ? "normal" : rollNpcStrategy();
+        const pitOff = isPlayer ? 0 : Math.floor(Math.random()*3)-1;
+        return {
+          id,
+          name: p.username || p.car_name || `#${i + 1}`,
+          isPlayer,
+          color: CAR_COLORS[i % CAR_COLORS.length],
+          carName: p.car_name || "",
+          trackPos: saved?.trackPos ?? (order.length - i) * 0.012,
+          lapCount: saved?.lapCount ?? 1,
+          totalLapsDone: saved?.totalLapsDone ?? 0,
+          currentTyre: tyreId in TYRE_DEFS ? tyreId : "medium",
+          tyreWear: saved?.tyreWear ?? 100,
+          pitStops: saved?.pitStops ?? 0,
+          inPit: saved?.inPit ?? false,
+          pitEndAt: saved?.pitEndAt ?? 0,
+          pitDurationSeconds: pitDurationSeconds(pitLvl, false),
+          pitDurationEmergencySeconds: pitDurationSeconds(pitLvl, true),
+          baseSpeed,
+          baseGrip: saved?.baseGrip ?? effGrip,
+          reliabilityWearMult,
+          pitStrategy: buildPitStrategy(tyreId in TYRE_DEFS ? tyreId : "medium", savedState.numLaps || totalLaps, weatherWear, reliabilityWearMult, pitOff, npcStrat),
+          finished: saved?.finished ?? false,
+          finishOrder: saved?.finishOrder ?? 0,
+          visible: true,
+          position: saved?.position ?? (i + 1),
+          lapTimes: saved?.lapTimes ?? [],
+          slideOffUntil: 0,
+          pitExitUntil: null,
+          engineHealth:100, dnf: saved?.dnf ?? false, dnfAtSec:0, dnfSparks:[],
+          fuelLoad: saved?.fuelLoad ?? 100,
+          sectorTimes:[null,null,null], currentSector:0, lastSectorCross:0, bestSectors:[Infinity,Infinity,Infinity], sectorDelta:null,
+          inSlipstream:false, tyreBlister:false,
+          strategyType: npcStrat,
+        };
+      });
+      
+      // Fast-forward the race by the elapsed real time (race continued while away)
+      if (realTimeElapsed > 0.5 && !savedState.allFinished) {
+        racers = fastForwardRace(racers, track, savedState.numLaps || totalLaps, realTimeElapsed, cond);
+      }
+      
+      // Check if race finished during fast-forward
+      const allFinished = racers.every(r => r.finished || r.dnf);
+      
+      if (allFinished || savedState.allFinished) {
+        // Race completed while away - show results immediately
+        clearSavedRaceState();
+        setUiPhase("done");
+        const finalOrder = [...racers].sort((a, b) => {
+          if (a.dnf && !b.dnf) return 1;
+          if (!a.dnf && b.dnf) return -1;
+          if (a.finished && b.finished) return (a.finishOrder || 99) - (b.finishOrder || 99);
+          const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
+          const pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+          return pb - pa;
+        });
+        setResults(finalOrder.map((r,i)=>({
+          pos:i+1, id:r.id, name:r.name, isPlayer:r.isPlayer,
+          color:r.color, carName:r.carName, pitStops:r.pitStops,
+          lapTimes:r.lapTimes, dnf:r.dnf,
+          bestLap:r.lapTimes?.length ? Math.min(...r.lapTimes) : null,
+          hasFastestLap: false,
+        })));
+        setCommentary("Race finished!");
+        const resultOrderIds = finalOrder.map((r) => r.id);
+        const dnfIds = finalOrder.filter((r) => r.dnf).map((r) => r.id);
+        setTimeout(()=>onComplete?.(resultOrderIds, dnfIds), 500);
+        return;
+      }
+      
+      // Resume the race with fast-forwarded state
+      raceStartTimeRef.current = savedState.raceStartRealTime || Date.now();
+      setUiPhase("racing");
+      const leaderLap = Math.max(1, ...racers.map(r => r.lapCount));
+      setLapDisplay(`${leaderLap} / ${savedState.numLaps || totalLaps}`);
+      setCommentary("Race continued...");
+      startRaceLoop(track, cond, savedState.numLaps || totalLaps, racers);
+      return;
+    }
+    
     const seen = new Set();
     const order = qualifying_order.filter((id) => {
       if (seen.has(id)) return false;

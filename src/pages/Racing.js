@@ -511,6 +511,7 @@ export default function Racing() {
           )}
           <CircuitRaceView
             mode="live"
+            raceId={activeRace.id}
             participants={activeRace.participants || []}
             qualifying_order={activeRace.qualifying_order || []}
             laps={activeRace.laps || 3}

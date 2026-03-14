@@ -250,7 +250,7 @@ export default function BuyCars() {
           <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Dealer and player listings. Owner shows seller.</p>
         </div>
         <Link
-          to="/garage"
+          to="/cars/garage"
           className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 text-primary font-heading text-[11px] font-bold hover:bg-primary/10"
         >
           <Car size={12} />

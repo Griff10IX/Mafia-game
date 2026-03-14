@@ -293,7 +293,7 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
             })}
           </div>
           <p className="text-[9px] text-mutedForeground font-heading mt-2 text-center">
-            <Link to="/garage" className="text-primary hover:underline">View full garage →</Link>
+            <Link to="/cars/garage" className="text-primary hover:underline">View full garage →</Link>
           </p>
         </div>
       )}

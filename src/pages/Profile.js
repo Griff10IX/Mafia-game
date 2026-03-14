@@ -1287,7 +1287,7 @@ export default function Profile() {
             </Link>
           ) : (
             <Link
-              to="/profile"
+              to="/account/profile"
               className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase tracking-wider hover:underline"
             >
               ← Back to edit
@@ -1433,7 +1433,7 @@ export default function Profile() {
                   </div>
                   <button type="button" onClick={saveVisibility} disabled={savingVisibility} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingVisibility ? 'Saving…' : 'Save'}</button>
                 </div>
-                <p className="text-[10px] text-mutedForeground">To show a car on your profile, open it from your <Link to="/garage" className="text-primary hover:underline">Garage</Link> and use the <strong>Profile</strong> section on that page.</p>
+                <p className="text-[10px] text-mutedForeground">To show a car on your profile, open it from your <Link to="/cars/garage" className="text-primary hover:underline">Garage</Link> and use the <strong>Profile</strong> section on that page.</p>
                 <div>
                   <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Autoplay profile videos</h3>
                   <div className="flex items-center justify-between gap-3 py-1">

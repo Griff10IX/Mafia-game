@@ -159,7 +159,7 @@ const SetupCard = ({ canEnable, hasTelegram }) => (
             <MessageSquare size={14} className="text-primary shrink-0 mt-0.5 sm:w-4 sm:h-4" />
             <p className="text-[10px] sm:text-xs font-heading text-zinc-300 leading-relaxed">
               Auto Rank runs without Telegram. For success notifications, set <strong>Telegram chat ID</strong> in{' '}
-              <Link to="/profile" className="underline font-bold text-primary hover:text-primary/80">
+              <Link to="/account/profile" className="underline font-bold text-primary hover:text-primary/80">
                 Profile → Settings
               </Link>{' '}
               (get ID from <span className="font-mono text-primary">@userinfobot</span>)

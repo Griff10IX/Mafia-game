@@ -54,7 +54,7 @@ export default function CarProfile() {
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
           <Car className="text-primary/40" size={48} />
           <p className="text-mutedForeground font-heading">Car not found</p>
-          <Link to="/garage" className="bg-zinc-800/50 border border-primary/30 text-primary font-heading text-xs px-3 py-1.5 rounded flex items-center gap-1.5 hover:bg-zinc-700/50 transition-all">
+          <Link to="/cars/garage" className="bg-zinc-800/50 border border-primary/30 text-primary font-heading text-xs px-3 py-1.5 rounded flex items-center gap-1.5 hover:bg-zinc-700/50 transition-all">
             <ArrowLeft size={14} /> Back to Garage
           </Link>
         </div>
@@ -71,7 +71,7 @@ export default function CarProfile() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link 
-            to="/garage" 
+            to="/cars/garage" 
             className="text-mutedForeground hover:text-primary transition-colors"
           >
             <ArrowLeft size={20} />
@@ -162,7 +162,7 @@ export default function CarProfile() {
       {/* Back button */}
       <div className="flex justify-center">
         <Link 
-          to="/garage" 
+          to="/cars/garage" 
           className="bg-zinc-700/50 hover:bg-zinc-600/50 text-foreground rounded px-4 py-2 text-xs font-heading font-bold uppercase tracking-wide border border-zinc-600/50 transition-all inline-flex items-center gap-1.5 touch-manipulation"
         >
           <ArrowLeft size={14} />

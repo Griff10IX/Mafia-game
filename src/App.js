@@ -1,5 +1,5 @@
 import { useState, useEffect, Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { ThemedToaster } from "./components/ThemedToaster";
 import Landing from "./pages/Landing";
 import StaffLogin from "./pages/StaffLogin";
@@ -91,6 +91,36 @@ const Snake = lazy(() => import("./pages/Snake"));
 const PageLoader = () => (
   <div className="min-h-[200px] flex items-center justify-center text-primary text-sm font-heading">Loading...</div>
 );
+
+// Redirect helpers for parameterized routes
+function ProfileRedirect() {
+  const { username } = useParams();
+  return <Navigate to={username ? `/account/profile/${username}` : '/account/profile'} replace />;
+}
+function FamilyRedirect() {
+  const { familyId } = useParams();
+  return <Navigate to={`/family/${familyId}`} replace />;
+}
+function CarProfileRedirect() {
+  const { carId } = useParams();
+  return <Navigate to={`/cars/profile/${carId}`} replace />;
+}
+function InboxChatRedirect() {
+  const { userId } = useParams();
+  return <Navigate to={`/social/chat/${userId}`} replace />;
+}
+function ForumTopicRedirect() {
+  const { topicId } = useParams();
+  return <Navigate to={`/social/forum/${topicId}`} replace />;
+}
+function BoxingArenaRedirect() {
+  const { matchId } = useParams();
+  return <Navigate to={`/games/boxing/${matchId}`} replace />;
+}
+function ShootingRangePlayRedirect() {
+  const { weaponId } = useParams();
+  return <Navigate to={weaponId ? `/games/shooting-range/play/${weaponId}` : '/games/shooting-range/play'} replace />;
+}
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -188,8 +218,9 @@ function App() {
               )
             }
           />
+          {/* ═══ MONEY GROUP ═══ */}
           <Route
-            path="/bank"
+            path="/money/bank"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -201,7 +232,7 @@ function App() {
             }
           />
           <Route
-            path="/stock-market"
+            path="/money/stocks"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -212,36 +243,15 @@ function App() {
               )
             }
           />
+          {/* Money redirects */}
+          <Route path="/bank" element={<Navigate to="/money/bank" replace />} />
+          <Route path="/stock-market" element={<Navigate to="/money/stocks" replace />} />
           <Route
             path="/stats"
             element={
               isAuthenticated ? (
                 <Layout>
                   <Stats />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/my-stats"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <MyStats />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/jail"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Jail />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
@@ -285,18 +295,6 @@ function App() {
             }
           />
           <Route
-            path="/inventory"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <MyInventory />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
             path="/loot-box"
             element={
               isAuthenticated ? (
@@ -320,8 +318,9 @@ function App() {
               )
             }
           />
+          {/* ═══ CRIME GROUP ═══ */}
           <Route
-            path="/crimes"
+            path="/crime/crimes"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -333,7 +332,19 @@ function App() {
             }
           />
           <Route
-            path="/gta"
+            path="/crime/jail"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Jail />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/crime/gta"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -344,32 +355,13 @@ function App() {
               )
             }
           />
+          {/* Crime redirects */}
+          <Route path="/crimes" element={<Navigate to="/crime/crimes" replace />} />
+          <Route path="/jail" element={<Navigate to="/crime/jail" replace />} />
+          <Route path="/gta" element={<Navigate to="/crime/gta" replace />} />
+          {/* ═══ CARS GROUP ═══ */}
           <Route
-            path="/gta/car/:carId"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <CarProfile />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/view-car"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ViewCar />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/garage"
+            path="/cars/garage"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -381,19 +373,7 @@ function App() {
             }
           />
           <Route
-            path="/sell-cars"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <SellCars />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/buy-cars"
+            path="/cars/buy"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -405,7 +385,50 @@ function App() {
             }
           />
           <Route
-            path="/admin"
+            path="/cars/sell"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <SellCars />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/cars/view"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <ViewCar />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/cars/profile/:carId"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <CarProfile />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          {/* Cars redirects */}
+          <Route path="/garage" element={<Navigate to="/cars/garage" replace />} />
+          <Route path="/buy-cars" element={<Navigate to="/cars/buy" replace />} />
+          <Route path="/sell-cars" element={<Navigate to="/cars/sell" replace />} />
+          <Route path="/view-car" element={<Navigate to="/cars/view" replace />} />
+          <Route path="/gta/car/:carId" element={<CarProfileRedirect />} />
+          {/* ═══ STAFF ROLE GROUP ═══ */}
+          <Route
+            path="/staffrole/admin"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -417,7 +440,19 @@ function App() {
             }
           />
           <Route
-            path="/admin/locked"
+            path="/staffrole/mod"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Admin />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/staffrole/locked"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -429,7 +464,7 @@ function App() {
             }
           />
           <Route
-            path="/admin/users-online"
+            path="/staffrole/users-online"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -440,8 +475,12 @@ function App() {
               )
             }
           />
+          {/* Staff redirects */}
+          <Route path="/admin" element={<Navigate to="/staffrole/admin" replace />} />
+          <Route path="/admin/locked" element={<Navigate to="/staffrole/locked" replace />} />
+          <Route path="/admin/users-online" element={<Navigate to="/staffrole/users-online" replace />} />
           <Route
-            path="/auto-rank"
+            path="/account/autorank"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -454,8 +493,10 @@ function App() {
               )
             }
           />
+          <Route path="/auto-rank" element={<Navigate to="/account/autorank" replace />} />
+          {/* ═══ KILL GROUP ═══ */}
           <Route
-            path="/attack"
+            path="/kill/attack"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -467,31 +508,7 @@ function App() {
             }
           />
           <Route
-            path="/attempts"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Attemps />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/hitlist"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <HitlistPage />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/bodyguards"
+            path="/kill/bodyguards"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -503,7 +520,52 @@ function App() {
             }
           />
           <Route
-            path="/families"
+            path="/kill/hitlist"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <HitlistPage />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/kill/attempts"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Attemps />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/kill/armour-weapons"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <ArmourWeapons />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          {/* Kill redirects */}
+          <Route path="/attack" element={<Navigate to="/kill/attack" replace />} />
+          <Route path="/bodyguards" element={<Navigate to="/kill/bodyguards" replace />} />
+          <Route path="/hitlist" element={<Navigate to="/kill/hitlist" replace />} />
+          <Route path="/attempts" element={<Navigate to="/kill/attempts" replace />} />
+          <Route path="/armour-weapons" element={<Navigate to="/kill/armour-weapons" replace />} />
+          <Route path="/weapons" element={<Navigate to="/kill/armour-weapons" replace />} />
+          <Route path="/armour" element={<Navigate to="/kill/armour-weapons" replace />} />
+          {/* ═══ FAMILY GROUP ═══ */}
+          <Route
+            path="/family/list"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -515,7 +577,7 @@ function App() {
             }
           />
           <Route
-            path="/families/:familyId"
+            path="/family/:familyId"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -526,8 +588,11 @@ function App() {
               )
             }
           />
+          {/* Family redirects */}
+          <Route path="/families" element={<Navigate to="/family/list" replace />} />
+          <Route path="/families/:familyId" element={<FamilyRedirect />} />
           <Route
-            path="/properties"
+            path="/money/property"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -538,6 +603,8 @@ function App() {
               )
             }
           />
+          <Route path="/properties" element={<Navigate to="/money/property" replace />} />
+          <Route path="/property" element={<Navigate to="/money/property" replace />} />
           <Route
             path="/casino"
             element={
@@ -699,18 +766,6 @@ function App() {
             }
           />
           <Route
-            path="/prestige"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Prestige />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
             path="/crack-safe"
             element={
               isAuthenticated ? (
@@ -734,57 +789,9 @@ function App() {
               )
             }
           />
-          <Route path="/gauntlet" element={<Navigate to="/flappygangster" replace />} />
+          {/* ═══ GAMES GROUP ═══ */}
           <Route
-            path="/flappygangster"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Gauntlet />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/boxing"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Boxing />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/boxing/arena/:matchId"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Boxing />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/racing"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Racing />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/snake"
+            path="/games/snake"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -796,11 +803,11 @@ function App() {
             }
           />
           <Route
-            path="/armour-weapons"
+            path="/games/battleships"
             element={
               isAuthenticated ? (
                 <Layout>
-                  <ArmourWeapons />
+                  <Battleships />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
@@ -808,57 +815,7 @@ function App() {
             }
           />
           <Route
-            path="/shooting-range"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ShootingRange />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/shooting-range/play/:weaponId?"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ShootingRange3D />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route path="/weapons" element={<Navigate to="/armour-weapons" replace />} />
-          <Route path="/armour" element={<Navigate to="/armour-weapons" replace />} />
-          <Route
-            path="/leaderboard"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Leaderboard />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/minigames-leaderboard"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <MiniGamesLeaderboard />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/minesweeper"
+            path="/games/minesweeper"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -870,11 +827,108 @@ function App() {
             }
           />
           <Route
-            path="/battleships"
+            path="/games/flappy"
             element={
               isAuthenticated ? (
                 <Layout>
-                  <Battleships />
+                  <Gauntlet />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/games/shooting-range"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <ShootingRange />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/games/shooting-range/play/:weaponId?"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <ShootingRange3D />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/games/leaderboard"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <MiniGamesLeaderboard />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/games/boxing"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Boxing />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/games/boxing/:matchId"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Boxing />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/games/racing"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Racing />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          {/* Games redirects */}
+          <Route path="/snake" element={<Navigate to="/games/snake" replace />} />
+          <Route path="/battleships" element={<Navigate to="/games/battleships" replace />} />
+          <Route path="/minesweeper" element={<Navigate to="/games/minesweeper" replace />} />
+          <Route path="/flappygangster" element={<Navigate to="/games/flappy" replace />} />
+          <Route path="/gauntlet" element={<Navigate to="/games/flappy" replace />} />
+          <Route path="/shooting-range" element={<Navigate to="/games/shooting-range" replace />} />
+          <Route path="/shooting-range/play/:weaponId?" element={<ShootingRangePlayRedirect />} />
+          <Route path="/minigames-leaderboard" element={<Navigate to="/games/leaderboard" replace />} />
+          <Route path="/boxing" element={<Navigate to="/games/boxing" replace />} />
+          <Route path="/boxing/arena/:matchId" element={<BoxingArenaRedirect />} />
+          <Route path="/racing" element={<Navigate to="/games/racing" replace />} />
+          {/* Keep the main leaderboard separate (not a minigame) */}
+          <Route
+            path="/leaderboard"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Leaderboard />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
@@ -965,8 +1019,33 @@ function App() {
               )
             }
           />
+          {/* ═══ SOCIAL GROUP ═══ */}
           <Route
-            path="/forum"
+            path="/social/inbox"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Inbox />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/social/chat/:userId"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <InboxChat />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/social/forum"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -978,23 +1057,11 @@ function App() {
             }
           />
           <Route
-            path="/forum/topic/:topicId"
+            path="/social/forum/:topicId"
             element={
               isAuthenticated ? (
                 <Layout>
                   <ForumTopic />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/inbox"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Inbox />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
@@ -1013,18 +1080,11 @@ function App() {
               )
             }
           />
-          <Route
-            path="/inbox/chat/:userId"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <InboxChat />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+          {/* Social redirects */}
+          <Route path="/inbox" element={<Navigate to="/social/inbox" replace />} />
+          <Route path="/inbox/chat/:userId" element={<InboxChatRedirect />} />
+          <Route path="/forum" element={<Navigate to="/social/forum" replace />} />
+          <Route path="/forum/topic/:topicId" element={<ForumTopicRedirect />} />
           <Route
             path="/dead-alive"
             element={
@@ -1037,8 +1097,9 @@ function App() {
               )
             }
           />
+          {/* ═══ ACCOUNT GROUP ═══ */}
           <Route
-            path="/profile"
+            path="/account/profile"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -1050,7 +1111,55 @@ function App() {
             }
           />
           <Route
-            path="/ip-rules"
+            path="/account/profile/:username"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Profile />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/account/stats"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <MyStats />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/account/inventory"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <MyInventory />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/account/prestige"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Prestige />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/account/settings"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -1061,18 +1170,13 @@ function App() {
               )
             }
           />
-          <Route
-            path="/profile/:username"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Profile />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+          {/* Account redirects */}
+          <Route path="/profile" element={<ProfileRedirect />} />
+          <Route path="/profile/:username" element={<ProfileRedirect />} />
+          <Route path="/my-stats" element={<Navigate to="/account/stats" replace />} />
+          <Route path="/inventory" element={<Navigate to="/account/inventory" replace />} />
+          <Route path="/prestige" element={<Navigate to="/account/prestige" replace />} />
+          <Route path="/ip-rules" element={<Navigate to="/account/settings" replace />} />
         </Routes>
         </Suspense>
         </ThemeProvider>

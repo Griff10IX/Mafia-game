@@ -299,24 +299,24 @@ function SinkingCutscene({ship,cells,onDone}) {
     const shipW = isHoriz ? shipSize * 40 * shipScale : 40 * shipScale;
     const shipH = isHoriz ? 40 * shipScale : shipSize * 40 * shipScale;
     const shipCX = W/2;
-    const shipStartY = H * 0.35;
-    const waterBaseY = H * 0.55;
+    const waterBaseY = H * 0.48; // Water starts near middle
+    const shipStartY = waterBaseY - shipH * 0.3; // Ship starts floating ON the water
 
     // Initialize explosion particles centered on ship
     const initP=[];
-    for (let i=0;i<80;i++) {
+    for (let i=0;i<100;i++) {
       const ox = (Math.random()-0.5) * shipW * 0.8;
       const oy = (Math.random()-0.5) * shipH * 0.8;
       const angle=Math.random()*Math.PI*2;
-      const spd=2+Math.random()*8;
+      const spd=1.5+Math.random()*6;
       const kind=i%6===0?"ember":i%5===0?"smoke":i%8===0?"chunk":"spark";
       initP.push({
         kind,x:shipCX+ox,y:shipStartY+oy,
-        vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd-3-Math.random()*5,
-        life:1,decay:0.006+Math.random()*0.01,
-        size:kind==="smoke"?14+Math.random()*20:kind==="chunk"?5+Math.random()*8:2+Math.random()*4,
+        vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd-2-Math.random()*4,
+        life:1,decay:0.004+Math.random()*0.008, // Slower decay for longer-lasting particles
+        size:kind==="smoke"?16+Math.random()*24:kind==="chunk"?5+Math.random()*8:2+Math.random()*4,
         hue:kind==="smoke"?0:kind==="ember"?8+Math.random()*25:28+Math.random()*18,
-        rot:Math.random()*Math.PI,rotV:(Math.random()-0.5)*0.2
+        rot:Math.random()*Math.PI,rotV:(Math.random()-0.5)*0.15
       });
     }
     stateRef.current.particles=initP;
@@ -435,25 +435,25 @@ function SinkingCutscene({ship,cells,onDone}) {
     function addBubble(x, y) {
       stateRef.current.bubbles.push({
         x, y,
-        vx: (Math.random()-0.5)*0.5,
-        vy: -1-Math.random()*2,
-        size: 2+Math.random()*4,
+        vx: (Math.random()-0.5)*0.4,
+        vy: -0.8-Math.random()*1.5,
+        size: 2+Math.random()*5,
         life: 1,
-        decay: 0.015+Math.random()*0.01
+        decay: 0.01+Math.random()*0.008 // Slower decay
       });
     }
 
     // Add splash particle
     function addSplash(x, y) {
       const angle = -Math.PI/2 + (Math.random()-0.5)*1.2;
-      const spd = 2+Math.random()*4;
+      const spd = 1.5+Math.random()*3;
       stateRef.current.splashes.push({
         x, y,
         vx: Math.cos(angle)*spd,
         vy: Math.sin(angle)*spd,
-        size: 3+Math.random()*5,
+        size: 3+Math.random()*6,
         life: 1,
-        decay: 0.025+Math.random()*0.02
+        decay: 0.018+Math.random()*0.015 // Slower decay
       });
     }
 
@@ -461,11 +461,11 @@ function SinkingCutscene({ship,cells,onDone}) {
     function addSmokeTrail(x, y) {
       stateRef.current.smokeTrails.push({
         x, y,
-        vx: (Math.random()-0.5)*0.3,
-        vy: -0.5-Math.random()*1,
-        size: 8+Math.random()*12,
+        vx: (Math.random()-0.5)*0.25,
+        vy: -0.4-Math.random()*0.8,
+        size: 10+Math.random()*15,
         life: 1,
-        decay: 0.008+Math.random()*0.006
+        decay: 0.006+Math.random()*0.004 // Slower decay
       });
     }
 
@@ -506,8 +506,9 @@ function SinkingCutscene({ship,cells,onDone}) {
       }
       
       // Calculate ship position with smooth physics
-      const sinkProgress = s.phase === "sink" ? easeInOutSine(Math.min(1, (s.t - 1.8) / 4)) : 0;
-      const targetY = shipStartY + sinkProgress * H * 0.5;
+      // Sink progress: starts after explosion (t > 1.5), takes about 3.5 seconds to complete
+      const sinkProgress = s.phase === "sink" ? easeInOutSine(Math.min(1, (s.t - 1.5) / 3.5)) : 0;
+      const targetY = shipStartY + sinkProgress * H * 0.45; // Sink into the water
       
       // Smooth ship movement
       s.shipYVel += (targetY - s.shipY) * 0.02;
@@ -540,8 +541,8 @@ function SinkingCutscene({ship,cells,onDone}) {
       }
       
       // Generate smoke trails
-      if (s.phase === "explode" || (s.phase === "sink" && s.t < 3)) {
-        if (Math.random() < 0.3) {
+      if (s.phase === "explode" || (s.phase === "sink" && s.t < 4)) {
+        if (Math.random() < 0.25) {
           addSmokeTrail(shipCX + (Math.random()-0.5)*shipW*0.5, s.shipY - shipH*0.3);
         }
       }
@@ -651,14 +652,19 @@ function SinkingCutscene({ship,cells,onDone}) {
         ctx.fillRect(0,0,W,H);
       }
       
-      // Phase transitions
-      s.t += 0.025;
+      // Phase transitions - total ~6 seconds
+      // At 60fps: 0.017 per frame = 1.0 per second of real time
+      s.t += 0.017;
       if (s.phase === "explode") {
-        if (s.t > 1.8) s.phase = "sink";
+        // Explosion phase: ~1.5 seconds
+        if (s.t > 1.5) s.phase = "sink";
       } else if (s.phase === "sink") {
-        if (sinkProgress >= 0.95) { s.phase = "fadeout"; s.fadeAlpha = 0; }
+        // Sink phase: ~3.5 seconds (sinkProgress goes from 0 to 1 over t=1.5 to t=5.0)
+        const sinkProg = Math.min(1, (s.t - 1.5) / 3.5);
+        if (sinkProg >= 0.98) { s.phase = "fadeout"; s.fadeAlpha = 0; }
       } else if (s.phase === "fadeout") {
-        s.fadeAlpha = (s.fadeAlpha||0) + 0.025;
+        // Fadeout: ~1 second
+        s.fadeAlpha = (s.fadeAlpha||0) + 0.018;
         if (s.fadeAlpha >= 1) { cancelAnimationFrame(frameRef.current); onDone(); return; }
       }
       

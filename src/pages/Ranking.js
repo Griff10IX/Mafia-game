@@ -12,7 +12,7 @@ export default function Ranking() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Link
-          to="/crimes"
+          to="/crime/crimes"
           data-testid="goto-crimes"
           className={`${styles.panel} rounded-md p-6 transition-smooth group block border border-transparent hover:border-primary/50`}
         >
@@ -28,7 +28,7 @@ export default function Ranking() {
         </Link>
 
         <Link
-          to="/gta"
+          to="/crime/gta"
           data-testid="goto-gta"
           className={`${styles.panel} rounded-md p-6 transition-smooth group block border border-transparent hover:border-primary/50`}
         >
@@ -44,7 +44,7 @@ export default function Ranking() {
         </Link>
 
         <Link
-          to="/jail"
+          to="/crime/jail"
           data-testid="goto-jail"
           className={`${styles.panel} rounded-md p-6 transition-smooth group block border border-transparent hover:border-primary/50`}
         >

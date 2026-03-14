@@ -291,7 +291,7 @@ export default function MyInventory() {
                   <Car size={12} className="text-amber-400 shrink-0" />
                   <span className="text-[11px] font-heading text-foreground">{c.name ?? 'Car'}</span>
                   <span className="text-[9px] text-amber-400">Loot Exclusive</span>
-                  <Link to="/garage" className="ml-auto text-[9px] text-primary hover:underline">View in Garage →</Link>
+                  <Link to="/cars/garage" className="ml-auto text-[9px] text-primary hover:underline">View in Garage →</Link>
                 </div>
               ))}
               {hasSpeakeasy && (
