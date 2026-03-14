@@ -541,6 +541,13 @@ export default function Layout({ children }) {
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
 
+  // Periodic refresh of user data (bullets, cash, etc.) every 60 seconds for Auto Rank updates
+  useEffect(() => {
+    let intervalId;
+    const deferred = setTimeout(() => { intervalId = setInterval(fetchData, 60000); }, 5000);
+    return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
+  }, []); // eslint-disable-line
+
   const fetchFlashNews = async () => {
     try { const res = await api.get('/news/flash'); setFlashNews(res.data?.items || []); } catch { setFlashNews([]); }
   };

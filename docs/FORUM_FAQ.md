@@ -14,22 +14,33 @@ Combat is the heart of the game. Attack other players to steal their cash and ea
 [list]
 [*][color=#888888]Must be in the SAME CITY as your target[/color]
 [*][color=#888888]Need enough bullets based on target's armour level[/color]
-[*][color=#888888]Cannot attack players in hospital or travelling[/color]
-[*][color=#888888]Cooldown between attacks on the same player[/color]
+[*][color=#888888]Cannot attack while in jail or traveling[/color]
+[*][color=#888888]30 second cooldown between attacks[/color]
+[/list]
+
+[b]Attack Success Rate:[/b]
+[list]
+[*][color=#888888]Base success depends on your weapon vs their armour[/color]
+[*][color=#888888]Weapon mastery increases hit chance (up to +10%)[/color]
+[*][color=#888888]Better weapons deal more damage per hit[/color]
+[*][color=#888888]Failed attacks still use bullets[/color]
 [/list]
 
 [b]What Happens When You Kill Someone:[/b]
 [list]
-[*][color=#2ECC71]You gain a % of their cash on hand[/color]
+[*][color=#2ECC71]You gain a % of their cash on hand (10-25%)[/color]
 [*][color=#2ECC71]You gain rank points (RP) based on their level[/color]
-[*][color=#2ECC71]You gain respect[/color]
+[*][color=#2ECC71]You gain respect points[/color]
 [*][color=#2ECC71]Kill is logged and counts toward stats/objectives[/color]
+[*][color=#2ECC71]Chance to loot items from their inventory[/color]
 [/list]
 
 [b]What Happens When You Die:[/b]
 [list]
 [*][color=#FF6B6B]Lose all cash on hand (Swiss Bank is protected)[/color]
-[*][color=#FF6B6B]Lose all properties[/color]
+[*][color=#FF6B6B]Lose all properties and their upgrades[/color]
+[*][color=#FF6B6B]Lose all weapons and armour[/color]
+[*][color=#FF6B6B]Lose all cars in your garage[/color]
 [*][color=#FF6B6B]Your character is permanently dead (permadeath)[/color]
 [*][color=#FF6B6B]Must create new account to play again[/color]
 [/list]
@@ -37,34 +48,41 @@ Combat is the heart of the game. Attack other players to steal their cash and ea
 [color=#FFD700][b]Weapons[/b][/color]
 11 weapons from Brass Knuckles to Tommy Gun. Each weapon is stronger than the last. You MUST own the previous tier before buying the next one.
 
-[b]Weapon Progression:[/b]
+[b]Weapon Progression & Damage:[/b]
 [list]
-[*][color=#888888]Brass Knuckles (Starting)[/color]
-[*][color=#888888]Knife[/color]
-[*][color=#888888]Baseball Bat[/color]
-[*][color=#888888]Crowbar[/color]
-[*][color=#888888]Pistol[/color]
-[*][color=#888888]Revolver[/color]
-[*][color=#888888]Shotgun[/color]
-[*][color=#888888]Rifle[/color]
-[*][color=#888888]SMG[/color]
-[*][color=#888888]AK-47[/color]
-[*][color=#888888]Tommy Gun (Best)[/color]
+[*][color=#666666]Brass Knuckles (Starting) - 1x damage[/color]
+[*][color=#666666]Knife - 1.2x damage[/color]
+[*][color=#777777]Baseball Bat - 1.4x damage[/color]
+[*][color=#777777]Crowbar - 1.6x damage[/color]
+[*][color=#888888]Pistol - 2x damage[/color]
+[*][color=#888888]Revolver - 2.3x damage[/color]
+[*][color=#999999]Shotgun - 2.7x damage[/color]
+[*][color=#AAAAAA]Rifle - 3x damage[/color]
+[*][color=#BBBBBB]SMG - 3.5x damage[/color]
+[*][color=#CCCCCC]AK-47 - 4x damage[/color]
+[*][color=#FFD700]Tommy Gun (Best) - 5x damage[/color]
 [/list]
 
-[b]Weapon Mastery:[/b] Train at the Shooting Range to increase mastery. Higher mastery = fewer bullets needed to kill (up to 10% reduction).
+[b]Weapon Mastery:[/b]
+Train at the Shooting Range to increase mastery. Each weapon has its own mastery level (0-100%).
+[list]
+[*][color=#888888]Higher mastery = fewer bullets needed (up to 10% reduction)[/color]
+[*][color=#888888]Mastery training costs bullets[/color]
+[*][color=#888888]Hit targets in the mini-game to gain mastery XP[/color]
+[*][color=#888888]Mastery persists even if you buy a new weapon[/color]
+[/list]
 
 [color=#FFD700][b]Armour[/b][/color]
 Armour determines how many bullets are needed to kill you. Higher armour = more protection. Must be purchased in order.
 
 [b]Armour Levels:[/b]
 [list]
-[*][color=#888888]Level 1 - ~3 bullets to kill[/color]
-[*][color=#888888]Level 2 - ~5 bullets to kill[/color]
-[*][color=#888888]Level 3 - ~10 bullets to kill[/color]
-[*][color=#888888]Level 4 - ~15 bullets to kill[/color]
-[*][color=#888888]Level 5 - ~25 bullets to kill[/color]
-[*][color=#FFD700]Level 6 - ~40 bullets to kill (Loot Box Exclusive!)[/color]
+[*][color=#888888]Level 1 (Leather Jacket) - ~3 bullets to kill[/color]
+[*][color=#888888]Level 2 (Padded Vest) - ~5 bullets to kill[/color]
+[*][color=#888888]Level 3 (Chain Mail) - ~10 bullets to kill[/color]
+[*][color=#888888]Level 4 (Kevlar Vest) - ~15 bullets to kill[/color]
+[*][color=#888888]Level 5 (Tactical Armor) - ~25 bullets to kill[/color]
+[*][color=#FFD700]Level 6 (Steel Plate Vest) - ~40 bullets to kill (Loot Box Exclusive!)[/color]
 [/list]
 
 [color=#FFD700][b]Hitlist (Bounties)[/b][/color]
@@ -76,6 +94,7 @@ Place bounties on other players. Anyone who kills them collects the reward.
 [*][color=#888888]Hidden option (+50% cost) - your name stays anonymous[/color]
 [*][color=#888888]Buy off your own bounty for 150% of the bounty amount[/color]
 [*][color=#888888]NPC targets available for practice and easy rewards[/color]
+[*][color=#888888]Bounties stack if multiple people add to the same target[/color]
 [/list]
 
 [color=#FFD700][b]Bodyguards[/b][/color]
@@ -83,9 +102,10 @@ Hire bodyguards to protect you. They absorb damage before you do.
 
 [list]
 [*][color=#888888]Start with up to 4 bodyguard slots[/color]
-[*][color=#888888]Buy more slots from the point store[/color]
+[*][color=#888888]Buy more slots from the point store (up to 10 total)[/color]
 [*][color=#888888]Bodyguards die first when you're attacked[/color]
 [*][color=#888888]Human bodyguards need weekly wages[/color]
+[*][color=#888888]NPC bodyguards are cheaper but weaker[/color]
 [/list]
 [/quote]
 
@@ -97,29 +117,119 @@ Hire bodyguards to protect you. They absorb damage before you do.
 [color=#2ECC71][b]Properties[/b][/color]
 Own properties that generate passive income every hour.
 
+[b]Property Types (in order):[/b]
 [list]
-[*][color=#888888]Multiple property types available[/color]
-[*][color=#888888]Upgrade each property to level 5 for max income[/color]
+[*][color=#888888]Pawn Shop - $500/hr base[/color]
+[*][color=#888888]Liquor Store - $1,000/hr base[/color]
+[*][color=#888888]Restaurant - $2,500/hr base[/color]
+[*][color=#888888]Nightclub - $5,000/hr base[/color]
+[*][color=#888888]Casino - $10,000/hr base[/color]
+[*][color=#FFD700]Hotel - $25,000/hr base[/color]
+[/list]
+
+[b]Property Features:[/b]
+[list]
+[*][color=#888888]Upgrade each property to level 5 for max income (+100% at max)[/color]
 [*][color=#888888]Must max current property before buying the next tier[/color]
 [*][color=#888888]Collect daily to build a streak bonus (up to +7%)[/color]
-[*][color=#888888]Reinvest option for +10% income boost[/color]
+[*][color=#888888]Reinvest option for +10% income boost per collection[/color]
+[*][color=#888888]Properties are LOST on death - bank your profits![/color]
 [/list]
 
 [color=#2ECC71][b]Booze Runs[/b][/color]
 Buy booze cheap in one city, travel to another, sell high.
 
+[b]Booze Types (by profit potential):[/b]
 [list]
-[*][color=#888888]6 booze types: Beer, Wine, Whiskey, Vodka, Champagne, Moonshine[/color]
+[*][color=#888888]Beer - Low risk, low reward[/color]
+[*][color=#888888]Wine - Moderate[/color]
+[*][color=#888888]Whiskey - Moderate[/color]
+[*][color=#888888]Vodka - Good profit[/color]
+[*][color=#888888]Champagne - High profit[/color]
+[*][color=#FFD700]Moonshine - Highest profit, highest risk[/color]
+[/list]
+
+[b]Booze Run Tips:[/b]
+[list]
 [*][color=#888888]Prices change every 3 hours - check before you travel![/color]
 [*][color=#888888]Carrying capacity increases with your rank[/color]
-[*][color=#888888]Small risk of getting caught and jailed[/color]
+[*][color=#888888]Buy capacity upgrades from the point store[/color]
+[*][color=#888888]Small risk of getting caught and jailed (5-15% depending on type)[/color]
+[*][color=#888888]Best strategy: buy low in one city, sell high in another[/color]
 [/list]
 
 [color=#2ECC71][b]Banks[/b][/color]
+
+[b]Interest Bank:[/b]
+Lock cash for a period to earn interest:
 [list]
-[*][color=#888888]Interest Bank - Lock cash for 12h to 7 days, earn 1-12% return[/color]
-[*][color=#888888]Swiss Bank - Protected storage, safe when you die (no interest)[/color]
-[*][color=#888888]Quick Trade - Buy/sell points with other players[/color]
+[*][color=#888888]12 hours - 1% return[/color]
+[*][color=#888888]24 hours - 2% return[/color]
+[*][color=#888888]3 days - 5% return[/color]
+[*][color=#888888]7 days - 12% return[/color]
+[/list]
+
+[b]Swiss Bank:[/b]
+[list]
+[*][color=#888888]Protected storage - safe even when you die[/color]
+[*][color=#888888]No interest earned[/color]
+[*][color=#888888]Deposit/withdraw anytime[/color]
+[*][color=#FFD700]THE most important bank - always keep money here![/color]
+[/list]
+
+[b]Quick Trade:[/b]
+[list]
+[*][color=#888888]Buy/sell points with other players[/color]
+[*][color=#888888]Set your own exchange rate[/color]
+[*][color=#888888]Great for converting cash to points or vice versa[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#E67E22]:car: GARAGE & VEHICLES[/color][/b][/size]
+
+[quote]
+[color=#E67E22][b]Car Rarities[/b][/color]
+Cars come in 6 rarity tiers:
+
+[list]
+[*][color=#AAAAAA]Common - Basic vehicles[/color]
+[*][color=#2ECC71]Uncommon - Better models[/color]
+[*][color=#3498DB]Rare - Sports cars[/color]
+[*][color=#9B59B6]Epic - Luxury vehicles[/color]
+[*][color=#F39C12]Legendary - Exotic supercars[/color]
+[*][color=#FFD700]Exclusive - Loot box only, rarest![/color]
+[/list]
+
+[color=#E67E22][b]Travel Speed by Rarity[/b][/color]
+Better cars = faster travel between cities:
+[list]
+[*][color=#AAAAAA]Common: 45 seconds[/color]
+[*][color=#2ECC71]Uncommon: 35 seconds[/color]
+[*][color=#3498DB]Rare: 28 seconds[/color]
+[*][color=#9B59B6]Epic: 23 seconds[/color]
+[*][color=#F39C12]Legendary: 20 seconds[/color]
+[*][color=#FFD700]Exclusive: 15 seconds[/color]
+[/list]
+
+[color=#E67E22][b]Melting Cars for Bullets[/b][/color]
+Convert stolen cars into ammunition:
+[list]
+[*][color=#AAAAAA]Common: ~500 bullets[/color]
+[*][color=#2ECC71]Uncommon: ~1,500 bullets[/color]
+[*][color=#3498DB]Rare: ~4,000 bullets[/color]
+[*][color=#9B59B6]Epic: ~10,000 bullets[/color]
+[*][color=#F39C12]Legendary: ~25,000 bullets[/color]
+[*][color=#FFD700]Exclusive: ~50,000 bullets[/color]
+[/list]
+
+[color=#E67E22][b]Other Car Options[/b][/color]
+[list]
+[*][color=#888888]Scrap for cash - Quick money, less than selling[/color]
+[*][color=#888888]Sell to players - Set your own price[/color]
+[*][color=#888888]Keep for travel - Better cars = faster travel[/color]
+[*][color=#888888]Custom Car (500 pts) - Design your own unique car[/color]
 [/list]
 [/quote]
 
@@ -133,44 +243,57 @@ Commit crimes to earn cash, rank points, and loot box pieces. Higher rank unlock
 
 [b]Crime Types (by rank requirement):[/b]
 [list]
-[*][color=#888888]Pickpocket - Starting crime[/color]
-[*][color=#888888]Mug a Pedestrian[/color]
-[*][color=#888888]Bootlegging[/color]
-[*][color=#888888]Armed Robbery[/color]
-[*][color=#888888]Extortion[/color]
-[*][color=#888888]Jewelry Heist[/color]
-[*][color=#888888]Bank Heist[/color]
-[*][color=#888888]Casino Heist - Highest rewards[/color]
+[*][color=#666666]Pickpocket - Starting crime, low reward[/color]
+[*][color=#777777]Mug a Pedestrian - Rat rank[/color]
+[*][color=#888888]Bootlegging - Thief rank[/color]
+[*][color=#999999]Armed Robbery - Mugger rank[/color]
+[*][color=#AAAAAA]Extortion - Hitman rank[/color]
+[*][color=#BBBBBB]Jewelry Heist - Enforcer rank[/color]
+[*][color=#CCCCCC]Bank Heist - Associate rank[/color]
+[*][color=#FFD700]Casino Heist - Capo rank, highest rewards[/color]
+[/list]
+
+[b]Crime Rewards:[/b]
+[list]
+[*][color=#888888]Cash payout (varies by crime type)[/color]
+[*][color=#888888]Rank points (RP)[/color]
+[*][color=#888888]Loot box pieces (1-3 per crime)[/color]
+[*][color=#888888]Chance for bonus items[/color]
 [/list]
 
 [color=#9B59B6][b]Organised Crime (OC/Heists)[/b][/color]
 Team-based heists requiring 4 players with different roles.
 
+[b]OC Roles:[/b]
 [list]
-[*][color=#888888]4 Roles: Driver, Weapons, Explosives, Hacker[/color]
+[*][color=#E74C3C]Driver - Getaway vehicle[/color]
+[*][color=#3498DB]Weapons Expert - Combat support[/color]
+[*][color=#F39C12]Explosives - Entry and distraction[/color]
+[*][color=#2ECC71]Hacker - Security bypass[/color]
+[/list]
+
+[b]OC Features:[/b]
+[list]
 [*][color=#888888]Upgrade equipment to boost success rate (up to 40%)[/color]
-[*][color=#888888]Failed heists = jail time[/color]
-[*][color=#888888]8 hour cooldown (reducible with point store items)[/color]
+[*][color=#888888]Equipment has 5 upgrade levels each[/color]
+[*][color=#888888]Failed heists = jail time for all participants[/color]
+[*][color=#888888]8 hour cooldown (4h with point store upgrade)[/color]
+[*][color=#888888]Rewards split equally among all 4 participants[/color]
 [/list]
 
 [color=#9B59B6][b]GTA (Car Theft)[/b][/color]
 Steal cars from various locations. Better locations = rarer cars.
 
+[b]Theft Locations:[/b]
 [list]
-[*][color=#888888]Street Parking - Common cars[/color]
-[*][color=#888888]Parking Garage - Uncommon[/color]
-[*][color=#888888]Dealership - Rare[/color]
-[*][color=#888888]Showroom - Epic[/color]
-[*][color=#888888]Private Estate - Legendary[/color]
+[*][color=#AAAAAA]Street Parking - Common cars (80%)[/color]
+[*][color=#2ECC71]Parking Garage - Uncommon (60%), Common (40%)[/color]
+[*][color=#3498DB]Dealership - Rare (50%), Uncommon (40%)[/color]
+[*][color=#9B59B6]Showroom - Epic (40%), Rare (50%)[/color]
+[*][color=#F39C12]Private Estate - Legendary (30%), Epic (60%)[/color]
 [/list]
 
-[b]What to do with stolen cars:[/b]
-[list]
-[*][color=#888888]Melt for bullets[/color]
-[*][color=#888888]Scrap for cash[/color]
-[*][color=#888888]Sell to other players[/color]
-[*][color=#888888]Use for travel (better cars = faster)[/color]
-[/list]
+[b]GTA Cooldown:[/b] 2 minutes between attempts
 [/quote]
 
 [hr]
@@ -181,19 +304,36 @@ Steal cars from various locations. Better locations = rarer cars.
 [color=#E74C3C][b]Getting Jailed[/b][/color]
 Failed crimes, GTAs, or heists can land you in jail.
 
+[b]Jail Times:[/b]
+[list]
+[*][color=#888888]Failed crime: 1-5 minutes[/color]
+[*][color=#888888]Failed GTA: 2-8 minutes[/color]
+[*][color=#888888]Failed OC: 10-30 minutes[/color]
+[*][color=#888888]Snitched on: +50% time added[/color]
+[/list]
+
 [color=#E74C3C][b]Getting Out[/b][/color]
 [list]
 [*][color=#888888]Wait out your sentence[/color]
 [*][color=#888888]Get busted out by another player[/color]
-[*][color=#888888]Pay bail[/color]
+[*][color=#888888]Pay bail (costs increase with sentence length)[/color]
 [*][color=#888888]Set a reward for being busted out[/color]
 [/list]
 
 [color=#E74C3C][b]Busting Others[/b][/color]
-Free players from jail. Success rate based on your stats. Rewards include cash and respect.
+Free players from jail:
+[list]
+[*][color=#888888]Success rate based on your rank and stats[/color]
+[*][color=#888888]Rewards: cash, respect, and gratitude[/color]
+[*][color=#888888]Failed bust = you go to jail too![/color]
+[/list]
 
 [color=#E74C3C][b]Snitching[/b][/color]
-Add time to another player's sentence. Makes enemies!
+[list]
+[*][color=#888888]Add time to another player's sentence[/color]
+[*][color=#888888]Makes enemies - they'll remember![/color]
+[*][color=#888888]Good for revenge or family wars[/color]
+[/list]
 [/quote]
 
 [hr]
@@ -204,21 +344,30 @@ Add time to another player's sentence. Makes enemies!
 [color=#3498DB][b]Cities[/b][/color]
 4 cities available: Chicago, New York, Los Angeles, Detroit
 
+Each city has:
+[list]
+[*][color=#888888]Different booze prices[/color]
+[*][color=#888888]Different players to attack[/color]
+[*][color=#888888]Same shops and features[/color]
+[/list]
+
 [color=#3498DB][b]Travel Time[/b][/color]
 Based on your car rarity:
 [list]
-[*][color=#888888]Common: 45 seconds[/color]
-[*][color=#888888]Uncommon: 35 seconds[/color]
-[*][color=#888888]Rare: 28 seconds[/color]
-[*][color=#888888]Epic: 23 seconds[/color]
-[*][color=#888888]Legendary: 20 seconds[/color]
+[*][color=#AAAAAA]Common: 45 seconds[/color]
+[*][color=#2ECC71]Uncommon: 35 seconds[/color]
+[*][color=#3498DB]Rare: 28 seconds[/color]
+[*][color=#9B59B6]Epic: 23 seconds[/color]
+[*][color=#F39C12]Legendary: 20 seconds[/color]
+[*][color=#FFD700]Exclusive: 15 seconds[/color]
 [/list]
 
 [color=#3498DB][b]Why Travel?[/b][/color]
 [list]
 [*][color=#888888]Attack players in other cities[/color]
-[*][color=#888888]Different booze prices per city[/color]
-[*][color=#888888]Escape enemies[/color]
+[*][color=#888888]Different booze prices per city (arbitrage!)[/color]
+[*][color=#888888]Escape enemies hunting you[/color]
+[*][color=#888888]Join family members for protection[/color]
 [/list]
 [/quote]
 
@@ -229,22 +378,39 @@ Based on your car rarity:
 [quote]
 [color=#F39C12][b]Family Hierarchy[/b][/color]
 [list]
-[*][color=#FFD700]Boss (1) - Full control[/color]
-[*][color=#C0C0C0]Underboss (1) - Second in command[/color]
-[*][color=#CD7F32]Consigliere (1) - Advisor[/color]
-[*][color=#888888]Capo (4) - Crew leaders[/color]
+[*][color=#FFD700]Boss (1) - Full control, can disband family[/color]
+[*][color=#C0C0C0]Underboss (1) - Second in command, can promote/demote[/color]
+[*][color=#CD7F32]Consigliere (1) - Advisor, manages diplomacy[/color]
+[*][color=#888888]Capo (4) - Crew leaders, can recruit[/color]
 [*][color=#888888]Soldier (15) - Made members[/color]
-[*][color=#888888]Associate (30) - Prospects[/color]
+[*][color=#888888]Associate (30) - Prospects, limited access[/color]
 [/list]
 
 [color=#F39C12][b]Rackets[/b][/color]
-Family-owned businesses that generate income. Upgrade to level 5 for max profits.
+Family-owned businesses that generate income:
+[list]
+[*][color=#888888]Each racket can be upgraded to level 5[/color]
+[*][color=#888888]Income goes to family treasury[/color]
+[*][color=#888888]Boss distributes treasury funds[/color]
+[*][color=#888888]Rackets can be stolen in family wars[/color]
+[/list]
 
 [color=#F39C12][b]Family Wars[/b][/color]
-Declare war on other families. Winner gets the loser's treasury and rackets!
+[list]
+[*][color=#888888]Declare war on rival families[/color]
+[*][color=#888888]Kill enemy members to score points[/color]
+[*][color=#888888]War lasts until surrender or wipe[/color]
+[*][color=#888888]Winner takes loser's treasury and rackets[/color]
+[*][color=#888888]Losing family may be disbanded[/color]
+[/list]
 
 [color=#F39C12][b]Crew OC[/b][/color]
-Family-wide heists every 6-8 hours. Everyone participates for shared rewards.
+[list]
+[*][color=#888888]Family-wide heist every 6-8 hours[/color]
+[*][color=#888888]All online members can participate[/color]
+[*][color=#888888]Rewards based on participation level[/color]
+[*][color=#888888]Builds family unity and treasury[/color]
+[/list]
 [/quote]
 
 [hr]
@@ -252,21 +418,29 @@ Family-wide heists every 6-8 hours. Everyone participates for shared rewards.
 [size=1.5][b][color=#E91E63]:dice: CASINOS[/color][/b][/size]
 
 [quote]
-[color=#E91E63][b]Games Available[/b][/color]
+[color=#E91E63][b]Solo Games[/b][/color]
 [list]
-[*][color=#888888]Dice - Pick number and sides, win stake x sides[/color]
-[*][color=#888888]Roulette - Standard casino roulette[/color]
-[*][color=#888888]Blackjack - Classic 21[/color]
-[*][color=#888888]Slots - Spin to win[/color]
-[*][color=#888888]Video Poker - Jacks or Better[/color]
-[*][color=#888888]Horse Racing - Bet on horses[/color]
+[*][color=#888888][b]Dice[/b] - Pick number and sides, win stake x sides[/color]
+[*][color=#888888][b]Roulette[/b] - Standard casino roulette (red/black, numbers)[/color]
+[*][color=#888888][b]Blackjack[/b] - Classic 21, beat the dealer[/color]
+[*][color=#888888][b]Slots[/b] - Spin to win, jackpot available[/color]
+[*][color=#888888][b]Video Poker[/b] - Jacks or Better variant[/color]
+[*][color=#888888][b]Horse Racing[/b] - Bet on horses, various odds[/color]
 [/list]
 
 [color=#E91E63][b]Multiplayer Games[/b][/color]
 [list]
-[*][color=#888888]MDG (Million Dollar Game) - Pot game, winner takes all[/color]
-[*][color=#888888]MP Blackjack - Against other players[/color]
-[*][color=#888888]MP Poker - Texas Hold'em[/color]
+[*][color=#FFD700][b]MDG (Million Dollar Game)[/b][/color] - Pot game, everyone antes, winner takes all
+[*][color=#888888][b]MP Blackjack[/b] - Play against other players[/color]
+[*][color=#888888][b]MP Poker[/b] - Texas Hold'em tournaments[/color]
+[/list]
+
+[color=#E91E63][b]Casino Tips[/b][/color]
+[list]
+[*][color=#888888]Set a budget before playing[/color]
+[*][color=#888888]House edge varies by game[/color]
+[*][color=#888888]Blackjack has best odds if played well[/color]
+[*][color=#888888]Slots are pure luck but have big jackpots[/color]
 [/list]
 [/quote]
 
@@ -275,10 +449,31 @@ Family-wide heists every 6-8 hours. Everyone participates for shared rewards.
 [size=1.5][b][color=#00BCD4]:joystick: MINI-GAMES[/color][/b][/size]
 
 [quote]
+[color=#00BCD4][b]Shooting Range[/b][/color]
+Train weapon mastery by hitting targets:
 [list]
-[*][color=#00BCD4][b]Shooting Range[/b][/color] - Train weapon mastery
-[*][color=#00BCD4][b]Snake (Package Run)[/b][/color] - Collect rewards on board
-[*][color=#00BCD4][b]Minesweeper[/b][/color] - 3 difficulties, scaling rewards
+[*][color=#888888]Costs bullets to play[/color]
+[*][color=#888888]Hit targets to gain mastery XP[/color]
+[*][color=#888888]Each weapon levels separately[/color]
+[*][color=#888888]Max mastery reduces bullet usage by 10%[/color]
+[/list]
+
+[color=#00BCD4][b]Snake (Package Run)[/b][/color]
+Classic snake game with rewards:
+[list]
+[*][color=#888888]Collect packages on the board[/color]
+[*][color=#888888]Avoid walls and your own tail[/color]
+[*][color=#888888]Longer snake = higher score[/color]
+[*][color=#888888]Rewards: cash, RP, loot pieces[/color]
+[/list]
+
+[color=#00BCD4][b]Minesweeper[/b][/color]
+Classic puzzle game:
+[list]
+[*][color=#888888]Easy - 8x8 grid, 10 mines[/color]
+[*][color=#888888]Medium - 16x16 grid, 40 mines[/color]
+[*][color=#888888]Hard - 30x16 grid, 99 mines[/color]
+[*][color=#888888]Higher difficulty = better rewards[/color]
 [/list]
 [/quote]
 
@@ -290,20 +485,47 @@ Family-wide heists every 6-8 hours. Everyone participates for shared rewards.
 [color=#FFD700][b]Ranks (22 Total)[/b][/color]
 Progress from Rat to Godfather VI by earning rank points.
 
+[b]Early Ranks:[/b]
 [list]
 [*][color=#666666]Rat → Lookout → Pickpocket → Thief → Mugger → Dealer[/color]
+[/list]
+
+[b]Mid Ranks:[/b]
+[list]
 [*][color=#888888]Hitman → Assassin → Enforcer → Local Chief[/color]
+[/list]
+
+[b]High Ranks:[/b]
+[list]
 [*][color=#AAAAAA]Associate → Soldier → Capo → Boss[/color]
+[/list]
+
+[b]Elite Ranks:[/b]
+[list]
 [*][color=#CCCCCC]Kingpin → Don[/color]
+[/list]
+
+[b]Godfather Ranks:[/b]
+[list]
 [*][color=#FFD700]Godfather I → II → III → IV → V → VI[/color]
 [/list]
 
 [color=#FFD700][b]Objectives[/b][/color]
+Complete objectives for bonus rewards:
 [list]
-[*][color=#888888]Daily objectives - Reset every 24h[/color]
+[*][color=#888888]Daily objectives - Reset every 24h, easy targets[/color]
 [*][color=#888888]Weekly objectives - Higher targets, better rewards[/color]
-[*][color=#888888]Monthly objectives - Even bigger targets[/color]
-[*][color=#FFD700]Lifetime objectives - Massive goals for huge rewards[/color]
+[*][color=#888888]Monthly objectives - Big challenges, big payouts[/color]
+[*][color=#FFD700]Lifetime objectives - Ultimate goals for massive rewards[/color]
+[/list]
+
+[b]Objective Types:[/b]
+[list]
+[*][color=#888888]Commit X crimes[/color]
+[*][color=#888888]Steal X cars[/color]
+[*][color=#888888]Kill X players[/color]
+[*][color=#888888]Earn X cash[/color]
+[*][color=#888888]Complete X heists[/color]
 [/list]
 [/quote]
 
@@ -314,15 +536,25 @@ Progress from Rat to Godfather VI by earning rank points.
 [quote]
 Collect 100 loot box pieces to open a loot box. Pieces drop from crimes and activities.
 
+[b]How to Get Pieces:[/b]
+[list]
+[*][color=#888888]Crimes - 1-3 pieces per crime[/color]
+[*][color=#888888]GTA - 2-5 pieces per car stolen[/color]
+[*][color=#888888]Heists - 10-20 pieces on success[/color]
+[*][color=#888888]Objectives - Bonus pieces as rewards[/color]
+[/list]
+
 [color=#FFD700][b]Possible Rewards:[/b][/color]
 [list]
-[*][color=#888888]Points and rank points[/color]
-[*][color=#888888]Cash and bullets[/color]
-[*][color=#888888]Cars (including exclusives)[/color]
-[*][color=#888888]Tokens[/color]
-[*][color=#FFD700]Level 6 Armour (Steel Plate Vest) - RARE[/color]
-[*][color=#FFD700]Loot Weapon - RARE[/color]
-[*][color=#FFD700]Loot Car - RARE[/color]
+[*][color=#888888]Points (50-500)[/color]
+[*][color=#888888]Rank points (100-1000)[/color]
+[*][color=#888888]Cash ($10K-$500K)[/color]
+[*][color=#888888]Bullets (1K-25K)[/color]
+[*][color=#888888]Cars (any rarity including Exclusive)[/color]
+[*][color=#888888]Tokens (various types)[/color]
+[*][color=#FFD700]Level 6 Armour (Steel Plate Vest) - ULTRA RARE[/color]
+[*][color=#FFD700]Loot Weapon (special weapon) - ULTRA RARE[/color]
+[*][color=#FFD700]Exclusive Car - ULTRA RARE[/color]
 [/list]
 [/quote]
 
@@ -331,18 +563,73 @@ Collect 100 loot box pieces to open a loot box. Pieces drop from crimes and acti
 [size=1.5][b][color=#8E44AD]:star: POINT STORE[/color][/b][/size]
 
 [quote]
-[color=#8E44AD][b]Key Items[/b][/color]
+[color=#8E44AD][b]Premium Items[/b][/color]
 [list]
 [*][color=#FFD700]Auto Rank (5,000 pts)[/color] - Auto-commit crimes & GTAs while offline
 [*][color=#888888]OC Timer Reduction (300 pts)[/color] - 4h cooldown instead of 8h
-[*][color=#888888]Bullets (100-1,525 pts)[/color] - 5K to 100K bullets
-[*][color=#888888]Custom Car (500 pts)[/color] - Design your own car
-[*][color=#888888]Extra bodyguard slots[/color]
-[*][color=#888888]Booze capacity upgrades[/color]
+[*][color=#888888]Custom Car (500 pts)[/color] - Design your own unique car
+[*][color=#888888]Name Change (200 pts)[/color] - Change your username
+[*][color=#888888]Extra Bodyguard Slots (150 pts each)[/color]
+[*][color=#888888]Booze Capacity Upgrade (100 pts)[/color]
+[/list]
+
+[color=#8E44AD][b]Bullets[/b][/color]
+[list]
+[*][color=#888888]5,000 bullets - 100 pts[/color]
+[*][color=#888888]15,000 bullets - 275 pts[/color]
+[*][color=#888888]30,000 bullets - 500 pts[/color]
+[*][color=#888888]50,000 bullets - 775 pts[/color]
+[*][color=#888888]100,000 bullets - 1,525 pts[/color]
 [/list]
 
 [color=#8E44AD][b]Tokens (1-Hour Boosts)[/b][/color]
-Consumable boosts that stack up to several hours. Types include Crime XP, GTA XP, Melt Bonus, OC Cooldown, Booze Bonus, and more.
+Consumable boosts that stack up to several hours:
+[list]
+[*][color=#888888]Crime XP Token - +25% crime rewards[/color]
+[*][color=#888888]GTA XP Token - +25% GTA rewards[/color]
+[*][color=#888888]Melt Bonus Token - +25% bullets from melting[/color]
+[*][color=#888888]OC Cooldown Token - Reduce OC timer[/color]
+[*][color=#888888]Booze Bonus Token - +25% booze profits[/color]
+[*][color=#888888]Loot Token - +25% loot box pieces[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#1ABC9C]:speech_balloon: SOCIAL FEATURES[/color][/b][/size]
+
+[quote]
+[color=#1ABC9C][b]Forum[/b][/color]
+Community discussion boards:
+[list]
+[*][color=#888888]General Discussion - Chat with other players[/color]
+[*][color=#888888]Announcements - Official game news[/color]
+[*][color=#888888]Help Desk - Get support from staff[/color]
+[*][color=#888888]Family Recruitment - Find a family to join[/color]
+[*][color=#888888]Trading - Buy/sell with other players[/color]
+[/list]
+
+[color=#1ABC9C][b]Direct Messages[/b][/color]
+[list]
+[*][color=#888888]Send private messages to any player[/color]
+[*][color=#888888]Attach GIFs and use smileys[/color]
+[*][color=#888888]Block unwanted contacts[/color]
+[/list]
+
+[color=#1ABC9C][b]Game Chat[/b][/color]
+[list]
+[*][color=#888888]Real-time chat with all online players[/color]
+[*][color=#888888]Family-only mode available[/color]
+[*][color=#888888]Minimizable chat window[/color]
+[/list]
+
+[color=#1ABC9C][b]Profile Customization[/b][/color]
+[list]
+[*][color=#888888]Set a profile picture[/color]
+[*][color=#888888]Write a bio[/color]
+[*][color=#888888]Display your stats and achievements[/color]
+[*][color=#888888]Show your car collection[/color]
+[/list]
 [/quote]
 
 [hr]
@@ -391,25 +678,40 @@ Contact support FIRST if there's any issue with a transaction.
 
 [quote]
 [color=#3498DB][b]Q: How do I make money fast?[/b][/color]
-[color=#AAAAAA]A: Booze runs are the fastest early game. Also do crimes, collect property income, and complete objectives.[/color]
+[color=#AAAAAA]A: Booze runs are the fastest early game. Check prices, buy low in one city, travel, sell high. Also do crimes, collect property income, and complete objectives.[/color]
 
 [color=#3498DB][b]Q: How do I get bullets?[/b][/color]
-[color=#AAAAAA]A: Melt cars from GTA, buy from armouries, or purchase with points.[/color]
+[color=#AAAAAA]A: Melt cars from GTA (legendary cars give the most), buy from armouries with cash, or purchase with points from the store.[/color]
 
 [color=#3498DB][b]Q: What happens when I die?[/b][/color]
-[color=#AAAAAA]A: Permadeath - you lose everything except Swiss Bank cash. Must start a new account.[/color]
+[color=#AAAAAA]A: Permadeath - you lose EVERYTHING except Swiss Bank cash and unused points. Your character is gone forever. Must start a new account.[/color]
 
 [color=#3498DB][b]Q: How do I join a family?[/b][/color]
-[color=#AAAAAA]A: Visit the Families page and apply, or wait for an invite.[/color]
+[color=#AAAAAA]A: Visit the Families page and apply to open families, or wait for an invite. Check the forum for recruitment posts.[/color]
 
 [color=#3498DB][b]Q: How does Auto Rank work?[/b][/color]
-[color=#AAAAAA]A: It automatically commits crimes and GTAs while you're offline based on your settings.[/color]
+[color=#AAAAAA]A: It automatically commits crimes and GTAs while you're offline based on your settings. You configure which crimes/locations it uses. Costs 5,000 points.[/color]
 
 [color=#3498DB][b]Q: Can I get my points back if I die?[/b][/color]
-[color=#AAAAAA]A: Contact support - unused points can be transferred to a new character.[/color]
+[color=#AAAAAA]A: Contact support - UNUSED points can be transferred to a new character. Used items/purchases cannot be refunded.[/color]
 
 [color=#3498DB][b]Q: What's the Interest Bank vs Swiss Bank?[/b][/color]
-[color=#AAAAAA]A: Interest Bank pays interest but money is locked. Swiss Bank protects money when you die but pays no interest.[/color]
+[color=#AAAAAA]A: Interest Bank pays interest but money is locked for a period. Swiss Bank protects money when you die but pays no interest. USE SWISS BANK![/color]
+
+[color=#3498DB][b]Q: How do I report a bug?[/b][/color]
+[color=#AAAAAA]A: Use the Help Desk forum category or message a staff member directly. Include screenshots if possible.[/color]
+
+[color=#3498DB][b]Q: What is a Loot Weapon?[/b][/color]
+[color=#AAAAAA]A: A special weapon only obtainable from loot boxes. It has unique stats and appearance. Very rare![/color]
+
+[color=#3498DB][b]Q: How do tokens work?[/b][/color]
+[color=#AAAAAA]A: Tokens are 1-hour boosts. Activate them and they stack (up to several hours). Effect applies to relevant activities during the duration.[/color]
+
+[color=#3498DB][b]Q: What is weapon mastery?[/b][/color]
+[color=#AAAAAA]A: Each weapon has a mastery level (0-100%) trained at the Shooting Range. Higher mastery = fewer bullets needed to kill (up to 10% reduction).[/color]
+
+[color=#3498DB][b]Q: How do family wars work?[/b][/color]
+[color=#AAAAAA]A: Boss declares war, both families fight by killing each other's members. War ends when one side surrenders or is wiped. Winner takes treasury and rackets.[/color]
 [/quote]
 
 [hr]
@@ -419,12 +721,82 @@ Contact support FIRST if there's any issue with a transaction.
 [quote]
 [list]
 [*][color=#FFD700][b]Always bank your cash[/b][/color] - Swiss Bank protects from death
-[*][color=#FFD700][b]Collect properties daily[/b][/color] - Streak bonuses add up
+[*][color=#FFD700][b]Collect properties daily[/b][/color] - Streak bonuses add up to +7%
 [*][color=#FFD700][b]Join a family ASAP[/b][/color] - Protection and Crew OC rewards
 [*][color=#FFD700][b]Train weapon mastery[/b][/color] - Saves bullets in combat
 [*][color=#FFD700][b]Check booze prices[/b][/color] - They change every 3 hours
 [*][color=#FFD700][b]Don't skip armour tiers[/b][/color] - Must buy in order
 [*][color=#FFD700][b]Melt legendary cars[/b][/color] - Best bullet yield
+[*][color=#FFD700][b]Complete daily objectives[/b][/color] - Easy rewards
+[*][color=#FFD700][b]Use tokens wisely[/b][/color] - Stack them before a big crime spree
+[*][color=#FFD700][b]Never carry too much cash[/b][/color] - You drop it when killed
+[/list]
+[/quote]
+
+[hr]
+
+[center][size=1.8][b][color=#9B59B6]:wink: SMILEYS & FORMATTING :tongue:[/color][/b][/size][/center]
+
+[quote]
+[size=1.4][color=#9B59B6][b]Classic Smileys[/b][/color][/size]
+Type these codes in your posts and messages:
+
+[list]
+[*][color=#888888]:wink: or ;) - Wink[/color] :wink:
+[*][color=#888888]:twisted: or >:) - Evil grin[/color] :twisted:
+[*][color=#888888]:tup: - Thumbs up[/color] :tup:
+[*][color=#888888]:tdown: - Thumbs down[/color] :tdown:
+[*][color=#888888]:tongue: or :P - Tongue out[/color] :tongue:
+[*][color=#888888]:surprised: or :O - Surprised[/color] :surprised:
+[*][color=#888888]:happy: or :} - Happy[/color] :happy:
+[*][color=#888888]:sad: or :( - Sad[/color] :sad:
+[*][color=#888888]:rolleyes: - Rolling eyes[/color] :rolleyes:
+[*][color=#888888]:redface: or :blush: - Embarrassed[/color] :redface:
+[*][color=#888888]:?: - Question[/color] :?:
+[*][color=#888888]:mad: or :angry: - Angry[/color] :mad:
+[*][color=#888888]:lol: or :laugh: - Laughing[/color] :lol:
+[*][color=#888888]:idea: - Idea/lightbulb[/color] :idea:
+[*][color=#888888]:!: - Exclamation[/color] :!:
+[*][color=#888888]:evil: or :devil: - Devil[/color] :evil:
+[*][color=#888888]:eek: or :shock: - Shocked[/color] :eek:
+[*][color=#888888]:cool: or B) - Cool/sunglasses[/color] :cool:
+[*][color=#888888]:confused: or :S - Confused[/color] :confused:
+[*][color=#888888]:grin: or :D - Big grin[/color] :grin:
+[*][color=#888888]:arrow: - Arrow[/color] :arrow:
+[/list]
+
+[size=1.4][color=#9B59B6][b]BBCode Formatting[/b][/color][/size]
+Use these tags to format your posts:
+
+[b]Text Styling:[/b]
+[list]
+[*][color=#888888][b]...[/b] - Bold text[/color]
+[*][color=#888888][i]...[/i] - Italic text[/color]
+[*][color=#888888][u]...[/u] - Underlined text[/color]
+[*][color=#888888][s]...[/s] - Strikethrough text[/color]
+[*][color=#888888][center]...[/center] - Centered text[/color]
+[/list]
+
+[b]Colors & Size:[/b]
+[list]
+[*][color=#888888][color=#FF0000]...[/color] - Colored text (hex codes)[/color]
+[*][color=#888888][size=1.5]...[/size] - Text size (0.5 to 3)[/color]
+[/list]
+
+[b]Structure:[/b]
+[list]
+[*][color=#888888][quote]...[/quote] - Quote box[/color]
+[*][color=#888888][spoiler]...[/spoiler] - Hidden spoiler[/color]
+[*][color=#888888][list][*]item[/list] - Bullet list[/color]
+[*][color=#888888][hr] - Horizontal line[/color]
+[/list]
+
+[b]Media:[/b]
+[list]
+[*][color=#888888][url=link]text[/url] - Clickable link[/color]
+[*][color=#888888][img]url[/img] - Image[/color]
+[*][color=#888888][gif]url[/gif] - GIF image[/color]
+[*][color=#888888][ytube]video_id[/ytube] - YouTube embed[/color]
 [/list]
 [/quote]
 
