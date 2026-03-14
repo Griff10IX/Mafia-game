@@ -1532,30 +1532,56 @@ async def _create_automated_race(slot_label: str) -> Optional[str]:
     )
     profiles = await profiles_cursor.to_list(MAX_RACING_TEAMS)
     participants = []
+    default_racing_car = RACING_CARS[0] if RACING_CARS else {"id": "model_t", "name": "Ford Model T Racer"}
+    
     for prof in profiles:
         uid = prof.get("user_id")
         if not uid:
             continue
         user = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
         username = (user or {}).get("username") or "?"
+        
+        # Find or create a car for the user
         car_id = prof.get("selected_racing_car_id")
-        if not car_id:
+        car_doc = None
+        if car_id:
+            car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": car_id}, {"_id": 0})
+        if not car_doc:
             car_doc = await db.user_racing_cars.find_one({"user_id": uid}, {"_id": 0})
-            if not car_doc:
-                continue
-            car_id = car_doc.get("id")
-        car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": car_id}, {"_id": 0})
-        if not car_doc or float(car_doc.get("engine_wear") or 0) >= ENGINE_WEAR_MAX:
-            continue
+        if not car_doc:
+            # Auto-create a default car for the user so they can participate
+            new_car_id = str(uuid.uuid4())
+            car_doc = {
+                "id": new_car_id,
+                "user_id": uid,
+                "racing_car_id": default_racing_car.get("id"),
+                "engine_wear": 0,
+                "created_at": _now_iso(),
+            }
+            await db.user_racing_cars.insert_one(car_doc)
+            await db.racing_profiles.update_one({"user_id": uid}, {"$set": {"selected_racing_car_id": new_car_id}})
+        
+        # Auto-repair engine if at 100% wear for automated races
+        if float(car_doc.get("engine_wear") or 0) >= ENGINE_WEAR_MAX:
+            await db.user_racing_cars.update_one({"user_id": uid, "id": car_doc.get("id")}, {"$set": {"engine_wear": 50}})
+            car_doc["engine_wear"] = 50
+        
+        # Find available tyres or give free medium tyres
         compound = "medium"
-        for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard"):
-            if prof.get(key) is not None and int(prof.get(key) or 0) >= 1:
+        has_tyres = False
+        for key in ("tyre_stock_medium", "tyre_stock_soft", "tyre_stock_hard"):
+            stock = int(prof.get(key) or 0)
+            if stock >= 1:
                 compound = key.replace("tyre_stock_", "")
+                has_tyres = True
                 break
-        stock = int(prof.get(f"tyre_stock_{compound}") or 0)
-        if stock < 1:
-            continue
-        car_name = next((c.get("name") for c in RACING_CARS if c.get("id") == car_doc.get("racing_car_id")), "?")
+        
+        if not has_tyres:
+            # Give 3 free medium tyres for automated race participation
+            await db.racing_profiles.update_one({"user_id": uid}, {"$inc": {"tyre_stock_medium": 3}})
+            compound = "medium"
+        
+        car_name = next((c.get("name") for c in RACING_CARS if c.get("id") == car_doc.get("racing_car_id")), default_racing_car.get("name", "?"))
         participants.append({
             "user_id": uid,
             "username": username,
@@ -1565,6 +1591,7 @@ async def _create_automated_race(slot_label: str) -> Optional[str]:
             "is_npc": False,
             "tyre_compound": compound,
         })
+    
     if len(participants) < MIN_GRID:
         return None
     track = random.choice(TRACKS)

@@ -527,6 +527,42 @@ export default function Racing() {
         </div>
       )}
 
+      {/* ─── AUTOMATED RACE REPLAY ─── */}
+      {activeRace?.state === "replay" && (
+        <div className="p-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-primary)]">
+              Replay — {activeRace.track_name} {activeRace.weather_name && `(${activeRace.weather_name})`}
+            </p>
+            <button
+              type="button"
+              onClick={() => setActiveRace(null)}
+              className="text-[10px] font-heading px-2 py-1 rounded border border-[var(--noir-border)] hover:bg-[var(--noir-surface)] touch-manipulation"
+            >
+              Close
+            </button>
+          </div>
+          <CircuitRaceView
+            mode="replay"
+            raceId={activeRace.id}
+            participants={activeRace.participants || []}
+            qualifying_order={activeRace.qualifying_order || activeRace.result_order || []}
+            resultOrder={activeRace.result_order || []}
+            lap_results={activeRace.lap_results || []}
+            pit_stops={activeRace.pit_stops || []}
+            tire_wear_after_lap={activeRace.tire_wear_after_lap || {}}
+            laps={activeRace.laps || 3}
+            weather={activeRace.weather || "clear"}
+            weather_name={activeRace.weather_name}
+            initialTrackId={TRACK_ID_MAP[activeRace.track_id] || "chicago"}
+            playerCarName={playerCarName}
+            playerPitLevel={profile?.pit_level ?? 0}
+            currentUserId={profile?.user_id}
+            onReset={() => setActiveRace(null)}
+          />
+        </div>
+      )}
+
       {/* ─── POST-RACE RESULTS ─── */}
       {activeRace?.state === "completed" && (
         <div className={styles.panel + " m-3 overflow-hidden"}>
@@ -604,6 +640,13 @@ export default function Racing() {
                         </span>
                       )}
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveRace({ ...latestAutomated, state: "replay" })}
+                      className={styles.btnPrimary + " text-[10px] px-3 py-1.5 mb-2 touch-manipulation"}
+                    >
+                      Watch Replay
+                    </button>
                     <Collapsible label="Latest result" count={(latestAutomated.result_order || []).length} defaultOpen={false}>
                       <div className="p-2 space-y-0.5">
                         {(latestAutomated.result_order || []).slice(0, 5).map((id, i) => {
