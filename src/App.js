@@ -209,7 +209,7 @@ function App() {
           />
           <Route path="/dashboard" element={<Navigate to="/account/dashboard" replace />} />
           <Route
-            path="/users-online"
+            path="/game/users-online"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -220,6 +220,7 @@ function App() {
               )
             }
           />
+          <Route path="/users-online" element={<Navigate to="/game/users-online" replace />} />
           {/* ═══ MONEY GROUP ═══ */}
           <Route
             path="/money/bank"
@@ -287,7 +288,7 @@ function App() {
           />
           <Route path="/objectives" element={<Navigate to="/account/objectives" replace />} />
           <Route
-            path="/missions"
+            path="/account/missions"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -298,6 +299,7 @@ function App() {
               )
             }
           />
+          <Route path="/missions" element={<Navigate to="/account/missions" replace />} />
           <Route
             path="/money/loot-box"
             element={

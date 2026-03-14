@@ -530,7 +530,7 @@ export default function LootBox() {
           <div className="space-y-1.5 min-w-0">
             {/* Header */}
             <div className="relative lb-fade-in">
-              <p className="text-[9px] text-zinc-500 font-heading italic">Earn pieces from <Link to="/missions" className="text-primary underline">the Consigliere's Ledger</Link>. One hundred pieces open a box. Exclusives are scarce.</p>
+              <p className="text-[9px] text-zinc-500 font-heading italic">Earn pieces from <Link to="/account/missions" className="text-primary underline">the Consigliere's Ledger</Link>. One hundred pieces open a box. Exclusives are scarce.</p>
             </div>
 
             {/* Chest card */}

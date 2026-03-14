@@ -3190,7 +3190,7 @@ export default function Admin() {
             <div className="space-y-2">
               {[
                 '/dashboard',
-                '/users-online',
+                '/game/users-online',
                 '/bank',
                 '/stock-market',
                 '/stats',
@@ -3198,7 +3198,7 @@ export default function Admin() {
                 '/jail',
                 '/organised-crime',
                 '/objectives',
-                '/missions',
+                '/account/missions',
                 '/inventory',
                 '/loot-box',
                 '/ranking',

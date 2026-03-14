@@ -100,7 +100,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       items: [
         { path: '/account/dashboard', label: 'Dashboard' },
         { path: '/account/objectives', label: 'Objectives' },
-        { path: '/missions', label: 'Missions' },
+        { path: '/account/missions', label: 'Missions' },
         { path: '/account/inventory', label: 'My Inventory' },
         { path: '/money/loot-box', label: 'Loot Box' },
         { path: '/account/profile', label: 'Edit Profile' },
@@ -130,7 +130,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/game/help-desk', label: 'Help Desk' },
         { path: '/money/booze-run', label: 'Booze Run' },
         { path: '/money/racket', label: 'Racket' },
-        { path: '/users-online', label: 'Users Online' },
+        { path: '/game/users-online', label: 'Users Online' },
         { path: '/game/family/list', label: 'Families' },
         { path: '/game/daily-rewards', label: 'Daily Rewards' },
         { path: '/game/leaderboard', label: 'Leaderboard' },
@@ -682,9 +682,9 @@ export default function Layout({ children }) {
   const isCategorizedClassic = sidebarLayout === 'categorized_classic';
   const PATH_TO_CATEGORY = isCategorizedClassic
     ? {
-        '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/missions': 'information',
+        '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/account/missions': 'information',
         '/account/profile': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
-        '/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information', '/game/leaderboard': 'information',
+        '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information', '/game/leaderboard': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
         '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
@@ -695,9 +695,9 @@ export default function Layout({ children }) {
         '/mini-games': 'minigames',
       }
     : {
-        '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/missions': 'information',
+        '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/account/missions': 'information',
         '/account/inventory': 'information', '/money/loot-box': 'information', '/account/profile': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
-        '/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information',
+        '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
         '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
@@ -723,7 +723,7 @@ export default function Layout({ children }) {
     { path: '/account/dashboard', icon: Home, label: 'Dashboard' },
     ...(needsEmailVerification ? [{ path: '/verify-email', icon: Mail, label: 'Verify email' }] : []),
     { path: '/account/objectives', icon: ListChecks, label: 'Objectives' },
-    { path: '/missions', icon: Map, label: 'Missions' },
+    { path: '/account/missions', icon: Map, label: 'Missions' },
     { path: '/account/inventory', icon: Package, label: 'My Inventory' },
     { path: '/money/loot-box', icon: Gift, label: 'Loot Box' },
     { path: '/account/profile', icon: User, label: 'Edit Profile' },
@@ -741,7 +741,7 @@ export default function Layout({ children }) {
     ...(hasCasinoOrProperty ? [{ path: '/my-properties', icon: Building2, label: 'My Properties' }] : []),
     { path: '/money/booze-run', icon: Wine, label: 'Booze Run' },
     { path: '/money/racket', icon: Building2, label: 'Racket' },
-    { path: '/users-online', icon: Users, label: 'Users Online' },
+    { path: '/game/users-online', icon: Users, label: 'Users Online' },
     { path: '/social/forum', icon: MessageSquare, label: 'Forum' },
     { path: '/social/inbox', icon: Mail, label: 'Inbox', badge: unreadCount },
     { path: '/game/help-desk', icon: HelpCircle, label: 'Help Desk', badge: helpDeskOpenCount },
