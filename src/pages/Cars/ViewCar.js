@@ -56,7 +56,7 @@ export default function ViewCar() {
       <div className={styles.pageContent}>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
           <Car className="text-primary/40" size={48} />
-          <p className="text-mutedForeground font-heading">No car id in URL. Use viewcar&amp;id=... to view a car.</p>
+          <p className="text-mutedForeground font-heading">No car id in URL. Use /view-car?id=... to view a car.</p>
           <Link to="/cars/garage" className="bg-zinc-800/50 border border-primary/30 text-primary font-heading text-xs px-3 py-1.5 rounded flex items-center gap-1.5 hover:bg-zinc-700/50 transition-all">
             <ArrowLeft size={14} /> Back to Garage
           </Link>
