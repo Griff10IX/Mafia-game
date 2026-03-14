@@ -7,7 +7,6 @@
 # - Seasons last 2 months: after a season, total reset of everything racing (teams cleared, all progress reset).
 from datetime import datetime, timezone, timedelta
 import asyncio
-import json
 import os
 import random
 import uuid
@@ -16,16 +15,6 @@ from fastapi import Depends, HTTPException, Header
 from pydantic import BaseModel
 
 from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, send_notification
-
-
-def _dlog(msg: str, data: dict, hyp: str = ""):
-    try:
-        p = os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug-d94f2d.log")
-        with open(p, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId": "d94f2d", "location": "racing.py", "message": msg, "data": data, "hypothesisId": hyp, "timestamp": datetime.now(timezone.utc).isoformat()}) + "\n")
-    except Exception:
-        pass
-
 
 # ---------- Constants ----------
 def _now_iso() -> str:
@@ -121,7 +110,8 @@ CREW_EXTRA_TYPES = [
     ("morale", 2, 32000),
     ("tactician", 2, 30000),
 ]
-RACING_TEAM_CREATE_COST = 25_000_000  # $25M to create a racing team (name + colour) = 25_000_000  # $25M to create a racing team (name + colour)
+RACING_TEAM_CREATE_COST = 25_000_000  # $25M to create a racing team (name + colour)
+CREW_BANK_START = 50_000  # Starting crew bank when creating a team
 MAX_RACING_TEAMS = 18  # Only 18 teams total; kill a team owner to take their team
 MAX_CAR_UPGRADE_LEVEL = 4  # engine, tires
 MAX_AERO_LEVEL = 2
@@ -571,11 +561,14 @@ def _run_race_simulation_laps(
                 return float(c.get("wear_mult", 1.0))
         return 1.0
 
-    def _compound_grip_mult(entrant: dict) -> float:
+    def _compound_grip_mult(entrant: dict, is_wet: bool = False) -> float:
         cid = (entrant.get("tyre_compound") or "medium").lower()
         for c in TYRE_COMPOUNDS:
             if c.get("id") == cid:
-                return float(c.get("grip_mult", 1.0))
+                mult = float(c.get("grip_mult", 1.0))
+                if is_wet and c.get("wet_grip_bonus"):
+                    mult += float(c.get("wet_grip_bonus", 0))
+                return mult
         return 1.0
 
     for lap in range(1, num_laps + 1):
@@ -638,7 +631,8 @@ def _run_race_simulation_laps(
             weight_penalty = max(0.0, base_weight_penalty - 0.01 * fuel_lvl)  # fuel 0..2 reduces penalty up to 2%
             fuel_weight_mult = 1.0 + weight_penalty
             tire_factor = max(0.3, tire_wear[eid] / 100.0)
-            compound_mult = _compound_grip_mult(e)
+            is_wet = weather_id in ("rain", "snow")
+            compound_mult = _compound_grip_mult(e, is_wet=is_wet)
             combined = (speed_val * (0.7 + 0.3 * grip_val) * tire_factor * speed_mult * compound_mult) / fuel_weight_mult
             if eid in pitting:
                 combined *= PIT_PENALTY_FACTOR
@@ -1178,10 +1172,10 @@ async def create_racing_team(body: CreateRacingTeamRequest, current_user: dict =
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -RACING_TEAM_CREATE_COST}})
     await db.racing_profiles.update_one(
         {"user_id": current_user["id"]},
-        {"$set": {"team_name": name, "team_color": color}},
+        {"$set": {"team_name": name, "team_color": color, "crew_bank": CREW_BANK_START}},
         upsert=True,
     )
-    return {"message": "Racing team created", "team_name": name, "team_color": color}
+    return {"message": "Racing team created", "team_name": name, "team_color": color, "crew_bank": CREW_BANK_START}
 
 
 async def create_race(body: CreateRaceRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -1472,7 +1466,6 @@ async def _start_race_internal(race_id: str) -> dict:
     # Deterministic qualifying so grid is stable and fair for a given race_id.
     with _SeededRandom(f"qualifying:{race_id}"):
         qualifying_order, qualifying_results = _run_qualifying(participants, profile_by_user, upgrades_map, track, weather_id)
-    _dlog("racing_qualifying", {"race_id": race_id, "qualifying_order": qualifying_order, "track_id": race.get("track_id"), "laps": race.get("laps"), "weather_id": weather_id}, "R")
     id_to_p = {(p.get("user_id") or p.get("id")): p for p in participants}
     participants = [id_to_p[eid] for eid in qualifying_order if eid in id_to_p]
     for p in participants:
@@ -1829,7 +1822,6 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
             participants, profile_by_user, upgrades_map, num_laps, weather_id=weather_id, engine_wear_by_entrant=engine_wear_by_entrant
         )
     dnf_ids: List[str] = list(sim_dnf_ids or [])
-    _dlog("racing_complete", {"race_id": race_id, "result_order": result_order, "lap1_order": lap_results[0] if lap_results else None, "last_lap_order": lap_results[-1] if lap_results else None, "dnf_ids": dnf_ids, "num_laps": num_laps}, "R")
     pot = entry_fee * len(participants) * REWARD_POOL_PCT
     if pot < RACING_BASE_CASH_POOL:
         pot = RACING_BASE_CASH_POOL
