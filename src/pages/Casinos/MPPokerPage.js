@@ -21,6 +21,7 @@ export default function MPPokerPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createMaxPlayers, setCreateMaxPlayers] = useState(6);
   const [createBuyIn, setCreateBuyIn] = useState('100000');
+  const [createSmallBlind, setCreateSmallBlind] = useState('');
   const [createExtraPrize, setCreateExtraPrize] = useState('');
   const [creating, setCreating] = useState(false);
   const [vsDealerOpen, setVsDealerOpen] = useState(false);
@@ -67,6 +68,7 @@ export default function MPPokerPage() {
       const res = await api.post('/casino/mp-poker/games', {
         max_players: Math.max(2, Math.min(9, createMaxPlayers)),
         buy_in: buyIn,
+        small_blind: parseInt(String(createSmallBlind).replace(/\D/g, ''), 10) || 0,
         extra_prize: parseInt(String(createExtraPrize).replace(/\D/g, ''), 10) || 0,
       });
       await refreshUser();
@@ -206,6 +208,11 @@ export default function MPPokerPage() {
                 <div className="flex items-center gap-2">
                   <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Buy-in ($)</label>
                   <FormattedNumberInput value={createBuyIn} onChange={setCreateBuyIn} placeholder="100,000"
+                    className="flex-1 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Small Blind</label>
+                  <FormattedNumberInput value={createSmallBlind} onChange={setCreateSmallBlind} placeholder="Auto (buy-in/100)"
                     className="flex-1 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
                 </div>
                 <div className="flex items-center gap-2">

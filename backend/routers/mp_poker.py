@@ -232,6 +232,7 @@ class PokerCreateRequest(BaseModel):
     max_players: int = 6
     buy_in: int = 100_000
     extra_prize: int = 0
+    small_blind: int = 0
 
 
 def register(router):
@@ -673,7 +674,10 @@ def register(router):
             raise HTTPException(status_code=400, detail="Insufficient funds")
         game_id = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
-        small_blind = max(buy_in // 100, 1)
+        if request.small_blind > 0:
+            small_blind = max(1, min(buy_in // 2, request.small_blind))
+        else:
+            small_blind = max(buy_in // 100, 1)
         big_blind = small_blind * 2
         players = [{
             "user_id": uid,

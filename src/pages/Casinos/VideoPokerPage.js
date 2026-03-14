@@ -590,7 +590,7 @@ export default function VideoPoker() {
                       canHold={isDealPhase}
                       index={i}
                       dealing={dealing}
-                      revealed={!isDealPhase}
+                      revealed={true}
                     />
                   ))}
                 </div>
