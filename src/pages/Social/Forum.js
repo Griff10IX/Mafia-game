@@ -391,14 +391,14 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
 };
 
 // Topic row for desktop with hover preview. canStickyImportant = admin/mod (sticky, important, lock). canLock = admin/mod/hdo (lock only for HDO).
-const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updating, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId }) => {
+const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updating, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId, censorProfanity }) => {
   const [showPreview, setShowPreview] = useState(false);
   const showFlagControls = canStickyImportant || canLock;
   const isMyTopic = meUsername && topic.author_username === meUsername;
   const showDesignerSubmit = designerCompId && isMyTopic;
   const alreadySubmitted = showDesignerSubmit && (myEntryTopicIds || []).includes(topic.id);
   const isSubmitting = submittingTopicId === topic.id;
-  const titleHtml = parseForumContent(topic.title || '');
+  const titleHtml = parseForumContent(topic.title || '', { censorProfanity });
 
   return (
     <div 
@@ -479,13 +479,13 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
 };
 
 // Topic card for mobile. canStickyImportant = admin/mod, canLock = admin/mod/hdo.
-const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId }) => {
+const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId, censorProfanity }) => {
   const showFlagControls = canStickyImportant || canLock;
   const isMyTopic = meUsername && topic.author_username === meUsername;
   const showDesignerSubmit = designerCompId && isMyTopic;
   const alreadySubmitted = showDesignerSubmit && (myEntryTopicIds || []).includes(topic.id);
   const isSubmitting = submittingTopicId === topic.id;
-  const titleHtml = parseForumContent(topic.title || '');
+  const titleHtml = parseForumContent(topic.title || '', { censorProfanity });
 
   return (
   <Link to={`/forum/topic/${topic.id}`} className="sm:hidden block px-3 py-2 f-row transition-colors active:bg-zinc-800/50">
@@ -1336,6 +1336,7 @@ export default function Forum() {
                       meUsername={user?.username}
                       onSubmitToComp={() => {}}
                       submittingTopicId={null}
+                      censorProfanity={user?.censor_profanity}
                     />
                     <TopicRowMobile
                       topic={t}
@@ -1348,6 +1349,7 @@ export default function Forum() {
                       meUsername={user?.username}
                       onSubmitToComp={() => {}}
                       submittingTopicId={null}
+                      censorProfanity={user?.censor_profanity}
                     />
                   </div>
                 ))}
@@ -1374,6 +1376,7 @@ export default function Forum() {
                   meUsername={user?.username}
                   onSubmitToComp={() => {}}
                   submittingTopicId={null}
+                  censorProfanity={user?.censor_profanity}
                 />
                 <TopicRowMobile
                   topic={t}
@@ -1386,6 +1389,7 @@ export default function Forum() {
                   meUsername={user?.username}
                   onSubmitToComp={() => {}}
                   submittingTopicId={null}
+                  censorProfanity={user?.censor_profanity}
                 />
               </div>
             ))}

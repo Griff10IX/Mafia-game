@@ -852,6 +852,22 @@ def register(router):
             "hide_jailbusts_on_profile": bool(doc.get("hide_jailbusts_on_profile", False)),
         }
 
+    @router.get("/profile/censor-profanity")
+    async def get_censor_profanity(current_user: dict = Depends(get_current_user)):
+        """Get user's profanity filter preference."""
+        return {"censor_profanity": bool(current_user.get("censor_profanity", False))}
+
+    @router.patch("/profile/censor-profanity")
+    async def update_censor_profanity(
+        current_user: dict = Depends(get_current_user),
+        censor_profanity: Optional[bool] = Body(None, embed=True),
+    ):
+        """Enable/disable profanity filter. When enabled, swear words are replaced with ***."""
+        if censor_profanity is None:
+            return {"message": "No change", "censor_profanity": bool(current_user.get("censor_profanity", False))}
+        await db.users.update_one({"id": current_user["id"]}, {"$set": {"censor_profanity": censor_profanity}})
+        return {"message": "Profanity filter updated", "censor_profanity": censor_profanity}
+
     @router.patch("/profile/mod-online-color")
     async def update_mod_online_color(
         current_user: dict = Depends(get_current_user),

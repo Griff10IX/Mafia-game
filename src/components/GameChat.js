@@ -5,6 +5,7 @@ import api from '../utils/api';
 import { getApiErrorMessage } from '../utils/api';
 import { toast } from 'sonner';
 import GifPicker from './GifPicker';
+import { filterProfanity } from '../utils/profanityFilter';
 
 const POLL_INTERVAL_MS = 5000;
 const MAX_MESSAGE_LEN = 500;
@@ -81,7 +82,7 @@ function formatChatTime(iso) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function GameChat({ myUserId, onCloseSidebar }) {
+export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = false }) {
   const [messages, setMessages] = useState([]);
   const [prefs, setPrefs] = useState({ family_only: false, blocked_user_ids: [], block_list_with_names: [], in_family: false, muted: false, muted_until: null });
   const [loading, setLoading] = useState(true);
@@ -373,7 +374,7 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
                     </span>
                   )}
                   {m.message && m.message !== '(GIF)' && (
-                    <span style={{ color: 'rgba(255,255,255,0.68)' }}>{m.message}</span>
+                    <span style={{ color: 'rgba(255,255,255,0.68)' }}>{censorProfanity ? filterProfanity(m.message) : m.message}</span>
                   )}
                 </div>
 

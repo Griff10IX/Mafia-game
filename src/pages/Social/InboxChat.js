@@ -4,6 +4,7 @@ import { ArrowLeft, Send } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
+import { filterProfanity } from '../../utils/profanityFilter';
 import styles from '../../styles/noir.module.css';
 
 function formatTime(dateString) {
@@ -77,8 +78,15 @@ export default function InboxChat() {
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
+  const [censorProfanity, setCensorProfanity] = useState(false);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
+
+  useEffect(() => {
+    api.get('/profile/censor-profanity').then((res) => {
+      setCensorProfanity(res.data?.censor_profanity === true);
+    }).catch(() => {});
+  }, []);
 
   const insertEmoji = (emoji) => setReplyText((t) => t + emoji);
 
@@ -198,7 +206,7 @@ export default function InboxChat() {
                 }`}
               >
                 <p className="text-sm font-heading whitespace-pre-wrap break-words">
-                  {msg.message}
+                  {censorProfanity ? filterProfanity(msg.message) : msg.message}
                 </p>
                 {msg.gif_url && (
                   <img

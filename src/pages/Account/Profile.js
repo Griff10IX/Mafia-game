@@ -912,6 +912,8 @@ export default function Profile() {
   const [hideJailbustsOnProfile, setHideJailbustsOnProfile] = useState(false);
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [savingAutoplay, setSavingAutoplay] = useState(false);
+  const [censorProfanity, setCensorProfanity] = useState(false);
+  const [savingProfanity, setSavingProfanity] = useState(false);
   const [modOnlineColor, setModOnlineColor] = useState('#1e3a5f');
   const [savingModColor, setSavingModColor] = useState(false);
   const [bannerTextEdit, setBannerTextEdit] = useState('');
@@ -1058,6 +1060,9 @@ export default function Profile() {
       setProfileAutoplayVideo(me?.profile_autoplay_video !== false);
       setHideKillsOnProfile(profile?.hide_kills_on_profile === true);
       setHideJailbustsOnProfile(profile?.hide_jailbusts_on_profile === true);
+      api.get('/profile/censor-profanity').then((res) => {
+        setCensorProfanity(res.data?.censor_profanity === true);
+      }).catch(() => {});
     }
   }, [isMe, viewPublic, profile, profile?.hide_kills_on_profile, profile?.hide_jailbusts_on_profile, me?.profile_autoplay_video]);
 
@@ -1115,6 +1120,20 @@ export default function Profile() {
       toast.error(e.response?.data?.detail || 'Failed to save');
     } finally {
       setSavingAutoplay(false);
+    }
+  };
+
+  const saveProfanityFilter = async () => {
+    setSavingProfanity(true);
+    try {
+      await api.patch('/profile/censor-profanity', { censor_profanity: censorProfanity });
+      toast.success('Profanity filter saved');
+      const meRes = await api.get('/auth/me');
+      setMe(meRes.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save');
+    } finally {
+      setSavingProfanity(false);
     }
   };
 
@@ -1472,6 +1491,17 @@ export default function Profile() {
                     </button>
                   </div>
                   <button type="button" onClick={saveVideoAutoplay} disabled={savingAutoplay} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingAutoplay ? 'Saving…' : 'Save'}</button>
+                </div>
+                <div>
+                  <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Profanity filter</h3>
+                  <p className="text-xs text-mutedForeground mb-2">Replace swear words with *** in chat, forum, and messages.</p>
+                  <div className="flex items-center justify-between gap-3 py-1">
+                    <span className="text-sm text-foreground">Censor profanity</span>
+                    <button type="button" role="switch" aria-checked={censorProfanity} disabled={savingProfanity} onClick={() => setCensorProfanity((v) => !v)} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${censorProfanity ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingProfanity ? 'opacity-60' : ''}`}>
+                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${censorProfanity ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                  <button type="button" onClick={saveProfanityFilter} disabled={savingProfanity} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingProfanity ? 'Saving…' : 'Save'}</button>
                 </div>
               </div>
               <div className="prof-art-line text-primary mx-3" />

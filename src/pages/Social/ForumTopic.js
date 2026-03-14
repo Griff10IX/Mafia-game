@@ -507,7 +507,7 @@ export default function ForumTopic() {
               <h1
                 className="text-lg sm:text-xl font-heading font-bold prof-banner-content"
                 style={topic.title_color ? { color: topic.title_color } : { color: 'var(--noir-primary)' }}
-                dangerouslySetInnerHTML={{ __html: parseForumContent(topic.title || '') }}
+                dangerouslySetInnerHTML={{ __html: parseForumContent(topic.title || '', { censorProfanity: user?.censor_profanity }) }}
               />
               {topic.is_locked && <Lock size={14} className="text-red-400" />}
             </div>
@@ -693,7 +693,7 @@ export default function ForumTopic() {
           ) : (
             <div
               className="forum-content text-sm text-foreground leading-relaxed break-words"
-              dangerouslySetInnerHTML={{ __html: parseForumContent(topicContent) }}
+              dangerouslySetInnerHTML={{ __html: parseForumContent(topicContent, { censorProfanity: user?.censor_profanity }) }}
             />
           )}
         </div>
@@ -859,7 +859,7 @@ export default function ForumTopic() {
                       {parent.content && parent.content !== '(GIF)' && (
                         <div
                           className="text-[10px] text-zinc-400 font-normal forum-content line-clamp-3"
-                          dangerouslySetInnerHTML={{ __html: parseForumContent(parent.content) }}
+                          dangerouslySetInnerHTML={{ __html: parseForumContent(parent.content, { censorProfanity: user?.censor_profanity }) }}
                         />
                       )}
                     </div>
@@ -877,7 +877,7 @@ export default function ForumTopic() {
                 {c.content && c.content !== '(GIF)' && (
                   <div
                     className="mt-2 text-xs text-foreground forum-content break-words"
-                    dangerouslySetInnerHTML={{ __html: parseForumContent(c.content) }}
+                    dangerouslySetInnerHTML={{ __html: parseForumContent(c.content, { censorProfanity: user?.censor_profanity }) }}
                   />
                 )}
                 

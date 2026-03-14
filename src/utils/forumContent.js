@@ -553,10 +553,19 @@ const SMILEYS = [
  *   [*]…                  list item (inside [list])
  *   [hr]                  horizontal rule / divider
  *   :smiley: codes        see SMILEYS list above
+ *
+ * Options:
+ *   censorProfanity: boolean - if true, replace swear words with ***
  */
-export function parseForumContent(content) {
+export function parseForumContent(content, options = {}) {
   if (content == null || typeof content !== 'string') return '';
   let s = content;
+
+  // 0) Apply profanity filter if enabled
+  if (options.censorProfanity) {
+    const { filterProfanity } = require('./profanityFilter');
+    s = filterProfanity(s);
+  }
 
   // 1) Escape HTML so raw < > & are safe
   s = escapeHtml(s);
