@@ -483,7 +483,7 @@ async def update_topic(
     request: TopicUpdate,
     current_user: dict = Depends(get_current_user),
 ):
-    """Admin/Mod: sticky, important, locked. HDO: lock/unlock only. Author: edit title, content, gif_url."""
+    """Admin/Mod: sticky, important, locked, edit any topic. HDO: lock/unlock only. Author: edit own topic."""
     topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
@@ -494,6 +494,7 @@ async def update_topic(
     is_hdo = _is_hdo(current_user)
     can_sticky_important = is_admin or is_mod
     can_lock = is_admin or is_mod or is_hdo
+    can_edit_content = is_author or is_admin or is_mod
     updates = {}
     if can_sticky_important:
         if request.is_sticky is not None:
@@ -502,7 +503,7 @@ async def update_topic(
             updates["is_important"] = request.is_important
     if can_lock and request.is_locked is not None:
         updates["is_locked"] = request.is_locked
-    if is_author:
+    if can_edit_content:
         if request.title is not None:
             title = (request.title or "").strip()
             if not title:
