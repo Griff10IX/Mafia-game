@@ -251,12 +251,18 @@ export default function Racing() {
 
   useEffect(() => {
     if (!raceIdParam) return;
+    const c = raceIdParam;
     (async () => {
       try {
-        const r = await api.get(`/racing/races/${raceIdParam}`);
+        const r = await api.get(`/racing/races/${c}`);
         const race = r.data?.race;
         if (race?.state === "open" || race?.state === "completed" || race?.state === "running") {
-          setActiveRace(race);
+          setActiveRace((prev) => {
+            if (prev?.id === race.id && prev?.state === "running" && race.state === "running") {
+              if ((prev.qualifying_order?.length ?? 0) > 0) return prev;
+            }
+            return race;
+          });
           setTab("races");
         }
       } catch (_) {}
