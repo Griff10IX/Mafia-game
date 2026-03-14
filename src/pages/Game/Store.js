@@ -13,7 +13,7 @@ const STORE_STYLES = `
 `;
 
 const PACKAGES = [
-  { id: 'test', name: '10 pts', points: 10, price: 0.50, popular: false, isTest: true },
+  { id: 'test', name: '10 pts', points: 10, price: 0.32, popular: false, isTest: true },
   { id: 'starter', name: '2,500 pts', points: 2500, price: 4.99, popular: false },
   { id: 'bronze', name: '5,000 pts', points: 5000, price: 8.99, popular: false },
   { id: 'silver', name: '10,000 pts', points: 10000, price: 15.99, popular: true },
