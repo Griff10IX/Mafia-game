@@ -290,7 +290,7 @@ export default function Racing() {
         await fetchProfile();
         refreshUser();
         toast.success("Race created");
-        navigate(`/racing?race=${race.id}`, { replace: true });
+        navigate(`/casino/mini-games/racing?race=${race.id}`, { replace: true });
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
     } catch (e) { toast.error(apiDetail(e)); }
@@ -313,7 +313,7 @@ export default function Racing() {
         }
         setTab("races");
         setActiveRace(startedRace);
-        navigate(`/racing?race=${race.id}`, { replace: true });
+        navigate(`/casino/mini-games/racing?race=${race.id}`, { replace: true });
         window.scrollTo({ top: 0, behavior: "smooth" });
         toast.success("Race started — run it live");
         fetchOpenRaces();
@@ -335,7 +335,7 @@ export default function Racing() {
       await fetchProfile();
       refreshUser();
       toast.success("Joined race");
-      navigate(`/racing?race=${race.id}`, { replace: true });
+      navigate(`/casino/mini-games/racing?race=${race.id}`, { replace: true });
     } catch (e) { toast.error(apiDetail(e)); }
     finally { setJoiningId(null); }
   };
