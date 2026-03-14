@@ -808,11 +808,19 @@ async def buy_bullets(
     }
 
 
+CUSTOM_BULLETS_MAX = 250_000
+
+def _calculate_bullet_cost(bullets: int) -> int:
+    """Calculate cost for any bullet amount (matches frontend formula)."""
+    if bullets < 5000:
+        return max(1, int(bullets * 0.02))
+    return 100 + ((bullets - 5000) * 75 + 4999) // 5000
+
 async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_current_user)):
     """Buy bullets from store: use respect points first (5 respect = 1 point), then points."""
-    cost = BULLET_PACKS.get(bullets)
-    if cost is None:
-        raise HTTPException(status_code=400, detail=f"Invalid bullet pack. Choose from: {', '.join(str(k) for k in BULLET_PACKS)}")
+    if bullets < 1 or bullets > CUSTOM_BULLETS_MAX:
+        raise HTTPException(status_code=400, detail=f"Bullet amount must be between 1 and {CUSTOM_BULLETS_MAX:,}")
+    cost = _calculate_bullet_cost(bullets)
     cost_used, inc = _store_cost_inc(current_user, cost)
     inc["bullets"] = bullets
     await db.users.update_one(

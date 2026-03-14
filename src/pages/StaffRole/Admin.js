@@ -645,17 +645,30 @@ export default function Admin() {
     }
   };
 
-  const handleSaveLaunchSettings = async () => {
+  const handleSaveLoginLock = async () => {
     setLaunchSettingsSaving(true);
     try {
       await api.patch('/admin/settings', {
         login_lock_until: loginLockUntil || null,
         login_lock_message: loginLockMessage || null,
+      });
+      toast.success('Login lock settings saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to save login lock');
+    } finally {
+      setLaunchSettingsSaving(false);
+    }
+  };
+
+  const handleSavePreorder = async () => {
+    setLaunchSettingsSaving(true);
+    try {
+      await api.patch('/admin/settings', {
         preorder_points_release_date: preorderReleaseDate || null,
       });
-      toast.success('Launch settings saved');
+      toast.success('Preorder settings saved');
     } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to save launch settings');
+      toast.error(e.response?.data?.detail ?? 'Failed to save preorder settings');
     } finally {
       setLaunchSettingsSaving(false);
     }
@@ -3053,6 +3066,14 @@ export default function Admin() {
                 onChange={(e) => setLoginLockMessage(e.target.value)}
                 className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-amber-500/50 focus:outline-none"
               />
+              <button
+                type="button"
+                onClick={handleSaveLoginLock}
+                disabled={launchSettingsSaving}
+                className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50"
+              >
+                {launchSettingsSaving ? 'Saving...' : 'Save Login Lock'}
+              </button>
             </div>
 
             <div className="h-px bg-zinc-700/30" />
@@ -3076,18 +3097,15 @@ export default function Admin() {
                   Clear
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={handleSavePreorder}
+                disabled={launchSettingsSaving}
+                className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50"
+              >
+                {launchSettingsSaving ? 'Saving...' : 'Save Preorder Settings'}
+              </button>
             </div>
-
-            <div className="h-px bg-zinc-700/30" />
-
-            <button
-              type="button"
-              onClick={handleSaveLaunchSettings}
-              disabled={launchSettingsSaving}
-              className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50"
-            >
-              {launchSettingsSaving ? 'Saving...' : 'Save Launch Settings'}
-            </button>
           </div>
         )}
         </div>

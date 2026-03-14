@@ -1754,8 +1754,8 @@ export default function AutoRank() {
                         <tr key={u.id || u.username} className="border-b border-zinc-700/30 hover:bg-zinc-800/30 transition-colors">
                           <td className="py-2 pr-2 text-foreground font-medium">{u.username}</td>
                           <td className="py-2 pr-2">
-                            <span className={u.online ? 'text-emerald-400' : 'text-zinc-600'}>
-                              {u.online ? '●' : '○'}
+                            <span className={u.auto_rank_idle ? 'text-amber-400' : u.online ? 'text-emerald-400' : 'text-zinc-600'}>
+                              {u.auto_rank_idle ? '●' : u.online ? '●' : '○'}
                             </span>
                           </td>
                           <td className="py-2 pr-2">
