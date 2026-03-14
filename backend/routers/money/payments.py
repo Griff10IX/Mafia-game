@@ -368,9 +368,20 @@ def register(router):
 
     @router.get("/payments/my-transactions")
     async def my_payment_transactions(current_user: dict = Depends(get_current_user)):
-        """List current user's payment transactions (for Store Payments section)."""
+        """List current user's payment transactions (for Store Payments section).
+        Filters out old 'pending' transactions (abandoned checkouts) older than 30 minutes."""
+        now = datetime.now(timezone.utc)
+        thirty_mins_ago = (now - timedelta(minutes=30)).isoformat()
+        
+        # Only show: completed, preorder_pending, or recent pending (last 30 min)
         cursor = db.payment_transactions.find(
-            {"user_id": current_user["id"]},
+            {
+                "user_id": current_user["id"],
+                "$or": [
+                    {"payment_status": {"$in": ["completed", "preorder_pending"]}},
+                    {"payment_status": "pending", "created_at": {"$gte": thirty_mins_ago}},
+                ]
+            },
             {"_id": 0, "session_id": 1, "package_id": 1, "points": 1, "payment_status": 1, "created_at": 1, "points_credited_at": 1},
         ).sort("created_at", -1).limit(50)
         items = await cursor.to_list(50)
