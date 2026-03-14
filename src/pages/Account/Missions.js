@@ -617,6 +617,19 @@ function formatTimeUntil(isoString) {
   return 'in <1m';
 }
 
+function RewardBadge({ icon: Icon, value, label, color, bgColor }) {
+  if (!value || value <= 0) return null;
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${bgColor} border ${color}`}>
+      <Icon size={10} className={color.replace('border-', 'text-').replace('/30', '')} />
+      <span className={`text-[10px] font-heading font-bold ${color.replace('border-', 'text-').replace('/30', '')}`}>
+        {typeof value === 'number' ? value.toLocaleString() : value}
+      </span>
+      {label && <span className="text-[9px] text-mutedForeground">{label}</span>}
+    </span>
+  );
+}
+
 function TributeBanner({
   bank,
   tributeBullets = 0,
@@ -663,71 +676,145 @@ function TributeBanner({
   const dailyTotalRespect = (hasMission1Bonus ? dailyRespectMission1 : 0) + (hasMission2Bonus ? dailyRespectMission2 : 0) + (hasMission3Bonus ? dailyRespectMission3 : 0) + (hasMission4Bonus ? dailyRespectMission4 : 0);
   const dailyTotalLoot = dailyLootBase + (hasMission2Bonus ? dailyLootMission2 : 0);
   const missionHints = [
-    { n: 1, has: hasMission1Bonus, cash: dailyCashMission1, bullets: dailyBulletsMission1, respect: dailyRespectMission1 },
     { n: 2, has: hasMission2Bonus, cash: dailyCashMission2, bullets: dailyBulletsMission2, respect: dailyRespectMission2, loot: dailyLootMission2 },
     { n: 3, has: hasMission3Bonus, cash: dailyCashMission3, bullets: dailyBulletsMission3, respect: dailyRespectMission3 },
     { n: 4, has: hasMission4Bonus, cash: dailyCashMission4, bullets: dailyBulletsMission4, respect: dailyRespectMission4 },
   ].filter((m) => !m.has && (m.cash > 0 || m.bullets > 0 || m.respect > 0 || (m.loot || 0) > 0));
+
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border m-fade-in ${hasAny ? 'border-green-500/30' : 'border-primary/20'}`} style={{ animationDelay: '0.05s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className={`px-2.5 py-2 flex items-center justify-between gap-3 flex-wrap border-l-2 ${hasAny ? 'border-green-500 bg-green-500/5' : 'border-zinc-600 bg-primary/5'}`}>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Banknote size={16} className={hasBank ? 'text-green-400' : 'text-mutedForeground'} />
-          <div>
-            <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Tribute Bank</div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-heading font-bold text-foreground">{fmt(bank)}</span>
-              {(tributeBullets || 0) > 0 && (
-                <span className="text-[10px] font-heading font-bold text-foreground">· {(tributeBullets || 0).toLocaleString()} bullets</span>
-              )}
-              {(tributeLootBoxPieces || 0) > 0 && (
-                <span className="text-[10px] font-heading font-bold text-foreground">· {tributeLootBoxPieces} loot piece(s)</span>
-              )}
-              {(tributeRespect || 0) > 0 && (
-                <span className="text-[10px] font-heading font-bold text-foreground">· {tributeRespect} respect</span>
-              )}
-            </div>
-            {tributeDepositDailyAt && (
-              <div className="flex items-center gap-1 mt-1 text-[9px] text-mutedForeground">
-                <Clock size={9} />
-                <span>Deposits daily at {tributeDepositDailyAt}</span>
-              </div>
-            )}
-            <div className="text-[9px] text-mutedForeground mt-0.5">
-              <span className="text-mutedForeground">Daily: </span>
-              <span className="text-foreground font-semibold">{fmt(dailyTotalCash)}</span> cash
-              {dailyTotalBullets > 0 && <><span className="text-mutedForeground"> · </span><span className="text-foreground font-semibold">{dailyTotalBullets}</span> bullets</>}
-              {dailyTotalRespect > 0 && <><span className="text-mutedForeground"> · </span><span className="text-foreground font-semibold">{dailyTotalRespect}</span> respect</>}
-              {dailyTotalLoot > 0 && <><span className="text-mutedForeground"> · </span><span className="text-foreground font-semibold">{dailyTotalLoot}</span> loot</>}
-            </div>
-            <div className="text-[8px] text-mutedForeground mt-0.5 italic">All rewards stack daily until you collect.</div>
-            {missionHints.length > 0 && (
-              <div className="text-[9px] text-mutedForeground mt-1 space-y-0.5">
-                {missionHints.map((m) => {
-                  const parts = [];
-                  if (m.cash > 0) parts.push(`+${fmt(m.cash)}`);
-                  if (m.bullets > 0) parts.push(`+${m.bullets} bullets`);
-                  if (m.respect > 0) parts.push(`+${m.respect} respect`);
-                  if ((m.loot || 0) > 0) parts.push(`+${m.loot} loot`);
-                  return <div key={m.n}>Complete Mission {m.n} for {parts.join(' ')}/day</div>;
-                })}
-              </div>
-            )}
-            {nextIn && (
-              <div className="text-[9px] text-primary/80 mt-0.5">Next deposit: {nextIn}</div>
-            )}
-          </div>
+      
+      {/* Header */}
+      <div className={`px-2.5 py-1.5 border-b flex items-center justify-between ${hasAny ? 'border-green-500/20 bg-green-500/8' : 'border-primary/20 bg-primary/8'}`}>
+        <div className="flex items-center gap-2">
+          <Banknote size={14} className={hasAny ? 'text-green-400' : 'text-primary'} />
+          <span className={`text-[9px] font-heading font-bold uppercase tracking-[0.12em] ${hasAny ? 'text-green-400' : 'text-primary'}`}>
+            Tribute Bank
+          </span>
         </div>
         <button
           type="button"
           onClick={onCollect}
           disabled={!hasAny || collecting}
-          className={`px-2.5 py-1 rounded text-[10px] font-heading font-bold uppercase border transition-colors ${hasAny && !collecting ? 'bg-green-500/20 border-green-500/40 text-green-400 hover:bg-green-500/30 cursor-pointer' : 'bg-zinc-800/50 border-zinc-600 text-mutedForeground cursor-not-allowed'} ${collecting ? 'opacity-60' : ''}`}
+          className={`px-3 py-1 rounded text-[10px] font-heading font-bold uppercase border transition-all ${hasAny && !collecting ? 'bg-green-500/20 border-green-500/40 text-green-400 hover:bg-green-500/30 hover:scale-105 cursor-pointer' : 'bg-zinc-800/50 border-zinc-600 text-mutedForeground cursor-not-allowed'} ${collecting ? 'opacity-60' : ''}`}
         >
           {collecting ? 'Collecting…' : 'Collect'}
         </button>
       </div>
+
+      <div className="p-2.5 space-y-3">
+        {/* Current Balance */}
+        <div className={`p-2 rounded-md border ${hasAny ? 'border-green-500/20 bg-green-500/5' : 'border-zinc-700/50 bg-zinc-800/30'}`}>
+          <div className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1.5">Available to Collect</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md ${hasBank ? 'bg-green-500/15 border border-green-500/30' : 'bg-zinc-800/50 border border-zinc-700/50'}`}>
+              <Coins size={14} className={hasBank ? 'text-green-400' : 'text-zinc-500'} />
+              <span className={`text-base font-heading font-bold ${hasBank ? 'text-green-400' : 'text-zinc-500'}`}>{fmt(bank)}</span>
+            </span>
+            {hasBullets && (
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-red-500/15 border border-red-500/30">
+                <AlertCircle size={14} className="text-red-400" />
+                <span className="text-base font-heading font-bold text-red-400">{tributeBullets.toLocaleString()}</span>
+                <span className="text-[10px] text-red-400/80">bullets</span>
+              </span>
+            )}
+            {hasRespect && (
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-fuchsia-500/15 border border-fuchsia-500/30">
+                <Crown size={14} className="text-fuchsia-400" />
+                <span className="text-base font-heading font-bold text-fuchsia-400">{tributeRespect}</span>
+                <span className="text-[10px] text-fuchsia-400/80">respect</span>
+              </span>
+            )}
+            {hasLootPieces && (
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-violet-500/15 border border-violet-500/30">
+                <Star size={14} className="text-violet-400" />
+                <span className="text-base font-heading font-bold text-violet-400">{tributeLootBoxPieces}</span>
+                <span className="text-[10px] text-violet-400/80">loot</span>
+              </span>
+            )}
+            {!hasAny && (
+              <span className="text-[10px] text-zinc-500 italic">Nothing to collect yet</span>
+            )}
+          </div>
+        </div>
+
+        {/* Daily Deposits Info */}
+        <div className="p-2 rounded-md border border-primary/20 bg-primary/5">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="text-[9px] font-heading text-primary uppercase tracking-wider flex items-center gap-1">
+              <Clock size={10} />
+              Daily Deposits
+            </div>
+            {tributeDepositDailyAt && (
+              <span className="text-[9px] text-mutedForeground">at {tributeDepositDailyAt}</span>
+            )}
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-1.5">
+            <RewardBadge icon={Coins} value={fmt(dailyTotalCash)} color="border-green-500/30" bgColor="bg-green-500/10" />
+            {dailyTotalBullets > 0 && (
+              <RewardBadge icon={AlertCircle} value={dailyTotalBullets} label="bullets" color="border-red-500/30" bgColor="bg-red-500/10" />
+            )}
+            {dailyTotalRespect > 0 && (
+              <RewardBadge icon={Crown} value={dailyTotalRespect} label="respect" color="border-fuchsia-500/30" bgColor="bg-fuchsia-500/10" />
+            )}
+            {dailyTotalLoot > 0 && (
+              <RewardBadge icon={Star} value={dailyTotalLoot} label="loot" color="border-violet-500/30" bgColor="bg-violet-500/10" />
+            )}
+          </div>
+          
+          <div className="text-[8px] text-mutedForeground mt-1.5 italic flex items-center gap-1">
+            <AlertCircle size={8} />
+            All rewards stack daily until you collect.
+          </div>
+        </div>
+
+        {/* Mission Unlock Hints */}
+        {missionHints.length > 0 && (
+          <div className="space-y-1">
+            <div className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider">Unlock More Rewards</div>
+            {missionHints.map((m) => (
+              <div key={m.n} className="flex items-center gap-2 p-1.5 rounded border border-zinc-700/50 bg-zinc-800/30">
+                <span className="text-[9px] font-heading text-primary shrink-0">Mission {m.n}</span>
+                <ChevronRight size={10} className="text-zinc-600" />
+                <div className="flex flex-wrap items-center gap-1">
+                  {m.cash > 0 && (
+                    <span className="inline-flex items-center gap-0.5 text-[9px] text-green-400">
+                      <Coins size={9} />+{fmt(m.cash)}
+                    </span>
+                  )}
+                  {m.bullets > 0 && (
+                    <span className="inline-flex items-center gap-0.5 text-[9px] text-red-400">
+                      <AlertCircle size={9} />+{m.bullets}
+                    </span>
+                  )}
+                  {m.respect > 0 && (
+                    <span className="inline-flex items-center gap-0.5 text-[9px] text-fuchsia-400">
+                      <Crown size={9} />+{m.respect}
+                    </span>
+                  )}
+                  {(m.loot || 0) > 0 && (
+                    <span className="inline-flex items-center gap-0.5 text-[9px] text-violet-400">
+                      <Star size={9} />+{m.loot}
+                    </span>
+                  )}
+                  <span className="text-[8px] text-zinc-500">/day</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Next Deposit Timer */}
+        {nextIn && (
+          <div className="flex items-center justify-center gap-2 py-1.5 px-2 rounded border border-primary/20 bg-primary/5">
+            <Clock size={12} className="text-primary" />
+            <span className="text-[10px] font-heading text-primary">Next deposit: {nextIn}</span>
+          </div>
+        )}
+      </div>
+      
       <div className="m-art-line text-primary mx-2.5" />
     </div>
   );
