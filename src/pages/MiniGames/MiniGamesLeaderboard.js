@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Trophy, Medal, Award, RefreshCw, Gamepad2, Clock, Gift, DollarSign, Heart, Package, Crosshair, Bomb, Ship, Car } from 'lucide-react';
+import { Trophy, Medal, Award, RefreshCw, Gamepad2, Clock, Gift, DollarSign, Heart, Package, Crosshair, Bomb, Ship, Car, PersonStanding } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -21,6 +21,7 @@ const GAME_ICONS = {
   minesweeper: Bomb,
   battleships: Ship,
   the_getaway: Car,
+  family_run: PersonStanding,
 };
 
 const GAME_LABELS = {
@@ -30,6 +31,7 @@ const GAME_LABELS = {
   minesweeper: 'Minefield',
   battleships: 'Rum Runner',
   the_getaway: 'The Getaway',
+  family_run: 'Family Run',
 };
 
 function formatTimeUntil(isoDate) {
@@ -134,7 +136,7 @@ export default function MiniGamesLeaderboard() {
           </h1>
         </div>
         <p className="text-[9px] text-zinc-500 font-heading italic">
-          Play Snake, Flappy Gangster, Shooting Range, Minefield, Rum Runner, and The Getaway to earn points. Top 5 rewarded every Sunday!
+          Play Snake, Flappy Gangster, Shooting Range, Minefield, Rum Runner, The Getaway, and Family Run to earn points. Top 5 rewarded every Sunday!
         </p>
         <button
           type="button"
@@ -389,6 +391,13 @@ export default function MiniGamesLeaderboard() {
           >
             <Car size={12} className="text-primary" />
             The Getaway
+          </Link>
+          <Link
+            to="/casino/mini-games/family-run"
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20 hover:border-primary/40`}
+          >
+            <PersonStanding size={12} className="text-primary" />
+            Family Run
           </Link>
         </div>
       </section>

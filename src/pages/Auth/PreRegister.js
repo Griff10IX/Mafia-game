@@ -15,14 +15,23 @@ const FEATURES = [
 
 export default function PreRegister() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
   const [stats, setStats] = useState(null);
   const [rewards, setRewards] = useState(null);
+  const [launchStatus, setLaunchStatus] = useState({ loginLocked: false, lockUntil: null, lockMessage: null });
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
   useEffect(() => {
+    // Get launch status from the same endpoint as Landing page
+    api.get('/auth/launch-status')
+      .then((r) => {
+        setLaunchStatus({
+          loginLocked: !!r.data?.login_locked,
+          lockUntil: r.data?.lock_until || null,
+          lockMessage: r.data?.lock_message || null,
+        });
+      })
+      .catch(() => {});
+
     api.get('/auth/preregister/stats')
       .then((r) => {
         setStats(r.data);
@@ -32,8 +41,8 @@ export default function PreRegister() {
   }, []);
 
   const calculateCountdown = useCallback(() => {
-    if (!stats?.launch_date) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
-    const target = new Date(stats.launch_date).getTime();
+    if (!launchStatus.lockUntil) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+    const target = new Date(launchStatus.lockUntil).getTime();
     const now = Date.now();
     const diff = Math.max(0, target - now);
     if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
@@ -42,32 +51,18 @@ export default function PreRegister() {
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((diff % (1000 * 60)) / 1000);
     return { days, hours, minutes, seconds };
-  }, [stats?.launch_date]);
+  }, [launchStatus.lockUntil]);
 
   useEffect(() => {
-    if (!stats?.launch_date) return;
+    if (!launchStatus.lockUntil) return;
     setCountdown(calculateCountdown());
     const interval = setInterval(() => setCountdown(calculateCountdown()), 1000);
     return () => clearInterval(interval);
-  }, [stats?.launch_date, calculateCountdown]);
+  }, [launchStatus.lockUntil, calculateCountdown]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!email.trim()) {
-      toast.error('Please enter your email');
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await api.post('/auth/preregister', { email: email.trim() });
-      toast.success(res.data?.message || 'You\'re on the list!');
-      setSubmitted(true);
-    } catch (err) {
-      const detail = err.response?.data?.detail;
-      toast.error(typeof detail === 'string' ? detail : 'Failed to register. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+  const handleCreateAccount = () => {
+    // Navigate to dedicated register route that bypasses preregister redirect
+    navigate('/register');
   };
 
   return (
@@ -86,10 +81,15 @@ export default function PreRegister() {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes pulse-glow {
+          0%, 100% { box-shadow: 0 0 20px rgba(201,168,76,0.3); }
+          50% { box-shadow: 0 0 40px rgba(201,168,76,0.5); }
+        }
         .fade-up { animation: fade-up 0.5s ease both; }
         .fade-up-1 { animation: fade-up 0.5s 0.1s ease both; }
         .fade-up-2 { animation: fade-up 0.5s 0.2s ease both; }
         .fade-up-3 { animation: fade-up 0.5s 0.3s ease both; }
+        .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
       `}</style>
 
       <div className="absolute inset-0 bg-black/70 pointer-events-none" />
@@ -100,7 +100,7 @@ export default function PreRegister() {
           {/* Header */}
           <div className="text-center mb-8 fade-up">
             <p className="text-[10px] font-heading uppercase tracking-[0.4em] mb-2" style={{ color: 'var(--noir-primary)', opacity: 0.6 }}>
-              Coming Soon
+              Pre-Register Now
             </p>
             <h1 className="text-4xl md:text-5xl font-heading font-black uppercase tracking-wider mb-3" style={{ color: 'var(--noir-foreground)' }}>
               MAFIA WARS
@@ -111,7 +111,7 @@ export default function PreRegister() {
           </div>
 
           {/* Countdown */}
-          {stats?.launch_date && (
+          {launchStatus.lockUntil && (
             <div className="mb-8 fade-up-1">
               <p className="text-center text-[10px] font-heading uppercase tracking-wider mb-3" style={{ color: 'var(--noir-primary)' }}>
                 Game Launches In
@@ -137,6 +137,11 @@ export default function PreRegister() {
                   </div>
                 ))}
               </div>
+              {launchStatus.lockMessage && (
+                <p className="text-center text-xs font-heading mt-3" style={{ color: 'var(--noir-muted)' }}>
+                  {launchStatus.lockMessage}
+                </p>
+              )}
             </div>
           )}
 
@@ -144,9 +149,12 @@ export default function PreRegister() {
           <div className={`${styles.panel} rounded-xl overflow-hidden fade-up-2`}>
             {/* Rewards Banner */}
             <div className="p-6 text-center" style={{ background: 'linear-gradient(180deg, rgba(var(--noir-primary-rgb,201,168,76),0.15) 0%, transparent 100%)' }}>
-              <h2 className="text-lg font-heading font-bold uppercase tracking-wider mb-4" style={{ color: 'var(--noir-primary)' }}>
+              <h2 className="text-lg font-heading font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--noir-primary)' }}>
                 Founding Member Rewards
               </h2>
+              <p className="text-xs font-heading mb-4" style={{ color: 'var(--noir-muted)' }}>
+                Create your account now and receive these exclusive rewards on launch day
+              </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto">
                 <div className="p-4 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
                   <div className="text-2xl mb-1">💎</div>
@@ -163,7 +171,7 @@ export default function PreRegister() {
                     ${rewards?.bonus_cash?.toLocaleString() || '5,000'}
                   </div>
                   <div className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
-                    Starting Cash
+                    Starting Cash Boost
                   </div>
                 </div>
                 <div className="p-4 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
@@ -178,55 +186,23 @@ export default function PreRegister() {
               </div>
             </div>
 
-            {/* Email Form */}
-            <div className="p-6 border-t" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.15)' }}>
-              {!submitted ? (
-                <form onSubmit={handleSubmit} className="max-w-md mx-auto">
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      className={`flex-1 ${styles.input} h-12 px-4 font-heading`}
-                      required
-                    />
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className={`${styles.btnPrimary} px-6 py-3 font-heading font-bold uppercase tracking-wider whitespace-nowrap disabled:opacity-50`}
-                    >
-                      {loading ? 'Joining...' : 'Pre-Register'}
-                    </button>
-                  </div>
-                  <p className="text-center text-[10px] font-heading mt-3" style={{ color: 'var(--noir-muted)' }}>
-                    We'll notify you when the game launches. No spam, ever.
-                  </p>
-                </form>
-              ) : (
-                <div className="text-center py-4">
-                  <div className="text-3xl mb-3">✅</div>
-                  <h3 className="text-lg font-heading font-bold mb-2" style={{ color: 'var(--noir-primary)' }}>
-                    You're In!
-                  </h3>
-                  <p className="text-sm font-heading" style={{ color: 'var(--noir-muted)' }}>
-                    We'll send you an email when the game launches.
-                  </p>
-                </div>
-              )}
-
-              {/* Or Register Now */}
-              <div className="mt-6 pt-6 border-t text-center" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.1)' }}>
-                <p className="text-[10px] font-heading uppercase tracking-wider mb-3" style={{ color: 'var(--noir-muted)' }}>
-                  Or secure your username now
-                </p>
-                <button
-                  onClick={() => navigate('/')}
-                  className={`${styles.btnPrimary} px-6 py-2.5 font-heading font-bold uppercase tracking-wider opacity-80 hover:opacity-100`}
-                >
-                  Create Account
-                </button>
-              </div>
+            {/* Create Account CTA */}
+            <div className="p-6 border-t text-center" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.15)' }}>
+              <h3 className="text-base font-heading font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--noir-foreground)' }}>
+                Secure Your Username
+              </h3>
+              <p className="text-xs font-heading mb-4" style={{ color: 'var(--noir-muted)' }}>
+                Create your account now to lock in your username and claim founding member rewards when we launch
+              </p>
+              <button
+                onClick={handleCreateAccount}
+                className={`${styles.btnPrimary} pulse-glow px-8 py-4 font-heading font-bold uppercase tracking-wider text-base`}
+              >
+                Create Your Account
+              </button>
+              <p className="text-[10px] font-heading mt-3" style={{ color: 'var(--noir-muted)' }}>
+                Login will be available when the game launches
+              </p>
             </div>
 
             {/* Stats */}
@@ -234,18 +210,18 @@ export default function PreRegister() {
               <div className="grid grid-cols-2 border-t" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.1)' }}>
                 <div className="p-4 text-center border-r" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.1)' }}>
                   <div className="text-2xl font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
-                    {stats.total_interested?.toLocaleString() || 0}
+                    {stats.registered_accounts?.toLocaleString() || 0}
                   </div>
                   <div className="text-[9px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
-                    People Interested
+                    Accounts Pre-Registered
                   </div>
                 </div>
                 <div className="p-4 text-center">
                   <div className="text-2xl font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
-                    {stats.registered_accounts?.toLocaleString() || 0}
+                    {stats.registered_accounts > 0 ? Math.min(100, stats.registered_accounts) : 0}
                   </div>
                   <div className="text-[9px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
-                    Accounts Created
+                    Founding Members
                   </div>
                 </div>
               </div>

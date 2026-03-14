@@ -73,6 +73,7 @@ const ShootingRange = lazy(() => import("./pages/MiniGames/ShootingRange"));
 const ShootingRange3D = lazy(() => import("./pages/MiniGames/ShootingRange3D"));
 const Snake = lazy(() => import("./pages/MiniGames/Snake"));
 const TheGetaway = lazy(() => import("./pages/MiniGames/TheGetaway"));
+const FamilyRun = lazy(() => import("./pages/MiniGames/FamilyRun"));
 
 // Money pages
 const Bank = lazy(() => import("./pages/Money/Bank"));
@@ -150,13 +151,21 @@ function ShootingRangePlayRedirect() {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [loginLocked, setLoginLocked] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
       setIsAuthenticated(true);
     }
-    setIsLoading(false);
+    // Check if login is locked (pre-registration mode)
+    fetch(`${process.env.REACT_APP_API_URL || ''}/auth/launch-status`)
+      .then(r => r.json())
+      .then(data => {
+        setLoginLocked(!!data?.login_locked);
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
   }, []);
 
   if (isLoading) {
@@ -178,12 +187,36 @@ function App() {
             element={
               isAuthenticated ? (
                 <Navigate to="/account/dashboard" replace />
+              ) : loginLocked ? (
+                <Navigate to="/preregister" replace />
               ) : (
                 <Landing setIsAuthenticated={setIsAuthenticated} />
               )
             }
           />
           <Route path="/preregister" element={<PreRegister />} />
+          <Route
+            path="/register"
+            element={
+              isAuthenticated ? (
+                <Navigate to="/account/dashboard" replace />
+              ) : (
+                <Landing setIsAuthenticated={setIsAuthenticated} defaultTab="register" />
+              )
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              isAuthenticated ? (
+                <Navigate to="/account/dashboard" replace />
+              ) : loginLocked ? (
+                <Navigate to="/preregister" replace />
+              ) : (
+                <Landing setIsAuthenticated={setIsAuthenticated} />
+              )
+            }
+          />
           <Route
             path="/forgot-password"
             element={<ForgotPassword />}
@@ -862,6 +895,18 @@ function App() {
             }
           />
           <Route
+            path="/casino/mini-games/family-run"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <FamilyRun />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
             path="/casino/mini-games/minesweeper"
             element={
               isAuthenticated ? (
@@ -961,6 +1006,7 @@ function App() {
           <Route path="/snake" element={<Navigate to="/casino/mini-games/snake" replace />} />
           <Route path="/battleships" element={<Navigate to="/casino/mini-games/battleships" replace />} />
           <Route path="/the-getaway" element={<Navigate to="/casino/mini-games/the-getaway" replace />} />
+          <Route path="/family-run" element={<Navigate to="/casino/mini-games/family-run" replace />} />
           <Route path="/minesweeper" element={<Navigate to="/casino/mini-games/minesweeper" replace />} />
           <Route path="/flappygangster" element={<Navigate to="/casino/mini-games/flappy" replace />} />
           <Route path="/gauntlet" element={<Navigate to="/casino/mini-games/flappy" replace />} />

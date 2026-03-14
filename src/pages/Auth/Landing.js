@@ -4,9 +4,9 @@ import { toast } from 'sonner';
 import api, { getBaseURL, AUTH_ERROR_KEY } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
-export default function Landing({ setIsAuthenticated }) {
+export default function Landing({ setIsAuthenticated, defaultTab }) {
   const navigate = useNavigate();
-  const [isLogin, setIsLogin] = useState(true);
+  const [isLogin, setIsLogin] = useState(defaultTab !== 'register');
   const [verifySentForEmail, setVerifySentForEmail] = useState(null);
 
   // Launch lock state
