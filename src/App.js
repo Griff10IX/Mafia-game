@@ -57,6 +57,7 @@ const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const MiniGamesLeaderboard = lazy(() => import("./pages/MiniGamesLeaderboard"));
 const Minesweeper = lazy(() => import("./pages/Minesweeper"));
 const Battleships = lazy(() => import("./pages/Battleships"));
+const TheGetaway = lazy(() => import("./pages/TheGetaway"));
 const Store = lazy(() => import("./pages/Store"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminLocked = lazy(() => import("./pages/AdminLocked"));
@@ -822,6 +823,18 @@ function App() {
             }
           />
           <Route
+            path="/casino/mini-games/the-getaway"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <TheGetaway />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
             path="/casino/mini-games/minesweeper"
             element={
               isAuthenticated ? (
@@ -920,6 +933,7 @@ function App() {
           {/* Games redirects */}
           <Route path="/snake" element={<Navigate to="/casino/mini-games/snake" replace />} />
           <Route path="/battleships" element={<Navigate to="/casino/mini-games/battleships" replace />} />
+          <Route path="/the-getaway" element={<Navigate to="/casino/mini-games/the-getaway" replace />} />
           <Route path="/minesweeper" element={<Navigate to="/casino/mini-games/minesweeper" replace />} />
           <Route path="/flappygangster" element={<Navigate to="/casino/mini-games/flappy" replace />} />
           <Route path="/gauntlet" element={<Navigate to="/casino/mini-games/flappy" replace />} />

@@ -1431,6 +1431,8 @@ from routers import minesweeper
 minesweeper.register(api_router)
 from routers import battleships
 battleships.register(api_router)
+from routers import the_getaway
+the_getaway.register(api_router)
 from routers import auto_rank as auto_rank_router
 auto_rank_router.register(api_router)
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Trophy, Medal, Award, RefreshCw, Gamepad2, Clock, Gift, DollarSign, Heart, Package, Crosshair, Bomb, Ship } from 'lucide-react';
+import { Trophy, Medal, Award, RefreshCw, Gamepad2, Clock, Gift, DollarSign, Heart, Package, Crosshair, Bomb, Ship, Car } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -20,6 +20,7 @@ const GAME_ICONS = {
   shooting_range: Crosshair,
   minesweeper: Bomb,
   battleships: Ship,
+  the_getaway: Car,
 };
 
 const GAME_LABELS = {
@@ -28,6 +29,7 @@ const GAME_LABELS = {
   shooting_range: 'Shooting Range',
   minesweeper: 'Minefield',
   battleships: 'Rum Runner',
+  the_getaway: 'The Getaway',
 };
 
 function formatTimeUntil(isoDate) {
@@ -132,7 +134,7 @@ export default function MiniGamesLeaderboard() {
           </h1>
         </div>
         <p className="text-[9px] text-zinc-500 font-heading italic">
-          Play Snake, Flappy Gangster, Shooting Range, Minefield, and Rum Runner to earn points. Top 5 rewarded every Sunday!
+          Play Snake, Flappy Gangster, Shooting Range, Minefield, Rum Runner, and The Getaway to earn points. Top 5 rewarded every Sunday!
         </p>
         <button
           type="button"
@@ -380,6 +382,13 @@ export default function MiniGamesLeaderboard() {
           >
             <Ship size={12} className="text-primary" />
             Rum Runner
+          </Link>
+          <Link
+            to="/casino/mini-games/the-getaway"
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20 hover:border-primary/40`}
+          >
+            <Car size={12} className="text-primary" />
+            The Getaway
           </Link>
         </div>
       </section>

@@ -57,6 +57,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/casino/mini-games/snake', label: 'Package Run' },
         { path: '/casino/mini-games/minesweeper', label: 'Minefield' },
         { path: '/casino/mini-games/battleships', label: 'Rum Runner' },
+        { path: '/casino/mini-games/the-getaway', label: 'The Getaway' },
         { path: '/casino/mini-games/leaderboard', label: 'Leaderboard' },
       ],
     },
@@ -785,8 +786,8 @@ export default function Layout({ children }) {
   const rankingNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-ranking-group" onClick={() => setRankingOpen((v) => !v)}
-        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/ranking' || location.pathname.startsWith('/crime/') || location.pathname === '/organised-crime' || location.pathname === '/account/prestige') ? styles.navItemActive : styles.sidebarNavLink}`}
-        style={(location.pathname === '/ranking' || location.pathname.startsWith('/crime/') || location.pathname === '/organised-crime' || location.pathname === '/account/prestige') ? sidebarActiveGroupStyle : undefined}>
+        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/game/ranking' || location.pathname.startsWith('/crime/') || location.pathname === '/organised-crime' || location.pathname === '/account/prestige') ? styles.navItemActive : styles.sidebarNavLink}`}
+        style={(location.pathname === '/game/ranking' || location.pathname.startsWith('/crime/') || location.pathname === '/organised-crime' || location.pathname === '/account/prestige') ? sidebarActiveGroupStyle : undefined}>
         <Target size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
         <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Ranking</span>
         {!rankingOpen && (rankingCounts.crimes > 0 || rankingCounts.gta > 0) && (
@@ -890,6 +891,7 @@ export default function Layout({ children }) {
             { to: '/casino/mini-games/snake', label: 'Package Run', testId: 'nav-snake' },
             { to: '/casino/mini-games/minesweeper', label: 'Minefield', testId: 'nav-minesweeper' },
             { to: '/casino/mini-games/battleships', label: 'Rum Runner', testId: 'nav-battleships' },
+            { to: '/casino/mini-games/the-getaway', label: 'The Getaway', testId: 'nav-the-getaway' },
             { to: '/casino/mini-games/leaderboard', label: 'Leaderboard', testId: 'nav-minigames-leaderboard' },
           ].map((item, idx) => {
             const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;
@@ -909,7 +911,7 @@ export default function Layout({ children }) {
 
   const renderNavItem = (item, showDivider) => {
     const navDivider = showDivider ? navDividerEl(`div-${item.path}`) : null;
-    if (item.path === '/ranking') return <Fragment key="nav-ranking-group">{navDivider}{rankingNavBlock}</Fragment>;
+    if (item.path === '/game/ranking') return <Fragment key="nav-ranking-group">{navDivider}{rankingNavBlock}</Fragment>;
     if (item.path === '/casino') return <Fragment key="nav-casino-group">{navDivider}{casinoNavBlock}</Fragment>;
     if (item.path === '/mini-games') return <Fragment key="nav-minigames-group">{navDivider}{miniGamesNavBlock}</Fragment>;
     const Icon = item.icon;
