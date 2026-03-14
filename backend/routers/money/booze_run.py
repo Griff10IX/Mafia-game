@@ -341,7 +341,7 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
         })
     if is_run:
         try:
-            from routers.objectives import update_objectives_progress
+            from routers.account.objectives import update_objectives_progress
             await update_objectives_progress(user["id"], "booze_runs", 1)
         except Exception:
             pass

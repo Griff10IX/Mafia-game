@@ -92,7 +92,7 @@ export default function VerifyEmail({ setIsAuthenticated }) {
     <div
       className={`relative min-h-screen ${styles.page} ${styles.themeGangsterModern}`}
       style={{
-        backgroundImage: `url(${process.env.PUBLIC_URL || ''}/landing-bg.png)`,
+        backgroundImage: `url(${process.env.PUBLIC_URL || ''}/images/landing-bg.png)`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }}

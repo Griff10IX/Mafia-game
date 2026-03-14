@@ -52,7 +52,7 @@ async def _ban_user_impl(db, user_id: str, username: str, reason: str, duration_
 def register(router):
     """Register security admin routes. Dependencies injected here to avoid circular imports."""
     import server as srv
-    from security import send_telegram_alert as _send_telegram, get_security_summary
+    from middleware.security import send_telegram_alert as _send_telegram, get_security_summary
 
     db = srv.db
     get_current_user = srv.get_current_user

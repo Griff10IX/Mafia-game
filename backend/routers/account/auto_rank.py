@@ -329,7 +329,7 @@ async def wake_auto_rank_if_idle(db, user_id: str):
 async def _send_jail_notification(telegram_chat_id: str, username: str, reason: str, jail_seconds: int = 30, bot_token: Optional[str] = None):
     if not (telegram_chat_id or "").strip():
         return
-    from security import send_telegram_to_chat
+    from middleware.security import send_telegram_to_chat
     msg = f"**Auto Rank** — {username}\n\n🔒 You're in jail ({reason}). {jail_seconds}s."
     await send_telegram_to_chat(telegram_chat_id, msg, bot_token)
 
@@ -513,7 +513,7 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
     """Try one jail bust, send result to Telegram."""
     import server as srv
     from routers.crime.jail import _attempt_bust_impl
-    from security import send_telegram_to_chat
+    from middleware.security import send_telegram_to_chat
 
     db = srv.db
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
@@ -580,7 +580,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     from routers.crime.crimes import _commit_crime_impl
     from routers.cars.gta import _attempt_gta_impl, _melt_cars_impl, GTA_OPTIONS
     CARS = getattr(srv, "CARS", None) or []
-    from security import send_telegram_to_chat
+    from middleware.security import send_telegram_to_chat
 
     db = srv.db
     get_rank_info = srv.get_rank_info
@@ -826,7 +826,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
 async def run_booze_arrivals():
     """Process booze users who have just arrived from travel so they sell immediately."""
     import server as srv
-    from security import send_telegram_to_chat
+    from middleware.security import send_telegram_to_chat
 
     db = srv.db
     now = datetime.now(timezone.utc)
@@ -1024,7 +1024,7 @@ async def run_auto_rank_oc_once():
     Skips users who have been inactive for 3+ hours (auto_rank_idle)."""
     import server as srv
     from routers.crime.oc import run_oc_heist_npc_only
-    from security import send_telegram_to_chat
+    from middleware.security import send_telegram_to_chat
 
     db = srv.db
     if not await get_auto_rank_enabled(db):
@@ -1166,8 +1166,8 @@ def register(router):
     import server as srv
     from fastapi import Depends, Header, HTTPException, Request
     from pydantic import BaseModel
-    from security import send_telegram_to_chat
-    import security as security_module
+    from middleware.security import send_telegram_to_chat
+    import middleware.security as security_module
 
     db = srv.db
     get_current_user = srv.get_current_user

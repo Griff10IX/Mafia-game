@@ -157,7 +157,7 @@ export default function Landing({ setIsAuthenticated }) {
       className={`relative min-h-screen ${styles.page} ${styles.themeGangsterModern}`}
       data-testid="landing-page"
       style={{
-        backgroundImage: `url(${process.env.PUBLIC_URL || ''}/landing-bg.png)`,
+        backgroundImage: `url(${process.env.PUBLIC_URL || ''}/images/landing-bg.png)`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',

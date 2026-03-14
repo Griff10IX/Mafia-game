@@ -314,7 +314,7 @@ from server import (
     send_notification,
     RANKS,
 )
-from routers.objectives import update_objectives_progress
+from routers.account.objectives import update_objectives_progress
 
 
 async def get_crimes(current_user: dict = Depends(get_current_user)):

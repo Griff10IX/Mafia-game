@@ -51,7 +51,7 @@ from server import (
     log_activity,
 )
 from routers.money.booze_run import BOOZE_TYPES
-from routers.objectives import update_objectives_progress
+from routers.account.objectives import update_objectives_progress
 from routers.kill.armoury import _best_weapon_for_user, _get_weapon_mastery_pct, MASTERY_MAX_BULLET_REDUCTION_PCT
 from routers.game.families import resolve_family_id
 

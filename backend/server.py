@@ -27,7 +27,7 @@ import httpx
 import certifi
 
 # Import security module (anti-cheat and monitoring)
-import security as security_module
+import middleware.security as security_module
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -74,7 +74,7 @@ security = HTTPBearer()
 app = FastAPI()
 
 # Security monitoring (imported after app creation)
-from security import (
+from middleware.security import (
     check_request_spam,
     check_duplicate_request,
     check_negative_balance,
@@ -1358,8 +1358,8 @@ from routers.kill import attack, armoury, bodyguards, hitlist
 from routers.minigames import gauntlet, boxing, racing, snake
 from routers.money import bank, stock_market, properties, quicktrade, crack_safe, illegal_business, booze_run, racket, payments
 from routers.social import forum, game_chat, giphy
-from routers import objectives
-from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
+from routers.account import objectives
+from routers.account.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
 from routers.game.families import FAMILY_RACKETS, compute_loser_racket_cash, WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT  # used by _family_war_check_wipe_and_award and seed
 from routers.kill.bodyguards import _create_robot_bodyguard_user  # used by seed
 from routers.money.booze_run import get_booze_rotation_interval_seconds, get_booze_rotation_index  # flash news
@@ -1382,7 +1382,7 @@ from routers.game import designer_competitions
 designer_competitions.register(api_router)
 armoury.register(api_router)
 objectives.register(api_router)
-from routers import missions
+from routers.account import missions
 missions.register(api_router)
 from routers.money import loot_box
 loot_box.register(api_router)
@@ -1474,7 +1474,7 @@ class OPTIONSResponder(BaseHTTPMiddleware):
 
 # Import security middleware
 try:
-    from security_middleware import SecurityMiddleware
+    from middleware.security_middleware import SecurityMiddleware
     app.add_middleware(SecurityMiddleware, db=db)
 except ImportError:
     print("Warning: security_middleware.py not found - rate limiting disabled")
@@ -1579,7 +1579,7 @@ async def startup_db():
             await asyncio.sleep(5)
     asyncio.create_task(slots_draw_ticker())
     # Missions: daily tribute deposit at configured UTC hour (e.g. 17:00); check every 60s
-    from routers import missions as missions_router
+    from routers.account import missions as missions_router
     async def tribute_deposit_ticker():
         while True:
             try:

@@ -48,7 +48,7 @@ from server import (
     RANKS,
     STATES,
 )
-from routers.objectives import update_objectives_progress
+from routers.account.objectives import update_objectives_progress
 
 logger = logging.getLogger(__name__)
 

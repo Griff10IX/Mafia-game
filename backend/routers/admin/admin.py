@@ -14,7 +14,7 @@ import httpx
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from disposable_email import is_disposable_email
+from utils.disposable_email import is_disposable_email
 
 # Cloudflare API config for bot blocking toggle
 CF_ZONE_ID = os.environ.get("CF_ZONE_ID", "")
@@ -126,7 +126,7 @@ SEED_TEST_PASSWORD = "test1234"
 def register(router):
     """Register admin routes. Dependencies from server to avoid circular imports."""
     import server as srv
-    import security as security_module
+    import middleware.security as security_module
     from routers.game.families import FAMILY_RACKETS
     from routers.kill.bodyguards import _create_robot_bodyguard_user
 
@@ -468,7 +468,7 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         try:
-            import security_middleware as sm_module
+            import middleware.security_middleware as sm_module
             middleware_enabled = getattr(sm_module, "SECURITY_MIDDLEWARE_ENABLED", False)
         except ImportError:
             middleware_enabled = False
@@ -532,7 +532,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         security_module.GLOBAL_RATE_LIMITS_ENABLED = False
         try:
-            import security_middleware as sm_module
+            import middleware.security_middleware as sm_module
             sm_module.SECURITY_MIDDLEWARE_ENABLED = False
         except ImportError:
             pass
@@ -553,7 +553,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         security_module.GLOBAL_RATE_LIMITS_ENABLED = True
         try:
-            import security_middleware as sm_module
+            import middleware.security_middleware as sm_module
             sm_module.SECURITY_MIDDLEWARE_ENABLED = True
         except ImportError:
             pass
@@ -613,7 +613,7 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         try:
-            import security_middleware as sm_module
+            import middleware.security_middleware as sm_module
             sm_module.SECURITY_MIDDLEWARE_ENABLED = enabled
             return {
                 "message": f"Security middleware {'ENABLED' if enabled else 'DISABLED'}",

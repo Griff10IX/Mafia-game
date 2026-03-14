@@ -8,8 +8,8 @@ from datetime import datetime, timezone, timedelta
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
 
-from disposable_email import is_disposable_email
-from security import is_proxy_or_vpn
+from utils.disposable_email import is_disposable_email
+from middleware.security import is_proxy_or_vpn
 
 
 class UserRegister(BaseModel):

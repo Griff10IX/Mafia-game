@@ -45,7 +45,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.db = db
         # Import here to avoid circular dependency
-        from security import check_endpoint_rate_limit, check_request_spam, check_duplicate_request
+        from middleware.security import check_endpoint_rate_limit, check_request_spam, check_duplicate_request
         self.check_endpoint_rate_limit = check_endpoint_rate_limit
         self.check_request_spam = check_request_spam
         self.check_duplicate_request = check_duplicate_request

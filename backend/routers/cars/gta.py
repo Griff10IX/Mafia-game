@@ -89,7 +89,7 @@ from server import (
     CustomCarImageUpdate,
     _family_in_active_war,
 )
-from routers.objectives import update_objectives_progress
+from routers.account.objectives import update_objectives_progress
 from routers.admin.airport import _invalidate_travel_info_cache
 from routers.game.families import resolve_family_id
 
