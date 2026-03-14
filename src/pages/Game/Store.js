@@ -115,6 +115,25 @@ export default function Store() {
   const [preorderActive, setPreorderActive] = useState(false);
   const [preorderReleaseDate, setPreorderReleaseDate] = useState(null);
   const [pendingPoints, setPendingPoints] = useState(0);
+  const [claimingPending, setClaimingPending] = useState(false);
+
+  const handleClaimPendingPoints = async () => {
+    setClaimingPending(true);
+    try {
+      const res = await api.post('/payments/check-release');
+      if (res.data?.released > 0) {
+        toast.success(res.data?.message || 'Points released!');
+        setPendingPoints(0);
+        fetchData();
+      } else {
+        toast.info(res.data?.message || 'No points to release');
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to release points');
+    } finally {
+      setClaimingPending(false);
+    }
+  };
 
   const fetchPaymentTransactions = useCallback(async () => {
     try {
@@ -327,10 +346,18 @@ export default function Store() {
         <div className="relative rounded-lg border border-green-500/30 overflow-hidden bg-green-500/5">
           <div className="h-0.5 bg-gradient-to-r from-transparent via-green-500/50 to-transparent" />
           <div className="px-4 py-3">
-            <p className="text-[10px] font-heading font-bold text-green-400 uppercase tracking-[0.15em]">Pending Points</p>
+            <p className="text-[10px] font-heading font-bold text-green-400 uppercase tracking-[0.15em]">Pending Points Ready</p>
             <p className="text-[10px] text-zinc-400 font-heading mt-1">
-              You have <span className="text-green-400 font-bold">{pendingPoints.toLocaleString()}</span> points awaiting release. They will be credited automatically on your next login.
+              You have <span className="text-green-400 font-bold">{pendingPoints.toLocaleString()}</span> points ready to be credited.
             </p>
+            <button
+              type="button"
+              onClick={handleClaimPendingPoints}
+              disabled={claimingPending}
+              className="mt-2 px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50"
+            >
+              {claimingPending ? 'Releasing...' : 'Claim Pending Points'}
+            </button>
           </div>
           <div className="h-px bg-green-500/20 mx-3" />
         </div>

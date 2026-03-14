@@ -54,7 +54,8 @@ const SEARCHABLE_TOOLS = [
   { label: 'Jail NPCs', categoryId: 'admin-gameworld', collapseKey: 'jailNpcs', keywords: ['jail', 'npc', 'prisoner'] },
   { label: 'Casino Settings', categoryId: 'admin-gameworld', collapseKey: 'casinoCaps', keywords: ['casino', 'caps', 'max bet', 'buyback'] },
   { label: 'Admin Settings', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['admin', 'settings', 'config', 'banner', 'stock'] },
-  { label: 'Pre-order Settings', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['preorder', 'points', 'release'] },
+  { label: 'Pre-order Settings', categoryId: 'admin-gameworld', collapseKey: 'launchSettings', keywords: ['preorder', 'points', 'release'] },
+  { label: 'Release Preorder Points', categoryId: 'admin-gameworld', collapseKey: 'launchSettings', keywords: ['release', 'preorder', 'points', 'credit'] },
   { label: 'Login Lock', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['login', 'lock', 'maintenance'] },
   // Security
   { label: 'Security Summary', categoryId: 'admin-security', collapseKey: 'securitySummary', keywords: ['security', 'summary', 'flags'] },
@@ -429,6 +430,7 @@ export default function Admin() {
   const [loginLockMessage, setLoginLockMessage] = useState('');
   const [preorderReleaseDate, setPreorderReleaseDate] = useState('');
   const [launchSettingsSaving, setLaunchSettingsSaving] = useState(false);
+  const [preorderReleaseLoading, setPreorderReleaseLoading] = useState(false);
   const [casinoGlobalMaxBet, setCasinoGlobalMaxBet] = useState(1000000000);
   const [casinoBuybackMaxPoints, setCasinoBuybackMaxPoints] = useState(15000);
   const [casinoCapsSaving, setCasinoCapsSaving] = useState(false);
@@ -819,6 +821,19 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to clear');
     } finally {
       setLaunchSettingsSaving(false);
+    }
+  };
+
+  const handleReleaseAllPreorder = async () => {
+    if (!window.confirm('Release all pending preorder points to users? This will credit points and send notifications to all users with pending preorders.')) return;
+    setPreorderReleaseLoading(true);
+    try {
+      const res = await api.post('/admin/payments/release-all-preorder');
+      toast.success(res.data?.message || 'Released');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to release');
+    } finally {
+      setPreorderReleaseLoading(false);
     }
   };
 
@@ -3288,6 +3303,16 @@ export default function Admin() {
                 className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50"
               >
                 {launchSettingsSaving ? 'Saving...' : 'Save Preorder Settings'}
+              </button>
+              <div className="h-px bg-zinc-700/30 my-2" />
+              <p className="text-[10px] text-mutedForeground">If release date has passed, click below to manually credit all pending preorder points to users (sends notifications).</p>
+              <button
+                type="button"
+                onClick={handleReleaseAllPreorder}
+                disabled={preorderReleaseLoading}
+                className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50"
+              >
+                {preorderReleaseLoading ? 'Releasing...' : 'Release All Pending Preorder Points'}
               </button>
             </div>
           </div>

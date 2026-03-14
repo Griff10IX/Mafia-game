@@ -390,6 +390,84 @@ def register(router):
             "release_date": release_date,
         }
 
+    @router.post("/payments/check-release")
+    async def check_and_release_pending_points(current_user: dict = Depends(get_current_user)):
+        """Check if preorder release date has passed and credit any pending points for current user."""
+        settings = await db.game_settings.find_one({"_id": "main"})
+        release_date_str = settings.get("preorder_points_release_date") if settings else None
+        if not release_date_str:
+            return {"released": 0, "message": "No preorder release date set"}
+        
+        now = datetime.now(timezone.utc)
+        try:
+            release_date = datetime.fromisoformat(release_date_str.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return {"released": 0, "message": "Invalid release date format"}
+        
+        if now < release_date:
+            return {"released": 0, "message": "Release date has not passed yet", "release_date": release_date_str}
+        
+        pending_txns = await db.payment_transactions.find(
+            {"user_id": current_user["id"], "payment_status": "preorder_pending"}
+        ).to_list(100)
+        
+        released_count = 0
+        total_points = 0
+        for txn in pending_txns:
+            if await _credit_preorder_points(db, txn):
+                released_count += 1
+                total_points += txn.get("preorder_points") or txn.get("points", 0)
+        
+        return {
+            "released": released_count,
+            "total_points": total_points,
+            "message": f"Released {total_points:,} points from {released_count} transaction(s)" if released_count else "No pending points to release",
+        }
+
+    @router.post("/admin/payments/release-all-preorder")
+    async def admin_release_all_preorder_points(current_user: dict = Depends(get_current_user)):
+        """Admin only: Release all pending preorder points for all users (if release date has passed)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        
+        settings = await db.game_settings.find_one({"_id": "main"})
+        release_date_str = settings.get("preorder_points_release_date") if settings else None
+        if not release_date_str:
+            return {"released": 0, "message": "No preorder release date set"}
+        
+        now = datetime.now(timezone.utc)
+        try:
+            release_date = datetime.fromisoformat(release_date_str.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return {"released": 0, "message": "Invalid release date format"}
+        
+        if now < release_date:
+            return {"released": 0, "message": "Release date has not passed yet", "release_date": release_date_str}
+        
+        pending_txns = await db.payment_transactions.find(
+            {"payment_status": "preorder_pending"}
+        ).to_list(10000)
+        
+        released_count = 0
+        total_points = 0
+        users_affected = set()
+        for txn in pending_txns:
+            if await _credit_preorder_points(db, txn):
+                released_count += 1
+                total_points += txn.get("preorder_points") or txn.get("points", 0)
+                users_affected.add(txn.get("user_id"))
+        
+        logger.info(
+            "Admin released all preorder points: %s transactions, %s points, %s users",
+            released_count, total_points, len(users_affected),
+        )
+        return {
+            "released": released_count,
+            "total_points": total_points,
+            "users_affected": len(users_affected),
+            "message": f"Released {total_points:,} points from {released_count} transaction(s) for {len(users_affected)} user(s)" if released_count else "No pending preorder points to release",
+        }
+
     @router.get("/admin/payments")
     async def admin_payment_log(current_user: dict = Depends(get_current_user)):
         """Admin only: list all payment transactions (donations) with username for audit."""
