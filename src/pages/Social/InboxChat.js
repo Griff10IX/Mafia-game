@@ -37,6 +37,23 @@ const CLASSIC_SMILEYS = [
   { code: ':confused:', img: 'confused' },
   { code: ':grin:', img: 'grin' },
   { code: ':arrow:', img: 'arrow' },
+  { code: ':feelsbadman:', img: 'feelsbadman' },
+  { code: ':ez:', img: 'ez' },
+  { code: ':crazy:', img: 'crazy' },
+  { code: ':feelsrainman:', img: 'feelsrainman' },
+  { code: ':fu:', img: 'fu' },
+  { code: ':sadge:', img: 'sadge' },
+  { code: ':howdie:', img: 'howdie' },
+  { code: ':uzi:', img: 'uzi' },
+  { code: ':kekl:', img: 'kekl' },
+  { code: ':kekwait:', img: 'kekwait' },
+  { code: ':kekleo:', img: 'kekleo' },
+  { code: ':kekw:', img: 'kekw' },
+  { code: ':hmmnice:', img: 'hmmnice' },
+  { code: ':hypers:', img: 'hypers' },
+  { code: ':poggers:', img: 'poggers' },
+  { code: ':hackermans:', img: 'hackermans' },
+  { code: ':prayge:', img: 'prayge' },
 ];
 
 const CHAT_EMOJIS = [

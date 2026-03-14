@@ -82,6 +82,23 @@ const IMAGE_SMILEYS = [
   [':D', '/images/smileys/grin.png'],
   [':grin:', '/images/smileys/grin.png'],
   [':arrow:', '/images/smileys/arrow.png'],
+  [':feelsbadman:', '/images/smileys/feelsbadman.png'],
+  [':ez:', '/images/smileys/ez.png'],
+  [':crazy:', '/images/smileys/crazy.png'],
+  [':feelsrainman:', '/images/smileys/feelsrainman.png'],
+  [':fu:', '/images/smileys/fu.png'],
+  [':sadge:', '/images/smileys/sadge.png'],
+  [':howdie:', '/images/smileys/howdie.png'],
+  [':uzi:', '/images/smileys/uzi.png'],
+  [':kekl:', '/images/smileys/kekl.png'],
+  [':kekwait:', '/images/smileys/kekwait.png'],
+  [':kekleo:', '/images/smileys/kekleo.png'],
+  [':kekw:', '/images/smileys/kekw.png'],
+  [':hmmnice:', '/images/smileys/hmmnice.png'],
+  [':hypers:', '/images/smileys/hypers.png'],
+  [':poggers:', '/images/smileys/poggers.png'],
+  [':hackermans:', '/images/smileys/hackermans.png'],
+  [':prayge:', '/images/smileys/prayge.png'],
 ];
 
 // ---------------------------------------------------------------------------
