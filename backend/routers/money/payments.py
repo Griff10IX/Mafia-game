@@ -2,7 +2,7 @@
 import os
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -378,22 +378,19 @@ def register(router):
 
     @router.get("/payments/pending-points")
     async def get_pending_points(current_user: dict = Depends(get_current_user)):
-        """Get user's pending preorder points that will be credited on release date (includes stuck 'pending' transactions)."""
-        # Include both preorder_pending and stuck pending transactions
+        """Get user's pending preorder points that will be credited on release date."""
+        # Only count preorder_pending (confirmed paid, waiting for release)
+        # Don't count "pending" - those are unconfirmed/abandoned checkout sessions
         pending_txns = await db.payment_transactions.find(
-            {"user_id": current_user["id"], "payment_status": {"$in": ["preorder_pending", "pending"]}},
-            {"_id": 0, "preorder_points": 1, "points": 1, "preorder_release_date": 1, "payment_status": 1},
+            {"user_id": current_user["id"], "payment_status": "preorder_pending"},
+            {"_id": 0, "preorder_points": 1, "points": 1, "preorder_release_date": 1},
         ).to_list(100)
         total_pending = sum(t.get("preorder_points") or t.get("points", 0) for t in pending_txns)
-        preorder_count = sum(1 for t in pending_txns if t.get("payment_status") == "preorder_pending")
-        stuck_count = sum(1 for t in pending_txns if t.get("payment_status") == "pending")
         settings = await db.game_settings.find_one({"_id": "main"})
         release_date = settings.get("preorder_points_release_date") if settings else None
         return {
             "pending_points": total_pending,
             "transaction_count": len(pending_txns),
-            "preorder_count": preorder_count,
-            "stuck_count": stuck_count,
             "release_date": release_date,
         }
 
@@ -414,9 +411,10 @@ def register(router):
             except (ValueError, TypeError):
                 pass
         
-        # First: check any stuck "pending" transactions with Stripe and process them
+        # First: check recent "pending" transactions with Stripe (only last 2 hours to avoid checking old abandoned ones)
+        two_hours_ago = (now - timedelta(hours=2)).isoformat()
         stuck_pending = await db.payment_transactions.find(
-            {"user_id": current_user["id"], "payment_status": "pending"}
+            {"user_id": current_user["id"], "payment_status": "pending", "created_at": {"$gte": two_hours_ago}}
         ).to_list(100)
         
         processed_stuck = 0
