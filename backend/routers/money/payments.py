@@ -378,37 +378,83 @@ def register(router):
 
     @router.get("/payments/pending-points")
     async def get_pending_points(current_user: dict = Depends(get_current_user)):
-        """Get user's pending preorder points that will be credited on release date."""
+        """Get user's pending preorder points that will be credited on release date (includes stuck 'pending' transactions)."""
+        # Include both preorder_pending and stuck pending transactions
         pending_txns = await db.payment_transactions.find(
-            {"user_id": current_user["id"], "payment_status": "preorder_pending"},
-            {"_id": 0, "preorder_points": 1, "points": 1, "preorder_release_date": 1},
+            {"user_id": current_user["id"], "payment_status": {"$in": ["preorder_pending", "pending"]}},
+            {"_id": 0, "preorder_points": 1, "points": 1, "preorder_release_date": 1, "payment_status": 1},
         ).to_list(100)
         total_pending = sum(t.get("preorder_points") or t.get("points", 0) for t in pending_txns)
+        preorder_count = sum(1 for t in pending_txns if t.get("payment_status") == "preorder_pending")
+        stuck_count = sum(1 for t in pending_txns if t.get("payment_status") == "pending")
         settings = await db.game_settings.find_one({"_id": "main"})
         release_date = settings.get("preorder_points_release_date") if settings else None
         return {
             "pending_points": total_pending,
             "transaction_count": len(pending_txns),
+            "preorder_count": preorder_count,
+            "stuck_count": stuck_count,
             "release_date": release_date,
         }
 
     @router.post("/payments/check-release")
     async def check_and_release_pending_points(current_user: dict = Depends(get_current_user)):
-        """Check if preorder release date has passed and credit any pending points for current user."""
+        """Check for stuck 'pending' transactions with Stripe, then release any preorder_pending points."""
         settings = await db.game_settings.find_one({"_id": "main"})
         release_date_str = settings.get("preorder_points_release_date") if settings else None
-        if not release_date_str:
-            return {"released": 0, "message": "No preorder release date set"}
-        
         now = datetime.now(timezone.utc)
-        try:
-            release_date = datetime.fromisoformat(release_date_str.replace("Z", "+00:00"))
-        except (ValueError, TypeError):
-            return {"released": 0, "message": "Invalid release date format"}
         
-        if now < release_date:
-            return {"released": 0, "message": "Release date has not passed yet", "release_date": release_date_str}
+        # Parse release date if set
+        release_date = None
+        preorder_active = False
+        if release_date_str:
+            try:
+                release_date = datetime.fromisoformat(release_date_str.replace("Z", "+00:00"))
+                preorder_active = now < release_date
+            except (ValueError, TypeError):
+                pass
         
+        # First: check any stuck "pending" transactions with Stripe and process them
+        stuck_pending = await db.payment_transactions.find(
+            {"user_id": current_user["id"], "payment_status": "pending"}
+        ).to_list(100)
+        
+        processed_stuck = 0
+        api_key = _get_stripe_key()
+        if stuck_pending and api_key:
+            for txn in stuck_pending:
+                session_id = txn.get("session_id")
+                if not session_id:
+                    continue
+                try:
+                    def _retrieve():
+                        import stripe
+                        stripe.api_key = api_key
+                        return stripe.checkout.Session.retrieve(session_id)
+                    session = await asyncio.to_thread(_retrieve)
+                    if session.payment_status == "paid":
+                        user_id = txn.get("user_id")
+                        package_id = txn.get("package_id", "")
+                        points = txn.get("points", 0)
+                        if user_id and points > 0:
+                            result = await _credit_payment_if_pending(db, session_id, user_id, package_id, points)
+                            if result.get("credited"):
+                                processed_stuck += 1
+                                logger.info("Processed stuck pending transaction: session_id=%s user_id=%s points=%s", session_id, user_id, points)
+                except Exception as e:
+                    logger.warning("Failed to check stuck transaction %s: %s", txn.get("session_id"), e)
+        
+        # If preorder is still active (release date in future), don't release preorder_pending yet
+        if preorder_active:
+            return {
+                "released": 0,
+                "processed_stuck": processed_stuck,
+                "total_points": 0,
+                "message": f"Processed {processed_stuck} stuck transaction(s). Release date has not passed yet." if processed_stuck else "Release date has not passed yet",
+                "release_date": release_date_str,
+            }
+        
+        # Now release any preorder_pending transactions
         pending_txns = await db.payment_transactions.find(
             {"user_id": current_user["id"], "payment_status": "preorder_pending"}
         ).to_list(100)
@@ -420,10 +466,17 @@ def register(router):
                 released_count += 1
                 total_points += txn.get("preorder_points") or txn.get("points", 0)
         
+        msg_parts = []
+        if released_count:
+            msg_parts.append(f"Released {total_points:,} points from {released_count} transaction(s)")
+        if processed_stuck:
+            msg_parts.append(f"Processed {processed_stuck} stuck transaction(s)")
+        
         return {
             "released": released_count,
+            "processed_stuck": processed_stuck,
             "total_points": total_points,
-            "message": f"Released {total_points:,} points from {released_count} transaction(s)" if released_count else "No pending points to release",
+            "message": ". ".join(msg_parts) if msg_parts else "No pending points to release",
         }
 
     @router.post("/admin/payments/release-all-preorder")

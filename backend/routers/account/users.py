@@ -104,9 +104,10 @@ def register(router):
                         user_status = "online"
                 except Exception:
                     pass
-            # Auto-rank enabled but not idle and user is offline = show as idle (bot keeping them in game)
-            if user_status == "offline" and user.get("auto_rank_enabled") and not user.get("auto_rank_idle"):
-                user_status = "idle"
+            # Admins/mods with auto-rank enabled = always show as "online" (24/7)
+            # Regular users follow normal status based on last_seen (online/idle/offline)
+            if (is_admin or is_mod) and user.get("auto_rank_enabled") and not user.get("auto_rank_idle"):
+                user_status = "online"
             
             item = {
                 "username": (user.get("username") or "").strip(),

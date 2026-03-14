@@ -76,7 +76,7 @@ OBJECTIVE_TYPES_LIFETIME = [
     {"id": "melt", "label": "Melt 5,000,000 bullets", "target": 5_000_000, "progress_key": "bullets_melted"},
     {"id": "crime_profit", "label": "Earn $5,000,000,000 from crimes", "target": 5_000_000_000, "progress_key": "crime_profit"},
     {"id": "respect", "label": "Earn 15,000 respect points", "target": 15_000, "progress_key": "lifetime_respect_earned"},
-    {"id": "booze", "label": "Complete 1,000,000 booze runs", "target": 1_000_000, "progress_key": "booze_runs_count"},
+    {"id": "booze", "label": "Complete 100,000 booze runs", "target": 100_000, "progress_key": "booze_runs_count"},
     {"id": "minigames", "label": "Play 1,000 minigames", "target": 1_000, "progress_key": "minigame_plays"},
     {"id": "hitlist_npc", "label": "Kill 5,000 hitlist NPCs", "target": 5_000, "progress_key": "hitlist_npc_kills"},
 ]
@@ -555,14 +555,13 @@ async def get_objectives(current_user: dict = Depends(get_current_user)):
     lifetime_claimed = bool(user.get("objectives_lifetime_claimed"))
     lifetime_progress = await _get_lifetime_progress(user_id, user)
     lifetime_list, lifetime_all_done = _build_lifetime_objective_list(lifetime_progress)
-    lifetime_claim_reward = None
-    if lifetime_all_done and not lifetime_claimed:
-        lifetime_claim_reward = {
-            "money": LIFETIME_COMPLETION_REWARD["money"],
-            "points": LIFETIME_COMPLETION_REWARD["points"],
-            "bullets": LIFETIME_COMPLETION_REWARD["bullets"],
-            "perks": LIFETIME_PERKS,
-        }
+    # Always show rewards preview (so users know what they're working towards)
+    lifetime_claim_reward = {
+        "money": LIFETIME_COMPLETION_REWARD["money"],
+        "points": LIFETIME_COMPLETION_REWARD["points"],
+        "bullets": LIFETIME_COMPLETION_REWARD["bullets"],
+        "perks": LIFETIME_PERKS,
+    } if not lifetime_claimed else None
 
     # Notify admins when a user is close to completing lifetime objectives (8+ done)
     # Only notify once per user (tracked by objectives_lifetime_close_notified flag)

@@ -52,21 +52,21 @@ OC_JAIL_CHANCE_ON_FAIL = 0.50
 OC_JAIL_SECONDS_TEAM = 60  # Creator goes to jail on failed/jail outcome
 
 # Jobs: cash = total pool on success (split by team). Success chance is fixed 50%.
-# 75% reduction for beta
+# Reduced for beta
 OC_JOBS = [
-    {"id": "country_bank", "name": "Country Bank", "success_rate": 0.50, "cash": 550_000, "rp": 120},
-    {"id": "state_bank", "name": "State Bank", "success_rate": 0.50, "cash": 700_000, "rp": 280},
-    {"id": "city_bank", "name": "City Bank", "success_rate": 0.50, "cash": 950_000, "rp": 560},
-    {"id": "government_vault", "name": "Government Vault", "success_rate": 0.50, "cash": 1_375_000, "rp": 1100},
+    {"id": "country_bank", "name": "Country Bank", "success_rate": 0.50, "cash": 137_500, "rp": 120},
+    {"id": "state_bank", "name": "State Bank", "success_rate": 0.50, "cash": 175_000, "rp": 280},
+    {"id": "city_bank", "name": "City Bank", "success_rate": 0.50, "cash": 237_500, "rp": 560},
+    {"id": "government_vault", "name": "Government Vault", "success_rate": 0.50, "cash": 343_750, "rp": 1100},
 ]
 
 # Equipment (must match organised_crime EQUIPMENT_TIERS): used to boost success rate when running heist
 OC_EQUIPMENT_BY_ID = {
     "basic": {"cost": 0, "success_bonus": 0.0},
-    "upgraded": {"cost": 400_000, "success_bonus": 0.10},
-    "professional": {"cost": 700_000, "success_bonus": 0.20},
-    "elite": {"cost": 900_000, "success_bonus": 0.30},
-    "master": {"cost": 1_000_000, "success_bonus": 0.40},
+    "upgraded": {"cost": 25_000, "success_bonus": 0.10},
+    "professional": {"cost": 43_750, "success_bonus": 0.20},
+    "elite": {"cost": 56_250, "success_bonus": 0.30},
+    "master": {"cost": 62_500, "success_bonus": 0.40},
 }
 
 OC_COOLDOWN_HOURS = 6
