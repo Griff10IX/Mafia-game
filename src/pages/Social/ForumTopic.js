@@ -8,7 +8,16 @@ import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 
-const EMOJI_STRIP = ['😀', '😂', '👍', '❤️', '🔥', '😎', '👋', '🎉', '💀', '😢', '💰', '💎', '🔫', '👑', '🏆', '✨'];
+const EMOJI_STRIP = [
+  '😀', '😃', '😄', '😁', '😊', '🙂', '😉', '😎', '🤩', '😍', 
+  '😂', '🤣', '😅', '😢', '😭', '😤', '😡', '🤬', '😱', '😰',
+  '🤔', '😐', '😑', '🙄', '😏', '😒', '🥱', '😴', '🤢', '🤮',
+  '👍', '👎', '👋', '🤝', '🙏', '💪', '✊', '👊', '🤙', '✌️',
+  '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '💔', '❣️', '💕',
+  '🔥', '⭐', '✨', '💥', '💯', '🎉', '🎊', '🏆', '👑', '💎',
+  '💰', '💵', '💸', '🔫', '💀', '☠️', '⚔️', '🔪', '🎲', '🃏',
+  '❓', '❗', '⚠️', '✅', '❌', '🚫', '➕', '➖', '➡️', '⬅️'
+];
 
 const TITLE_COLORS = [
   // Default
@@ -539,17 +548,19 @@ export default function ForumTopic() {
                     style={editTitleColor ? { color: editTitleColor } : {}}
                     className="flex-1 px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowEditTitleColors(!showEditTitleColors)}
-                    className="px-2 py-1 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 flex items-center gap-1"
-                    title="Title Color"
-                  >
-                    <Palette size={14} />
-                    {editTitleColor && <span className="w-3 h-3 rounded-full" style={{ backgroundColor: editTitleColor }} />}
-                  </button>
+                  {(isAdmin || isModerator) && (
+                    <button
+                      type="button"
+                      onClick={() => setShowEditTitleColors(!showEditTitleColors)}
+                      className="px-2 py-1 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 flex items-center gap-1"
+                      title="Title Color (Staff Only)"
+                    >
+                      <Palette size={14} />
+                      {editTitleColor && <span className="w-3 h-3 rounded-full" style={{ backgroundColor: editTitleColor }} />}
+                    </button>
+                  )}
                 </div>
-                {showEditTitleColors && (
+                {(isAdmin || isModerator) && showEditTitleColors && (
                   <div className="flex flex-wrap gap-1 p-2 bg-zinc-900/50 border border-zinc-700/50 rounded">
                     {TITLE_COLORS.map((c) => (
                       <button

@@ -150,6 +150,7 @@ async def get_topics(
         item = {
             "id": t["id"],
             "title": t["title"],
+            "title_color": t.get("title_color"),
             "author_username": t.get("author_username", "?"),
             "category": t.get("category", "general"),
             "posts": comment_count + 1,
@@ -299,9 +300,12 @@ async def create_topic(
     gif_url = (request.gif_url or "").strip()
     if gif_url and not (gif_url.startswith("http://") or gif_url.startswith("https://")):
         raise HTTPException(status_code=400, detail="Invalid GIF URL")
-    title_color = (request.title_color or "").strip()
-    if title_color and not (title_color.startswith("#") and len(title_color) <= 9):
-        title_color = ""  # Invalid color, ignore
+    # Only admins/mods can use title colors
+    title_color = ""
+    if _is_admin(current_user) or _is_moderator(current_user):
+        title_color = (request.title_color or "").strip()
+        if title_color and not (title_color.startswith("#") and len(title_color) <= 9):
+            title_color = ""  # Invalid color, ignore
     topic_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     doc = {
@@ -562,12 +566,13 @@ async def update_topic(
                 updates["gif_url"] = gif_url
             else:
                 updates["_unset_gif"] = True  # signal to $unset gif_url
-        if request.title_color is not None:
-            title_color = (request.title_color or "").strip()
-            if title_color and title_color.startswith("#") and len(title_color) <= 9:
-                updates["title_color"] = title_color
-            elif not title_color:
-                updates["_unset_title_color"] = True  # signal to $unset title_color
+    # Only admins/mods can use title colors
+    if (is_admin or is_mod) and request.title_color is not None:
+        title_color = (request.title_color or "").strip()
+        if title_color and title_color.startswith("#") and len(title_color) <= 9:
+            updates["title_color"] = title_color
+        elif not title_color:
+            updates["_unset_title_color"] = True  # signal to $unset title_color
     if not (is_admin or is_mod or is_hdo or is_author):
         raise HTTPException(status_code=403, detail="Not allowed to edit this topic")
     if not updates:

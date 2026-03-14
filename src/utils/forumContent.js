@@ -39,6 +39,15 @@ function escapeRegex(str) {
 }
 
 // ---------------------------------------------------------------------------
+// Image-based smileys — classic forum style (render as <img> tags)
+// ---------------------------------------------------------------------------
+const IMAGE_SMILEYS = [
+  [':wink:', '/images/smileys/wink.png'],
+  [';-)', '/images/smileys/wink.png'],
+  [';)', '/images/smileys/wink.png'],
+];
+
+// ---------------------------------------------------------------------------
 // Smileys — order matters: longer / more-specific patterns first
 // ---------------------------------------------------------------------------
 const SMILEYS = [
@@ -50,7 +59,6 @@ const SMILEYS = [
   [':-))',  '😄'],
   [':-)',   '😊'],
   [':-D',   '😄'],
-  [';-)',   '😉'],
   [':-P',   '😛'],
   [':-p',   '😛'],
   [':-O',   '😮'],
@@ -64,7 +72,6 @@ const SMILEYS = [
   ['O:-)',  '😇'],
   [':)',    '😊'],
   [':D',   '😄'],
-  [';)',    '😉'],
   [':P',   '😛'],
   [':p',   '😛'],
   [':O',   '😮'],
@@ -90,7 +97,6 @@ const SMILEYS = [
   [':big_smile:',  '😁'],
   [':smile:',      '😊'],
   [':blush:',      '😊'],
-  [':wink:',       '😉'],
   [':tongue:',     '😛'],
   [':kiss:',       '😘'],
   [':love:',       '😍'],
@@ -348,6 +354,100 @@ const SMILEYS = [
   [':grape:',       '🍇'],
   [':horseshoe:',   '🧲'],
   [':joystick:',    '🕹️'],
+  
+  // --- Additional icons ---
+  [':calendar:',    '📅'],
+  [':airplane:',    '✈️'],
+  [':plane:',       '✈️'],
+  [':factory:',     '🏭'],
+  [':speech_balloon:', '💬'],
+  [':chat:',        '💬'],
+  [':shield:',      '🛡️'],
+  [':question:',    '❓'],
+  [':exclamation:', '❗'],
+  [':info:',        'ℹ️'],
+  [':building:',    '🏢'],
+  [':bank:',        '🏦'],
+  [':hospital:',    '🏥'],
+  [':house:',       '🏠'],
+  [':office:',      '🏢'],
+  [':store:',       '🏪'],
+  [':hotel:',       '🏨'],
+  [':crosshair:',   '🎯'],
+  [':target:',      '🎯'],
+  [':sword:',       '⚔️'],
+  [':swords:',      '⚔️'],
+  [':axe:',         '🪓'],
+  [':hammer:',      '🔨'],
+  [':wrench:',      '🔧'],
+  [':gear:',        '⚙️'],
+  [':package:',     '📦'],
+  [':inbox:',       '📥'],
+  [':outbox:',      '📤'],
+  [':mailbox:',     '📬'],
+  [':truck:',       '🚚'],
+  [':taxi:',        '🚕'],
+  [':bus:',         '🚌'],
+  [':train:',       '🚂'],
+  [':ship:',        '🚢'],
+  [':anchor:',      '⚓'],
+  [':fuel:',        '⛽'],
+  [':traffic:',     '🚦'],
+  [':construction:','🚧'],
+  [':tent:',        '⛺'],
+  [':mountain:',    '⛰️'],
+  [':volcano:',     '🌋'],
+  [':desert:',      '🏜️'],
+  [':island:',      '🏝️'],
+  [':sunrise:',     '🌅'],
+  [':sunset:',      '🌇'],
+  [':city:',        '🏙️'],
+  [':night:',       '🌃'],
+  [':bridge:',      '🌉'],
+  [':wheel:',       '🎡'],
+  [':coaster:',     '🎢'],
+  [':circus:',      '🎪'],
+  [':ticket:',      '🎟️'],
+  [':film:',        '🎬'],
+  [':camera:',      '📷'],
+  [':tv:',          '📺'],
+  [':radio:',       '📻'],
+  [':cd:',          '💿'],
+  [':dvd:',         '📀'],
+  [':battery:',     '🔋'],
+  [':plug:',        '🔌'],
+  [':flashlight:',  '🔦'],
+  [':candle:',      '🕯️'],
+  [':lightbulb:',   '💡'],
+  [':door:',        '🚪'],
+  [':bed:',         '🛏️'],
+  [':couch:',       '🛋️'],
+  [':toilet:',      '🚽'],
+  [':shower:',      '🚿'],
+  [':bathtub:',     '🛁'],
+  [':razor:',       '🪒'],
+  [':lotion:',      '🧴'],
+  [':soap:',        '🧼'],
+  [':sponge:',      '🧽'],
+  [':basket:',      '🧺'],
+  [':thread:',      '🧵'],
+  [':yarn:',        '🧶'],
+  [':pin2:',        '📍'],
+  [':map:',         '🗺️'],
+  [':compass:',     '🧭'],
+  [':world:',       '🌐'],
+  [':satellite:',   '🛰️'],
+  [':rocket2:',     '🚀'],
+  [':ufo:',         '🛸'],
+  [':atom:',        '⚛️'],
+  [':dna:',         '🧬'],
+  [':microscope:',  '🔬'],
+  [':telescope:',   '🔭'],
+  [':pill:',        '💊'],
+  [':syringe:',     '💉'],
+  [':drop:',        '🩸'],
+  [':bandage:',     '🩹'],
+  [':stethoscope:', '🩺'],
 ];
 
 /**
@@ -527,7 +627,11 @@ export function parseForumContent(content) {
       : escapeHtml(url.trim());
   });
 
-  // 6) Smileys
+  // 6) Smileys - image smileys first, then text emojis
+  for (const [from, imgPath] of IMAGE_SMILEYS) {
+    const imgTag = `<img src="${imgPath}" alt="${escapeAttr(from)}" class="inline-smiley" style="display:inline;vertical-align:middle;width:20px;height:20px;" />`;
+    s = s.replace(new RegExp(escapeRegex(from), 'g'), imgTag);
+  }
   for (const [from, emoji] of SMILEYS) {
     s = s.replace(new RegExp(escapeRegex(from), 'g'), emoji);
   }
