@@ -328,8 +328,21 @@ async def _set_user_idle(db, user_id: str, username: str = "?"):
     logger.info("Auto rank: user %s went idle (no activity for 3h) - tasks disabled, prefs saved", username)
 
 
+def _is_staff(user: dict) -> bool:
+    """Check if user is admin or moderator (staff never go auto_rank_idle)."""
+    import server as srv
+    email = (user.get("email") or "").lower()
+    is_admin = email in srv.ADMIN_EMAILS
+    is_mod = bool(user.get("is_moderator"))
+    return is_admin or is_mod
+
+
 async def _check_and_set_idle(db, user_id: str, user: dict, now: datetime) -> bool:
-    """Check if user should be idle. If so, save preferences, disable all tasks, set auto_rank_idle=True. Return True if idle."""
+    """Check if user should be idle. If so, save preferences, disable all tasks, set auto_rank_idle=True. Return True if idle.
+    Admins and moderators are exempt - their auto_rank never goes idle."""
+    # Staff (admins/mods) never go idle - their auto_rank always stays active
+    if _is_staff(user):
+        return False
     if _is_user_idle(user, now):
         if not user.get("auto_rank_idle"):
             await _set_user_idle(db, user_id, user.get("username", user_id))
@@ -890,7 +903,7 @@ async def run_booze_arrivals():
 
     cursor = db.users.find(
         {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_booze": True, "travel_arrives_at": {"$lte": now_iso}, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
-        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1},
+        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
     )
     users = await cursor.to_list(200)
     
@@ -946,7 +959,7 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
                 {"auto_rank_next_run_at": {"$lte": now.isoformat()}},
             ],
         },
-        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1},
+        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
     )
     users = await cursor.to_list(500)
     
@@ -1006,7 +1019,7 @@ async def run_bust_5sec_once():
     try:
         cursor = db.users.find(
             {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
-            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1},
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
         )
         users = await cursor.to_list(500)
         
@@ -1074,7 +1087,7 @@ async def run_auto_rank_oc_once():
     try:
         cursor = db.users.find(
             {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_oc": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
-            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_oc_retry_at": 1, "last_seen": 1},
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_oc_retry_at": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
         )
         users = await cursor.to_list(500)
         

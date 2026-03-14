@@ -225,10 +225,6 @@ def register(router):
             # Admin ghost mode - always offline
             status = "offline"
             online = False
-        elif user.get("auto_rank_enabled") and not user.get("auto_rank_idle"):
-            # Auto-rank enabled but not idle - always IDLE (bot is playing for them)
-            status = "idle"
-            online = False
         elif last_seen_dt and last_seen_dt >= five_min_ago:
             # Active within last 5 minutes - ONLINE
             status = "online"
@@ -241,8 +237,12 @@ def register(router):
             # Active 5-10 minutes ago - IDLE
             status = "idle"
             online = False
+        elif user.get("auto_rank_enabled") and not user.get("auto_rank_idle"):
+            # Auto-rank enabled but not idle and user is offline - show as IDLE (bot keeping them in game)
+            status = "idle"
+            online = False
         else:
-            # More than 10 minutes - OFFLINE
+            # More than 10 minutes or auto_rank_idle - OFFLINE
             status = "offline"
             online = False
         wealth_range = get_wealth_rank_range(user.get("money", 0))
