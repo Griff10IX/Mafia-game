@@ -8,10 +8,54 @@ from fastapi import Depends
 
 def _gambling_profit_from_details(game_type: str, details: dict) -> int:
     """Compute profit from gambling_log details. Positive = won, negative = lost."""
-    stake = int(details.get("stake") or details.get("bet") or 0)
-    payout = int(details.get("payout") or 0)
-    if game_type in ("sports_bet", "mdg", "mp_blackjack"):
-        return 0  # sports uses sports_bets; mdg/mp complex
+    # Handle different field names used by different games
+    stake = int(details.get("stake") or details.get("bet") or details.get("total_stake") or 0)
+    payout = int(details.get("payout") or details.get("total_payout") or 0)
+    
+    # Sports betting uses separate sports_bets collection
+    if game_type == "sports_bet":
+        return 0
+    
+    # MDG: track fees paid vs payouts received
+    if game_type == "mdg":
+        action = details.get("action")
+        if action in ("create", "join"):
+            # Player paid fee to enter
+            fee_pts = int(details.get("fee_points") or 0)
+            fee_money = int(details.get("fee_money") or 0)
+            extra_pts = int(details.get("extra_pot_points") or 0)
+            extra_money = int(details.get("extra_pot_money") or 0)
+            return -(fee_pts + fee_money + extra_pts + extra_money)
+        elif action == "payout":
+            # Player won pot
+            pot_pts = int(details.get("pot_points") or 0)
+            pot_money = int(details.get("pot_money") or 0)
+            return pot_pts + pot_money
+        return 0
+    
+    # MP Blackjack: track buy-ins vs winnings
+    if game_type == "mp_blackjack":
+        action = details.get("action")
+        if action in ("create", "join"):
+            buy_in = int(details.get("buy_in") or 0)
+            extra_prize = int(details.get("extra_prize") or 0)
+            return -(buy_in + extra_prize)
+        elif action == "payout":
+            winnings = int(details.get("winnings") or 0)
+            return winnings
+        return 0
+    
+    # MP Poker: track buy-ins vs winnings
+    if game_type == "mp_poker":
+        action = details.get("action")
+        if action in ("create", "join"):
+            buy_in = int(details.get("buy_in") or 0)
+            return -buy_in
+        elif action == "payout":
+            winnings = int(details.get("winnings") or 0)
+            return winnings
+        return 0
+    
     return payout - stake
 
 

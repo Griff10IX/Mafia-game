@@ -239,6 +239,7 @@ def register(router):
                     if uid in winner_ids:
                         if pot > 0:
                             await db.users.update_one({"id": uid}, {"$inc": {"money": pot}})
+                            await log_gambling(uid, p.get("username") or "?", "mp_blackjack", {"action": "payout", "game_id": game_id, "winnings": pot})
                         results.append({
                             "user_id": uid,
                             "username": p.get("username"),
@@ -377,6 +378,7 @@ def register(router):
             payouts[uid] = pot
             if pot > 0:
                 await db.users.update_one({"id": uid}, {"$inc": {"money": pot}})
+                await log_gambling(uid, players[winner_indices[0]].get("username") or "?", "mp_blackjack", {"action": "payout", "game_id": game_id, "winnings": pot})
 
             results = []
             for p in players:

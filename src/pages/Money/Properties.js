@@ -40,7 +40,8 @@ export default function Properties() {
       setProperties(Array.isArray(data) ? data : (data?.properties ?? []));
       setPropertyIncomePerkUntil(data?.property_income_perk_until ?? null);
     } catch (error) {
-      toast.error('Failed to load properties');
+      const detail = error.response?.data?.detail || error.message || 'Unknown error';
+      toast.error(`Failed to load properties: ${detail}`);
       setProperties([]);
       setPropertyIncomePerkUntil(null);
     } finally {

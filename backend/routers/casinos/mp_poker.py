@@ -268,6 +268,7 @@ def register(router):
             hand_name = _hand_description(best[0], best[1])
         if winner and winner.get("user_id") == uid and pot > 0:
             await db.users.update_one({"id": uid}, {"$inc": {"money": pot}})
+            await log_gambling(uid, g.get("username") or "?", "mp_poker", {"action": "payout", "game_id": game_id, "winnings": pot})
             results.append({"user_id": uid, "result": "win", "payout": pot, "hand": hand_name})
             results.append({"user_id": "dealer", "result": "lose", "payout": 0})
         elif winner and winner.get("user_id") == "dealer":
@@ -454,6 +455,7 @@ def register(router):
         bot["total_bet_this_hand"] = blind * 2
         pot = blind * 3
         await db.users.update_one({"id": uid}, {"$inc": {"money": -human_stack}})
+        await log_gambling(uid, (current_user.get("username") or "?"), "mp_poker", {"action": "create", "game_id": game_id, "buy_in": human_stack, "mode": "vs_dealer"})
         now_iso = datetime.now(timezone.utc).isoformat()
         doc = {
             "id": game_id,
@@ -716,6 +718,7 @@ def register(router):
             "chat": [],
         }
         await db.users.update_one({"id": uid}, {"$inc": {"money": -need}})
+        await log_gambling(uid, username, "mp_poker", {"action": "create", "game_id": game_id, "buy_in": need, "mode": "vs_players"})
         await db.mp_poker_games.insert_one(doc)
         return {"game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
 
@@ -770,6 +773,7 @@ def register(router):
             "is_bot": False,
         })
         await db.users.update_one({"id": uid}, {"$inc": {"money": -buy_in}})
+        await log_gambling(uid, username, "mp_poker", {"action": "join", "game_id": game_id, "buy_in": buy_in})
         # 2+ players is enough to enter ready phase; creator can start once all current players are ready
         phase = "ready" if len(players) >= 2 else "lobby"
         await db.mp_poker_games.update_one(
@@ -887,6 +891,7 @@ def register(router):
             uid = winner.get("user_id")
             if uid and uid != "dealer":
                 await db.users.update_one({"id": uid}, {"$inc": {"money": pot}})
+                await log_gambling(uid, winner.get("username") or "?", "mp_poker", {"action": "payout", "game_id": game_id, "winnings": pot})
             for p in players:
                 results.append({
                     "user_id": p.get("user_id"),
@@ -915,6 +920,7 @@ def register(router):
                 winner_payouts[uid] = split + (remainder if i == 0 else 0)
                 if uid and uid != "dealer" and winner_payouts[uid] > 0:
                     await db.users.update_one({"id": uid}, {"$inc": {"money": winner_payouts[uid]}})
+                    await log_gambling(uid, w.get("username") or "?", "mp_poker", {"action": "payout", "game_id": game_id, "winnings": winner_payouts[uid]})
             for p in players:
                 uid = p.get("user_id")
                 results.append({

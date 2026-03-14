@@ -61,8 +61,9 @@ export default function MyProperties() {
       } else {
         setArmouryDetail(null);
       }
-    } catch {
-      toast.error('Failed to load properties');
+    } catch (error) {
+      const detail = error.response?.data?.detail || error.message || 'Unknown error';
+      toast.error(`Failed to load properties: ${detail}`);
       setData({ casino: null, property: null });
     } finally {
       setLoading(false);
