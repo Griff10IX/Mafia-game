@@ -45,6 +45,43 @@ const IMAGE_SMILEYS = [
   [':wink:', '/images/smileys/wink.png'],
   [';-)', '/images/smileys/wink.png'],
   [';)', '/images/smileys/wink.png'],
+  [':twisted:', '/images/smileys/twisted.png'],
+  ['>:)', '/images/smileys/twisted.png'],
+  [':tup:', '/images/smileys/tup.png'],
+  [':tdown:', '/images/smileys/tdown.png'],
+  [':tongue:', '/images/smileys/tongue.png'],
+  [':P', '/images/smileys/tongue.png'],
+  [':p', '/images/smileys/tongue.png'],
+  [':surprised:', '/images/smileys/surprised.png'],
+  [':O', '/images/smileys/surprised.png'],
+  [':o', '/images/smileys/surprised.png'],
+  [':}', '/images/smileys/smirk.png'],
+  [':happy:', '/images/smileys/smirk.png'],
+  [':sad:', '/images/smileys/sad.png'],
+  [':(', '/images/smileys/sad.png'],
+  [':-(', '/images/smileys/sad.png'],
+  [':rolleyes:', '/images/smileys/rolleyes.png'],
+  [':redface:', '/images/smileys/redface.png'],
+  [':blush:', '/images/smileys/redface.png'],
+  [':?:', '/images/smileys/question.png'],
+  [':mad:', '/images/smileys/mad.png'],
+  [':angry:', '/images/smileys/mad.png'],
+  [':lol:', '/images/smileys/lol.png'],
+  [':laugh:', '/images/smileys/lol.png'],
+  [':idea:', '/images/smileys/idea.png'],
+  [':!:', '/images/smileys/exclamation.png'],
+  [':evil:', '/images/smileys/evil.png'],
+  [':devil:', '/images/smileys/evil.png'],
+  [':eek:', '/images/smileys/eek.png'],
+  [':shock:', '/images/smileys/eek.png'],
+  [':cool:', '/images/smileys/cool.png'],
+  ['B)', '/images/smileys/cool.png'],
+  [':S', '/images/smileys/confused.png'],
+  [':s', '/images/smileys/confused.png'],
+  [':confused:', '/images/smileys/confused.png'],
+  [':D', '/images/smileys/grin.png'],
+  [':grin:', '/images/smileys/grin.png'],
+  [':arrow:', '/images/smileys/arrow.png'],
 ];
 
 // ---------------------------------------------------------------------------
@@ -629,7 +666,7 @@ export function parseForumContent(content) {
 
   // 6) Smileys - image smileys first, then text emojis
   for (const [from, imgPath] of IMAGE_SMILEYS) {
-    const imgTag = `<img src="${imgPath}" alt="${escapeAttr(from)}" class="inline-smiley" style="display:inline;vertical-align:middle;width:20px;height:20px;" />`;
+    const imgTag = `<img src="${imgPath}" alt="${escapeAttr(from)}" class="inline-smiley" style="display:inline;vertical-align:middle;width:1.2em;height:1.2em;" />`;
     s = s.replace(new RegExp(escapeRegex(from), 'g'), imgTag);
   }
   for (const [from, emoji] of SMILEYS) {

@@ -8,6 +8,32 @@ import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 
+// Classic forum smileys (text codes that render as images)
+const CLASSIC_SMILEYS = [
+  { code: ':wink:', img: 'wink' },
+  { code: ':twisted:', img: 'twisted' },
+  { code: ':tup:', img: 'tup' },
+  { code: ':tdown:', img: 'tdown' },
+  { code: ':tongue:', img: 'tongue' },
+  { code: ':surprised:', img: 'surprised' },
+  { code: ':happy:', img: 'smirk' },
+  { code: ':sad:', img: 'sad' },
+  { code: ':rolleyes:', img: 'rolleyes' },
+  { code: ':redface:', img: 'redface' },
+  { code: ':?:', img: 'question' },
+  { code: ':mad:', img: 'mad' },
+  { code: ':lol:', img: 'lol' },
+  { code: ':idea:', img: 'idea' },
+  { code: ':!:', img: 'exclamation' },
+  { code: ':evil:', img: 'evil' },
+  { code: ':eek:', img: 'eek' },
+  { code: ':cool:', img: 'cool' },
+  { code: ':confused:', img: 'confused' },
+  { code: ':grin:', img: 'grin' },
+  { code: ':arrow:', img: 'arrow' },
+];
+
+// Modern emoji picker
 const EMOJI_STRIP = [
   '😀', '😃', '😄', '😁', '😊', '🙂', '😉', '😎', '🤩', '😍', 
   '😂', '🤣', '😅', '😢', '😭', '😤', '😡', '🤬', '😱', '😰',
@@ -133,28 +159,38 @@ export default function ForumTopic() {
   const [designerSubmitLoading, setDesignerSubmitLoading] = useState(false);
   const [designerSubmittingCommentId, setDesignerSubmittingCommentId] = useState(null);
 
-  const fetchTopic = useCallback(async () => {
+  const fetchTopic = useCallback(async (silent = false) => {
     if (!topicId) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const res = await api.get(`/forum/topics/${topicId}`);
       setTopic(res.data?.topic ?? null);
       setComments(res.data?.comments ?? []);
     } catch (e) {
-      setTopic(null);
-      setComments([]);
-      if (e.response?.status === 404) {
-        toast.error('Topic not found');
-        navigate('/forum');
-      } else {
-        toast.error('Failed to load topic');
+      if (!silent) {
+        setTopic(null);
+        setComments([]);
+        if (e.response?.status === 404) {
+          toast.error('Topic not found');
+          navigate('/forum');
+        } else {
+          toast.error('Failed to load topic');
+        }
       }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [topicId, navigate]);
 
   useEffect(() => { fetchTopic(); }, [fetchTopic]);
+  
+  // Silent background refresh every 60 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchTopic(true);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [fetchTopic]);
   useEffect(() => {
     api.get('/admin/check').then((r) => {
       setIsAdmin(!!r.data?.is_admin);
@@ -964,6 +1000,23 @@ export default function ForumTopic() {
               {/* Emoji picker */}
               {showEmojis && (
                 <div className="flex flex-wrap gap-1 pt-2 border-t border-zinc-700/30">
+                  {/* Classic forum smileys first */}
+                  {CLASSIC_SMILEYS.map(({ code, img }) => (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => setCommentText((c) => c + code)}
+                      className="hover:scale-110 transition-transform p-0.5"
+                      title={code}
+                    >
+                      <img 
+                        src={`/images/smileys/${img}.png`}
+                        alt={code}
+                        className="w-5 h-5"
+                      />
+                    </button>
+                  ))}
+                  {/* Modern emojis */}
                   {EMOJI_STRIP.map((em) => (
                     <button
                       key={em}

@@ -16,6 +16,31 @@ const FORUM_STYLES = `
   .f-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
+// Classic forum smileys (text codes that render as images)
+const CLASSIC_SMILEYS = [
+  { code: ':wink:', img: 'wink' },
+  { code: ':twisted:', img: 'twisted' },
+  { code: ':tup:', img: 'tup' },
+  { code: ':tdown:', img: 'tdown' },
+  { code: ':tongue:', img: 'tongue' },
+  { code: ':surprised:', img: 'surprised' },
+  { code: ':happy:', img: 'smirk' },
+  { code: ':sad:', img: 'sad' },
+  { code: ':rolleyes:', img: 'rolleyes' },
+  { code: ':redface:', img: 'redface' },
+  { code: ':?:', img: 'question' },
+  { code: ':mad:', img: 'mad' },
+  { code: ':lol:', img: 'lol' },
+  { code: ':idea:', img: 'idea' },
+  { code: ':!:', img: 'exclamation' },
+  { code: ':evil:', img: 'evil' },
+  { code: ':eek:', img: 'eek' },
+  { code: ':cool:', img: 'cool' },
+  { code: ':confused:', img: 'confused' },
+  { code: ':grin:', img: 'grin' },
+  { code: ':arrow:', img: 'arrow' },
+];
+
 const EMOJI_STRIP = [
   '😀', '😃', '😄', '😁', '😊', '🙂', '😉', '😎', '🤩', '😍', 
   '😂', '🤣', '😅', '😢', '😭', '😤', '😡', '🤬', '😱', '😰',
@@ -241,6 +266,13 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
           </div>
           {showEmojis && (
             <div className="flex flex-wrap gap-1">
+              {/* Classic forum smileys first */}
+              {CLASSIC_SMILEYS.map(({ code, img }) => (
+                <button key={code} type="button" onClick={() => insertEmoji(code)} className="hover:scale-110 transition-transform p-0.5" title={code}>
+                  <img src={`/images/smileys/${img}.png`} alt={code} className="w-5 h-5" />
+                </button>
+              ))}
+              {/* Modern emojis */}
               {EMOJI_STRIP.map((em) => (
                 <button key={em} type="button" onClick={() => insertEmoji(em)} className="text-base hover:scale-110 transition-transform p-0.5">
                   {em}
@@ -560,17 +592,17 @@ export default function Forum() {
   const [designerSubmittingEntry, setDesignerSubmittingEntry] = useState(false);
   const [designerSubmittingTopicId, setDesignerSubmittingTopicId] = useState(null);
 
-  const fetchTopics = useCallback(async () => {
-    setLoading(true);
+  const fetchTopics = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await api.get('/forum/topics', { params: { category: activeTab, page: forumPage } });
       setTopics(res.data?.topics ?? []);
       setCanViewPage2(!!res.data?.can_view_page_2);
     } catch {
-      toast.error('Failed to load forum');
-      setTopics([]);
+      if (!silent) toast.error('Failed to load forum');
+      if (!silent) setTopics([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [activeTab, forumPage]);
 
@@ -614,6 +646,14 @@ export default function Forum() {
   }, []);
 
   useEffect(() => { fetchTopics(); }, [fetchTopics]);
+  
+  // Silent background refresh every 60 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchTopics(true);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [fetchTopics]);
   useEffect(() => {
     if (activeTab === 'entertainer') {
       fetchEntertainerGames();

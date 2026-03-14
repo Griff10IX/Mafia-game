@@ -18,6 +18,31 @@ function getStoredMinimized() {
   }
 }
 
+// Classic forum smileys (text codes that render as images)
+const CLASSIC_SMILEYS = [
+  { code: ':wink:', img: 'wink' },
+  { code: ':twisted:', img: 'twisted' },
+  { code: ':tup:', img: 'tup' },
+  { code: ':tdown:', img: 'tdown' },
+  { code: ':tongue:', img: 'tongue' },
+  { code: ':surprised:', img: 'surprised' },
+  { code: ':happy:', img: 'smirk' },
+  { code: ':sad:', img: 'sad' },
+  { code: ':rolleyes:', img: 'rolleyes' },
+  { code: ':redface:', img: 'redface' },
+  { code: ':?:', img: 'question' },
+  { code: ':mad:', img: 'mad' },
+  { code: ':lol:', img: 'lol' },
+  { code: ':idea:', img: 'idea' },
+  { code: ':!:', img: 'exclamation' },
+  { code: ':evil:', img: 'evil' },
+  { code: ':eek:', img: 'eek' },
+  { code: ':cool:', img: 'cool' },
+  { code: ':confused:', img: 'confused' },
+  { code: ':grin:', img: 'grin' },
+  { code: ':arrow:', img: 'arrow' },
+];
+
 const CHAT_EMOJIS = [
   '😀', '😃', '😄', '😁', '😊', '🙂', '😉', '😎', '🤩', '😍', 
   '😂', '🤣', '😅', '😢', '😭', '😤', '😡', '🤬', '😱', '😰',
@@ -440,9 +465,31 @@ export default function GameChat({ myUserId, onCloseSidebar }) {
         {/* Emoji strip — horizontal scrolling, touch-friendly buttons */}
         {showEmojis && (
           <div
-            className="flex gap-1 overflow-x-auto overflow-y-hidden py-0.5 -mx-0.5"
+            className="flex gap-1 overflow-x-auto overflow-y-hidden py-0.5 -mx-0.5 flex-wrap"
             style={{ scrollbarWidth: 'none' }}
           >
+            {/* Classic forum smileys first */}
+            {CLASSIC_SMILEYS.map(({ code, img }) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => insertEmoji(code)}
+                className="shrink-0 min-w-[36px] min-h-[36px] w-9 h-9 sm:w-6 sm:h-6 sm:min-w-[24px] sm:min-h-[24px] flex items-center justify-center rounded-sm transition-colors touch-manipulation active:scale-95 hover:scale-110"
+                style={{ border: '1px solid transparent' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.1)';
+                  e.currentTarget.style.borderColor = 'rgba(var(--noir-primary-rgb), 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.borderColor = 'transparent';
+                }}
+                title={code}
+              >
+                <img src={`/images/smileys/${img}.png`} alt={code} className="w-5 h-5" />
+              </button>
+            ))}
+            {/* Modern emojis */}
             {CHAT_EMOJIS.map((emoji) => (
               <button
                 key={emoji}

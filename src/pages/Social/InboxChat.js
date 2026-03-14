@@ -14,6 +14,31 @@ function formatTime(dateString) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+// Classic forum smileys (text codes that render as images)
+const CLASSIC_SMILEYS = [
+  { code: ':wink:', img: 'wink' },
+  { code: ':twisted:', img: 'twisted' },
+  { code: ':tup:', img: 'tup' },
+  { code: ':tdown:', img: 'tdown' },
+  { code: ':tongue:', img: 'tongue' },
+  { code: ':surprised:', img: 'surprised' },
+  { code: ':happy:', img: 'smirk' },
+  { code: ':sad:', img: 'sad' },
+  { code: ':rolleyes:', img: 'rolleyes' },
+  { code: ':redface:', img: 'redface' },
+  { code: ':?:', img: 'question' },
+  { code: ':mad:', img: 'mad' },
+  { code: ':lol:', img: 'lol' },
+  { code: ':idea:', img: 'idea' },
+  { code: ':!:', img: 'exclamation' },
+  { code: ':evil:', img: 'evil' },
+  { code: ':eek:', img: 'eek' },
+  { code: ':cool:', img: 'cool' },
+  { code: ':confused:', img: 'confused' },
+  { code: ':grin:', img: 'grin' },
+  { code: ':arrow:', img: 'arrow' },
+];
+
 const CHAT_EMOJIS = [
   '😀', '😃', '😄', '😁', '😊', '🙂', '😉', '😎', '🤩', '😍', 
   '😂', '🤣', '😅', '😢', '😭', '😤', '😡', '🤬', '😱', '😰',
@@ -220,6 +245,20 @@ export default function InboxChat() {
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-1">
+          {/* Classic forum smileys first */}
+          {CLASSIC_SMILEYS.map(({ code, img }) => (
+            <button
+              key={code}
+              type="button"
+              onClick={() => insertEmoji(code)}
+              className="leading-none p-1.5 rounded hover:bg-primary/20 transition-all focus:outline-none focus:ring-1 focus:ring-primary/50 hover:scale-110"
+              title={code}
+              aria-label={code}
+            >
+              <img src={`/images/smileys/${img}.png`} alt={code} className="w-5 h-5" />
+            </button>
+          ))}
+          {/* Modern emojis */}
           {CHAT_EMOJIS.map((emoji) => (
             <button
               key={emoji}

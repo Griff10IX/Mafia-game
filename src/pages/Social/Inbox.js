@@ -24,6 +24,31 @@ const NOTIFICATION_ICONS = {
 
 const VALID_FILTERS = ['all', 'unread', 'sent', 'rank_up', 'reward', 'bodyguard', 'attack', 'system', 'user_message'];
 
+// Classic forum smileys (text codes that render as images)
+const CLASSIC_SMILEYS = [
+  { code: ':wink:', img: 'wink' },
+  { code: ':twisted:', img: 'twisted' },
+  { code: ':tup:', img: 'tup' },
+  { code: ':tdown:', img: 'tdown' },
+  { code: ':tongue:', img: 'tongue' },
+  { code: ':surprised:', img: 'surprised' },
+  { code: ':happy:', img: 'smirk' },
+  { code: ':sad:', img: 'sad' },
+  { code: ':rolleyes:', img: 'rolleyes' },
+  { code: ':redface:', img: 'redface' },
+  { code: ':?:', img: 'question' },
+  { code: ':mad:', img: 'mad' },
+  { code: ':lol:', img: 'lol' },
+  { code: ':idea:', img: 'idea' },
+  { code: ':!:', img: 'exclamation' },
+  { code: ':evil:', img: 'evil' },
+  { code: ':eek:', img: 'eek' },
+  { code: ':cool:', img: 'cool' },
+  { code: ':confused:', img: 'confused' },
+  { code: ':grin:', img: 'grin' },
+  { code: ':arrow:', img: 'arrow' },
+];
+
 const EMOJI_ROWS = [
   ['😀', '😃', '😄', '😁', '😊', '🙂', '😉', '😎', '🤩', '😍'],
   ['😂', '🤣', '😅', '😢', '😭', '😤', '😡', '🤬', '😱', '😰'],
@@ -143,12 +168,25 @@ const ComposeModal = ({
               className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y transition-colors"
             />
             <div className="mt-1 flex flex-wrap gap-0.5">
+              {/* Classic forum smileys first */}
+              {CLASSIC_SMILEYS.map(({ code, img }) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => onInsertEmoji(code)}
+                  className="p-1 rounded hover:bg-primary/20 active:scale-95 transition-all hover:scale-110"
+                  title={code}
+                >
+                  <img src={`/images/smileys/${img}.png`} alt={code} className="w-4 h-4" />
+                </button>
+              ))}
+              {/* Modern emojis */}
               {EMOJI_ROWS.flat().map((emoji) => (
-                <button 
-                  key={emoji} 
-                  type="button" 
-                  onClick={() => onInsertEmoji(emoji)} 
-                  className="text-sm p-1 rounded hover:bg-primary/20 active:scale-95 transition-all" 
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => onInsertEmoji(emoji)}
+                  className="text-sm p-1 rounded hover:bg-primary/20 active:scale-95 transition-all"
                 >
                   {emoji}
                 </button>
