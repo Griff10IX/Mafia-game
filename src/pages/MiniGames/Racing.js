@@ -263,18 +263,20 @@ export default function Racing() {
     })();
   }, [raceIdParam]);
 
+  const createRacePayload = () => ({
+    track_id: createForm.track_id,
+    entry_fee: Number(createForm.entry_fee) || 0,
+    max_grid: Number(createForm.max_grid) || 6,
+    laps: Number(createForm.laps) || 3,
+    tyre_compound: (createForm.tyre_compound === "full_wet" ? "inter" : createForm.tyre_compound) || "medium",
+    weather_id: WEATHER_ID_FOR_API(createForm.weather_id || "clear"),
+  });
+
   const handleCreateRace = async () => {
     if (!createForm.track_id) { toast.error("Select a track"); return; }
     setCreating(true);
     try {
-      const r = await api.post("/racing/races", {
-        track_id: createForm.track_id,
-        entry_fee: Number(createForm.entry_fee) || 0,
-        max_grid: Number(createForm.max_grid) || 6,
-        laps: Number(createForm.laps) || 3,
-        tyre_compound: (createForm.tyre_compound === "full_wet" ? "inter" : createForm.tyre_compound) || "medium",
-        weather_id: WEATHER_ID_FOR_API(createForm.weather_id || "clear"),
-      });
+      const r = await api.post("/racing/races", createRacePayload());
       const race = r.data?.race;
       if (race) {
         setActiveRace(race);
@@ -282,6 +284,27 @@ export default function Racing() {
         await fetchProfile();
         refreshUser();
         toast.success("Race created");
+        navigate(`/racing?race=${race.id}`, { replace: true });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    } catch (e) { toast.error(apiDetail(e)); }
+    finally { setCreating(false); }
+  };
+
+  const handleCreateAndRaceVsNpcs = async () => {
+    if (!createForm.track_id) { toast.error("Select a track"); return; }
+    setCreating(true);
+    try {
+      const r = await api.post("/racing/races", createRacePayload());
+      const race = r.data?.race;
+      if (race) {
+        await api.post(`/racing/races/${race.id}/start`);
+        const r2 = await api.get(`/racing/races/${race.id}`);
+        setActiveRace(r2.data?.race);
+        await fetchOpenRaces();
+        await fetchProfile();
+        refreshUser();
+        toast.success("Race started — run it live");
         navigate(`/racing?race=${race.id}`, { replace: true });
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
@@ -746,7 +769,7 @@ export default function Racing() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pt-2 border-t border-[var(--noir-border)]">
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--noir-border)]">
                   <button type="button" className="text-[10px] font-heading px-2 py-1 rounded border border-[var(--noir-border)] hover:bg-[var(--noir-primary)]/10 touch-manipulation"
                     onClick={() => setCreateForm((f) => ({ ...f, weather_id: WEATHER_OPTIONS[Math.floor(Math.random() * WEATHER_OPTIONS.length)].id }))}>
                     Random weather
@@ -755,6 +778,12 @@ export default function Racing() {
                     disabled={creating || !createForm.track_id || !selectedInstanceId || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 || (effectiveTyreStock(createForm.tyre_compound, profile) < 1)}
                     onClick={handleCreateRace}>
                     {creating ? "Creating…" : "Create race"}
+                  </button>
+                  <button type="button" className="min-h-[34px] text-xs touch-manipulation px-3 py-1 rounded border border-[var(--noir-primary)] bg-[var(--noir-primary)]/10 text-[var(--noir-primary)] hover:bg-[var(--noir-primary)]/20 font-heading"
+                    disabled={creating || !createForm.track_id || !selectedInstanceId || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 || (effectiveTyreStock(createForm.tyre_compound, profile) < 1)}
+                    onClick={handleCreateAndRaceVsNpcs}
+                    title="Create a race and start immediately vs AI opponents">
+                    {creating ? "Creating…" : "Create & race vs NPCs"}
                   </button>
                 </div>
                 {(cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 && (
