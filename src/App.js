@@ -2,6 +2,7 @@ import { useState, useEffect, Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from "react-router-dom";
 import { ThemedToaster } from "./components/ThemedToaster";
 import Landing from "./pages/Auth/Landing";
+import PreRegister from "./pages/Auth/PreRegister";
 import StaffLogin from "./pages/Auth/StaffLogin";
 import ForgotPassword from "./pages/Auth/ForgotPassword";
 import ResetPassword from "./pages/Auth/ResetPassword";
@@ -182,6 +183,7 @@ function App() {
               )
             }
           />
+          <Route path="/preregister" element={<PreRegister />} />
           <Route
             path="/forgot-password"
             element={<ForgotPassword />}

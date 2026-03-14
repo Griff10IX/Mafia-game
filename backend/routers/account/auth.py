@@ -83,6 +83,18 @@ class RevokeSessionBody(BaseModel):
     session_id: str
 
 
+class PreRegisterBody(BaseModel):
+    email: EmailStr
+
+
+# Pre-registration rewards (applied on first login after launch)
+PREREGISTER_REWARDS = {
+    "bonus_points": 500,
+    "bonus_cash": 5000,
+    "badge": "Founding Member",
+}
+
+
 def register(router):
     """Register auth routes. Dependencies from server to avoid circular imports."""
     import server as srv
@@ -281,7 +293,29 @@ def register(router):
                 "mission_completions": [],
                 "unlocked_maps_up_to": "Chicago",
                 "theme_preferences": {"sidebarLayout": "categorized"},
+                "founding_member": False,
+                "founding_rewards_claimed": False,
             }
+
+            # Check if registering during pre-launch (founding member)
+            settings = await db.game_settings.find_one({"_id": "main"})
+            lock_until = settings.get("login_lock_until") if settings else None
+            if lock_until:
+                try:
+                    lock_dt = datetime.fromisoformat(lock_until.replace("Z", "+00:00"))
+                    if datetime.now(timezone.utc) < lock_dt:
+                        user_doc["founding_member"] = True
+                except (ValueError, TypeError):
+                    pass
+            
+            # Check if email was pre-registered and mark as founding member
+            email_prereg = await db.preregistrations.find_one({"email": user_doc["email"]})
+            if email_prereg:
+                user_doc["founding_member"] = True
+                await db.preregistrations.update_one(
+                    {"email": user_doc["email"]},
+                    {"$set": {"converted": True, "converted_at": datetime.now(timezone.utc).isoformat()}}
+                )
 
             await db.users.insert_one(user_doc.copy())
 
@@ -632,7 +666,44 @@ def register(router):
         except Exception as e:
             logging.warning("Failed to release preorder points on login: %s", e)
         
+        # Apply founding member rewards on first login after launch
+        founding_rewards_applied = False
+        try:
+            if user.get("founding_member") and not user.get("founding_rewards_claimed"):
+                # Check if launch has happened (login_lock_until has passed)
+                settings = settings or await db.game_settings.find_one({"_id": "main"})
+                lock_until_str = settings.get("login_lock_until") if settings else None
+                launch_happened = True
+                if lock_until_str:
+                    try:
+                        lock_dt = datetime.fromisoformat(lock_until_str.replace("Z", "+00:00"))
+                        launch_happened = now >= lock_dt
+                    except (ValueError, TypeError):
+                        pass
+                
+                if launch_happened:
+                    # Apply rewards
+                    reward_update = {
+                        "$inc": {
+                            "points": PREREGISTER_REWARDS.get("bonus_points", 500),
+                            "money": PREREGISTER_REWARDS.get("bonus_cash", 5000),
+                        },
+                        "$set": {
+                            "founding_rewards_claimed": True,
+                            "founding_rewards_claimed_at": now.isoformat(),
+                            "badges": [PREREGISTER_REWARDS.get("badge", "Founding Member")],
+                        }
+                    }
+                    await db.users.update_one({"id": user["id"]}, reward_update)
+                    founding_rewards_applied = True
+                    logging.info("Applied founding member rewards to user %s", user["id"])
+        except Exception as e:
+            logging.warning("Failed to apply founding member rewards: %s", e)
+        
         user_safe = _login_response_user(user)
+        if founding_rewards_applied:
+            user_safe["founding_rewards_just_applied"] = True
+            user_safe["founding_rewards"] = PREREGISTER_REWARDS
         return {"token": token, "user": user_safe}
 
     @router.post("/auth/password-reset/request")
@@ -1123,3 +1194,55 @@ def register(router):
         if result.modified_count == 0:
             raise HTTPException(status_code=404, detail="Session not found or already revoked")
         return {"message": "Session revoked"}
+
+    # ─── PRE-REGISTRATION SYSTEM ─────────────────────────────────────────────
+    @router.post("/auth/preregister")
+    async def preregister_email(body: PreRegisterBody, request: Request):
+        """Email-only pre-registration for launch notifications and founding member rewards."""
+        email_clean = (body.email or "").strip().lower()
+        if is_disposable_email(email_clean):
+            raise HTTPException(status_code=400, detail="Disposable email addresses are not allowed.")
+        
+        # Check if already pre-registered or has an account
+        existing_prereg = await db.preregistrations.find_one({"email": email_clean})
+        if existing_prereg:
+            return {"message": "You're already on the list!", "already_registered": True}
+        
+        existing_user = await db.users.find_one({"email": {"$regex": f"^{re.escape(email_clean)}$", "$options": "i"}})
+        if existing_user:
+            return {"message": "You already have an account! You'll receive founding member rewards.", "already_registered": True}
+        
+        # Store pre-registration
+        doc = {
+            "email": email_clean,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "ip": _client_ip(request),
+            "converted": False,
+        }
+        await db.preregistrations.insert_one(doc)
+        
+        return {
+            "message": "You're in! You'll be notified when the game launches and receive exclusive founding member rewards.",
+            "rewards": PREREGISTER_REWARDS,
+        }
+
+    @router.get("/auth/preregister/stats")
+    async def get_preregister_stats():
+        """Public stats for pre-registration page."""
+        total_preregistered = await db.preregistrations.count_documents({})
+        total_accounts = await db.users.count_documents({"is_dead": {"$ne": True}})
+        settings = await db.game_settings.find_one({"_id": "main"})
+        lock_until = settings.get("login_lock_until") if settings else None
+        
+        return {
+            "total_interested": total_preregistered + total_accounts,
+            "preregistered_emails": total_preregistered,
+            "registered_accounts": total_accounts,
+            "launch_date": lock_until,
+            "rewards": PREREGISTER_REWARDS,
+        }
+
+    @router.get("/auth/preregister/rewards")
+    async def get_preregister_rewards():
+        """Get the current pre-registration rewards."""
+        return {"rewards": PREREGISTER_REWARDS}
