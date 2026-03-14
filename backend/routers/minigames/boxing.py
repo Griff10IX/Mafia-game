@@ -1,8 +1,20 @@
 import asyncio
+import json
 import math
+import os
 import random
 import uuid
 from datetime import datetime, timezone, timedelta
+
+# #region agent log
+def _dlog(msg: str, data: dict, hyp: str = ""):
+    try:
+        p = os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug-d94f2d.log")
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"sessionId": "d94f2d", "location": "boxing.py", "message": msg, "data": data, "hypothesisId": hyp, "timestamp": datetime.now(timezone.utc).isoformat()}) + "\n")
+    except Exception:
+        pass
+# #endregion
 from typing import Optional, List, Dict, Any
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
@@ -482,6 +494,7 @@ async def matches_create(payload: MatchCreateRequest, current_user: dict = Depen
         # Scale so NPC average is close to player (band 0.92–1.08 for variety but still even)
         ratio = (player_level / npc_design_level) * random.uniform(0.92, 1.08)
         b_npc_stats = {k: max(1, min(15, int(round(int(npc.get(k, 1) or 1) * ratio)))) for k in STAT_KEYS}
+        _dlog("npc_match_create", {"npc_name": npc.get("name"), "player_eff": player_eff, "b_npc_stats": b_npc_stats, "ratio": ratio}, "B")
         ra = int(a_prof.get("rating") or 1000)
         # Use player rating for NPC so odds reflect an even match
         rb = ra + random.randint(-40, 40)
@@ -807,7 +820,7 @@ def _round_exchange(a_stats: dict, b_stats: dict, a_hp: int, b_hp: int, a_stam: 
     a_kds_this_round = b_kds_dealt  # A got knocked down by B
     b_kds_this_round = a_kds_dealt  # B got knocked down by A
 
-    return {
+    out = {
         "a_hits": a_hits, "b_hits": b_hits,
         "a_dmg": a_dmg, "b_dmg": b_dmg,
         "hp": {"a": a_hp_after, "b": b_hp_after},
@@ -815,6 +828,8 @@ def _round_exchange(a_stats: dict, b_stats: dict, a_hp: int, b_hp: int, a_stam: 
         "a_kds_this_round": a_kds_this_round,  # Times A was knocked down this round
         "b_kds_this_round": b_kds_this_round,  # Times B was knocked down this round
     }
+    _dlog("round_exchange", {"hp_a": a_hp_after, "hp_b": b_hp_after, "a_kds_r": a_kds_this_round, "b_kds_r": b_kds_this_round, "a_dmg": a_dmg, "b_dmg": b_dmg}, "A")
+    return out
 
 
 async def advance_running_matches(database) -> int:
@@ -1004,7 +1019,9 @@ async def advance_running_matches(database) -> int:
         await database.boxing_matches.update_one({"id": match_id}, updates)
 
         if finish:
-            await _finalize_match(database, match_id, winner_id=(a_id if finish == "a" else b_id if finish == "b" else None), finish_reason=reason)
+            wid = a_id if finish == "a" else b_id if finish == "b" else None
+            _dlog("advance_running_finish", {"match_id": match_id, "finish": finish, "winner_id": wid, "reason": reason, "round": rnd}, "A")
+            await _finalize_match(database, match_id, winner_id=wid, finish_reason=reason)
         return 1
     finally:
         await database.boxing_matches.update_one({"id": match_id}, {"$set": {"sim_lock": None}})
@@ -1080,6 +1097,7 @@ async def advance_counting_matches(database) -> int:
         if down_kds >= MAX_KNOCKDOWNS_TOTAL:
             got_up = False  # TKO - too many knockdowns
 
+        _dlog("advance_counting", {"match_id": match_id, "down": down, "got_up": got_up, "down_kds": down_kds, "current_round": current_round, "max_rounds": max_rounds}, "E")
         if got_up:
             # If we're already at max rounds, fight is over — resolve by decision (no extra round)
             if current_round >= max_rounds:

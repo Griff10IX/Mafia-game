@@ -313,6 +313,9 @@ function simulateFight(aS, bS) {
     else if (winsB >= 2) { winner = "b"; reason = winsB === 3 ? "Unanimous decision" : "Split decision"; }
     else { winner = a.totalDmgDealt > b.totalDmgDealt ? "a" : "b"; reason = "Majority decision"; }
   }
+  // #region agent log
+  fetch('http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d94f2d'},body:JSON.stringify({sessionId:'d94f2d',location:'Boxing.js:simulateFight',message:'client_fight_result',data:{winner,reason,hpA:a.hp,hpB:b.hp,kdsA:a.kds,kdsB:b.kds},hypothesisId:'A',timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   return {
     events, winner, reason, scorecard,
     stats: {
@@ -644,7 +647,14 @@ export default function Boxing3D() {
         if (m) {
           setArenaMatchDetail(m);
           arenaMatchDetailRef.current = m;
-          if (m.state === "finished") setArenaServerResult({ winner: m.winner, finish_reason: m.finish_reason || "" });
+          if (m.state === "finished") {
+            const sr = { winner: m.winner, finish_reason: m.finish_reason || "" };
+            setArenaServerResult(sr);
+            const clientSide = arenaFightResult?.winner;
+            const clientWinnerId = clientSide === "a" ? m?.a_id : clientSide === "b" ? m?.b_id : null;
+            const match = clientWinnerId === m?.winner;
+            fetch('http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d94f2d'},body:JSON.stringify({sessionId:'d94f2d',location:'Boxing.js:poll',message:'server_vs_client',data:{server_winner:sr.winner,client_winner_side:clientSide,client_winner_id:clientWinnerId,match_result_same:match},hypothesisId:'A',timestamp:Date.now()})}).catch(()=>{});
+          }
           // Keep HP and round in sync with server so bar and "End of round" are correct
           const hp = m.hp || {};
           const serverRound = m.round ?? 1;

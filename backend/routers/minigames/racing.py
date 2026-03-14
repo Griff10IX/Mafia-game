@@ -7,6 +7,7 @@
 # - Seasons last 2 months: after a season, total reset of everything racing (teams cleared, all progress reset).
 from datetime import datetime, timezone, timedelta
 import asyncio
+import json
 import os
 import random
 import uuid
@@ -15,6 +16,16 @@ from fastapi import Depends, HTTPException, Header
 from pydantic import BaseModel
 
 from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, send_notification
+
+
+def _dlog(msg: str, data: dict, hyp: str = ""):
+    try:
+        p = os.path.join(os.path.dirname(__file__), "..", "..", "..", "debug-d94f2d.log")
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"sessionId": "d94f2d", "location": "racing.py", "message": msg, "data": data, "hypothesisId": hyp, "timestamp": datetime.now(timezone.utc).isoformat()}) + "\n")
+    except Exception:
+        pass
+
 
 # ---------- Constants ----------
 def _now_iso() -> str:
@@ -576,7 +587,9 @@ def _run_race_simulation_laps(
             if wear < ENGINE_RISK_THRESHOLD:
                 continue
             # Cooling reduces in-race engine risk (in addition to reducing post-race wear).
-            up_eng = upgrades_map.get(next((e.get("racing_car_instance_id") for e in entrants if (e.get("user_id") or e.get("id")) == eid), None) or eid) or {}
+            entrant = next((e for e in entrants if (e.get("user_id") or e.get("id")) == eid), None)
+            up_key = (entrant.get("racing_car_instance_id") or entrant.get("id") or "") if entrant else ""
+            up_eng = upgrades_map.get(up_key, {})
             cooling = int(up_eng.get("cooling_level") or 0)
             cooling_risk_mult = max(0.6, 1.0 - 0.20 * cooling)  # 0,1,2 => 1.0,0.8,0.6
             # Chance of DNF increases with wear; at 100% use ENGINE_DNF_CHANCE_PER_LAP_AT_100
@@ -1459,6 +1472,7 @@ async def _start_race_internal(race_id: str) -> dict:
     # Deterministic qualifying so grid is stable and fair for a given race_id.
     with _SeededRandom(f"qualifying:{race_id}"):
         qualifying_order, qualifying_results = _run_qualifying(participants, profile_by_user, upgrades_map, track, weather_id)
+    _dlog("racing_qualifying", {"race_id": race_id, "qualifying_order": qualifying_order, "track_id": race.get("track_id"), "laps": race.get("laps"), "weather_id": weather_id}, "R")
     id_to_p = {(p.get("user_id") or p.get("id")): p for p in participants}
     participants = [id_to_p[eid] for eid in qualifying_order if eid in id_to_p]
     for p in participants:
@@ -1815,6 +1829,7 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
             participants, profile_by_user, upgrades_map, num_laps, weather_id=weather_id, engine_wear_by_entrant=engine_wear_by_entrant
         )
     dnf_ids: List[str] = list(sim_dnf_ids or [])
+    _dlog("racing_complete", {"race_id": race_id, "result_order": result_order, "lap1_order": lap_results[0] if lap_results else None, "last_lap_order": lap_results[-1] if lap_results else None, "dnf_ids": dnf_ids, "num_laps": num_laps}, "R")
     pot = entry_fee * len(participants) * REWARD_POOL_PCT
     if pot < RACING_BASE_CASH_POOL:
         pot = RACING_BASE_CASH_POOL

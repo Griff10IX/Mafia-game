@@ -128,6 +128,11 @@ ATTACKER_BASE_STRENGTH = 5
 GUARD_STRENGTH_PER_LEVEL = 4  # armour_level + weapon_level each contribute
 SECURITY_WEIGHT = 1.0  # defence = DEFENDER_BASE + sum(guard_strength) + security_level * weight per upgrade
 
+# Collect anti-spam: extras only when at least 1 min accumulated
+MIN_COLLECT_HOURS_FOR_EXTRAS = 1 / 60
+# Extras (bullets, respect, points, loot pieces) cooldown: once every few hours
+RACKET_EXTRAS_COOLDOWN_HOURS = 3
+
 # Death / killer reward
 MAX_INCOME_BOOST_PERCENT = 20
 INCOME_BOOST_PER_KILL_PERCENT = 2
@@ -441,11 +446,24 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
     updates = {"last_collected_at": now.isoformat()}
     security_level = len(business.get("security_upgrades") or []) or int(business.get("security_level") or 0)
     ib_mult = float(prestige.get("illegal_business_mult", 1.0))
-    # Passive rewards (respect, bullets, points, loot pieces) scale with level/income; apply prestige mult
-    respect_earned = min(100, max(0, int(income * 0.001 * ib_mult)))
-    bullets_earned = max(1, int((1 + min(level + security_level, 9)) * ib_mult))
-    points_earned = int((random.randint(1, 5) if level >= 3 else 0) * ib_mult)
-    loot_pieces_earned = (random.randint(1, 2) if random.random() < 0.05 else 0)
+    # Extras (bullets, respect, points, loot) only when enough time accumulated and cooldown passed
+    last_extras = business.get("last_extras_collected_at")
+    extras_cooldown_passed = True
+    if last_extras:
+        try:
+            last_dt = datetime.fromisoformat(last_extras.replace("Z", "+00:00"))
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            extras_cooldown_passed = (now - last_dt).total_seconds() >= RACKET_EXTRAS_COOLDOWN_HOURS * 3600
+        except Exception:
+            pass
+    grant_extras = hours >= MIN_COLLECT_HOURS_FOR_EXTRAS and extras_cooldown_passed
+    if grant_extras:
+        updates["last_extras_collected_at"] = now.isoformat()
+    respect_earned = min(100, max(0, int(income * 0.001 * ib_mult))) if grant_extras else 0
+    bullets_earned = max(1, int((1 + min(level + security_level, 9)) * ib_mult)) if grant_extras else 0
+    points_earned = int((random.randint(1, 5) if level >= 3 else 0) * ib_mult) if grant_extras else 0
+    loot_pieces_earned = (random.randint(1, 2) if random.random() < 0.05 else 0) if grant_extras else 0
     inc = {"money": income, "illegal_business_collections": 1}
     if respect_earned > 0:
         inc["respect_points"] = respect_earned
