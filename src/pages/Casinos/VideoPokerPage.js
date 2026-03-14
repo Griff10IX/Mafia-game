@@ -177,6 +177,7 @@ export default function VideoPoker() {
   const [showWin, setShowWin] = useState(false);
   const [ownerLoading, setOwnerLoading] = useState(false);
   const [newMaxBet, setNewMaxBet] = useState('');
+  const [ownerBuyBack, setOwnerBuyBack] = useState('');
   const [transferUsername, setTransferUsername] = useState('');
   const [sellPoints, setSellPoints] = useState('');
   const [buyBackOffer, setBuyBackOffer] = useState(null);
@@ -190,6 +191,7 @@ export default function VideoPoker() {
     api.get('/casino/videopoker/ownership').then((r) => {
       const data = r.data ?? null;
       setOwnership(data);
+      if (data?.buy_back_reward != null) setOwnerBuyBack(String(data.buy_back_reward));
       if (data?.buy_back_offer) {
         setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
       } else {
@@ -258,6 +260,18 @@ export default function VideoPoker() {
     setOwnerLoading(true);
     try { await api.post('/casino/videopoker/set-max-bet', { city, max_bet: val }); toast.success('Max bet updated'); setNewMaxBet(''); fetchConfigAndOwnership(); }
     catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
+    finally { setOwnerLoading(false); }
+  };
+
+  const handleSetBuyBack = async () => {
+    if (!ownership?.current_city) return;
+    const val = parseInt(String(ownerBuyBack).replace(/\D/g, ''), 10) || 0;
+    setOwnerLoading(true);
+    try {
+      await api.post('/casino/videopoker/set-buy-back-reward', { city: ownership.current_city, amount: val });
+      toast.success('Buy-back reward updated');
+      fetchConfigAndOwnership();
+    } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setOwnerLoading(false); }
   };
 
@@ -427,6 +441,11 @@ export default function VideoPoker() {
               <span className="text-[10px] text-mutedForeground w-20 shrink-0">Max Bet</span>
               <FormattedNumberInput placeholder="e.g. 100,000,000" value={newMaxBet} onChange={setNewMaxBet} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
               <button onClick={handleSetMaxBet} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">Set</button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-mutedForeground w-20 shrink-0">Buy-back</span>
+              <FormattedNumberInput placeholder="Points offered if taken" value={ownerBuyBack} onChange={setOwnerBuyBack} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
+              <button onClick={handleSetBuyBack} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">Set</button>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-mutedForeground w-20 shrink-0">Transfer</span>
