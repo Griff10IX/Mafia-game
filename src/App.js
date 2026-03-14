@@ -151,7 +151,14 @@ function ShootingRangePlayRedirect() {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [loginLocked, setLoginLocked] = useState(false);
+  // Initialize from sessionStorage to prevent flicker on reload
+  const [loginLocked, setLoginLocked] = useState(() => {
+    try {
+      return sessionStorage.getItem('login_locked') === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -166,9 +173,15 @@ function App() {
     fetch(`${apiBase}/auth/launch-status`)
       .then(r => r.json())
       .then(data => {
-        setLoginLocked(!!data?.login_locked);
+        const locked = !!data?.login_locked;
+        setLoginLocked(locked);
+        try {
+          sessionStorage.setItem('login_locked', locked ? 'true' : 'false');
+        } catch (_) {}
       })
-      .catch(() => {})
+      .catch(() => {
+        // On error, keep existing state from sessionStorage
+      })
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -192,7 +205,7 @@ function App() {
               isAuthenticated ? (
                 <Navigate to="/account/dashboard" replace />
               ) : loginLocked ? (
-                <Navigate to="/preregister" replace />
+                <PreRegister />
               ) : (
                 <Landing setIsAuthenticated={setIsAuthenticated} />
               )
@@ -215,7 +228,7 @@ function App() {
               isAuthenticated ? (
                 <Navigate to="/account/dashboard" replace />
               ) : loginLocked ? (
-                <Navigate to="/preregister" replace />
+                <PreRegister />
               ) : (
                 <Landing setIsAuthenticated={setIsAuthenticated} />
               )
