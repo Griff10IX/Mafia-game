@@ -29,17 +29,18 @@ def register(router):
 
     @router.get("/users/online", response_model=OnlineUsersResponse)
     async def get_online_users(current_user: dict = Depends(get_current_user)):
-        """Online = last 5 min, forced-online, or Auto Rank enabled (and not idle). When Auto Rank is idle, user appears offline."""
+        """Returns online and idle users with status field."""
         now = datetime.now(timezone.utc)
         five_min_ago = now - timedelta(minutes=5)
+        ten_min_ago = now - timedelta(minutes=10)
         users = await db.users.find(
             {
                 "is_dead": {"$ne": True},
                 "is_bodyguard": {"$ne": True},
                 "$or": [
-                    {"last_seen": {"$gte": five_min_ago.isoformat()}},
+                    {"last_seen": {"$gte": ten_min_ago.isoformat()}},  # Include idle users (5-10 min)
                     {"forced_online_until": {"$gt": now.isoformat()}},
-                    {"$and": [{"auto_rank_enabled": True}, {"auto_rank_idle": {"$ne": True}}]},  # only online if not idle
+                    {"$and": [{"auto_rank_enabled": True}, {"auto_rank_idle": {"$ne": True}}]},  # auto-rank not idle
                 ],
             },
             {"_id": 0, "password_hash": 0}
@@ -77,6 +78,36 @@ def register(router):
                     online_color = None  # will use mod_default from settings below
             elif is_hdo:
                 online_color = HDO_ONLINE_COLOR
+            
+            # Determine user status: online, idle, or offline
+            user_status = "offline"
+            last_seen_str = user.get("last_seen")
+            if last_seen_str:
+                try:
+                    ls_dt = datetime.fromisoformat(last_seen_str)
+                    if ls_dt.tzinfo is None:
+                        ls_dt = ls_dt.replace(tzinfo=timezone.utc)
+                    if ls_dt >= five_min_ago:
+                        user_status = "online"
+                    elif ls_dt >= ten_min_ago:
+                        user_status = "idle"
+                except Exception:
+                    pass
+            # forced_online_until overrides to online
+            forced_until = user.get("forced_online_until")
+            if forced_until and user_status != "online":
+                try:
+                    fu = datetime.fromisoformat(forced_until)
+                    if fu.tzinfo is None:
+                        fu = fu.replace(tzinfo=timezone.utc)
+                    if now < fu:
+                        user_status = "online"
+                except Exception:
+                    pass
+            # Auto-rank enabled but not idle = idle status
+            if user_status == "offline" and user.get("auto_rank_enabled") and not user.get("auto_rank_idle"):
+                user_status = "idle"
+            
             item = {
                 "username": (user.get("username") or "").strip(),
                 "rank": rank_id,
@@ -89,6 +120,7 @@ def register(router):
                 "is_help_desk_operator": is_hdo,
                 "prestige_level": _prestige_level,
                 "online_color": online_color,
+                "status": user_status,
             }
             users_data.append(item)
             if uid:

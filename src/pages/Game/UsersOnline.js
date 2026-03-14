@@ -84,9 +84,17 @@ const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor }) =>
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-        <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Role colours</h3>
+        <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Key</h3>
       </div>
       <div className="px-2.5 py-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] font-heading">
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full shrink-0 bg-emerald-500" aria-hidden />
+          <span className="text-mutedForeground">Online</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full shrink-0 bg-amber-500" aria-hidden />
+          <span className="text-mutedForeground">Idle</span>
+        </span>
         <span className="flex items-center gap-1.5">
           <span className="w-3 h-3 rounded-sm shrink-0 border border-white/20" style={{ backgroundColor: adminColor }} aria-hidden />
           <span className="text-mutedForeground">Admin</span>
@@ -97,11 +105,11 @@ const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor }) =>
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-3 h-3 rounded-sm shrink-0 border border-white/20" style={{ backgroundColor: hdoColor }} aria-hidden />
-          <span className="text-mutedForeground">Help Desk Operator</span>
+          <span className="text-mutedForeground">Help Desk</span>
         </span>
         <span className="flex items-center gap-1.5">
           <Target size={12} className="text-red-400 shrink-0" aria-hidden />
-          <span className="text-mutedForeground">On hitlist</span>
+          <span className="text-mutedForeground">Hitlist</span>
         </span>
       </div>
       <div className="uo-art-line text-primary mx-2.5" />
@@ -115,6 +123,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
   const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
   const displayColor = user.online_color || (user.is_admin ? adminColor : user.is_moderator ? modColor : undefined);
+  const userStatus = user.status || 'online';
 
   return (
     <div
@@ -122,6 +131,11 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
       data-testid="user-card"
     >
       <div className="flex items-center gap-1 min-h-[20px] w-full">
+        <span 
+          className={`w-2 h-2 rounded-full shrink-0 ${userStatus === 'idle' ? 'bg-amber-500' : 'bg-emerald-500'}`}
+          title={userStatus === 'idle' ? 'Idle' : 'Online'}
+          aria-hidden
+        />
         <HoverCard onOpenChange={(open) => open && ensureProfilePreview(user.username)}>
           <HoverCardTrigger asChild>
             <Link
@@ -277,7 +291,7 @@ const InfoCard = () => (
         <p className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>
-            Users inactive for <strong className="text-foreground">5+ minutes</strong> appear offline
+            <span className="text-emerald-400 font-bold">Online</span> = active within 5 min, <span className="text-amber-400 font-bold">Idle</span> = 5-10 min
           </span>
         </p>
         <p className="flex items-start gap-1">

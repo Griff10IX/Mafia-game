@@ -247,7 +247,7 @@ const ProfileInfoCard = ({
       icon: Activity,
       isStatus: true, 
       isDead: profile.is_dead, 
-      isOnline: profile.online 
+      status: profile.status || (profile.online ? 'online' : 'offline')
     },
     { 
       label: 'Messages', 
@@ -392,15 +392,21 @@ const ProfileInfoCard = ({
                   row.component
                 ) : row.isStatus ? (
                   <span className="font-heading text-[10px] md:text-xs">
-                    {row.isDead && <span className="text-red-400">💀 Dead (Offline)</span>}
-                    {!row.isDead && row.isOnline && (
+                    {row.isDead && <span className="text-red-500 font-bold">(DEAD)</span>}
+                    {!row.isDead && row.status === 'online' && (
                       <span>
                         <span className="text-foreground">Alive </span>
                         <span className="text-emerald-400">(🟢 Online)</span>
                       </span>
                     )}
-                    {!row.isDead && !row.isOnline && (
-                      <span className="text-foreground">Alive (Offline)</span>
+                    {!row.isDead && row.status === 'idle' && (
+                      <span>
+                        <span className="text-foreground">Alive </span>
+                        <span className="text-amber-400">(🟠 Idle)</span>
+                      </span>
+                    )}
+                    {!row.isDead && row.status === 'offline' && (
+                      <span className="text-zinc-500">Alive (Offline)</span>
                     )}
                   </span>
                 ) : row.label === 'Crew' && profile.family_tag && profile.family_name ? (

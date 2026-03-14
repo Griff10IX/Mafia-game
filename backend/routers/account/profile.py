@@ -189,30 +189,61 @@ def register(router):
         _prestige_name = PRESTIGE_CONFIGS.get(_prestige_level, {}).get("name", "") if _prestige_level > 0 else ""
         wealth_id, wealth_name = get_wealth_rank(user.get("money", 0))
         is_dead = bool(user.get("is_dead"))
-        online = False
+        now_utc = datetime.now(timezone.utc)
+        five_min_ago = now_utc - timedelta(minutes=5)
+        ten_min_ago = now_utc - timedelta(minutes=10)
+        
+        # Determine status: "online", "idle", "offline", or "dead"
+        status = "offline"
+        online = False  # Keep for backward compatibility
         last_seen = user.get("last_seen")
-        if (not is_dead) and last_seen:
+        last_seen_dt = None
+        if last_seen:
             try:
-                ls = datetime.fromisoformat(last_seen)
-                if ls.tzinfo is None:
-                    ls = ls.replace(tzinfo=timezone.utc)
-                online = ls >= (datetime.now(timezone.utc) - timedelta(minutes=5))
+                last_seen_dt = datetime.fromisoformat(last_seen)
+                if last_seen_dt.tzinfo is None:
+                    last_seen_dt = last_seen_dt.replace(tzinfo=timezone.utc)
             except Exception:
-                online = False
-        if (not is_dead) and (not online):
-            forced_until = user.get("forced_online_until")
-            if forced_until:
-                try:
-                    fu = datetime.fromisoformat(forced_until)
-                    if fu.tzinfo is None:
-                        fu = fu.replace(tzinfo=timezone.utc)
-                    online = datetime.now(timezone.utc) < fu
-                except Exception:
-                    pass
-        # When Auto Rank is enabled, count as online; when disabled, normal rules (last 5 min / forced) already applied above
-        if (not is_dead) and (not online) and user.get("auto_rank_enabled"):
+                last_seen_dt = None
+        
+        # Check forced_online_until
+        forced_online = False
+        forced_until = user.get("forced_online_until")
+        if forced_until:
+            try:
+                fu = datetime.fromisoformat(forced_until)
+                if fu.tzinfo is None:
+                    fu = fu.replace(tzinfo=timezone.utc)
+                forced_online = now_utc < fu
+            except Exception:
+                pass
+        
+        if is_dead:
+            status = "dead"
+            online = False
+        elif (user.get("email") in ADMIN_EMAILS or user.get("is_moderator")) and user.get("admin_ghost_mode"):
+            # Admin ghost mode - always offline
+            status = "offline"
+            online = False
+        elif last_seen_dt and last_seen_dt >= five_min_ago:
+            # Active within last 5 minutes - ONLINE
+            status = "online"
             online = True
-        if (user.get("email") in ADMIN_EMAILS or user.get("is_moderator")) and user.get("admin_ghost_mode"):
+        elif forced_online:
+            # Forced online by admin - ONLINE
+            status = "online"
+            online = True
+        elif last_seen_dt and last_seen_dt >= ten_min_ago:
+            # Active 5-10 minutes ago - IDLE
+            status = "idle"
+            online = False
+        elif user.get("auto_rank_enabled") and not user.get("auto_rank_idle"):
+            # Auto-rank enabled but not idle - IDLE (bot is keeping them active)
+            status = "idle"
+            online = False
+        else:
+            # More than 10 minutes or auto_rank_idle - OFFLINE
+            status = "offline"
             online = False
         wealth_range = get_wealth_rank_range(user.get("money", 0))
         user_id = user["id"]
@@ -365,6 +396,7 @@ def register(router):
             "is_npc": bool(user.get("is_npc")),
             "is_bodyguard": is_bodyguard_visible,
             "online": online,
+            "status": status,  # "online", "idle", "offline", or "dead"
             "last_seen": last_seen,
             "family_name": family_name,
             "family_tag": family_tag,
