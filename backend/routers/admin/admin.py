@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import httpx
-from fastapi import Depends, HTTPException, Query
+from fastapi import Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from utils.disposable_email import is_disposable_email
@@ -35,6 +35,10 @@ class EventsToggleRequest(BaseModel):
 
 
 class AllEventsForTestingRequest(BaseModel):
+    enabled: bool
+
+
+class BetaSignupToggleRequest(BaseModel):
     enabled: bool
 
 
@@ -3395,10 +3399,11 @@ def register(router):
         return {"beta_signup_enabled": bool(doc.get("beta_signup_enabled", False)) if doc else False}
 
     @router.post("/admin/beta-signup/toggle")
-    async def admin_toggle_beta_signup(current_user: dict = Depends(get_current_user), enabled: bool = Body(..., embed=True)):
+    async def admin_toggle_beta_signup(request: BetaSignupToggleRequest, current_user: dict = Depends(get_current_user)):
         """Toggle beta signup mode. When enabled, new signups get 15k points, $1B cash, 15k respect."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        enabled = request.enabled
         await db.game_config.update_one(
             {"id": "main"},
             {"$set": {"beta_signup_enabled": bool(enabled)}},
