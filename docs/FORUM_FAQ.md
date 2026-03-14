@@ -15,7 +15,7 @@ Combat is the heart of the game. Attack other players to steal their cash and ea
 [*][color=#888888]Must be in the SAME CITY as your target[/color]
 [*][color=#888888]Need enough bullets based on target's armour level[/color]
 [*][color=#888888]Cannot attack while in jail or traveling[/color]
-[*][color=#888888]30 second cooldown between attacks[/color]
+[*][color=#888888]30 second cooldown between failed attacks[/color]
 [/list]
 
 [b]Attack Success Rate:[/b]
@@ -639,19 +639,97 @@ Community discussion boards:
 [quote]
 [size=1.4][color=#FF4444][b]General Rules[/b][/color][/size]
 
-:x: [b][color=#FF6B6B]No multi-accounting[/color][/b] - One account per person
-:x: [b][color=#FF6B6B]No exploiting bugs[/color][/b] - Report bugs to staff
+:x: [b][color=#FF6B6B]No multi-accounting[/color][/b] - One account per person, per household
+:x: [b][color=#FF6B6B]No exploiting bugs[/color][/b] - Report bugs to staff immediately
 :x: [b][color=#FF6B6B]No harassment[/color][/b] - Real-life threats = permanent ban
-:x: [b][color=#FF6B6B]No sharing accounts[/color][/b]
+:x: [b][color=#FF6B6B]No sharing accounts[/color][/b] - Your account, your responsibility
 :x: [b][color=#FF6B6B]No botting/scripting[/color][/b] - Auto Rank is the only exception
-:x: [b][color=#FF6B6B]No real-money trading[/color][/b]
+:x: [b][color=#FF6B6B]No real-money trading[/color][/b] - No selling/buying accounts or items for real money
+:x: [b][color=#FF6B6B]No impersonating staff[/color][/b] - Pretending to be admin/mod = instant ban
+:x: [b][color=#FF6B6B]No advertising[/color][/b] - No promoting other games or websites
 
 [size=1.4][color=#FF4444][b]Combat Rules[/b][/color][/size]
 
 :check: [color=#2ECC71]PvP is allowed and encouraged - it's a mafia game![/color]
 :check: [color=#2ECC71]Hitlist bounties are fair game[/color]
 :check: [color=#2ECC71]Family wars are part of the game[/color]
+:check: [color=#2ECC71]Trash talk in moderation is fine[/color]
 :x: [color=#FF6B6B]No targeting staff maliciously[/color]
+:x: [color=#FF6B6B]No spawn-camping new players excessively[/color]
+
+[size=1.4][color=#FF4444][b]Chat & Forum Rules[/b][/color][/size]
+
+:x: [b][color=#FF6B6B]No spamming[/color][/b] - Flooding chat or forums with repeated messages
+:x: [b][color=#FF6B6B]No NSFW content[/color][/b] - Keep it PG-13
+:x: [b][color=#FF6B6B]No racism/discrimination[/color][/b] - Zero tolerance policy
+:x: [b][color=#FF6B6B]No doxxing[/color][/b] - Never share anyone's personal information
+:x: [b][color=#FF6B6B]No evading mutes[/color][/b] - Using alts to bypass a mute = extended punishment
+:check: [color=#2ECC71]Roleplay and in-game threats are fine[/color]
+:check: [color=#2ECC71]Friendly banter is encouraged[/color]
+[/quote]
+
+[hr]
+
+[center][size=1.8][b][color=#E74C3C]:lock: PUNISHMENTS & APPEALS :lock:[/color][/b][/size][/center]
+
+[quote]
+[size=1.4][color=#E74C3C][b]Chat Mutes[/b][/color][/size]
+Mutes prevent you from using game chat and sending messages.
+
+[b]Mute Durations:[/b]
+[list]
+[*][color=#888888]Warning - First offense, verbal warning[/color]
+[*][color=#888888]1 hour mute - Minor offense[/color]
+[*][color=#888888]24 hour mute - Repeated minor offense[/color]
+[*][color=#888888]7 day mute - Serious offense[/color]
+[*][color=#FF6B6B]Permanent mute - Extreme cases[/color]
+[/list]
+
+[b]Common Mute Reasons:[/b]
+[list]
+[*][color=#888888]Spamming chat[/color]
+[*][color=#888888]Excessive profanity[/color]
+[*][color=#888888]Harassment of other players[/color]
+[*][color=#888888]Advertising[/color]
+[/list]
+
+[size=1.4][color=#E74C3C][b]Account Bans[/b][/color][/size]
+Bans completely prevent access to the game.
+
+[b]Ban Types:[/b]
+[list]
+[*][color=#888888]Temporary Ban (1-30 days) - Serious rule violations[/color]
+[*][color=#FF6B6B]Permanent Ban - Extreme violations, no appeal[/color]
+[*][color=#FF6B6B]IP Ban - Multi-accounting, ban evasion[/color]
+[/list]
+
+[b]Automatic Ban Reasons:[/b]
+[list]
+[*][color=#FF6B6B]Chargebacks on point purchases[/color]
+[*][color=#FF6B6B]Multi-accounting (all accounts banned)[/color]
+[*][color=#FF6B6B]Exploiting bugs for advantage[/color]
+[*][color=#FF6B6B]Real-money trading[/color]
+[*][color=#FF6B6B]Hacking/botting[/color]
+[/list]
+
+[size=1.4][color=#E74C3C][b]Appeals Process[/b][/color][/size]
+Think you were punished unfairly?
+
+[list]
+[*][color=#888888]Contact staff via the Help Desk forum[/color]
+[*][color=#888888]Provide your username and punishment details[/color]
+[*][color=#888888]Explain your side calmly and honestly[/color]
+[*][color=#888888]Wait for staff review (24-72 hours)[/color]
+[*][color=#888888]Accept the final decision - repeated appeals = ignored[/color]
+[/list]
+
+[b][color=#FFD700]Tips to Avoid Punishment:[/color][/b]
+[list]
+[*][color=#888888]Read the rules before playing[/color]
+[*][color=#888888]Think before you type[/color]
+[*][color=#888888]Report issues instead of exploiting them[/color]
+[*][color=#888888]If unsure, ask staff first[/color]
+[/list]
 [/quote]
 
 [hr]
@@ -735,35 +813,24 @@ Contact support FIRST if there's any issue with a transaction.
 
 [hr]
 
-[center][size=1.8][b][color=#9B59B6]:wink: SMILEYS & FORMATTING :tongue:[/color][/b][/size][/center]
+[center][size=1.8][b][color=#9B59B6]SMILEYS & FORMATTING[/color][/b][/size][/center]
 
 [quote]
 [size=1.4][color=#9B59B6][b]Classic Smileys[/b][/color][/size]
 Type these codes in your posts and messages:
 
-[list]
-[*][color=#888888]:wink: or ;) - Wink[/color] :wink:
-[*][color=#888888]:twisted: or >:) - Evil grin[/color] :twisted:
-[*][color=#888888]:tup: - Thumbs up[/color] :tup:
-[*][color=#888888]:tdown: - Thumbs down[/color] :tdown:
-[*][color=#888888]:tongue: or :P - Tongue out[/color] :tongue:
-[*][color=#888888]:surprised: or :O - Surprised[/color] :surprised:
-[*][color=#888888]:happy: or :} - Happy[/color] :happy:
-[*][color=#888888]:sad: or :( - Sad[/color] :sad:
-[*][color=#888888]:rolleyes: - Rolling eyes[/color] :rolleyes:
-[*][color=#888888]:redface: or :blush: - Embarrassed[/color] :redface:
-[*][color=#888888]:?: - Question[/color] :?:
-[*][color=#888888]:mad: or :angry: - Angry[/color] :mad:
-[*][color=#888888]:lol: or :laugh: - Laughing[/color] :lol:
-[*][color=#888888]:idea: - Idea/lightbulb[/color] :idea:
-[*][color=#888888]:!: - Exclamation[/color] :!:
-[*][color=#888888]:evil: or :devil: - Devil[/color] :evil:
-[*][color=#888888]:eek: or :shock: - Shocked[/color] :eek:
-[*][color=#888888]:cool: or B) - Cool/sunglasses[/color] :cool:
-[*][color=#888888]:confused: or :S - Confused[/color] :confused:
-[*][color=#888888]:grin: or :D - Big grin[/color] :grin:
-[*][color=#888888]:arrow: - Arrow[/color] :arrow:
-[/list]
+:wink: [color=#666666]wink[/color] | :twisted: [color=#666666]evil[/color] | :tup: [color=#666666]thumbs up[/color] | :tdown: [color=#666666]thumbs down[/color] | :tongue: [color=#666666]tongue[/color]
+:surprised: [color=#666666]surprised[/color] | :happy: [color=#666666]happy[/color] | :sad: [color=#666666]sad[/color] | :rolleyes: [color=#666666]rolleyes[/color] | :redface: [color=#666666]blush[/color]
+:?: [color=#666666]question[/color] | :mad: [color=#666666]angry[/color] | :lol: [color=#666666]laugh[/color] | :idea: [color=#666666]idea[/color] | :!: [color=#666666]exclaim[/color]
+:evil: [color=#666666]devil[/color] | :eek: [color=#666666]shocked[/color] | :cool: [color=#666666]cool[/color] | :confused: [color=#666666]confused[/color] | :grin: [color=#666666]grin[/color] | :arrow: [color=#666666]arrow[/color]
+
+[size=1.4][color=#9B59B6][b]Meme Smileys[/b][/color][/size]
+Special meme emotes:
+
+:feelsbadman: [color=#666666]feelsbadman[/color] | :sadge: [color=#666666]sadge[/color] | :prayge: [color=#666666]prayge[/color] | :feelsrainman: [color=#666666]rainman[/color]
+:ez: [color=#666666]ez[/color] | :poggers: [color=#666666]poggers[/color] | :hypers: [color=#666666]hypers[/color] | :hmmnice: [color=#666666]hmmnice[/color]
+:kekw: [color=#666666]kekw[/color] | :kekl: [color=#666666]kekl[/color] | :kekleo: [color=#666666]kekleo[/color] | :kekwait: [color=#666666]kekwait[/color]
+:crazy: [color=#666666]crazy[/color] | :hackermans: [color=#666666]hackermans[/color] | :howdie: [color=#666666]howdie[/color] | :uzi: [color=#666666]uzi[/color] | :fu: [color=#666666]fu[/color]
 
 [size=1.4][color=#9B59B6][b]BBCode Formatting[/b][/color][/size]
 Use these tags to format your posts:
