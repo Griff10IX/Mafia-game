@@ -571,7 +571,7 @@ export function parseForumContent(content) {
     const safe = safeUrl(url.trim());
     gifPlaceholders.push(
       safe
-        ? `<img src="${escapeAttr(safe)}" alt="GIF" class="forum-content-media forum-content-gif" style="display:block;max-width:100%;height:auto;border-radius:6px;margin:0.25em auto;" loading="lazy">`
+        ? `<img src="${escapeAttr(safe)}" alt="GIF" class="forum-content-media forum-content-gif" style="display:block;max-width:400px;max-height:300px;width:auto;height:auto;border-radius:6px;margin:0.25em auto;object-fit:contain;" loading="lazy">`
         : ''
     );
     return `\u0001G${idx}\u0001`;
@@ -583,7 +583,7 @@ export function parseForumContent(content) {
     // display:block + margin:auto → centres correctly inside [center] wrappers
     imgPlaceholders.push(
       safe
-        ? `<img src="${escapeAttr(safe)}" alt="" class="forum-content-media forum-content-img" style="display:block;max-width:100%;height:auto;border-radius:6px;margin:0.25em auto;" loading="lazy">`
+        ? `<img src="${escapeAttr(safe)}" alt="" class="forum-content-media forum-content-img" style="display:block;max-width:500px;max-height:400px;width:auto;height:auto;border-radius:6px;margin:0.25em auto;object-fit:contain;" loading="lazy">`
         : ''
     );
     return `\u0001I${idx}\u0001`;

@@ -971,20 +971,134 @@ Think you were punished unfairly?
 
 [hr]
 
-[center][size=1.8][b][color=#FF4444]:moneybag: POINT STORE POLICY :moneybag:[/color][/b][/size][/center]
+[center][size=1.8][b][color=#FF4444]:moneybag: POINTS & PURCHASES :moneybag:[/color][/b][/size][/center]
 
 [quote]
-[center][size=1.3][b][color=#FF4444]All point purchases are FINAL and NON-REFUNDABLE.[/color][/b][/size][/center]
+[size=1.4][color=#2ECC71][b]Buying Points[/b][/color][/size]
+Points are the premium currency used to purchase upgrades and items.
 
-[size=1.4][color=#FF4444][b]:fire: Chargebacks[/b][/color][/size]
-Filing a chargeback will result in:
+[b]How to Purchase:[/b]
 [list]
-[*][b][color=#FF6B6B]Immediate permanent ban[/color][/b]
-[*][b][color=#FF6B6B]Ban of all associated accounts[/color][/b]
-[*][b][color=#FF6B6B]No appeal[/color][/b]
+[*][color=#888888]Click "Buy Points" in the navigation menu[/color]
+[*][color=#888888]Select a point package[/color]
+[*][color=#888888]Complete payment via secure checkout[/color]
+[*][color=#888888]Points are added instantly to your account[/color]
 [/list]
 
-Contact support FIRST if there's any issue with a transaction.
+[b]Payment Methods:[/b]
+[list]
+[*][color=#888888]Credit/Debit Card (Visa, Mastercard, Amex)[/color]
+[*][color=#888888]PayPal[/color]
+[*][color=#888888]Cryptocurrency (where available)[/color]
+[/list]
+
+[b]Point Packages:[/b]
+[list]
+[*][color=#888888]Starter packs for new players[/color]
+[*][color=#888888]Bulk packages with bonus points[/color]
+[*][color=#888888]Check the store for current offers[/color]
+[/list]
+
+[size=1.4][color=#FFD700][b]What Happens to Points When You Die?[/b][/color][/size]
+[list]
+[*][color=#2ECC71][b]UNUSED points are SAFE[/b][/color] - They stay on your account
+[*][color=#FF6B6B][b]USED items are LOST[/b][/color] - Auto Rank, bullets, tokens, etc.
+[*][color=#888888]Contact support to transfer unused points to a new character[/color]
+[*][color=#888888]Provide your old username and new username[/color]
+[*][color=#888888]Staff will verify and transfer within 24-48 hours[/color]
+[/list]
+
+[size=1.4][color=#3498DB][b]Transaction Issues[/b][/color][/size]
+Having problems with a purchase?
+
+[b]Points Not Received:[/b]
+[list]
+[*][color=#888888]Wait 5-10 minutes - sometimes there's a delay[/color]
+[*][color=#888888]Check your email for payment confirmation[/color]
+[*][color=#888888]Clear your browser cache and refresh[/color]
+[*][color=#888888]If still missing after 30 minutes, contact support[/color]
+[/list]
+
+[b]Duplicate Charges:[/b]
+[list]
+[*][color=#888888]Do NOT file a chargeback[/color]
+[*][color=#888888]Contact support immediately with transaction IDs[/color]
+[*][color=#888888]We will refund duplicates or credit extra points[/color]
+[/list]
+
+[b]Wrong Amount Charged:[/b]
+[list]
+[*][color=#888888]Screenshot your bank statement[/color]
+[*][color=#888888]Contact support with order details[/color]
+[*][color=#888888]We will investigate and resolve[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[center][size=1.8][b][color=#FF4444]:warning: REFUND & CHARGEBACK POLICY :warning:[/color][/b][/size][/center]
+
+[quote]
+[center][size=1.5][b][color=#FF4444]ALL PURCHASES ARE FINAL AND NON-REFUNDABLE[/color][/b][/size][/center]
+
+[size=1.4][color=#FF4444][b]No Refunds Policy[/b][/color][/size]
+[list]
+[*][color=#888888]Points are virtual goods delivered instantly[/color]
+[*][color=#888888]Once purchased, points cannot be refunded[/color]
+[*][color=#888888]This includes accidental purchases[/color]
+[*][color=#888888]This includes purchases made by others on your account[/color]
+[*][color=#888888]Secure your account - you are responsible for all purchases[/color]
+[/list]
+
+[size=1.4][color=#FF4444][b]:fire: CHARGEBACKS - READ CAREFULLY :fire:[/b][/color][/size]
+
+A chargeback is when you dispute a charge with your bank/card company instead of contacting us.
+
+[center][b][color=#FF6B6B][size=1.3]FILING A CHARGEBACK WILL RESULT IN:[/size][/color][/b][/center]
+
+[list]
+[*][b][color=#FF6B6B]IMMEDIATE PERMANENT BAN[/color][/b] - No warning
+[*][b][color=#FF6B6B]ALL ASSOCIATED ACCOUNTS BANNED[/color][/b] - Same IP, same device, same payment method
+[*][b][color=#FF6B6B]IP BAN[/color][/b] - Cannot create new accounts
+[*][b][color=#FF6B6B]NO APPEAL PROCESS[/color][/b] - This decision is final
+[*][b][color=#FF6B6B]REPORTED TO FRAUD DATABASES[/color][/b] - May affect other games/services
+[/list]
+
+[size=1.4][color=#FFD700][b]Why Are Chargebacks So Serious?[/b][/color][/size]
+[list]
+[*][color=#888888]Chargebacks cost us significant fees ($15-25 per dispute)[/color]
+[*][color=#888888]They hurt our ability to accept payments[/color]
+[*][color=#888888]They're often used fraudulently[/color]
+[*][color=#888888]You already received and used the points[/color]
+[/list]
+
+[size=1.4][color=#2ECC71][b]Instead of Chargebacks - Contact Us![/b][/color][/size]
+[list]
+[*][color=#2ECC71]Use the Help Desk forum[/color]
+[*][color=#2ECC71]Message a staff member directly[/color]
+[*][color=#2ECC71]Email support (check website for address)[/color]
+[*][color=#2ECC71]We respond within 24-48 hours[/color]
+[*][color=#2ECC71]We WILL help resolve legitimate issues[/color]
+[/list]
+
+[b][color=#FFD700]We have NEVER refused to help a player with a legitimate transaction issue. Contact us first![/color][/b]
+
+[size=1.4][color=#FF4444][b]Fraudulent Purchases[/b][/color][/size]
+If someone used your card without permission:
+[list]
+[*][color=#888888]Contact us FIRST before your bank[/color]
+[*][color=#888888]Provide proof it wasn't you (police report, etc.)[/color]
+[*][color=#888888]We can work with you to resolve it[/color]
+[*][color=#888888]Going straight to chargeback = ban, even if fraud[/color]
+[/list]
+
+[size=1.4][color=#9B59B6][b]Gift Purchases[/b][/color][/size]
+[list]
+[*][color=#888888]You can gift points to other players[/color]
+[*][color=#888888]Gifted points are non-refundable[/color]
+[*][color=#888888]If you gift points and then chargeback = both accounts banned[/color]
+[*][color=#888888]Only gift to people you trust[/color]
+[/list]
 [/quote]
 
 [hr]
