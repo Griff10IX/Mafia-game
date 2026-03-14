@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -35,6 +35,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Search Users', categoryId: 'admin-players', collapseKey: 'searchUsers', keywords: ['search', 'users', 'email', 'find'] },
   { label: 'Change Rank', categoryId: 'admin-players', collapseKey: 'rank', keywords: ['rank', 'change', 'prestige', 'level'] },
   { label: 'Add Points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'add', 'give'] },
+  { label: 'Founding Member', categoryId: 'admin-players', collapseKey: 'founding', keywords: ['founding', 'member', 'badge', 'founder'] },
   { label: 'Add Money', categoryId: 'admin-players', collapseKey: 'money', keywords: ['money', 'cash', 'add', 'give'] },
   { label: 'Add Bullets', categoryId: 'admin-players', collapseKey: 'bullets', keywords: ['bullets', 'ammo', 'add'] },
   { label: 'Give Car', categoryId: 'admin-players', collapseKey: 'cars', keywords: ['car', 'vehicle', 'give'] },
@@ -1078,6 +1079,13 @@ export default function Admin() {
   const handleAddPoints = async () => {
     try {
       const response = await api.post(`/admin/add-points?target_username=${formData.targetUsername}&points=${formData.points}`);
+      toast.success(response.data.message);
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleSetFoundingMember = async (isFounding) => {
+    try {
+      const response = await api.post(`/admin/set-founding-member?target_username=${formData.targetUsername}&is_founding=${isFounding}`);
       toast.success(response.data.message);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
@@ -3105,6 +3113,11 @@ export default function Admin() {
             <ActionRow icon={Coins} label="Add Points">
               <FormattedNumberInput value={formData.points != null ? String(formData.points) : ''} onChange={(raw) => setFormData((prev) => ({ ...prev, points: raw === '' ? 0 : parseInt(raw, 10) }))} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnPrimary onClick={handleAddPoints}>Add</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Award} label="Founding Member" description="Grant or remove Founding Member badge">
+              <BtnPrimary onClick={() => handleSetFoundingMember(true)}>Grant</BtnPrimary>
+              <BtnDanger onClick={() => handleSetFoundingMember(false)}>Remove</BtnDanger>
             </ActionRow>
 
             <ActionRow icon={Crosshair} label="Give Bullets">

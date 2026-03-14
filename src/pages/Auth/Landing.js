@@ -132,6 +132,13 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
 
       const response = await api.post(endpoint, payload);
 
+      // Pre-registration mode: account created but can't login until launch
+      if (response.data.preregistered) {
+        toast.success(response.data.message || 'Account created! You can log in when the game launches.');
+        setFormData({ email: '', username: '', password: '', confirmPassword: '' });
+        return;
+      }
+
       if (response.data.verify_required) {
         if (response.data.token) {
           localStorage.setItem('token', response.data.token);

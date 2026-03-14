@@ -247,6 +247,40 @@ def register(router):
         )
         return {"message": f"Added {points} points to {target_username}"}
 
+    @router.post("/admin/set-founding-member")
+    async def admin_set_founding_member(
+        target_username: str,
+        is_founding: bool = True,
+        current_user: dict = Depends(get_current_user)
+    ):
+        """Set or remove founding member status for a user. When true, adds the badge; when false, removes it."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "badges": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        badge_name = "Founding Member"
+        if is_founding:
+            await db.users.update_one(
+                {"id": target["id"]},
+                {
+                    "$set": {"founding_member": True},
+                    "$addToSet": {"badges": badge_name}
+                }
+            )
+            return {"message": f"Set {target['username']} as Founding Member with badge"}
+        else:
+            await db.users.update_one(
+                {"id": target["id"]},
+                {
+                    "$set": {"founding_member": False},
+                    "$pull": {"badges": badge_name}
+                }
+            )
+            return {"message": f"Removed Founding Member status from {target['username']}"}
+
     @router.post("/admin/give-all-points")
     async def admin_give_all_points(points: int, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

@@ -295,29 +295,78 @@ def register(router):
                 "theme_preferences": {"sidebarLayout": "categorized"},
                 "founding_member": False,
                 "founding_rewards_claimed": False,
+                "badges": [],
             }
 
             # Check if registering during pre-launch (founding member)
             settings = await db.game_settings.find_one({"_id": "main"})
             lock_until = settings.get("login_lock_until") if settings else None
+            is_founding = False
             if lock_until:
                 try:
                     lock_dt = datetime.fromisoformat(lock_until.replace("Z", "+00:00"))
                     if datetime.now(timezone.utc) < lock_dt:
-                        user_doc["founding_member"] = True
+                        is_founding = True
                 except (ValueError, TypeError):
                     pass
             
             # Check if email was pre-registered and mark as founding member
             email_prereg = await db.preregistrations.find_one({"email": user_doc["email"]})
             if email_prereg:
-                user_doc["founding_member"] = True
+                is_founding = True
                 await db.preregistrations.update_one(
                     {"email": user_doc["email"]},
                     {"$set": {"converted": True, "converted_at": datetime.now(timezone.utc).isoformat()}}
                 )
+            
+            # If founding member, set flag and add badge immediately
+            if is_founding:
+                user_doc["founding_member"] = True
+                user_doc["badges"] = [PREREGISTER_REWARDS.get("badge", "Founding Member")]
 
             await db.users.insert_one(user_doc.copy())
+
+            # Check if login is locked (pre-registration mode) - don't auto-login
+            settings = await db.game_settings.find_one({"_id": "main"})
+            login_lock_until = settings.get("login_lock_until") if settings else None
+            login_is_locked = False
+            if login_lock_until:
+                try:
+                    lock_dt = datetime.fromisoformat(login_lock_until.replace("Z", "+00:00"))
+                    login_is_locked = datetime.now(timezone.utc) < lock_dt
+                except (ValueError, TypeError):
+                    pass
+            
+            if login_is_locked:
+                # Pre-registration: account created but can't login yet
+                # Still send verification email if required
+                if require_verification:
+                    verification_token = str(uuid.uuid4())
+                    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+                    await db.email_verifications.insert_one({
+                        "token": verification_token,
+                        "user_id": user_id,
+                        "email": user_doc["email"],
+                        "username": user_doc["username"],
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "expires_at": expires_at.isoformat(),
+                    })
+                    import threading
+                    from utils.email_sender import send_verification_email
+                    def _send_in_background():
+                        try:
+                            send_verification_email(user_doc["email"], user_doc["username"], verification_token)
+                        except Exception as e:
+                            logging.warning("Background verification email failed: %s", e)
+                    threading.Thread(target=_send_in_background, daemon=True).start()
+                
+                return {
+                    "token": None,
+                    "user": None,
+                    "message": "Account created! You're now a Founding Member. You'll be able to log in when the game launches.",
+                    "preregistered": True,
+                    "founding_member": True,
+                }
 
             if not require_verification:
                 ip = _client_ip(request) or ""
@@ -683,6 +732,7 @@ def register(router):
                 
                 if launch_happened:
                     # Apply rewards
+                    badge_name = PREREGISTER_REWARDS.get("badge", "Founding Member")
                     reward_update = {
                         "$inc": {
                             "points": PREREGISTER_REWARDS.get("bonus_points", 500),
@@ -691,7 +741,9 @@ def register(router):
                         "$set": {
                             "founding_rewards_claimed": True,
                             "founding_rewards_claimed_at": now.isoformat(),
-                            "badges": [PREREGISTER_REWARDS.get("badge", "Founding Member")],
+                        },
+                        "$addToSet": {
+                            "badges": badge_name,
                         }
                     }
                     await db.users.update_one({"id": user["id"]}, reward_update)

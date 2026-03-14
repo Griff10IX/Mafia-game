@@ -328,6 +328,9 @@ function buildGameCapitalRows(data) {
     { label: 'Swiss bank cash', value: formatMoney(gc?.swiss_total) },
     { label: 'Interest bank cash', value: formatMoney(gc?.interest_bank_total) },
     { label: 'Quick Trade cash', value: formatMoney(gc?.quicktrade_cash) },
+    { label: 'Booze profits', value: formatMoney(gc?.booze_profit_total) },
+    { label: 'Total bullets', value: formatNumber(gc?.bullets_total) },
+    { label: 'Family treasuries', value: formatMoney(gc?.family_treasury_total) },
   ];
 }
 
@@ -348,6 +351,7 @@ function buildVehicleRows(data) {
   const vs = data?.vehicle_stats;
   return [
     { label: 'Total vehicles', value: formatNumber(vs?.total_vehicles) },
+    { label: 'Total value', value: formatMoney(vs?.total_vehicle_value) },
     { label: 'Common', value: formatNumber(vs?.common_vehicles) },
     { label: 'Uncommon', value: formatNumber(vs?.uncommon_vehicles) },
     { label: 'Rare', value: formatNumber(vs?.rare_vehicles) },
@@ -355,6 +359,10 @@ function buildVehicleRows(data) {
     { label: 'Legendary', value: formatNumber(vs?.legendary_vehicles) },
     { label: 'Custom', value: formatNumber(vs?.custom_vehicles) },
     { label: 'Exclusives', value: formatNumber(vs?.exclusive_vehicles) },
+    { label: 'Loot exclusives', value: formatNumber(vs?.loot_exclusive_vehicles) },
+    { label: 'Racing cars', value: formatNumber(vs?.racing_cars) },
+    { label: 'Cars scrapped', value: formatNumber(vs?.cars_scrapped) },
+    { label: 'Cars melted', value: formatNumber(vs?.cars_melted) },
   ];
 }
 

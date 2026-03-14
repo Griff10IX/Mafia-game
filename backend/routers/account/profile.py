@@ -410,6 +410,8 @@ def register(router):
             "youtube_url": (user.get("profile_youtube_url") or "").strip() or None,
             "profile_banner_image_url": (user.get("profile_banner_image_url") or "").strip() or None,
             "profile_banner_text": (user.get("profile_banner_text") or "").strip() or None,
+            "badges": user.get("badges") or [],
+            "founding_member": bool(user.get("founding_member")),
         }
         if not is_own_profile:
             for key in (

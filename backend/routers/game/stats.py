@@ -77,8 +77,9 @@ def register(router):
                 "$group": {
                     "_id": None,
                     "money_total": {"$sum": {"$ifNull": ["$money", 0]}},
-                    "points_total": {"$sum": {"$ifNull": ["$points", 0]}},
+                    "booze_profit_total": {"$sum": {"$ifNull": ["$booze_profit_total", 0]}},
                     "swiss_total": {"$sum": {"$ifNull": ["$swiss_balance", 0]}},
+                    "bullets_total": {"$sum": {"$ifNull": ["$bullets", 0]}},
                     "total_crimes": {"$sum": {"$ifNull": ["$total_crimes", 0]}},
                     "total_gta": {"$sum": {"$ifNull": ["$total_gta", 0]}},
                     "total_jail_busts": {"$sum": {"$ifNull": ["$jail_busts", 0]}},
@@ -88,6 +89,12 @@ def register(router):
             }
         ]).to_list(1)
         totals_doc = totals[0] if totals else {}
+        
+        # Family treasuries total
+        family_treasury_agg = await db.families.aggregate([
+            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$treasury", 0]}}}}
+        ]).to_list(1)
+        family_treasury_total = int(family_treasury_agg[0].get("total", 0) or 0) if family_treasury_agg else 0
         # Total cash: alive real users only (not dead, not NPCs)
         cash_agg = await db.users.aggregate([
             {"$match": alive_real_match},
@@ -112,16 +119,36 @@ def register(router):
             {"$group": {"_id": "$car_id", "count": {"$sum": 1}}}
         ]).to_list(100)
         car_by_id = {c.get("id"): c for c in CARS}
-        rarity_counts = {"common": 0, "uncommon": 0, "rare": 0, "ultra_rare": 0, "legendary": 0, "custom": 0, "exclusive": 0}
+        rarity_counts = {"common": 0, "uncommon": 0, "rare": 0, "ultra_rare": 0, "legendary": 0, "custom": 0, "exclusive": 0, "loot_exclusive": 0}
+        total_vehicle_value = 0
         for cc in car_counts:
             car_id = cc.get("_id")
             cnt = int(cc.get("count", 0) or 0)
             info = car_by_id.get(car_id) or {}
             rarity = info.get("rarity") or "common"
+            car_value = int(info.get("value") or 0)
+            total_vehicle_value += car_value * cnt
             if rarity in rarity_counts:
                 rarity_counts[rarity] += cnt
             else:
                 rarity_counts["common"] += cnt
+        
+        # Cars scrapped and melted totals
+        cars_scrapped_agg = await db.users.aggregate([
+            {"$match": real_user_match},
+            {"$group": {"_id": None, "scrapped": {"$sum": {"$ifNull": ["$total_cars_scrapped", 0]}}, "melted": {"$sum": {"$ifNull": ["$total_cars_melted", 0]}}}}
+        ]).to_list(1)
+        cars_scrapped_doc = cars_scrapped_agg[0] if cars_scrapped_agg else {}
+        
+        # Racing cars count
+        racing_cars_count = await db.user_racing_cars.count_documents({})
+        
+        # GTA success rate (GTAs / attempts if we have attempts data)
+        gta_stats_agg = await db.users.aggregate([
+            {"$match": real_user_match},
+            {"$group": {"_id": None, "gta_total": {"$sum": {"$ifNull": ["$total_gta", 0]}}, "gta_fails": {"$sum": {"$ifNull": ["$total_gta_fails", 0]}}}}
+        ]).to_list(1)
+        gta_stats_doc = gta_stats_agg[0] if gta_stats_agg else {}
 
         rank_stats_map: dict = {}
         rank_meta = [(r["id"], r["name"]) for r in RANKS]
@@ -238,7 +265,9 @@ def register(router):
                 "swiss_total": int(totals_doc.get("swiss_total", 0) or 0),
                 "interest_bank_total": interest_bank_total,
                 "quicktrade_cash": quicktrade_cash,
-                "points_total": int(totals_doc.get("points_total", 0) or 0),
+                "booze_profit_total": int(totals_doc.get("booze_profit_total", 0) or 0),
+                "bullets_total": int(totals_doc.get("bullets_total", 0) or 0),
+                "family_treasury_total": family_treasury_total,
             },
             "user_stats": {
                 "total_users": int(total_users),
@@ -252,6 +281,7 @@ def register(router):
             },
             "vehicle_stats": {
                 "total_vehicles": int(total_vehicles),
+                "total_vehicle_value": int(total_vehicle_value),
                 "common_vehicles": int(rarity_counts.get("common", 0)),
                 "uncommon_vehicles": int(rarity_counts.get("uncommon", 0)),
                 "rare_vehicles": int(rarity_counts.get("rare", 0)),
@@ -259,6 +289,12 @@ def register(router):
                 "legendary_vehicles": int(rarity_counts.get("legendary", 0)),
                 "custom_vehicles": int(rarity_counts.get("custom", 0)),
                 "exclusive_vehicles": int(rarity_counts.get("exclusive", 0)),
+                "loot_exclusive_vehicles": int(rarity_counts.get("loot_exclusive", 0)),
+                "racing_cars": int(racing_cars_count),
+                "cars_scrapped": int(cars_scrapped_doc.get("scrapped", 0) or 0),
+                "cars_melted": int(cars_scrapped_doc.get("melted", 0) or 0),
+                "gta_success": int(gta_stats_doc.get("gta_total", 0) or 0),
+                "gta_fails": int(gta_stats_doc.get("gta_fails", 0) or 0),
             },
             "rank_stats": rank_stats,
             "recent_kills": recent_kills,
