@@ -560,11 +560,11 @@ function getCurvature(track, t) {
   return Math.abs(delta) / arcLen;
 }
 
-/** Corner multiplier: 1.0 on straights, ~0.78 in sharp corners. Scale by grip (higher grip = less slowdown). Cars carry more speed through corners. */
+/** Corner multiplier: 1.0 on straights, ~0.50–0.60 in sharp corners (1920s era = must brake). Scale by grip. */
 function getCornerMult(curvature, baseGrip = 0.85) {
-  const k = 0.007;
+  const k = 0.022;
   const raw = 1 / (1 + curvature * k);
-  const minMult = 0.78 + (baseGrip - 0.5) * 0.15;
+  const minMult = 0.48 + (baseGrip - 0.5) * 0.28;
   return Math.max(minMult, Math.min(1, raw));
 }
 
@@ -1521,19 +1521,22 @@ export default function CircuitRaceView({
 
         // Movement
         const prevPos = r.trackPos;
+        // 1920s–30s era: max ~130 mph (210 km/h) on straights; scale raw formula to realistic range
+        const SPEED_REALISM_SCALE = 0.32;
+        const SPEED_CAP_KMH = 210;
         if (r.slideOffUntil > 0 && nowSec < r.slideOffUntil) {
           const lapTime = track.lapBase / effSpeed;
           const advance = (1.0 / lapTime) * dt * 0.18;
           r.trackPos = (r.trackPos + advance + 1) % 1;
-          const rawKmh = track.km && track.lapBase ? (3600 * track.km * 0.18 * effSpeed) / track.lapBase : null;
-          r.currentSpeedKmh = rawKmh == null ? null : Math.max(0, Math.min(410, rawKmh));
+          const rawKmh = track.km && track.lapBase ? SPEED_REALISM_SCALE * (3600 * track.km * 0.18 * effSpeed) / track.lapBase : null;
+          r.currentSpeedKmh = rawKmh == null ? null : Math.max(0, Math.min(SPEED_CAP_KMH, rawKmh));
         } else {
           r.slideOffUntil = 0;
           const lapTime = track.lapBase / effSpeed;
           const advance = (1.0 / lapTime) * dt * cornerMult;
           r.trackPos = (r.trackPos + advance + 1) % 1;
-          const rawKmh = track.km && track.lapBase ? (3600 * track.km * cornerMult * effSpeed) / track.lapBase : null;
-          r.currentSpeedKmh = rawKmh == null ? null : Math.max(0, Math.min(410, rawKmh));
+          const rawKmh = track.km && track.lapBase ? SPEED_REALISM_SCALE * (3600 * track.km * cornerMult * effSpeed) / track.lapBase : null;
+          r.currentSpeedKmh = rawKmh == null ? null : Math.max(0, Math.min(SPEED_CAP_KMH, rawKmh));
           if (curvature > 0.10 && effectiveGrip < 0.82 && Math.random() < dt * 2.2 * (0.85 - effectiveGrip) * Math.min(1, curvature / 0.18)) {
             r.slideOffUntil = nowSec + 0.5 + Math.random() * 0.6;
             addIncident(`${r.name} off track!`);

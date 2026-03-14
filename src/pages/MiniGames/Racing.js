@@ -165,7 +165,7 @@ export default function Racing() {
       max_racing_teams: d.max_racing_teams,
       racing_week_ends_utc: d.racing_week_ends_utc,
       racing_season_ends_utc: d.racing_season_ends_utc,
-      global_upgrade_cap: d.global_upgrade_cap ?? 18,
+      global_upgrade_cap: d.global_upgrade_cap ?? 26,
       free_engine_repair_available: !!d.free_engine_repair_available,
       crew_levels_used: d.crew_levels_used ?? 0,
       crew_global_cap: d.crew_global_cap ?? 24,
@@ -930,22 +930,22 @@ export default function Racing() {
                 const fuel = up.fuel_level ?? 0;
                 const championship = up.championship_upgrade || false;
                 const wins = profile?.wins ?? 0;
-                const globalCap = profile?.global_upgrade_cap ?? 18;
+                const globalCap = profile?.global_upgrade_cap ?? 26;
                 const levelsUsed = c.upgrade_levels_used ?? (engine + tires + aero + reliability + (championship ? 1 : 0) + brakes + gearbox + cooling + weight + fuel);
                 const atGlobalCap = levelsUsed >= globalCap;
                 const bank = profile?.crew_bank ?? 0;
 
                 const levelMap = { engine, tires, aero, reliability, brakes, gearbox, cooling, weight, fuel };
                 const maxMap = {
-                  engine: upgradeTradeoffs?.engine?.max ?? 4,
-                  tires: upgradeTradeoffs?.tires?.max ?? 4,
-                  aero: upgradeTradeoffs?.aero?.max ?? 2,
-                  reliability: upgradeTradeoffs?.reliability?.max ?? 2,
-                  brakes: upgradeTradeoffs?.brakes?.max ?? 3,
-                  gearbox: upgradeTradeoffs?.gearbox?.max ?? 3,
-                  cooling: upgradeTradeoffs?.cooling?.max ?? 2,
-                  weight: upgradeTradeoffs?.weight?.max ?? 2,
-                  fuel: upgradeTradeoffs?.fuel?.max ?? 2,
+                  engine: upgradeTradeoffs?.engine?.max ?? 5,
+                  tires: upgradeTradeoffs?.tires?.max ?? 5,
+                  aero: upgradeTradeoffs?.aero?.max ?? 3,
+                  reliability: upgradeTradeoffs?.reliability?.max ?? 3,
+                  brakes: upgradeTradeoffs?.brakes?.max ?? 4,
+                  gearbox: upgradeTradeoffs?.gearbox?.max ?? 4,
+                  cooling: upgradeTradeoffs?.cooling?.max ?? 3,
+                  weight: upgradeTradeoffs?.weight?.max ?? 3,
+                  fuel: upgradeTradeoffs?.fuel?.max ?? 3,
                 };
 
                 const nextETCost = carUpgradeCosts[engine + tires + 1] ?? carUpgradeCosts[carUpgradeCosts.length - 1];

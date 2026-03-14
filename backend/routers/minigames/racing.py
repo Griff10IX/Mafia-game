@@ -93,7 +93,7 @@ WINS_FOR_AERO_RELIABILITY = 1
 WINS_FOR_CHAMPIONSHIP_UPGRADE = 3
 CHAMPIONSHIP_UPGRADE_COST = 350000
 # 10 upgradable car stats total; not all can be maxed — global cap on total levels
-RACING_UPGRADE_GLOBAL_CAP = 18  # sum of all 10 upgrade levels cannot exceed this
+RACING_UPGRADE_GLOBAL_CAP = 26  # sum of all 10 upgrade levels cannot exceed this
 MAX_CREW_LEVEL = 5  # mechanic, pit
 # 12 crew upgrades total; cannot all be maxed — global cap on total levels (max possible = 34)
 RACING_CREW_GLOBAL_CAP = 24
@@ -113,15 +113,15 @@ CREW_EXTRA_TYPES = [
 RACING_TEAM_CREATE_COST = 25_000_000  # $25M to create a racing team (name + colour)
 CREW_BANK_START = 50_000  # Starting crew bank when creating a team
 MAX_RACING_TEAMS = 18  # Only 18 teams total; kill a team owner to take their team
-MAX_CAR_UPGRADE_LEVEL = 4  # engine, tires
-MAX_AERO_LEVEL = 2
-MAX_RELIABILITY_LEVEL = 2
-MAX_BRAKES_LEVEL = 3
-MAX_GEARBOX_LEVEL = 3
-MAX_COOLING_LEVEL = 2
-MAX_WEIGHT_LEVEL = 2
+MAX_CAR_UPGRADE_LEVEL = 5  # engine, tires
+MAX_AERO_LEVEL = 3
+MAX_RELIABILITY_LEVEL = 3
+MAX_BRAKES_LEVEL = 4
+MAX_GEARBOX_LEVEL = 4
+MAX_COOLING_LEVEL = 3
+MAX_WEIGHT_LEVEL = 3
 WINS_FOR_WEIGHT = 2
-MAX_FUEL_LEVEL = 2
+MAX_FUEL_LEVEL = 3
 # New stats: brakes +grip -power, gearbox +speed -grip, cooling -engine wear, weight +speed +grip (unlock 2 wins), fuel +power
 BRAKES_GRIP_PER_LEVEL = 0.02
 BRAKES_POWER_PENALTY_PER_LEVEL = 0.01
@@ -584,7 +584,7 @@ def _run_race_simulation_laps(
             up_key = (entrant.get("racing_car_instance_id") or entrant.get("id") or "") if entrant else ""
             up_eng = upgrades_map.get(up_key, {})
             cooling = int(up_eng.get("cooling_level") or 0)
-            cooling_risk_mult = max(0.6, 1.0 - 0.20 * cooling)  # 0,1,2 => 1.0,0.8,0.6
+            cooling_risk_mult = max(0.4, 1.0 - 0.20 * cooling)  # 0..3 => 1.0,0.8,0.6,0.4
             # Chance of DNF increases with wear; at 100% use ENGINE_DNF_CHANCE_PER_LAP_AT_100
             dnf_chance = (wear - ENGINE_RISK_THRESHOLD) / (ENGINE_WEAR_MAX - ENGINE_RISK_THRESHOLD) * ENGINE_DNF_CHANCE_PER_LAP_AT_100
             if random.random() < (dnf_chance * cooling_risk_mult):
@@ -621,14 +621,14 @@ def _run_race_simulation_laps(
                 up = upgrades_map.get(e.get("racing_car_instance_id") or eid) or {}
                 cooling = int(up.get("cooling_level") or 0)
                 # Cooling softens the penalty when the engine is in the risk zone.
-                penalty = min(1.0, ENGINE_SPEED_PENALTY_AT_RISK + 0.05 * cooling)  # 0,1,2 => 0.85,0.90,0.95
+                penalty = min(1.0, ENGINE_SPEED_PENALTY_AT_RISK + 0.05 * cooling)  # 0..3 => 0.85,0.90,0.95,1.0
                 speed_val *= penalty
             # Fuel upgrade reduces early-race weight penalty (small but meaningful).
             up_fuel = upgrades_map.get(e.get("racing_car_instance_id") or eid) or {}
             fuel_lvl = int(up_fuel.get("fuel_level") or 0)
             # Heavier at start: up to +3% penalty on lap 1, fades to ~0 by final lap.
             base_weight_penalty = 0.03 * ((num_laps - lap + 1) / max(1, num_laps))
-            weight_penalty = max(0.0, base_weight_penalty - 0.01 * fuel_lvl)  # fuel 0..2 reduces penalty up to 2%
+            weight_penalty = max(0.0, base_weight_penalty - 0.01 * fuel_lvl)  # fuel 0..3 reduces penalty up to 3%
             fuel_weight_mult = 1.0 + weight_penalty
             tire_factor = max(0.3, tire_wear[eid] / 100.0)
             is_wet = weather_id in ("rain", "snow")

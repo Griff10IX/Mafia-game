@@ -132,6 +132,10 @@ function CarProfileRedirect() {
   const { carId } = useParams();
   return <Navigate to={`/cars/profile/${carId}`} replace />;
 }
+function ViewCarRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/cars/view${search}`} replace />;
+}
 function InboxChatRedirect() {
   const { userId } = useParams();
   return <Navigate to={`/social/chat/${userId}`} replace />;
@@ -509,7 +513,7 @@ function App() {
           <Route path="/garage" element={<Navigate to="/cars/garage" replace />} />
           <Route path="/buy-cars" element={<Navigate to="/cars/buy" replace />} />
           <Route path="/sell-cars" element={<Navigate to="/cars/sell" replace />} />
-          <Route path="/view-car" element={<Navigate to="/cars/view" replace />} />
+          <Route path="/view-car" element={<ViewCarRedirect />} />
           <Route path="/gta/car/:carId" element={<CarProfileRedirect />} />
           {/* ═══ STAFF ROLE GROUP ═══ */}
           <Route
