@@ -1,8 +1,9 @@
-# Casino Roulette: config, ownership, claim, relinquish, set-max-bet, send-to-user, sell-on-trade, spin
-from datetime import datetime, timezone
+# Casino Roulette: config, ownership, claim, relinquish, set-max-bet, send-to-user, sell-on-trade, spin, buy-back
+from datetime import datetime, timezone, timedelta
 import re
 import random
 import time
+import uuid
 from typing import Optional, Union
 from pydantic import BaseModel
 from bson.objectid import ObjectId
@@ -55,6 +56,19 @@ class RouletteSetMaxBetRequest(BaseModel):
 class RouletteSendToUserRequest(BaseModel):
     city: str
     target_username: str
+
+
+class RouletteSetBuyBackRequest(BaseModel):
+    city: Optional[str] = None
+    amount: int
+
+
+class RouletteBuyBackAcceptRequest(BaseModel):
+    offer_id: str
+
+
+class RouletteBuyBackRejectRequest(BaseModel):
+    offer_id: str
 
 
 # ----- Per-user cache for GET /casino/roulette/ownership -----
@@ -152,6 +166,12 @@ def register(router):
         entry = _ownership_cache.get(user_id)
         if entry and (now_ts - entry["ts"]) < _OWNERSHIP_TTL_SEC:
             return entry["data"]
+        now = datetime.now(timezone.utc)
+        # Clean up expired buy-back offers
+        await db.roulette_buy_back_offers.delete_many({
+            "to_user_id": user_id,
+            "expires_at": {"$lt": now.isoformat()},
+        })
         raw = (current_user.get("current_state") or "").strip()
         if not raw:
             raw = STATES[0] if STATES else "Chicago"
@@ -168,7 +188,9 @@ def register(router):
                 "is_owner": False,
                 "is_unclaimed": True,
                 "claim_cost": ROULETTE_CLAIM_COST,
-                "max_bet": ROULETTE_DEFAULT_MAX_BET
+                "max_bet": ROULETTE_DEFAULT_MAX_BET,
+                "buy_back_reward": None,
+                "buy_back_offer": None,
             }
             if len(_ownership_cache) < _OWNERSHIP_MAX_ENTRIES:
                 _ownership_cache[user_id] = {"ts": now_ts, "data": out}
@@ -182,6 +204,26 @@ def register(router):
         max_bet = doc.get("max_bet", ROULETTE_DEFAULT_MAX_BET)
         total_earnings = doc.get("total_earnings", 0)
         profit = int((doc.get("profit") or total_earnings or 0) or 0)
+        buy_back_reward = doc.get("buy_back_reward")
+        # Check for active buy-back offer for this user
+        active_offer = await db.roulette_buy_back_offers.find_one(
+            {"to_user_id": user_id},
+            {"_id": 0, "id": 1, "points_offered": 1, "amount_shortfall": 1, "owner_paid": 1, "expires_at": 1}
+        )
+        buy_back_offer = None
+        if active_offer:
+            try:
+                exp_dt = datetime.fromisoformat((active_offer.get("expires_at") or "").replace("Z", "+00:00"))
+                if exp_dt > now:
+                    buy_back_offer = {
+                        "offer_id": active_offer["id"],
+                        "points_offered": int(active_offer.get("points_offered") or 0),
+                        "amount_shortfall": int(active_offer.get("amount_shortfall") or 0),
+                        "owner_paid": int(active_offer.get("owner_paid") or 0),
+                        "expires_at": active_offer.get("expires_at"),
+                    }
+            except Exception:
+                pass
         out = {
             "current_city": display_city,
             "owner_id": owner_id,
@@ -191,7 +233,9 @@ def register(router):
             "claim_cost": ROULETTE_CLAIM_COST,
             "max_bet": max_bet,
             "total_earnings": total_earnings if is_owner else None,
-            "profit": profit if is_owner else None
+            "profit": profit if is_owner else None,
+            "buy_back_reward": buy_back_reward if is_owner else None,
+            "buy_back_offer": buy_back_offer,
         }
         if len(_ownership_cache) < _OWNERSHIP_MAX_ENTRIES:
             _ownership_cache[user_id] = {"ts": now_ts, "data": out}
@@ -216,7 +260,7 @@ def register(router):
             raise HTTPException(status_code=400, detail=f"You need ${ROULETTE_CLAIM_COST:,} to claim")
         res = await db.roulette_ownership.update_one(
             {"city": stored_city or city, "owner_id": None},
-            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": ROULETTE_DEFAULT_MAX_BET, "total_earnings": 0}},
+            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": ROULETTE_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0, "buy_back_reward": 0}},
             upsert=True
         )
         if not res.modified_count and not res.upserted_id:
@@ -250,6 +294,66 @@ def register(router):
         new_max = max(1_000_000, min(request.max_bet, ROULETTE_ABSOLUTE_MAX_BET))
         await db.roulette_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": new_max}})
         return {"message": f"Max bet set to ${new_max:,}"}
+
+    @router.post("/casino/roulette/set-buy-back-reward")
+    async def casino_roulette_set_buy_back_reward(request: RouletteSetBuyBackRequest, current_user: dict = Depends(get_current_user_verified)):
+        """Set the buy-back reward (points) offered if someone takes your roulette table."""
+        _invalidate_ownership_cache(current_user.get("id") or "")
+        raw = (request.city or current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
+        city = _normalize_city_for_roulette(raw) if raw else (STATES[0] if STATES else "")
+        if not city or city not in STATES:
+            raise HTTPException(status_code=400, detail="Invalid city")
+        stored_city, doc = await _get_roulette_ownership_doc(city)
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
+            raise HTTPException(status_code=403, detail="You do not own this table")
+        amount = max(0, int(request.amount))
+        await db.roulette_ownership.update_one({"city": stored_city or city}, {"$set": {"buy_back_reward": amount}})
+        return {"message": "Buy-back reward updated."}
+
+    @router.post("/casino/roulette/buy-back/accept")
+    async def casino_roulette_buy_back_accept(request: RouletteBuyBackAcceptRequest, current_user: dict = Depends(get_current_user_verified)):
+        """Accept a buy-back offer: receive points and return the roulette table to the previous owner."""
+        offer = await db.roulette_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0})
+        if not offer:
+            raise HTTPException(status_code=404, detail="Offer not found")
+        if offer.get("to_user_id") != current_user.get("id") or "":
+            raise HTTPException(status_code=403, detail="Not your offer")
+        expires = offer.get("expires_at")
+        if expires:
+            try:
+                exp_dt = datetime.fromisoformat(expires.replace("Z", "+00:00"))
+                if exp_dt < datetime.now(timezone.utc):
+                    await db.roulette_buy_back_offers.delete_one({"id": request.offer_id})
+                    raise HTTPException(status_code=400, detail="Offer expired")
+            except ValueError:
+                pass
+        city = offer.get("city")
+        from_owner_id = offer.get("from_owner_id")
+        points_offered = int(offer.get("points_offered") or 0)
+        if points_offered <= 0:
+            raise HTTPException(status_code=400, detail="Invalid offer (0 points)")
+        from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1, "username": 1})
+        if not from_user or int(from_user.get("points") or 0) < points_offered:
+            raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
+        await db.users.update_one({"id": from_owner_id}, {"$inc": {"points": -points_offered}})
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
+        from_username = from_user.get("username") if from_user else None
+        # Reset max_bet to 0 when ownership returns - owner must set it again
+        await db.roulette_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_username, "max_bet": 0}})
+        await db.roulette_buy_back_offers.delete_one({"id": request.offer_id})
+        _invalidate_ownership_cache(current_user.get("id") or "")
+        _invalidate_ownership_cache(from_owner_id)
+        return {"message": "Accepted. You received the points and the table was returned to the previous owner."}
+
+    @router.post("/casino/roulette/buy-back/reject")
+    async def casino_roulette_buy_back_reject(request: RouletteBuyBackRejectRequest, current_user: dict = Depends(get_current_user_verified)):
+        """Reject a buy-back offer: keep the roulette table."""
+        offer = await db.roulette_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0, "to_user_id": 1})
+        if not offer or offer.get("to_user_id") != current_user.get("id") or "":
+            raise HTTPException(status_code=404, detail="Offer not found")
+        await db.roulette_buy_back_offers.delete_one({"id": request.offer_id})
+        _invalidate_ownership_cache(current_user.get("id") or "")
+        return {"message": "Rejected. You keep the casino."}
 
     @router.post("/casino/roulette/send-to-user")
     async def casino_roulette_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -361,19 +465,59 @@ def register(router):
                 )
         elif not owner_id:
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": total_payout}})
+            ownership_transferred = False
         else:
-            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": total_payout}})
+            # Check if owner can afford to pay
+            owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
+            owner_money = int((owner.get("money") or 0) if owner else 0)
+            owner_username = owner.get("username") if owner else None
             net_cost = total_payout - total_stake
             if head_family_id and edge > 0:
                 net_cost += edge
                 await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.roulette": edge}})
-            await db.users.update_one({"id": owner_id}, {"$inc": {"money": -net_cost, "total_casino_payouts": net_cost}})
-            # Track biggest payout for owner
-            await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": net_cost}}, {"$set": {"biggest_casino_payout": net_cost}})
+            actual_payout = min(total_payout, owner_money + total_stake)
+            shortfall = total_payout - actual_payout
+            actual_net_cost = actual_payout - total_stake
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
+            if actual_net_cost > 0:
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_net_cost, "total_casino_payouts": actual_net_cost}})
+                # Track biggest payout for owner
+                await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": actual_net_cost}}, {"$set": {"biggest_casino_payout": actual_net_cost}})
             await db.roulette_ownership.update_one(
                 {"city": stored_city or city},
-                {"$inc": {"total_earnings": -net_cost}}
+                {"$inc": {"total_earnings": -actual_net_cost}}
             )
+            ownership_transferred = False
+            buy_back_offer = None
+            buy_back_reward = int((ownership_doc or {}).get("buy_back_reward") or 0)
+            if shortfall > 0:
+                # Owner can't pay full amount - transfer ownership
+                ownership_transferred = True
+                roulette_owner_set = {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or ""}
+                if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
+                    roulette_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+                await db.roulette_ownership.update_one({"city": stored_city or city}, {"$set": roulette_owner_set})
+                # Track casino won/lost stats
+                await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"casinos_seized": 1}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"casinos_lost": 1}})
+                # Create buy-back offer if owner has set a reward
+                if buy_back_reward > 0:
+                    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
+                    offer_id = str(uuid.uuid4())
+                    await db.roulette_buy_back_offers.insert_one({
+                        "id": offer_id,
+                        "city": stored_city or city,
+                        "from_owner_id": owner_id,
+                        "from_owner_username": owner_username,
+                        "to_user_id": current_user.get("id") or "",
+                        "to_username": current_user.get("username"),
+                        "points_offered": buy_back_reward,
+                        "amount_shortfall": shortfall,
+                        "owner_paid": actual_payout,
+                        "expires_at": expires_at,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                    buy_back_offer = {"offer_id": offer_id, "points_offered": buy_back_reward, "amount_shortfall": shortfall, "owner_paid": actual_payout, "expires_at": expires_at}
         await log_gambling(
             current_user.get("id") or "",
             current_user.get("username") or "?",
@@ -390,7 +534,10 @@ def register(router):
         return {
             "result": result,
             "win": win,
-            "total_payout": total_payout,
+            "total_payout": total_payout if not owner_id else actual_payout,
             "total_stake": total_stake,
-            "owner_cut": edge if (head_family_id or owner_id) else 0
+            "owner_cut": edge if (head_family_id or owner_id) else 0,
+            "ownership_transferred": ownership_transferred if win and owner_id else False,
+            "shortfall": shortfall if win and owner_id else 0,
+            "buy_back_offer": buy_back_offer if win and owner_id else None,
         }
