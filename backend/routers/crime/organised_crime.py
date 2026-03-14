@@ -17,7 +17,7 @@ if _backend not in sys.path:
 
 from server import db, get_current_user, get_current_user_verified, get_rank_info, log_respect_earned, maybe_process_rank_up, maybe_respect_points_drop
 
-# Equipment tiers for Organised Crime
+# Equipment tiers for Organised Crime (75% reduction for beta)
 EQUIPMENT_TIERS = [
     {
         "id": "basic",
@@ -29,28 +29,28 @@ EQUIPMENT_TIERS = [
     {
         "id": "upgraded",
         "name": "Dynamite & V8 Ford",
-        "cost": 400_000,
+        "cost": 100_000,
         "success_bonus": 0.10,
         "description": "+10% - Better explosives, faster getaway car"
     },
     {
         "id": "professional",
         "name": "Nitroglycerin & Duesenberg",
-        "cost": 700_000,
+        "cost": 175_000,
         "success_bonus": 0.20,
         "description": "+20% - Pro safecracking, luxury getaway vehicle"
     },
     {
         "id": "elite",
         "name": "Tommy Gun & Armored Cadillac",
-        "cost": 900_000,
+        "cost": 225_000,
         "success_bonus": 0.30,
         "description": "+30% - Heavy firepower, bulletproof transport"
     },
     {
         "id": "master",
         "name": "C4 & Custom Roadster",
-        "cost": 1_000_000,
+        "cost": 250_000,
         "success_bonus": 0.40,
         "description": "+40% - Military-grade explosives, race-tuned machine"
     }
@@ -111,51 +111,51 @@ OC_HEIST_FAIL_ESCAPED_MESSAGES = [
     "Double-crossed. You got out with your life, not the cash.",
 ]
 
-# Heist jobs with different risk/reward
+# Heist jobs with different risk/reward (75% reduction for beta)
 HEIST_JOBS = [
     {
         "id": "country_bank",
         "name": "Country Bank",
         "base_success_rate": 0.65,
-        "reward": 2_100_000,  # Always > setup+equipment max (2M) so every run profits on success
+        "reward": 525_000,  # 75% reduction
         "rank_points": 120,
         "jail_time": 45,
         "jail_chance": 0.05,
         "min_rank": 2,
-        "setup_cost": 1_000_000
+        "setup_cost": 250_000  # 75% reduction
     },
     {
         "id": "state_bank",
         "name": "State Bank",
         "base_success_rate": 0.50,
-        "reward": 2_600_000,  # Higher risk, higher reward
+        "reward": 650_000,  # 75% reduction
         "rank_points": 360,
-        "jail_time": 60,  # 1 minute
-        "jail_chance": 0.08,  # 8% chance of jail on failure
+        "jail_time": 60,
+        "jail_chance": 0.08,
         "min_rank": 4,
-        "setup_cost": 1_000_000
+        "setup_cost": 250_000  # 75% reduction
     },
     {
         "id": "city_bank",
         "name": "City Bank",
         "base_success_rate": 0.35,
-        "reward": 3_800_000,  # Even higher risk/reward
+        "reward": 950_000,  # 75% reduction
         "rank_points": 960,
-        "jail_time": 75,  # 1 min 15 sec
-        "jail_chance": 0.12,  # 12% chance of jail on failure
+        "jail_time": 75,
+        "jail_chance": 0.12,
         "min_rank": 6,
-        "setup_cost": 1_000_000
+        "setup_cost": 250_000  # 75% reduction
     },
     {
         "id": "government_vault",
         "name": "Government Vault",
         "base_success_rate": 0.20,
-        "reward": 5_500_000,  # Maximum risk/reward
+        "reward": 1_375_000,  # 75% reduction
         "rank_points": 1920,
-        "jail_time": 90,  # 1 min 30 sec (max)
-        "jail_chance": 0.15,  # 15% chance of jail on failure
+        "jail_time": 90,
+        "jail_chance": 0.15,
         "min_rank": 8,
-        "setup_cost": 1_000_000
+        "setup_cost": 250_000  # 75% reduction
     }
 ]
 

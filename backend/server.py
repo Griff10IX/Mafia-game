@@ -187,12 +187,12 @@ SWISS_BANK_LIMIT_START = 50_000_000
 # Interest bank options (duration_hours -> interest_rate)
 # Longer duration = better interest
 BANK_INTEREST_OPTIONS = [
-    {"hours": 3, "rate": 0.005},    # 0.5%
-    {"hours": 6, "rate": 0.012},    # 1.2%
-    {"hours": 12, "rate": 0.025},   # 2.5%
-    {"hours": 24, "rate": 0.05},    # 5%
-    {"hours": 48, "rate": 0.12},    # 12%
-    {"hours": 72, "rate": 0.20},    # 20%
+    {"hours": 3, "rate": 0.0025},   # 0.25%
+    {"hours": 6, "rate": 0.006},    # 0.6%
+    {"hours": 12, "rate": 0.0125},  # 1.25%
+    {"hours": 24, "rate": 0.025},   # 2.5%
+    {"hours": 48, "rate": 0.06},    # 6%
+    {"hours": 72, "rate": 0.10},    # 10%
 ]
 
 # Health & armour: health 0-100, armour 0-5. Bullets to kill clamped to [MIN_BULLETS_TO_KILL, MAX_BULLETS_TO_KILL]
@@ -390,36 +390,36 @@ TRAVEL_TIMES = {
 }
 
 CARS = [
-    # Common (difficulty 1) - 6 cars, values $500-$750 ascending
-    {"id": "car1", "name": "Model T Ford", "rarity": "common", "min_difficulty": 1, "value": 500, "travel_bonus": 0, "image": "/images/gta/car1.jpg"},
-    {"id": "car5", "name": "Essex Coach", "rarity": "common", "min_difficulty": 1, "value": 550, "travel_bonus": 0, "image": "/images/gta/car5.jpg"},
-    {"id": "car2", "name": "Chevrolet Series AB", "rarity": "common", "min_difficulty": 1, "value": 600, "travel_bonus": 5, "image": "/images/gta/car2.jpg"},
-    {"id": "car6", "name": "Durant Star", "rarity": "common", "min_difficulty": 1, "value": 650, "travel_bonus": 5, "image": "/images/gta/car6.jpg"},
-    {"id": "car4", "name": "Ford Model A", "rarity": "common", "min_difficulty": 1, "value": 700, "travel_bonus": 5, "image": "/images/gta/car4.jpg"},
-    {"id": "car3", "name": "Dodge Brothers", "rarity": "common", "min_difficulty": 1, "value": 750, "travel_bonus": 5, "image": "/images/gta/car3.jpg"},
-    # Uncommon (difficulty 2) - 4 cars, values $1,200-$2,000 ascending
-    {"id": "car7", "name": "Oakland", "rarity": "uncommon", "min_difficulty": 2, "value": 1200, "travel_bonus": 10, "image": "/images/gta/car7.jpg"},
-    {"id": "car8", "name": "Willys-Knight", "rarity": "uncommon", "min_difficulty": 2, "value": 1500, "travel_bonus": 10, "image": "/images/gta/car8.jpg"},
-    {"id": "car10", "name": "Buick Master Six", "rarity": "uncommon", "min_difficulty": 2, "value": 1800, "travel_bonus": 12, "image": "/images/gta/car10.jpg"},
-    {"id": "car9", "name": "Cadillac V-8", "rarity": "uncommon", "min_difficulty": 2, "value": 2000, "travel_bonus": 15, "image": "/images/gta/car9.jpg"},
-    # Rare (difficulty 3) - 4 cars, values $3,500-$5,500 ascending
-    {"id": "car11", "name": "Packard Eight", "rarity": "rare", "min_difficulty": 3, "value": 3500, "travel_bonus": 20, "image": "/images/gta/car11.jpg"},
-    {"id": "car12", "name": "Lincoln Model L", "rarity": "rare", "min_difficulty": 3, "value": 4000, "travel_bonus": 20, "image": "/images/gta/car12.jpg"},
-    {"id": "car13", "name": "Pierce-Arrow", "rarity": "rare", "min_difficulty": 3, "value": 5000, "travel_bonus": 25, "image": "/images/gta/car13.jpg"},
-    {"id": "car14", "name": "Stutz Bearcat", "rarity": "rare", "min_difficulty": 3, "value": 5500, "travel_bonus": 25, "image": "/images/gta/car14.jpg"},
-    # Ultra Rare (difficulty 4) - 3 cars, values $10,000-$15,000 ascending
-    {"id": "car15", "name": "Duesenberg Model J", "rarity": "ultra_rare", "min_difficulty": 4, "value": 10000, "travel_bonus": 35, "image": "/images/gta/car15.jpeg"},
-    {"id": "car16", "name": "Cord L-29", "rarity": "ultra_rare", "min_difficulty": 4, "value": 12000, "travel_bonus": 35, "image": "/images/gta/car16.jpg"},
-    {"id": "car17", "name": "Auburn Speedster", "rarity": "ultra_rare", "min_difficulty": 4, "value": 15000, "travel_bonus": 40, "image": "/images/gta/car17.jpg"},
-    # Legendary (difficulty 5) - 2 cars, values $25,000-$30,000 ascending
-    {"id": "car18", "name": "Bugatti Type 41 Royale", "rarity": "legendary", "min_difficulty": 5, "value": 25000, "travel_bonus": 50, "image": "/images/gta/car18.jpg"},
-    {"id": "car19", "name": "Rolls-Royce Phantom II", "rarity": "legendary", "min_difficulty": 5, "value": 30000, "travel_bonus": 55, "image": "/images/gta/car19.jpg"},
-    # Custom (store only, 500 pts) - $50,000 value, yields 100 bullets when melted
-    {"id": "car_custom", "name": "Custom Car", "rarity": "custom", "min_difficulty": 5, "value": 50000, "travel_bonus": 55, "image": None},
-    # Exclusive (admin only) - $250,000,000 (500,000 bullets)
-    {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 250000000, "travel_bonus": 60, "image": "/images/gta/car20.png"},
-    # Loot-exclusive (loot box only, cap 3 globally) - $500,000,000 (1,000,000 bullets), rarest car
-    {"id": "car21", "name": "1930 Cadillac Series 452 V-16 Armored Sedan", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 500000000, "travel_bonus": 68, "image": "/images/gta/car21.png"},
+    # Common (difficulty 1) - 6 cars, values $125-$188 ascending (75% reduction)
+    {"id": "car1", "name": "Model T Ford", "rarity": "common", "min_difficulty": 1, "value": 125, "travel_bonus": 0, "image": "/images/gta/car1.jpg"},
+    {"id": "car5", "name": "Essex Coach", "rarity": "common", "min_difficulty": 1, "value": 138, "travel_bonus": 0, "image": "/images/gta/car5.jpg"},
+    {"id": "car2", "name": "Chevrolet Series AB", "rarity": "common", "min_difficulty": 1, "value": 150, "travel_bonus": 5, "image": "/images/gta/car2.jpg"},
+    {"id": "car6", "name": "Durant Star", "rarity": "common", "min_difficulty": 1, "value": 163, "travel_bonus": 5, "image": "/images/gta/car6.jpg"},
+    {"id": "car4", "name": "Ford Model A", "rarity": "common", "min_difficulty": 1, "value": 175, "travel_bonus": 5, "image": "/images/gta/car4.jpg"},
+    {"id": "car3", "name": "Dodge Brothers", "rarity": "common", "min_difficulty": 1, "value": 188, "travel_bonus": 5, "image": "/images/gta/car3.jpg"},
+    # Uncommon (difficulty 2) - 4 cars, values $300-$500 ascending (75% reduction)
+    {"id": "car7", "name": "Oakland", "rarity": "uncommon", "min_difficulty": 2, "value": 300, "travel_bonus": 10, "image": "/images/gta/car7.jpg"},
+    {"id": "car8", "name": "Willys-Knight", "rarity": "uncommon", "min_difficulty": 2, "value": 375, "travel_bonus": 10, "image": "/images/gta/car8.jpg"},
+    {"id": "car10", "name": "Buick Master Six", "rarity": "uncommon", "min_difficulty": 2, "value": 450, "travel_bonus": 12, "image": "/images/gta/car10.jpg"},
+    {"id": "car9", "name": "Cadillac V-8", "rarity": "uncommon", "min_difficulty": 2, "value": 500, "travel_bonus": 15, "image": "/images/gta/car9.jpg"},
+    # Rare (difficulty 3) - 4 cars, values $875-$1,375 ascending (75% reduction)
+    {"id": "car11", "name": "Packard Eight", "rarity": "rare", "min_difficulty": 3, "value": 875, "travel_bonus": 20, "image": "/images/gta/car11.jpg"},
+    {"id": "car12", "name": "Lincoln Model L", "rarity": "rare", "min_difficulty": 3, "value": 1000, "travel_bonus": 20, "image": "/images/gta/car12.jpg"},
+    {"id": "car13", "name": "Pierce-Arrow", "rarity": "rare", "min_difficulty": 3, "value": 1250, "travel_bonus": 25, "image": "/images/gta/car13.jpg"},
+    {"id": "car14", "name": "Stutz Bearcat", "rarity": "rare", "min_difficulty": 3, "value": 1375, "travel_bonus": 25, "image": "/images/gta/car14.jpg"},
+    # Ultra Rare (difficulty 4) - 3 cars, values $2,500-$3,750 ascending (75% reduction)
+    {"id": "car15", "name": "Duesenberg Model J", "rarity": "ultra_rare", "min_difficulty": 4, "value": 2500, "travel_bonus": 35, "image": "/images/gta/car15.jpeg"},
+    {"id": "car16", "name": "Cord L-29", "rarity": "ultra_rare", "min_difficulty": 4, "value": 3000, "travel_bonus": 35, "image": "/images/gta/car16.jpg"},
+    {"id": "car17", "name": "Auburn Speedster", "rarity": "ultra_rare", "min_difficulty": 4, "value": 3750, "travel_bonus": 40, "image": "/images/gta/car17.jpg"},
+    # Legendary (difficulty 5) - 2 cars, values $6,250-$7,500 ascending (75% reduction)
+    {"id": "car18", "name": "Bugatti Type 41 Royale", "rarity": "legendary", "min_difficulty": 5, "value": 6250, "travel_bonus": 50, "image": "/images/gta/car18.jpg"},
+    {"id": "car19", "name": "Rolls-Royce Phantom II", "rarity": "legendary", "min_difficulty": 5, "value": 7500, "travel_bonus": 55, "image": "/images/gta/car19.jpg"},
+    # Custom (store only, 500 pts) - $12,500 value (75% reduction)
+    {"id": "car_custom", "name": "Custom Car", "rarity": "custom", "min_difficulty": 5, "value": 12500, "travel_bonus": 55, "image": None},
+    # Exclusive (admin only) - $62,500,000 (75% reduction)
+    {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 62500000, "travel_bonus": 60, "image": "/images/gta/car20.png"},
+    # Loot-exclusive (loot box only, cap 3 globally) - $125,000,000 (75% reduction)
+    {"id": "car21", "name": "1930 Cadillac Series 452 V-16 Armored Sedan", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 125000000, "travel_bonus": 68, "image": "/images/gta/car21.png"},
 ]
 
 # Models (UserRegister, UserLogin, PasswordResetRequest, PasswordResetConfirm moved to routers/auth.py)

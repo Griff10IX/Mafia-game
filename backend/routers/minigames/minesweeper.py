@@ -11,10 +11,11 @@ from server import db, get_current_user
 
 VALID_DIFFICULTIES = ["snitch", "capo", "godfather"]
 
+# 75% reduction for beta
 DIFFICULTY_CONFIG = {
-    "snitch": {"base_cash": 5_000, "base_respect": 5, "points": 15, "max_time": 600},
-    "capo": {"base_cash": 15_000, "base_respect": 15, "points": 30, "max_time": 1200},
-    "godfather": {"base_cash": 50_000, "base_respect": 50, "points": 60, "max_time": 1800},
+    "snitch": {"base_cash": 1_250, "base_respect": 5, "points": 15, "max_time": 600},
+    "capo": {"base_cash": 3_750, "base_respect": 15, "points": 30, "max_time": 1200},
+    "godfather": {"base_cash": 12_500, "base_respect": 50, "points": 60, "max_time": 1800},
 }
 
 MAX_WINS_PER_HOUR = 20

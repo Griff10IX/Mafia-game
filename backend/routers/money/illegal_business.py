@@ -35,9 +35,9 @@ ILLEGAL_BUSINESS_TYPES = [
     {"id": "protection_racket", "name": "Protection racket", "description": "Protection payments from local businesses.", "produces_booze": False},
 ]
 
-START_COST_CASH = 50_000
+START_COST_CASH = 12_500  # 75% reduction for beta
 START_COST_POINTS = 0
-INCOME_PER_HOUR_BASE = 2000
+INCOME_PER_HOUR_BASE = 500  # 75% reduction for beta
 INCOME_CAP_HOURS_BASE = 24
 BOOZE_PER_HOUR_BASE = 5
 BOOZE_CAP_HOURS_BASE = 24
@@ -98,18 +98,20 @@ SECURITY_UPGRADES = [
     {"id": "bouncers_4", "name": "Armoured bouncers", "defence_weight": 18},
 ]
 # Cost for security upgrade at index i: base + step * i (gradually higher).
-SECURITY_UPGRADE_BASE_CASH = 25_000
-SECURITY_UPGRADE_STEP_CASH = 20_000
+# 75% reduction for beta
+SECURITY_UPGRADE_BASE_CASH = 6_250
+SECURITY_UPGRADE_STEP_CASH = 5_000
 SECURITY_UPGRADE_BASE_POINTS = 5
 SECURITY_UPGRADE_STEP_POINTS = 8
 SECURITY_UPGRADE_IDS = [u["id"] for u in SECURITY_UPGRADES]
 
 # Guard hire: cost per slot; armour/weapon 0..base_max + mission unlocks (cap at 20).
-GUARD_HIRE_COST_CASH = 10_000
+# 75% reduction for beta
+GUARD_HIRE_COST_CASH = 2_500
 GUARD_HIRE_COST_POINTS = 5
 GUARD_SLOTS_MAX = 1000
 # Cost to add one more guard slot: base * (mult ** (current_slots - GUARD_SLOTS_INITIAL)).
-GUARD_SLOT_BASE_CASH = 50_000
+GUARD_SLOT_BASE_CASH = 12_500  # 75% reduction
 GUARD_SLOT_BASE_POINTS = 10
 GUARD_SLOT_MULT = 1.5
 GUARD_ARMOUR_MAX = 20

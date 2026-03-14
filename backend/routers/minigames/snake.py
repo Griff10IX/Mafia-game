@@ -14,11 +14,12 @@ MAX_SCORE_ACCEPTED = 50_000
 MAX_PLAYS_PER_HOUR = 15
 
 # Per-submit caps for each reward type (prevent economy overflow)
+# 75% reduction for beta
 REWARD_CAPS = {
-    "cash": 100_000,
+    "cash": 25_000,
     "respect": 500,
     "rank_points": 200,
-    "bullets": 200,
+    "bullets": 50,
     "booze": 50,
 }
 # Default booze type for Package Run (Booze Run uses booze_carrying.{booze_id})

@@ -10,9 +10,10 @@ from server import db, get_current_user
 
 MAX_WINS_PER_HOUR = 15
 
-BASE_CASH = 25_000
+# 75% reduction for beta
+BASE_CASH = 6_250
 BASE_RESPECT = 25
-BONUS_PER_SHIP_SAVED = 5_000
+BONUS_PER_SHIP_SAVED = 1_250
 BONUS_RESPECT_PER_SHIP = 5
 MAX_TIME_SECONDS = 1800
 

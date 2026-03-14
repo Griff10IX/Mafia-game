@@ -473,7 +473,7 @@ async def open_loot_box(
                 merged_inc["rank_points"] = merged_inc.get("rank_points", 0) + amount
                 rewards.append({"type": "rank_points", "amount": amount, "rarity": "standard"})
             elif chosen == "cash":
-                amount = random.randint(100_000, 25_000_000)
+                amount = random.randint(25_000, 6_250_000)  # 75% reduction for beta
                 merged_inc["money"] = merged_inc.get("money", 0) + amount
                 rewards.append({"type": "cash", "amount": amount, "rarity": "standard"})
             elif chosen == "cars":
@@ -482,7 +482,7 @@ async def open_loot_box(
                     pool = [c for c in CARS if c.get("id") != LOOT_EXCLUSIVE_CAR_ID and c.get("rarity") != "loot_exclusive"]
                 if not pool:
                     # No cars available (e.g. CARS empty); give cash instead
-                    amount = random.randint(100_000, 25_000_000)
+                    amount = random.randint(25_000, 6_250_000)  # 75% reduction for beta
                     merged_inc["money"] = merged_inc.get("money", 0) + amount
                     rewards.append({"type": "cash", "amount": amount, "rarity": "standard"})
                 else:
@@ -573,8 +573,9 @@ async def open_loot_box(
         )
 
 
-SPEAKEASY_DAILY_CASH = 100_000
-SPEAKEASY_DAILY_BULLETS = 100
+# 75% reduction for beta
+SPEAKEASY_DAILY_CASH = 25_000
+SPEAKEASY_DAILY_BULLETS = 25
 SPEAKEASY_COOLDOWN_HOURS = 24
 
 

@@ -11,21 +11,22 @@ from routers.minigames.minigame_leaderboard import log_minigame_play
 
 
 # Base tiers (score threshold -> cash, respect for that tier only; cumulative applied in _get_reward)
+# 75% reduction for beta
 REWARD_TIERS = [
-    {"score": 1, "cash": 250, "respect": 5, "label": "Street Punk"},
-    {"score": 5, "cash": 1_000, "respect": 5, "label": "Corner Boy"},
-    {"score": 10, "cash": 2_500, "respect": 10, "label": "Made Man"},
-    {"score": 20, "cash": 6_000, "respect": 20, "label": "Underboss"},
-    {"score": 35, "cash": 12_500, "respect": 20, "label": "Capo"},
-    {"score": 50, "cash": 25_000, "respect": 40, "label": "Don"},
+    {"score": 1, "cash": 63, "respect": 5, "label": "Street Punk"},
+    {"score": 5, "cash": 250, "respect": 5, "label": "Corner Boy"},
+    {"score": 10, "cash": 625, "respect": 10, "label": "Made Man"},
+    {"score": 20, "cash": 1_500, "respect": 20, "label": "Underboss"},
+    {"score": 35, "cash": 3_125, "respect": 20, "label": "Capo"},
+    {"score": 50, "cash": 6_250, "respect": 40, "label": "Don"},
 ]
 
 # Caps per single run (infinite levels, but one claim cannot exceed these)
-MAX_CASH_PER_CLAIM = 1_000_000
+MAX_CASH_PER_CLAIM = 250_000  # 75% reduction
 MAX_RESPECT_PER_CLAIM = 1_000
 
 # Beyond tier 50: every gate adds this cash (until cap) and 2 respect (until cap)
-CASH_PER_GATE_AFTER_50 = 2_000
+CASH_PER_GATE_AFTER_50 = 500  # 75% reduction
 RESPECT_PER_GATE_AFTER_50 = 2
 
 # Basic sanity limits (frontend is not trusted).

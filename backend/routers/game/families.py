@@ -43,24 +43,25 @@ from server import (
 
 # ============ Constants ============
 MAX_FAMILIES = 10
-FAMILY_CREATE_COST = 25_000_000  # $25M to create a family
+FAMILY_CREATE_COST = 6_250_000  # 75% reduction for beta ($25M -> $6.25M)
 FAMILY_ROLES = ["boss", "underboss", "consigliere", "capo", "soldier", "associate"]
 FAMILY_ROLE_LIMITS = {"boss": 1, "underboss": 1, "consigliere": 1, "capo": 4, "soldier": 15, "associate": 30}
 FAMILY_ROLE_ORDER = {"boss": 0, "underboss": 1, "consigliere": 2, "capo": 3, "soldier": 4, "associate": 5}
 
+# 75% reduction for beta on all racket base_income
 FAMILY_RACKETS = [
-    {"id": "protection", "name": "Protection Racket", "cooldown_hours": 6, "base_income": 400, "description": "Extortion from businesses"},
-    {"id": "gambling", "name": "Gambling Operation", "cooldown_hours": 12, "base_income": 550, "description": "Numbers & bookmaking"},
-    {"id": "loansharking", "name": "Loan Sharking", "cooldown_hours": 24, "base_income": 700, "description": "High-interest loans"},
-    {"id": "labour", "name": "Labour Racketeering", "cooldown_hours": 8, "base_income": 850, "description": "Union kickbacks"},
-    {"id": "distillery", "name": "Distillery", "cooldown_hours": 10, "base_income": 1000, "description": "Bootleg liquor production"},
-    {"id": "warehouse", "name": "Warehouse", "cooldown_hours": 8, "base_income": 1150, "description": "Storage and distribution"},
-    {"id": "restaurant_bar", "name": "Restaurant & Bar", "cooldown_hours": 6, "base_income": 1300, "description": "Front and steady income"},
-    {"id": "funeral_home", "name": "Funeral Home", "cooldown_hours": 12, "base_income": 1450, "description": "Respectable front"},
-    {"id": "garment_shop", "name": "Garment Shop", "cooldown_hours": 9, "base_income": 1600, "description": "Garment district operations"},
+    {"id": "protection", "name": "Protection Racket", "cooldown_hours": 6, "base_income": 100, "description": "Extortion from businesses"},
+    {"id": "gambling", "name": "Gambling Operation", "cooldown_hours": 12, "base_income": 138, "description": "Numbers & bookmaking"},
+    {"id": "loansharking", "name": "Loan Sharking", "cooldown_hours": 24, "base_income": 175, "description": "High-interest loans"},
+    {"id": "labour", "name": "Labour Racketeering", "cooldown_hours": 8, "base_income": 213, "description": "Union kickbacks"},
+    {"id": "distillery", "name": "Distillery", "cooldown_hours": 10, "base_income": 250, "description": "Bootleg liquor production"},
+    {"id": "warehouse", "name": "Warehouse", "cooldown_hours": 8, "base_income": 288, "description": "Storage and distribution"},
+    {"id": "restaurant_bar", "name": "Restaurant & Bar", "cooldown_hours": 6, "base_income": 325, "description": "Front and steady income"},
+    {"id": "funeral_home", "name": "Funeral Home", "cooldown_hours": 12, "base_income": 363, "description": "Respectable front"},
+    {"id": "garment_shop", "name": "Garment Shop", "cooldown_hours": 9, "base_income": 400, "description": "Garment district operations"},
 ]
-RACKET_UPGRADE_COST = 50_000
-RACKET_UNLOCK_COST = 100_000
+RACKET_UPGRADE_COST = 12_500  # 75% reduction
+RACKET_UNLOCK_COST = 25_000  # 75% reduction
 RACKET_MAX_LEVEL = 5
 FAMILY_RACKET_ATTACK_BASE_SUCCESS = 0.70
 FAMILY_RACKET_ATTACK_LEVEL_PENALTY = 0.10
@@ -72,11 +73,11 @@ FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS = 3
 CREW_OC_COOLDOWN_HOURS = 8
 CREW_OC_COOLDOWN_HOURS_REDUCED = 6
 CREW_OC_REWARD_RP = 80
-CREW_OC_REWARD_CASH = 40_000
-CREW_OC_REWARD_BULLETS = 100
+CREW_OC_REWARD_CASH = 10_000  # 75% reduction
+CREW_OC_REWARD_BULLETS = 25  # 75% reduction
 CREW_OC_REWARD_POINTS = 3
 CREW_OC_REWARD_BOOZE = 10
-CREW_OC_TREASURY_LUMP = 200_000
+CREW_OC_TREASURY_LUMP = 50_000  # 75% reduction
 
 FAMILY_RACKET_RAID_SUCCESS_MESSAGES = [
     "Raid successful! Took ${amount:,} from {family_name}'s {racket_name}.",

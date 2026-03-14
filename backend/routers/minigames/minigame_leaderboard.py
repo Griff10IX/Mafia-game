@@ -17,12 +17,13 @@ PARTICIPATION_POINTS = 10
 SCORE_BONUS_DIVISOR = 100
 SCORE_BONUS_CAP = 50
 
+# 75% reduction for beta
 DEFAULT_REWARDS = {
-    1: {"cash": 1_000_000, "respect": 200, "loot_pieces": 15, "bullets": 500},
-    2: {"cash": 500_000, "respect": 100, "loot_pieces": 0, "bullets": 300},
-    3: {"cash": 250_000, "respect": 50, "loot_pieces": 0, "bullets": 150},
-    4: {"cash": 100_000, "respect": 25, "loot_pieces": 0, "bullets": 75},
-    5: {"cash": 50_000, "respect": 10, "loot_pieces": 0, "bullets": 50},
+    1: {"cash": 250_000, "respect": 200, "loot_pieces": 15, "bullets": 125},
+    2: {"cash": 125_000, "respect": 100, "loot_pieces": 0, "bullets": 75},
+    3: {"cash": 62_500, "respect": 50, "loot_pieces": 0, "bullets": 38},
+    4: {"cash": 25_000, "respect": 25, "loot_pieces": 0, "bullets": 19},
+    5: {"cash": 12_500, "respect": 10, "loot_pieces": 0, "bullets": 13},
 }
 
 

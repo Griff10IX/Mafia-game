@@ -947,12 +947,13 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             if hitlist_entry:
                 rewards = hitlist_entry.get("npc_rewards") or {}
                 rp_added = int(rewards.get("rank_points", 0) or 0)
-                inc = {"money": int(rewards.get("cash", 0) or 0), "points": int(rewards.get("points", 0) or 0), "rank_points": rp_added, "bullets": int(rewards.get("bullets", 0) or 0), "total_kills": 1, "hitlist_npc_kills": 1}
+                inc = {"money": int(rewards.get("cash", 0) or 0), "rank_points": rp_added, "bullets": int(rewards.get("bullets", 0) or 0), "total_kills": 1, "hitlist_npc_kills": 1}
                 if target.get("is_bodyguard"):
                     inc["robot_bodyguard_kills"] = 1
+                # Add respect_points from template + possible random drop
+                reward_respect = int(rewards.get("respect_points", 0) or 0)
                 respect_drop = maybe_respect_points_drop()
-                if respect_drop:
-                    inc["respect_points"] = respect_drop
+                inc["respect_points"] = reward_respect + (respect_drop or 0)
                 booze = rewards.get("booze")
                 if isinstance(booze, dict) and booze:
                     booze_ids = [b["id"] for b in BOOZE_TYPES]
@@ -960,11 +961,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                         if bid in booze_ids and amt and int(amt) > 0:
                             inc[f"booze_carrying.{bid}"] = int(amt)
                             inc[f"booze_carrying_cost.{bid}"] = 0
-                # Prestige bonus: boost NPC hitlist kill cash and points rewards
+                # Prestige bonus: boost NPC hitlist kill cash rewards
                 from server import get_prestige_bonus as _get_prestige_bonus
                 _npc_mult = _get_prestige_bonus(current_user)["npc_mult"]
                 inc["money"] = int(inc.get("money", 0) * _npc_mult)
-                inc["points"] = int(inc.get("points", 0) * _npc_mult)
                 if inc:
                     rp_before = int(current_user.get("rank_points") or 0)
                     await db.users.update_one({"id": killer_id}, {"$inc": inc})
@@ -993,7 +993,6 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     pass
                 reward_parts = []
                 if inc.get("money"): reward_parts.append(f"${inc['money']:,} cash")
-                if inc.get("points"): reward_parts.append(f"{inc['points']} pts")
                 if inc.get("rank_points"): reward_parts.append(f"{inc['rank_points']} RP")
                 if inc.get("bullets"): reward_parts.append(f"{inc['bullets']} bullets")
                 if inc.get("respect_points"): reward_parts.append(f"{inc['respect_points']} respect")

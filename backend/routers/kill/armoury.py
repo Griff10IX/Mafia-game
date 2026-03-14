@@ -24,11 +24,12 @@ BULLET_FACTORY_PRODUCTION_PER_HOUR = BULLET_FACTORY_TOTAL_PER_24H / 24  # ~208.3
 BULLET_FACTORY_MAX_HOURS_CAP = 24  # cap accumulated at 24h of production (5000 total)
 BULLET_FACTORY_BUY_MAX_PER_PURCHASE = 5000  # max bullets per single purchase
 BULLET_FACTORY_BUY_COOLDOWN_MINUTES = 15  # must wait this long between purchases
-BULLET_FACTORY_CLAIM_COST = 5_000_000  # $5M to claim (like claiming a casino)
+BULLET_FACTORY_CLAIM_COST = 1_250_000  # 75% reduction for beta ($5M -> $1.25M)
 BULLET_FACTORY_PRICE_MIN = 1
 BULLET_FACTORY_PRICE_MAX = 100_000  # max $ per bullet (when owned)
-BULLET_FACTORY_UNOWNED_PRICE_MIN = 2500
-BULLET_FACTORY_UNOWNED_PRICE_MAX = 4000
+# 75% reduction for beta
+BULLET_FACTORY_UNOWNED_PRICE_MIN = 625
+BULLET_FACTORY_UNOWNED_PRICE_MAX = 1000
 
 # Armoury production: 5 per hour per armour/weapon; max 15 in stock per item (per level per weapon)
 ARMOURY_ARMOUR_RATE_PER_HOUR = 5

@@ -11,7 +11,7 @@ from server import db, get_current_user, log_activity, CARS
 RPS_PLAYS_PER_WINDOW = 3
 RPS_WINDOW_HOURS = 6
 RPS_CHOICES = ["rock", "paper", "scissors"]
-RPS_WIN_MONEY = 50_000
+RPS_WIN_MONEY = 12_500  # 75% reduction for beta
 # Cars up to rare only (common, uncommon, rare)
 DAILY_REWARDS_CAR_IDS = [c["id"] for c in CARS if c.get("id") not in ("car_custom", "car20") and c.get("rarity") in ("common", "uncommon", "rare")]
 # On win: 25% chance 1 car, 8% chance 2 cars (so sometimes just cash, sometimes cash + 1 or 2 cars)

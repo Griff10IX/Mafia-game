@@ -8,9 +8,10 @@ from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, get_current_user_verified, _is_admin, log_activity
 
-SAFE_ENTRY_COST = 1_000_000
-SAFE_JACKPOT_SEED = 5_000_000
-SAFE_JACKPOT_PER_ATTEMPT = 1_000_000  # Jackpot increases by exactly 1M per attempt
+# 75% reduction for beta
+SAFE_ENTRY_COST = 250_000
+SAFE_JACKPOT_SEED = 1_250_000
+SAFE_JACKPOT_PER_ATTEMPT = 250_000  # Jackpot increases by exactly 250K per attempt
 SAFE_DIGITS = 5
 SAFE_MIN = 1
 SAFE_MAX = 9

@@ -66,17 +66,18 @@ HITLIST_NPC_NAMES = [
     "Frankie the Fist", "Lefty Louie", "Joey Bananas", "Paulie Walnuts",
 ]
 
+# 75% reduction for beta; points replaced with respect_points
 HITLIST_NPC_TEMPLATES = [
-    {"id": "npc_1", "rank": 2, "rewards": {"cash": 50_000, "booze": {"bathtub_gin": 15}}},
-    {"id": "npc_2", "rank": 4, "rewards": {"points": 300, "car_id": "car2"}},
-    {"id": "npc_3", "rank": 5, "rewards": {"rank_points": 40, "bullets": 2000}},
-    {"id": "npc_4", "rank": 3, "rewards": {"cash": 80_000, "booze": {"moonshine": 25}}},
-    {"id": "npc_5", "rank": 6, "rewards": {"points": 600, "rank_points": 30}},
-    {"id": "npc_6", "rank": 6, "rewards": {"cash": 120_000, "bullets": 1500, "booze": {"rum_runners": 20}, "points": 200}},
-    {"id": "npc_7", "rank": 5, "rewards": {"cash": 150_000, "points": 400, "car_id": "car7"}},
-    {"id": "npc_8", "rank": 8, "rewards": {"rank_points": 75, "bullets": 3000, "points": 500}},
-    {"id": "npc_9", "rank": 3, "rewards": {"cash": 40_000, "booze": {"speakeasy_whiskey": 10, "needle_beer": 10}}},
-    {"id": "npc_10", "rank": 7, "rewards": {"cash": 200_000, "booze": {"jamaica_ginger": 30}, "points": 250}},
+    {"id": "npc_1", "rank": 2, "rewards": {"cash": 12_500, "booze": {"bathtub_gin": 15}, "respect_points": 25}},
+    {"id": "npc_2", "rank": 4, "rewards": {"respect_points": 50, "car_id": "car2"}},
+    {"id": "npc_3", "rank": 5, "rewards": {"rank_points": 40, "bullets": 500, "respect_points": 30}},
+    {"id": "npc_4", "rank": 3, "rewards": {"cash": 20_000, "booze": {"moonshine": 25}, "respect_points": 20}},
+    {"id": "npc_5", "rank": 6, "rewards": {"respect_points": 75, "rank_points": 30}},
+    {"id": "npc_6", "rank": 6, "rewards": {"cash": 30_000, "bullets": 375, "booze": {"rum_runners": 20}, "respect_points": 40}},
+    {"id": "npc_7", "rank": 5, "rewards": {"cash": 37_500, "respect_points": 60, "car_id": "car7"}},
+    {"id": "npc_8", "rank": 8, "rewards": {"rank_points": 75, "bullets": 750, "respect_points": 100}},
+    {"id": "npc_9", "rank": 3, "rewards": {"cash": 10_000, "booze": {"speakeasy_whiskey": 10, "needle_beer": 10}, "respect_points": 15}},
+    {"id": "npc_10", "rank": 7, "rewards": {"cash": 50_000, "booze": {"jamaica_ginger": 30}, "respect_points": 50}},
 ]
 
 
