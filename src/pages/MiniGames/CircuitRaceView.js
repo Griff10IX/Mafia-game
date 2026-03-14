@@ -535,11 +535,11 @@ function pt2xy(p, sx, sy) { return [sx(p.x), sy(p.y)]; }
 /** Approximate curvature at track position t (0..1). Higher = sharper corner. */
 function getCurvature(track, t) {
   const eps = 0.008;
-  
-  // Near the finish line (start/end boundary), skip curvature calculation
-  // to avoid false corner detection from geometry discontinuity at lap boundary
-  if (t < eps * 2 || t > 1 - eps * 2) {
-    return 0; // Treat finish line area as straight
+  // Treat finish straight as flat: ~5% at start and end to avoid false corner
+  // from geometry discontinuity at lap boundary (cars shouldn't slow before the line)
+  const finishStraight = 0.05;
+  if (t < finishStraight || t > 1 - finishStraight) {
+    return 0;
   }
   
   const t0 = t - eps;
