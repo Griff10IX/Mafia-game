@@ -159,7 +159,11 @@ function App() {
       setIsAuthenticated(true);
     }
     // Check if login is locked (pre-registration mode)
-    fetch(`${process.env.REACT_APP_API_URL || ''}/auth/launch-status`)
+    const raw = (process.env.REACT_APP_BACKEND_URL && process.env.REACT_APP_BACKEND_URL.trim())
+      ? process.env.REACT_APP_BACKEND_URL.replace(/\/+$/, '').replace(/\/api\/?$/, '')
+      : '';
+    const apiBase = raw ? `${raw}/api` : '/api';
+    fetch(`${apiBase}/auth/launch-status`)
       .then(r => r.json())
       .then(data => {
         setLoginLocked(!!data?.login_locked);
