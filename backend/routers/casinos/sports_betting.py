@@ -708,8 +708,9 @@ async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_curren
 
 
 async def sports_betting_stats(current_user: dict = Depends(get_current_user_verified)):
+    uid = current_user.get("id") or ""
     pipeline = [
-        {"$match": {"user_id": current_user.get("id") or "", "status": {"$in": ["won", "lost"]}}},
+        {"$match": {"user_id": uid, "status": {"$in": ["won", "lost"]}}},
         {"$group": {"_id": None, "total_stake": {"$sum": "$stake"}, "won_count": {"$sum": {"$cond": [{"$eq": ["$status", "won"]}, 1, 0]}}, "lost_count": {"$sum": {"$cond": [{"$eq": ["$status", "lost"]}, 1, 0]}}}},
     ]
     agg = await db.sports_bets.aggregate(pipeline).to_list(1)
@@ -719,24 +720,47 @@ async def sports_betting_stats(current_user: dict = Depends(get_current_user_ver
     lost_count = int(doc.get("lost_count", 0) or 0)
     total_placed = won_count + lost_count
     won_stake = await db.sports_bets.aggregate([
-        {"$match": {"user_id": current_user.get("id") or "", "status": "won"}},
+        {"$match": {"user_id": uid, "status": "won"}},
         {"$group": {"_id": None, "sum": {"$sum": {"$multiply": ["$stake", "$odds"]}}}},
     ]).to_list(1)
     lost_stake = await db.sports_bets.aggregate([
-        {"$match": {"user_id": current_user.get("id") or "", "status": "lost"}},
+        {"$match": {"user_id": uid, "status": "lost"}},
         {"$group": {"_id": None, "sum": {"$sum": "$stake"}}},
     ]).to_list(1)
     winnings = int((won_stake[0].get("sum", 0) or 0)) if won_stake else 0
     losses = int((lost_stake[0].get("sum", 0) or 0)) if lost_stake else 0
     profit_loss = winnings - losses
     win_pct = round(100 * won_count / total_placed, 1) if total_placed else 0
-    all_placed = await db.sports_bets.count_documents({"user_id": current_user.get("id") or ""})
+    all_placed = await db.sports_bets.count_documents({"user_id": uid})
+
+    biggest_win_doc = await db.sports_bets.find_one(
+        {"user_id": uid, "status": "won"},
+        {"stake": 1, "odds": 1},
+        sort=[("stake", -1)],
+    )
+    biggest_win = int((biggest_win_doc.get("stake", 0) * biggest_win_doc.get("odds", 1))) if biggest_win_doc else 0
+
+    biggest_loss_doc = await db.sports_bets.find_one(
+        {"user_id": uid, "status": "lost"},
+        {"stake": 1},
+        sort=[("stake", -1)],
+    )
+    biggest_loss = int(biggest_loss_doc.get("stake", 0)) if biggest_loss_doc else 0
+
+    u = await db.users.find_one({"id": uid}, {"sports_current_win_streak": 1, "sports_best_win_streak": 1})
+    current_win_streak = int((u or {}).get("sports_current_win_streak", 0))
+    best_win_streak = int((u or {}).get("sports_best_win_streak", 0))
+
     return {
         "total_bets_placed": all_placed,
         "total_bets_won": won_count,
         "total_bets_lost": lost_count,
         "win_pct": win_pct,
         "profit_loss": profit_loss,
+        "biggest_win": biggest_win,
+        "biggest_loss": biggest_loss,
+        "current_win_streak": current_win_streak,
+        "best_win_streak": best_win_streak,
     }
 
 
@@ -859,14 +883,21 @@ async def admin_sports_settle(request: SportsSettleEventRequest, current_user: d
         won = b.get("option_id") == winning_option_id
         new_status = "won" if won else "lost"
         await db.sports_bets.update_one({"id": b["id"]}, {"$set": {"status": new_status, "settled_at": now}})
-        u = await db.users.find_one({"id": b["user_id"]}, {"_id": 0, "username": 1})
+        u = await db.users.find_one({"id": b["user_id"]}, {"_id": 0, "username": 1, "sports_current_win_streak": 1, "sports_best_win_streak": 1})
         await log_gambling(b["user_id"], u.get("username") if u else "?", "sports_bet", {"bet_id": b["id"], "event_name": b.get("event_name"), "option_name": b.get("option_name"), "stake": b.get("stake"), "odds": b.get("odds"), "status": new_status, "settled_at": now})
         if won:
             stake = int(b.get("stake") or 0)
             odds = float(b.get("odds") or 1)
             payout = int(stake * odds)
+            current_streak = int((u or {}).get("sports_current_win_streak", 0)) + 1
+            best_streak = max(current_streak, int((u or {}).get("sports_best_win_streak", 0)))
+            update_fields = {"sports_current_win_streak": current_streak, "sports_best_win_streak": best_streak}
             if payout > 0:
-                await db.users.update_one({"id": b["user_id"]}, {"$inc": {"money": payout}})
+                await db.users.update_one({"id": b["user_id"]}, {"$inc": {"money": payout}, "$set": update_fields})
+            else:
+                await db.users.update_one({"id": b["user_id"]}, {"$set": update_fields})
+        else:
+            await db.users.update_one({"id": b["user_id"]}, {"$set": {"sports_current_win_streak": 0}})
     return {"message": f"Event {event_id} settled. Winning option: {winning_option_id}. Winners paid out."}
 
 

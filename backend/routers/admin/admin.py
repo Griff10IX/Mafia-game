@@ -1671,12 +1671,19 @@ def register(router):
             stock_market_max_points = 3000
         banner_doc = await db.game_settings.find_one({"key": "landing_banner_enabled"}, {"_id": 0, "value": 1})
         landing_banner_enabled = bool(banner_doc.get("value") if banner_doc else False)
+        main_doc = await db.game_settings.find_one({"_id": "main"})
+        login_lock_until = main_doc.get("login_lock_until") if main_doc else None
+        login_lock_message = main_doc.get("login_lock_message") if main_doc else None
+        preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         return {
             "admin_online_color": admin_online_color.strip(),
             "mod_default_online_color": mod_default_online_color.strip(),
             "require_email_verification": require_email_verification,
             "stock_market_max_points": stock_market_max_points,
             "landing_banner_enabled": landing_banner_enabled,
+            "login_lock_until": login_lock_until,
+            "login_lock_message": login_lock_message,
+            "preorder_points_release_date": preorder_points_release_date,
         }
 
     @router.patch("/admin/settings")
@@ -1723,6 +1730,24 @@ def register(router):
                 {"$set": {"value": body.landing_banner_enabled}},
                 upsert=True,
             )
+        if body.login_lock_until is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"login_lock_until": body.login_lock_until if body.login_lock_until else None}},
+                upsert=True,
+            )
+        if body.login_lock_message is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"login_lock_message": body.login_lock_message if body.login_lock_message else None}},
+                upsert=True,
+            )
+        if body.preorder_points_release_date is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"preorder_points_release_date": body.preorder_points_release_date if body.preorder_points_release_date else None}},
+                upsert=True,
+            )
         MOD_DEFAULT = "#1e3a5f"
         doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
         admin_online_color = (doc.get("value") or "#a78bfa") if doc else "#a78bfa"
@@ -1737,12 +1762,19 @@ def register(router):
         stock_market_max_points = max(1, stock_market_max_points)
         banner_doc = await db.game_settings.find_one({"key": "landing_banner_enabled"}, {"_id": 0, "value": 1})
         landing_banner_enabled = bool(banner_doc.get("value") if banner_doc else False)
+        main_doc = await db.game_settings.find_one({"_id": "main"})
+        login_lock_until = main_doc.get("login_lock_until") if main_doc else None
+        login_lock_message = main_doc.get("login_lock_message") if main_doc else None
+        preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         return {
             "admin_online_color": admin_online_color,
             "mod_default_online_color": mod_default_online_color.strip() if isinstance(mod_default_online_color, str) else MOD_DEFAULT,
             "require_email_verification": require_email_verification,
             "stock_market_max_points": stock_market_max_points,
             "landing_banner_enabled": landing_banner_enabled,
+            "login_lock_until": login_lock_until,
+            "login_lock_message": login_lock_message,
+            "preorder_points_release_date": preorder_points_release_date,
         }
 
     PAGE_LOCKS_KEY = "page_locks"

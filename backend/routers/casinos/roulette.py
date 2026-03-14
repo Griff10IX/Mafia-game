@@ -289,11 +289,18 @@ def register(router):
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
         stored_city, doc = await _get_roulette_ownership_doc(city)
-        if not doc or doc.get("owner_id") != current_user.get("id") or "":
+        if not doc:
+            raise HTTPException(status_code=404, detail="No roulette table found in this city")
+        if doc.get("owner_id") != (current_user.get("id") or ""):
             raise HTTPException(status_code=403, detail="You do not own this table")
         new_max = max(1_000_000, min(request.max_bet, ROULETTE_ABSOLUTE_MAX_BET))
-        await db.roulette_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": new_max}})
-        return {"message": f"Max bet set to ${new_max:,}"}
+        result = await db.roulette_ownership.update_one(
+            {"city": stored_city or city},
+            {"$set": {"max_bet": new_max}}
+        )
+        if result.modified_count == 0 and result.matched_count == 0:
+            raise HTTPException(status_code=500, detail="Failed to update max bet")
+        return {"message": f"Max bet set to ${new_max:,}", "max_bet": new_max}
 
     @router.post("/casino/roulette/set-buy-back-reward")
     async def casino_roulette_set_buy_back_reward(request: RouletteSetBuyBackRequest, current_user: dict = Depends(get_current_user_verified)):

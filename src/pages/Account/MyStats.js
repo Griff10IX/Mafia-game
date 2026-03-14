@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BarChart3, Shield, Target, Sword, Dice5, Trophy, DollarSign, TrendingUp, Wine, Bot, Landmark, Zap } from 'lucide-react';
+import { BarChart3, Target, Sword, Dice5, Trophy, DollarSign, TrendingUp, Wine, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../utils/api';
 import styles from '../../styles/noir.module.css';
@@ -158,35 +158,44 @@ export default function MyStats() {
   const points = stats.points || {};
   const prestige = stats.prestige || {};
 
+  const kdRatio = combat.total_deaths > 0 ? (combat.total_kills / combat.total_deaths).toFixed(2) : combat.total_kills > 0 ? '∞' : '0.00';
   const combatRows = [
-    { label: 'Kills', value: formatNumber(combat.total_kills) },
-    { label: 'Deaths', value: formatNumber(combat.total_deaths) },
-    { label: 'Hitlist NPC Kills', value: formatNumber(combat.hitlist_npc_kills) },
-    { label: 'Robot Bodyguard Kills', value: formatNumber(combat.robot_bodyguard_kills) },
+    { label: 'Total Kills', value: formatNumber(combat.total_kills) },
+    { label: 'Total Deaths', value: formatNumber(combat.total_deaths) },
+    { label: 'K/D Ratio', value: kdRatio, valueColor: parseFloat(kdRatio) >= 1 ? 'text-emerald-400' : 'text-rose-400' },
     { label: 'Player Kills', value: formatNumber(combat.user_kills) },
+    { label: 'Hitlist NPC Kills', value: formatNumber(combat.hitlist_npc_kills) },
+    { label: 'Robot BG Kills', value: formatNumber(combat.robot_bodyguard_kills) },
+    { label: 'Bodyguard Slots', value: formatNumber(bodyguards.slots_purchased) },
+    { label: 'Bodyguards Hired', value: formatNumber(bodyguards.total_hired) },
+    { label: 'Human BGs Hired', value: formatNumber(bodyguards.human_hired) },
+    { label: 'Longest BG Survived', value: formatDuration(bodyguards.longest_surviving_seconds) },
   ];
 
   const rankRows = [
     { label: 'Rank Points', value: formatNumber(rank.rank_points) },
-    { label: 'Crimes', value: formatNumber(rank.total_crimes) },
-    { label: 'Crime Profit', value: formatMoney(rank.crime_profit), valueColor: 'text-emerald-400' },
-    { label: 'GTAs', value: formatNumber(rank.total_gta) },
+    { label: 'Prestige Level', value: formatNumber(prestige.level), valueColor: prestige.level > 0 ? 'text-amber-400' : 'text-foreground' },
+    { label: 'Crimes Committed', value: formatNumber(rank.total_crimes) },
+    { label: 'Crime Profit', value: formatMoney(rank.crime_profit), valueColor: rank.crime_profit > 0 ? 'text-emerald-400' : 'text-foreground' },
+    { label: 'GTAs Completed', value: formatNumber(rank.total_gta) },
     { label: 'Jail Busts', value: formatNumber(rank.jail_busts) },
-    { label: 'Jail Attempts', value: formatNumber(rank.jail_bust_attempts) },
-    { label: 'OC Heists', value: formatNumber(rank.total_oc_heists) },
-    { label: 'Bullets Melted', value: formatNumber(rank.bullets_melted) },
-    { label: 'Bust Record', value: formatNumber(rank.consecutive_busts_record) },
+    { label: 'Bust Attempts', value: formatNumber(rank.jail_bust_attempts) },
+    { label: 'NPC Busts', value: formatNumber(rank.jail_busts_npc) },
+    { label: 'Current Bust Streak', value: formatNumber(rank.current_consecutive_busts), valueColor: rank.current_consecutive_busts > 0 ? 'text-cyan-400' : 'text-foreground' },
+    { label: 'Best Bust Streak', value: formatNumber(rank.consecutive_busts_record), valueColor: rank.consecutive_busts_record > 0 ? 'text-amber-400' : 'text-foreground' },
   ];
 
-  const bodyguardRows = [
-    { label: 'Slots Bought', value: formatNumber(bodyguards.slots_purchased) },
-    { label: 'Total Hired', value: formatNumber(bodyguards.total_hired) },
-    { label: 'Human Hired', value: formatNumber(bodyguards.human_hired) },
-    { label: 'Points on Hires', value: formatNumber(bodyguards.total_spent_hires) },
-    { label: 'Points on Upgrades', value: formatNumber(bodyguards.total_spent_upgrades) },
-    ...(bodyguards.longest_surviving_seconds != null
-      ? [{ label: 'Longest Surviving', value: formatDuration(bodyguards.longest_surviving_seconds) }]
-      : []),
+  const economyRows = [
+    { label: 'Lifetime Points Spent', value: formatNumber(points.lifetime_spent) },
+    { label: 'Points on BG Hires', value: formatNumber(bodyguards.total_spent_hires) },
+    { label: 'Points on BG Upgrades', value: formatNumber(bodyguards.total_spent_upgrades) },
+    { label: 'Bank Interest Earned', value: formatMoney(bank.interest_earned), valueColor: bank.interest_earned > 0 ? 'text-emerald-400' : 'text-foreground' },
+    { label: 'Stock Trades', value: formatNumber(stockMarket.total_trades) },
+    { label: 'Stock Profit/Loss', value: formatNumber(stockMarket.total_profit_points), valueColor: (stockMarket.total_profit_points || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400' },
+    { label: 'OC Heists', value: formatNumber(rank.total_oc_heists) },
+    { label: 'Bullets Melted', value: formatNumber(rank.bullets_melted) },
+    { label: 'Booze Capacity', value: formatNumber(booze.capacity) },
+    { label: 'Booze Profits', value: formatMoney(booze.profit_total), valueColor: (booze.profit_total || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400' },
   ];
 
   const casinoTypeLabel = (t) => (t && { dice: 'Dice', roulette: 'Roulette', blackjack: 'Blackjack', horseracing: 'Horse Racing', videopoker: 'Video Poker', slots: 'Slots' }[t]) || '—';
@@ -204,12 +213,19 @@ export default function MyStats() {
     { label: 'Biggest Payout', value: formatMoney(casinos.biggest_casino_payout), valueColor: casinos.biggest_casino_payout > 0 ? 'text-rose-400' : 'text-foreground' },
   ];
 
+  const boozeAvgProfit = booze.runs_count > 0 ? Math.round(booze.profit_total / booze.runs_count) : 0;
+  const boozeSuccessRate = booze.runs_count > 0 ? ((booze.runs_count - booze.jail_count) / booze.runs_count * 100).toFixed(1) : 0;
   const boozeRows = [
     { label: 'Total Profit', value: formatMoney(booze.profit_total), valueColor: (booze.profit_total || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400' },
-    { label: 'Runs Made', value: formatNumber(booze.runs_count) },
-    ...(booze.best_booze_name ? [{ label: 'Best Booze (Profit)', value: `${booze.best_booze_name} (${formatMoney(booze.best_booze_profit)})`, valueColor: 'text-emerald-400' }] : []),
-    { label: 'Times Jailed (Carrying)', value: formatNumber(booze.jail_count) },
-    { label: 'Booze Limit', value: formatNumber(booze.capacity) },
+    { label: 'Runs Completed', value: formatNumber(booze.runs_count) },
+    { label: 'Avg Profit/Run', value: formatMoney(boozeAvgProfit), valueColor: boozeAvgProfit >= 0 ? 'text-emerald-400' : 'text-rose-400' },
+    { label: 'Success Rate', value: `${boozeSuccessRate}%`, valueColor: parseFloat(boozeSuccessRate) >= 80 ? 'text-emerald-400' : parseFloat(boozeSuccessRate) >= 50 ? 'text-amber-400' : 'text-rose-400' },
+    { label: 'Times Jailed', value: formatNumber(booze.jail_count), valueColor: booze.jail_count > 0 ? 'text-rose-400' : 'text-foreground' },
+    { label: 'Current Capacity', value: formatNumber(booze.capacity) },
+    { label: 'Best Booze Type', value: booze.best_booze_name || '—', valueColor: booze.best_booze_name ? 'text-amber-400' : 'text-mutedForeground' },
+    { label: 'Best Booze Profit', value: formatMoney(booze.best_booze_profit || 0), valueColor: (booze.best_booze_profit || 0) > 0 ? 'text-emerald-400' : 'text-foreground' },
+    { label: 'Auto Rank Runs', value: formatNumber(autoRank.total_booze_runs) },
+    { label: 'Auto Rank Booze Profit', value: formatMoney(autoRank.total_booze_profit), valueColor: (autoRank.total_booze_profit || 0) > 0 ? 'text-emerald-400' : 'text-foreground' },
   ];
 
   const autoRankRows = [
@@ -223,15 +239,6 @@ export default function MyStats() {
     { label: 'Bullets from Melt', value: formatNumber(autoRank.total_bullets_from_melt), valueColor: (autoRank.total_bullets_from_melt || 0) > 0 ? 'text-amber-400' : 'text-foreground' },
     { label: 'Cars Scrapped', value: formatNumber(autoRank.total_cars_scrapped) },
     { label: 'Cash from Scrap', value: formatMoney(autoRank.total_cash_from_scrap), valueColor: (autoRank.total_cash_from_scrap || 0) > 0 ? 'text-emerald-400' : 'text-foreground' },
-  ];
-
-  const stockMarketRows = [
-    { label: 'Total Trades', value: formatNumber(stockMarket.total_trades) },
-    { label: 'Profit / Loss (pts)', value: formatNumber(stockMarket.total_profit_points), valueColor: (stockMarket.total_profit_points || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400' },
-  ];
-
-  const bankRows = [
-    { label: 'Interest Earned', value: formatMoney(bank.interest_earned), valueColor: (bank.interest_earned || 0) > 0 ? 'text-emerald-400' : 'text-foreground' },
   ];
 
   const gamblingByGame = gambling.by_game || {};
@@ -252,18 +259,20 @@ export default function MyStats() {
     }),
   ];
 
+  const totalBets = (sports.total_bets_won || 0) + (sports.total_bets_lost || 0);
+  const sportsAvgReturn = totalBets > 0 ? Math.round((sports.profit_loss || 0) / totalBets) : 0;
   const sportsRows = [
-    { label: 'Bets Won', value: formatNumber(sports.total_bets_won) },
-    { label: 'Bets Lost', value: formatNumber(sports.total_bets_lost) },
-    { label: 'Win %', value: sports.win_pct != null ? `${sports.win_pct}%` : '—' },
-    {
-      label: 'Profit / Loss',
-      value: formatMoney(sports.profit_loss),
-      valueColor: (sports.profit_loss || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400',
-    },
+    { label: 'Total Bets Placed', value: formatNumber(sports.total_bets_placed || totalBets) },
+    { label: 'Bets Won', value: formatNumber(sports.total_bets_won), valueColor: (sports.total_bets_won || 0) > 0 ? 'text-emerald-400' : 'text-foreground' },
+    { label: 'Bets Lost', value: formatNumber(sports.total_bets_lost), valueColor: (sports.total_bets_lost || 0) > 0 ? 'text-rose-400' : 'text-foreground' },
+    { label: 'Win Rate', value: sports.win_pct != null ? `${sports.win_pct}%` : '—', valueColor: (sports.win_pct || 0) >= 50 ? 'text-emerald-400' : 'text-rose-400' },
+    { label: 'Profit / Loss', value: formatMoney(sports.profit_loss), valueColor: (sports.profit_loss || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400' },
+    { label: 'Avg Return/Bet', value: formatMoney(sportsAvgReturn), valueColor: sportsAvgReturn >= 0 ? 'text-emerald-400' : 'text-rose-400' },
+    { label: 'Biggest Win', value: formatMoney(sports.biggest_win || 0), valueColor: (sports.biggest_win || 0) > 0 ? 'text-amber-400' : 'text-foreground' },
+    { label: 'Biggest Loss', value: formatMoney(sports.biggest_loss || 0), valueColor: (sports.biggest_loss || 0) > 0 ? 'text-rose-400' : 'text-foreground' },
+    { label: 'Current Win Streak', value: formatNumber(sports.current_win_streak || 0), valueColor: (sports.current_win_streak || 0) > 0 ? 'text-cyan-400' : 'text-foreground' },
+    { label: 'Best Win Streak', value: formatNumber(sports.best_win_streak || 0), valueColor: (sports.best_win_streak || 0) > 0 ? 'text-amber-400' : 'text-foreground' },
   ];
-
-  const pointsRows = [{ label: 'Lifetime Points Spent', value: formatNumber(points.lifetime_spent) }];
 
   return (
     <div className={`${styles.pageContent} p-3 sm:p-4`}>
@@ -283,9 +292,9 @@ export default function MyStats() {
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <StatCard title="Combat" icon={Sword} rows={combatRows} delay={0} />
+          <StatCard title="Combat & Bodyguards" icon={Sword} rows={combatRows} delay={0} />
           <StatCard title="Rank & Activities" icon={Target} rows={rankRows} delay={0.05} />
-          <StatCard title="Bodyguards" icon={Shield} rows={bodyguardRows} delay={0.1} />
+          <StatCard title="Economy & Points" icon={TrendingUp} rows={economyRows} delay={0.1} />
           <StatCard title="Casino & Property (Owning)" icon={DollarSign} rows={casinoRows} delay={0.15} />
           <StatCard
             title="Gambling (Playing)"
@@ -301,17 +310,6 @@ export default function MyStats() {
           />
           <StatCard title="Booze Run" icon={Wine} rows={boozeRows} delay={0.27} />
           <StatCard title="Auto Rank" icon={Bot} rows={autoRankRows} delay={0.28} />
-          <StatCard title="Stock Market" icon={Zap} rows={stockMarketRows} delay={0.29} />
-          <StatCard title="Bank" icon={Landmark} rows={bankRows} delay={0.3} />
-          <StatCard title="Points" icon={TrendingUp} rows={pointsRows} delay={0.31} />
-          {(prestige.level ?? 0) > 0 && (
-            <StatCard
-              title="Prestige"
-              icon={Trophy}
-              rows={[{ label: 'Level', value: formatNumber(prestige.level) }]}
-              delay={0.35}
-            />
-          )}
         </div>
       </div>
     </div>

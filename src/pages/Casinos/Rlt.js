@@ -421,13 +421,14 @@ export default function Rlt() {
   };
 
   const handleSetMaxBet = async () => {
-    if (!ownership?.current_city) return;
+    if (!ownership?.current_city) { toast.error('No city found'); return; }
     const val = parseInt(String(newMaxBet).replace(/\D/g, ''), 10);
     if (!val || val < 1000000) { toast.error('Min $1,000,000'); return; }
     setOwnerLoading(true);
     try {
-      await api.post('/casino/roulette/set-max-bet', { city: ownership.current_city, max_bet: val });
-      toast.success('Updated');
+      const res = await api.post('/casino/roulette/set-max-bet', { city: ownership.current_city, max_bet: val });
+      toast.success(res.data?.message || 'Updated');
+      if (res.data?.max_bet) setConfig((prev) => ({ ...prev, max_bet: res.data.max_bet }));
       fetchOwnership();
       setNewMaxBet('');
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
