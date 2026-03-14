@@ -15,6 +15,7 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from utils.disposable_email import is_disposable_email
+from routers.kill.armoury import TOKEN_CONFIG
 
 # Cloudflare API config for bot blocking toggle
 CF_ZONE_ID = os.environ.get("CF_ZONE_ID", "")
@@ -791,6 +792,25 @@ def register(router):
         )
         return {"message": f"Forced offline users online until {until_iso}", "until": until_iso, "updated": res.modified_count}
 
+    @router.post("/admin/force-online-user")
+    async def admin_force_online_user(target_username: str, hours: int = 1, current_user: dict = Depends(get_current_user)):
+        """Force a specific user to appear online for a number of hours. Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        hours = max(1, min(hours, 24))  # Clamp between 1 and 24 hours
+        now = datetime.now(timezone.utc)
+        until = now + timedelta(hours=hours)
+        until_iso = until.isoformat()
+        await db.users.update_one(
+            {"id": target["id"]},
+            {"$set": {"forced_online_until": until_iso}},
+        )
+        return {"message": f"Forced {target['username']} online until {until_iso}", "until": until_iso, "username": target["username"]}
+
     @router.post("/admin/lock-player")
     async def admin_lock_player(target_username: str, lock_minutes: int = 0, current_user: dict = Depends(get_current_user)):
         """Lock account for investigation: user can only access /locked page and submit one comment until unlocked. lock_minutes ignored (kept for API compat). Admin or moderator."""
@@ -942,6 +962,11 @@ def register(router):
         if target.get("is_dead"):
             raise HTTPException(status_code=400, detail="That account is already dead")
         now_iso = datetime.now(timezone.utc).isoformat()
+        # Store token counts at death for Dead > Alive restoration
+        tokens_at_death = {}
+        for token_type, cfg in TOKEN_CONFIG.items():
+            count_field = cfg["count_field"]
+            tokens_at_death[count_field] = int(target.get(count_field, 0) or 0)
         await db.users.update_one(
             {"id": target["id"]},
             {"$set": {
@@ -949,6 +974,7 @@ def register(router):
                 "dead_at": now_iso,
                 "points_at_death": int(target.get("points", 0) or 0),
                 "money_at_death": int(target.get("money", 0) or 0),
+                "tokens_at_death": tokens_at_death,
                 "money": 0,
                 "health": 0,
             }, "$inc": {"total_deaths": 1}}
@@ -1052,6 +1078,7 @@ def register(router):
                     "killed_by_family_name": "",
                     "points_at_death": "",
                     "money_at_death": "",
+                    "tokens_at_death": "",
                     "traveling_to": "",
                     "travel_arrives_at": "",
                     "jail_until": "",

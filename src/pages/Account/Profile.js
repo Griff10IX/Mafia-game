@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
@@ -137,6 +137,17 @@ const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone })
       toast.error(e.response?.data?.detail || 'Failed');
     } finally { setLoading(null); }
   };
+  const handleForceOnline = async () => {
+    if (!window.confirm(`Force ${username} to appear online for 1 hour?`)) return;
+    setLoading('force-online');
+    try {
+      const res = await api.post('/admin/force-online-user', null, { params: { target_username: username, hours: 1 } });
+      toast.success(res.data?.message || 'Forced online for 1 hour');
+      onDone?.();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally { setLoading(null); }
+  };
   const btn = 'inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-all active:scale-95 disabled:opacity-50';
   return (
     <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/5 border-b border-primary/20 flex flex-wrap items-center gap-1 md:gap-1.5">
@@ -151,6 +162,7 @@ const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone })
           </>
         )}
         <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleUnmute} disabled={!!loading} className={btn} title="Unmute forum"><Volume2 size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Unmute from forum</TooltipContent></Tooltip>
+        <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleForceOnline} disabled={!!loading} className={btn} title="Force online 1hr"><Radio size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Force online (1 hour)</TooltipContent></Tooltip>
         <Tooltip><TooltipTrigger asChild><Link to={{ pathname: '/admin', state: { activityLogUsername: username, gamblingLogUsername: username } }} className={btn} title="Activity log"><FileText size={12} className="md:w-3.5 md:h-3.5" /></Link></TooltipTrigger><TooltipContent>Activity log</TooltipContent></Tooltip>
         <Tooltip><TooltipTrigger asChild><Link to={{ pathname: '/admin', state: { gamblingLogUsername: username } }} className={btn} title="Gambling log"><Dices size={12} className="md:w-3.5 md:h-3.5" /></Link></TooltipTrigger><TooltipContent>Gambling log</TooltipContent></Tooltip>
       </TooltipProvider>

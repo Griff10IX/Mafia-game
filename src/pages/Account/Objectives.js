@@ -60,7 +60,7 @@ const ObjectiveRow = ({ obj, delay = 0 }) => {
           {Number(obj.current).toLocaleString()}/{Number(obj.target).toLocaleString()}
         </span>
         {obj.reward && (
-          <span className="text-[9px] text-primary/80 font-heading shrink-0 max-w-[70px] sm:max-w-[80px] truncate" title={formatReward(obj.reward)}>
+          <span className="text-[9px] text-primary/80 font-heading shrink-0 whitespace-nowrap" title={formatReward(obj.reward)}>
             {formatReward(obj.reward)}
           </span>
         )}

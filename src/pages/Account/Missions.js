@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BookOpen, X, Crown, Clock, Lock, CheckCircle, Banknote,
-  MapPin, ChevronRight, Skull, Star, AlertCircle, Coins, ListChecks, ChevronUp
+  MapPin, ChevronRight, Skull, Star, AlertCircle, Coins, ListChecks, ChevronUp, Zap
 } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
@@ -635,12 +635,14 @@ function TributeBanner({
   tributeBullets = 0,
   tributeLootBoxPieces = 0,
   tributeRespect = 0,
+  tributeTokens = 0,
   onCollect,
   collecting,
   tributeDepositDailyAt,
   nextTributeDepositAt,
   dailyCashBase = 500,
   dailyLootBase = 1,
+  dailyTokensTotal = 0,
   hasMission1Bonus = false,
   dailyCashMission1 = 0,
   dailyBulletsMission1 = 0,
@@ -669,7 +671,8 @@ function TributeBanner({
   const hasBullets = (tributeBullets || 0) > 0;
   const hasLootPieces = (tributeLootBoxPieces || 0) > 0;
   const hasRespect = (tributeRespect || 0) > 0;
-  const hasAny = hasBank || hasBullets || hasLootPieces || hasRespect;
+  const hasTokens = (tributeTokens || 0) > 0;
+  const hasAny = hasBank || hasBullets || hasLootPieces || hasRespect || hasTokens;
   const nextIn = nextTributeDepositAt ? formatTimeUntil(nextTributeDepositAt) : null;
   const dailyTotalCash = dailyCashBase + (hasMission1Bonus ? dailyCashMission1 : 0) + (hasMission2Bonus ? dailyCashMission2 : 0) + (hasMission3Bonus ? dailyCashMission3 : 0) + (hasMission4Bonus ? dailyCashMission4 : 0);
   const dailyTotalBullets = (hasMission1Bonus ? dailyBulletsMission1 : 0) + (hasMission2Bonus ? dailyBulletsMission2 : 0) + (hasMission3Bonus ? dailyBulletsMission3 : 0) + (hasMission4Bonus ? dailyBulletsMission4 : 0);
@@ -733,6 +736,13 @@ function TributeBanner({
                 <span className="text-[10px] text-violet-400/80">loot</span>
               </span>
             )}
+            {hasTokens && (
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/15 border border-amber-500/30">
+                <Zap size={14} className="text-amber-400" />
+                <span className="text-base font-heading font-bold text-amber-400">{tributeTokens}</span>
+                <span className="text-[10px] text-amber-400/80">tokens</span>
+              </span>
+            )}
             {!hasAny && (
               <span className="text-[10px] text-zinc-500 italic">Nothing to collect yet</span>
             )}
@@ -761,6 +771,9 @@ function TributeBanner({
             )}
             {dailyTotalLoot > 0 && (
               <RewardBadge icon={Star} value={dailyTotalLoot} label="loot" color="border-violet-500/30" bgColor="bg-violet-500/10" />
+            )}
+            {dailyTokensTotal > 0 && (
+              <RewardBadge icon={Zap} value={dailyTokensTotal} label="tokens" color="border-amber-500/30" bgColor="bg-amber-500/10" />
             )}
           </div>
           
@@ -891,7 +904,8 @@ export default function Missions() {
     const bullets = data?.tribute_bullets ?? 0;
     const lootPieces = data?.tribute_loot_box_pieces ?? 0;
     const respect = data?.tribute_respect ?? 0;
-    if (bank <= 0 && bullets <= 0 && lootPieces <= 0 && respect <= 0) return;
+    const tokens = data?.tribute_tokens ?? 0;
+    if (bank <= 0 && bullets <= 0 && lootPieces <= 0 && respect <= 0 && tokens <= 0) return;
     setCollecting(true);
     try {
       const res = await api.post('/missions/collect-tribute');
@@ -899,12 +913,14 @@ export default function Missions() {
       const collectedBullets = res.data?.collected_bullets ?? 0;
       const collectedLoot = res.data?.collected_loot_box_pieces ?? 0;
       const collectedRespect = res.data?.collected_respect ?? 0;
-      if (collectedCash > 0 || collectedBullets > 0 || collectedLoot > 0 || collectedRespect > 0) {
+      const collectedTokens = res.data?.collected_tokens ?? 0;
+      if (collectedCash > 0 || collectedBullets > 0 || collectedLoot > 0 || collectedRespect > 0 || collectedTokens > 0) {
         const parts = [];
         if (collectedCash > 0) parts.push(`${fmt(collectedCash)} cash`);
         if (collectedBullets > 0) parts.push(`${collectedBullets.toLocaleString()} bullets`);
         if (collectedLoot > 0) parts.push(`${collectedLoot} loot piece(s)`);
         if (collectedRespect > 0) parts.push(`${collectedRespect} respect`);
+        if (collectedTokens > 0) parts.push(`${collectedTokens} token(s)`);
         toast.success(`Collected ${parts.join(' and ')}`);
         refreshUser();
         const mapRes = await api.get('/missions/map');
@@ -1058,12 +1074,14 @@ export default function Missions() {
         tributeBullets={data?.tribute_bullets ?? 0}
         tributeLootBoxPieces={data?.tribute_loot_box_pieces ?? 0}
         tributeRespect={data?.tribute_respect ?? 0}
+        tributeTokens={data?.tribute_tokens ?? 0}
         onCollect={handleCollect}
         collecting={collecting}
         tributeDepositDailyAt={data?.tribute_deposit_daily_at}
         nextTributeDepositAt={data?.next_tribute_deposit_at}
         dailyCashBase={data?.daily_tribute_cash_base ?? 500}
         dailyLootBase={data?.daily_tribute_loot_box_pieces_base ?? 1}
+        dailyTokensTotal={data?.daily_tribute_tokens_total ?? 0}
         hasMission1Bonus={!!data?.has_mission_1_bonus}
         dailyCashMission1={data?.daily_tribute_cash_mission1 ?? 0}
         dailyBulletsMission1={data?.daily_tribute_bullets_mission1 ?? 0}

@@ -805,12 +805,13 @@ async def spawn_jail_npcs():
         "Trigger Mike", "Three-Finger Brown", "Sleepy Sam", "Cockeyed Lou",
         "Bottles Capone", "Fats McCarthy", "Greasy Thumb Guzik", "Terrible Tommy",
         "The Enforcer", "Ice Pick Willie", "Slippery Sal", "Cement Charlie",
+        "Razor Eddie", "Sticky Fingers Sal", "Cigar Box Tommy", "Mugsy Malone", "Black Hand Bruno",
     ]
     while True:
         try:
             await asyncio.sleep(random.randint(60, 120))
             current_npcs = await db.jail_npcs.count_documents({})
-            if current_npcs < 5:
+            if current_npcs < 10:
                 npc_name = random.choice(npc_names)
                 rank_names = [r["name"] for r in RANKS]
                 weights = [30, 25, 20, 15, 10, 7, 5, 3, 2, 1, 1, 1, 1]

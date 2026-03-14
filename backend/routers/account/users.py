@@ -80,33 +80,34 @@ def register(router):
                 online_color = HDO_ONLINE_COLOR
             
             # Determine user status: online, idle, or offline
-            user_status = "offline"
-            last_seen_str = user.get("last_seen")
-            if last_seen_str:
-                try:
-                    ls_dt = datetime.fromisoformat(last_seen_str)
-                    if ls_dt.tzinfo is None:
-                        ls_dt = ls_dt.replace(tzinfo=timezone.utc)
-                    if ls_dt >= five_min_ago:
-                        user_status = "online"
-                    elif ls_dt >= ten_min_ago:
-                        user_status = "idle"
-                except Exception:
-                    pass
-            # forced_online_until overrides to online
-            forced_until = user.get("forced_online_until")
-            if forced_until and user_status != "online":
-                try:
-                    fu = datetime.fromisoformat(forced_until)
-                    if fu.tzinfo is None:
-                        fu = fu.replace(tzinfo=timezone.utc)
-                    if now < fu:
-                        user_status = "online"
-                except Exception:
-                    pass
-            # Auto-rank enabled but not idle = idle status
-            if user_status == "offline" and user.get("auto_rank_enabled") and not user.get("auto_rank_idle"):
+            # Auto-rank enabled (and not auto_rank_idle) = always "idle" since bot is playing for them
+            if user.get("auto_rank_enabled") and not user.get("auto_rank_idle"):
                 user_status = "idle"
+            else:
+                user_status = "offline"
+                last_seen_str = user.get("last_seen")
+                if last_seen_str:
+                    try:
+                        ls_dt = datetime.fromisoformat(last_seen_str)
+                        if ls_dt.tzinfo is None:
+                            ls_dt = ls_dt.replace(tzinfo=timezone.utc)
+                        if ls_dt >= five_min_ago:
+                            user_status = "online"
+                        elif ls_dt >= ten_min_ago:
+                            user_status = "idle"
+                    except Exception:
+                        pass
+                # forced_online_until overrides to online
+                forced_until = user.get("forced_online_until")
+                if forced_until and user_status != "online":
+                    try:
+                        fu = datetime.fromisoformat(forced_until)
+                        if fu.tzinfo is None:
+                            fu = fu.replace(tzinfo=timezone.utc)
+                        if now < fu:
+                            user_status = "online"
+                    except Exception:
+                        pass
             
             item = {
                 "username": (user.get("username") or "").strip(),

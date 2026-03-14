@@ -149,7 +149,13 @@ def register(router):
             {"_id": 0}
         ).sort("created_at", -1).to_list(200)
         recent_kills = []
+        seen_kills = set()
         for a in attempts:
+            # Deduplicate based on victim + killer + timestamp
+            dedup_key = (a.get("target_username"), a.get("attacker_username"), a.get("created_at"))
+            if dedup_key in seen_kills:
+                continue
+            seen_kills.add(dedup_key)
             killer = await db.users.find_one(
                 {"id": a.get("attacker_id")},
                 {"_id": 0, "is_npc": 1, "rank_points": 1, "username": 1}

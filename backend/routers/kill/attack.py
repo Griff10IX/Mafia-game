@@ -1120,6 +1120,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 )
         # Transfer properties with stacking cap - extras auto-sell for cash
         from routers.money.properties import MAX_STACK_COUNT, calculate_property_value
+from routers.kill.armoury import TOKEN_CONFIG
         # Get killer's current property counts
         killer_props = await db.user_properties.find({"user_id": killer_id}, {"_id": 0, "property_id": 1}).to_list(100)
         killer_prop_counts = {}
@@ -1158,6 +1159,11 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         if current_user.get("family_id"):
             killer_family_doc = await db.families.find_one({"id": current_user["family_id"]}, {"_id": 0, "name": 1})
         money_after_loot = max(0, victim_money - cash_loot)
+        # Store token counts at death for Dead > Alive restoration
+        tokens_at_death = {}
+        for token_type, cfg in TOKEN_CONFIG.items():
+            count_field = cfg["count_field"]
+            tokens_at_death[count_field] = int(target.get(count_field, 0) or 0)
         await db.users.update_one(
             {"id": victim_id},
             {"$set": {
@@ -1165,6 +1171,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 "dead_at": now_iso,
                 "points_at_death": target.get("points", 0),
                 "money_at_death": money_after_loot,
+                "tokens_at_death": tokens_at_death,
                 "money": 0,
                 "health": 0,
                 "killed_by_username": current_user.get("username"),
