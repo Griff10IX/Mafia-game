@@ -599,6 +599,12 @@ export function ThemeProvider({ children }) {
   const setThemeVariant = useCallback((variant) => {
     const v = variant === 'modern' ? 'modern' : 'classic';
     setThemeVariantState(v);
+    if (v === 'modern') {
+      setTextureIdState('modern-soft');
+      try {
+        localStorage.setItem(STORAGE_KEY_TEXTURE, 'modern-soft');
+      } catch (_) {}
+    }
     try {
       localStorage.setItem(STORAGE_KEY_THEME_VARIANT, v);
     } catch (_) {}

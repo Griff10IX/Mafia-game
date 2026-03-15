@@ -68,6 +68,8 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       icon: Target,
       label: 'Rank',
       items: [
+        { path: '/game/ranking', label: 'Ranking' },
+        { path: '/game/ranking/badges', label: 'Badges' },
         { path: '/crime/crimes', label: 'Crimes' },
         { path: '/crime/gta', label: 'GTA' },
         { path: '/crime/jail', label: 'Jail' },
@@ -324,12 +326,24 @@ export default function Layout({ children }) {
           : i
       );
     }
-    return items.map((i) =>
-      i.type === 'group' && i.id === 'misc'
-        ? { ...i, items: i.items.map((sub) => (sub.path === '/help-desk' ? { ...sub, badge: helpDeskOpenCount } : sub)) }
-        : i
-    );
-  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount]);
+    return items.map((i) => {
+      if (i.type === 'group' && i.id === 'misc') {
+        return { ...i, items: i.items.map((sub) => (sub.path === '/help-desk' ? { ...sub, badge: helpDeskOpenCount } : sub)) };
+      }
+      if (i.type === 'group' && i.id === 'rank') {
+        return {
+          ...i,
+          items: i.items.map((sub) => {
+            if (sub.path === '/crime/crimes') return { ...sub, badge: rankingCounts.crimes };
+            if (sub.path === '/crime/gta') return { ...sub, badge: rankingCounts.gta };
+            if (sub.path === '/crime/jail') return { ...sub, badge: rankingCounts.jail };
+            return sub;
+          }),
+        };
+      }
+      return i;
+    });
+  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 

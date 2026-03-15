@@ -472,6 +472,10 @@
   background-color: rgba(45, 45, 45, 0.9);
 }
 
+body[data-theme-variant="modern"] .themeGangsterModern .raisedHover {
+  transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
 .themeGangsterModern .input {
   background-color: rgba(26, 26, 26, 0.95);
   border-color: var(--gm-border);
@@ -556,6 +560,7 @@ body[data-theme-variant="modern"] .themeGangsterModern .sidebar {
   backdrop-filter: blur(10px);
   background: linear-gradient(180deg, rgba(28, 28, 32, 0.96) 0%, rgba(22, 22, 25, 0.96) 100%);
   border-color: var(--modern-divider, rgba(161, 161, 170, 0.14));
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 body[data-theme-variant="modern"] .themeGangsterModern .panelHeader {
@@ -569,6 +574,7 @@ body[data-theme-variant="modern"] .themeGangsterModern .surface {
   background: linear-gradient(180deg, rgba(45, 45, 50, 0.95) 0%, rgba(36, 36, 40, 0.95) 100%);
   border-color: var(--modern-border-soft, rgba(161, 161, 170, 0.18));
   box-shadow: var(--modern-glow-soft, 0 18px 48px rgba(12, 12, 14, 0.65));
+  transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 body[data-theme-variant="modern"] .themeGangsterModern .input {
@@ -690,17 +696,45 @@ body[data-theme-variant="modern"] [data-chat-part="aux-btn"] {
   border-color: var(--modern-composer-btn-border, rgba(var(--noir-primary-rgb), 0.28)) !important;
 }
 
-/* Modern: bottom nav and touch ball (variables handle colours; optional refinements) */
+/* Modern: bottom nav – frosted glass, soft shadow */
 body[data-theme-variant="modern"] [data-layout="bottom-nav"] nav {
-  border-top-color: var(--modern-divider, rgba(161, 161, 170, 0.14));
+  background: linear-gradient(180deg, rgba(28, 28, 32, 0.94) 0%, rgba(22, 22, 26, 0.97) 100%) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--modern-divider, rgba(161, 161, 170, 0.14));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 -8px 24px rgba(0, 0, 0, 0.35);
 }
 body[data-theme-variant="modern"] [data-layout="bottom-nav-submenu"] {
   border-color: var(--modern-divider, rgba(161, 161, 170, 0.14));
 }
+/* Modern: futuristic touch ball – frosted glass, soft glow, orbital feel */
 body[data-theme-variant="modern"] [data-layout="touch-ball"] button {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(var(--noir-primary-rgb), 0.12);
+  background: linear-gradient(145deg, rgba(28, 28, 32, 0.92) 0%, rgba(22, 22, 26, 0.95) 100%) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(var(--noir-primary-rgb), 0.35) !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 0 20px rgba(var(--noir-primary-rgb), 0.18),
+    0 0 40px rgba(var(--noir-primary-rgb), 0.08),
+    0 8px 32px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 50%;
+}
+body[data-theme-variant="modern"] [data-layout="touch-ball"] button:active {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 0 12px rgba(var(--noir-primary-rgb), 0.22),
+    0 4px 16px rgba(0, 0, 0, 0.5) !important;
 }
 body[data-theme-variant="modern"] [data-layout="touch-ball-panel"] {
-  border-color: var(--modern-border-soft, rgba(161, 161, 170, 0.18));
-  box-shadow: var(--modern-glow-soft, 0 18px 48px rgba(12, 12, 14, 0.65));
+  background: linear-gradient(180deg, rgba(28, 28, 32, 0.96) 0%, rgba(22, 22, 26, 0.98) 100%) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(var(--noir-primary-rgb), 0.2) !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 0 30px rgba(var(--noir-primary-rgb), 0.06),
+    0 24px 60px rgba(0, 0, 0, 0.6) !important;
 }
