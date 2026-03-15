@@ -75,6 +75,7 @@ export default function Bodyguards() {
   const [cancellingInviteId, setCancellingInviteId] = useState(null);
   const [droppingSlot, setDroppingSlot] = useState(null);
   const [bodyguardLastDropAt, setBodyguardLastDropAt] = useState(null);
+  const [hiringSlots, setHiringSlots] = useState(new Set());
 
   const DROP_COOLDOWN_HOURS = 3;
 
@@ -196,6 +197,7 @@ export default function Bodyguards() {
   };
 
   const hireBodyguard = async (slot, isRobot) => {
+    setHiringSlots((prev) => new Set(prev).add(slot));
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
       toast.success(response?.data?.message ?? 'Bodyguard hired', { duration: 10000 });
@@ -218,6 +220,12 @@ export default function Bodyguards() {
       } else {
         toast.error(detail, { duration: 10000 });
       }
+    } finally {
+      setHiringSlots((prev) => {
+        const next = new Set(prev);
+        next.delete(slot);
+        return next;
+      });
     }
   };
 
@@ -261,7 +269,7 @@ export default function Bodyguards() {
     return Math.round(base * mult * inflationMult);
   };
 
-  const nextEmptySlot = bodyguards.find((b) => !b.bodyguard_username)?.slot_number;
+  const nextEmptySlot = bodyguards.find((b) => !b.bodyguard_username && !hiringSlots.has(b.slot_number))?.slot_number;
   // All active bodyguards sorted by slot number (mixed robots and humans together)
   const activeBodyguards = bodyguards
     .filter((b) => b.bodyguard_username)
@@ -542,7 +550,7 @@ export default function Bodyguards() {
     );
   }
 
-  const activeCount = bodyguards.filter(bg => bg.bodyguard_username).length;
+  const activeCount = bodyguards.filter(bg => bg.bodyguard_username).length + hiringSlots.size;
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="bodyguards-page">
