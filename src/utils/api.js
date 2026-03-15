@@ -11,6 +11,40 @@ const api = axios.create({
   baseURL: API,
 });
 
+// ── In-flight GET deduplication ──
+const _inFlightGet = new Map();
+function _getDedupKey(config) {
+  const url = config.url || '';
+  const params = config.params && typeof config.params === 'object'
+    ? Object.keys(config.params)
+        .sort()
+        .map((k) => `${k}=${String(config.params[k])}`)
+        .join('&')
+    : '';
+  return params ? `${url}?${params}` : url;
+}
+
+// ── Short-TTL response cache for Layout-heavy GETs (no gameplay change) ──
+const _cacheTTLMs = 10000; // 10s
+const _cache = new Map();
+const _cacheablePatterns = [
+  '/auth/me',
+  '/user/rank-progress',
+  '/crimes',
+  '/gta/options',
+  '/jail/players',
+  '/gta/exclusive-pool-status',
+  '/travel/status',
+];
+function _isCacheable(url) {
+  if (!url) return false;
+  const path = String(url).replace(/\?.*$/, '').replace(/^\/+/, '');
+  return _cacheablePatterns.some((p) => path === p.replace(/^\/+/, '') || path.endsWith(p));
+}
+export function invalidateApiCache() {
+  _cache.clear();
+}
+
 // ── Rate-limit cooldown state (shared across the app) ──
 let _cooldownUntil = 0;        // timestamp (ms) when cooldown expires
 let _cooldownTimerId = null;
@@ -45,6 +79,51 @@ function _startCooldown(seconds) {
 export function getCooldownRemaining() {
   return Math.max(0, Math.ceil((_cooldownUntil - Date.now()) / 1000));
 }
+
+const _defaultAdapter = api.defaults.adapter;
+api.defaults.adapter = (config) => {
+  const method = (config.method || 'get').toLowerCase();
+  const key = _getDedupKey(config);
+
+  // Invalidate cache on any mutation so next GET is fresh
+  if (method !== 'get') {
+    invalidateApiCache();
+    return _defaultAdapter(config);
+  }
+
+  // GET: check cache first
+  if (_isCacheable(config.url)) {
+    const cached = _cache.get(key);
+    if (cached && Date.now() - cached.at < _cacheTTLMs) {
+      return Promise.resolve({
+        data: cached.data,
+        status: 200,
+        statusText: 'OK',
+        headers: cached.headers || {},
+        config,
+      });
+    }
+  }
+
+  // GET: deduplicate in-flight
+  let pending = _inFlightGet.get(key);
+  if (pending) {
+    return pending.then((r) => ({ ...r, config }));
+  }
+
+  pending = _defaultAdapter(config);
+  if (_isCacheable(config.url)) {
+    _inFlightGet.set(key, pending);
+    pending
+      .then((res) => {
+        _cache.set(key, { data: res.data, headers: res.headers, at: Date.now() });
+      })
+      .finally(() => {
+        _inFlightGet.delete(key);
+      });
+  }
+  return pending;
+};
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');

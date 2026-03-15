@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2 } from 'lucide-react';
-import api, { getApiErrorMessage, onCooldownChange } from '../utils/api';
-import { setCrimesPrefetch } from '../utils/prefetchCache';
+import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache } from '../utils/api';
+import { setCrimesPrefetch, getCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useTheme } from '../context/ThemeContext';
@@ -470,6 +470,7 @@ export default function Layout({ children }) {
   const refreshUserDebounceRef = useRef(null);
   useEffect(() => {
     const runRefresh = async (detail) => {
+      invalidateApiCache();
       if (detail && detail.money != null) setUser((prev) => (prev ? { ...prev, money: Number(detail.money) } : null));
       fetchData(); fetchUnreadCount(); fetchHelpDeskOpenCount(); fetchWarStatus(); fetchRankingCounts();
       api.get('/oc/status').then((r) => setOcStatus(r.data)).catch(() => setOcStatus(null));
@@ -520,15 +521,19 @@ export default function Layout({ children }) {
     const intervalId = setInterval(fetchCasinoProperty, 10000);
     return () => clearInterval(intervalId);
   }, [showCasinoProfitLive, userId]); // eslint-disable-line
+  // On pathname change: only refresh ranking counts (debounced); do not refetch user/rank (handled by mount, 60s interval, app:refresh-user)
+  const rankingDebounceRef = useRef(null);
   useEffect(() => {
-    fetchData();
     const path = location.pathname;
     const needRanking = ['/ranking', '/crimes', '/gta', '/jail'].includes(path) || (userId && mobileStatsDisplay === 'right_sidebar');
-    const t2 = setTimeout(() => {
+    if (rankingDebounceRef.current) clearTimeout(rankingDebounceRef.current);
+    rankingDebounceRef.current = setTimeout(() => {
       if (needRanking) fetchRankingCounts();
       if (userId && mobileStatsDisplay === 'right_sidebar') api.get('/oc/status').then((r) => setOcStatus(r.data)).catch(() => setOcStatus(null));
-    }, 200);
-    return () => { clearTimeout(t2); };
+    }, 350);
+    return () => {
+      if (rankingDebounceRef.current) clearTimeout(rankingDebounceRef.current);
+    };
   }, [location.pathname, userId, mobileStatsDisplay]); // eslint-disable-line
 
   useEffect(() => {
@@ -642,8 +647,12 @@ export default function Layout({ children }) {
 
   const fetchRankingCounts = async () => {
     try {
+      const crimesPrefetchData = getCrimesPrefetch();
+      const crimesPromise = crimesPrefetchData != null
+        ? Promise.resolve({ data: crimesPrefetchData })
+        : api.get('/crimes');
       const [crimesRes, gtaRes, jailPlayersRes, exclusiveRes] = await Promise.all([
-        api.get('/crimes'),
+        crimesPromise,
         api.get('/gta/options'),
         api.get('/jail/players'),
         api.get('/gta/exclusive-pool-status').catch(() => ({ data: { exclusive_in_pool: false } })),

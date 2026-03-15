@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import GifPicker from './GifPicker';
 import { filterProfanity } from '../utils/profanityFilter';
 
-const POLL_INTERVAL_MS = 5000;
+const POLL_INTERVAL_MS = 10000;
 const MAX_MESSAGE_LEN = 500;
 const GAME_CHAT_MINIMIZED_KEY = 'game_chat_minimized';
 
