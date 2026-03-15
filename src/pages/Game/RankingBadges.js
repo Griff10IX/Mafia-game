@@ -87,7 +87,7 @@ export const CATEGORY_COLORS = {
 };
 
 // ─── CSS animations (injected once via <style>) ───────────────────────────────
-const BADGE_STYLES = `
+export const BADGE_STYLES = `
   @keyframes badge-bronze   { 0%,100%{ filter:drop-shadow(0 0 2px rgba(180,100,30,.4)); }  50%{ filter:drop-shadow(0 0 5px rgba(220,140,60,.7)); } }
   @keyframes badge-silver   { 0%,100%{ filter:drop-shadow(0 0 2px rgba(180,190,210,.4)); } 50%{ filter:drop-shadow(0 0 6px rgba(210,220,240,.85)); } }
   @keyframes badge-gold     { 0%,100%{ filter:drop-shadow(0 0 3px rgba(255,200,0,.5)); }   50%{ filter:drop-shadow(0 0 8px rgba(255,220,50,.9)); } }
