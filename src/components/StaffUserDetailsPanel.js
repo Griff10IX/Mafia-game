@@ -208,9 +208,9 @@ export default function StaffUserDetailsPanel({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className={`w-full sm:max-w-md overflow-y-auto ${styles.panel} border-primary/30 bg-[var(--noir-surface)] shadow-[0_0_24px_rgba(var(--noir-primary-rgb),0.08)]`}
+        className={`flex flex-col h-full max-h-[100vh] w-full sm:max-w-md overflow-hidden ${styles.panel} border-primary/30 bg-[var(--noir-surface)] shadow-[0_0_24px_rgba(var(--noir-primary-rgb),0.08)]`}
       >
-        <SheetHeader className="pb-2">
+        <SheetHeader className="pb-2 shrink-0">
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-primary" />
             <SheetTitle className="text-sm font-heading font-bold text-primary uppercase tracking-wider">
@@ -224,7 +224,7 @@ export default function StaffUserDetailsPanel({
           )}
         </SheetHeader>
 
-        <div className="mt-4 space-y-4">
+        <div className="mt-4 space-y-4 flex-1 min-h-0 overflow-y-auto">
           {loading && (
             <div className="flex items-center gap-2 py-8 text-mutedForeground">
               <Activity className="w-4 h-4 animate-pulse" />

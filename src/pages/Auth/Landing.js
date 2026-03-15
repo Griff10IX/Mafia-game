@@ -43,6 +43,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
   const [resendLoading, setResendLoading]           = useState(false);
   const [resendCooldownSeconds, setResendCooldownSeconds] = useState(0);
   const [bannerEnabled, setBannerEnabled]           = useState(false);
+  const [bannerMessage, setBannerMessage]           = useState('');
 
   // Fetch launch status on mount
   useEffect(() => {
@@ -84,10 +85,16 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     return () => clearInterval(interval);
   }, [launchStatus.loginLocked, launchStatus.lockUntil, calculateCountdown]);
 
+  const DEFAULT_BANNER_MESSAGE = 'Beta round end: March 24 6pm. Full game release March 28th 6pm. This beta lets you try the game and features before launch.';
+
   useEffect(() => {
     api.get('/landing-banner')
-      .then((r) => setBannerEnabled(!!r.data?.enabled))
-      .catch(() => setBannerEnabled(false));
+      .then((r) => {
+        setBannerEnabled(!!r.data?.enabled);
+        const msg = (r.data?.message || '').trim();
+        setBannerMessage(msg || DEFAULT_BANNER_MESSAGE);
+      })
+      .catch(() => { setBannerEnabled(false); setBannerMessage(''); });
   }, []);
 
   useEffect(() => {
@@ -272,13 +279,17 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
               }}
             />
 
-            {/* Beta banner */}
+            {/* Beta / release banner */}
             {bannerEnabled && (
               <div
-                className="relative z-10 mb-4 px-5 py-1.5 rounded font-heading font-bold uppercase tracking-wider text-xs"
-                style={{ backgroundColor: 'var(--noir-primary)', color: 'var(--noir-background)' }}
+                className="relative z-10 mb-4 px-5 py-3 rounded font-heading text-xs leading-relaxed"
+                style={{
+                  backgroundColor: 'var(--noir-primary)',
+                  color: 'var(--noir-background)',
+                  whiteSpace: 'pre-line',
+                }}
               >
-                Beta Testing Round
+                {bannerMessage || DEFAULT_BANNER_MESSAGE}
               </div>
             )}
 

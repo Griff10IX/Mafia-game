@@ -453,6 +453,7 @@ export default function Admin() {
   const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState('#1e3a5f');
   const [requireEmailVerification, setRequireEmailVerification] = useState(false);
   const [landingBannerEnabled, setLandingBannerEnabled] = useState(false);
+  const [landingBannerMessage, setLandingBannerMessage] = useState('');
   const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);
   const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
   const [loginLockUntil, setLoginLockUntil] = useState('');
@@ -722,6 +723,7 @@ export default function Admin() {
       setModDefaultOnlineColor(modHex.startsWith('#') ? modHex : '#' + modHex);
       setRequireEmailVerification(!!res.data?.require_email_verification);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
+      setLandingBannerMessage(res.data?.landing_banner_message ?? '');
       setStockMarketMaxPoints(Math.max(1, parseInt(res.data?.stock_market_max_points, 10) || 3000));
       setLoginLockUntil(res.data?.login_lock_until || '');
       setLoginLockMessage(res.data?.login_lock_message || '');
@@ -732,6 +734,7 @@ export default function Admin() {
       setAdminOnlineColor('#a78bfa');
       setModDefaultOnlineColor('#1e3a5f');
       setRequireEmailVerification(false);
+      setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
       setLoginLockUntil('');
       setLoginLockMessage('');
@@ -776,12 +779,14 @@ export default function Admin() {
         mod_default_online_color: modDefaultOnlineColor,
         require_email_verification: requireEmailVerification,
         landing_banner_enabled: landingBannerEnabled,
+        landing_banner_message: landingBannerMessage,
         stock_market_max_points: Math.max(1, parseInt(stockMarketMaxPoints, 10) || 3000),
       });
       setAdminOnlineColor(res.data?.admin_online_color || adminOnlineColor);
       setModDefaultOnlineColor(res.data?.mod_default_online_color || modDefaultOnlineColor);
       setRequireEmailVerification(!!res.data?.require_email_verification);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
+      if (res.data?.landing_banner_message !== undefined) setLandingBannerMessage(res.data.landing_banner_message ?? '');
       setStockMarketMaxPoints(Math.max(1, res.data?.stock_market_max_points ?? 3000));
       toast.success('Settings saved');
     } catch (e) {
@@ -3980,8 +3985,18 @@ export default function Admin() {
                   onChange={(e) => setLandingBannerEnabled(e.target.checked)}
                   className="rounded border-input"
                 />
-                <span>Show &quot;Beta Testing Round&quot; banner on login page</span>
+                <span>Show beta/release banner on login page</span>
               </label>
+            </div>
+            <div className="pt-2 border-t border-primary/10">
+              <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground mb-1">Banner message (supports newlines)</label>
+              <textarea
+                value={landingBannerMessage}
+                onChange={(e) => setLandingBannerMessage(e.target.value)}
+                placeholder="Beta round end: March 24 6pm. Full release March 28th 6pm. Beta is for trying the game and features."
+                rows={3}
+                className="w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-heading resize-y"
+              />
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
               <label className="text-sm font-heading text-foreground">Stock market max points (per user cap)</label>

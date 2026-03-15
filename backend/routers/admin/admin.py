@@ -48,6 +48,7 @@ class AdminSettingsUpdate(BaseModel):
     require_email_verification: Optional[bool] = None
     stock_market_max_points: Optional[int] = None
     landing_banner_enabled: Optional[bool] = None
+    landing_banner_message: Optional[str] = None
     login_lock_until: Optional[str] = None  # ISO datetime - block logins until this date
     login_lock_message: Optional[str] = None  # Custom message shown on login page during lock
     preorder_points_release_date: Optional[str] = None  # ISO datetime - points held until this date
@@ -1757,6 +1758,8 @@ def register(router):
             stock_market_max_points = 3000
         banner_doc = await db.game_settings.find_one({"key": "landing_banner_enabled"}, {"_id": 0, "value": 1})
         landing_banner_enabled = bool(banner_doc.get("value") if banner_doc else False)
+        msg_doc = await db.game_settings.find_one({"key": "landing_banner_message"}, {"_id": 0, "value": 1})
+        landing_banner_message = (msg_doc.get("value") or "") if msg_doc and msg_doc.get("value") is not None else ""
         main_doc = await db.game_settings.find_one({"_id": "main"})
         login_lock_until = main_doc.get("login_lock_until") if main_doc else None
         login_lock_message = main_doc.get("login_lock_message") if main_doc else None
@@ -1769,6 +1772,7 @@ def register(router):
             "require_email_verification": require_email_verification,
             "stock_market_max_points": stock_market_max_points,
             "landing_banner_enabled": landing_banner_enabled,
+            "landing_banner_message": landing_banner_message,
             "login_lock_until": login_lock_until,
             "login_lock_message": login_lock_message,
             "preorder_points_release_date": preorder_points_release_date,
@@ -1820,6 +1824,12 @@ def register(router):
                 {"$set": {"value": body.landing_banner_enabled}},
                 upsert=True,
             )
+        if body.landing_banner_message is not None:
+            await db.game_settings.update_one(
+                {"key": "landing_banner_message"},
+                {"$set": {"value": body.landing_banner_message}},
+                upsert=True,
+            )
         if body.login_lock_until is not None:
             await db.game_settings.update_one(
                 {"_id": "main"},
@@ -1864,6 +1874,8 @@ def register(router):
         stock_market_max_points = max(1, stock_market_max_points)
         banner_doc = await db.game_settings.find_one({"key": "landing_banner_enabled"}, {"_id": 0, "value": 1})
         landing_banner_enabled = bool(banner_doc.get("value") if banner_doc else False)
+        msg_doc = await db.game_settings.find_one({"key": "landing_banner_message"}, {"_id": 0, "value": 1})
+        landing_banner_message = (msg_doc.get("value") or "") if msg_doc and msg_doc.get("value") is not None else ""
         main_doc = await db.game_settings.find_one({"_id": "main"})
         login_lock_until = main_doc.get("login_lock_until") if main_doc else None
         login_lock_message = main_doc.get("login_lock_message") if main_doc else None
@@ -1876,6 +1888,7 @@ def register(router):
             "require_email_verification": require_email_verification,
             "stock_market_max_points": stock_market_max_points,
             "landing_banner_enabled": landing_banner_enabled,
+            "landing_banner_message": landing_banner_message,
             "login_lock_until": login_lock_until,
             "login_lock_message": login_lock_message,
             "preorder_points_release_date": preorder_points_release_date,
@@ -1912,12 +1925,21 @@ def register(router):
                 paths[p] = v
         return {"paths": paths}
 
+    DEFAULT_LANDING_BANNER_MESSAGE = (
+        "Beta round end: March 24 6pm. Full game release March 28th 6pm. "
+        "This beta lets you try the game and features before launch."
+    )
+
     @router.get("/landing-banner")
     async def get_landing_banner_public():
-        """Public: return whether the beta testing banner is enabled on the login page. No auth required."""
+        """Public: return whether the beta banner is enabled and its message. No auth required."""
         doc = await db.game_settings.find_one({"key": "landing_banner_enabled"}, {"_id": 0, "value": 1})
         enabled = bool(doc.get("value") if doc else False)
-        return {"enabled": enabled}
+        msg_doc = await db.game_settings.find_one({"key": "landing_banner_message"}, {"_id": 0, "value": 1})
+        message = (msg_doc.get("value") or "").strip() if msg_doc and msg_doc.get("value") is not None else ""
+        if enabled and not message:
+            message = DEFAULT_LANDING_BANNER_MESSAGE
+        return {"enabled": enabled, "message": message}
 
     @router.get("/admin/page-locks")
     async def admin_get_page_locks(current_user: dict = Depends(get_current_user)):
