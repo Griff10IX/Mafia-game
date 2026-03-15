@@ -255,7 +255,7 @@ export default function StaffUserDetailsPanel({ username, open, onOpenChange }) 
                   label="Account locked"
                   value={
                     data.account_locked
-                      ? `Yes${data.account_locked_at ? ` (${formatDateTime(data.account_locked_at)})` : ''}
+                      ? 'Yes' + (data.account_locked_at ? ' (' + formatDateTime(data.account_locked_at) + ')' : '')
                       : 'No'
                   }
                   highlight={data.account_locked}
