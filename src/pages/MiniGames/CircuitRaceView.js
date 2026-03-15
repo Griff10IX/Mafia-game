@@ -427,7 +427,7 @@ const GP_TARGA = (t) => interpPtsSmooth(PTS_TARGA, t);
 
 const TRACKS = [
   {
-    id:"chicago", name:"Chicago Board Track", km:3.1, corners:10, lapBase:24, rewardMult:1.0, trackWidth:16,
+    id:"chicago", name:"Chicago Board Track", km:3.1, corners:10, lapBase:24, rewardMult:1.0, trackWidth:36,
     desc:"Banked wooden oval with tight turns",
     getPoint: GP_CHICAGO,
     pitEntry:0.61, pitExit:0.67, sfLine:0.01,
@@ -458,7 +458,7 @@ const TRACKS = [
     },
   },
   {
-    id:"daytona", name:"Daytona Beach", km:4.2, corners:6, lapBase:28, rewardMult:1.2, trackWidth:16,
+    id:"daytona", name:"Daytona Beach", km:4.2, corners:6, lapBase:28, rewardMult:1.2, trackWidth:36,
     desc:"High-speed banked D-oval, 31° banking",
     getPoint: GP_DAYTONA,
     pitEntry:0.55, pitExit:0.62, sfLine:0.0,
@@ -472,7 +472,7 @@ const TRACKS = [
     },
   },
   {
-    id:"indianapolis", name:"Indianapolis", km:4.6, corners:6, lapBase:30, rewardMult:1.3, trackWidth:16,
+    id:"indianapolis", name:"Indianapolis", km:4.6, corners:6, lapBase:30, rewardMult:1.3, trackWidth:36,
     desc:"Superspeedway, 9° banking, Yard of Bricks",
     getPoint: GP_INDIANAPOLIS,
     pitEntry:0.59, pitExit:0.66, sfLine:0.0,
@@ -489,7 +489,7 @@ const TRACKS = [
     },
   },
   {
-    id:"roosevelt", name:"Roosevelt Raceway", km:2.8, corners:18, lapBase:26, rewardMult:1.1, trackWidth:12,
+    id:"roosevelt", name:"Roosevelt Raceway", km:2.8, corners:18, lapBase:26, rewardMult:1.1, trackWidth:28,
     desc:"Technical road course, hairpins and chicanes",
     getPoint: GP_ROOSEVELT,
     pitEntry:0.77, pitExit:0.83, sfLine:0.0,
@@ -503,7 +503,7 @@ const TRACKS = [
     },
   },
   {
-    id:"boardwalk", name:"Boardwalk Circuit", km:3.4, corners:22, lapBase:27, rewardMult:1.15, trackWidth:10,
+    id:"boardwalk", name:"Boardwalk Circuit", km:3.4, corners:22, lapBase:27, rewardMult:1.15, trackWidth:24,
     desc:"Tight street circuit, chicanes, hairpins",
     getPoint: GP_BOARDWALK,
     pitEntry:0.69, pitExit:0.75, sfLine:0.0,
@@ -523,7 +523,7 @@ const TRACKS = [
     },
   },
   {
-    id:"lakeside", name:"Lakeside Park", km:3.8, corners:14, lapBase:28, rewardMult:1.1, trackWidth:12,
+    id:"lakeside", name:"Lakeside Park", km:3.8, corners:14, lapBase:28, rewardMult:1.1, trackWidth:28,
     desc:"Flowing high-speed sweepers around the lake",
     getPoint: GP_LAKESIDE,
     pitEntry:0.64, pitExit:0.70, sfLine:0.0,
@@ -547,7 +547,7 @@ const TRACKS = [
     },
   },
   {
-    id:"harbor", name:"Harbor Front", km:3.0, corners:24, lapBase:25, rewardMult:1.05, trackWidth:10,
+    id:"harbor", name:"Harbor Front", km:3.0, corners:24, lapBase:25, rewardMult:1.05, trackWidth:24,
     desc:"Narrow dockside street track, cranes and containers",
     getPoint: GP_HARBOR,
     pitEntry:0.79, pitExit:0.85, sfLine:0.0,
@@ -576,7 +576,7 @@ const TRACKS = [
     },
   },
   {
-    id:"mountain", name:"Mountain Pass", km:4.8, corners:22, lapBase:32, rewardMult:1.25, trackWidth:12,
+    id:"mountain", name:"Mountain Pass", km:4.8, corners:22, lapBase:32, rewardMult:1.25, trackWidth:28,
     desc:"Long elevation changes, switchbacks and S-curves",
     getPoint: GP_MOUNTAIN,
     pitEntry:0.71, pitExit:0.77, sfLine:0.0,
@@ -609,7 +609,7 @@ const TRACKS = [
     },
   },
   {
-    id:"brooklands", name:"Brooklands Banking", km:6.4, corners:8, lapBase:42, rewardMult:1.35, trackWidth:16,
+    id:"brooklands", name:"Brooklands Banking", km:6.4, corners:8, lapBase:42, rewardMult:1.35, trackWidth:36,
     desc:"High-speed banked oval, long back straight — Surrey, England",
     getPoint: GP_BROOKLANDS,
     pitEntry:0.58, pitExit:0.64, sfLine:0.0,
@@ -641,7 +641,7 @@ const TRACKS = [
     },
   },
   {
-    id:"monza", name:"Monza Autodromo", km:8.0, corners:14, lapBase:52, rewardMult:1.4, trackWidth:12,
+    id:"monza", name:"Monza Autodromo", km:8.0, corners:14, lapBase:52, rewardMult:1.4, trackWidth:28,
     desc:"Combined oval and road course — Monza, Italy (est. 1922)",
     getPoint: GP_MONZA,
     pitEntry:0.62, pitExit:0.68, sfLine:0.0,
@@ -656,7 +656,7 @@ const TRACKS = [
     },
   },
   {
-    id:"lemans", name:"Le Mans Sarthe", km:10.7, corners:16, lapBase:65, rewardMult:1.5, trackWidth:14,
+    id:"lemans", name:"Le Mans Sarthe", km:10.7, corners:16, lapBase:65, rewardMult:1.5, trackWidth:30,
     desc:"Ultra-long Mulsanne straight, tight Porsche curves — Le Mans, France (est. 1923)",
     getPoint: GP_LEMANS,
     pitEntry:0.56, pitExit:0.63, sfLine:0.0,
@@ -675,7 +675,7 @@ const TRACKS = [
     },
   },
   {
-    id:"avus", name:"AVUS Speedway", km:12.0, corners:4, lapBase:58, rewardMult:1.45, trackWidth:16,
+    id:"avus", name:"AVUS Speedway", km:12.0, corners:4, lapBase:58, rewardMult:1.45, trackWidth:36,
     desc:"Two massive straights linked by banked hairpins — Berlin, Germany (est. 1921)",
     getPoint: GP_AVUS,
     pitEntry:0.48, pitExit:0.54, sfLine:0.0,
@@ -706,7 +706,7 @@ const TRACKS = [
     },
   },
   {
-    id:"targa", name:"Targa Florio", km:14.5, corners:32, lapBase:80, rewardMult:1.6, trackWidth:9,
+    id:"targa", name:"Targa Florio", km:14.5, corners:32, lapBase:80, rewardMult:1.6, trackWidth:22,
     desc:"Narrow mountain roads, countless switchbacks — Madonie, Sicily (est. 1906)",
     getPoint: GP_TARGA,
     pitEntry:0.72, pitExit:0.78, sfLine:0.0,
@@ -1446,7 +1446,7 @@ export default function CircuitRaceView({
         if (pitFrac < 0.15) blend = (pitFrac / 0.15) * (pitFrac / 0.15);
         else if (pitFrac > 0.85) blend = ((1 - pitFrac) / 0.15) * ((1 - pitFrac) / 0.15);
         else blend = 1;
-        const d = blend * (halfW + 18);
+        const d = blend * (halfW + 22);
         px = sx(pp.x) + Math.cos(pitAng) * d;
         py = sy(pp.y) + Math.sin(pitAng) * d;
         angle = Math.atan2(sy(pp2.y) - sy(pp.y), sx(pp2.x) - sx(pp.x));
@@ -1465,7 +1465,7 @@ export default function CircuitRaceView({
             if (oi !== drawIdx && op >= 0 && Math.abs(op - myPos) < 0.015) nearbyCount++;
           });
           if (nearbyCount > 0) {
-            lateralOff = ((drawIdx % 3) - 1) * (halfW * 0.5);
+            lateralOff = ((drawIdx % 3) - 1) * (halfW * 0.6);
           }
         }
         const offs = offTrack ? (halfW + 8) : lateralOff;
@@ -1650,14 +1650,19 @@ export default function CircuitRaceView({
     const logEntries = stateRef.current?.incidents;
     if (logEntries && logEntries.length) {
       ctx.save();
-      const recent = logEntries.slice(-3);
+      const recent = logEntries.slice(-4);
       recent.forEach((entry,i)=>{
         const age = (performance.now() - entry.time)/1000;
-        const alpha = Math.max(0, 1 - age/8);
+        const alpha = Math.max(0, 1 - age/10);
         if(alpha<=0) return;
-        ctx.globalAlpha=alpha*0.7;
-        ctx.fillStyle="#e8c870"; ctx.font="bold 7px Rajdhani,sans-serif"; ctx.textAlign="left";
-        ctx.fillText(entry.text, 6, H-28-i*12);
+        ctx.globalAlpha=alpha*0.85;
+        ctx.fillStyle="#111"; ctx.font="bold 13px Rajdhani,sans-serif"; ctx.textAlign="left";
+        const yPos = H - 34 - i * 18;
+        const textW = ctx.measureText(entry.text).width;
+        ctx.fillRect(4, yPos - 12, textW + 10, 16);
+        ctx.globalAlpha=alpha*0.95;
+        ctx.fillStyle="#e8c870";
+        ctx.fillText(entry.text, 9, yPos);
       });
       ctx.restore();
     }

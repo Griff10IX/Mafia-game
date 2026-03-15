@@ -182,7 +182,8 @@ NUM_LAPS_MAX = 20
 TIRE_WEAR_PER_LAP = 18
 # Pit a lap before tires are gone: ~18 wear/lap → pit when below 50 so next lap wouldn't kill tires
 TIRE_PIT_THRESHOLD = 50
-PIT_PENALTY_FACTOR = 0.72  # speed multiplier when pitting (lose time that lap)
+PIT_PENALTY_FACTOR_BASE = 0.68  # base speed multiplier when pitting (lose time that lap)
+PIT_PENALTY_IMPROVEMENT_PER_LEVEL = 0.04  # each pit_level reduces the penalty (max 5 → 0.68 + 0.20 = 0.88)
 
 # Season/week: 2 races per day (morning/evening), 7-day weeks, top 5 get good rewards, then full reset; leaderboard winner +5% per repeat win (cap 20%). Seasons = 2 months, then total reset.
 RACING_SEASON_DURATION_DAYS = 60
@@ -386,8 +387,11 @@ def _effective_speed_and_grip_display(entrant: dict, profile: Optional[dict], up
         speed *= 1.02
         grip = min(1.0, grip * 1.02)
     if profile and not entrant.get("is_npc"):
-        crew_total = _total_crew_levels(profile)
-        speed *= 1.0 + crew_total * CREW_BONUS_PER_LEVEL
+        mechanic = int(profile.get("mechanic_level") or 0)
+        speed *= 1.0 + mechanic * CREW_BONUS_PER_LEVEL
+        engineer_lvl = int(profile.get("engineer_level") or 0)
+        if engineer_lvl > 0:
+            grip += engineer_lvl * 0.008
     return (max(1.0, speed), max(0.5, min(1.0, grip)))
 
 
@@ -554,9 +558,16 @@ def _effective_speed_and_grip(entrant: dict, profile: Optional[dict], upgrades_m
         speed *= 1.02
         grip = min(1.0, grip * 1.02)
     if profile and not entrant.get("is_npc"):
-        crew_total = _total_crew_levels(profile)
-        speed *= 1.0 + crew_total * CREW_BONUS_PER_LEVEL
-    speed *= 0.985 + random.random() * 0.03
+        mechanic = int(profile.get("mechanic_level") or 0)
+        speed *= 1.0 + mechanic * CREW_BONUS_PER_LEVEL
+        engineer_lvl = int(profile.get("engineer_level") or 0)
+        if engineer_lvl > 0:
+            grip += engineer_lvl * 0.008
+        physio_lvl = int(profile.get("physio_level") or 0)
+        rng_range = max(0.01, 0.03 - physio_lvl * 0.005)
+        speed *= 0.985 + random.random() * rng_range
+    else:
+        speed *= 0.985 + random.random() * 0.03
     speed = max(1.0, speed)
     grip = max(0.5, min(1.0, grip))
     return (speed, grip)
@@ -633,6 +644,21 @@ def _run_race_simulation_laps(
     if is_wet:
         corner_weight = min(0.75, corner_weight * 1.35)
 
+    crew_cache: Dict[str, dict] = {}
+    for e in entrants:
+        eid = e.get("user_id") or e.get("id")
+        prof = profile_by_user.get(eid) or {}
+        crew_cache[eid] = {
+            "strategist": int(prof.get("strategist_level") or 0),
+            "spotter": int(prof.get("spotter_level") or 0),
+            "tyre_tech": int(prof.get("tyre_tech_level") or 0),
+            "fuel_tech": int(prof.get("fuel_tech_level") or 0),
+            "data_analyst": int(prof.get("data_analyst_level") or 0),
+            "logistics": int(prof.get("logistics_level") or 0),
+            "morale": int(prof.get("morale_level") or 0),
+            "tactician": int(prof.get("tactician_level") or 0),
+        }
+
     def _compound_wear_mult(entrant: dict) -> float:
         cid = (entrant.get("tyre_compound") or "medium").lower()
         for c in TYRE_COMPOUNDS:
@@ -675,7 +701,8 @@ def _run_race_simulation_laps(
                 continue
             prof = profile_by_user.get(eid) or {}
             pit_level = min(MAX_CREW_LEVEL, int(prof.get("pit_level") or 0))
-            pit_threshold = min(65, TIRE_PIT_THRESHOLD + pit_level * 2.5)
+            strategist = crew_cache.get(eid, {}).get("strategist", 0)
+            pit_threshold = min(65, TIRE_PIT_THRESHOLD + pit_level * 2.5 - strategist * 3)
             if tire_wear[eid] < pit_threshold:
                 pitting.add(eid)
             elif lap > 1 and lap < num_laps and random.random() < 0.12 and tire_wear[eid] < (55 + pit_level * 2):
@@ -698,8 +725,10 @@ def _run_race_simulation_laps(
                 speed_val *= penalty
             up_fuel = _get_upgrades(e)
             fuel_lvl = int(up_fuel.get("fuel_level") or 0)
+            crew = crew_cache.get(eid, {})
+            fuel_tech = crew.get("fuel_tech", 0)
             base_weight_penalty = 0.03 * ((num_laps - lap + 1) / max(1, num_laps))
-            weight_penalty = max(0.0, base_weight_penalty - 0.01 * fuel_lvl)
+            weight_penalty = max(0.0, base_weight_penalty - 0.01 * fuel_lvl - 0.005 * fuel_tech)
             fuel_weight_mult = 1.0 + weight_penalty
             tire_factor = max(0.3, tire_wear[eid] / 100.0)
             compound_mult = _compound_grip_mult(e)
@@ -714,10 +743,24 @@ def _run_race_simulation_laps(
 
             combined = straight_perf * (1.0 - corner_weight) + corner_perf * corner_weight
 
+            tactician = crew.get("tactician", 0)
+            if is_wet and tactician > 0:
+                combined *= 1.0 + tactician * 0.015
+
+            morale = crew.get("morale", 0)
+            if morale > 0 and lap_results:
+                last_lap = lap_results[-1]
+                pos_idx = last_lap.index(eid) if eid in last_lap else len(last_lap)
+                if pos_idx < len(ids) // 2:
+                    combined *= 1.0 + morale * 0.005
+
             if damage_map.get(eid, 0) > 0:
                 combined *= (1.0 - damage_map[eid])
             if eid in pitting:
-                combined *= PIT_PENALTY_FACTOR
+                ent_prof = profile_by_user.get(eid) or {}
+                ent_pit_level = min(MAX_CREW_LEVEL, int(ent_prof.get("pit_level") or 0))
+                pit_factor = PIT_PENALTY_FACTOR_BASE + ent_pit_level * PIT_PENALTY_IMPROVEMENT_PER_LEVEL
+                combined *= pit_factor
             lap_speeds.append((eid, combined))
 
         random.shuffle(lap_speeds)
@@ -739,6 +782,9 @@ def _run_race_simulation_laps(
                 contact_chance = corner_severity * 0.08
                 if random.random() < contact_chance:
                     victim = random.choice([eid_a, eid_b])
+                    spotter = crew_cache.get(victim, {}).get("spotter", 0)
+                    if spotter > 0 and random.random() < spotter * 0.15:
+                        continue
                     dmg = random.uniform(0.02, 0.08)
                     damage_map[victim] = min(0.25, damage_map.get(victim, 0) + dmg)
                     incidents.append({"lap": lap, "entrant_ids": [eid_a, eid_b], "damaged": victim, "damage_pct": round(dmg * 100, 1)})
@@ -753,8 +799,12 @@ def _run_race_simulation_laps(
             if eid in pitting:
                 tire_wear[eid] = 100.0
             else:
+                crew = crew_cache.get(eid, {})
+                tyre_tech = crew.get("tyre_tech", 0)
+                logistics = crew.get("logistics", 0)
                 comp_wear = _compound_wear_mult(e)
-                wear_this_lap = (TIRE_WEAR_PER_LAP + random.uniform(-2, 2)) * tire_wear_mult * comp_wear * wear_mult_rel
+                crew_wear_reduction = 1.0 - tyre_tech * 0.06 - logistics * 0.03
+                wear_this_lap = (TIRE_WEAR_PER_LAP + random.uniform(-2, 2)) * tire_wear_mult * comp_wear * wear_mult_rel * max(0.7, crew_wear_reduction)
                 tire_wear[eid] = max(0, tire_wear[eid] - wear_this_lap)
             tire_wear_after_lap[eid].append(round(tire_wear[eid], 1))
 
@@ -804,6 +854,13 @@ def _run_qualifying(
         corner_grip_bonus = compound_mult + brakes * 0.03 + aero * 0.02
         corner_perf = grip_val * corner_grip_bonus * speed_mult
         combined = straight_perf * (1.0 - corner_weight) + corner_perf * corner_weight
+        prof = profile_by_user.get(eid) or {}
+        data_analyst = int(prof.get("data_analyst_level") or 0)
+        if data_analyst > 0 and not e.get("is_npc"):
+            combined *= 1.0 + data_analyst * 0.012
+        tactician_q = int(prof.get("tactician_level") or 0)
+        if is_wet and tactician_q > 0 and not e.get("is_npc"):
+            combined *= 1.0 + tactician_q * 0.015
         combined = max(0.01, float(combined))
         lap_time = lap_base / combined
         lap_time = max(20.0, min(300.0, lap_time))
@@ -908,8 +965,17 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "crew_global_cap": RACING_CREW_GLOBAL_CAP,
         "crew_tradeoffs": {
             "mechanic": {"label": "Mechanic", "max": MAX_CREW_LEVEL, "costs": CREW_UPGRADE_COSTS, "desc": "+2% speed per level"},
-            "pit": {"label": "Pit Crew", "max": MAX_CREW_LEVEL, "costs": CREW_UPGRADE_COSTS, "desc": "+2% speed, shorter pit stops"},
-            **{suffix: {"label": suffix.replace("_", " ").title(), "max": max_lvl, "cost_base": cost_base, "desc": "+2% speed per level"} for suffix, max_lvl, cost_base in CREW_EXTRA_TYPES},
+            "pit": {"label": "Pit Crew", "max": MAX_CREW_LEVEL, "costs": CREW_UPGRADE_COSTS, "desc": "Faster pit stops — less time lost per stop (+4% speed recovery/level)"},
+            "strategist": {"label": "Strategist", "max": 3, "cost_base": 40000, "desc": "Optimises pit window — pushes tyres harder before pitting"},
+            "spotter": {"label": "Spotter", "max": 3, "cost_base": 35000, "desc": "Avoids contact damage — 15% dodge chance per level"},
+            "engineer": {"label": "Engineer", "max": 3, "cost_base": 45000, "desc": "Better car setup — +0.8% grip per level"},
+            "tyre_tech": {"label": "Tyre Tech", "max": 3, "cost_base": 38000, "desc": "Reduces tyre wear rate — 6% less degradation per level"},
+            "fuel_tech": {"label": "Fuel Tech", "max": 2, "cost_base": 30000, "desc": "Fuel efficiency — reduces fuel weight penalty"},
+            "data_analyst": {"label": "Data Analyst", "max": 2, "cost_base": 28000, "desc": "Qualifying specialist — +1.2% quali pace per level"},
+            "physio": {"label": "Physio", "max": 2, "cost_base": 25000, "desc": "Driver consistency — reduces random lap variance"},
+            "logistics": {"label": "Logistics", "max": 2, "cost_base": 26000, "desc": "Reduces tyre wear — 3% less degradation per level"},
+            "morale": {"label": "Morale", "max": 2, "cost_base": 32000, "desc": "Team spirit — +0.5% pace when running in top half"},
+            "tactician": {"label": "Tactician", "max": 2, "cost_base": 30000, "desc": "Wet weather specialist — +1.5% pace in rain/snow"},
         },
         "car_upgrade_costs": CAR_UPGRADE_COSTS,
         "max_car_upgrade_level": MAX_CAR_UPGRADE_LEVEL,

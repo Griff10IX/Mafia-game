@@ -734,6 +734,22 @@ export default function Racing() {
                 );
               })}
             </ul>
+            {(activeRace.incidents || []).length > 0 && (
+              <div className="mt-3 pt-2 border-t border-[var(--noir-border)]">
+                <p className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-primary)] mb-1">Race Incidents</p>
+                <ul className="space-y-0.5">
+                  {activeRace.incidents.map((inc, idx) => {
+                    const damagedP = (activeRace.participants || []).find((x) => (x.user_id || x.id) === inc.damaged);
+                    return (
+                      <li key={idx} className="text-[11px] text-[var(--noir-muted)] flex items-center gap-1.5">
+                        <span className="text-red-400 font-bold text-[9px]">LAP {inc.lap}</span>
+                        <span>{damagedP?.username || damagedP?.car_name || inc.damaged} took contact damage ({inc.damage_pct}%)</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
             <button type="button" className={styles.btnPrimary + " mt-3 w-full min-h-[40px] touch-manipulation text-xs"}
               onClick={() => { setActiveRace(null); fetchProfile(); navigate("/racing", { replace: true }); }}>
               Back to races
