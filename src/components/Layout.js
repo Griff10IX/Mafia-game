@@ -813,11 +813,11 @@ export default function Layout({ children }) {
     { path: '/account/profile', icon: User, label: 'Edit Profile' },
     { path: '/account/referral', icon: UserPlus, label: 'Referral' },
     { path: '/account/settings', icon: Globe, label: 'IP & Devices' },
+    { path: '__combat__', icon: Sword, label: 'Combat' },
     { path: '/game/stats', icon: TrendingUp, label: 'Stats' },
     { path: '/account/stats', icon: BarChart3, label: 'My Stats' },
     { path: '/money/bank', icon: Landmark, label: 'Bank' },
     { path: '/money/stocks', icon: TrendingUp, label: 'Stock Market' },
-    { path: '__combat__', icon: Sword, label: 'Combat' },
     { path: '/game/travel', icon: Plane, label: 'Travel' },
     { path: '/game/states', icon: MapPin, label: 'States' },
     { path: '/my-properties', icon: Building2, label: 'My Properties' },
@@ -933,17 +933,19 @@ export default function Layout({ children }) {
       {combatOpen && (
         <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
           {[
-            { to: '/kill/attack', label: 'Attack', testId: 'nav-attack' },
-            { to: '/kill/attempts', label: 'Attempts', testId: 'nav-attempts' },
-            { to: '/kill/hitlist', label: 'Hitlist', testId: 'nav-hitlist' },
-            { to: '/kill/bodyguards', label: 'Bodyguards', testId: 'nav-bodyguards' },
-            { to: '/kill/armour-weapons', label: 'Armoury', testId: 'nav-armoury' },
+            { to: '/kill/attack', label: 'Attack', testId: 'nav-attack', Icon: Sword },
+            { to: '/kill/attempts', label: 'Attempts', testId: 'nav-attempts', Icon: Crosshair },
+            { to: '/kill/hitlist', label: 'Hitlist', testId: 'nav-hitlist', Icon: ScrollText },
+            { to: '/kill/bodyguards', label: 'Bodyguards', testId: 'nav-bodyguards', Icon: Shield },
+            { to: '/kill/armour-weapons', label: 'Armoury', testId: 'nav-armoury', Icon: Sword },
           ].map((item, idx) => {
             const isActive = location.pathname === item.to;
+            const Icon = item.Icon;
             return (
               <Fragment key={item.to}>
                 {showSidebarDividers && idx > 0 && navDividerEl(`cb${idx}`)}
                 <Link to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
+                  <Icon size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
                   <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
                 </Link>
               </Fragment>
