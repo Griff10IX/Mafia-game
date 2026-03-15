@@ -76,6 +76,7 @@ const ShootingRange3D = lazy(() => import("./pages/MiniGames/ShootingRange3D"));
 const Snake = lazy(() => import("./pages/MiniGames/Snake"));
 const TheGetaway = lazy(() => import("./pages/MiniGames/TheGetaway"));
 const FamilyRun = lazy(() => import("./pages/MiniGames/FamilyRun"));
+const WhackACopper = lazy(() => import("./pages/MiniGames/WhackACopper"));
 
 // Money pages
 const Bank = lazy(() => import("./pages/Money/Bank"));
@@ -936,6 +937,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <FamilyRun />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/casino/mini-games/whack-a-copper"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <WhackACopper />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

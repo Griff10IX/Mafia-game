@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Trophy, Medal, Award, RefreshCw, Gamepad2, Clock, Gift, DollarSign, Heart, Package, Crosshair, Bomb, Ship, Car, PersonStanding } from 'lucide-react';
+import { Trophy, Medal, Award, RefreshCw, Gamepad2, Clock, Gift, DollarSign, Heart, Package, Crosshair, Bomb, Ship, Car, PersonStanding, Shield } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -22,6 +22,7 @@ const GAME_ICONS = {
   battleships: Ship,
   the_getaway: Car,
   family_run: PersonStanding,
+  whack_a_copper: Shield,
 };
 
 const GAME_LABELS = {
@@ -32,6 +33,7 @@ const GAME_LABELS = {
   battleships: 'Rum Runner',
   the_getaway: 'The Getaway',
   family_run: 'Family Run',
+  whack_a_copper: 'Whack-A-Copper',
 };
 
 function formatTimeUntil(isoDate) {

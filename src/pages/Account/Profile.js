@@ -572,17 +572,16 @@ const ProfileInfoCard = ({
                 </span>
               </div>
               <div className="flex flex-wrap gap-0.5 items-end">
-                {achievementBadges.map((cat) =>
-                  cat.unlocked_targets.map((t) => {
-                    const mastery = (BADGE_MASTERY[cat.id] || {})[t] || null;
-                    const lbl = t >= 1_000_000 ? `${Math.floor(t / 1_000_000)}M` : t >= 1000 ? `${Math.floor(t / 1000)}K` : String(t);
-                    return (
-                      <span key={`${cat.id}-${t}`} title={`${cat.name}: ${lbl}`}>
-                        <MiniShield color={BADGE_CAT_COLORS[cat.id] || '#d4af37'} mastery={mastery} label={lbl} size={mastery ? 25 : 22} />
-                      </span>
-                    );
-                  })
-                )}
+                {achievementBadges.map((cat) => {
+                  const t = cat.current_target;
+                  const mastery = (BADGE_MASTERY[cat.id] || {})[t] || null;
+                  const lbl = t >= 1_000_000 ? `${Math.floor(t / 1_000_000)}M` : t >= 1000 ? `${Math.floor(t / 1000)}K` : String(t);
+                  return (
+                    <span key={cat.id} title={`${cat.name}: ${lbl}`}>
+                      <MiniShield color={BADGE_CAT_COLORS[cat.id] || '#d4af37'} mastery={mastery} label={lbl} size={mastery ? 25 : 22} />
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}

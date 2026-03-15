@@ -58,6 +58,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/casino/mini-games/minesweeper', label: 'Minefield' },
         { path: '/casino/mini-games/battleships', label: 'Rum Runner' },
         { path: '/casino/mini-games/the-getaway', label: 'The Getaway' },
+        { path: '/casino/mini-games/whack-a-copper', label: 'Whack-A-Copper' },
         { path: '/casino/mini-games/leaderboard', label: 'Leaderboard' },
       ],
     },
@@ -903,6 +904,7 @@ export default function Layout({ children }) {
             { to: '/casino/mini-games/minesweeper', label: 'Minefield', testId: 'nav-minesweeper' },
             { to: '/casino/mini-games/battleships', label: 'Rum Runner', testId: 'nav-battleships' },
             { to: '/casino/mini-games/the-getaway', label: 'The Getaway', testId: 'nav-the-getaway' },
+            { to: '/casino/mini-games/whack-a-copper', label: 'Whack-A-Copper', testId: 'nav-whack-a-copper' },
             { to: '/casino/mini-games/leaderboard', label: 'Leaderboard', testId: 'nav-minigames-leaderboard' },
           ].map((item, idx) => {
             const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;

@@ -465,6 +465,7 @@ RATE_LIMIT_CONFIG = {
     "/api/snake/": (0.5, False),
     "/api/shooting-range/train": (2.0, False),
     "/api/shooting-range/score": (1.0, False),
+    "/api/whack-a-copper/": (1.0, False),
     
     # Travel & Booze Run
     "/api/travel": (3.0, False),

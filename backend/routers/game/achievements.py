@@ -68,7 +68,7 @@ BONUS_BENEFITS = {
 
 
 def compute_profile_badges(user: dict) -> list:
-    """Return a compact list of unlocked badges for profile display (no DB call needed)."""
+    """Return current (highest) badge per category for profile display (no DB call needed)."""
     result = []
     for cat in BADGE_CATEGORIES:
         progress = int(user.get(cat["progress_key"]) or 0)
@@ -78,9 +78,9 @@ def compute_profile_badges(user: dict) -> list:
         result.append({
             "id": cat["id"],
             "name": cat["name"],
+            "current_target": max(unlocked),
             "unlocked_count": len(unlocked),
             "total_tiers": len(cat["targets"]),
-            "unlocked_targets": unlocked,
         })
     return result
 

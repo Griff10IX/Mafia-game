@@ -1521,6 +1521,8 @@ from routers.minigames import the_getaway
 the_getaway.register(api_router)
 from routers.minigames import family_run
 family_run.register(api_router)
+from routers.minigames import whack_a_copper
+whack_a_copper.register(api_router)
 from routers.account import auto_rank as auto_rank_router
 auto_rank_router.register(api_router)
 
