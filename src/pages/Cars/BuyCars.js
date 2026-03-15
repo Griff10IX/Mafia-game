@@ -248,9 +248,7 @@ export default function BuyCars() {
 
       <div className="relative bc-fade-in flex flex-wrap items-end justify-between gap-2">
         <div>
-          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Marketplace</p>
-          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">Buy Cars</h1>
-          <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Dealer and player listings. Owner shows seller.</p>
+          <p className="text-[10px] text-zinc-500 font-heading italic">Dealer and player listings. Owner shows seller.</p>
         </div>
         <Link
           to="/cars/garage"

@@ -1852,14 +1852,7 @@ export default function FamilyPage() {
                     <span className="text-sm text-primary/40 font-mono font-normal">[{family.tag}]</span>
                   </h1>
                 </>
-              ) : (
-                <>
-                  <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Five Families & Beyond</p>
-                  <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
-                    Crime Families
-                  </h1>
-                </>
-              )}
+              ) : null}
               {family && (
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <RoleBadge role={myRole} size="lg" />

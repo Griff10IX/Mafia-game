@@ -197,6 +197,7 @@ async def get_oc_status(current_user: dict = Depends(get_current_user)):
         "has_timer_upgrade": has_timer_upgrade,
         "pending_heist": None,
         "pending_invites": [],
+        "total_oc_heists": int(current_user.get("total_oc_heists") or 0),
     }
     # Creator's pending heist (one per user)
     pending = await db.oc_pending_heists.find_one(

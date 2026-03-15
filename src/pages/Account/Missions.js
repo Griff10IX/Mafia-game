@@ -1059,14 +1059,7 @@ export default function Missions() {
     <div className={`space-y-3 ${styles.pageContent}`} style={{ padding: '12px 14px', maxWidth: 900, margin: '0 auto' }}>
       <style>{MISSIONS_STYLES}</style>
 
-      {/* Page header */}
-      <div className="relative">
-        <div className="flex items-center gap-2 mb-1">
-          <BookOpen size={18} className="text-primary" />
-          <h1 className="text-base font-heading font-bold text-foreground tracking-wide">Missions</h1>
-        </div>
-        <p className="text-[10px] text-mutedForeground italic">Prove yourself: commit 15 crimes and bust 1 NPC from jail. Earn tribute and claim your reward.</p>
-      </div>
+      <p className="text-[10px] text-mutedForeground italic">Prove yourself: commit 15 crimes and bust 1 NPC from jail. Earn tribute and claim your reward.</p>
 
       {/* Current mission strip – Mission X of Y */}
       {orderedCityMissions.length > 0 && (

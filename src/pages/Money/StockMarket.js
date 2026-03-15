@@ -150,9 +150,7 @@ export default function StockMarket() {
       <style>{STOCK_STYLES}</style>
 
       <div className="relative stock-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Exchange</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Stocks</h1>
-        <p className="text-[10px] text-mutedForeground font-heading italic mt-1">Long: buy with points. Short: profit when price drops. Same cap and cooldowns.</p>
+        <p className="text-[10px] text-mutedForeground font-heading italic">Long: buy with points. Short: profit when price drops. Same cap and cooldowns.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

@@ -496,12 +496,7 @@ export default function CrackSafe() {
 
       {/* Page header */}
       <div className="cs-fade-in">
-        <p className="text-[8px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-0.5">The Vault</p>
-        <h1 className="text-lg sm:text-xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
-          <Lock size={18} className="text-primary/60" />
-          Crack the Safe
-        </h1>
-        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">
+        <p className="text-[9px] text-zinc-500 font-heading italic">
           Enter 5 numbers between 1 and 9 to crack the safe. Each attempt costs {formatMoney(info?.entry_cost ?? 1_000_000)}.
         </p>
       </div>

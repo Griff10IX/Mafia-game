@@ -192,10 +192,6 @@ export default function MyInventory() {
     <div className={`${styles.pageContent} p-3 sm:p-4`}>
       <style>{INV_STYLES}</style>
       <div className="max-w-4xl mx-auto space-y-4">
-        <h1 className="text-lg sm:text-xl font-heading font-bold text-primary flex items-center gap-2 inv-fade-in">
-          <Package size={22} />
-          My Inventory
-        </h1>
         <p className="text-[10px] sm:text-xs text-mutedForeground font-heading inv-fade-in" style={{ animationDelay: '0.05s' }}>
           Equip your armour and weapons. View your loot-exclusive items.
         </p>

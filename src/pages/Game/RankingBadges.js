@@ -426,12 +426,6 @@ export default function RankingBadges() {
     <div className={`space-y-6 ${styles.pageContent}`} data-testid="ranking-badges-page">
       <style>{BADGE_STYLES}</style>
 
-      {/* Page header */}
-      <div>
-        <h1 className="text-4xl md:text-5xl font-heading font-bold text-primary mb-2">Ranking Badges</h1>
-        <p className="text-mutedForeground">Eight tiers — Bronze through Void. Earn them all.</p>
-      </div>
-
       {/* Tier legend */}
       <div className={`${styles.panel} rounded-md p-4 border border-primary/20`}>
         <div className="flex items-center gap-2 mb-3">

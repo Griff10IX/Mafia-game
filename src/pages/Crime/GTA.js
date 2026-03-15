@@ -576,18 +576,6 @@ export default function GTA() {
         </div>
       )}
 
-      {/* GTA stats */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.03s' }}>
-        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">GTA stats</span>
-        </div>
-        <div className="p-2 text-[10px] font-heading text-foreground">
-          GTAs today: {gtaStats.count_today ?? 0}  successful today {gtaStats.success_today ?? 0}  past week {gtaStats.count_week ?? 0} ({gtaStats.success_week ?? 0} successful)
-        </div>
-        <div className="gta-art-line text-primary mx-2.5" />
-      </div>
-
       {/* GTA options list */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.05s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -618,6 +606,18 @@ export default function GTA() {
         isCollapsed={recentStolenCollapsed} 
         onToggle={toggleRecentStolen} 
       />
+
+      {/* GTA stats */}
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">GTA stats</span>
+        </div>
+        <div className="p-2 text-[10px] font-heading text-foreground">
+          GTAs today: {gtaStats.count_today ?? 0}  successful today {gtaStats.success_today ?? 0}  past week {gtaStats.count_week ?? 0} ({gtaStats.success_week ?? 0} successful)
+        </div>
+        <div className="gta-art-line text-primary mx-2.5" />
+      </div>
 
       <InfoSection />
     </div>

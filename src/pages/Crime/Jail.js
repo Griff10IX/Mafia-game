@@ -473,11 +473,6 @@ export default function Jail() {
     <div className={`space-y-2 ${styles.pageContent}`} data-testid="jail-page">
       <style>{JAIL_STYLES}</style>
 
-      <div className="relative j-fade-in flex items-center gap-2 flex-wrap">
-        <p className="text-[9px] text-zinc-500 font-heading italic">Bust out jailed players for RP. Set a reward if you get locked up.</p>
-        {autoRankJailDisabled && <AutoRankIcon />}
-      </div>
-
       {user?.jailbust_bonus_until && (
         <div className="j-fade-in">
           <ActiveTokenBadge tokenType="jailbust_bonus" untilIso={user.jailbust_bonus_until} />
@@ -562,21 +557,6 @@ export default function Jail() {
         </div>
       )}
 
-      {/* Bust stats */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 j-fade-in`} style={{ animationDelay: '0.03s' }}>
-        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Bust stats</span>
-        </div>
-        <div className="p-2 text-[10px] font-heading text-foreground">
-          Attempted busts today: {jailStats.count_today ?? 0}  streak {jailStatus.current_consecutive_busts ?? 0}  total successful busts {jailStatus.jail_busts ?? 0}
-          <div className="mt-1 text-mutedForeground text-[9px]">
-            Record {jailStatus.consecutive_busts_record ?? 0}  ·  Past week {jailStats.count_week ?? 0} busts, {jailStats.success_week ?? 0} successful  ·  Profit today ${(jailStats.profit_today ?? 0).toLocaleString()}  ·  Past week ${(jailStats.profit_week ?? 0).toLocaleString()}
-          </div>
-        </div>
-        <div className="j-art-line text-primary mx-2.5" />
-      </div>
-
       {/* Jailed Players */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 j-fade-in`} style={{ animationDelay: '0.05s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -612,7 +592,27 @@ export default function Jail() {
         <div className="j-art-line text-primary mx-2.5" />
       </div>
 
+      <div className="relative j-fade-in flex items-center gap-2 flex-wrap">
+        <p className="text-[9px] text-zinc-500 font-heading italic">Bust out jailed players for RP. Set a reward if you get locked up.</p>
+        {autoRankJailDisabled && <AutoRankIcon />}
+      </div>
+
       <InfoSection />
+
+      {/* Bust stats */}
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 j-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Bust stats</span>
+        </div>
+        <div className="p-2 text-[10px] font-heading text-foreground">
+          Attempted busts today: {jailStats.count_today ?? 0}  streak {jailStatus.current_consecutive_busts ?? 0}  total successful busts {jailStatus.jail_busts ?? 0}
+          <div className="mt-1 text-mutedForeground text-[9px]">
+            Record {jailStatus.consecutive_busts_record ?? 0}  ·  Past week {jailStats.count_week ?? 0} busts, {jailStats.success_week ?? 0} successful  ·  Profit today ${(jailStats.profit_today ?? 0).toLocaleString()}  ·  Past week ${(jailStats.profit_week ?? 0).toLocaleString()}
+          </div>
+        </div>
+        <div className="j-art-line text-primary mx-2.5" />
+      </div>
     </div>
   );
 }

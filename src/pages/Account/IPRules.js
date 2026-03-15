@@ -60,11 +60,11 @@ export default function IPRules() {
 
   if (loading && !data) {
     return (
-      <div className={styles.pageContent}>
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-          <Globe size={22} className="opacity-40 animate-pulse" style={{ color: 'var(--noir-primary)' }} />
-          <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--noir-primary)', borderTopColor: 'transparent' }} />
-          <span className="text-[10px] font-heading uppercase tracking-[0.25em]" style={{ color: 'var(--noir-primary)' }}>Loading...</span>
+      <div className={`${styles.pageContent} space-y-2`}>
+        <div className="flex flex-col items-center justify-center min-h-[30vh] gap-2">
+          <Globe size={18} className="text-primary opacity-40 animate-pulse" />
+          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-[9px] font-heading uppercase tracking-wider text-primary">Loading...</span>
         </div>
       </div>
     );
@@ -93,158 +93,126 @@ export default function IPRules() {
   };
 
   return (
-    <div className={styles.pageContent}>
-      <div className="flex items-center justify-between gap-2 mb-4">
-        <div className="flex items-center gap-2">
-          <Globe size={20} style={{ color: 'var(--noir-primary)' }} />
-          <h1 className="text-lg font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-foreground)' }}>
-            IP & Devices
-          </h1>
-        </div>
+    <div className={`${styles.pageContent} space-y-2`}>
+      <div className="flex items-center justify-end gap-2">
         <button
           type="button"
           onClick={handleRefresh}
           disabled={loading}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-heading uppercase tracking-wider border transition-opacity disabled:opacity-50"
-          style={{ backgroundColor: 'var(--noir-surface)', borderColor: 'var(--noir-border-light)', color: 'var(--noir-foreground)' }}
+          className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading uppercase tracking-wider border border-primary/30 bg-primary/10 text-primary transition-opacity disabled:opacity-50 hover:bg-primary/15"
           title="Refresh IP and device info"
         >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
           Refresh
         </button>
       </div>
 
-      <div
-        className="rounded-lg border p-4 mb-6"
-        style={{
-          backgroundColor: 'var(--noir-content)',
-          borderColor: 'var(--noir-border-light)',
-        }}
-      >
-        <p className="text-sm font-heading leading-relaxed" style={{ color: 'var(--noir-foreground)' }}>
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Rules</span>
+        </div>
+        <p className="p-2 text-[10px] font-heading text-foreground leading-snug">
           You must not move money, points, or casino winnings, sell cars, or take part in organised jobs with anyone who shares your current connection address. Running more than one active character at a time is not allowed. Anyone suspected of multiple active accounts may have all of them terminated, with wealth subject to seizure.
         </p>
       </div>
 
-      <div
-        className="rounded-lg border p-4 mb-6"
-        style={{
-          backgroundColor: 'var(--noir-content)',
-          borderColor: 'var(--noir-border-light)',
-        }}
-      >
-        <h2 className="text-xs font-heading font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--noir-primary)' }}>
-          Accounts signed in from this address
-        </h2>
-        {currentIp ? (
-          <>
-            <p className="text-sm font-heading mb-2 flex flex-wrap items-center gap-x-3 gap-y-1" style={{ color: 'var(--noir-foreground)' }}>
-              <span style={{ color: 'var(--noir-primary)' }}>{currentIp}</span>
-              {currentDeviceType && (
-                <span className="flex items-center gap-1.5 text-xs font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
-                  <DeviceIcon type={currentDeviceType} />
-                  {currentDeviceType}
-                </span>
-              )}
-            </p>
-            {lastDeviceType && lastDeviceType !== currentDeviceType && (
-              <p className="text-xs font-heading mb-2" style={{ color: 'var(--noir-muted)' }}>
-                Last login was from: {lastDeviceType}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Accounts from this address</span>
+        </div>
+        <div className="p-2 space-y-1">
+          {currentIp ? (
+            <>
+              <p className="text-[10px] font-heading flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="text-primary font-medium">{currentIp}</span>
+                {currentDeviceType && (
+                  <span className="flex items-center gap-1 text-[9px] font-heading uppercase tracking-wider text-mutedForeground">
+                    <DeviceIcon type={currentDeviceType} />
+                    {currentDeviceType}
+                  </span>
+                )}
               </p>
-            )}
-            <ul className="space-y-1">
-              {accountsFromIp.length ? (
-                accountsFromIp.map((username) => (
-                  <li
-                    key={username}
-                    className="px-2 py-1.5 rounded text-sm font-heading"
-                    style={{ backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' }}
-                  >
-                    {username}
-                  </li>
-                ))
-              ) : (
-                <li className="text-sm font-heading" style={{ color: 'var(--noir-muted)' }}>None</li>
+              {lastDeviceType && lastDeviceType !== currentDeviceType && (
+                <p className="text-[9px] font-heading text-mutedForeground">Last login: {lastDeviceType}</p>
               )}
-            </ul>
-          </>
-        ) : (
-          <p className="text-sm font-heading" style={{ color: 'var(--noir-muted)' }}>Unable to detect current address.</p>
-        )}
+              <ul className="space-y-0.5">
+                {accountsFromIp.length ? (
+                  accountsFromIp.map((username) => (
+                    <li key={username} className="px-2 py-1 rounded text-[10px] font-heading bg-secondary/50 text-foreground">
+                      {username}
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-[10px] font-heading text-mutedForeground">None</li>
+                )}
+              </ul>
+            </>
+          ) : (
+            <p className="text-[10px] font-heading text-mutedForeground">Unable to detect current address.</p>
+          )}
+        </div>
       </div>
 
-      <div
-        className="rounded-lg border p-4"
-        style={{
-          backgroundColor: 'var(--noir-content)',
-          borderColor: 'var(--noir-border-light)',
-        }}
-      >
-        <h2 className="text-xs font-heading font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--noir-primary)' }}>
-          {sessions.length ? 'Sessions (IP & devices)' : "Addresses you've signed in from"}
-        </h2>
-        {sessions.length > 0 ? (
-          <ul className="space-y-1">
-            {sessions.map((s) => (
-              <li
-                key={s.id}
-                className="px-2 py-1.5 rounded text-sm font-heading flex flex-wrap items-center justify-between gap-2"
-                style={{ backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' }}
-              >
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+            {sessions.length ? 'Sessions (IP & devices)' : "Addresses you've signed in from"}
+          </span>
+        </div>
+        <div className="p-2 space-y-0.5">
+          {sessions.length > 0 ? (
+            <ul className="space-y-0.5">
+              {sessions.map((s) => (
+                <li
+                  key={s.id}
+                  className="px-2 py-1 rounded text-[10px] font-heading flex flex-wrap items-center justify-between gap-1.5 bg-secondary/30"
+                >
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-foreground">
                   <span>{s.ip || '—'}</span>
                   {s.device_type && (
-                    <span className="flex items-center gap-1 text-xs font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
+                    <span className="flex items-center gap-0.5 text-[9px] uppercase tracking-wider text-mutedForeground">
                       <DeviceIcon type={s.device_type} />
                       {s.device_type}
                     </span>
                   )}
-                  <span className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
-                    Last used: {formatLastUsed(s.last_used_at)}
-                  </span>
-                  {s.is_current && (
-                    <span className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>
-                      Current
-                    </span>
-                  )}
+                  <span className="text-[9px] text-mutedForeground">Last: {formatLastUsed(s.last_used_at)}</span>
+                  {s.is_current && <span className="text-[9px] font-bold text-primary uppercase">Current</span>}
                 </div>
                 {!s.is_current && s.id && (
                   <button
                     type="button"
                     onClick={() => handleRevokeSession(s.id)}
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-heading uppercase tracking-wider border transition-opacity hover:opacity-90"
-                    style={{ borderColor: 'var(--noir-border-light)', color: 'var(--noir-muted)' }}
+                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-heading uppercase border border-border text-mutedForeground hover:text-foreground transition-colors"
                     title="Log out this session"
                   >
-                    <LogOut size={12} />
+                    <LogOut size={10} />
                     Log out
                   </button>
                 )}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <ul className="space-y-1">
-            {yourIps.length ? (
-              yourIps.map((ip) => (
-                <li
-                  key={ip}
-                  className="px-2 py-1.5 rounded text-sm font-heading flex items-center gap-2"
-                  style={{ backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' }}
-                >
-                  <span>{ip}</span>
-                  {ip === currentIp && (
-                    <span className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>
-                      Current
-                    </span>
-                  )}
                 </li>
-              ))
-            ) : (
-              <li className="text-sm font-heading" style={{ color: 'var(--noir-muted)' }}>None recorded.</li>
-            )}
-          </ul>
-        )}
+              ))}
+            </ul>
+          ) : (
+            <ul className="space-y-0.5">
+              {yourIps.length ? (
+                yourIps.map((ip) => (
+                  <li
+                    key={ip}
+                    className="px-2 py-1 rounded text-[10px] font-heading flex items-center gap-1.5 bg-secondary/30 text-foreground"
+                  >
+                    <span>{ip}</span>
+                    {ip === currentIp && <span className="text-[9px] font-bold text-primary uppercase">Current</span>}
+                  </li>
+                ))
+              ) : (
+                <li className="text-[10px] font-heading text-mutedForeground">None recorded.</li>
+              )}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );

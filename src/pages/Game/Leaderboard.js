@@ -142,7 +142,6 @@ export default function Leaderboard() {
     <div className={`space-y-3 ${styles.pageContent}`} data-testid="leaderboard-page">
       <style>{LB_STYLES}</style>
       <header className="relative lb-fade-in">
-        <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider mb-2">Leaderboard</h1>
         <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
           <span className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">Period:</span>
           <button

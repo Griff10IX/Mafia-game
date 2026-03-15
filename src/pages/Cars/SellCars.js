@@ -208,9 +208,7 @@ export default function SellCars() {
 
       <div className="relative sc-fade-in flex flex-wrap items-end justify-between gap-2">
         <div>
-          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">List for Sale</p>
-          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">Sell Cars</h1>
-          <p className="text-[10px] text-zinc-500 font-heading italic mt-1">List cars from your garage. Select cars and set a price.</p>
+          <p className="text-[10px] text-zinc-500 font-heading italic">List cars from your garage. Select cars and set a price.</p>
         </div>
         <Link
           to="/cars/garage"
