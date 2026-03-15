@@ -3154,6 +3154,11 @@ export default function Admin() {
               username={(formData.targetUsername || '').trim()}
               open={staffUserDetailsOpen}
               onOpenChange={setStaffUserDetailsOpen}
+              isAdmin={isAdmin}
+              isModerator={isModerator}
+              onActionDone={() => {
+                fetchLockedAccounts();
+              }}
             />
             {viewRegistrationInfo && (
               <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-1">

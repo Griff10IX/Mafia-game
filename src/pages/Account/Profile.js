@@ -411,6 +411,11 @@ const ProfileInfoCard = ({
             username={profile.username}
             open={staffDetailsOpen}
             onOpenChange={setStaffDetailsOpen}
+            isAdmin={isAdmin}
+            isModerator={isModerator}
+            onActionDone={() => {
+              refetchProfile();
+            }}
           />
         </>
       )}
