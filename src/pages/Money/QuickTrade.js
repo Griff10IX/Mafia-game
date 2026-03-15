@@ -18,6 +18,7 @@ export default function QuickTrade() {
   const [buyOffers, setBuyOffers] = useState([]);
   const [tokenOffers, setTokenOffers] = useState([]);
   const [properties, setProperties] = useState([]);
+  const [tokenBalances, setTokenBalances] = useState({});
 
   const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus'];
   const formatTokenName = (t) => t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -44,16 +45,18 @@ export default function QuickTrade() {
   const fetchTrades = async () => {
     setLoading(true);
     try {
-      const [sellRes, buyRes, tokenRes, propRes] = await Promise.all([
+      const [sellRes, buyRes, tokenRes, propRes, balancesRes] = await Promise.all([
         api.get('/trade/sell-offers'),
         api.get('/trade/buy-offers'),
         api.get('/trade/token-offers'),
         api.get('/trade/properties'),
+        api.get('/trade/my-token-balances'),
       ]);
       setSellOffers(sellRes.data || []);
       setBuyOffers(buyRes.data || []);
       setTokenOffers(tokenRes.data || []);
       setProperties(propRes.data || []);
+      setTokenBalances(balancesRes.data || {});
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load trades');
     } finally {
@@ -193,7 +196,13 @@ export default function QuickTrade() {
   };
 
   const handleCreateTokenOffer = async () => {
-    const qty = Math.max(1, parseInt(String(tokenQuantity).replace(/,/g, ''), 10) || 1);
+    let qty = Math.max(1, parseInt(String(tokenQuantity).replace(/,/g, ''), 10) || 1);
+    const sellable = tokenBalances[tokenType]?.sellable;
+    if (sellable != null && qty > sellable) qty = Math.max(0, sellable);
+    if (qty < 1) {
+      toast.error('No tokens available to sell (referral tokens cannot be sold on Quick Trade).');
+      return;
+    }
     const price = Math.max(1, parseInt(String(tokenPrice).replace(/,/g, ''), 10) || 0);
     if (!price) {
       toast.error('Enter price in points');
@@ -470,8 +479,15 @@ export default function QuickTrade() {
                 ))}
               </select>
             </div>
+            {tokenBalances[tokenType] != null && (
+              <div className="flex flex-col gap-1 rounded-md px-3 py-2 bg-zinc-800/40 border border-zinc-700/30 text-[10px] font-heading">
+                <span className="text-mutedForeground">Your balance: <span className="text-foreground font-bold">{tokenBalances[tokenType].total}</span> total</span>
+                <span className="text-mutedForeground">Referral tokens: <span className="text-foreground font-bold">{tokenBalances[tokenType].referral}</span> (cannot be sold)</span>
+                <span className="text-primary font-bold">Available to sell: {tokenBalances[tokenType].sellable}</span>
+              </div>
+            )}
             <div>
-              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Quantity</label>
+              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Quantity{tokenBalances[tokenType]?.sellable != null ? ` (max ${tokenBalances[tokenType].sellable})` : ''}</label>
               <FormattedNumberInput
                 value={tokenQuantity}
                 onChange={setTokenQuantity}

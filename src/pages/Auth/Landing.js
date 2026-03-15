@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { getBaseURL, AUTH_ERROR_KEY } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
 export default function Landing({ setIsAuthenticated, defaultTab }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isLogin, setIsLogin] = useState(defaultTab !== 'register');
   const [verifySentForEmail, setVerifySentForEmail] = useState(null);
 
@@ -45,6 +46,13 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
   const [bannerEnabled, setBannerEnabled]           = useState(false);
   const [bannerMessage, setBannerMessage]           = useState('');
   const [referralCode, setReferralCode]             = useState('');
+
+  // Track unique login-page visits for admin stats (when viewing /login)
+  useEffect(() => {
+    if (location.pathname === '/login') {
+      api.post('/auth/track-login-page-view').catch(() => {});
+    }
+  }, [location.pathname]);
 
   // Fetch launch status on mount
   useEffect(() => {

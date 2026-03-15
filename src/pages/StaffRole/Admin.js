@@ -92,6 +92,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Cheat Detection', categoryId: 'admin-cheat', collapseKey: 'cheat', keywords: ['cheat', 'detection', 'suspicious'] },
   { label: 'Find Duplicates', categoryId: 'admin-cheat', collapseKey: 'duplicates', keywords: ['duplicate', 'multi', 'account'] },
   // Analytics
+  { label: 'Login page unique visitors', categoryId: 'admin-analytics', collapseKey: 'loginPageVisitors', keywords: ['login', 'visitors', 'unique', 'page', 'stats'] },
   { label: 'User Analytics', categoryId: 'admin-analytics', collapseKey: 'analytics', keywords: ['analytics', 'stats', 'users'] },
   // Logs
   { label: 'Attack Logs', categoryId: 'admin-logs', collapseKey: 'attackLogs', keywords: ['attack', 'log', 'kill'] },
@@ -385,6 +386,8 @@ export default function Admin() {
   const [economyAnalyticsDays, setEconomyAnalyticsDays] = useState(7);
   const [economyAnalytics, setEconomyAnalytics] = useState(null);
   const [economyAnalyticsLoading, setEconomyAnalyticsLoading] = useState(false);
+  const [loginPageVisitors, setLoginPageVisitors] = useState(null);
+  const [loginPageVisitorsLoading, setLoginPageVisitorsLoading] = useState(false);
   const [attackLogsUsername, setAttackLogsUsername] = useState('');
   const [attackLogsLimit, setAttackLogsLimit] = useState(200);
   const [attackLogsData, setAttackLogsData] = useState(null);
@@ -2458,6 +2461,15 @@ export default function Admin() {
       setEconomyOverview(res.data ?? null);
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load economy overview'); }
     finally { setEconomyOverviewLoading(false); }
+  };
+
+  const handleFetchLoginPageVisitors = async () => {
+    setLoginPageVisitorsLoading(true);
+    try {
+      const res = await api.get('/admin/stats/login-page-unique-visitors');
+      setLoginPageVisitors(res.data?.unique_visitors ?? null);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load login page visitors'); }
+    finally { setLoginPageVisitorsLoading(false); }
   };
 
   const handleFetchPlayerActivity = async () => {
@@ -4929,6 +4941,27 @@ export default function Admin() {
           <BarChart3 size={12} />
           Analytics
         </h2>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={User}
+          title="Login page unique visitors"
+          badge={loginPageVisitors != null ? <span className="text-[10px] font-heading text-primary">{loginPageVisitors.toLocaleString()} unique</span> : null}
+          isCollapsed={collapsed.loginPageVisitors}
+          onToggle={() => { toggleSection('loginPageVisitors'); if (collapsed.loginPageVisitors && loginPageVisitors === null) handleFetchLoginPageVisitors(); }}
+        />
+        {!collapsed.loginPageVisitors && (
+          <div className="p-3 space-y-2">
+            <BtnPrimary onClick={handleFetchLoginPageVisitors} disabled={loginPageVisitorsLoading}>{loginPageVisitorsLoading ? 'Loading…' : 'Refresh'}</BtnPrimary>
+            {loginPageVisitors != null && (
+              <p className="text-[10px] font-heading text-mutedForeground">
+                Unique visitors to the login page (by IP): <span className="font-bold text-foreground">{loginPageVisitors.toLocaleString()}</span>
+              </p>
+            )}
+          </div>
+        )}
+        </div>
 
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

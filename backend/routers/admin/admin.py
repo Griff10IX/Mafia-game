@@ -471,6 +471,17 @@ def register(router):
         summary = await security_module.get_security_summary(db, limit=limit, flag_type=flag_type)
         return summary
 
+    @router.get("/admin/stats/login-page-unique-visitors")
+    async def admin_login_page_unique_visitors(current_user: dict = Depends(get_current_user)):
+        """Return count of unique visitors to the login page (by IP)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        try:
+            n = await db.login_page_visits.count_documents({})
+        except Exception:
+            n = 0
+        return {"unique_visitors": n}
+
     @router.get("/admin/security/flags")
     async def admin_security_flags(
         limit: int = 100,

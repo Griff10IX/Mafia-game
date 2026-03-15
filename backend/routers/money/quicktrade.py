@@ -314,6 +314,26 @@ async def get_token_offers(current_user: dict = Depends(get_current_user)):
     return result
 
 
+async def get_my_token_balances(current_user: dict = Depends(get_current_user)):
+    """Return per-token-type balances: total, referral (cannot be sold), and sellable for Quick Trade."""
+    user_id = current_user["id"]
+    projection = {"_id": 0, "referral_tokens": 1}
+    for cfg in TOKEN_CONFIG.values():
+        projection[cfg["count_field"]] = 1
+    user = await db.users.find_one({"id": user_id}, projection)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    referral_tokens = user.get("referral_tokens") or {}
+    result = {}
+    for token_type in TOKEN_TYPES:
+        field = TOKEN_CONFIG[token_type]["count_field"]
+        total = int(user.get(field) or 0)
+        referral = int(referral_tokens.get(field) or 0)
+        sellable = max(0, total - referral)
+        result[token_type] = {"total": total, "referral": referral, "sellable": sellable}
+    return result
+
+
 async def create_token_offer(offer: CreateTokenOffer, current_user: dict = Depends(get_current_user)):
     """Create a token sell offer. Deducts tokens from seller; buyer will pay points and receive tokens."""
     user_id = current_user["id"]
@@ -732,6 +752,7 @@ def register(router):
     router.add_api_route("/trade/sell-offer/{offer_id}/cancel", cancel_sell_offer_post, methods=["POST"])
     router.add_api_route("/trade/buy-offer/{offer_id}/cancel", cancel_buy_offer_post, methods=["POST"])
     router.add_api_route("/trade/token-offers", get_token_offers, methods=["GET"])
+    router.add_api_route("/trade/my-token-balances", get_my_token_balances, methods=["GET"])
     router.add_api_route("/trade/token-offer", create_token_offer, methods=["POST"])
     router.add_api_route("/trade/token-offer/{offer_id}/accept", accept_token_offer, methods=["POST"])
     router.add_api_route("/trade/token-offer/{offer_id}/cancel", cancel_token_offer, methods=["POST"])

@@ -127,6 +127,9 @@ def register(router):
     DEFAULT_GARAGE_BATCH_LIMIT = srv.DEFAULT_GARAGE_BATCH_LIMIT
     SWISS_BANK_LIMIT_START = srv.SWISS_BANK_LIMIT_START
     ADMIN_EMAILS = srv.ADMIN_EMAILS
+    RANKS = getattr(srv, "RANKS", [])
+    PRESTIGE_CONFIGS = getattr(srv, "PRESTIGE_CONFIGS", {})
+    CARS = getattr(srv, "CARS", [])
 
     def _client_ip(request: Request):
         # Cloudflare provides real IP in CF-Connecting-IP
@@ -336,12 +339,20 @@ def register(router):
                 user_doc["founding_member"] = True
                 user_doc["badges"] = [PREREGISTER_REWARDS.get("badge", "Founding Member")]
 
-            # Check if beta signup mode is enabled - give bonus resources
+            # Check if beta signup mode is enabled - give bonus resources, Godfather rank, prestige 1, exclusive car, loot exclusive car & weapon
             game_config = await db.game_config.find_one({"id": "main"}, {"_id": 0, "beta_signup_enabled": 1})
-            if game_config and game_config.get("beta_signup_enabled"):
+            beta_signup_gifts = bool(game_config and game_config.get("beta_signup_enabled"))
+            if beta_signup_gifts:
                 user_doc["points"] = 15000
                 user_doc["money"] = 1000000000  # $1 billion
-                user_doc["rank_points"] = 15000
+                # Godfather rank and prestige 1 for beta signups
+                if RANKS:
+                    gf = RANKS[-1]
+                    user_doc["rank"] = gf["id"]
+                    user_doc["rank_points"] = int(gf.get("required_points") or 0)
+                if 1 in PRESTIGE_CONFIGS:
+                    user_doc["prestige_level"] = 1
+                    user_doc["prestige_rank_multiplier"] = float(PRESTIGE_CONFIGS[1].get("threshold_mult") or 1.0)
                 # Give all consumable tokens (5 of each)
                 user_doc["xp_crimes_tokens"] = 5
                 user_doc["xp_gta_tokens"] = 5
@@ -380,6 +391,32 @@ def register(router):
                         user_doc["referral_tokens"] = referral_tokens
 
             await db.users.insert_one(user_doc.copy())
+
+            # Beta signup: grant Al Capone car (car20), loot-exclusive car (car21), and loot-exclusive weapon (weapon_loot)
+            if beta_signup_gifts:
+                now_iso = datetime.now(timezone.utc).isoformat()
+                for car_id in ("car20", "car21"):
+                    car_info = next((c for c in CARS if c.get("id") == car_id), None)
+                    if car_info:
+                        await db.user_cars.insert_one({
+                            "id": str(uuid.uuid4()),
+                            "user_id": user_id,
+                            "car_id": car_id,
+                            "car_name": car_info.get("name", car_id),
+                            "acquired_at": now_iso,
+                            "damage_percent": 0,
+                        })
+                await db.user_weapons.update_one(
+                    {"user_id": user_id, "weapon_id": "weapon_loot"},
+                    {"$inc": {"quantity": 1}, "$set": {"acquired_at": now_iso}},
+                    upsert=True,
+                )
+                await db.users.update_one({"id": user_id}, {"$set": {"equipped_weapon_id": "weapon_loot"}})
+                try:
+                    from routers.kill.armoury import _invalidate_weapons_cache
+                    _invalidate_weapons_cache(user_id)
+                except Exception:
+                    pass
 
             # Check if login is locked (pre-registration mode) - don't auto-login
             settings = await db.game_settings.find_one({"_id": "main"})
@@ -556,6 +593,26 @@ def register(router):
             except Exception:
                 logging.warning("Login response: skipping non-serializable key=%s type=%s", k, type(v).__name__)
         return out
+
+    @router.post("/auth/track-login-page-view")
+    async def track_login_page_view(request: Request):
+        """Record a visit to the login page (public, no auth). Used for admin unique-visitor stats."""
+        ip = _client_ip(request)
+        if not ip:
+            return {"ok": True}
+        now = datetime.now(timezone.utc)
+        try:
+            await db.login_page_visits.update_one(
+                {"ip": ip},
+                {
+                    "$setOnInsert": {"first_seen": now},
+                    "$set": {"last_seen": now},
+                },
+                upsert=True,
+            )
+        except Exception as e:
+            logging.warning("track_login_page_view: %s", e)
+        return {"ok": True}
 
     @router.post("/auth/login")
     async def login(user_data: UserLogin, request: Request):

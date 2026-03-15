@@ -114,18 +114,23 @@ function Pipe({ x, topHeight, gap, theme }) {
   );
 }
 
+const initialGameFrame = () => ({
+  birdY: VIEW_H / 2,
+  birdVel: 0,
+  birdRot: 0,
+  pipes: [],
+  score: 0,
+  bgOffset: 0,
+});
+
 export default function Gauntlet() {
   const [gameState, setGameState] = useState("idle"); // idle, playing, dead
-  const [birdY, setBirdY] = useState(VIEW_H / 2);
-  const [birdVel, setBirdVel] = useState(0);
-  const [birdRot, setBirdRot] = useState(0);
-  const [pipes, setPipes] = useState([]);
-  const [score, setScore] = useState(0);
+  const [gameFrame, setGameFrame] = useState(initialGameFrame);
+  const { birdY, birdVel, birdRot, pipes, score, bgOffset } = gameFrame;
   const [bestScore, setBestScore] = useState(0);
   const [money, setMoney] = useState(0);
   const [flashGold, setFlashGold] = useState(false);
   const [particles, setParticles] = useState([]);
-  const [bgOffset, setBgOffset] = useState(0);
   const [claimStatus, setClaimStatus] = useState({ state: "idle", cash: 0, respect: 0, message: "" }); // idle|claiming|claimed|error
   const [lbPeriod, setLbPeriod] = useState("weekly");
   const [top10, setTop10] = useState([]);
@@ -139,6 +144,7 @@ export default function Gauntlet() {
   const birdVelRef = useRef(birdVel);
   const pipesRef = useRef(pipes);
   const scoreRef = useRef(score);
+  const bgOffsetRef = useRef(bgOffset);
   const tickRef = useRef(0);
   const speedRef = useRef(speedId);
   const difficultyRef = useRef(difficultyId);
@@ -150,6 +156,7 @@ export default function Gauntlet() {
   birdVelRef.current = birdVel;
   pipesRef.current = pipes;
   scoreRef.current = score;
+  bgOffsetRef.current = bgOffset;
 
   const isTouch = useMemo(() => {
     if (typeof window === "undefined") return false;
@@ -238,22 +245,25 @@ export default function Gauntlet() {
     if (stateRef.current === "idle") {
       setClaimStatus({ state: "idle", cash: 0, message: "" });
       setGameState("playing");
-      setBirdVel(JUMP_FORCE);
-      setPipes([{ x: VIEW_W + 80, topHeight: 100 + Math.random() * 200, scored: false }]);
+      setGameFrame((prev) => ({
+        ...prev,
+        birdVel: JUMP_FORCE,
+        pipes: [{ x: VIEW_W + 80, topHeight: 100 + Math.random() * 200, scored: false }],
+        score: 0,
+        bgOffset: 0,
+      }));
       tickRef.current = 0;
       return;
     }
     if (stateRef.current === "playing") {
-      // Slightly smooth: don't stack jumps into an extreme velocity
-      setBirdVel((v) => Math.min(JUMP_FORCE, v - 1.2));
+      setGameFrame((prev) => ({
+        ...prev,
+        birdVel: Math.min(JUMP_FORCE, prev.birdVel - 1.2),
+      }));
     }
     if (stateRef.current === "dead") {
       setGameState("idle");
-      setBirdY(VIEW_H / 2);
-      setBirdVel(0);
-      setBirdRot(0);
-      setPipes([]);
-      setScore(0);
+      setGameFrame(initialGameFrame());
       setClaimStatus({ state: "idle", cash: 0, respect: 0, message: "" });
     }
   }, []);
@@ -280,13 +290,14 @@ export default function Gauntlet() {
     if (gameState !== "playing") return;
 
     const loop = () => {
-      tickRef.current++;
+      let cancelled = false;
+      try {
+        tickRef.current++;
 
-      const newVel = birdVelRef.current + GRAVITY;
+        const newVel = birdVelRef.current + GRAVITY;
       const newY = birdYRef.current + newVel;
       const newRot = Math.max(-30, Math.min(90, newVel * 5));
-
-      setBgOffset((o) => (o + 1) % 60);
+      const nextBgOffset = (bgOffsetRef.current + 1) % 60;
 
       let newPipes = pipesRef.current.map((p) => ({ ...p, x: p.x - pipeSpeed }));
       if (tickRef.current % spawnInterval === 0) {
@@ -321,22 +332,36 @@ export default function Gauntlet() {
       }
 
       if (dead) {
+        cancelled = true;
         spawnParticles(birdX, birdYRef.current, "#ff4444");
         setBestScore((b) => Math.max(b, newScore));
-        setScore(newScore);
+        setGameFrame((prev) => ({ ...prev, score: newScore }));
         setGameState("dead");
         cancelAnimationFrame(frameRef.current);
         claimReward(newScore);
         return;
       }
 
-      setBirdY(newY);
-      setBirdVel(newVel);
-      setBirdRot(newRot);
-      setPipes(newPipes);
-      setScore(newScore);
+      birdYRef.current = newY;
+      birdVelRef.current = newVel;
+      pipesRef.current = newPipes;
+      scoreRef.current = newScore;
+      bgOffsetRef.current = nextBgOffset;
+      setGameFrame({
+        birdY: newY,
+        birdVel: newVel,
+        birdRot: newRot,
+        pipes: newPipes,
+        score: newScore,
+        bgOffset: nextBgOffset,
+      });
 
-      frameRef.current = requestAnimationFrame(loop);
+      } catch (err) {
+        console.error("Flappy Gangster loop error:", err);
+      }
+      if (!cancelled) {
+        frameRef.current = requestAnimationFrame(loop);
+      }
     };
 
     frameRef.current = requestAnimationFrame(loop);

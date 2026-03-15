@@ -192,6 +192,7 @@ export default function WhackACopper() {
   const timerRef = useRef(null);
   const waveRef = useRef(null);
   const holeTimers = useRef([]);
+  const holeEscapeTimerIds = useRef([]); // per-hole escape timer so we can cancel on whack (avoids race: click vs escape)
   const holeUpRef = useRef(Array(12).fill(false));
 
   const cols = gridSize === 12 ? 3 : 3;
@@ -248,6 +249,8 @@ export default function WhackACopper() {
     clearTimeout(waveRef.current);
     holeTimers.current.forEach(clearTimeout);
     holeTimers.current = [];
+    (holeEscapeTimerIds.current || []).forEach((tid) => { if (tid != null) clearTimeout(tid); });
+    holeEscapeTimerIds.current = [];
     holeUpRef.current = Array(refs.current.gridSize).fill(false);
     setHoleStates(Array.from({ length: refs.current.gridSize }, () => ({
       up: false, bonked: false, flash: null, escaped: false,
@@ -270,6 +273,7 @@ export default function WhackACopper() {
 
     const t = setTimeout(() => {
       if (!holeUpRef.current[i] || !refs.current.running) return;
+      holeEscapeTimerIds.current[i] = null;
       holeUpRef.current[i] = false;
       setHole(i, { up: false, flash: "miss", escaped: true });
       clearFlash(i);
@@ -286,6 +290,7 @@ export default function WhackACopper() {
       }
       triggerShake();
     }, stay);
+    holeEscapeTimerIds.current[i] = t;
     holeTimers.current.push(t);
   }, [diff, livesMode, setHole, clearFlash, triggerShake, endGame]);
 
@@ -314,6 +319,8 @@ export default function WhackACopper() {
   const startGame = useCallback(() => {
     holeTimers.current.forEach(clearTimeout);
     holeTimers.current = [];
+    (holeEscapeTimerIds.current || []).forEach((tid) => { if (tid != null) clearTimeout(tid); });
+    holeEscapeTimerIds.current = Array(gridSize).fill(null);
     clearTimeout(timerRef.current);
     clearTimeout(waveRef.current);
     holeUpRef.current = Array(gridSize).fill(false);
@@ -368,6 +375,11 @@ export default function WhackACopper() {
   const handleWhack = useCallback((i) => {
     if (phase !== "playing" || !holeUpRef.current[i]) return;
     holeUpRef.current[i] = false;
+    const escapeTimerId = holeEscapeTimerIds.current[i];
+    if (escapeTimerId != null) {
+      clearTimeout(escapeTimerId);
+      holeEscapeTimerIds.current[i] = null;
+    }
 
     setHole(i, { up: false, bonked: true, flash: "hit" });
     clearFlash(i);
