@@ -133,29 +133,30 @@ const CrimesPageSkeleton = () => (
   </div>
 );
 
-const JailNotice = () => (
-  <div className={`relative p-2 ${styles.panel} border border-amber-500/40 rounded-md cr-fade-in overflow-hidden`}>
-    <div className="h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
-    <div className="flex items-center gap-1.5">
-      <AlertCircle size={10} className="text-amber-400 shrink-0" />
-      <span className="text-amber-200/80 text-[10px]">
-        <strong className="text-amber-300">Incarcerated</strong> — Can't commit crimes while in jail
-      </span>
+// Compact status icons: show when Incarcerated or Auto Rank is active
+const StatusIcons = ({ inJail, autoRankActive }) => {
+  if (!inJail && !autoRankActive) return null;
+  return (
+    <div className="flex items-center gap-2 cr-fade-in">
+      {inJail && (
+        <span
+          title="Incarcerated — Can't commit crimes while in jail"
+          className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-amber-500/40 bg-amber-500/10"
+        >
+          <AlertCircle size={14} className="text-amber-400" />
+        </span>
+      )}
+      {autoRankActive && (
+        <span
+          title="Auto Rank — Crimes are running automatically. Manual play disabled."
+          className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-amber-500/40 bg-amber-500/10"
+        >
+          <Bot size={14} className="text-amber-400" />
+        </span>
+      )}
     </div>
-  </div>
-);
-
-const AutoRankCrimesNotice = () => (
-  <div className={`relative p-2 ${styles.panel} border border-amber-500/40 rounded-md cr-fade-in overflow-hidden`}>
-    <div className="h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
-    <div className="flex items-center gap-1.5">
-      <Bot size={10} className="text-amber-400 shrink-0" />
-      <span className="text-amber-200/80 text-[10px]">
-        <strong className="text-amber-300">Auto Rank</strong> — Crimes are running automatically. Manual play disabled.
-      </span>
-    </div>
-  </div>
-);
+  );
+};
 
 const EventBanner = ({ event }) => {
   if (!event?.name || (event.kill_cash === 1 && event.rank_points === 1)) {
@@ -657,13 +658,11 @@ export default function Crimes() {
     <div className={`space-y-2 ${styles.pageContent}`} data-testid="crimes-page">
       <style>{CRIMES_STYLES}</style>
 
-      <div className="relative cr-fade-in flex items-center gap-1.5">
+      <div className="relative cr-fade-in flex items-center gap-2 flex-wrap">
         <p className="text-[9px] text-zinc-500 font-heading italic">Commit crimes for cash and rank. Fail and you risk jail.</p>
         {user?.xp_crimes_until && <ActiveTokenBadge tokenType="xp_crimes" untilIso={user.xp_crimes_until} symbol />}
+        <StatusIcons inJail={!!user?.in_jail} autoRankActive={autoRankCrimesDisabled === true} />
       </div>
-
-      {user?.in_jail && <JailNotice />}
-      {autoRankCrimesDisabled === true && <AutoRankCrimesNotice />}
 
       {eventsEnabled && <EventBanner event={event} />}
 
@@ -689,21 +688,6 @@ export default function Crimes() {
           ))}
         </div>
       )}
-
-      {/* Stats */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 cr-fade-in`} style={{ animationDelay: '0.03s' }}>
-        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Crimes stats</span>
-        </div>
-        <div className="p-2 text-[10px] font-heading text-foreground">
-          Crimes today: {crimeStats.count_today ?? 0}  successful today {crimeStats.success_today ?? 0}  past week {crimeStats.count_week ?? 0} ({crimeStats.success_week ?? 0} successful)
-          <div className="mt-1 text-mutedForeground text-[9px]">
-            Profit today ${(crimeStats.profit_today ?? 0).toLocaleString()}  ·  Past 24h ${(crimeStats.profit_24h ?? 0).toLocaleString()}  ·  Past week ${(crimeStats.profit_week ?? 0).toLocaleString()}
-          </div>
-        </div>
-        <div className="cr-art-line text-primary mx-2.5" />
-      </div>
 
       {/* Crimes list */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 cr-fade-in`} style={{ animationDelay: '0.05s' }}>
@@ -751,6 +735,21 @@ export default function Crimes() {
           <div className="cr-art-line mx-2.5" style={{ color: 'rgba(184,145,68,0.3)' }} />
         </div>
       )}
+
+      {/* Stats — below prestige crimes */}
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 cr-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Crime stats</span>
+        </div>
+        <div className="p-2 text-[10px] font-heading text-foreground">
+          Crimes today: {crimeStats.count_today ?? 0}  successful today {crimeStats.success_today ?? 0}  past week {crimeStats.count_week ?? 0} ({crimeStats.success_week ?? 0} successful)
+          <div className="mt-1 text-mutedForeground text-[9px]">
+            Profit today ${(crimeStats.profit_today ?? 0).toLocaleString()}  ·  Past 24h ${(crimeStats.profit_24h ?? 0).toLocaleString()}  ·  Past week ${(crimeStats.profit_week ?? 0).toLocaleString()}
+          </div>
+        </div>
+        <div className="cr-art-line text-primary mx-2.5" />
+      </div>
     </div>
   );
 }
