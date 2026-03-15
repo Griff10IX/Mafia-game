@@ -213,10 +213,18 @@ function applyTextStyleToDocument(style) {
 
 function applyTextureToDocument(textureId) {
   const body = document.body;
+  const root = document.documentElement;
   const prev = body.getAttribute('data-texture');
   if (prev) body.removeAttribute('data-texture');
   if (textureId && textureId !== 'none') {
     body.setAttribute('data-texture', textureId);
+  }
+  if (textureId === 'modern-soft') {
+    body.setAttribute('data-theme-variant', 'modern');
+    root.setAttribute('data-theme-variant', 'modern');
+  } else {
+    body.removeAttribute('data-theme-variant');
+    root.removeAttribute('data-theme-variant');
   }
 }
 

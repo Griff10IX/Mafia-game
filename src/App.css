@@ -1,6 +1,7 @@
 .App {
   min-height: 100vh;
-  background-color: #050505;
+  background-color: var(--noir-content, #050505);
+  padding: var(--app-page-gutter, 0);
 }
 
 * {

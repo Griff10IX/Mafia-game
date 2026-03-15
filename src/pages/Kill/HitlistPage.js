@@ -53,7 +53,7 @@ const HITLIST_STYLES = `
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: radial-gradient(circle, #0a0a0a 40%, #1a1a1a 60%, transparent 100%);
+    background: radial-gradient(circle, #0a0a0a 40%, var(--noir-content) 60%, transparent 100%);
     box-shadow: inset 0 1px 2px rgba(0,0,0,0.8);
   }
   
@@ -114,9 +114,9 @@ const InkSplatter = ({ className = "" }) => (
 // Animated coin
 const CoinIcon = ({ className = "" }) => (
   <svg viewBox="0 0 24 24" className={`w-4 h-4 coin-spin ${className}`}>
-    <circle cx="12" cy="12" r="10" fill="#d4af37" stroke="#8b6914" strokeWidth="1.5" />
+    <circle cx="12" cy="12" r="10" fill="var(--noir-primary)" stroke="#8b6914" strokeWidth="1.5" />
     <circle cx="12" cy="12" r="7" fill="none" stroke="#8b6914" strokeWidth="0.5" />
-    <text x="12" y="16" textAnchor="middle" className="text-[10px] font-bold" fill="#1a1a1a">P</text>
+    <text x="12" y="16" textAnchor="middle" className="text-[10px] font-bold" fill="var(--noir-content)">P</text>
   </svg>
 );
 

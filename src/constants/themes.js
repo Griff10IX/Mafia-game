@@ -262,6 +262,7 @@ export const THEME_COLOUR_SECTIONS = [
 /** Texture presets: applied as body overlay. id used for body[data-texture] and swatch preview. */
 export const THEME_TEXTURES = [
   { id: 'none', name: 'None' },
+  { id: 'modern-soft', name: 'Modern Soft' },
   { id: 'grid', name: 'Grid' },
   { id: 'lines', name: 'Lines' },
   { id: 'crosshatch', name: 'Crosshatch' },
@@ -575,6 +576,7 @@ export const DEFAULT_TEXTURE_ID = 'none';
  */
 export const THEME_PRESETS = [
   { id: 'old-default', name: 'Old Default Theme', description: 'Full theme: gold accent, no texture, original buttons, default text & font', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'default', mutedWritingColourId: null, buttonStyleId: 'original', fontId: 'classic', textStyleId: 'normal', toastTextColourId: null, mobileNavStyle: 'sidebar', isFullPreset: true },
+  { id: 'modern-full', name: 'Modern Full', description: 'Modern spacing, cool palette, cleaner typography and layout', colourId: 'tone-2-ocean', textureId: 'modern-soft', buttonColourId: 'electric', accentLineColourId: 'sky', writingColourId: 'cool-white', mutedWritingColourId: 'powder-blue', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', isFullPreset: true },
   { id: 'original', name: 'Original theme', description: 'Default look before custom themes', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'default', name: 'Classic Mafia', description: 'Gold, no texture', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'dark-mode', name: 'Dark Mode', description: 'Slate accents, clean', colourId: 'matte-slate', textureId: 'none', buttonColourId: null, accentLineColourId: null },

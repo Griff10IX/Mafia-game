@@ -54,7 +54,8 @@
 .panel {
   background-color: var(--noir-surface);
   border: 1px solid var(--noir-border-mid);
-  border-radius: 2px;
+  border-radius: var(--app-surface-radius, 8px);
+  box-shadow: var(--app-card-shadow, none);
 }
 
 /* Card header strip */
@@ -125,7 +126,7 @@
 .userBox {
   background-color: var(--noir-surface);
   border: 1px solid var(--noir-border-light);
-  border-radius: 2px;
+  border-radius: var(--app-surface-radius, 8px);
 }
 
 /* Sidebar: expanded group header (e.g. RANKING when open) – solid gold, dark text */
@@ -169,7 +170,7 @@
 .input {
   background-color: var(--noir-content);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 2px;
+  border-radius: calc(var(--app-surface-radius, 8px) - 4px);
   color: var(--noir-foreground);
 }
 
@@ -188,7 +189,7 @@
   background: linear-gradient(to bottom, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4));
   color: var(--noir-button-foreground);
   border: 1px solid var(--noir-button-border, rgba(var(--noir-button-primary-rgb), 0.5));
-  border-radius: 2px;
+  border-radius: calc(var(--app-surface-radius, 8px) - 4px);
   text-shadow: 0 1px 0 var(--noir-button-text-shadow, rgba(0, 0, 0, 0.2));
 }
 
@@ -201,7 +202,7 @@
   background: linear-gradient(to bottom, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4));
   color: #1a1a1a;
   border: 1px solid var(--noir-button-border, rgba(var(--noir-button-primary-rgb), 0.5));
-  border-radius: 2px;
+  border-radius: calc(var(--app-surface-radius, 8px) - 4px);
 }
 
 .btnGoldDarkText:hover {
@@ -456,7 +457,7 @@
 .themeGangsterModern .panel {
   background-color: var(--gm-card);
   border: 1px solid var(--gm-border);
-  border-radius: 6px;
+  border-radius: var(--app-surface-radius, 10px);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
@@ -535,4 +536,23 @@
 [data-button-shape="pill"] .btnPrimary,
 [data-button-shape="pill"] .btnGoldDarkText {
   border-radius: 9999px !important;
+}
+
+/* Modern variant: cleaner spacing and softer surfaces without changing game logic */
+body[data-theme-variant="modern"] .themeGangsterModern {
+  --gm-bg: #090d14;
+  --gm-bg-top: #111827;
+  --gm-card: #151c2c;
+  --gm-card-hover: #1b2538;
+  --gm-border: #243247;
+}
+
+body[data-theme-variant="modern"] .themeGangsterModern .topBar,
+body[data-theme-variant="modern"] .themeGangsterModern .sidebar {
+  backdrop-filter: blur(8px);
+}
+
+body[data-theme-variant="modern"] .themeGangsterModern .panelHeader {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }

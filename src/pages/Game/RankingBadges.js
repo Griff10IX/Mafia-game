@@ -76,7 +76,7 @@ export const MILESTONE_TIERS = {
 
 // ─── Category accent colours ──────────────────────────────────────────────────
 export const CATEGORY_COLORS = {
-  crimes:         { color: '#d4af37', bg: '#201600', stroke: '#b8960c' },
+  crimes:         { color: 'var(--noir-primary)', bg: '#201600', stroke: '#b8960c' },
   gta:            { color: '#a78bfa', bg: '#150d28', stroke: '#7c4dcc' },
   jail_busts:     { color: '#60a5fa', bg: '#0a1528', stroke: '#2255aa' },
   kills:          { color: '#f87171', bg: '#200808', stroke: '#cc3333' },

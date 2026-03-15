@@ -38,7 +38,7 @@ const OVERHEAD_THICK = 0.14;
 const C = {
   bg:     '#080610',
   sky:    '#0a0818',
-  gold:   '#d4af37',
+  gold:   'var(--noir-primary)',
   goldD:  '#7a5e10',
   red:    '#991400',
   redB:   '#ff2200',
@@ -578,7 +578,7 @@ export default function FamilyRun() {
       const hR=P_STAND_H*0.16;
       ctx.fillStyle=C.flesh;
       ctx.beginPath(); ctx.arc(0,-P_STAND_H+legH-hR,hR,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle='#1a1a1a';
+      ctx.fillStyle='var(--noir-content)';
       ctx.fillRect(-hR*0.55,-P_STAND_H+legH-hR*1.25,hR*0.32,hR*0.28);
       ctx.fillRect( hR*0.24,-P_STAND_H+legH-hR*1.25,hR*0.32,hR*0.28);
       ctx.strokeStyle='#4a1010'; ctx.lineWidth=1.5;
@@ -679,7 +679,7 @@ export default function FamilyRun() {
     flex:1, padding:'13px 0',
     background:'rgba(212,175,55,0.07)',
     border:'1px solid rgba(212,175,55,0.28)',
-    color:'#d4af37', fontFamily:'monospace', fontSize:12,
+    color:'var(--noir-primary)', fontFamily:'monospace', fontSize:12,
     letterSpacing:'0.04em', cursor:'pointer', borderRadius:4,
     WebkitTapHighlightColor:'transparent', touchAction:'manipulation',
   };

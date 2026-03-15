@@ -100,9 +100,9 @@ function Reel({ spinning, revealed, symbolId, reelIndex, isWin }) {
         className="relative rounded-md overflow-hidden"
         style={{
           width: 80, height: CELL_H * VISIBLE_ROWS,
-          background: 'linear-gradient(135deg, #3a3a3a 0%, #1a1a1a 50%, #2a2a2a 100%)',
+          background: 'linear-gradient(135deg, #3a3a3a 0%, var(--noir-content) 50%, #2a2a2a 100%)',
           border: '3px solid transparent',
-          borderImage: 'linear-gradient(180deg, #c9a84c 0%, #7a6528 40%, #c9a84c 60%, #7a6528 100%) 1',
+          borderImage: 'linear-gradient(180deg, var(--noir-primary-bright) 0%, #7a6528 40%, var(--noir-primary-bright) 60%, #7a6528 100%) 1',
           boxShadow: 'inset 0 0 24px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.5)',
         }}
       >
@@ -202,7 +202,7 @@ function ChasingLights({ count = 20, active }) {
             className="absolute w-1.5 h-1.5 rounded-full"
             style={{
               ...posStyle,
-              background: active ? '#d4af37' : '#5a4a1a',
+              background: active ? 'var(--noir-primary)' : '#5a4a1a',
               boxShadow: active ? `0 0 6px rgba(212,175,55,0.8)` : 'none',
               opacity: active ? 1 : 0.4,
               animation: active ? `chase-blink 1.5s ease-in-out infinite` : 'none',
@@ -233,7 +233,7 @@ function Lever({ onPull, disabled }) {
         className="w-5 h-3 rounded-t-sm"
         style={{
           background: 'linear-gradient(180deg, #8a7a3a, #5a4a1a)',
-          borderTop: '1px solid #c9a84c',
+          borderTop: '1px solid var(--noir-primary-bright)',
         }}
       />
       {/* Shaft */}
@@ -242,7 +242,7 @@ function Lever({ onPull, disabled }) {
           className="w-2.5 sm:w-3 rounded-sm transition-all origin-top"
           style={{
             height: pulled ? 52 : 64,
-            background: 'linear-gradient(90deg, #8a7a3a, #c9a84c, #8a7a3a)',
+            background: 'linear-gradient(90deg, #8a7a3a, var(--noir-primary-bright), #8a7a3a)',
             boxShadow: 'inset -1px 0 2px rgba(0,0,0,0.3), 1px 0 2px rgba(0,0,0,0.2)',
             transition: 'height 0.15s ease-out',
           }}
@@ -661,7 +661,7 @@ export default function SlotsPage() {
             style={{
               background: 'linear-gradient(180deg, #2a2520 0%, #1a1612 30%, #0f0d0a 100%)',
               border: '3px solid transparent',
-              borderImage: 'linear-gradient(180deg, #c9a84c, #7a6528 40%, #c9a84c 60%, #5a4a1a) 1',
+              borderImage: 'linear-gradient(180deg, var(--noir-primary-bright), #7a6528 40%, var(--noir-primary-bright) 60%, #5a4a1a) 1',
               borderRadius: 20,
               boxShadow: '0 0 24px rgba(212,175,55,0.15), 0 8px 32px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05)',
               padding: '0 0 12px 0',
@@ -687,7 +687,7 @@ export default function SlotsPage() {
                 <div
                   className="font-heading font-black text-lg sm:text-xl uppercase tracking-[0.25em]"
                   style={{
-                    background: 'linear-gradient(180deg, #ffd700 0%, #c9a84c 40%, #ffd700 60%, #b8941e 100%)',
+                    background: 'linear-gradient(180deg, #ffd700 0%, var(--noir-primary-bright) 40%, #ffd700 60%, #b8941e 100%)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
@@ -710,7 +710,7 @@ export default function SlotsPage() {
                 <div
                   className="relative rounded-lg p-[3px]"
                   style={{
-                    background: 'linear-gradient(135deg, #c9a84c, #7a6528 30%, #c9a84c 50%, #5a4a1a 70%, #c9a84c)',
+                    background: 'linear-gradient(135deg, var(--noir-primary-bright), #7a6528 30%, var(--noir-primary-bright) 50%, #5a4a1a 70%, var(--noir-primary-bright))',
                   }}
                 >
                   <div
@@ -741,7 +741,7 @@ export default function SlotsPage() {
                       className="absolute w-2 h-2 rounded-full"
                       style={{
                         ...pos,
-                        background: 'radial-gradient(circle at 40% 40%, #c9a84c, #5a4a1a)',
+                        background: 'radial-gradient(circle at 40% 40%, var(--noir-primary-bright), #5a4a1a)',
                         boxShadow: 'inset 0 1px 1px rgba(0,0,0,0.5)',
                       }}
                     />
@@ -820,8 +820,8 @@ export default function SlotsPage() {
                 disabled={!canSpin}
                 className="relative overflow-hidden rounded-lg px-7 sm:px-10 py-2.5 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
                 style={{
-                  background: 'linear-gradient(180deg, #d4af37, #a08020, #8a6e18)',
-                  borderColor: '#c9a84c',
+                  background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
+                  borderColor: 'var(--noir-primary-bright)',
                   color: '#1a1200',
                   boxShadow: '0 4px 16px rgba(212,175,55,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
                 }}
