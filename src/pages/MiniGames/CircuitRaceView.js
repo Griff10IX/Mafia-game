@@ -646,7 +646,7 @@ const TRACKS = [
 
 const PROFILE_N = 256;
 const _profileCache = new Map();
-const PROFILE_CACHE_KEY = "v3"; // bump to invalidate when profile logic changes (e.g. finish straight zone)
+const PROFILE_CACHE_KEY = "v4"; // bump to invalidate when profile logic changes (e.g. finish straight zone)
 
 // FIX B1: uses geometry discontinuity detection instead of blanket 5% bypass
 function getCurvature(track, t) {
@@ -701,11 +701,16 @@ function buildSpeedProfile(track) {
   const mn = Math.min(...raw), mx = Math.max(...raw), rng = mx-mn||1;
   const profile = new Float32Array(N);
   for (let i = 0; i < N; i++) profile[i] = 0.56 + ((raw[i]-mn)/rng)*0.44;
-  // No slowdown at start/finish: last ~6% and first ~6% of lap at least as fast as the approach/exit
-  const refIdx = 235; // ~0.92 lap – reference speed for run to the line
+  // No slowdown at start/finish: use max speed in approach/exit range so cars don't slow every lap before the line
+  const runStart = 204; // ~0.80 lap – start of "run to the line" zone
+  const runEnd = N - 1; // 255
+  let refRun = profile[runStart];
+  for (let i = runStart; i <= runEnd; i++) refRun = Math.max(refRun, profile[i]);
+  for (let i = runStart; i <= runEnd; i++) profile[i] = Math.max(profile[i], Math.min(1.0, refRun));
   const refIdxFirst = 16; // ~0.06 lap – reference speed for exit from line
-  for (let i = 244; i <= N - 1; i++) profile[i] = Math.max(profile[i], Math.min(1.0, profile[refIdx]));
-  for (let i = 0; i <= 15; i++) profile[i] = Math.max(profile[i], Math.min(1.0, profile[refIdxFirst]));
+  let refFirst = profile[refIdxFirst];
+  for (let i = 0; i <= 24; i++) refFirst = Math.max(refFirst, profile[i]);
+  for (let i = 0; i <= 15; i++) profile[i] = Math.max(profile[i], Math.min(1.0, refFirst));
   const cap = (i, arr) => {
     const prev = arr[(i-1+N)%N], next = arr[(i+1)%N];
     const m = Math.max(prev, next);
