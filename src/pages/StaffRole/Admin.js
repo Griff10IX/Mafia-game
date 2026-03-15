@@ -12,6 +12,29 @@ const ADMIN_STYLES = `
   @keyframes admin-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .admin-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   .admin-category-nav { scroll-margin-top: 5rem; }
+  /* Iron Man / HUD module styling */
+  .admin-module {
+    background-color: rgba(10, 10, 12, 0.95);
+    border: 1px solid rgba(var(--noir-primary-rgb), 0.3);
+    border-top-width: 2px;
+    box-shadow: 0 0 20px rgba(var(--noir-primary-rgb), 0.06);
+  }
+  .admin-command-bar {
+    border-bottom: 1px solid rgba(var(--noir-primary-rgb), 0.35);
+    background: linear-gradient(180deg, rgba(var(--noir-primary-rgb), 0.06) 0%, transparent 100%);
+  }
+  .admin-focus-block {
+    border-top-color: rgba(var(--noir-primary-rgb), 0.5);
+    box-shadow: 0 0 24px rgba(var(--noir-primary-rgb), 0.08);
+  }
+  .admin-hud-bar {
+    border-left: 2px solid rgba(var(--noir-primary-rgb), 0.4);
+  }
+  .admin-scan-line {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(var(--noir-primary-rgb), 0.4), transparent);
+    opacity: 0.6;
+  }
 `;
 
 const ADMIN_CATEGORIES = [
@@ -160,7 +183,7 @@ function SectionHeader({ icon: Icon, title, badge, isCollapsed, onToggle, color 
     <button
       type="button"
       onClick={onToggle}
-      className="w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
+      className="admin-hud-bar w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
     >
       <div className="flex items-center gap-2">
         <Icon size={14} className={color} />
@@ -177,7 +200,7 @@ function SectionHeader({ icon: Icon, title, badge, isCollapsed, onToggle, color 
 }
 function ActionRow({ icon: Icon, label, description, children, color = 'text-primary' }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 py-2 rounded-md bg-zinc-800/30 border border-transparent hover:border-primary/20">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 py-2 rounded-md bg-zinc-800/30 border border-transparent border-l-2 border-l-transparent hover:border-primary/20 hover:border-l-primary/20 transition-colors">
       <div className="flex items-center gap-2 min-w-0">
         <Icon size={14} className={`shrink-0 ${color}`} />
         <div className="min-w-0">
@@ -193,7 +216,7 @@ function ActionRow({ icon: Icon, label, description, children, color = 'text-pri
 }
 function BtnPrimary({ children, ...props }) {
   return (
-    <button {...props} className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 touch-manipulation font-heading">
+    <button {...props} className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 hover:shadow-[0_0_12px_rgba(var(--noir-primary-rgb),0.15)] focus:shadow-[0_0_12px_rgba(var(--noir-primary-rgb),0.12)] transition-all disabled:opacity-50 touch-manipulation font-heading">
       {children}
     </button>
   );
@@ -2551,7 +2574,7 @@ export default function Admin() {
       )}
 
       {/* Sticky category navigation */}
-      <nav className="sticky top-0 z-20 -mx-2 px-2 py-2 bg-background/95 border-b border-primary/20 rounded-b-md admin-category-nav backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <nav className="sticky top-0 z-20 -mx-2 px-2 py-2 bg-background/95 border-b border-primary/20 rounded-b-md admin-category-nav admin-command-bar backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="flex flex-col gap-2">
           {/* Search bar */}
           <div className="relative">
@@ -2621,9 +2644,10 @@ export default function Admin() {
           </div>
         </div>
       </nav>
+      <div className="admin-scan-line" />
 
       {/* Target Username */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+      <div className={`relative admin-module admin-focus-block ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎯 Target Username</span>
@@ -2641,7 +2665,7 @@ export default function Admin() {
       </div>
 
       {/* Search users (username or email) */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+      <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Search users (username or email)</span>
@@ -2699,7 +2723,7 @@ export default function Admin() {
 
       {/* All registered users (admin only) */}
       {isAdmin && (
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+      <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">All registered users</span>
@@ -3040,7 +3064,7 @@ export default function Admin() {
           Player Management
         </h2>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Activity}
@@ -3086,7 +3110,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={UserCog}
@@ -3373,7 +3397,7 @@ export default function Admin() {
         </h2>
 
         {/* Launch Settings */}
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-500/30`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-amber-500/30`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
         <SectionHeader
           icon={Clock}
@@ -3472,7 +3496,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={DollarSign}
@@ -3522,7 +3546,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Zap}
@@ -3549,7 +3573,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Gift}
@@ -3577,7 +3601,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Clock}
@@ -3605,7 +3629,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Coins}
@@ -3626,7 +3650,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Building2}
@@ -3678,7 +3702,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Dice5}
@@ -3766,7 +3790,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Lock}
@@ -3884,7 +3908,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Palette}
@@ -3982,7 +4006,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Bell}
@@ -4030,7 +4054,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={Car}
@@ -4084,7 +4108,7 @@ export default function Admin() {
           <Globe size={12} />
           Security & Cloudflare
         </h2>
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Shield}
@@ -4129,7 +4153,7 @@ export default function Admin() {
         </div>
 
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Bot}
@@ -4174,7 +4198,7 @@ export default function Admin() {
         </div>
 
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={Lock}
@@ -4299,7 +4323,7 @@ export default function Admin() {
               </div>
             )}
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Shield}
@@ -4675,7 +4699,7 @@ export default function Admin() {
           Cheat Detection
         </h2>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Users}
@@ -4896,7 +4920,7 @@ export default function Admin() {
           Analytics
         </h2>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Coins}
@@ -4967,7 +4991,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Activity}
@@ -5000,7 +5024,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={BarChart3}
@@ -5199,7 +5223,7 @@ export default function Admin() {
 
         {/* Crime Analytics */}
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={BarChart3}
@@ -5305,7 +5329,7 @@ export default function Admin() {
         </div>
 
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={BarChart3}
@@ -5362,7 +5386,7 @@ export default function Admin() {
 
         {/* Trades Analytics */}
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={BarChart3}
@@ -5409,7 +5433,7 @@ export default function Admin() {
 
         {/* Hitlist & Bodyguards Analytics */}
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={BarChart3}
@@ -5456,7 +5480,7 @@ export default function Admin() {
 
         {/* Economy Analytics (cars, properties, loot, booze) */}
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={BarChart3}
@@ -5513,7 +5537,7 @@ export default function Admin() {
           Logs
         </h2>
         {/* Attack logs (post data) — admin and mod */}
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={Crosshair}
@@ -5629,7 +5653,7 @@ export default function Admin() {
           )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={ScrollText}
@@ -5680,7 +5704,7 @@ export default function Admin() {
         </div>
 
         {/* Betting Log — all casino and sports bets */}
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={Dice5}
@@ -5761,7 +5785,7 @@ export default function Admin() {
 
         {/* Casino Analytics */}
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={Skull}
@@ -5833,7 +5857,7 @@ export default function Admin() {
 
         {/* GTA Logs (Post Data) */}
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={Car}
@@ -5913,7 +5937,7 @@ export default function Admin() {
 
         {/* Jail Bust Logs (Post Data) */}
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={Lock}
@@ -5966,7 +5990,7 @@ export default function Admin() {
           )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={Coins}
@@ -6037,7 +6061,7 @@ export default function Admin() {
         </div>
 
         {/* Donations / Payments (Stripe point purchases) */}
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={Zap}
@@ -6129,7 +6153,7 @@ export default function Admin() {
         </div>
 
         {/* Stock Logs (Post Data) */}
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={BarChart3}
@@ -6198,7 +6222,7 @@ export default function Admin() {
           <Wrench size={12} />
           Testing Tools
         </h2>
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Clock}
@@ -6253,7 +6277,7 @@ export default function Admin() {
         </div>
 
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={Shield}
@@ -6268,7 +6292,7 @@ export default function Admin() {
                 <BtnPrimary onClick={handleGenerateBodyguards}>Generate</BtnPrimary>
               </ActionRow>
 
-              <ActionRow icon={Activity} label="Check bodyguard speeds" description="Time between robot hires (ms) for target user">
+              <ActionRow icon={Activity} label="Check bodyguard speeds" description="Time between robot hires (ms). Enter username in Target Username above, then click Log.">
                 <BtnPrimary onClick={handleCheckBodyguardSpeeds} disabled={bodyguardSpeedsLoading || !(formData.targetUsername || '').trim()}>
                   {bodyguardSpeedsLoading ? '…' : 'Log'}
                 </BtnPrimary>
@@ -6323,7 +6347,7 @@ export default function Admin() {
           )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
           <SectionHeader
             icon={Trophy}
@@ -6352,7 +6376,7 @@ export default function Admin() {
           <Gift size={12} />
           Quick & Bulk
         </h2>
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Zap}
@@ -6377,7 +6401,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Layers}
@@ -6547,7 +6571,7 @@ export default function Admin() {
           Staff Management
         </h2>
         {isAdmin && (
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Promote / demote moderators</span>
@@ -6630,7 +6654,7 @@ export default function Admin() {
         </div>
         )}
 
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Promote / demote Help Desk Operators</span>
@@ -6681,7 +6705,7 @@ export default function Admin() {
           <Palette size={12} />
           Mod Tools
         </h2>
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
             icon={Palette}
