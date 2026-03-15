@@ -11,7 +11,7 @@ const REF_STYLES = `
 `;
 
 function formatMoney(n) {
-  return `$${Number(n).toLocaleString()}`;
+  return `$${Math.round(Number(n)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
 const StatCard = ({ label, value, valueColor = 'text-foreground', icon: Icon }) => (

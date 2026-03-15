@@ -810,50 +810,82 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             eligible.sort(key=lambda x: x["value"])
             melted_this_cycle = 0  # cap total melted per cycle at batch_limit
             car_ids = [e["user_car_id"] for e in eligible[:max(0, batch_limit - melted_this_cycle)]]
-            for action in melt_action_ids:
-                if action not in ("bullets", "cash"):
-                    continue
-                if melted_this_cycle >= batch_limit or not car_ids:
-                    break
-                car_ids = car_ids[:max(0, batch_limit - melted_this_cycle)]
-                if not car_ids:
-                    break
+            actions = [a for a in melt_action_ids if a in ("bullets", "cash")]
+            if len(actions) == 2:
+                # Both bullets and cash selected: use half batch for each per cycle
+                n = len(car_ids)
+                half = (n + 1) // 2
+                car_ids_bullets = car_ids[:half]
+                car_ids_cash = car_ids[half:]
                 try:
-                    result = await _melt_cars_impl(user, car_ids, action)
-                    if result.get("cooldown"):
-                        continue  # skip bullets this cycle, still try cash
-                    if result.get("success"):
-                        mc = result.get("melted_count", 0) or result.get("scrapped_count", 0)
-                        melted_this_cycle += mc
-                        has_success = True
-                        await _set_last_activity(db, user_id, "melt", now)
-                        if action == "bullets":
-                            tb = result.get("total_bullets", 0)
+                    if car_ids_bullets:
+                        result_b = await _melt_cars_impl(user, car_ids_bullets, "bullets")
+                        if not result_b.get("cooldown") and result_b.get("success"):
+                            mc = result_b.get("melted_count", 0)
+                            melted_this_cycle += mc
+                            has_success = True
+                            await _set_last_activity(db, user_id, "melt", now)
+                            tb = result_b.get("total_bullets", 0)
                             lines.append(f"**Melt** — Melted {mc} car(s) for {tb} bullets.")
                             await _update_auto_rank_stats_melt(db, user_id, melted_count=mc, total_bullets=tb)
-                        else:
-                            tv = result.get("total_value", 0)
+                    if car_ids_cash:
+                        result_c = await _melt_cars_impl(user, car_ids_cash, "cash")
+                        if result_c.get("success"):
+                            mc = result_c.get("scrapped_count", 0)
+                            melted_this_cycle += mc
+                            has_success = True
+                            await _set_last_activity(db, user_id, "melt", now)
+                            tv = result_c.get("total_value", 0)
                             lines.append(f"**Melt** — Scrapped {mc} car(s) for ${tv:,}.")
                             await _update_auto_rank_stats_melt(db, user_id, scrapped_count=mc, total_cash=tv)
-                        # Re-fetch eligible cars for next action (previous were deleted); cap by batch limit
-                        cars_cursor = db.user_cars.find({"user_id": user_id})
-                        user_cars = await cars_cursor.to_list(1000)
-                        eligible = []
-                        for uc in user_cars:
-                            if uc.get("listed_for_sale"):
-                                continue
-                            car_info = next((c for c in (CARS or []) if c.get("id") == uc.get("car_id")), None)
-                            if not car_info:
-                                continue
-                            rarity = car_info.get("rarity") or "common"
-                            if allowed_rarities is not None and rarity not in allowed_rarities:
-                                continue
-                            ucid = uc.get("id") or str(uc.get("_id", ""))
-                            eligible.append({"user_car_id": ucid, "value": int(car_info.get("value") or 0)})
-                        eligible.sort(key=lambda x: x["value"])
-                        car_ids = [e["user_car_id"] for e in eligible[:max(0, batch_limit - melted_this_cycle)]]
                 except Exception as e:
                     logger.exception("Auto rank melt for %s: %s", user_id, e)
+            else:
+                # Single action (or only one of bullets/cash): use full batch per action, re-fetch between
+                for action in melt_action_ids:
+                    if action not in ("bullets", "cash"):
+                        continue
+                    if melted_this_cycle >= batch_limit or not car_ids:
+                        break
+                    car_ids = car_ids[:max(0, batch_limit - melted_this_cycle)]
+                    if not car_ids:
+                        break
+                    try:
+                        result = await _melt_cars_impl(user, car_ids, action)
+                        if result.get("cooldown"):
+                            continue  # skip bullets this cycle, still try cash
+                        if result.get("success"):
+                            mc = result.get("melted_count", 0) or result.get("scrapped_count", 0)
+                            melted_this_cycle += mc
+                            has_success = True
+                            await _set_last_activity(db, user_id, "melt", now)
+                            if action == "bullets":
+                                tb = result.get("total_bullets", 0)
+                                lines.append(f"**Melt** — Melted {mc} car(s) for {tb} bullets.")
+                                await _update_auto_rank_stats_melt(db, user_id, melted_count=mc, total_bullets=tb)
+                            else:
+                                tv = result.get("total_value", 0)
+                                lines.append(f"**Melt** — Scrapped {mc} car(s) for ${tv:,}.")
+                                await _update_auto_rank_stats_melt(db, user_id, scrapped_count=mc, total_cash=tv)
+                            # Re-fetch eligible cars for next action (previous were deleted); cap by batch limit
+                            cars_cursor = db.user_cars.find({"user_id": user_id})
+                            user_cars = await cars_cursor.to_list(1000)
+                            eligible = []
+                            for uc in user_cars:
+                                if uc.get("listed_for_sale"):
+                                    continue
+                                car_info = next((c for c in (CARS or []) if c.get("id") == uc.get("car_id")), None)
+                                if not car_info:
+                                    continue
+                                rarity = car_info.get("rarity") or "common"
+                                if allowed_rarities is not None and rarity not in allowed_rarities:
+                                    continue
+                                ucid = uc.get("id") or str(uc.get("_id", ""))
+                                eligible.append({"user_car_id": ucid, "value": int(car_info.get("value") or 0)})
+                            eligible.sort(key=lambda x: x["value"])
+                            car_ids = [e["user_car_id"] for e in eligible[:max(0, batch_limit - melted_this_cycle)]]
+                    except Exception as e:
+                        logger.exception("Auto rank melt for %s: %s", user_id, e)
 
     # --- Booze ---
     if user.get("auto_rank_booze", False):

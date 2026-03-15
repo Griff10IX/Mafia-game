@@ -645,6 +645,7 @@ export default function CircuitRaceView({
   const rafRef = useRef(null);
   const stateRef = useRef(null); // mutable race state (avoids closure staleness)
   const countdownIntervalRef = useRef(null);
+  const replayLoopStartedRef = useRef(false); // avoid starting race loop twice in replay fallback
 
   // ── UI STATE ──
   const [uiPhase, setUiPhase] = useState("setup"); // setup | countdown | qualifying | racing | done
@@ -1370,6 +1371,7 @@ export default function CircuitRaceView({
     const speedMul = () => speedMultRef.current || 1;
 
     const loop = (now) => {
+      try {
       let dt = (now - lastFrameTime) / 1000;
       if (firstFrame) { firstFrame = false; dt = 0; }
       dt = Math.min(0.05, dt) * speedMul();
@@ -1776,6 +1778,10 @@ export default function CircuitRaceView({
       }
 
       rafRef.current = requestAnimationFrame(loop);
+      } catch (err) {
+        console.error("Race loop error", err);
+        rafRef.current = requestAnimationFrame(loop);
+      }
     };
 
     raceStartTimeRef.current = Date.now();
@@ -1787,6 +1793,7 @@ export default function CircuitRaceView({
   useEffect(() => {
     if (mode !== "replay") return;
     if (!participants.length && !resultOrder.length) return;
+    replayLoopStartedRef.current = false;
     const rawOrder = (qualifying_order && qualifying_order.length) ? qualifying_order : (resultOrder.length ? resultOrder : participants.map(p => p.user_id || p.id));
     // Deduplicate: one racer per entrant id (keep first occurrence) so leaderboard never shows duplicate names/positions
     const seen = new Set();
@@ -1840,7 +1847,10 @@ export default function CircuitRaceView({
           countdownIntervalRef.current = null;
           setUiPhase("racing");
           const pr = stateRef.current?.pendingReplay;
-          if (pr) startRaceLoop(pr.track, pr.cond, pr.totalLaps, pr.racers);
+          if (pr && pr.racers?.length) {
+            replayLoopStartedRef.current = true;
+            startRaceLoop(pr.track, pr.cond, pr.totalLaps, pr.racers);
+          }
           return 0;
         }
         return next;
@@ -1850,8 +1860,19 @@ export default function CircuitRaceView({
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- replay init: only re-run when mode / currentUserId
-  }, [mode, currentUserId]);
+    // Re-run when replay data becomes available (e.g. parent loaded race result)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- replay init: re-run when mode, user, or replay payload ready
+  }, [mode, currentUserId, raceId, participants.length, resultOrder.length]);
+
+  // Fallback: start race loop when replay is in "racing" but loop was not started (e.g. countdown timing)
+  useEffect(() => {
+    if (mode !== "replay" || uiPhase !== "racing") return;
+    if (replayLoopStartedRef.current) return;
+    const pr = stateRef.current?.pendingReplay;
+    if (!pr || !pr.racers?.length) return;
+    replayLoopStartedRef.current = true;
+    startRaceLoop(pr.track, pr.cond, pr.totalLaps, pr.racers);
+  }, [mode, uiPhase, startRaceLoop]);
 
   // ── LIVE MODE ──
   // When mode==="live", race runs in real time; build racers from participants + qualifying_order (no backend result)
