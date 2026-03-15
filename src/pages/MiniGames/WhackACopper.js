@@ -186,7 +186,7 @@ export default function WhackACopper() {
   refs.current.score = score;
   refs.current.combo = combo;
   refs.current.lives = lives;
-  refs.current.running = false;
+  refs.current.running = phase === "playing";
   refs.current.gridSize = gridSize;
 
   const timerRef = useRef(null);

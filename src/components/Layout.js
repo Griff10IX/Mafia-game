@@ -1272,10 +1272,10 @@ export default function Layout({ children }) {
             </button>
           )}
 
-          {/* Flash news */}
-          <div className="flex-1 min-w-0 overflow-hidden hidden sm:flex items-center gap-2">
+          {/* Flash news — fixed width band so bar looks even */}
+          <div className="hidden sm:flex items-center flex-1 min-w-0 max-w-md md:max-w-lg">
             {flashNews.length > 0 && (
-              <div className="flex items-center gap-2 min-w-0 min-h-[1.5rem]">
+              <div className="flex items-center gap-2 min-w-0 w-full min-h-[2rem] rounded px-2 py-1 border border-primary/15 bg-primary/5">
                 <Newspaper size={14} className="shrink-0 text-primary/70 self-center" aria-hidden />
                 <div className="flex items-baseline gap-1.5 min-w-0 flex-1 overflow-hidden">
                   <span className="text-xs text-mutedForeground truncate font-heading leading-none" title={flashNews[flashIndex]?.message}>{flashNews[flashIndex]?.message}</span>

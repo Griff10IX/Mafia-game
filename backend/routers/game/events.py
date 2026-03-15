@@ -6,7 +6,7 @@ from fastapi import Depends
 from server import db, get_current_user, get_effective_event, get_events_enabled
 from routers.money.booze_run import get_booze_rotation_interval_seconds, get_booze_rotation_index
 
-# Rotating tips for flash news ticker (one per day so the bar has more to show)
+# Rotating tips for flash news ticker (multiple shown per load so the bar has variety)
 FLASH_NEWS_TIPS = [
     "Organised Crime: run heists with you + 3 NPCs for big payouts.",
     "Booze Run: buy low, travel, sell high. Prices rotate every few hours.",
@@ -16,6 +16,10 @@ FLASH_NEWS_TIPS = [
     "GTA: steal cars for cash and rank. Unlock better options as you rank up.",
     "Family rackets: run rackets for your family. Payouts vary by daily event.",
     "Missions: complete objectives for rewards. Account → Missions.",
+    "Swiss Bank: protects your cash when you die. Use it.",
+    "Hitlist: place bounties on players. NPC targets available for practice.",
+    "Daily rewards: play Rock Paper Scissors every 6h for free cash and cars.",
+    "Loot boxes: collect 100 pieces from crimes and GTA to open a box.",
 ]
 
 
@@ -171,17 +175,19 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
     except Exception:
         pass
 
-    # Add a rotating tip so the ticker always has extra variety
+    # Add multiple rotating tips so the ticker has more variety (not just 3 items)
     day_index = now.date().toordinal() % len(FLASH_NEWS_TIPS)
-    tip_message = FLASH_NEWS_TIPS[day_index]
-    items.append({
-        "id": f"tip_{day_index}_{now.date().isoformat()}",
-        "type": "tip",
-        "message": tip_message,
-        "at": now.date().isoformat() + "T12:00:00+00:00",
-    })
+    for offset in range(min(5, len(FLASH_NEWS_TIPS))):
+        idx = (day_index + offset) % len(FLASH_NEWS_TIPS)
+        tip_message = FLASH_NEWS_TIPS[idx]
+        items.append({
+            "id": f"tip_{idx}_{now.date().isoformat()}_{offset}",
+            "type": "tip",
+            "message": tip_message,
+            "at": now.date().isoformat() + f"T{12 + offset:02d}:00:00+00:00",
+        })
     items.sort(key=lambda x: x["at"], reverse=True)
-    return {"items": items[:15]}
+    return {"items": items[:20]}
 
 
 def register(router):
