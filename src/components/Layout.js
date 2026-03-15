@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useTheme } from '../context/ThemeContext';
 import ThemePicker from './ThemePicker';
+import FirstTimeThemeModal from './FirstTimeThemeModal';
+import { getThemePreset } from '../constants/themes';
 import ErrorBoundary from './ErrorBoundary';
 import GameChat from './GameChat';
 import DeathScreen from './DeathScreen';
@@ -292,6 +294,7 @@ export default function Layout({ children }) {
   const notificationBallRef = useRef(null);
   const notificationDragRef = useRef({ isDragging: false, startX: 0, startY: 0, ballX: 0, ballY: 0 });
   const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const [showInitialThemeModal, setShowInitialThemeModal] = useState(false);
   const [topBarCustomizeOpen, setTopBarCustomizeOpen] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [findUserQuery, setFindUserQuery] = useState('');
@@ -314,7 +317,54 @@ export default function Layout({ children }) {
   const mobileBottomNavRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const { mobileNavStyle } = useTheme();
+  const {
+    mobileNavStyle,
+    setColour,
+    setTexture,
+    setButtonColour,
+    setAccentLineColour,
+    setWritingColour,
+    setMutedWritingColour,
+    setButtonStyle,
+    setFont,
+    setTextStyle,
+    setToastTextColour,
+    setMobileNavStyle,
+    setThemeVariant,
+  } = useTheme();
+
+  useEffect(() => {
+    if (!user || typeof localStorage === 'undefined') return;
+    if (localStorage.getItem('app_initial_theme_chosen') === '1') return;
+    setShowInitialThemeModal(true);
+  }, [user]);
+
+  useEffect(() => {
+    if (!showInitialThemeModal) return;
+    const onChosen = () => setShowInitialThemeModal(false);
+    window.addEventListener('app-initial-theme-chosen', onChosen);
+    return () => window.removeEventListener('app-initial-theme-chosen', onChosen);
+  }, [showInitialThemeModal]);
+
+  const handleInitialThemeChoose = useCallback((presetId) => {
+    const p = getThemePreset(presetId);
+    setColour(p.colourId);
+    setTexture(p.textureId);
+    setButtonColour(p.buttonColourId ?? null);
+    setAccentLineColour(p.accentLineColourId ?? null);
+    if (p.writingColourId != null) setWritingColour(p.writingColourId);
+    if (p.mutedWritingColourId !== undefined) setMutedWritingColour(p.mutedWritingColourId ?? null);
+    if (p.buttonStyleId != null) setButtonStyle(p.buttonStyleId);
+    if (p.fontId != null) setFont(p.fontId);
+    if (p.textStyleId != null) setTextStyle(p.textStyleId);
+    if (p.toastTextColourId !== undefined) setToastTextColour(p.toastTextColourId ?? null);
+    if (p.mobileNavStyle != null) setMobileNavStyle(p.mobileNavStyle);
+    if (p.themeVariant != null) setThemeVariant(p.themeVariant);
+    try {
+      localStorage.setItem('app_initial_theme_chosen', '1');
+    } catch (_) {}
+    setShowInitialThemeModal(false);
+  }, [setColour, setTexture, setButtonColour, setAccentLineColour, setWritingColour, setMutedWritingColour, setButtonStyle, setFont, setTextStyle, setToastTextColour, setMobileNavStyle, setThemeVariant]);
 
   const hasCasinoOrProperty = Boolean(user?.has_casino_or_property);
   const mobileBottomNavItems = useMemo(() => {
@@ -2018,6 +2068,11 @@ export default function Layout({ children }) {
       )}
 
       <ThemePicker open={themePickerOpen} onClose={() => setThemePickerOpen(false)} />
+      <FirstTimeThemeModal
+        open={showInitialThemeModal}
+        onClose={() => setShowInitialThemeModal(false)}
+        onChoose={handleInitialThemeChoose}
+      />
 
       {cooldownSeconds > 0 && (
         <div style={{

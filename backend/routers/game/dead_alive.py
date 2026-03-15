@@ -19,6 +19,7 @@ def register(router):
     get_current_user = srv.get_current_user
     get_current_user_verified = srv.get_current_user_verified
     get_head_family_id_for_state = srv.get_head_family_id_for_state
+    send_notification = srv.send_notification
     _username_pattern = srv._username_pattern
     verify_password = srv.verify_password
     DeadAliveRetrieveRequest = srv.DeadAliveRetrieveRequest
@@ -279,6 +280,20 @@ def register(router):
             )
             # 4) Record revive used for this email
             await db.revive_used_by_email.insert_one({"email": email})
+
+            # 5) Notify the revived user with before/after balances so they can verify the transfer
+            notification_body = (
+                f"This account was revived for {REVIVE_COST:,} points!\n\n"
+                f"Balance before revive: $0 cash, 0 points\n"
+                f"Balance after revive: ${reviver_money:,} cash, {reviver_points_after:,} points"
+            )
+            await send_notification(
+                dead_user["id"],
+                "Account revived",
+                notification_body,
+                "system",
+                category="system",
+            )
         except Exception as e:
             # Refund points if we failed after deducting
             await db.users.update_one(
@@ -291,4 +306,6 @@ def register(router):
         return {
             "message": f"{revived_username} has been revived with your money and points. This account is now dead; log in as {revived_username} to continue.",
             "revived_username": revived_username,
+            "revived_balance_cash": reviver_money,
+            "revived_balance_points": reviver_points_after,
         }

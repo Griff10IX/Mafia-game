@@ -4,7 +4,6 @@ import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Bui
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
-import StaffUserDetailsPanel from '../../components/StaffUserDetailsPanel';
 import styles from '../../styles/noir.module.css';
 
 const ADMIN_STYLES = `
@@ -249,7 +248,6 @@ export default function Admin() {
   const [cars, setCars] = useState([]);
   const [bgTestCount, setBgTestCount] = useState(2);
   const [collapsed, setCollapsed] = useState(() => loadCollapsed());
-  const [staffUserDetailsOpen, setStaffUserDetailsOpen] = useState(false);
   const [formData, setFormData] = useState({
     targetUsername: '',
     newRank: 1,
@@ -2102,7 +2100,7 @@ export default function Admin() {
   };
 
   const handleDeleteUser = async () => {
-    if (!deleteUserId.trim()) { toast.error('Enter a user ID'); return; }
+    if (!deleteUserId.trim()) { toast.error('Enter a user ID or username'); return; }
     if (!window.confirm('DELETE this user?')) return;
     setDbLoading(true);
     try {
@@ -3139,27 +3137,17 @@ export default function Admin() {
             <ActionRow icon={User} label="View registration info" description="Email, username, created at, IPs for target user">
               <BtnPrimary onClick={handleViewRegistration} disabled={viewRegistrationLoading}>{viewRegistrationLoading ? '...' : 'View'}</BtnPrimary>
             </ActionRow>
-            <ActionRow icon={Shield} label="User Details" description="Full dossier: identity, stats, network (staff-stats panel)">
-              <BtnPrimary
-                onClick={() => setStaffUserDetailsOpen(true)}
-                disabled={!(formData.targetUsername || '').trim()}
+            <ActionRow icon={Shield} label="User profile & dossier" description="Open user's profile and staff dossier (Details panel opens there, not in Admin)">
+              <Link
+                to={(formData.targetUsername || '').trim() ? `/account/profile/${encodeURIComponent((formData.targetUsername || '').trim())}?details=1` : '#'}
+                className={`inline-block bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 font-heading touch-manipulation ${(formData.targetUsername || '').trim() ? '' : 'pointer-events-none opacity-50'}`}
               >
-                View
-              </BtnPrimary>
+                Open profile
+              </Link>
             </ActionRow>
             {!(formData.targetUsername || '').trim() && (
               <p className="text-[9px] text-mutedForeground font-heading pl-6">Enter target username above.</p>
             )}
-            <StaffUserDetailsPanel
-              username={(formData.targetUsername || '').trim()}
-              open={staffUserDetailsOpen}
-              onOpenChange={setStaffUserDetailsOpen}
-              isAdmin={isAdmin}
-              isModerator={isModerator}
-              onActionDone={() => {
-                fetchLockedAccounts();
-              }}
-            />
             {viewRegistrationInfo && (
               <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-1">
                 <div className="font-bold text-primary mb-1">Registration info</div>
@@ -6498,7 +6486,7 @@ export default function Admin() {
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="User ID"
+                  placeholder="User ID or username"
                   value={deleteUserId}
                   onChange={(e) => setDeleteUserId(e.target.value)}
                   className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"

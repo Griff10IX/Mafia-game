@@ -469,6 +469,12 @@ export function ThemeProvider({ children }) {
         if (Array.isArray(prefs.customThemes)) { localStorage.setItem(STORAGE_KEY_CUSTOM_THEMES, JSON.stringify(prefs.customThemes)); setCustomThemesState(prefs.customThemes); }
         if (prefs.mobileNavStyle != null) { localStorage.setItem(STORAGE_KEY_MOBILE_NAV, prefs.mobileNavStyle); setMobileNavStyleState(prefs.mobileNavStyle); }
         if (prefs.buttonShapeId != null) { localStorage.setItem(STORAGE_KEY_BUTTON_SHAPE, prefs.buttonShapeId); setButtonShapeIdState(prefs.buttonShapeId); }
+        if (prefs.colourId != null || prefs.theme_variant != null || prefs.themeVariant != null) {
+          try {
+            localStorage.setItem('app_initial_theme_chosen', '1');
+            if (typeof window !== 'undefined') window.dispatchEvent(new Event('app-initial-theme-chosen'));
+          } catch (_) {}
+        }
       } catch (_) {}
     }).catch(() => {}).finally(() => { themeLoadedRef.current = true; });
   }, []);

@@ -3330,30 +3330,37 @@ def register(router):
     async def admin_delete_single_user(user_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        user = await db.users.find_one({"id": user_id}, {"_id": 0, "username": 1})
+        raw = (user_id or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="User ID or username required")
+        user = await db.users.find_one({"id": raw}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            username_pattern = re.compile("^" + re.escape(raw) + "$", re.IGNORECASE)
+            user = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
+        resolved_id = user["id"]
         deleted = {}
         username = user.get("username", "?")
-        deleted["user"] = (await db.users.delete_one({"id": user_id})).deleted_count
-        deleted["family_members"] = (await db.family_members.delete_many({"user_id": user_id})).deleted_count
-        deleted["bodyguards"] = (await db.bodyguards.delete_many({"$or": [{"user_id": user_id}, {"bodyguard_user_id": user_id}]})).deleted_count
-        deleted["bodyguard_invites"] = (await db.bodyguard_invites.delete_many({"$or": [{"from_user_id": user_id}, {"to_user_id": user_id}]})).deleted_count
-        deleted["user_cars"] = (await db.user_cars.delete_many({"user_id": user_id})).deleted_count
-        deleted["user_properties"] = (await db.user_properties.delete_many({"user_id": user_id})).deleted_count
-        deleted["user_weapons"] = (await db.user_weapons.delete_many({"user_id": user_id})).deleted_count
-        deleted["attacks"] = (await db.attacks.delete_many({"$or": [{"attacker_id": user_id}, {"target_id": user_id}]})).deleted_count
-        deleted["notifications"] = (await db.notifications.delete_many({"user_id": user_id})).deleted_count
-        deleted["extortions"] = (await db.extortions.delete_many({"$or": [{"extorter_id": user_id}, {"target_id": user_id}]})).deleted_count
-        deleted["sports_bets"] = (await db.sports_bets.delete_many({"user_id": user_id})).deleted_count
-        deleted["blackjack_games"] = (await db.blackjack_games.delete_many({"user_id": user_id})).deleted_count
-        deleted["dice_ownership"] = (await db.dice_ownership.update_many({"owner_id": user_id}, {"$set": {"owner_id": None, "owner_username": None}})).modified_count
-        deleted["dice_buy_back_offers"] = (await db.dice_buy_back_offers.delete_many({"$or": [{"from_owner_id": user_id}, {"to_user_id": user_id}]})).deleted_count
-        deleted["slots_ownership"] = (await db.slots_ownership.update_many({"owner_id": user_id}, {"$set": {"owner_id": None, "owner_username": None}})).modified_count
-        await db.slots_entries.update_many({}, {"$pull": {"user_ids": user_id}})
-        deleted["slots_buy_back_offers"] = (await db.slots_buy_back_offers.delete_many({"$or": [{"from_owner_id": user_id}, {"to_user_id": user_id}]})).deleted_count
-        deleted["interest_deposits"] = (await db.interest_deposits.delete_many({"user_id": user_id})).deleted_count
-        deleted["family_war_stats"] = (await db.family_war_stats.delete_many({"user_id": user_id})).deleted_count
+        deleted["user"] = (await db.users.delete_one({"id": resolved_id})).deleted_count
+        deleted["family_members"] = (await db.family_members.delete_many({"user_id": resolved_id})).deleted_count
+        deleted["bodyguards"] = (await db.bodyguards.delete_many({"$or": [{"user_id": resolved_id}, {"bodyguard_user_id": resolved_id}]})).deleted_count
+        deleted["bodyguard_invites"] = (await db.bodyguard_invites.delete_many({"$or": [{"from_user_id": resolved_id}, {"to_user_id": resolved_id}]})).deleted_count
+        deleted["user_cars"] = (await db.user_cars.delete_many({"user_id": resolved_id})).deleted_count
+        deleted["user_properties"] = (await db.user_properties.delete_many({"user_id": resolved_id})).deleted_count
+        deleted["user_weapons"] = (await db.user_weapons.delete_many({"user_id": resolved_id})).deleted_count
+        deleted["attacks"] = (await db.attacks.delete_many({"$or": [{"attacker_id": resolved_id}, {"target_id": resolved_id}]})).deleted_count
+        deleted["notifications"] = (await db.notifications.delete_many({"user_id": resolved_id})).deleted_count
+        deleted["extortions"] = (await db.extortions.delete_many({"$or": [{"extorter_id": resolved_id}, {"target_id": resolved_id}]})).deleted_count
+        deleted["sports_bets"] = (await db.sports_bets.delete_many({"user_id": resolved_id})).deleted_count
+        deleted["blackjack_games"] = (await db.blackjack_games.delete_many({"user_id": resolved_id})).deleted_count
+        deleted["dice_ownership"] = (await db.dice_ownership.update_many({"owner_id": resolved_id}, {"$set": {"owner_id": None, "owner_username": None}})).modified_count
+        deleted["dice_buy_back_offers"] = (await db.dice_buy_back_offers.delete_many({"$or": [{"from_owner_id": resolved_id}, {"to_user_id": resolved_id}]})).deleted_count
+        deleted["slots_ownership"] = (await db.slots_ownership.update_many({"owner_id": resolved_id}, {"$set": {"owner_id": None, "owner_username": None}})).modified_count
+        await db.slots_entries.update_many({}, {"$pull": {"user_ids": resolved_id}})
+        deleted["slots_buy_back_offers"] = (await db.slots_buy_back_offers.delete_many({"$or": [{"from_owner_id": resolved_id}, {"to_user_id": resolved_id}]})).deleted_count
+        deleted["interest_deposits"] = (await db.interest_deposits.delete_many({"user_id": resolved_id})).deleted_count
+        deleted["family_war_stats"] = (await db.family_war_stats.delete_many({"user_id": resolved_id})).deleted_count
         total = sum(deleted.values())
         return {"message": f"Deleted user '{username}' and {total} related documents", "details": deleted}
 

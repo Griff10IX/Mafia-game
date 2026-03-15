@@ -62,17 +62,25 @@ export const TIER_DEFS = {
 
 export const TIER_ORDER = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'galaxy', 'obsidian', 'void'];
 
-// ─── Milestone → Tier mapping ─────────────────────────────────────────────────
+// ─── Milestone → Tier mapping (bronze < silver < gold, gold well above 1K for crimes) ───
 export const MILESTONE_TIERS = {
-  crimes:         { 100: 'bronze', 500: 'silver', 1000: 'gold', 5000: 'platinum', 10000: 'diamond', 25000: 'galaxy', 50000: 'obsidian', 100000: 'obsidian', 1000000: 'void' },
-  gta:            { 10: 'bronze', 50: 'silver', 100: 'gold', 500: 'platinum', 1000: 'diamond', 5000: 'galaxy', 10000: 'obsidian', 100000: 'void' },
-  jail_busts:     { 10: 'bronze', 50: 'silver', 100: 'gold', 500: 'platinum', 1000: 'diamond', 5000: 'galaxy', 10000: 'obsidian', 100000: 'void' },
-  kills:          { 10: 'bronze', 50: 'silver', 100: 'gold', 500: 'platinum', 1000: 'diamond', 5000: 'galaxy', 10000: 'obsidian', 100000: 'void' },
-  oc_heists:      { 10: 'bronze', 50: 'silver', 100: 'gold', 500: 'platinum', 1000: 'diamond', 5000: 'galaxy', 10000: 'obsidian', 100000: 'void' },
-  bullets_melted: { 1000: 'bronze', 5000: 'silver', 10000: 'gold', 50000: 'platinum', 100000: 'diamond', 500000: 'galaxy', 1000000: 'obsidian', 5000000: 'void' },
-  booze_runs:     { 10: 'bronze', 50: 'silver', 100: 'gold', 500: 'platinum', 1000: 'diamond', 5000: 'galaxy', 10000: 'obsidian', 100000: 'void' },
-  hitlist_npc:    { 10: 'bronze', 50: 'silver', 100: 'gold', 250: 'platinum', 500: 'diamond', 1000: 'galaxy', 2500: 'obsidian', 10000: 'void' },
+  crimes:         { 500: 'bronze', 2500: 'silver', 10000: 'gold', 50000: 'platinum', 250000: 'diamond', 500000: 'galaxy', 1000000: 'obsidian', 5000000: 'void' },
+  gta:            { 50: 'bronze', 250: 'silver', 1000: 'gold', 5000: 'platinum', 25000: 'diamond', 100000: 'galaxy', 250000: 'obsidian', 500000: 'void' },
+  jail_busts:     { 50: 'bronze', 250: 'silver', 1000: 'gold', 5000: 'platinum', 25000: 'diamond', 100000: 'galaxy', 250000: 'obsidian', 500000: 'void' },
+  kills:          { 50: 'bronze', 100: 'silver', 250: 'gold', 500: 'platinum', 750: 'diamond', 1000: 'galaxy', 1500: 'void' },
+  oc_heists:      { 50: 'bronze', 250: 'silver', 1000: 'gold', 5000: 'platinum', 25000: 'diamond', 50000: 'galaxy', 100000: 'obsidian', 250000: 'void' },
+  bullets_melted: { 5000: 'bronze', 25000: 'silver', 100000: 'gold', 500000: 'platinum', 1000000: 'diamond', 2500000: 'galaxy', 5000000: 'void' },
+  booze_runs:     { 50: 'bronze', 250: 'silver', 1000: 'gold', 5000: 'platinum', 25000: 'diamond', 50000: 'galaxy', 100000: 'obsidian', 250000: 'void' },
+  hitlist_npc:    { 50: 'bronze', 250: 'silver', 1000: 'gold', 2500: 'platinum', 5000: 'diamond', 7500: 'galaxy', 10000: 'void' },
 };
+
+// Resolve tier for a given target so order is always Bronze → … → Void (no Platinum then Bronze)
+function getTierForTarget(categoryId, target) {
+  const tierMap = MILESTONE_TIERS[categoryId] || {};
+  const thresholds = Object.keys(tierMap).map(Number).filter((t) => t <= target).sort((a, b) => a - b);
+  const best = thresholds[thresholds.length - 1];
+  return best != null ? tierMap[best] : 'bronze';
+}
 
 // ─── Category accent colours ──────────────────────────────────────────────────
 export const CATEGORY_COLORS = {
@@ -84,6 +92,18 @@ export const CATEGORY_COLORS = {
   bullets_melted: { color: '#fb923c', bg: '#1a0d00', stroke: '#aa5010' },
   booze_runs:     { color: '#2dd4bf', bg: '#051818', stroke: '#108888' },
   hitlist_npc:    { color: '#f472b6', bg: '#1a0510', stroke: '#aa2266' },
+};
+
+// What each badge category is for (shown under category name)
+export const CATEGORY_DESCRIPTIONS = {
+  crimes:         'Crimes committed',
+  gta:            'GTA car thefts',
+  jail_busts:     'Jail busts completed',
+  kills:          'Kills (attack wins)',
+  oc_heists:      'Organised crime heists',
+  bullets_melted: 'Bullets melted at armoury',
+  booze_runs:     'Booze runs completed',
+  hitlist_npc:    'Hitlist NPC kills',
 };
 
 // ─── CSS animations (injected once via <style>) ───────────────────────────────
@@ -265,8 +285,7 @@ function ShieldBody({ tier, gradId, unlocked, bStroke, innerS }) {
 // ─── BadgeShield ───────────────────────────────────────────────────────────────
 export function BadgeShield({ label, unlocked, categoryId, target, size: sizeProp }) {
   const catMeta  = CATEGORY_COLORS[categoryId] || CATEGORY_COLORS.crimes;
-  const tierMap  = MILESTONE_TIERS[categoryId] || {};
-  const tierId   = tierMap[target] || 'bronze';
+  const tierId   = getTierForTarget(categoryId, target);
   const tier     = TIER_DEFS[tierId];
 
   const isHigh   = ['galaxy', 'obsidian', 'void'].includes(tierId);
@@ -449,7 +468,7 @@ export default function RankingBadges() {
 
           const lastUnlockedTierId = [...(cat.tiers || [])]
             .filter(t => t.unlocked)
-            .map(t => (MILESTONE_TIERS[cat.id] || {})[t.target] || 'bronze')
+            .map(t => getTierForTarget(cat.id, t.target))
             .pop();
 
           return (
@@ -467,6 +486,11 @@ export default function RankingBadges() {
                   <span className="font-heading font-bold uppercase tracking-wider text-sm" style={{ color: catColor }}>
                     {cat.name}
                   </span>
+                  {CATEGORY_DESCRIPTIONS[cat.id] && (
+                    <span className="text-[10px] text-mutedForeground font-heading">
+                      {CATEGORY_DESCRIPTIONS[cat.id]}
+                    </span>
+                  )}
                   {bonus && (
                     <span className="text-[10px] text-mutedForeground font-heading">
                       +{bonus.bonus_pct}% {bonus.benefit}

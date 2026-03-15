@@ -1083,6 +1083,13 @@ export default function Profile() {
     }
   }, [profile]);
 
+  // When opening profile with ?details=1 as staff viewing another user, auto-open the staff dossier
+  useEffect(() => {
+    if (profile && (isAdmin || isModerator) && !isMe && searchParams.get('details') === '1') {
+      setStaffDetailsOpen(true);
+    }
+  }, [profile, isAdmin, isModerator, isMe, searchParams]);
+
   const fetchPrefs = async () => {
     try {
       const res = await api.get('/profile/preferences');
