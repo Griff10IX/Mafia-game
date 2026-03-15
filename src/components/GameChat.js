@@ -169,7 +169,13 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
       }
       fetchMessages().catch(() => {}); // Refresh in background; ignore errors (poll will retry)
     } catch (err) {
-      toast.error(getApiErrorMessage(err));
+      const status = err.response?.status;
+      const msg = status === 500
+        ? 'Send failed; your message may still appear in a moment.'
+        : getApiErrorMessage(err);
+      toast.error(msg);
+      // Refetch after short delay — server may have saved the message but returned 500
+      setTimeout(() => fetchMessages().catch(() => {}), 1500);
     } finally {
       setSending(false);
     }
@@ -204,7 +210,12 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
       }
       fetchMessages().catch(() => {});
     } catch (err) {
-      toast.error(getApiErrorMessage(err));
+      const status = err.response?.status;
+      const msg = status === 500
+        ? 'Send failed; your message may still appear in a moment.'
+        : getApiErrorMessage(err);
+      toast.error(msg);
+      setTimeout(() => fetchMessages().catch(() => {}), 1500);
     } finally {
       setSending(false);
     }

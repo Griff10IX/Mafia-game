@@ -1009,10 +1009,12 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 except Exception:
                     pass
                 rp_added = int((rewards.get("rank_points", 0) or 0) * hitlist_mult)
+                raw_bullets = int((rewards.get("bullets", 0) or 0) * hitlist_mult)
+                min_bullets = math.ceil(bullets_required * 1.12)  # always profitable: reward >= cost + 12%
                 inc = {
                     "money": int((rewards.get("cash", 0) or 0) * hitlist_mult),
                     "rank_points": rp_added,
-                    "bullets": int((rewards.get("bullets", 0) or 0) * hitlist_mult),
+                    "bullets": max(raw_bullets, min_bullets),
                     "total_kills": 1,
                     "hitlist_npc_kills": 1,
                 }

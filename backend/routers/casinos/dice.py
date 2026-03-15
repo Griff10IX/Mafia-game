@@ -301,9 +301,10 @@ def register(router):
 
     @router.post("/casino/dice/claim")
     async def casino_dice_claim(request: DiceClaimRequest, current_user: dict = Depends(get_current_user_verified)):
-        """Claim ownership of the dice table in a city (cost in points). Max 1 casino per player. Requires Capo or higher."""
+        """Claim ownership of the dice table in a city (cost in points). Max 1 casino per player. Requires Capo or higher (or prestiged)."""
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
-        if rank_id < CAPO_RANK_ID:
+        prestige_level = int(current_user.get("prestige_level") or 0)
+        if rank_id < CAPO_RANK_ID and prestige_level < 1:
             raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim a casino. Reach Capo to hold one.")
         _invalidate_ownership_cache(current_user.get("id") or "")
         city = _normalize_city_for_dice((request.city or "").strip())

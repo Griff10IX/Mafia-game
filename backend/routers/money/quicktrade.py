@@ -656,7 +656,8 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     prop_type = prop.get("type") or ""
     if prop_type.startswith("casino_") or prop_type == "airport" or prop_type == "bullet_factory":
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
-        if rank_id < CAPO_RANK_ID:
+        prestige_level = int(current_user.get("prestige_level") or 0)
+        if rank_id < CAPO_RANK_ID and prestige_level < 1:
             raise HTTPException(status_code=403, detail="You must be rank Capo or higher to buy a casino or property. Reach Capo to hold one.")
     buyer = await db.users.find_one({"id": buyer_id})
     if not buyer:

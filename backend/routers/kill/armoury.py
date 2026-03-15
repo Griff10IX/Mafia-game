@@ -403,9 +403,10 @@ async def claim_bullet_factory(
     body: StateOptionalRequest = Body(default=StateOptionalRequest()),
     current_user: dict = Depends(get_current_user),
 ):
-    """Pay to become the armoury owner in this state (bullets + armour + weapons). Max 1 property per player. Requires Capo or higher."""
+    """Pay to become the armoury owner in this state (bullets + armour + weapons). Max 1 property per player. Requires Capo or higher (or prestiged)."""
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
-    if rank_id < CAPO_RANK_ID:
+    prestige_level = int(current_user.get("prestige_level") or 0)
+    if rank_id < CAPO_RANK_ID and prestige_level < 1:
         raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim the armoury. Reach Capo to hold one.")
     owned_prop = await _user_owns_any_property(current_user["id"])
     if owned_prop:

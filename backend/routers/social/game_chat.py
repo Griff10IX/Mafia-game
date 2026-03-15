@@ -207,8 +207,8 @@ def register(router):
         if body.gif_url:
             doc["gif_url"] = body.gif_url.strip()
         await db.game_chat_messages.insert_one(doc)
-        # Response to clients should not expose internal ids
-        safe_doc = {k: v for k, v in doc.items() if k not in ("user_id", "family_id")}
+        # Response to clients: exclude internal _id (added by insert_one), user_id, family_id
+        safe_doc = {k: v for k, v in doc.items() if k not in ("_id", "user_id", "family_id")}
         return {"message": safe_doc}
 
     @router.get("/game-chat/prefs")

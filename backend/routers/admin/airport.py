@@ -428,7 +428,8 @@ async def list_airports(current_user: dict = Depends(get_current_user)):
 async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(get_current_user)):
     from server import _user_owns_any_property, maybe_auto_relinquish_below_capo  # lazy import to avoid circular dependency
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
-    if rank_id < CAPO_RANK_ID:
+    prestige_level = int(current_user.get("prestige_level") or 0)
+    if rank_id < CAPO_RANK_ID and prestige_level < 1:
         raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim a property (airport). Reach Capo to hold one.")
     if req.state not in STATES:
         raise HTTPException(status_code=400, detail="Invalid state")
