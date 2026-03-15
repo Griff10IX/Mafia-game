@@ -973,7 +973,7 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
     """Find users whose auto_rank_next_run_at is due, run each once, set next_run_at.
     Use cycle_start (e.g. when the loop iteration began) for scheduling the next run so that
     delays from run_booze_arrivals() don't stretch the effective interval.
-    Skips users who have been inactive for 12+ hours (auto_rank_idle)."""
+    Skips users who have been inactive for 24+ hours (auto_rank_idle)."""
     import server as srv
     db = srv.db
     now = datetime.now(timezone.utc)
@@ -1036,7 +1036,7 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
 
 async def run_bust_5sec_once():
     """Single pass: for bust-every-5-sec users, try one jail bust each. Target pool = NPCs + jailed players (random pick so both can be busted).
-    Skips users who have been inactive for 12+ hours (auto_rank_idle)."""
+    Skips users who have been inactive for 24+ hours (auto_rank_idle)."""
     import random
     import server as srv
     db = srv.db
@@ -1108,7 +1108,7 @@ async def run_bust_5sec_loop():
 
 async def run_auto_rank_oc_once():
     """Single pass: for OC users, run OC with NPC when timer ready. Used by cron or loop.
-    Skips users who have been inactive for 12+ hours (auto_rank_idle)."""
+    Skips users who have been inactive for 24+ hours (auto_rank_idle)."""
     import server as srv
     from routers.crime.oc import run_oc_heist_npc_only
     from middleware.security import send_telegram_to_chat

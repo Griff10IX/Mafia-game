@@ -801,14 +801,14 @@ export default function Layout({ children }) {
       };
   const SIDEBAR_CATEGORIES = isCategorizedClassic
     ? [
-        { id: 'information', label: 'INFORMATION' }, { id: 'combat', label: 'COMBAT' }, { id: 'ranking', label: 'RANKING' },
-        { id: 'minigames', label: 'MINI GAMES' },
-        { id: 'travel', label: 'TRAVEL' }, { id: 'messaging', label: 'MESSAGING' }, { id: 'money', label: 'MONEY' }, { id: 'other', label: 'OTHER' },
+        { id: 'information', label: 'INFORMATION' }, { id: 'combat', label: 'COMBAT' }, { id: 'travel', label: 'TRAVEL' },
+        { id: 'ranking', label: 'RANKING' }, { id: 'messaging', label: 'MESSAGING' }, { id: 'money', label: 'MONEY' },
+        { id: 'other', label: 'OTHER' }, { id: 'minigames', label: 'MINI GAMES' },
       ]
     : [
-        { id: 'information', label: 'You' }, { id: 'combat', label: 'Combat' }, { id: 'ranking', label: 'Ranking' },
-        { id: 'minigames', label: 'Mini games' },
-        { id: 'travel', label: 'Travel' }, { id: 'messaging', label: 'Messages' }, { id: 'money', label: 'Money' }, { id: 'other', label: 'Other' },
+        { id: 'information', label: 'You' }, { id: 'combat', label: 'Combat' }, { id: 'travel', label: 'Travel' },
+        { id: 'ranking', label: 'Ranking' }, { id: 'messaging', label: 'Messages' }, { id: 'money', label: 'Money' },
+        { id: 'other', label: 'Other' }, { id: 'minigames', label: 'Mini Games' },
       ];
 
   const navItems = [
