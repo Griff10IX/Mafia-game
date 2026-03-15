@@ -789,7 +789,8 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         melt_action_ids = user.get("auto_rank_melt_action_ids") or []
         melt_rarity_ids = user.get("auto_rank_melt_rarity_ids") or []
         if isinstance(melt_action_ids, list) and len(melt_action_ids) > 0:
-            allowed_rarities = set(melt_rarity_ids) if isinstance(melt_rarity_ids, list) and len(melt_rarity_ids) > 0 else None
+            # No rarities selected = don't melt/scrap any cars
+            allowed_rarities = set(melt_rarity_ids) if isinstance(melt_rarity_ids, list) and len(melt_rarity_ids) > 0 else set()
             batch_limit = user.get("garage_batch_limit") or getattr(srv, "DEFAULT_GARAGE_BATCH_LIMIT", 6)
             cars_cursor = db.user_cars.find({"user_id": user_id})
             user_cars = await cars_cursor.to_list(1000)
@@ -802,7 +803,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 if not car_info:
                     continue
                 rarity = car_info.get("rarity") or "common"
-                if allowed_rarities is not None and rarity not in allowed_rarities:
+                if rarity not in allowed_rarities:
                     continue
                 ucid = uc.get("id") or str(uc.get("_id", ""))
                 value = int(car_info.get("value") or 0)
@@ -878,7 +879,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                                 if not car_info:
                                     continue
                                 rarity = car_info.get("rarity") or "common"
-                                if allowed_rarities is not None and rarity not in allowed_rarities:
+                                if rarity not in allowed_rarities:
                                     continue
                                 ucid = uc.get("id") or str(uc.get("_id", ""))
                                 eligible.append({"user_car_id": ucid, "value": int(car_info.get("value") or 0)})
@@ -1238,7 +1239,7 @@ MELT_OPTIONS = [
     {"id": "bullets", "name": "Melt for Bullets"},
     {"id": "cash", "name": "Scrap for Cash"},
 ]
-MELT_RARITIES = ["common", "uncommon", "rare", "ultra_rare", "legendary", "custom", "exclusive"]
+MELT_RARITIES = ["common", "uncommon", "rare", "ultra_rare", "legendary", "custom", "loot_exclusive", "exclusive"]
 
 
 def _extract_preferences(user: dict) -> dict:

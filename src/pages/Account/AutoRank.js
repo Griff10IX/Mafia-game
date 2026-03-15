@@ -397,7 +397,7 @@ const CrimesGtaSettingsCard = ({
         <div className="flex items-center justify-between gap-2 mb-2">
           <span className="text-[10px] sm:text-xs font-heading font-bold text-zinc-300 flex items-center gap-1.5">
             <Flame size={12} className="text-primary" />
-            Melt actions
+            Melt / Scrap actions
           </span>
           <div className="flex gap-1">
             <button type="button" onClick={onSelectAllMeltActions} disabled={meltDisabled} className="text-[9px] font-heading font-bold text-primary hover:underline disabled:opacity-50">All</button>
@@ -430,7 +430,7 @@ const CrimesGtaSettingsCard = ({
             <button type="button" onClick={onDeselectAllMeltRarities} disabled={meltDisabled} className="text-[9px] font-heading font-bold text-zinc-400 hover:underline disabled:opacity-50">None</button>
           </div>
         </div>
-        <p className="text-[9px] text-zinc-500 font-heading mb-1">Empty = melt all rarities</p>
+        <p className="text-[9px] text-zinc-500 font-heading mb-1">Select at least one rarity to melt or scrap; empty = none</p>
         <div className="max-h-32 overflow-y-auto rounded bg-zinc-800/40 border border-zinc-700/30 divide-y divide-zinc-700/30">
           {((meltOptions?.rarities) || []).map((r) => (
             <OptionCheckbox

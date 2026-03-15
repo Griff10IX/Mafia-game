@@ -12,6 +12,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, _is_admin, _is_moderator, _is_hdo, log_activity, send_notification, ADMIN_EMAILS
+from utils.text import strip_emoji
 
 
 def _parse_iso_datetime(s):
@@ -373,7 +374,7 @@ async def add_comment(
         raise HTTPException(status_code=403, detail="You are muted from the forum and cannot post.")
     topic = await db.forum_topics.find_one(
         {"id": topic_id},
-        {"_id": 0, "is_locked": 1, "title": 1, "author_id": 1},
+        {"_id": 0, "is_locked": 1, "title": 1, "author_id": 1, "category": 1},
     )
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
@@ -381,6 +382,9 @@ async def add_comment(
         raise HTTPException(status_code=400, detail="Topic is locked")
     content = (request.content or "").strip()
     gif_url = (request.gif_url or "").strip()
+    if topic.get("category") == "designer":
+        content = strip_emoji(content)
+        gif_url = strip_emoji(gif_url).strip()
     if gif_url and not (gif_url.startswith("http://") or gif_url.startswith("https://")):
         raise HTTPException(status_code=400, detail="Invalid GIF URL")
     if not content and not gif_url:

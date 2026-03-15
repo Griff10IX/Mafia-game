@@ -353,7 +353,7 @@ const SettingsModal = ({
         
         <div className="p-4 space-y-3">
           <p className="text-xs text-mutedForeground font-heading">
-            Choose rarities for "Select all". Leave unchecked to include all.
+            Select rarities to melt or scrap. Empty = none (no cars will be melted or scrapped).
           </p>
           
           <div className="space-y-1">
@@ -570,10 +570,19 @@ export default function Garage() {
   };
 
   const meltCars = async () => {
-    if (selectedCars.length === 0) { toast.error('No cars selected'); return; }
+    const eligibleIds = meltScrapRarities.length > 0
+      ? selectedCars.filter((id) => {
+          const c = cars.find((car) => car.user_car_id === id);
+          return c && !c.listed_for_sale && meltScrapRarities.includes(c.rarity);
+        })
+      : [];
+    if (eligibleIds.length === 0) {
+      toast.error(meltScrapRarities.length === 0 ? 'Select rarities to melt or scrap (Melt/Scrap settings)' : 'No eligible cars selected');
+      return;
+    }
     if (meltBulletsSecondsRemaining > 0) return;
     try {
-      const response = await api.post('/gta/melt', { car_ids: selectedCars, action: 'bullets' });
+      const response = await api.post('/gta/melt', { car_ids: eligibleIds, action: 'bullets' });
       toast.success(response.data.message);
       if (response.data.melt_bullets_cooldown_until) {
         setMeltBulletsCooldownUntil(response.data.melt_bullets_cooldown_until);
@@ -587,9 +596,18 @@ export default function Garage() {
   };
 
   const scrapCars = async () => {
-    if (selectedCars.length === 0) { toast.error('No cars selected'); return; }
+    const eligibleIds = meltScrapRarities.length > 0
+      ? selectedCars.filter((id) => {
+          const c = cars.find((car) => car.user_car_id === id);
+          return c && !c.listed_for_sale && meltScrapRarities.includes(c.rarity);
+        })
+      : [];
+    if (eligibleIds.length === 0) {
+      toast.error(meltScrapRarities.length === 0 ? 'Select rarities to melt or scrap (Melt/Scrap settings)' : 'No eligible cars selected');
+      return;
+    }
     try {
-      const response = await api.post('/gta/melt', { car_ids: selectedCars, action: 'cash' });
+      const response = await api.post('/gta/melt', { car_ids: eligibleIds, action: 'cash' });
       toast.success(response.data.message);
       setSelectedCars([]);
       refreshUser();
@@ -625,7 +643,7 @@ export default function Garage() {
   const hiddenCount = totalCount - displayedCars.length;
   
   const displayedEligibleForMelt = displayedCars.filter(
-    (c) => !c.listed_for_sale && (meltScrapRarities.length === 0 || meltScrapRarities.includes(c.rarity))
+    (c) => !c.listed_for_sale && meltScrapRarities.length > 0 && meltScrapRarities.includes(c.rarity)
   );
   const displayedEligibleIds = displayedEligibleForMelt.map((c) => c.user_car_id);
   const allDisplayedSelected = displayedEligibleIds.length > 0 && displayedEligibleIds.every((id) => selectedCars.includes(id));
@@ -634,7 +652,7 @@ export default function Garage() {
 
   const batchLimit = user?.garage_batch_limit ?? 6;
   const selectedCarsForMelt = allFilteredCars.filter(
-    (c) => selectedCars.includes(c.user_car_id) && !c.listed_for_sale
+    (c) => selectedCars.includes(c.user_car_id) && !c.listed_for_sale && meltScrapRarities.length > 0 && meltScrapRarities.includes(c.rarity)
   );
   const predictedMeltBullets = selectedCarsForMelt
     .slice(0, batchLimit)

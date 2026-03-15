@@ -156,7 +156,9 @@ const KillUserCard = ({
   foundAndReady,
   loading,
   onKill,
-  onOpenCalc
+  onOpenCalc,
+  bulletsNeededForKill,
+  bulletsNeededLoading,
 }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in`}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atk-glow" />
@@ -195,6 +197,18 @@ const KillUserCard = ({
           ))}
         </datalist>
       </div>
+
+      {killUsername.trim() && (
+        <div className="text-[10px] font-heading text-mutedForeground">
+          {bulletsNeededLoading ? (
+            <span className="italic">Loading bullets needed…</span>
+          ) : bulletsNeededForKill && (killUsername.trim().toLowerCase() === bulletsNeededForKill.username.toLowerCase()) ? (
+            <span>
+              Bullets needed to kill {bulletsNeededForKill.username}: <span className="text-primary font-bold">{Number(bulletsNeededForKill.bullets).toLocaleString()}</span>
+            </span>
+          ) : null}
+        </div>
+      )}
       
       <div>
         <label className="block text-[9px] text-mutedForeground font-heading uppercase tracking-wider mb-0.5">
@@ -921,6 +935,8 @@ export default function Attack() {
   const [calcLoading, setCalcLoading] = useState(false);
   const [calcResult, setCalcResult] = useState(null);
   const [showCalcModal, setShowCalcModal] = useState(false);
+  const [killBulletsResult, setKillBulletsResult] = useState(null);
+  const [killBulletsLoading, setKillBulletsLoading] = useState(false);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [userBullets, setUserBullets] = useState(0);
@@ -1360,6 +1376,31 @@ export default function Attack() {
     }
   };
 
+  // Debounced fetch of bullets needed to kill the user in the kill form
+  useEffect(() => {
+    const trimmed = (killUsername || '').trim();
+    if (!trimmed) {
+      setKillBulletsResult(null);
+      setKillBulletsLoading(false);
+      return;
+    }
+    setKillBulletsLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.post('/attack/bullets/calc', { target_username: trimmed });
+        setKillBulletsResult({
+          username: res.data.target_username ?? trimmed,
+          bullets: res.data.bullets_required ?? 0,
+        });
+      } catch {
+        setKillBulletsResult(null);
+      } finally {
+        setKillBulletsLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [killUsername]);
+
   const foundAndReady = useMemo(() => attacks.filter((a) => a.status === 'found'), [attacks]);
   
   const filteredAttacks = useMemo(() => {
@@ -1408,15 +1449,17 @@ export default function Attack() {
             setDeathMessage={setDeathMessage}
             makePublic={makePublic}
             setMakePublic={setMakePublic}
-          useMolotovs={useMolotovs}
-          setUseMolotovs={setUseMolotovs}
+            useMolotovs={useMolotovs}
+            setUseMolotovs={setUseMolotovs}
             inflationPct={inflationPct}
             userBullets={userBullets}
-          userMolotovs={userMolotovs}
+            userMolotovs={userMolotovs}
             foundAndReady={foundAndReady}
             loading={loading}
             onKill={killByUsername}
             onOpenCalc={() => setShowCalcModal(true)}
+            bulletsNeededForKill={killBulletsResult}
+            bulletsNeededLoading={killBulletsLoading}
           />
 
           <FindUserCard

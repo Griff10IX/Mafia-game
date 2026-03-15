@@ -11,6 +11,7 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
 from server import db, get_current_user, send_notification, send_notification_to_all, _is_admin, _is_moderator
+from utils.text import strip_emoji
 
 VOTER_REWARD_POINTS = 100
 
@@ -89,8 +90,8 @@ async def create_competition(body: CompetitionCreate, current_user: dict = Depen
     now = datetime.now(timezone.utc).isoformat()
     doc = {
         "id": comp_id,
-        "title": (body.title or "").strip(),
-        "description": (body.description or "").strip() or None,
+        "title": strip_emoji((body.title or "").strip()),
+        "description": (strip_emoji((body.description or "").strip()) or "").strip() or None,
         "start_at": body.start_at.strip(),
         "end_at": body.end_at.strip(),
         "reward_money": int(body.reward_money or 0),
@@ -118,9 +119,9 @@ async def update_competition(comp_id: str, body: CompetitionUpdate, current_user
         raise HTTPException(status_code=400, detail="Only draft competitions can be updated")
     updates = {}
     if body.title is not None:
-        updates["title"] = body.title.strip()
+        updates["title"] = strip_emoji(body.title.strip())
     if body.description is not None:
-        updates["description"] = body.description.strip() or None
+        updates["description"] = (strip_emoji(body.description.strip()) or "").strip() or None
     if body.start_at is not None:
         updates["start_at"] = body.start_at.strip()
     if body.end_at is not None:
@@ -148,9 +149,9 @@ async def start_competition(comp_id: str, current_user: dict = Depends(get_curre
     if comp.get("status") != "draft":
         raise HTTPException(status_code=400, detail="Only draft competitions can be started")
     now = datetime.now(timezone.utc).isoformat()
-    title = (comp.get("title") or "Designer competition").strip()
+    title = strip_emoji((comp.get("title") or "Designer competition").strip())
     topic_title = f"Designer Competition: {title}"
-    topic_content = (comp.get("description") or "").strip() or "Post your picture in a reply below to enter. Then use \"Submit as my entry\" on your post."
+    topic_content = strip_emoji((comp.get("description") or "").strip()) or "Post your picture in a reply below to enter. Then use \"Submit as my entry\" on your post."
     topic_id = str(uuid.uuid4())
     topic_doc = {
         "id": topic_id,

@@ -150,6 +150,7 @@ def register(router):
     db = srv.db
     get_current_user = srv.get_current_user
     send_notification = srv.send_notification
+    send_notification_to_all = srv.send_notification_to_all
     _is_admin = srv._is_admin
     _is_moderator = srv._is_moderator
     _is_hdo = srv._is_hdo
@@ -418,6 +419,13 @@ def register(router):
             {"$set": {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID, "released": body.released}},
             upsert=True,
         )
+        if body.released:
+            await send_notification_to_all(
+                "GTA exclusive in pool",
+                "The Al Capone exclusive car is now in the GTA car pool. It can drop from GTAs (very rare); only one exists in the game at a time.",
+                "system",
+                category="gta_exclusive",
+            )
         return {"message": f"Al Capone exclusive {'released into' if body.released else 'retracted from'} GTA car pool", "released": body.released}
 
     @router.post("/admin/give-everyone-exclusive-cars")

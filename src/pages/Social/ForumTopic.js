@@ -1024,13 +1024,15 @@ export default function ForumTopic() {
                 >
                   GIF
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setShowEmojis(!showEmojis)}
-                  className="px-2 py-1 rounded border border-zinc-700/50 text-mutedForeground text-[10px] font-heading hover:text-foreground transition-all"
-                >
-                  😀 Emoji
-                </button>
+                {topic?.category !== 'designer' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEmojis(!showEmojis)}
+                    className="px-2 py-1 rounded border border-zinc-700/50 text-mutedForeground text-[10px] font-heading hover:text-foreground transition-all"
+                  >
+                    😀 Emoji
+                  </button>
+                )}
                 
                 <div className="flex-1" />
                 
@@ -1043,8 +1045,8 @@ export default function ForumTopic() {
                 </button>
               </div>
               
-              {/* Emoji picker */}
-              {showEmojis && (
+              {/* Emoji picker (hidden on designer comp topics to avoid emojis in entries) */}
+              {topic?.category !== 'designer' && showEmojis && (
                 <div className="flex flex-wrap gap-1 pt-2 border-t border-zinc-700/30">
                   {/* Classic forum smileys first */}
                   {CLASSIC_SMILEYS.map(({ code, img }) => (
