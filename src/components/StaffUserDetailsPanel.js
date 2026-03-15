@@ -208,7 +208,7 @@ export default function StaffUserDetailsPanel({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className={`flex flex-col h-full max-h-[100vh] w-full sm:max-w-md overflow-hidden ${styles.panel} border-primary/30 bg-[var(--noir-surface)] shadow-[0_0_24px_rgba(var(--noir-primary-rgb),0.08)]`}
+        className={`flex flex-col h-full max-h-[100vh] w-full sm:max-w-2xl md:max-w-4xl overflow-hidden ${styles.panel} border-primary/30 bg-[var(--noir-surface)] shadow-[0_0_24px_rgba(var(--noir-primary-rgb),0.08)]`}
       >
         <SheetHeader className="pb-2 shrink-0">
           <div className="flex items-center gap-2">
@@ -264,15 +264,16 @@ export default function StaffUserDetailsPanel({
 
           {data && !loading && (
             <>
-              <Section title="Identity">
-                <Row label="User ID" value={data.id} mono />
-                <Row label="Username" value={data.username} />
-                <Row label="Email" value={data.email} />
-                <Row label="Created" value={formatDateTime(data.created_at)} />
-                <Row label="Last seen" value={formatDateTime(data.last_seen)} />
-              </Section>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                <Section title="Identity">
+                  <Row label="User ID" value={data.id} mono />
+                  <Row label="Username" value={data.username} />
+                  <Row label="Email" value={data.email} />
+                  <Row label="Created" value={formatDateTime(data.created_at)} />
+                  <Row label="Last seen" value={formatDateTime(data.last_seen)} />
+                </Section>
 
-              <Section title="Rank & crew">
+                <Section title="Rank & crew">
                 <Row
                   label="Rank"
                   value={
@@ -386,24 +387,25 @@ export default function StaffUserDetailsPanel({
                 />
               </Section>
 
-              <Section title="Network">
-                <div className="col-span-2">
-                  <span className="text-mutedForeground block truncate">
-                    Registration IP
-                  </span>
-                  <span className="font-mono text-[9px] text-foreground block break-all">
-                    {data.registration_ip ?? '—'}
-                  </span>
-                </div>
-                <div className="col-span-2">
-                  <span className="text-mutedForeground block truncate">
-                    Last login IP
-                  </span>
-                  <span className="font-mono text-[9px] text-foreground block break-all">
-                    {data.last_login_ip ?? '—'}
-                  </span>
-                </div>
-              </Section>
+                <Section title="Network">
+                  <div className="col-span-2">
+                    <span className="text-mutedForeground block truncate">
+                      Registration IP
+                    </span>
+                    <span className="font-mono text-[9px] text-foreground block break-all">
+                      {data.registration_ip ?? '—'}
+                    </span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-mutedForeground block truncate">
+                      Last login IP
+                    </span>
+                    <span className="font-mono text-[9px] text-foreground block break-all">
+                      {data.last_login_ip ?? '—'}
+                    </span>
+                  </div>
+                </Section>
+              </div>
 
               {isStaff && (
                 <>
