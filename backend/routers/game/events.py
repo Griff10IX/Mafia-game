@@ -1,10 +1,22 @@
 # Events: active daily event, flash news (ticker)
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import Depends
 
 from server import db, get_current_user, get_effective_event, get_events_enabled
 from routers.money.booze_run import get_booze_rotation_interval_seconds, get_booze_rotation_index
+
+# Rotating tips for flash news ticker (one per day so the bar has more to show)
+FLASH_NEWS_TIPS = [
+    "Organised Crime: run heists with you + 3 NPCs for big payouts.",
+    "Booze Run: buy low, travel, sell high. Prices rotate every few hours.",
+    "Auto Rank: automate crimes, GTA, busts and booze from Account → Auto Rank.",
+    "Stock market: buy and sell shares. Check Money → Stock Market.",
+    "Jail: bust out or wait. Bodyguards can reduce your sentence.",
+    "GTA: steal cars for cash and rank. Unlock better options as you rank up.",
+    "Family rackets: run rackets for your family. Payouts vary by daily event.",
+    "Missions: complete objectives for rewards. Account → Missions.",
+]
 
 
 async def get_active_event(current_user: dict = Depends(get_current_user)):
@@ -75,8 +87,81 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
                 items.append({"id": w.get("id") + "_end", "type": "war_ended", "message": f"War ended: {wn} defeated {ln}", "at": ended_at})
             else:
                 items.append({"id": w.get("id") + "_end", "type": "war_ended", "message": f"War ended: {a_name} vs {b_name}", "at": ended_at})
+
+    # Hitlist additions (recent, non-hidden; cap 3)
+    cutoff_24h = (now - timedelta(hours=24)).isoformat()
+    try:
+        hitlist_docs = await db.hitlist.find({"hidden": {"$ne": True}}).sort("created_at", -1).limit(10).to_list(10)
+        for i, doc in enumerate(hitlist_docs):
+            if i >= 3:
+                break
+            created_at = doc.get("created_at") or ""
+            if created_at and str(created_at) < cutoff_24h:
+                continue
+            target = doc.get("target_username") or "Someone"
+            reward_type = doc.get("reward_type") or "cash"
+            amount = doc.get("reward_amount") or 0
+            if reward_type == "points":
+                msg = f"{target} was added to the hitlist for {amount} pts"
+            else:
+                msg = f"{target} was added to the hitlist for ${amount:,}"
+            items.append({
+                "id": f"hitlist_{doc.get('id', i)}",
+                "type": "hitlist_add",
+                "message": msg,
+                "at": created_at if isinstance(created_at, str) else (created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at)),
+            })
+    except Exception:
+        pass
+
+    # Users in jail (one item; only if >= 2 to avoid permanent single-user line)
+    try:
+        jail_count = await db.users.count_documents({"in_jail": True})
+        if jail_count >= 2:
+            users_word = "users" if jail_count != 1 else "user"
+            items.append({
+                "id": f"jail_count_{now.date().isoformat()}",
+                "type": "jail_count",
+                "message": f"{jail_count} {users_word} currently in jail.",
+                "at": now.isoformat(),
+            })
+    except Exception:
+        pass
+
+    # Recent player kills (cap 5)
+    try:
+        kill_docs = await db.attack_attempts.find({
+            "outcome": "killed",
+            "target_is_npc": {"$ne": True},
+            "is_npc_kill": {"$ne": True},
+        }).sort("created_at", -1).limit(10).to_list(10)
+        for i, doc in enumerate(kill_docs):
+            if i >= 5:
+                break
+            target = doc.get("target_username") or "Someone"
+            attacker = doc.get("attacker_username") or "?"
+            created_at = doc.get("created_at") or ""
+            at_str = created_at if isinstance(created_at, str) else (created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at))
+            items.append({
+                "id": f"kill_{doc.get('id', i)}",
+                "type": "kill",
+                "message": f"{target} was killed by {attacker}",
+                "at": at_str,
+            })
+    except Exception:
+        pass
+
+    # Add a rotating tip so the ticker always has extra variety
+    day_index = now.date().toordinal() % len(FLASH_NEWS_TIPS)
+    tip_message = FLASH_NEWS_TIPS[day_index]
+    items.append({
+        "id": f"tip_{day_index}_{now.date().isoformat()}",
+        "type": "tip",
+        "message": tip_message,
+        "at": now.date().isoformat() + "T12:00:00+00:00",
+    })
     items.sort(key=lambda x: x["at"], reverse=True)
-    return {"items": items[:10]}
+    return {"items": items[:15]}
 
 
 def register(router):
