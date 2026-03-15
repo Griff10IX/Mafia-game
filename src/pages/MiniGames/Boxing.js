@@ -365,7 +365,7 @@ function FightReplay({ fight, onClose }) {
         <div style={{ position: "relative", width: "100%", maxWidth: 720, margin: "0 auto", aspectRatio: "16/9", flexShrink: 0 }}>
           <canvas ref={canvasRef} width={640} height={360} style={{ width: "100%", height: "100%", display: "block" }} />
         </div>
-        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-2 min-h-0" style={{ fontSize: 11, lineHeight: 1.7, color: "#e0d0b0" }}>
+        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-2 min-h-0" style={{ fontSize: 11, lineHeight: 1.7, color: "#e0d0b0", textAlign: "center", maxWidth: 720, margin: "0 auto", width: "100%" }}>
           {commentary.map((c, i) => (
             <div key={i} style={{
               marginBottom: c.type === "round" ? 8 : 2,
