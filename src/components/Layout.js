@@ -809,6 +809,7 @@ export default function Layout({ children }) {
     { path: '/account/inventory', icon: Package, label: 'My Inventory' },
     { path: '/money/loot-box', icon: Gift, label: 'Loot Box' },
     { path: '/account/profile', icon: User, label: 'Edit Profile' },
+    { path: '/account/referral', icon: UserPlus, label: 'Referral' },
     { path: '/account/settings', icon: Globe, label: 'IP & Devices' },
     { path: '/game/stats', icon: TrendingUp, label: 'Stats' },
     { path: '/account/stats', icon: BarChart3, label: 'My Stats' },
