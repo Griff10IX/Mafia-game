@@ -28,6 +28,7 @@ export default function DeadAlive() {
 
   const [reviveEligibility, setReviveEligibility] = useState(null);
   const [reviveUsername, setReviveUsername] = useState('');
+  const [revivePassword, setRevivePassword] = useState('');
   const [reviveLoading, setReviveLoading] = useState(false);
   const [reviveSuccess, setReviveSuccess] = useState(null);
 
@@ -47,11 +48,19 @@ export default function DeadAlive() {
     setReviveLoading(true);
     setReviveSuccess(null);
     try {
-      const response = await api.post('/dead-alive/revive', { dead_username: toRevive });
+      const response = await api.post('/dead-alive/revive', {
+        dead_username: toRevive,
+        dead_password: revivePassword ? revivePassword : undefined
+      });
       toast.success(response.data.message);
       setReviveSuccess(response.data.revived_username);
       setReviveUsername('');
+      setRevivePassword('');
       setReviveEligibility((prev) => prev ? { ...prev, can_revive: false, revive_used: true, dead_accounts_same_email: [] } : null);
+      // Refetch user so Layout sees is_dead and shows the death screen
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app:refresh-user'));
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Revive failed.');
     } finally {
@@ -229,7 +238,7 @@ export default function DeadAlive() {
             </div>
             <div className="p-5 space-y-4">
               <p className="text-[11px] font-heading leading-relaxed" style={{ color: 'var(--noir-muted)' }}>
-                Pay {REVIVE_COST.toLocaleString()} points once to bring back one of your dead accounts linked to the same email.
+                Pay {REVIVE_COST.toLocaleString()} points once to bring back one of your dead accounts (same email, or prove ownership with that account&apos;s password if its email was freed).
                 This account will become dead; only your money and points (minus the cost) move to the revived account. No mission or rank transfer. One-time per email.
               </p>
               {reviveEligibility.revive_used && (
@@ -266,13 +275,28 @@ export default function DeadAlive() {
                         type="text"
                         value={reviveUsername}
                         onChange={(e) => setReviveUsername(e.target.value)}
-                        placeholder="Username of dead account (same email)"
+                        placeholder="Username of dead account"
                         autoComplete="off"
                         className={`da-input w-full ${styles.input} px-3 py-2.5 text-sm rounded transition-all`}
                         style={{ color: 'var(--noir-foreground)', fontFamily: 'inherit' }}
                         data-testid="revive-username"
                       />
                     )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-heading uppercase tracking-widest" style={{ color: 'var(--noir-muted)' }}>
+                      Dead account password (required if that account&apos;s email was freed, e.g. after Claim the Estate or new registration with same email)
+                    </label>
+                    <input
+                      type="password"
+                      value={revivePassword}
+                      onChange={(e) => setRevivePassword(e.target.value)}
+                      placeholder="Leave blank if same email still linked"
+                      autoComplete="new-password"
+                      className={`da-input w-full ${styles.input} px-3 py-2.5 text-sm rounded transition-all`}
+                      style={{ color: 'var(--noir-foreground)', fontFamily: 'inherit' }}
+                      data-testid="revive-password"
+                    />
                   </div>
                   <div className="flex items-center justify-between px-3 py-2 rounded bg-primary/10 border border-primary/20 text-[11px] font-heading" style={{ color: 'var(--noir-foreground)' }}>
                     <span style={{ color: 'var(--noir-muted)' }}>Your points</span>

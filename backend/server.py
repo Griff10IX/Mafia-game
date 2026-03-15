@@ -516,6 +516,7 @@ class DeadAliveRetrieveRequest(BaseModel):
 
 class DeadAliveReviveRequest(BaseModel):
     dead_username: str
+    dead_password: Optional[str] = None  # Required when dead account's email was freed (e.g. after Dead > Alive / new registration with same email)
 
 
 class AvatarUpdateRequest(BaseModel):

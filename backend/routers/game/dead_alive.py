@@ -212,8 +212,16 @@ def register(router):
         if not dead_user.get("is_dead"):
             raise HTTPException(status_code=400, detail="That account is not dead.")
         dead_email = (dead_user.get("email") or "").strip().lower()
-        if dead_email != email:
-            raise HTTPException(status_code=400, detail="That account is not linked to this email.")
+        emails_match = dead_email == email
+        if not emails_match:
+            # Email was freed (e.g. dead_xxx@deleted after registering new account with same email or using Dead > Alive); require password to prove ownership
+            if not (request.dead_password and request.dead_password.strip()):
+                raise HTTPException(
+                    status_code=400,
+                    detail="That account is not linked to this email (it may have been freed when you used the same email elsewhere). Enter the dead account's password to revive it.",
+                )
+            if not verify_password(request.dead_password.strip(), dead_user.get("password_hash") or ""):
+                raise HTTPException(status_code=401, detail="Invalid password for that account.")
 
         reviver_money = int(current_user.get("money") or 0)
         reviver_points_after = points_balance - REVIVE_COST
