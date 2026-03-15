@@ -4,6 +4,89 @@ import { toast } from 'sonner';
 import api from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
+const CATEGORY_COLORS = {
+  crimes:         { color: '#d4af37', glow: 'rgba(212,175,55,0.35)' },
+  gta:            { color: '#a78bfa', glow: 'rgba(167,139,250,0.35)' },
+  jail_busts:     { color: '#60a5fa', glow: 'rgba(96,165,250,0.35)' },
+  kills:          { color: '#f87171', glow: 'rgba(248,113,113,0.35)' },
+  oc_heists:      { color: '#34d399', glow: 'rgba(52,211,153,0.35)' },
+  bullets_melted: { color: '#fb923c', glow: 'rgba(251,146,60,0.35)' },
+  booze_runs:     { color: '#2dd4bf', glow: 'rgba(45,212,191,0.35)' },
+  hitlist_npc:    { color: '#f472b6', glow: 'rgba(244,114,182,0.35)' },
+  rank:           { color: '#d4af37', glow: 'rgba(212,175,55,0.35)' },
+};
+
+const LOCKED_COLOR = '#3f3f46';
+
+function BadgeShield({ label, unlocked, categoryId, size = 38 }) {
+  const meta = CATEGORY_COLORS[categoryId] || CATEGORY_COLORS.crimes;
+  const c = unlocked ? meta.color : LOCKED_COLOR;
+  const h = size * 1.22;
+  const fontSize = label.length > 3 ? 3.2 : label.length > 2 ? 3.6 : 4.2;
+
+  return (
+    <span
+      title={unlocked ? `Unlocked: ${label}` : `Locked: ${label}`}
+      style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 0, cursor: 'default' }}
+    >
+      <svg
+        width={size}
+        height={h}
+        viewBox="0 0 14 17"
+        style={{ flexShrink: 0, display: 'block' }}
+        aria-hidden="true"
+      >
+        {unlocked && (
+          <path
+            d="M1 4.5 L1 10 Q1 15 7 16.5 Q13 15 13 10 L13 4.5 L7 3 Z"
+            fill="none"
+            stroke={c}
+            strokeWidth="2.5"
+            opacity="0.18"
+          />
+        )}
+        <path
+          d="M1 4.5 L1 10 Q1 15 7 16.5 Q13 15 13 10 L13 4.5 L7 3 Z"
+          fill={unlocked ? `${c}30` : `${c}18`}
+          stroke={c}
+          strokeWidth="0.9"
+        />
+        <path
+          d="M3 6 L3 10 Q3 13 7 14.2 Q11 13 11 10 L11 6 L7 5 Z"
+          fill="none"
+          stroke={c}
+          strokeWidth="0.5"
+          opacity={unlocked ? 0.35 : 0.15}
+        />
+        {unlocked && (
+          <>
+            <polygon
+              points="4,4 7,1 10,4"
+              fill={`${c}80`}
+              stroke={c}
+              strokeWidth="0.6"
+            />
+            <line x1="7" y1="1" x2="7" y2="4.2" stroke={c} strokeWidth="0.7" />
+          </>
+        )}
+        <text
+          x="7"
+          y="11.5"
+          textAnchor="middle"
+          fontFamily="Cinzel, serif"
+          fontSize={fontSize}
+          fontWeight="700"
+          fill={c}
+          letterSpacing="0.2"
+          opacity={unlocked ? 1 : 0.5}
+        >
+          {label}
+        </text>
+      </svg>
+    </span>
+  );
+}
+
 export default function RankingBadges() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -61,6 +144,7 @@ export default function RankingBadges() {
       <div className="space-y-2">
         {categories.map((cat) => {
           const isOpen = openCategories[cat.id] !== false;
+          const catColor = (CATEGORY_COLORS[cat.id] || CATEGORY_COLORS.crimes).color;
           return (
             <div key={cat.id} className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
               <button
@@ -74,10 +158,10 @@ export default function RankingBadges() {
                   <ChevronRight size={16} className="text-primary shrink-0" />
                 )}
                 <div className="flex flex-col min-w-0">
-                  <span className="font-heading font-bold text-foreground uppercase tracking-wider">{cat.name}</span>
+                  <span className="font-heading font-bold uppercase tracking-wider" style={{ color: catColor }}>{cat.name}</span>
                   {bonusByCategory[cat.id] && (
                     <span className="text-[10px] text-mutedForeground font-heading">
-                      Badges: +{bonusByCategory[cat.id].bonus_pct}% {bonusByCategory[cat.id].benefit}
+                      +{bonusByCategory[cat.id].bonus_pct}% {bonusByCategory[cat.id].benefit}
                     </span>
                   )}
                 </div>
@@ -87,8 +171,8 @@ export default function RankingBadges() {
                 <div className="flex-1 min-w-0 ml-2">
                   <div className="h-1.5 bg-zinc-700/50 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary/70 rounded-full transition-all duration-500"
-                      style={{ width: `${cat.total_tiers ? (100 * cat.unlocked_count) / cat.total_tiers : 0}%` }}
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${cat.total_tiers ? (100 * cat.unlocked_count) / cat.total_tiers : 0}%`, backgroundColor: `${catColor}b3` }}
                     />
                   </div>
                 </div>
@@ -103,25 +187,20 @@ export default function RankingBadges() {
                       </div>
                       <div className="h-1.5 bg-zinc-700/50 rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-primary/60 rounded-full transition-all duration-500"
-                          style={{ width: `${cat.percent_to_next}%` }}
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${cat.percent_to_next}%`, backgroundColor: `${catColor}99` }}
                         />
                       </div>
                     </div>
                   )}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {cat.tiers.map((tier) => (
-                      <div
+                      <BadgeShield
                         key={tier.target}
-                        className={`inline-flex items-center justify-center min-w-[44px] h-9 px-2 rounded font-heading text-[10px] font-bold uppercase border transition-smooth ${
-                          tier.unlocked
-                            ? 'bg-amber-500/20 text-amber-400 border-amber-500/50'
-                            : 'bg-zinc-700/30 text-zinc-500 border-zinc-600/40'
-                        }`}
-                        title={tier.unlocked ? `Unlocked: ${tier.label}` : `Locked: ${tier.label}`}
-                      >
-                        {tier.label}
-                      </div>
+                        label={tier.label}
+                        unlocked={tier.unlocked}
+                        categoryId={cat.id}
+                      />
                     ))}
                   </div>
                 </div>
