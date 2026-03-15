@@ -627,17 +627,21 @@ export default function Racing() {
         </div>
       </div>
 
-      {/* ─── ACTIVE RACE: live run ─── */}
+      {/* ─── ACTIVE RACE: live run (uses replay mode with pre-computed backend results for position consistency) ─── */}
       {activeRace?.state === "running" && (
         <div className="p-3">
           {activeRace.qualifying_order?.length > 0 && (
             <p className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-primary)] mb-1.5">Live race — Grid by qualifying</p>
           )}
           <CircuitRaceView
-            mode="live"
+            mode="replay"
             raceId={activeRace.id}
             participants={activeRace.participants || []}
             qualifying_order={activeRace.qualifying_order || []}
+            resultOrder={activeRace.result_order || []}
+            lap_results={activeRace.lap_results || []}
+            pit_stops={activeRace.pit_stops || []}
+            tire_wear_after_lap={activeRace.tire_wear_after_lap || {}}
             laps={activeRace.laps || 3}
             weather={activeRace.weather || "clear"}
             weather_name={activeRace.weather_name}
@@ -645,6 +649,7 @@ export default function Racing() {
             playerCarName={playerCarName}
             playerPitLevel={profile?.pit_level ?? 0}
             currentUserId={profile?.user_id}
+            rewards={activeRace.rewards || null}
             onComplete={() => handleCompleteRace(activeRace.id)}
             onReset={() => { setActiveRace(null); fetchOpenRaces(); }}
           />

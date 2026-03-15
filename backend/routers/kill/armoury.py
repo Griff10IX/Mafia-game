@@ -1512,14 +1512,34 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
     return {"message": "Score recorded.", "score": score}
 
 
-async def get_shooting_range_leaderboard(current_user: dict = Depends(get_current_user)):
-    """Return top 10 shooting range scores (highest first, then earliest for ties)."""
+async def get_shooting_range_leaderboard(period: str = "all", current_user: dict = Depends(get_current_user)):
+    """Return top 10 shooting range scores with optional period filter and personal best."""
+    query = {}
+    now = datetime.now(timezone.utc)
+    if period == "weekly":
+        cutoff = (now - timedelta(days=7)).isoformat().replace("+00:00", "Z")
+        query["created_at"] = {"$gte": cutoff}
+    elif period == "today":
+        cutoff = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat().replace("+00:00", "Z")
+        query["created_at"] = {"$gte": cutoff}
+
     cursor = db.shooting_range_scores.find(
-        {},
+        query,
         {"_id": 0, "username": 1, "score": 1, "created_at": 1},
     ).sort([("score", -1), ("created_at", 1)]).limit(10)
     rows = await cursor.to_list(10)
-    return {"leaderboard": [{"rank": i + 1, "username": r.get("username", "?"), "score": r.get("score", 0)} for i, r in enumerate(rows)]}
+
+    pb_doc = await db.shooting_range_scores.find_one(
+        {"user_id": current_user["id"]},
+        {"_id": 0, "score": 1},
+        sort=[("score", -1)],
+    )
+    personal_best = pb_doc.get("score", 0) if pb_doc else 0
+
+    return {
+        "leaderboard": [{"rank": i + 1, "username": r.get("username", "?"), "score": r.get("score", 0)} for i, r in enumerate(rows)],
+        "personal_best": personal_best,
+    }
 
 
 def _tokens_from_user(user: dict) -> dict:

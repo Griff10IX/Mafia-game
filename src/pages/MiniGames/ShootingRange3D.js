@@ -278,8 +278,19 @@ export default function ShootingRange3D() {
     targetOriginX: 0,
     targetOriginY: 0,
     targetPhase: 0,
+    targetZ: BACK_WALL_Z + 0.20,
     nextSpawnAt: 0,
     raf: null,
+    // stats tracking
+    shotsFired: 0,
+    hitsLanded: 0,
+    bestZone: null,
+    lastMasteryGain: 0,
+    // shell casings
+    casings: [],
+    casingGroup: null,
+    // impact flashes
+    impactFlashes: [],
   });
 
   // React state — only what drives re-renders
@@ -302,6 +313,9 @@ export default function ShootingRange3D() {
   const [leaderboard, setLeaderboard]   = useState([]);
   const [cooldownSecondsLeft, setCooldownSecondsLeft] = useState(0);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const [roundStats, setRoundStats]     = useState(null);
+  const [lbPeriod, setLbPeriod]         = useState("all");
+  const [personalBest, setPersonalBest] = useState(0);
 
   useEffect(() => {
     setIsTouchDevice(typeof window !== "undefined" && (window.innerWidth < 700 || "ontouchstart" in window));
@@ -315,14 +329,16 @@ export default function ShootingRange3D() {
     catch { setMasteryData(null); }
   }, []);
 
-  const fetchLeaderboard = useCallback(async () => {
+  const fetchLeaderboard = useCallback(async (period) => {
+    const p = period || lbPeriod || "all";
     try {
-      const res = await api.get("/shooting-range/leaderboard");
+      const res = await api.get(`/shooting-range/leaderboard?period=${p}`);
       setLeaderboard(Array.isArray(res.data?.leaderboard) ? res.data.leaderboard : []);
+      if (res.data?.personal_best != null) setPersonalBest(res.data.personal_best);
     } catch {
       setLeaderboard([]);
     }
-  }, []);
+  }, [lbPeriod]);
 
   useEffect(() => { fetchMastery(); }, [fetchMastery]);
   useEffect(() => { fetchLeaderboard(); }, [fetchLeaderboard]);
@@ -379,7 +395,12 @@ export default function ShootingRange3D() {
     state.reloadEnd = performance.now()/1000 + RELOAD_SECS;
     setIsReloading(true);
     setReloadAnim(true);
-    if (state.gun) { state.gun.rotation.x = 0.18; setTimeout(() => { if (state.gun) state.gun.rotation.x = 0.05; }, 400); }
+    if (state.gun) {
+      state.gun.rotation.x = 0.35;
+      state.gun.position.y = -0.36;
+      setTimeout(() => { if (state.gun) { state.gun.rotation.x = 0.15; state.gun.position.y = -0.32; } }, 350);
+      setTimeout(() => { if (state.gun) { state.gun.rotation.x = 0.05; state.gun.position.y = -0.28; } }, 700);
+    }
   }, []);
 
   const finishReload = useCallback(() => {
@@ -405,8 +426,15 @@ export default function ShootingRange3D() {
     state.targetOriginY = oy;
     state.targetPattern = MOVE_PATTERNS[Math.floor(Math.random() * MOVE_PATTERNS.length)];
     state.targetPhase = Math.random() * Math.PI * 2;
-    state.target.position.set(ox, oy, BACK_WALL_Z + 0.20);
+    const isMidRange = Math.random() < 0.2;
+    const tz = isMidRange ? (BACK_WALL_Z + 8) : (BACK_WALL_Z + 0.20);
+    state.targetZ = tz;
+    state.targetMidRange = isMidRange;
+    state.target.position.set(ox, oy, tz);
     state.target.scale.set(0.01, 0.01, 0.01);
+    if (isMidRange) {
+      state.target.scale.set(0.01, 0.01, 0.01);
+    }
     state.target.visible = true;
     state.targetVisible = true;
     state.targetSpawnedAt = performance.now()/1000;
@@ -459,6 +487,7 @@ export default function ShootingRange3D() {
     if (state.ammo <= 0) { if (state.clipsRemaining > 0) doReload(); return; }
 
     state.ammo--;
+    state.shotsFired++;
     setAmmoState(state.ammo);
     if (state.ammo === 0 && state.clipsRemaining > 0) setTimeout(doReload, 300);
 
@@ -492,13 +521,31 @@ export default function ShootingRange3D() {
     state.camera.rotation.x -= 0.016;
     setTimeout(() => { if (state.camera) state.camera.rotation.x += 0.016; }, 75);
 
-    // Smoke puff
+    // Smoke puff (increased: spawn 2 particles)
     if (state.smokePts && state.muzzleFlash) {
-      const si = Math.floor(Math.random() * state.SMOKE_COUNT) * 3;
-      state.smokePts[si]   = state.muzzleFlash.position.x + (Math.random()-0.5)*0.05;
-      state.smokePts[si+1] = state.muzzleFlash.position.y + (Math.random()-0.5)*0.05;
-      state.smokePts[si+2] = state.muzzleFlash.position.z;
+      for (let sp = 0; sp < 2; sp++) {
+        const si = Math.floor(Math.random() * state.SMOKE_COUNT) * 3;
+        state.smokePts[si]   = state.muzzleFlash.position.x + (Math.random()-0.5)*0.05;
+        state.smokePts[si+1] = state.muzzleFlash.position.y + (Math.random()-0.5)*0.05;
+        state.smokePts[si+2] = state.muzzleFlash.position.z;
+      }
       if (state.smokeGeo) state.smokeGeo.attributes.position.needsUpdate = true;
+    }
+
+    // Shell casing ejection
+    if (state.casingGroup && state.camera) {
+      const casingMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.006, 0.006, 0.022, 6),
+        new THREE.MeshStandardMaterial({ color: 0xd4a830, metalness: 0.8, roughness: 0.25 })
+      );
+      casingMesh.position.copy(state.camera.position).add(new THREE.Vector3(0.15, -0.1, -0.4));
+      const casingVel = new THREE.Vector3(
+        0.8 + Math.random() * 0.5,
+        1.2 + Math.random() * 0.6,
+        -0.3 + Math.random() * 0.2
+      );
+      state.casingGroup.add(casingMesh);
+      state.casings.push({ mesh: casingMesh, vel: casingVel, born: performance.now()/1000, rotSpeed: Math.random()*12 });
     }
   }, [doReload]);
 
@@ -522,6 +569,11 @@ export default function ShootingRange3D() {
     state.nextSpawnAt = 0;
     state.holeCount = 0;
     if (state.holeGroup) { while (state.holeGroup.children.length) { const c = state.holeGroup.children[0]; c.geometry?.dispose(); c.material?.dispose(); state.holeGroup.remove(c); } }
+    state.shotsFired = 0;
+    state.hitsLanded = 0;
+    state.bestZone = null;
+    state.lastMasteryGain = 0;
+    setRoundStats(null);
     setGamePhase("playing"); gamePhaseRef.current = "playing";
     setScore(0); setTimeLeft(ROUND_DURATION_SEC); setAmmoState(MAX_AMMO); setClipsRemainingState(CLIPS_TOTAL);
     setIsReloading(false); setReloadAnim(false); setTargetUrgent(false);
@@ -616,6 +668,9 @@ export default function ShootingRange3D() {
       // Bullet group
       const bulletGroup = new THREE.Group(); scene.add(bulletGroup);
 
+      // Casing group
+      const casingGroup = new THREE.Group(); scene.add(casingGroup);
+
       // Store refs
       state.renderer    = renderer;
       state.scene       = scene;
@@ -633,6 +688,9 @@ export default function ShootingRange3D() {
       state.SMOKE_COUNT = SMOKE_COUNT;
       state.holeGroup   = holeGroup;
       state.holeCount   = 0;
+      state.casingGroup = casingGroup;
+      state.casings     = [];
+      state.impactFlashes = [];
       state.phase       = "idle";
       state.score       = 0;
       state.ammo        = MAX_AMMO;
@@ -665,12 +723,45 @@ export default function ShootingRange3D() {
           state.hazeMesh.geometry.attributes.position.needsUpdate = true;
         }
 
-        // Smoke drift
+        // Smoke drift (slower rise = longer visible)
         if (state.smokePts) {
           for (let i=0; i<state.smokePts.length; i+=3) {
-            if (state.smokePts[i+1]>-50) { state.smokePts[i+1]+=dt*0.12; state.smokePts[i]*=0.99; }
+            if (state.smokePts[i+1]>-50) { state.smokePts[i+1]+=dt*0.06; state.smokePts[i]*=0.997; }
           }
           if (state.smokeGeo) state.smokeGeo.attributes.position.needsUpdate = true;
+        }
+
+        // Shell casings physics
+        for (let ci = state.casings.length - 1; ci >= 0; ci--) {
+          const c = state.casings[ci];
+          const age = t - c.born;
+          if (age > 2.0) {
+            state.casingGroup.remove(c.mesh);
+            c.mesh.geometry.dispose(); c.mesh.material.dispose();
+            state.casings.splice(ci, 1);
+            continue;
+          }
+          c.vel.y -= 9.8 * dt;
+          c.mesh.position.x += c.vel.x * dt;
+          c.mesh.position.y += c.vel.y * dt;
+          c.mesh.position.z += c.vel.z * dt;
+          c.mesh.rotation.x += c.rotSpeed * dt;
+          if (c.mesh.position.y < 0) { c.mesh.position.y = 0; c.vel.y *= -0.3; c.vel.x *= 0.7; }
+        }
+
+        // Impact flash fade
+        for (let fi = state.impactFlashes.length - 1; fi >= 0; fi--) {
+          const f = state.impactFlashes[fi];
+          const age = t - f.born;
+          if (age > f.dur) {
+            state.scene.remove(f.mesh);
+            f.mesh.geometry.dispose(); f.mesh.material.dispose();
+            state.impactFlashes.splice(fi, 1);
+            continue;
+          }
+          const prog = age / f.dur;
+          f.mesh.scale.setScalar(1 + prog * 2.5);
+          f.mesh.material.opacity = 1 - prog;
         }
 
         // Muzzle decay
@@ -714,7 +805,7 @@ export default function ShootingRange3D() {
           ty = Math.max(0.5, Math.min(2.4, ty));
           state.target.position.x = tx;
           state.target.position.y = ty;
-          state.target.position.z = BACK_WALL_Z + 0.20;
+          state.target.position.z = state.targetZ || (BACK_WALL_Z + 0.20);
 
           // Urgency: pulse scale + warn UI when nearly expired
           if (remaining <= TARGET_WARN_AT) {
@@ -742,12 +833,19 @@ export default function ShootingRange3D() {
             setGamePhase("done"); gamePhaseRef.current = "done";
             const finalScore = state.score;
             const toSubmit = Math.min(finalScore, MAX_HITS_FOR_MASTERY);
+            const stats = {
+              score: finalScore,
+              shotsFired: state.shotsFired,
+              hitsLanded: state.hitsLanded,
+              accuracy: state.shotsFired > 0 ? Math.round((state.hitsLanded / state.shotsFired) * 100) : 0,
+              bestZone: state.bestZone,
+              masteryGain: toSubmit,
+            };
+            setRoundStats(stats);
             if (toSubmit > 0 && weaponId) {
               api.post("/shooting-range/train", { weapon_id: weaponId, mode: "live", hits: toSubmit })
-                .then(res => toast.success(res.data?.message || `Score: ${finalScore}. +${toSubmit}% mastery.`))
+                .then(res => { state.lastMasteryGain = toSubmit; })
                 .catch(e => toast.error(e.response?.data?.detail || "Submit failed."));
-            } else if (finalScore > 0) {
-              toast.info(`Round over! Score: ${finalScore}`);
             }
             if (finalScore >= 0) {
               api.post("/shooting-range/score", { score: finalScore })
@@ -778,17 +876,33 @@ export default function ShootingRange3D() {
               for (const zone of ZONES) {
                 if (lateralDist <= TARGET_RADIUS * Math.min(1, zone.frac * zoneMult)) { hitZone = zone; break; }
               }
+              const hitPts = state.targetMidRange ? Math.max(1, hitZone.pts - 1) : hitZone.pts;
               hideTarget(true);
-              state.score += hitZone.pts;
+              state.score += hitPts;
+              state.hitsLanded++;
+              if (!state.bestZone || hitZone.pts > state.bestZone.pts) state.bestZone = hitZone;
               setScore(state.score);
-              showScorePop(hitZone.pts, hitZone);
+              showScorePop(hitPts, hitZone);
               addBulletHole(tempVec.x + dx*0.6, tempVec.y + dy*0.6);
+
+              // Impact flash ring at hit location
+              const flashGeo = new THREE.RingGeometry(0.02, 0.12, 16);
+              const flashMat = new THREE.MeshBasicMaterial({
+                color: new THREE.Color(hitZone.popColor),
+                transparent: true, opacity: 1, side: THREE.DoubleSide
+              });
+              const flashMesh = new THREE.Mesh(flashGeo, flashMat);
+              flashMesh.position.set(tempVec.x + dx*0.3, tempVec.y + dy*0.3, tempVec.z + 0.25);
+              state.scene.add(flashMesh);
+              state.impactFlashes.push({ mesh: flashMesh, born: performance.now()/1000, dur: 0.3 });
+
               remove = true;
             }
           }
 
           if (!remove && b.mesh.position.z <= BACK_WALL_Z + 0.22) {
-            addBulletHole(b.mesh.position.x, b.mesh.position.y); remove = true;
+            addBulletHole(b.mesh.position.x, b.mesh.position.y);
+            remove = true;
           }
 
           if (remove) {
@@ -909,13 +1023,12 @@ export default function ShootingRange3D() {
       ) : (
         <div
           className="relative rounded-lg overflow-hidden border border-primary/20 bg-black select-none"
-          style={{ aspectRatio: "16/10", maxHeight: "68vh", minHeight: 280 }}
+          style={{ aspectRatio: isTouchDevice ? "4/3" : "16/10", maxHeight: "80vh", minHeight: 280 }}
         >
           <canvas
             ref={canvasRef}
             style={{ width: "100%", height: "100%", display: "block", cursor: "crosshair", touchAction: "none" }}
             onPointerDown={onPointerDown}
-            onTouchStart={onPointerDown}
           />
 
           {/* ── OVERLAY HUD ── */}
@@ -928,22 +1041,22 @@ export default function ShootingRange3D() {
               >
                 {/* Score */}
                 <div>
-                  <div style={{ fontFamily:"'Cinzel',serif", fontSize:7, letterSpacing:"0.28em", textTransform:"uppercase", color:"#6a4e28", marginBottom:2 }}>Score</div>
+                  <div style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(8px, 2vw, 10px)", letterSpacing:"0.28em", textTransform:"uppercase", color:"#6a4e28", marginBottom:2 }}>Score</div>
                   <div style={{ fontFamily:"'Cinzel',serif", fontWeight:700, fontSize:"clamp(22px,5vw,34px)", color:"#c9a460", lineHeight:1, textShadow:"0 0 22px rgba(201,164,96,.45),0 2px 0 rgba(0,0,0,.9)" }}>
                     {score}
                   </div>
                 </div>
                 {/* Centre: ammo */}
                 <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-                  <div style={{ fontFamily:"'Cinzel',serif", fontSize:7, letterSpacing:"0.24em", textTransform:"uppercase", color:"#6a4e28" }}>
+                  <div style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(8px, 2vw, 10px)", letterSpacing:"0.24em", textTransform:"uppercase", color:"#6a4e28" }}>
                     {isReloading ? "Reloading…" : `Clip ${Math.min(CLIPS_TOTAL, CLIPS_TOTAL - clipsRemainingState + 1)}/${CLIPS_TOTAL}`}
                   </div>
-                  <div style={{ display:"flex", gap:3, alignItems:"flex-end", flexWrap:"wrap", justifyContent:"center", maxWidth:140 }}>
+                  <div style={{ display:"flex", gap:isTouchDevice?4:3, alignItems:"flex-end", flexWrap:"wrap", justifyContent:"center", maxWidth:isTouchDevice?180:140 }}>
                     {Array.from({ length: MAX_AMMO }, (_, i) => (
                       <div
                         key={i}
                         style={{
-                          width: 5, height: 13,
+                          width: isTouchDevice ? 7 : 5, height: isTouchDevice ? 16 : 13,
                           borderRadius: "3px 3px 1px 1px",
                           background: i < ammoState
                             ? "linear-gradient(to bottom,#e8c870,#b89040)"
@@ -959,7 +1072,7 @@ export default function ShootingRange3D() {
                 </div>
                 {/* Time */}
                 <div style={{ textAlign:"right" }}>
-                  <div style={{ fontFamily:"'Cinzel',serif", fontSize:7, letterSpacing:"0.28em", textTransform:"uppercase", color:"#6a4e28", marginBottom:2 }}>Time</div>
+                  <div style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(8px, 2vw, 10px)", letterSpacing:"0.28em", textTransform:"uppercase", color:"#6a4e28", marginBottom:2 }}>Time</div>
                   <div style={{
                     fontFamily:"'Cinzel',serif", fontWeight:700, fontSize:"clamp(20px,4.5vw,30px)", lineHeight:1,
                     color: timeLeft <= 10 ? "#ff4444" : "#c9a460",
@@ -1054,11 +1167,12 @@ export default function ShootingRange3D() {
               )}
 
               {/* Bottom bar */}
+              {/* Bottom bar */}
               <div
                 className="absolute bottom-0 left-0 right-0 flex items-center gap-3 px-3 pb-3 pt-5"
                 style={{
                   background: "linear-gradient(to top,rgba(8,5,3,.96),transparent)",
-                  pointerEvents: gamePhase === "playing" ? "none" : "auto",
+                  pointerEvents: gamePhase === "playing" && !isTouchDevice ? "none" : "auto",
                 }}
               >
                 <div style={{ fontFamily:"'Crimson Text',serif", fontSize:"clamp(11px,3vw,14px)", fontStyle:"italic", color:"#c9a460", textShadow:"0 0 12px rgba(201,164,96,.4)", flex:1, textAlign:"left" }}>
@@ -1066,22 +1180,39 @@ export default function ShootingRange3D() {
                   {gamePhase === "playing" && isReloading && "Reloading…"}
                   {gamePhase === "playing" && !isReloading && ammoState === 0 && clipsRemainingState > 0 && "Empty — reloading…"}
                   {gamePhase === "playing" && !isReloading && ammoState === 0 && clipsRemainingState === 0 && "Out of ammo."}
-                  {gamePhase === "done" && (() => {
-                    if (cooldownSecondsLeft > 0) return `Next play in ${Math.ceil(cooldownSecondsLeft / 60)} min (1 round every 5 min)`;
+                  {gamePhase === "done" && !roundStats && (() => {
                     const s = r.current.score;
                     return s >= 60 ? `${s} pts — you shoot like the devil himself.`
                       : s >= 30 ? `${s} pts — not bad, not bad at all.`
                       : `${s} pts — keep practising, friend.`;
                   })()}
                 </div>
-                <div className="flex-1 flex justify-center shrink-0">
+                <div className="flex items-center gap-2 shrink-0" style={{ pointerEvents: "auto" }}>
+                  {gamePhase === "playing" && (
+                    <button
+                      type="button"
+                      onClick={doReload}
+                      disabled={isReloading || ammoState >= MAX_AMMO || clipsRemainingState <= 0}
+                      className={`${styles.btnGoldDarkText} font-heading text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-3 py-2 cursor-pointer`}
+                      style={{
+                        minHeight: isTouchDevice ? 44 : 32,
+                        opacity: (isReloading || ammoState >= MAX_AMMO || clipsRemainingState <= 0) ? 0.4 : 1,
+                        cursor: (isReloading || ammoState >= MAX_AMMO || clipsRemainingState <= 0) ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      Reload
+                    </button>
+                  )}
                   {(gamePhase === "idle" || gamePhase === "done") && (
                     <button
                       type="button"
-                      onClick={startRound}
+                      onClick={() => { setRoundStats(null); startRound(); }}
                       disabled={cooldownSecondsLeft > 0}
                       className={`${styles.btnGoldDarkText} font-heading text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-4 py-2 cursor-pointer`}
-                      style={cooldownSecondsLeft > 0 ? { opacity: 0.6, cursor: "not-allowed" } : {}}
+                      style={{
+                        minHeight: isTouchDevice ? 44 : 32,
+                        ...(cooldownSecondsLeft > 0 ? { opacity: 0.6, cursor: "not-allowed" } : {}),
+                      }}
                     >
                       {cooldownSecondsLeft > 0 ? `Wait ${Math.ceil(cooldownSecondsLeft / 60)} min` : (gamePhase === "done" ? "Play Again" : "Fire at Will")}
                     </button>
@@ -1089,6 +1220,85 @@ export default function ShootingRange3D() {
                 </div>
                 <div className="flex-1" />
               </div>
+
+              {/* Round-over summary overlay */}
+              {gamePhase === "done" && roundStats && (
+                <div
+                  style={{
+                    position: "absolute", inset: 0, zIndex: 40,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "rgba(8,5,3,0.88)",
+                    pointerEvents: "auto",
+                  }}
+                  onClick={() => setRoundStats(null)}
+                >
+                  <div
+                    style={{
+                      background: "linear-gradient(135deg, rgba(26,18,10,0.97), rgba(42,30,18,0.97))",
+                      border: "1px solid rgba(201,164,96,0.35)",
+                      borderRadius: 12,
+                      padding: isTouchDevice ? "20px 24px" : "28px 36px",
+                      minWidth: 220,
+                      maxWidth: 340,
+                      textAlign: "center",
+                    }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(10px,2.5vw,13px)", color:"#6a4e28", letterSpacing:"0.3em", textTransform:"uppercase", marginBottom:8 }}>
+                      Round Complete
+                    </div>
+                    <div style={{ fontFamily:"'Cinzel',serif", fontWeight:700, fontSize:"clamp(32px,8vw,52px)", color:"#c9a460", lineHeight:1, textShadow:"0 0 28px rgba(201,164,96,.5)", marginBottom:12 }}>
+                      {roundStats.score}
+                    </div>
+                    <div style={{ fontFamily:"'Crimson Text',serif", fontSize:"clamp(10px,2.5vw,12px)", color:"#6a4e28", letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:16 }}>
+                      Points
+                    </div>
+                    <div style={{ display:"flex", justifyContent:"center", gap:isTouchDevice?16:24, marginBottom:16, flexWrap:"wrap" }}>
+                      <div>
+                        <div style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(9px,2vw,11px)", color:"#6a4e28", letterSpacing:"0.15em", textTransform:"uppercase" }}>Shots</div>
+                        <div style={{ fontFamily:"'Cinzel',serif", fontWeight:700, fontSize:"clamp(16px,4vw,22px)", color:"#c9a460" }}>{roundStats.shotsFired}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(9px,2vw,11px)", color:"#6a4e28", letterSpacing:"0.15em", textTransform:"uppercase" }}>Hits</div>
+                        <div style={{ fontFamily:"'Cinzel',serif", fontWeight:700, fontSize:"clamp(16px,4vw,22px)", color:"#c9a460" }}>{roundStats.hitsLanded}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(9px,2vw,11px)", color:"#6a4e28", letterSpacing:"0.15em", textTransform:"uppercase" }}>Accuracy</div>
+                        <div style={{ fontFamily:"'Cinzel',serif", fontWeight:700, fontSize:"clamp(16px,4vw,22px)", color: roundStats.accuracy >= 50 ? "#ffe04a" : "#c9a460" }}>{roundStats.accuracy}%</div>
+                      </div>
+                    </div>
+                    {roundStats.bestZone && (
+                      <div style={{ marginBottom:12 }}>
+                        <div style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(9px,2vw,11px)", color:"#6a4e28", letterSpacing:"0.15em", textTransform:"uppercase" }}>Best Zone</div>
+                        <div style={{ fontFamily:"'Crimson Text',serif", fontSize:"clamp(13px,3vw,16px)", color:roundStats.bestZone.popColor, fontStyle:"italic" }}>{roundStats.bestZone.label}</div>
+                      </div>
+                    )}
+                    {roundStats.masteryGain > 0 && (
+                      <div style={{ fontFamily:"'Crimson Text',serif", fontSize:"clamp(11px,2.5vw,13px)", color:"#c9a460", fontStyle:"italic", marginBottom:12 }}>
+                        +{roundStats.masteryGain}% weapon mastery
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { setRoundStats(null); startRound(); }}
+                      disabled={cooldownSecondsLeft > 0}
+                      className={`${styles.btnGoldDarkText} font-heading text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-5 py-2 cursor-pointer mt-2`}
+                      style={{
+                        minHeight: isTouchDevice ? 44 : 32,
+                        ...(cooldownSecondsLeft > 0 ? { opacity: 0.6, cursor: "not-allowed" } : {}),
+                      }}
+                    >
+                      {cooldownSecondsLeft > 0 ? `Wait ${Math.ceil(cooldownSecondsLeft / 60)} min` : "Play Again"}
+                    </button>
+                    <div
+                      style={{ fontFamily:"'Crimson Text',serif", fontSize:11, color:"#6a4e28", marginTop:8, cursor:"pointer" }}
+                      onClick={() => setRoundStats(null)}
+                    >
+                      (click to dismiss)
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -1101,15 +1311,15 @@ export default function ShootingRange3D() {
           <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Scoring</h2>
           </div>
-          <div className="p-2 flex flex-wrap gap-x-4 gap-y-1 items-center">
+          <div className="p-2 grid grid-cols-2 sm:flex sm:flex-wrap gap-x-4 gap-y-1 items-center">
             {ZONES.map(z => (
-              <div key={z.frac} className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground">
+              <div key={z.frac} className="flex items-center gap-1.5 text-[10px] sm:text-[10px] font-heading text-mutedForeground">
                 <div style={{ width:10, height:10, borderRadius:"50%", background:z.popColor, opacity:0.8, flexShrink:0 }} />
                 <span className="text-foreground">{z.label}</span>
                 <span className="text-primary">+{z.pts}</span>
               </div>
             ))}
-            <span className="text-[10px] font-heading text-mutedForeground">· Targets vanish after {isTouchDevice ? TARGET_LIFETIME_TOUCH : TARGET_LIFETIME}s</span>
+            <span className="col-span-2 text-[10px] font-heading text-mutedForeground">· Targets vanish after {isTouchDevice ? TARGET_LIFETIME_TOUCH : TARGET_LIFETIME}s</span>
           </div>
           <div className="sr-art-line text-primary mx-3" />
         </div>
@@ -1119,10 +1329,27 @@ export default function ShootingRange3D() {
       {canPlay && (
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
+          <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Top 10 — Shooting Range</h2>
+            <div className="flex gap-1">
+              {[{ key:"all", label:"All-Time" }, { key:"weekly", label:"Weekly" }, { key:"today", label:"Today" }].map(p => (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => { setLbPeriod(p.key); fetchLeaderboard(p.key); }}
+                  className={`text-[9px] font-heading uppercase tracking-wider px-2 py-1 rounded cursor-pointer ${lbPeriod === p.key ? "bg-primary/20 text-primary font-bold" : "text-mutedForeground hover:text-primary"}`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="p-3">
+            {personalBest > 0 && (
+              <div className="text-[11px] font-heading text-primary/80 mb-2">
+                Your Best: <span className="text-primary font-bold">{personalBest}</span>
+              </div>
+            )}
             {leaderboard.length === 0 ? (
               <p className="text-[11px] text-mutedForeground font-heading">No scores yet. Be the first.</p>
             ) : (

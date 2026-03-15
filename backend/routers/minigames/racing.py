@@ -1526,6 +1526,12 @@ async def _start_race_internal(race_id: str) -> dict:
         p["pit_level"] = int(prof.get("pit_level") or 0) if prof else 0
         up = upgrades_map.get(p.get("racing_car_instance_id") or p.get("id"))
         p["reliability_level"] = int(up.get("reliability_level") or 0) if up else 0
+    # Pre-compute race simulation so live replay matches final results
+    with _SeededRandom(f"race:{race_id}"):
+        lap_results, result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids = _run_race_simulation_laps(
+            participants, profile_by_user, upgrades_map, num_laps, weather_id=weather_id, engine_wear_by_entrant=engine_wear_by_entrant
+        )
+    dnf_ids_list = list(sim_dnf_ids or [])
     now = _now_iso()
     await db.racing_races.update_one(
         {"id": race_id},
@@ -1540,12 +1546,12 @@ async def _start_race_internal(race_id: str) -> dict:
             "weather": weather_id,
             "weather_name": weather.get("name", "Clear"),
             "started_at": now,
-            "result_order": None,
-            "lap_results": None,
-            "pit_stops": None,
-            "tire_wear_after_lap": None,
+            "result_order": result_order,
+            "lap_results": lap_results,
+            "pit_stops": pit_stops,
+            "tire_wear_after_lap": tire_wear_after_lap,
+            "dnf_ids": dnf_ids_list,
             "rewards": None,
-            "dnf_ids": None,
             "completed_at": None,
         }},
     )
@@ -1559,12 +1565,12 @@ async def _start_race_internal(race_id: str) -> dict:
     race["weather"] = weather_id
     race["weather_name"] = weather.get("name", "Clear")
     race["started_at"] = now
-    race["result_order"] = None
-    race["lap_results"] = None
-    race["pit_stops"] = None
-    race["tire_wear_after_lap"] = None
+    race["result_order"] = result_order
+    race["lap_results"] = lap_results
+    race["pit_stops"] = pit_stops
+    race["tire_wear_after_lap"] = tire_wear_after_lap
+    race["dnf_ids"] = dnf_ids_list
     race["rewards"] = None
-    race["dnf_ids"] = None
     race["completed_at"] = None
     return race
 
@@ -1816,62 +1822,77 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
     if current_user.get("id") not in expected_ids:
         raise HTTPException(status_code=403, detail="You are not a participant in this race")
 
-    # Compute official results deterministically from the stored race inputs.
+    # Use pre-computed results stored at race start time
     track = _get_track(race.get("track_id") or "")
     reward_mult = float(track.get("reward_mult", 1.0)) if track else 1.0
     entry_fee = int(race.get("entry_fee") or 0)
     num_laps = max(NUM_LAPS_MIN, min(NUM_LAPS_MAX, int(race.get("laps") or 3)))
     weather_id = (race.get("weather") or "clear")
 
-    profile_by_user: Dict[str, dict] = {}
-    upgrades_map: Dict[str, dict] = (race.get("upgrades_snapshot") or {}) if isinstance(race.get("upgrades_snapshot"), dict) else {}
-    engine_wear_by_entrant: Dict[str, float] = (race.get("engine_wear_snapshot") or {}) if isinstance(race.get("engine_wear_snapshot"), dict) else {}
-    # Backfill snapshots if missing (older races)
-    if not upgrades_map:
-        for p in participants:
-            if p.get("is_npc"):
-                eid = p.get("id")
-                upgrades_map[eid] = {
-                    "engine_level": p.get("engine_level", 0),
-                    "tires_level": p.get("tires_level", 0),
-                    "aero_level": p.get("aero_level", 0),
-                    "reliability_level": p.get("reliability_level", 0),
-                    "brakes_level": p.get("brakes_level", 0),
-                    "gearbox_level": p.get("gearbox_level", 0),
-                    "cooling_level": p.get("cooling_level", 0),
-                    "weight_level": p.get("weight_level", 0),
-                    "fuel_level": p.get("fuel_level", 0),
-                }
-                continue
-            uid = p.get("user_id")
-            if uid and uid not in profile_by_user:
-                prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0})
-                if prof:
-                    profile_by_user[uid] = prof
-            inst_id = p.get("racing_car_instance_id")
-            if inst_id and inst_id not in upgrades_map:
-                up = await db.racing_upgrades.find_one({"user_id": uid, "racing_car_instance_id": inst_id}, {"_id": 0})
-                car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0})
-                base = {"engine_level": (car_doc or {}).get("engine_level", 0), "tires_level": (car_doc or {}).get("tires_level", 0)}
-                if up:
-                    base.update(up)
-                upgrades_map[inst_id] = base
-    if not engine_wear_by_entrant:
-        for p in participants:
-            if p.get("is_npc"):
-                continue
-            uid = p.get("user_id")
-            inst_id = p.get("racing_car_instance_id")
-            if uid and inst_id:
-                car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0, "engine_wear": 1})
-                engine_wear_by_entrant[uid] = float(car_doc.get("engine_wear") or 0) if car_doc else 0.0
+    result_order = race.get("result_order")
+    lap_results = race.get("lap_results")
+    pit_stops = race.get("pit_stops")
+    tire_wear_after_lap = race.get("tire_wear_after_lap")
+    dnf_ids: List[str] = list(race.get("dnf_ids") or [])
 
-    # Deterministic sim for authoritative results
-    with _SeededRandom(f"race:{race_id}"):
-        lap_results, result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids = _run_race_simulation_laps(
-            participants, profile_by_user, upgrades_map, num_laps, weather_id=weather_id, engine_wear_by_entrant=engine_wear_by_entrant
-        )
-    dnf_ids: List[str] = list(sim_dnf_ids or [])
+    profile_by_user: Dict[str, dict] = {}
+
+    # Fallback: re-compute if pre-computed results are missing (older races started before this change)
+    if not result_order:
+        upgrades_map: Dict[str, dict] = (race.get("upgrades_snapshot") or {}) if isinstance(race.get("upgrades_snapshot"), dict) else {}
+        engine_wear_by_entrant: Dict[str, float] = (race.get("engine_wear_snapshot") or {}) if isinstance(race.get("engine_wear_snapshot"), dict) else {}
+        if not upgrades_map:
+            for p in participants:
+                if p.get("is_npc"):
+                    eid = p.get("id")
+                    upgrades_map[eid] = {
+                        "engine_level": p.get("engine_level", 0),
+                        "tires_level": p.get("tires_level", 0),
+                        "aero_level": p.get("aero_level", 0),
+                        "reliability_level": p.get("reliability_level", 0),
+                        "brakes_level": p.get("brakes_level", 0),
+                        "gearbox_level": p.get("gearbox_level", 0),
+                        "cooling_level": p.get("cooling_level", 0),
+                        "weight_level": p.get("weight_level", 0),
+                        "fuel_level": p.get("fuel_level", 0),
+                    }
+                    continue
+                uid = p.get("user_id")
+                if uid and uid not in profile_by_user:
+                    prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0})
+                    if prof:
+                        profile_by_user[uid] = prof
+                inst_id = p.get("racing_car_instance_id")
+                if inst_id and inst_id not in upgrades_map:
+                    up = await db.racing_upgrades.find_one({"user_id": uid, "racing_car_instance_id": inst_id}, {"_id": 0})
+                    car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0})
+                    base = {"engine_level": (car_doc or {}).get("engine_level", 0), "tires_level": (car_doc or {}).get("tires_level", 0)}
+                    if up:
+                        base.update(up)
+                    upgrades_map[inst_id] = base
+        if not engine_wear_by_entrant:
+            for p in participants:
+                if p.get("is_npc"):
+                    continue
+                uid = p.get("user_id")
+                inst_id = p.get("racing_car_instance_id")
+                if uid and inst_id:
+                    car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0, "engine_wear": 1})
+                    engine_wear_by_entrant[uid] = float(car_doc.get("engine_wear") or 0) if car_doc else 0.0
+        with _SeededRandom(f"race:{race_id}"):
+            lap_results, result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids = _run_race_simulation_laps(
+                participants, profile_by_user, upgrades_map, num_laps, weather_id=weather_id, engine_wear_by_entrant=engine_wear_by_entrant
+            )
+        dnf_ids = list(sim_dnf_ids or [])
+    # Load profiles for sponsor income calculation (needed for rewards)
+    for p in participants:
+        if p.get("is_npc"):
+            continue
+        uid = p.get("user_id")
+        if uid and uid not in profile_by_user:
+            prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0})
+            if prof:
+                profile_by_user[uid] = prof
     pot = entry_fee * len(participants) * REWARD_POOL_PCT
     if pot < RACING_BASE_CASH_POOL:
         pot = RACING_BASE_CASH_POOL
