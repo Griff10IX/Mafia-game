@@ -1606,6 +1606,35 @@ export default function Admin() {
     }
   };
 
+  const [bodyguardSpeedsLoading, setBodyguardSpeedsLoading] = useState(false);
+  const [bodyguardSpeedsResult, setBodyguardSpeedsResult] = useState(null);
+  const handleCheckBodyguardSpeeds = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username above');
+      return;
+    }
+    setBodyguardSpeedsLoading(true);
+    setBodyguardSpeedsResult(null);
+    try {
+      const res = await api.get('/admin/bodyguards/hire-intervals', {
+        params: { target_username: username },
+      });
+      const data = res.data || {};
+      setBodyguardSpeedsResult(data);
+      if (Array.isArray(data.intervals_between_robot_bodyguards_ms) && data.intervals_between_robot_bodyguards_ms.length > 0) {
+        const msStr = data.intervals_between_robot_bodyguards_ms.map((ms) => `${Number(ms).toFixed(3)} ms`).join(', ');
+        toast.success(`Bodyguard speeds: ${msStr}`, { duration: 10000 });
+      } else {
+        toast.info(data.robot_count === 0 ? 'No robot bodyguards' : 'Only one robot (no intervals)', { duration: 5000 });
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed', { duration: 5000 });
+    } finally {
+      setBodyguardSpeedsLoading(false);
+    }
+  };
+
   const handleTestLifetimeObjectivesAlmostComplete = async () => {
     if (!window.confirm('Set your account to almost complete lifetime objectives (5 crimes away)? This will reset your lifetime progress flags.')) return;
     setLifetimeTestLoading(true);
@@ -6238,6 +6267,26 @@ export default function Admin() {
                 <Input type="number" min="1" max="4" value={bgTestCount} onChange={(e) => setBgTestCount(parseInt(e.target.value) || 1)} />
                 <BtnPrimary onClick={handleGenerateBodyguards}>Generate</BtnPrimary>
               </ActionRow>
+
+              <ActionRow icon={Activity} label="Check bodyguard speeds" description="Time between robot hires (ms) for target user">
+                <BtnPrimary onClick={handleCheckBodyguardSpeeds} disabled={bodyguardSpeedsLoading || !(formData.targetUsername || '').trim()}>
+                  {bodyguardSpeedsLoading ? '…' : 'Log'}
+                </BtnPrimary>
+              </ActionRow>
+              {bodyguardSpeedsResult && (
+                <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading font-mono space-y-0.5 ml-6 sm:ml-0">
+                  <div className="font-bold text-primary">
+                    {bodyguardSpeedsResult.username ?? '—'} · {bodyguardSpeedsResult.robot_count ?? 0} robot(s)
+                  </div>
+                  {Array.isArray(bodyguardSpeedsResult.intervals_between_robot_bodyguards_ms) && bodyguardSpeedsResult.intervals_between_robot_bodyguards_ms.length > 0 ? (
+                    <div className="text-foreground">
+                      Time between robot hires: {bodyguardSpeedsResult.intervals_between_robot_bodyguards_ms.map((ms) => `${Number(ms).toFixed(3)} ms`).join(', ')}
+                    </div>
+                  ) : (
+                    <div className="text-mutedForeground">No intervals (0 or 1 robot)</div>
+                  )}
+                </div>
+              )}
 
               <ActionRow icon={Trash2} label="Clear Target's BGs" description="Remove all bodyguards" color="text-red-400">
                 <BtnDanger onClick={handleClearBodyguards}>Clear</BtnDanger>

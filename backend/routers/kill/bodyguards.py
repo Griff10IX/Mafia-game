@@ -972,6 +972,39 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
     return payload
 
 
+async def admin_get_bodyguard_hire_intervals(
+    target_username: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin-only: Return time between robot bodyguard hires (ms) for a target user."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    username_pattern = _username_pattern((target_username or "").strip())
+    if not username_pattern:
+        raise HTTPException(status_code=400, detail="Target username required")
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    bodyguards = await db.bodyguards.find(
+        {"user_id": target["id"]},
+        {"_id": 0, "slot_number": 1, "is_robot": 1, "hired_at": 1},
+    ).to_list(10)
+    robots = [b for b in bodyguards if b.get("is_robot") and b.get("hired_at")]
+    robots.sort(key=lambda b: _parse_iso_datetime(b["hired_at"]) or datetime.min.replace(tzinfo=timezone.utc))
+    intervals_ms = []
+    for i in range(1, len(robots)):
+        t1 = _parse_iso_datetime(robots[i - 1]["hired_at"])
+        t2 = _parse_iso_datetime(robots[i]["hired_at"])
+        if t1 and t2:
+            delta_ms = (t2 - t1).total_seconds() * 1000
+            intervals_ms.append(round(delta_ms, 3))
+    return {
+        "username": target.get("username"),
+        "robot_count": len(robots),
+        "intervals_between_robot_bodyguards_ms": intervals_ms,
+    }
+
+
 async def admin_reset_bodyguard_cooldown(current_user: dict = Depends(get_current_user)):
     """Admin-only: Reset the bodyguard drop cooldown timer for yourself."""
     if not _is_admin(current_user):
@@ -1419,3 +1452,4 @@ def register(router):
     router.add_api_route("/admin/bodyguards/seed-humans", admin_seed_human_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/seed-random", admin_seed_random_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/reset-cooldown", admin_reset_bodyguard_cooldown, methods=["POST"])
+    router.add_api_route("/admin/bodyguards/hire-intervals", admin_get_bodyguard_hire_intervals, methods=["GET"])

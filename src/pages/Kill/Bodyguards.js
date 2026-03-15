@@ -275,21 +275,6 @@ export default function Bodyguards() {
     .filter((b) => b.bodyguard_username)
     .sort((a, b) => (a.slot_number ?? 0) - (b.slot_number ?? 0));
 
-  // Time between robot bodyguard hires (ms): sort robots by hired_at, then diff consecutive
-  const robotHireIntervalsMs = (() => {
-    const robots = bodyguards
-      .filter((b) => b.is_robot && b.hired_at)
-      .sort((a, b) => new Date(a.hired_at) - new Date(b.hired_at));
-    const bySlot = {};
-    const intervalsList = [];
-    for (let i = 1; i < robots.length; i++) {
-      const ms = new Date(robots[i].hired_at) - new Date(robots[i - 1].hired_at);
-      bySlot[robots[i].slot_number] = ms;
-      intervalsList.push(ms);
-    }
-    return { bySlot, intervalsList };
-  })();
-
   const sendInvite = async () => {
     const username = (inviteUsername || '').trim();
     if (!username) {
@@ -518,14 +503,6 @@ export default function Bodyguards() {
                   {bg.hired_at && new Date(bg.hired_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                 </div>
               </div>
-              {bg.is_robot && robotHireIntervalsMs.bySlot[bg.slot_number] != null && (
-                <div className="bg-zinc-900/50 rounded p-2 col-span-2">
-                  <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Time since previous robot</div>
-                  <div className="text-foreground font-mono font-bold text-primary">
-                    {Number(robotHireIntervalsMs.bySlot[bg.slot_number]).toFixed(3)} ms
-                  </div>
-                </div>
-              )}
               {(bg.hire_cost ?? 0) > 0 && (
                 <div className="bg-zinc-900/50 rounded p-2 col-span-2">
                   <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Upfront cost</div>
@@ -744,11 +721,6 @@ export default function Bodyguards() {
           {/* Your Bodyguards (in slot order) */}
           <div>
             <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Your Bodyguards</h4>
-            {robotHireIntervalsMs.intervalsList.length > 0 && (
-              <p className="text-[10px] text-mutedForeground px-1 mb-1 font-mono">
-                Time between robot hires: {robotHireIntervalsMs.intervalsList.map((ms) => `${Number(ms).toFixed(3)} ms`).join(', ')}
-              </p>
-            )}
             <div className="space-y-1">
               {activeBodyguards.map((bg) => renderBodyguardCard(bg))}
               {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
