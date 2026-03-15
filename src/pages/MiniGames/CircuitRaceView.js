@@ -646,6 +646,7 @@ const TRACKS = [
 
 const PROFILE_N = 256;
 const _profileCache = new Map();
+const PROFILE_CACHE_KEY = "v2"; // bump to invalidate when profile logic changes (e.g. finish-line cap)
 
 // FIX B1: uses geometry discontinuity detection instead of blanket 5% bypass
 function getCurvature(track, t) {
@@ -664,7 +665,8 @@ function getCurvature(track, t) {
 }
 
 function buildSpeedProfile(track) {
-  if (_profileCache.has(track.id)) return _profileCache.get(track.id);
+  const key = `${track.id}:${PROFILE_CACHE_KEY}`;
+  if (_profileCache.has(key)) return _profileCache.get(key);
   const N = PROFILE_N, raw = new Float32Array(N);
   // Pass 1: raw corner speed from curvature
   for (let i = 0; i < N; i++) {
@@ -699,7 +701,15 @@ function buildSpeedProfile(track) {
   const mn = Math.min(...raw), mx = Math.max(...raw), rng = mx-mn||1;
   const profile = new Float32Array(N);
   for (let i = 0; i < N; i++) profile[i] = 0.56 + ((raw[i]-mn)/rng)*0.44;
-  _profileCache.set(track.id, profile);
+  // Remove any dip at start/finish line: last ~2% and first ~1% of lap must not be slower than neighbors
+  const cap = (i, arr) => {
+    const prev = arr[(i-1+N)%N], next = arr[(i+1)%N];
+    const m = Math.max(prev, next);
+    if (arr[i] < m) arr[i] = Math.min(1.0, m);
+  };
+  for (let i = 0; i <= 2; i++) cap(i, profile);
+  for (let i = N-3; i <= N-1; i++) cap(i, profile);
+  _profileCache.set(key, profile);
   return profile;
 }
 
@@ -1623,9 +1633,29 @@ export default function CircuitRaceView({
         const next = prev-1;
         if (next <= 0) {
           clearInterval(cdRef.current); cdRef.current=null;
-          setUiPhase("racing");
           const pr = stateRef.current?.pendingReplay;
-          if (pr?.racers?.length) { rpStarted.current=true; startRaceLoop(pr.track,pr.cond,pr.totalLaps,pr.racers); }
+          if (pr?.racers?.length) {
+            setUiPhase("qualifying"); setLapDisp("Qualifying"); setCommentary("Qualifying lap — grid set by this lap");
+            startRaceLoop(pr.track, pr.cond, 1, pr.racers, {
+              onQualifyingComplete: (sortedRacers) => {
+                const qWd = WEATHER_DEFS[pr.cond] || WEATHER_DEFS.clear;
+                const gridRacers = sortedRacers.map((r, gi) => ({
+                  ...r, trackPos: (sortedRacers.length - gi) * 0.012, totalLapsDone: 0, lapCount: 1,
+                  finished: false, finishOrder: 0, visible: true, tyreWear: r.tyreWear ?? 100, lapTimes: [], pitStops: r.pitStops ?? 0,
+                  inPit: false, pitEndAt: 0, slideOffUntil: 0, pitExitUntil: null, position: gi + 1, carNumber: gi + 1,
+                  pitStrategy: r.pitStrategy ?? [], engineHealth: 100, dnf: false, dnfAtSec: 0, dnfSparks: [],
+                  fuelLoad: 100, currentSector: 0, lastSectorCross: 0, bestSectors: [Infinity, Infinity, Infinity], sectorDelta: null,
+                  inSlipstream: false, tyreBlister: false, overtakeBoostUntil: 0, currentSpeedMph: null,
+                }));
+                setCommentary("Grid set — race!");
+                setTimeout(() => {
+                  setUiPhase("racing"); setLapDisp(`1 / ${pr.totalLaps}`); setCommentary(rnd(COMMENTARY.start));
+                  rpStarted.current = true;
+                  startRaceLoop(pr.track, pr.cond, pr.totalLaps, gridRacers);
+                }, 2200);
+              },
+            });
+          }
           return 0;
         }
         return next;
