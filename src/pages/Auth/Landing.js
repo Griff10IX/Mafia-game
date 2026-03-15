@@ -47,9 +47,9 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
   const [bannerMessage, setBannerMessage]           = useState('');
   const [referralCode, setReferralCode]             = useState('');
 
-  // Track unique login-page visits for admin stats (when viewing /login)
+  // Track unique login-page visits for admin stats (when viewing login/landing page at / or /login)
   useEffect(() => {
-    if (location.pathname === '/login') {
+    if (location.pathname === '/login' || location.pathname === '/') {
       api.post('/auth/track-login-page-view').catch(() => {});
     }
   }, [location.pathname]);

@@ -596,7 +596,8 @@ def register(router):
 
     @router.post("/auth/track-login-page-view")
     async def track_login_page_view(request: Request):
-        """Record a visit to the login page (public, no auth). Used for admin unique-visitor stats."""
+        """Record a visit to the login page (public, no auth). One document per IP — duplicate
+        visits from the same IP only update last_seen; they are not counted as extra visitors."""
         ip = _client_ip(request)
         if not ip:
             return {"ok": True}

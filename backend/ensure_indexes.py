@@ -172,6 +172,8 @@ async def ensure_all_indexes(db):
         await db.email_verifications.create_index("token", unique=True)
         await db.email_verifications.create_index("expires_at")
         await db.login_lockouts.create_index("email", unique=True)
+        # One document per IP: duplicate visits from same IP are not counted (unique visitor count)
+        await db.login_page_visits.create_index("ip", unique=True)
         await db.revive_used_by_email.create_index("email", unique=True)
         await db.payment_transactions.create_index("session_id", unique=True)
 

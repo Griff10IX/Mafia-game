@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity } from 'lucide-react';
 import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache } from '../utils/api';
 import { setCrimesPrefetch, getCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -886,6 +886,7 @@ export default function Layout({ children }) {
           <Link to="/crime/crimes" onClick={() => setSidebarOpen(false)} onMouseEnter={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }} onFocus={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }}
             className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/crimes' ? styles.navItemActivePage : styles.sidebarNavLink}`}
             style={location.pathname === '/crime/crimes' ? sidebarActiveStyle : undefined} data-testid="nav-crimes">
+            <ListChecks size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">Crimes</span>
             {rankingCounts.crimes > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30">{rankingCounts.crimes}</span>}
           </Link>
@@ -900,22 +901,34 @@ export default function Layout({ children }) {
             data-testid="nav-gta"
             title={gtaExclusiveInPool ? 'Exclusive car in GTA pool!' : undefined}
           >
+            <Car size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">GTA</span>
             {gtaExclusiveInPool && <span className="text-[9px] text-violet-400 font-bold shrink-0" title="Exclusive in pool">★</span>}
             {rankingCounts.gta > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30">{rankingCounts.gta}</span>}
           </Link>
           {showSidebarDividers && navDividerEl('rd2')}
           <Link to="/crime/jail" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/jail' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/crime/jail' ? sidebarActiveStyle : undefined} data-testid="nav-jail">
+            <Lock size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">Jail</span>
             {rankingCounts.jail > 0 && <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30">{rankingCounts.jail}</span>}
           </Link>
           {showSidebarDividers && navDividerEl('rd3')}
           <Link to="/organised-crime" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/organised-crime' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/organised-crime' ? sidebarActiveStyle : undefined} data-testid="nav-organised-crime">
+            <Users size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">Organised Crime</span>
           </Link>
           {showSidebarDividers && navDividerEl('rd4')}
           <Link to="/game/ranking/badges" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/game/ranking/badges' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/game/ranking/badges' ? sidebarActiveStyle : undefined} data-testid="nav-badges">
+            <Award size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">Badges</span>
+          </Link>
+          {showSidebarDividers && navDividerEl('rd5')}
+          <Link to="/account/prestige" onClick={() => setSidebarOpen(false)} data-testid="nav-prestige"
+            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/account/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
+            style={location.pathname === '/account/prestige' ? sidebarActiveStyle : undefined}>
+            <Trophy size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
+            <span className="uppercase tracking-widest font-heading flex-1">Prestige</span>
+            {rankProgress?.current_rank >= 11 && (user?.prestige_level ?? 0) < 5 && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" title="You can prestige!" />}
           </Link>
         </div>
       )}
@@ -1014,22 +1027,24 @@ export default function Layout({ children }) {
       {miniGamesOpen && (
         <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
           {[
-            { to: '/casino/mini-games/racing', label: 'Racing', testId: 'nav-racing' },
-            { to: '/casino/mini-games/boxing', label: 'Boxing', testId: 'nav-boxing', matchPrefix: true },
-            { to: '/casino/mini-games/flappy', label: 'Flappy Gangster', testId: 'nav-flappygangster' },
-            { to: '/casino/mini-games/shooting-range', label: 'Shooting range', testId: 'nav-shooting-range', matchPrefix: true },
-            { to: '/casino/mini-games/snake', label: 'Package Run', testId: 'nav-snake' },
-            { to: '/casino/mini-games/minesweeper', label: 'Minefield', testId: 'nav-minesweeper' },
-            { to: '/casino/mini-games/battleships', label: 'Rum Runner', testId: 'nav-battleships' },
-            { to: '/casino/mini-games/the-getaway', label: 'The Getaway', testId: 'nav-the-getaway' },
-            { to: '/casino/mini-games/whack-a-copper', label: 'Whack-A-Copper', testId: 'nav-whack-a-copper' },
-            { to: '/casino/mini-games/leaderboard', label: 'Leaderboard', testId: 'nav-minigames-leaderboard' },
+            { to: '/casino/mini-games/racing', label: 'Racing', testId: 'nav-racing', Icon: Car },
+            { to: '/casino/mini-games/boxing', label: 'Boxing', testId: 'nav-boxing', matchPrefix: true, Icon: Activity },
+            { to: '/casino/mini-games/flappy', label: 'Flappy Gangster', testId: 'nav-flappygangster', Icon: Gamepad2 },
+            { to: '/casino/mini-games/shooting-range', label: 'Shooting range', testId: 'nav-shooting-range', matchPrefix: true, Icon: Crosshair },
+            { to: '/casino/mini-games/snake', label: 'Package Run', testId: 'nav-snake', Icon: Package },
+            { to: '/casino/mini-games/minesweeper', label: 'Minefield', testId: 'nav-minesweeper', Icon: LayoutGrid },
+            { to: '/casino/mini-games/battleships', label: 'Rum Runner', testId: 'nav-battleships', Icon: Wine },
+            { to: '/casino/mini-games/the-getaway', label: 'The Getaway', testId: 'nav-the-getaway', Icon: Plane },
+            { to: '/casino/mini-games/whack-a-copper', label: 'Whack-A-Copper', testId: 'nav-whack-a-copper', Icon: Zap },
+            { to: '/casino/mini-games/leaderboard', label: 'Leaderboard', testId: 'nav-minigames-leaderboard', Icon: Trophy },
           ].map((item, idx) => {
+            const IconComp = item.Icon;
             const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;
             return (
               <Fragment key={item.to}>
                 {showSidebarDividers && idx > 0 && navDividerEl(`mg${idx}`)}
                 <Link to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
+                  {IconComp && <IconComp size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />}
                   <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
                 </Link>
               </Fragment>
@@ -1269,19 +1284,6 @@ export default function Layout({ children }) {
                         {open && (
                           <>
                             {items.map((item, idx) => renderNavItem(item, idx > 0))}
-                            {cat.id === 'ranking' && (
-                              <>
-                                {navDividerEl('prestige-div')}
-                                <Link to="/account/prestige" data-testid="nav-prestige"
-                                  className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname === '/account/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
-                                  style={location.pathname === '/account/prestige' ? sidebarActiveStyle : undefined}
-                                  onClick={() => setSidebarOpen(false)}>
-                                  <Trophy size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
-                                  <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">Prestige</span>
-                                  {rankProgress?.current_rank >= 11 && (user?.prestige_level ?? 0) < 5 && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" title="You can prestige!" />}
-                                </Link>
-                              </>
-                            )}
                           </>
                         )}
                       </Fragment>
@@ -1291,15 +1293,6 @@ export default function Layout({ children }) {
               ) : (
                 <>
                   {navItems.map((item, index) => renderNavItem(item, index > 0))}
-                  {navDividerEl('prestige-div')}
-                  <Link to="/account/prestige" data-testid="nav-prestige"
-                    className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname === '/account/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
-                    style={location.pathname === '/account/prestige' ? sidebarActiveStyle : undefined}
-                    onClick={() => setSidebarOpen(false)}>
-                    <Trophy size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
-                    <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">Prestige</span>
-                    {rankProgress?.current_rank >= 11 && (user?.prestige_level ?? 0) < 5 && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" title="You can prestige!" />}
-                  </Link>
                 </>
               )}
 
