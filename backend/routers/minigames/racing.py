@@ -2056,6 +2056,12 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
     tire_wear_after_lap = race.get("tire_wear_after_lap")
     dnf_ids: List[str] = list(race.get("dnf_ids") or [])
 
+    # Use live result from client when provided (so results screen matches what the user saw)
+    if body.result_order and set(body.result_order) == expected_ids and len(body.result_order) == len(expected_ids):
+        result_order = list(body.result_order)
+        if body.dnf_ids is not None:
+            dnf_ids = [eid for eid in body.dnf_ids if eid in expected_ids]
+
     profile_by_user: Dict[str, dict] = {}
 
     # Fallback: re-compute if pre-computed results are missing (older races started before this change)

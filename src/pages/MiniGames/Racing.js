@@ -488,9 +488,12 @@ export default function Racing() {
     } catch (e) { toast.error(apiDetail(e)); }
   };
 
-  const handleCompleteRace = async (raceId) => {
+  const handleCompleteRace = async (raceId, liveResultOrder = null, liveDnfIds = null) => {
     try {
-      const r = await api.post(`/racing/races/${raceId}/complete`, {});
+      const body = {};
+      if (Array.isArray(liveResultOrder) && liveResultOrder.length > 0) body.result_order = liveResultOrder;
+      if (Array.isArray(liveDnfIds)) body.dnf_ids = liveDnfIds;
+      const r = await api.post(`/racing/races/${raceId}/complete`, body);
       try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); localStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {}
       setActiveRace((prev) => (prev?.id === raceId ? { ...r.data?.race, _resultsShown: true } : prev));
       refreshUser();
@@ -704,7 +707,7 @@ export default function Racing() {
             playerPitLevel={profile?.pit_level ?? 0}
             currentUserId={profile?.user_id}
             rewards={activeRace.rewards || null}
-            onComplete={() => handleCompleteRace(activeRace.id)}
+            onComplete={(resultOrderIds, dnfIds) => handleCompleteRace(activeRace.id, resultOrderIds, dnfIds)}
             onReset={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); localStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); fetchOpenRaces(); }}
           />
         </div>
