@@ -187,43 +187,13 @@ export default function Bodyguards() {
     }
   };
 
-  /** Lightweight refetch after hire: update bodyguards + inflation only, no loading spinner. */
-  const refetchAfterHire = async () => {
-    try {
-      const [bodyguardsRes, inflationRes] = await Promise.all([
-        api.get('/bodyguards'),
-        api.get('/bodyguards/inflation').catch(() => ({ data: { next_hire_inflation_pct: nextHireInflationPct } })),
-      ]);
-      if (bodyguardsRes.status >= 400) return;
-      const bgData = bodyguardsRes.data;
-      setBodyguards(Array.isArray(bgData) ? bgData : (bgData?.bodyguards ?? []));
-      setBodyguardFor(bgData?.bodyguard_for ?? null);
-      setBodyguardProfit(bgData?.bodyguard_profit ?? null);
-      setBodyguardLastDropAt(bgData?.bodyguard_last_drop_at ?? null);
-      if (inflationRes?.data != null) {
-        setNextHireInflationPct(inflationRes.data.next_hire_inflation_pct ?? nextHireInflationPct);
-        if (inflationRes.data.inflation_window_ends_at != null) setInflationWindowEndsAt(inflationRes.data.inflation_window_ends_at);
-      }
-    } catch {
-      // ignore; optimistic update already applied
-    }
-  };
-
   const hireBodyguard = async (slot, isRobot) => {
     setHiringSlots((prev) => new Set(prev).add(slot));
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
       toast.success(response?.data?.message ?? 'Bodyguard hired', { duration: 10000 });
-      const name = response?.data?.bodyguard_name || 'Robot';
-      setBodyguards((prev) =>
-        prev.map((b) =>
-          b.slot_number === slot
-            ? { ...b, bodyguard_username: name, is_robot: true, armour_level: 0, hired_at: new Date().toISOString(), bodyguard_rank_name: null }
-            : b
-        )
-      );
       refreshUser().catch(() => {});
-      // No auto refetch — user can refresh the page if they want fresh data (avoids extra requests affecting speed measurements)
+      // No automatic slot update — user refreshes the page when they want to see the new bodyguard
     } catch (error) {
       const detail = (error.response?.data?.detail || 'Failed to hire bodyguard').toString();
       refreshUser().catch(() => {});
