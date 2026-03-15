@@ -190,9 +190,13 @@ api.interceptors.response.use(
       // No response: network error, timeout, or server unreachable (often after server restart)
       error.response = { status: 0, data: { detail: NETWORK_ERROR_MSG } };
     }
-    // Show full-screen overlay with auto-refresh for server-down scenarios (skip 401/403 — those redirect)
+    // Full-screen overlay only for clear server-down cases (avoids false positives from cache/dedup or single bad gateway on background requests)
     const status = error.response?.status;
-    if ((status === 0 || isServerUnavailable(status)) && typeof window !== 'undefined' && !isPublicPath()) {
+    const url = error.config?.url || '';
+    const isCriticalRequest = /\/auth\/me(\?|$)/.test(url);
+    const showOverlay = typeof window !== 'undefined' && !isPublicPath() &&
+      (status === 0 || (isServerUnavailable(status) && isCriticalRequest));
+    if (showOverlay) {
       window.dispatchEvent(new CustomEvent(SERVER_UNAVAILABLE_EVENT));
     }
     return Promise.reject(error);
