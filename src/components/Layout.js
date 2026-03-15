@@ -1275,10 +1275,12 @@ export default function Layout({ children }) {
           {/* Flash news */}
           <div className="flex-1 min-w-0 overflow-hidden hidden sm:flex items-center gap-2">
             {flashNews.length > 0 && (
-              <div className="flex items-center gap-2 min-w-0">
-                <Newspaper size={14} className="shrink-0 text-primary/70" aria-hidden />
-                <span className="text-xs text-mutedForeground truncate font-heading" title={flashNews[flashIndex]?.message}>{flashNews[flashIndex]?.message}</span>
-                {flashNews.length > 1 && <span className="text-[10px] text-primary/50 shrink-0 font-heading">{flashIndex + 1}/{flashNews.length}</span>}
+              <div className="flex items-center gap-2 min-w-0 min-h-[1.5rem]">
+                <Newspaper size={14} className="shrink-0 text-primary/70 self-center" aria-hidden />
+                <div className="flex items-baseline gap-1.5 min-w-0 flex-1 overflow-hidden">
+                  <span className="text-xs text-mutedForeground truncate font-heading leading-none" title={flashNews[flashIndex]?.message}>{flashNews[flashIndex]?.message}</span>
+                  {flashNews.length > 1 && <span className="text-[10px] text-primary/50 shrink-0 font-heading leading-none tabular-nums">{flashIndex + 1}/{flashNews.length}</span>}
+                </div>
               </div>
             )}
           </div>

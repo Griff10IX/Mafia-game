@@ -99,28 +99,6 @@ body[data-theme-variant="modern"] .app-toaster .app-toast {
   box-shadow: var(--modern-glow-soft) !important;
 }
 
-/* Banner-style toasts (kill notifications / all notifications): full width, mobile-safe */
-.app-toaster-banner,
-.app-toaster-banner > div,
-.app-toaster-banner [data-sonner-list],
-.app-toaster-banner [data-sonner-toaster] {
-  width: 100% !important;
-  max-width: 100% !important;
-  box-sizing: border-box;
-}
-.app-toaster-banner .app-toast {
-  width: 100% !important;
-  max-width: 100% !important;
-  min-height: 44px;
-  box-sizing: border-box;
-}
-@media (max-width: 640px) {
-  .app-toaster-banner .app-toast {
-    min-height: 48px;
-    padding-top: max(8px, env(safe-area-inset-top, 0));
-  }
-}
-
 body[data-theme-variant="modern"] [data-death-screen] {
   background: radial-gradient(ellipse 100% 55% at 50% 0%, rgba(var(--noir-primary-rgb), 0.06) 0%, transparent 58%), radial-gradient(ellipse 80% 45% at 50% 100%, rgba(var(--noir-primary-rgb), 0.03) 0%, transparent 52%), linear-gradient(180deg, var(--noir-bg) 0%, var(--noir-content) 100%) !important;
 }

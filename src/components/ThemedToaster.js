@@ -141,27 +141,10 @@ export function ThemedToaster() {
         bottom: 'auto',
         transform: 'none',
       }
-    : isBanner
-    ? {
-        width: '100%',
-        maxWidth: '100%',
-        left: 0,
-        right: 0,
-        paddingLeft: 'max(16px, env(safe-area-inset-left))',
-        paddingRight: 'max(16px, env(safe-area-inset-right))',
-        boxSizing: 'border-box',
-      }
     : undefined;
 
   const toastOptions = isBanner
-    ? {
-        classNames: BANNER_TOAST_CLASSNAMES,
-        style: {
-          width: '100%',
-          maxWidth: '100%',
-          boxSizing: 'border-box',
-        },
-      }
+    ? { classNames: BANNER_TOAST_CLASSNAMES }
     : undefined;
 
   return (
@@ -200,7 +183,6 @@ export function ThemedToaster() {
         offset={offset}
         closeButton={closeButton}
         style={toasterStyle}
-        className={isBanner ? 'toaster app-toaster group app-toaster-banner' : undefined}
         toastOptions={toastOptions}
       />
     </>

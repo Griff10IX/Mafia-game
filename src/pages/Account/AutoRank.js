@@ -1090,7 +1090,6 @@ export default function AutoRank() {
   });
   const [lastStatsAt, setLastStatsAt] = useState(null);
   const prevJailSecondsRef = useRef(null);
-  const lastInJailFromPollRef = useRef(null);
 
   // Derived once per render, before any early return, so useEffects can read them
   const canEnable = Boolean(prefs?.auto_rank_purchased);
@@ -1124,9 +1123,6 @@ export default function AutoRank() {
       // When jail countdown just hit 0, refetch so "In jail — cycles paused" updates to "Running" right away
       const prev = prevJailSecondsRef.current;
       if (prev != null && prev > 0 && (jailSeconds === null || jailSeconds === 0) && refetchStatsRef.current) {
-        // #region agent log
-        fetch('http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c401e7'},body:JSON.stringify({sessionId:'c401e7',location:'AutoRank.js:jailExpired',message:'Jail countdown hit 0, triggering refetch',data:{prev,jailSeconds},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
         refetchStatsRef.current();
       }
       prevJailSecondsRef.current = jailSeconds;
@@ -1148,12 +1144,6 @@ export default function AutoRank() {
       api.get('/auto-rank/stats').then((res) => {
         if (!res?.data) return;
         const d = res.data;
-        // #region agent log
-        if (lastInJailFromPollRef.current === true && d.in_jail === false) {
-          fetch('http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c401e7'},body:JSON.stringify({sessionId:'c401e7',location:'AutoRank.js:statsPollJailCleared',message:'Stats poll: in_jail true->false',data:{in_jail:d.in_jail},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
-        }
-        lastInJailFromPollRef.current = d.in_jail === true;
-        // #endregion
         setStats((prev) => ({
           ...prev,
           global_loop_enabled: d.global_loop_enabled !== false,
@@ -1229,9 +1219,6 @@ export default function AutoRank() {
           api.get('/auto-rank/stats').catch(() => ({ data: null })),
         ]);
         setIsAdmin(!!checkRes.data?.is_admin);
-        // #region agent log
-        fetch('http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c401e7'},body:JSON.stringify({sessionId:'c401e7',location:'AutoRank.js:initialLoad',message:'Initial load API results',data:{meKeys:meRes?.data?Object.keys(meRes.data):null,statsKeys:statsRes?.data?Object.keys(statsRes.data):null,hasMe:!!meRes?.data,hasStats:!!statsRes?.data,mePurchased:meRes?.data?.auto_rank_purchased,meMelt:meRes?.data?.auto_rank_melt},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         if (meRes?.data) {
           setPrefs({
             auto_rank_enabled: meRes.data.auto_rank_enabled === true,
@@ -1338,9 +1325,6 @@ export default function AutoRank() {
     try {
       const payload = { [key]: value };
       const res = await api.patch('/auto-rank/me', payload);
-      // #region agent log
-      fetch('http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c401e7'},body:JSON.stringify({sessionId:'c401e7',location:'AutoRank.js:updatePref',message:'PATCH /me response',data:{key,value,responseKeys:res?.data?Object.keys(res.data):null,hasMelt:res?.data?.auto_rank_melt},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       setPrefs((p) => ({
         ...p,
         auto_rank_enabled: res.data?.auto_rank_enabled ?? p.auto_rank_enabled,
@@ -1400,9 +1384,6 @@ export default function AutoRank() {
         auto_rank_melt_action_ids: meltActionPayload,
         auto_rank_melt_rarity_ids: meltRarityPayload,
       });
-      // #region agent log
-      fetch('http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c401e7'},body:JSON.stringify({sessionId:'c401e7',location:'AutoRank.js:handleSaveSettings',message:'Save options payload and response',data:{crimePayloadLen:crimePayload.length,gtaPayloadLen:gtaPayload.length,resCrimeIdsLen:(res?.data?.auto_rank_crime_ids||[]).length,resGtaIdsLen:(res?.data?.auto_rank_gta_option_ids||[]).length},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       setPrefs((p) => ({
         ...p,
         auto_rank_crime_ids: res.data?.auto_rank_crime_ids ?? [],
@@ -1746,11 +1727,6 @@ export default function AutoRank() {
               <p className="text-xs text-zinc-400 font-heading">Loading...</p>
             ) : (() => {
               const displayed = hideOffline && adminUsersFilter === 'all' ? adminUsers.filter((u) => u.online) : adminUsers;
-              // #region agent log
-              if (adminUsers.length > 0 && hideOffline && adminUsersFilter === 'all') {
-                fetch('http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c401e7'},body:JSON.stringify({sessionId:'c401e7',location:'AutoRank.js:adminUsersDisplayed',message:'Admin users Hide offline',data:{adminUsersLen:adminUsers.length,displayedLen:displayed.length,sampleOnline:adminUsers.slice(0,5).map(u=>u.online)},timestamp:Date.now(),hypothesisId:'E'})}).catch(()=>{});
-              }
-              // #endregion
               return displayed.length === 0 ? (
                 <p className="text-xs text-zinc-400 font-heading">
                   {adminUsersFilter === 'online_only' ? 'No online users with Auto Rank.' : hideOffline ? 'No online users to show.' : 'No users with Auto Rank purchased.'}
