@@ -760,11 +760,11 @@ function getCurvature(track, t) {
   return Math.abs(delta) / arcLen;
 }
 
-/** Corner multiplier: 1.0 on straights, ~0.50–0.60 in sharp corners (1920s era = must brake). Scale by grip. */
+/** Corner multiplier: 1.0 on straights, ~0.55–0.70 in sharp corners (1920s era = must brake). Scale by grip. */
 function getCornerMult(curvature, baseGrip = 0.85) {
-  const k = 0.022;
+  const k = 3.0;
   const raw = 1 / (1 + curvature * k);
-  const minMult = 0.48 + (baseGrip - 0.5) * 0.28;
+  const minMult = 0.52 + (baseGrip - 0.5) * 0.26;
   return Math.max(minMult, Math.min(1, raw));
 }
 
@@ -1433,19 +1433,29 @@ export default function CircuitRaceView({
       let px, py, angle;
 
       if (r.inPit) {
-        const pitProgress = r.pitEndAt ? Math.max(0, Math.min(1, 1 - (r.pitEndAt - nowSec) / (r.pitDurationSeconds || 3))) : 0.5;
-        const pitFrac = 0.15 + pitProgress * 0.7;
+        const pitDur = r.pitDurationSeconds || 3;
+        const pitProgress = r.pitEndAt ? Math.max(0, Math.min(1, 1 - (r.pitEndAt - nowSec) / pitDur)) : 0.5;
         const pitEntryStart2 = track.pitEntry - 0.03;
         const pitExitEnd2 = track.pitExit + 0.03;
+        let pitFrac;
+        let blend;
+        if (pitProgress < 0.2) {
+          pitFrac = (pitProgress / 0.2) * 0.4;
+          blend = pitFrac / 0.15;
+          blend = Math.min(1, blend * blend);
+        } else if (pitProgress > 0.8) {
+          pitFrac = 0.6 + ((pitProgress - 0.8) / 0.2) * 0.4;
+          const exitBlend = (1 - pitFrac) / 0.15;
+          blend = Math.min(1, exitBlend * exitBlend);
+        } else {
+          pitFrac = 0.4 + ((pitProgress - 0.2) / 0.6) * 0.2;
+          blend = 1;
+        }
         const f0 = pitEntryStart2 + (pitExitEnd2 - pitEntryStart2) * pitFrac;
         const f = ((f0 % 1) + 1) % 1;
         const pp = track.getPoint(f);
         const pp2 = track.getPoint(((f + 0.005) % 1 + 1) % 1);
         const pitAng = Math.atan2(pp2.y - pp.y, pp2.x - pp.x) + Math.PI / 2;
-        let blend = 0;
-        if (pitFrac < 0.15) blend = (pitFrac / 0.15) * (pitFrac / 0.15);
-        else if (pitFrac > 0.85) blend = ((1 - pitFrac) / 0.15) * ((1 - pitFrac) / 0.15);
-        else blend = 1;
         const d = blend * (halfW + 22);
         px = sx(pp.x) + Math.cos(pitAng) * d;
         py = sy(pp.y) + Math.sin(pitAng) * d;
@@ -1678,6 +1688,7 @@ export default function CircuitRaceView({
     const playerPitSecEmerg = pitDurationSeconds(playerPitLevel, true);
     const gridSpacing = 0.012;
     const totalRacers = 8;
+    const playerRelMult = Math.max(0.7, 1.0 - playerPitLevel * 0.05);
     racers.push({
       id:"player", name:"You", isPlayer:true,
       color:CAR_COLORS[0], carName:playerCarName,
@@ -1687,8 +1698,8 @@ export default function CircuitRaceView({
       pitDurationSeconds: playerPitSec,
       pitDurationEmergencySeconds: playerPitSecEmerg,
       baseSpeed:1.0, baseGrip:0.85,
-      reliabilityWearMult: 1,
-      pitStrategy: buildPitStrategy(pTyre, nLaps, weatherWear, 1),
+      reliabilityWearMult: playerRelMult,
+      pitStrategy: buildPitStrategy(pTyre, nLaps, weatherWear, playerRelMult),
       finished:false, finishOrder:0, visible:true, position:1,
       lapTimes:[],
       slideOffUntil:0, pitExitUntil: null,
@@ -1705,18 +1716,19 @@ export default function CircuitRaceView({
       const t = NPC_TYRE_POOL[i] in TYRE_DEFS ? NPC_TYRE_POOL[i] : "medium";
       const npcStrat = rollNpcStrategy();
       const pitOffset = Math.floor(Math.random() * 3) - 1;
+      const npcRelMult = 0.8 + Math.random() * 0.2;
       racers.push({
         id:`npc_${i}`, name:NPC_NAMES[i], isPlayer:false,
         color:CAR_COLORS[i+1], carName:NPC_CARS[carIdx],
         trackPos: (totalRacers - (i + 1)) * gridSpacing, lapCount:1, totalLapsDone:0,
         currentTyre:t, tyreWear:100,
         pitStops:0, inPit:false, pitEndAt:0,
-        pitDurationSeconds: 3.0,
-        pitDurationEmergencySeconds: 3.8,
+        pitDurationSeconds: 2.5 + Math.random() * 1.0,
+        pitDurationEmergencySeconds: 3.2 + Math.random() * 1.0,
         baseSpeed: stats.baseSpeed + (Math.random()-0.5)*0.06,
         baseGrip: stats.baseGrip,
-        reliabilityWearMult: 1,
-        pitStrategy: buildPitStrategy(t, nLaps, weatherWear, 1, pitOffset, npcStrat),
+        reliabilityWearMult: npcRelMult,
+        pitStrategy: buildPitStrategy(t, nLaps, weatherWear, npcRelMult, pitOffset, npcStrat),
         finished:false, finishOrder:0, visible:true, position:i+2,
         lapTimes:[],
         slideOffUntil:0, pitExitUntil: null,
@@ -1841,16 +1853,17 @@ export default function CircuitRaceView({
               pitNotifTimer.current = setTimeout(() => setPitNotif(null), 2500);
             }
           }
-          r.currentSpeedMph = 0;
+          const pitTarget = 3;
+          r.currentSpeedMph = r.currentSpeedMph != null ? r.currentSpeedMph + (pitTarget - r.currentSpeedMph) * Math.min(1, dt * 4) : pitTarget;
           return;
         }
 
-        // DNF — engine health decay
+        // DNF — engine health decay (rare event, not every race)
         if (r.engineHealth != null && r.engineHealth < 100) {
-          r.engineHealth = Math.max(0, r.engineHealth - dt * 0.3);
+          r.engineHealth = Math.max(0, r.engineHealth - dt * 0.08);
         }
-        if (r.engineHealth != null && r.engineHealth > 0 && Math.random() < dt * 0.008) {
-          r.engineHealth = Math.max(0, r.engineHealth - (2 + Math.random() * 5));
+        if (r.engineHealth != null && r.engineHealth > 0 && Math.random() < dt * 0.002) {
+          r.engineHealth = Math.max(0, r.engineHealth - (1 + Math.random() * 2));
         }
         if (r.engineHealth != null && r.engineHealth <= 0 && !r.dnf) {
           r.dnf = true; r.dnfAtSec = nowSec; r.finished = true;
@@ -1920,23 +1933,25 @@ export default function CircuitRaceView({
 
         // Movement
         const prevPos = r.trackPos;
-        // 1920s-30s era: max 150 mph on straights; formula outputs mph directly
-        const SPEED_REALISM_SCALE = 0.199;
+        const SPEED_REALISM_SCALE = 0.168;
         const SPEED_CAP_MPH = 150;
+        const SPEED_SMOOTH = 6.0;
         if (r.slideOffUntil > 0 && nowSec < r.slideOffUntil) {
           const lapTime = track.lapBase / effSpeed;
           const advance = (1.0 / lapTime) * dt * 0.18;
           r.trackPos = (r.trackPos + advance + 1) % 1;
           const rawMph = track.km && track.lapBase ? SPEED_REALISM_SCALE * (3600 * track.km * 0.18 * effSpeed) / track.lapBase : null;
-          r.currentSpeedMph = rawMph == null ? null : Math.max(0, Math.min(SPEED_CAP_MPH, rawMph));
+          const targetMph = rawMph == null ? null : Math.max(0, Math.min(SPEED_CAP_MPH, rawMph));
+          r.currentSpeedMph = targetMph == null ? targetMph : (r.currentSpeedMph != null ? r.currentSpeedMph + (targetMph - r.currentSpeedMph) * Math.min(1, dt * SPEED_SMOOTH) : targetMph);
         } else {
           r.slideOffUntil = 0;
           const lapTime = track.lapBase / effSpeed;
           const advance = (1.0 / lapTime) * dt * cornerMult;
           r.trackPos = (r.trackPos + advance + 1) % 1;
           const rawMph = track.km && track.lapBase ? SPEED_REALISM_SCALE * (3600 * track.km * cornerMult * effSpeed) / track.lapBase : null;
-          r.currentSpeedMph = rawMph == null ? null : Math.max(0, Math.min(SPEED_CAP_MPH, rawMph));
-          if (curvature > 0.10 && effectiveGrip < 0.82 && Math.random() < dt * 2.2 * (0.85 - effectiveGrip) * Math.min(1, curvature / 0.18)) {
+          const targetMph = rawMph == null ? null : Math.max(0, Math.min(SPEED_CAP_MPH, rawMph));
+          r.currentSpeedMph = targetMph == null ? targetMph : (r.currentSpeedMph != null ? r.currentSpeedMph + (targetMph - r.currentSpeedMph) * Math.min(1, dt * SPEED_SMOOTH) : targetMph);
+          if (curvature > 0.25 && effectiveGrip < 0.65 && Math.random() < dt * 0.5 * (0.65 - effectiveGrip) * Math.min(1, curvature / 0.40)) {
             r.slideOffUntil = nowSec + 0.5 + Math.random() * 0.6;
             addIncident(`${r.name} off track!`);
             if (!scActive && nowSec > safetyCar.cooldownUntil && Math.random() < 0.15 && nLaps > 1) {
@@ -2038,12 +2053,12 @@ export default function CircuitRaceView({
             setManualPitRequested(false);
           }
         }
-        // Pit decision (auto)
+        // Pit decision (auto) — scheduled strategy pit
         if (!r.inPit && r.pitStrategy.length > 0 && !(r.isPlayer && manualPitRef.current)) {
           const next = r.pitStrategy[0];
           const currentLap = r.totalLapsDone + 1;
           const hasReplayData = r.tireWearByLap && r.tireWearByLap.length > 0;
-          const shouldPit = hasReplayData ? (currentLap >= next.lap) : (currentLap >= next.lap && r.tyreWear < 45);
+          const shouldPit = hasReplayData ? (currentLap >= next.lap) : (currentLap >= next.lap && r.tyreWear < 55);
           if (shouldPit) {
             const distToPit = Math.abs(((r.trackPos - track.pitEntry) + 1) % 1);
             if (distToPit < 0.12) {
@@ -2055,7 +2070,22 @@ export default function CircuitRaceView({
             }
           }
         }
-        // Emergency pit
+        // Smart early pit — tyres critically worn, pit before performance collapses
+        // Better crew (lower reliabilityWearMult) = higher threshold = pits earlier to protect performance
+        const isLastLap = r.totalLapsDone >= nLaps - 1;
+        const smartPitThreshold = 35 + (1.0 - (r.reliabilityWearMult || 1)) * 40;
+        if (!r.inPit && !isLastLap && r.tyreWear < smartPitThreshold && !(r.isPlayer && manualPitRef.current)) {
+          const dist = Math.abs(((r.trackPos - track.pitEntry) + 1) % 1);
+          if (dist < 0.12) {
+            r.inPit = true;
+            const dur = (r.pitDurationSeconds != null ? r.pitDurationSeconds : 3.0) + 0.5;
+            r.pitEndAt = nowSec + dur;
+            if (r.pitStrategy.length > 0) r.pitStrategy = r.pitStrategy.slice(1);
+            addIncident(`${r.name} — smart pit (tyre wear)`);
+            if (r.isPlayer) setPitNotif("PIT STOP — Tyres worn, changing…");
+          }
+        }
+        // Emergency pit — tyres at absolute minimum
         if (!r.inPit && r.tyreWear <= td.minWear + 1) {
           const dist = Math.abs(((r.trackPos - track.pitEntry) + 1) % 1);
           if (dist < 0.12) {
@@ -2257,7 +2287,7 @@ export default function CircuitRaceView({
         fuelLoad:100,
         sectorTimes:[null,null,null], currentSector:0, lastSectorCross:0, bestSectors:[Infinity,Infinity,Infinity], sectorDelta:null,
         inSlipstream:false, tyreBlister:false,
-        strategyType:"normal", reliabilityWearMult:1,
+        strategyType:"normal", reliabilityWearMult: Math.max(0.7, 1.0 - pitLvl * 0.05),
       };
     });
     stateRef.current = { racers, track, nLaps: totalLaps, wd: WEATHER_DEFS[cond] || WEATHER_DEFS.clear };
