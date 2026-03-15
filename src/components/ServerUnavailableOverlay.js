@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 
-const REFRESH_SECONDS = 5;
+const REFRESH_SECONDS = 30;
 
 export default function ServerUnavailableOverlay() {
   const [visible, setVisible] = useState(false);
@@ -35,6 +35,8 @@ export default function ServerUnavailableOverlay() {
     };
   }, [visible]);
 
+  const refresh = () => window.location.reload();
+
   if (!visible) return null;
 
   return (
@@ -42,17 +44,17 @@ export default function ServerUnavailableOverlay() {
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95"
       style={{ fontFamily: 'var(--font-heading, system-ui)' }}
     >
-      <div className="text-center max-w-sm mx-6 p-6 rounded-lg border border-amber-500/40 bg-amber-950/30">
-        <p className="text-amber-200 text-base font-semibold mb-2">
-          The server has been restarted
+      <div className="text-center max-w-sm mx-6 p-6 rounded-xl border-2 border-amber-500/60 bg-amber-950/80 shadow-2xl shadow-amber-950/50 ring-2 ring-amber-400/20">
+        <p className="text-amber-100 text-lg font-bold mb-2">
+          Server unavailable
         </p>
-        <p className="text-amber-200/80 text-sm mb-4">
+        <p className="text-amber-200/90 text-sm mb-4">
           Try again in {countdown} second{countdown !== 1 ? 's' : ''}. The page will refresh automatically.
         </p>
         <button
           type="button"
           onClick={refresh}
-          className="px-4 py-2 rounded border border-amber-500/60 bg-amber-600/30 text-amber-100 font-bold uppercase tracking-wider hover:bg-amber-600/50 transition-colors"
+          className="px-5 py-2.5 rounded-lg border-2 border-amber-500 bg-amber-600/50 text-amber-50 font-bold uppercase tracking-wider hover:bg-amber-600 transition-colors"
         >
           Refresh now
         </button>

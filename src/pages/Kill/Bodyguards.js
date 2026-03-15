@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, ChevronDown, ChevronRight } from 'lucide-react';
+import { Shield, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
@@ -76,6 +76,7 @@ export default function Bodyguards() {
   const [droppingSlot, setDroppingSlot] = useState(null);
   const [bodyguardLastDropAt, setBodyguardLastDropAt] = useState(null);
   const [hiringSlots, setHiringSlots] = useState(new Set());
+  const [refreshing, setRefreshing] = useState(false);
 
   const DROP_COOLDOWN_HOURS = 3;
 
@@ -171,6 +172,18 @@ export default function Bodyguards() {
       setInflationWindowEndsAt(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleManualRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await fetchData();
+      refreshUser().catch(() => {});
+      toast.success('Refreshed');
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -720,7 +733,19 @@ export default function Bodyguards() {
 
           {/* Your Bodyguards (in slot order) */}
           <div>
-            <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Your Bodyguards</h4>
+            <div className="flex items-center justify-between gap-2 px-1 mb-1.5">
+              <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider">Your Bodyguards</h4>
+              <button
+                type="button"
+                onClick={handleManualRefresh}
+                disabled={refreshing || loading}
+                className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading font-bold uppercase tracking-wide border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 transition-colors"
+                title="Refresh list and data"
+              >
+                <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+                {refreshing ? '…' : 'Refresh'}
+              </button>
+            </div>
             <div className="space-y-1">
               {activeBodyguards.map((bg) => renderBodyguardCard(bg))}
               {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
