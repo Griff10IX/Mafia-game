@@ -210,7 +210,7 @@ export default function Bodyguards() {
         )
       );
       refreshUser().catch(() => {});
-      refetchAfterHire();
+      // No auto refetch — user can refresh the page if they want fresh data (avoids extra requests affecting speed measurements)
     } catch (error) {
       const detail = (error.response?.data?.detail || 'Failed to hire bodyguard').toString();
       refreshUser().catch(() => {});

@@ -1647,7 +1647,9 @@ export default function Admin() {
       setBodyguardSpeedsResult(data);
       if (Array.isArray(data.intervals_between_robot_bodyguards_ms) && data.intervals_between_robot_bodyguards_ms.length > 0) {
         const msStr = data.intervals_between_robot_bodyguards_ms.map((ms) => `${Number(ms).toFixed(3)} ms`).join(', ');
-        toast.success(`Bodyguard speeds: ${msStr}`, { duration: 10000 });
+        const totalS = (data.total_seconds != null ? Number(data.total_seconds).toFixed(3) : (data.total_ms != null ? (Number(data.total_ms) / 1000).toFixed(3) : '—'));
+        const totalMs = data.total_ms != null ? Number(data.total_ms).toFixed(3) : '—';
+        toast.success(`Intervals: ${msStr}. Total: ${totalS} s (${totalMs} ms)`, { duration: 12000 });
       } else {
         toast.info(data.robot_count === 0 ? 'No robot bodyguards' : 'Only one robot (no intervals)', { duration: 5000 });
       }
@@ -6292,7 +6294,7 @@ export default function Admin() {
                 <BtnPrimary onClick={handleGenerateBodyguards}>Generate</BtnPrimary>
               </ActionRow>
 
-              <ActionRow icon={Activity} label="Check bodyguard speeds" description="Time between robot hires (ms). Enter username in Target Username above, then click Log.">
+              <ActionRow icon={Activity} label="Check bodyguard speeds" description="Total amount of seconds and milliseconds for all bodyguards. Enter username in Target Username above, then click Log.">
                 <BtnPrimary onClick={handleCheckBodyguardSpeeds} disabled={bodyguardSpeedsLoading || !(formData.targetUsername || '').trim()}>
                   {bodyguardSpeedsLoading ? '…' : 'Log'}
                 </BtnPrimary>
@@ -6303,9 +6305,17 @@ export default function Admin() {
                     {bodyguardSpeedsResult.username ?? '—'} · {bodyguardSpeedsResult.robot_count ?? 0} robot(s)
                   </div>
                   {Array.isArray(bodyguardSpeedsResult.intervals_between_robot_bodyguards_ms) && bodyguardSpeedsResult.intervals_between_robot_bodyguards_ms.length > 0 ? (
-                    <div className="text-foreground">
-                      Time between robot hires: {bodyguardSpeedsResult.intervals_between_robot_bodyguards_ms.map((ms) => `${Number(ms).toFixed(3)} ms`).join(', ')}
-                    </div>
+                    <>
+                      <div className="text-foreground">
+                        Intervals: {bodyguardSpeedsResult.intervals_between_robot_bodyguards_ms.map((ms) => `${Number(ms).toFixed(3)} ms`).join(', ')}
+                      </div>
+                      <div className="text-foreground font-bold">
+                        Total: {bodyguardSpeedsResult.total_seconds != null ? Number(bodyguardSpeedsResult.total_seconds).toFixed(3) : (bodyguardSpeedsResult.total_ms != null ? (Number(bodyguardSpeedsResult.total_ms) / 1000).toFixed(3) : '—')} s
+                        {bodyguardSpeedsResult.total_ms != null && (
+                          <span className="text-mutedForeground font-normal"> ({Number(bodyguardSpeedsResult.total_ms).toFixed(3)} ms)</span>
+                        )}
+                      </div>
+                    </>
                   ) : (
                     <div className="text-mutedForeground">No intervals (0 or 1 robot)</div>
                   )}

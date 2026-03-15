@@ -998,10 +998,14 @@ async def admin_get_bodyguard_hire_intervals(
         if t1 and t2:
             delta_ms = (t2 - t1).total_seconds() * 1000
             intervals_ms.append(round(delta_ms, 3))
+    total_ms = round(sum(intervals_ms), 3) if intervals_ms else 0
+    total_seconds = round(total_ms / 1000, 3)
     return {
         "username": target.get("username"),
         "robot_count": len(robots),
         "intervals_between_robot_bodyguards_ms": intervals_ms,
+        "total_ms": total_ms,
+        "total_seconds": total_seconds,
     }
 
 
