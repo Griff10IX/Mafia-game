@@ -1143,7 +1143,7 @@ export default function Racing() {
                       <div className="flex gap-3">
                         <div className="flex-1 grid grid-cols-2 gap-2">
                           <div className="p-2 rounded bg-black/20 text-center">
-                            <div className="text-[9px] font-heading uppercase text-[var(--noir-muted)]">Speed</div>
+                            <div className="text-[9px] font-heading uppercase text-[var(--noir-muted)]" title="Power rating — higher means faster top speed in races (not mph)">Speed (rating)</div>
                             <div className="text-lg font-heading" style={{ color: "var(--noir-primary)" }}>{c.effective_speed ?? 0}</div>
                           </div>
                           <div className="p-2 rounded bg-black/20 text-center">

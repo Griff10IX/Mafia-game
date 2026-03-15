@@ -52,12 +52,10 @@ const COMMENTARY = {
 
 // ─── TYRE PHYSICS ──────────────────────────────────────────────────────────
 
+// Full performance until wear hits 0; only then does grip drop
 function tyreGripFromWear(wear, tyreId) {
-  const td = TYRE_DEFS[tyreId] || TYRE_DEFS.medium;
-  const w  = wear / 100;
-  if (w >= td.cliffStart) return 1.0;
-  const below = (td.cliffStart - w) / td.cliffStart;
-  return Math.max(0.28, 1.0 - below * td.cliffRate * 0.35);
+  if (wear > 0) return 1.0;
+  return 0.28; // at 0% wear, minimum grip (e.g. crawl to pits)
 }
 
 function tyreColor(wear) {
@@ -646,7 +644,7 @@ const TRACKS = [
 
 const PROFILE_N = 256;
 const _profileCache = new Map();
-const PROFILE_CACHE_KEY = "v6"; // bump to invalidate when profile logic changes (e.g. finish straight zone)
+const PROFILE_CACHE_KEY = "v7"; // bump to invalidate when profile logic changes (e.g. finish straight zone)
 
 // FIX B1: uses geometry discontinuity detection instead of blanket 5% bypass
 function getCurvature(track, t) {
@@ -687,9 +685,9 @@ function buildSpeedProfile(track) {
   const key = `${track.id}:${PROFILE_CACHE_KEY}`;
   if (_profileCache.has(key)) return _profileCache.get(key);
   const N = PROFILE_N, raw = new Float32Array(N);
-  // Pass 1: raw corner speed from curvature; force full speed on start/finish straight so braking pass can't pull it down
-  const sfRawStart = Math.floor(N * 0.92); // last 8% of lap = full speed
-  const sfRawEndFirst = Math.floor(N * 0.08); // first 8% of lap = full speed
+  // Pass 1: raw corner speed from curvature; force full speed on S/F straight (last 20%, first 10%) so no track slows before the line
+  const sfRawStart = Math.floor(N * 0.80); // last 20% of lap = full speed (covers corners that run close to the line)
+  const sfRawEndFirst = Math.floor(N * 0.10); // first 10% of lap = full speed
   for (let i = 0; i < N; i++) {
     if (i >= sfRawStart || i <= sfRawEndFirst) {
       raw[i] = 1.0;
