@@ -343,12 +343,20 @@ export default function Racing() {
     return () => { if (refreshTimer.current) clearInterval(refreshTimer.current); };
   }, [fetchAll]);
 
+  const RACING_ACTIVE_RACE_KEY = "racing_active_race_id";
+
   useEffect(() => {
-    if (!raceIdParam) return;
-    const c = raceIdParam;
-    (async () => {
+    if (activeRace?.state === "running") {
+      try { sessionStorage.setItem(RACING_ACTIVE_RACE_KEY, activeRace.id); } catch (_) {}
+    } else {
+      try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {}
+    }
+  }, [activeRace?.state, activeRace?.id]);
+
+  useEffect(() => {
+    const restoreOrFetchByParam = async (id) => {
       try {
-        const r = await api.get(`/racing/races/${c}`);
+        const r = await api.get(`/racing/races/${id}`);
         const race = r.data?.race;
         if (race?.state === "open" || race?.state === "completed" || race?.state === "running") {
           setActiveRace((prev) => {
@@ -360,8 +368,28 @@ export default function Racing() {
           setTab("races");
         }
       } catch (_) {}
-    })();
-  }, [raceIdParam]);
+    };
+    if (raceIdParam) {
+      restoreOrFetchByParam(raceIdParam);
+      return;
+    }
+    const storedId = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(RACING_ACTIVE_RACE_KEY) : null;
+    if (storedId) {
+      (async () => {
+        try {
+          const r = await api.get(`/racing/races/${storedId}`);
+          const race = r.data?.race;
+          if (race?.state === "running") {
+            setActiveRace(race);
+            setTab("races");
+            navigate(`/casino/mini-games/racing?race=${storedId}`, { replace: true });
+          } else {
+            try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {}
+          }
+        } catch (_) {}
+      })();
+    }
+  }, [raceIdParam, navigate]);
 
   useEffect(() => {
     if (tab === "bets") fetchBets();
@@ -452,6 +480,7 @@ export default function Racing() {
   const handleCompleteRace = async (raceId) => {
     try {
       const r = await api.post(`/racing/races/${raceId}/complete`, {});
+      try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {}
       setActiveRace((prev) => (prev?.id === raceId ? { ...r.data?.race, _resultsShown: true } : prev));
       refreshUser();
       fetchProfile();
@@ -641,7 +670,7 @@ export default function Racing() {
         </div>
       </div>
 
-      {/* ─── ACTIVE RACE: live run (uses replay mode with pre-computed backend results for position consistency) ─── */}
+      {/* ─── LIVE RACE: same CircuitRaceView as replay — uses full realism (getCornerMult ~120 mph in corners, brake/accel smoothing, track width, car scale 0.88, final order from backend result_order) ─── */}
       {activeRace?.state === "running" && (
         <div className="p-3">
           {activeRace.qualifying_order?.length > 0 && (
@@ -665,7 +694,7 @@ export default function Racing() {
             currentUserId={profile?.user_id}
             rewards={activeRace.rewards || null}
             onComplete={() => handleCompleteRace(activeRace.id)}
-            onReset={() => { setActiveRace(null); fetchOpenRaces(); }}
+            onReset={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); fetchOpenRaces(); }}
           />
         </div>
       )}
@@ -679,7 +708,7 @@ export default function Racing() {
             </p>
             <button
               type="button"
-              onClick={() => setActiveRace(null)}
+              onClick={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); }}
               className="text-[10px] font-heading px-2 py-1 rounded border border-[var(--noir-border)] hover:bg-[var(--noir-surface)] touch-manipulation"
             >
               Close
@@ -702,7 +731,7 @@ export default function Racing() {
             playerPitLevel={profile?.pit_level ?? 0}
             currentUserId={profile?.user_id}
             rewards={activeRace.rewards || null}
-            onReset={() => setActiveRace(null)}
+            onReset={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); }}
           />
         </div>
       )}
@@ -751,7 +780,7 @@ export default function Racing() {
               </div>
             )}
             <button type="button" className={styles.btnPrimary + " mt-3 w-full min-h-[40px] touch-manipulation text-xs"}
-              onClick={() => { setActiveRace(null); fetchProfile(); navigate("/racing", { replace: true }); }}>
+              onClick={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); fetchProfile(); navigate("/racing", { replace: true }); }}>
               Back to races
             </button>
           </div>

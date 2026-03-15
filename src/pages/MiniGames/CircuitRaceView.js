@@ -1737,7 +1737,7 @@ export default function CircuitRaceView({
     return racers;
   }, [playerCarName, playerPitLevel]);
 
-  // ── RACE LOOP ──
+  // ── RACE LOOP (used for both LIVE and REPLAY: corner speed ~120 mph, brake/accel realism, track width, car scale 0.88, result_order at finish) ──
   const startRaceLoop = useCallback((track, cond, nLaps, racerArr, options = {}) => {
     const { onQualifyingComplete } = options;
     let currentWd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
@@ -1922,11 +1922,11 @@ export default function CircuitRaceView({
           effSpeed = Math.min(effSpeed, 0.35 * r.baseSpeed);
         }
 
-        // Corner-aware speed
+        // Corner-aware speed (tight corners ~120 mph via getCornerMult minMult; same for live + replay)
         const curvature = getCurvature(track, r.trackPos);
         const cornerMult = getCornerMult(curvature, effectiveGrip);
 
-        // Movement
+        // Movement (brake/accel realism: separate factors + max delta; track uses trackWidth, cars drawn at 0.88 scale)
         const prevPos = r.trackPos;
         const SPEED_REALISM_SCALE = 0.168;
         const SPEED_CAP_MPH = 150;
@@ -2023,7 +2023,10 @@ export default function CircuitRaceView({
               r.pitEndAt = nowSec + (r.pitDurationSeconds || 3);
             }
           } else {
-            r.tyreWear = targetWear;
+            // Don't overwrite high wear (e.g. 100 after pit) with stale end-of-lap value
+            if (targetWear >= r.tyreWear - 5 || r.tyreWear < 90) {
+              r.tyreWear = targetWear;
+            }
           }
         } else {
           const stintLaps = getEffectiveStintLaps(r.currentTyre, wd.wearMult, r.reliabilityWearMult);
@@ -2059,8 +2062,9 @@ export default function CircuitRaceView({
             setManualPitRequested(false);
           }
         }
-        // Pit decision (auto) — scheduled strategy pit
-        if (!r.inPit && r.pitStrategy.length > 0 && !(r.isPlayer && manualPitRef.current)) {
+        // Pit decision (auto) — scheduled strategy pit (skip on last lap so car can finish)
+        const isLastLap = r.totalLapsDone >= nLaps - 1;
+        if (!r.inPit && !isLastLap && r.pitStrategy.length > 0 && !(r.isPlayer && manualPitRef.current)) {
           const next = r.pitStrategy[0];
           const currentLap = r.totalLapsDone + 1;
           const hasReplayData = r.tireWearByLap && r.tireWearByLap.length > 0;
@@ -2078,7 +2082,6 @@ export default function CircuitRaceView({
         }
         // Smart early pit — tyres critically worn, pit before performance collapses
         // Better crew (lower reliabilityWearMult) = higher threshold = pits earlier to protect performance
-        const isLastLap = r.totalLapsDone >= nLaps - 1;
         const smartPitThreshold = 35 + (1.0 - (r.reliabilityWearMult || 1)) * 40;
         if (!r.inPit && !isLastLap && r.tyreWear < smartPitThreshold && !(r.isPlayer && manualPitRef.current)) {
           const dist = Math.abs(((r.trackPos - track.pitEntry) + 1) % 1);
@@ -2091,10 +2094,10 @@ export default function CircuitRaceView({
             if (r.isPlayer) setPitNotif("PIT STOP — Tyres worn, changing…");
           }
         }
-        // Emergency pit — tyres at absolute minimum
+        // Emergency pit — tyres at absolute minimum (on last lap only if truly critical so car can try to finish)
         if (!r.inPit && r.tyreWear <= td.minWear + 1) {
           const dist = Math.abs(((r.trackPos - track.pitEntry) + 1) % 1);
-          if (dist < 0.12) {
+          if (dist < 0.12 && (!isLastLap || r.tyreWear <= td.minWear)) {
             r.inPit = true;
             const durEmerg = (r.pitDurationEmergencySeconds != null ? r.pitDurationEmergencySeconds : 3.8) + 0.5;
             r.pitEndAt = nowSec + durEmerg;

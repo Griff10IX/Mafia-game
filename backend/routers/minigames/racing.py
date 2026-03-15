@@ -103,9 +103,8 @@ def _get_sponsor(racing_rep: int) -> dict:
 
 LAPS_PRIZE_SCALE_BASE = 3  # base laps for prize calculation; longer races scale up
 
-CREW_UPGRADE_COSTS = [0, 50000, 120000, 250000, 500000, 1000000]
-CREW_BONUS_PER_LEVEL = 0.02
-CAR_UPGRADE_COSTS = [0, 20000, 50000, 100000, 200000]
+# Cost formulas for 1–100: _crew_upgrade_cost(level), _car_engine_tires_cost(next_level) used below
+CREW_BONUS_PER_LEVEL = 0.001  # was 0.02 * 5 / 100 (mechanic: +2% speed per level at old max 5)
 # Engine wear: per race %, repair cost per %, replace cost. At high wear, risk of speed limit or DNF during race.
 ENGINE_WEAR_PER_RACE = 8
 ENGINE_WEAR_MAX = 100
@@ -121,73 +120,76 @@ TYRE_COST_MEDIUM = 500
 TYRE_COST_HARD = 400
 TYRE_COST_INTER = 650
 TYRE_COST_FULL_WET = 900
-# Trade-offs: engine +power -grip, tires +grip -power, aero +speed -grip (unlock 1+ win), reliability -wear -power (unlock 1+ win)
-ENGINE_POWER_PER_LEVEL = 0.04
-ENGINE_GRIP_PENALTY_PER_LEVEL = 0.03
-TIRES_GRIP_PER_LEVEL = 0.05
-TIRES_POWER_PENALTY_PER_LEVEL = 0.02
-AERO_SPEED_PER_LEVEL = 0.03
-AERO_GRIP_PENALTY_PER_LEVEL = 0.02
-RELIABILITY_WEAR_REDUCTION_PER_LEVEL = 0.08
-RELIABILITY_POWER_PENALTY_PER_LEVEL = 0.02
+# Trade-offs: engine +power -grip, tires +grip -power, aero +speed -grip, reliability -wear -power (scaled for max 100)
+ENGINE_POWER_PER_LEVEL = 0.002   # was 0.04 * 5 / 100
+ENGINE_GRIP_PENALTY_PER_LEVEL = 0.0015  # was 0.03 * 5 / 100
+TIRES_GRIP_PER_LEVEL = 0.0025    # was 0.05 * 5 / 100
+TIRES_POWER_PENALTY_PER_LEVEL = 0.001  # was 0.02 * 5 / 100
+AERO_SPEED_PER_LEVEL = 0.0009   # was 0.03 * 3 / 100
+AERO_GRIP_PENALTY_PER_LEVEL = 0.0006  # was 0.02 * 3 / 100
+RELIABILITY_WEAR_REDUCTION_PER_LEVEL = 0.0024  # was 0.08 * 3 / 100
+RELIABILITY_POWER_PENALTY_PER_LEVEL = 0.0006  # was 0.02 * 3 / 100
 WINS_FOR_AERO_RELIABILITY = 1
 WINS_FOR_CHAMPIONSHIP_UPGRADE = 3
 CHAMPIONSHIP_UPGRADE_COST = 350000
-# 13 upgradable car stats total; not all can be maxed — global cap on total levels
-RACING_UPGRADE_GLOBAL_CAP = 32  # sum of all car upgrade levels cannot exceed this
-MAX_CREW_LEVEL = 5  # mechanic, pit
-# 12 crew upgrades total; cannot all be maxed — global cap on total levels (max possible = 34)
-RACING_CREW_GLOBAL_CAP = 24
-# New crew types: (key_suffix, max_level, cost_base for cost_base * (current_level + 1))
+# 13 upgradable car stats total; all can be upgraded to 100 — global cap allows full max
+RACING_UPGRADE_GLOBAL_CAP = 1300  # 13 * 100
+MAX_CREW_LEVEL = 100  # mechanic, pit
+# 12 crew upgrades total; all can be upgraded to 100
+RACING_CREW_GLOBAL_CAP = 1200  # 12 * 100
+# New crew types: (key_suffix, max_level, cost_base). Cost = cost_base * (1 + (current + 1) * 0.08)
 CREW_EXTRA_TYPES = [
-    ("strategist", 3, 40000),
-    ("spotter", 3, 35000),
-    ("engineer", 3, 45000),
-    ("tyre_tech", 3, 38000),
-    ("fuel_tech", 2, 30000),
-    ("data_analyst", 2, 28000),
-    ("physio", 2, 25000),
-    ("logistics", 2, 26000),
-    ("morale", 2, 32000),
-    ("tactician", 2, 30000),
+    ("strategist", 100, 40000),
+    ("spotter", 100, 35000),
+    ("engineer", 100, 45000),
+    ("tyre_tech", 100, 38000),
+    ("fuel_tech", 100, 30000),
+    ("data_analyst", 100, 28000),
+    ("physio", 100, 25000),
+    ("logistics", 100, 26000),
+    ("morale", 100, 32000),
+    ("tactician", 100, 30000),
 ]
+_CREW_LABELS = {"strategist": "Strategist", "spotter": "Spotter", "engineer": "Engineer", "tyre_tech": "Tyre Tech", "fuel_tech": "Fuel Tech", "data_analyst": "Data Analyst", "physio": "Physio", "logistics": "Logistics", "morale": "Morale", "tactician": "Tactician"}
+_CREW_DESCS = {"strategist": "Optimises pit window — pushes tyres harder before pitting", "spotter": "Avoids contact damage — 15% dodge chance per level", "engineer": "Better car setup — +0.8% grip per level", "tyre_tech": "Reduces tyre wear rate — 6% less degradation per level", "fuel_tech": "Fuel efficiency — reduces fuel weight penalty", "data_analyst": "Qualifying specialist — +1.2% quali pace per level", "physio": "Driver consistency — reduces random lap variance", "logistics": "Reduces tyre wear — 3% less degradation per level", "morale": "Team spirit — +0.5% pace when running in top half", "tactician": "Wet weather specialist — +1.5% pace in rain/snow"}
 RACING_TEAM_CREATE_COST = 25_000_000  # $25M to create a racing team (name + colour)
 CREW_BANK_START = 50_000  # Starting crew bank when creating a team
 MAX_RACING_TEAMS = 18  # Only 18 teams total; kill a team owner to take their team
-MAX_CAR_UPGRADE_LEVEL = 5  # engine, tires
-MAX_AERO_LEVEL = 3
-MAX_RELIABILITY_LEVEL = 3
-MAX_BRAKES_LEVEL = 4
-MAX_GEARBOX_LEVEL = 4
-MAX_COOLING_LEVEL = 3
-MAX_WEIGHT_LEVEL = 3
+MAX_CAR_UPGRADE_LEVEL = 100  # engine, tires
+MAX_AERO_LEVEL = 100
+MAX_RELIABILITY_LEVEL = 100
+MAX_BRAKES_LEVEL = 100
+MAX_GEARBOX_LEVEL = 100
+MAX_COOLING_LEVEL = 100
+MAX_WEIGHT_LEVEL = 100
 WINS_FOR_WEIGHT = 2
-MAX_FUEL_LEVEL = 3
-MAX_SUSPENSION_LEVEL = 3
-SUSPENSION_GRIP_PER_LEVEL = 0.03
-SUSPENSION_SPEED_PENALTY_PER_LEVEL = 0.015
+MAX_FUEL_LEVEL = 100
+MAX_SUSPENSION_LEVEL = 100
+# Per-level effects scaled so 100 levels ≈ same total as old max (e.g. 3 levels): new = old * old_max / 100
+SUSPENSION_GRIP_PER_LEVEL = 0.0009   # was 0.03 * 3
+SUSPENSION_SPEED_PENALTY_PER_LEVEL = 0.00045  # was 0.015 * 3
 WINS_FOR_SUSPENSION = 1
 SUSPENSION_COST_BASE = 35000
-MAX_OVERTAKING_LEVEL = 3
-OVERTAKING_GRIP_PENALTY_PER_LEVEL = 0.01  # trade-off: -1% grip per level
-OVERTAKING_CHANCE_PER_LEVEL = 0.04  # chance to gain a position when close to car ahead
+MAX_OVERTAKING_LEVEL = 100
+OVERTAKING_GRIP_PENALTY_PER_LEVEL = 0.0003   # was 0.01 * 3
+OVERTAKING_CHANCE_PER_LEVEL = 0.0012  # was 0.04 * 3
 WINS_FOR_OVERTAKING = 1
 OVERTAKING_COST_BASE = 32000
-MAX_ACCELERATION_LEVEL = 3
-ACCELERATION_TOP_SPEED_PENALTY_PER_LEVEL = 0.015  # trade-off: -1.5% top speed per level
-ACCELERATION_BONUS_PER_LEVEL = 0.02  # +2% combined in "acceleration phase" (lap start / after corner)
+MAX_ACCELERATION_LEVEL = 100
+ACCELERATION_TOP_SPEED_PENALTY_PER_LEVEL = 0.00045  # was 0.015 * 3
+ACCELERATION_BONUS_PER_LEVEL = 0.0006  # was 0.02 * 3
 WINS_FOR_ACCELERATION = 1
 ACCELERATION_COST_BASE = 33000
-# New stats: brakes +grip -power, gearbox +speed -grip, cooling -engine wear, weight +speed +grip (unlock 2 wins), fuel +power, suspension +corner grip -straight speed, overtaking, acceleration
-BRAKES_GRIP_PER_LEVEL = 0.02
-BRAKES_POWER_PENALTY_PER_LEVEL = 0.01
-GEARBOX_SPEED_PER_LEVEL = 0.02
-GEARBOX_GRIP_PENALTY_PER_LEVEL = 0.01
-COOLING_WEAR_REDUCTION_PER_LEVEL = 0.05  # reduces engine wear rate
-WEIGHT_SPEED_PER_LEVEL = 0.01
-WEIGHT_GRIP_PER_LEVEL = 0.01
-FUEL_POWER_PER_LEVEL = 0.02
-# Cost per level for new types (crew bank)
+# New stats: brakes +grip -power, gearbox +speed -grip, cooling -engine wear, weight +speed +grip, fuel +power, suspension, overtaking, acceleration (all scaled for max 100)
+BRAKES_GRIP_PER_LEVEL = 0.0008   # was 0.02 * 4
+BRAKES_POWER_PENALTY_PER_LEVEL = 0.0004  # was 0.01 * 4
+GEARBOX_SPEED_PER_LEVEL = 0.0008   # was 0.02 * 4
+GEARBOX_GRIP_PENALTY_PER_LEVEL = 0.0004  # was 0.01 * 4
+COOLING_WEAR_REDUCTION_PER_LEVEL = 0.0015  # was 0.05 * 3
+WEIGHT_SPEED_PER_LEVEL = 0.0003   # was 0.01 * 3
+WEIGHT_GRIP_PER_LEVEL = 0.0003
+FUEL_POWER_PER_LEVEL = 0.0006   # was 0.02 * 3
+# Cost per level for new types (crew bank). Cost formula: cost_base * (1 + (current + 1) * 0.1)
 BRAKES_GEARBOX_COST_BASE = 30000
 COOLING_COST_BASE = 25000
 WEIGHT_COST_BASE = 45000
@@ -198,7 +200,7 @@ TIRE_WEAR_PER_LAP = 18
 # Pit a lap before tires are gone: ~18 wear/lap → pit when below 50 so next lap wouldn't kill tires
 TIRE_PIT_THRESHOLD = 50
 PIT_PENALTY_FACTOR_BASE = 0.68  # base speed multiplier when pitting (lose time that lap)
-PIT_PENALTY_IMPROVEMENT_PER_LEVEL = 0.04  # each pit_level reduces the penalty (max 5 → 0.68 + 0.20 = 0.88)
+PIT_PENALTY_IMPROVEMENT_PER_LEVEL = 0.002  # was 0.04 * 5 / 100; max 100 → 0.68 + 0.20 = 0.88
 
 # Season/week: 2 races per day (morning/evening), 7-day weeks, top 5 get good rewards, then full reset; leaderboard winner +5% per repeat win (cap 20%). Seasons = 2 months, then total reset.
 RACING_SEASON_DURATION_DAYS = 60
@@ -248,6 +250,42 @@ DEFAULT_PROFILE = {
 }
 for _suffix, _max, _ in CREW_EXTRA_TYPES:
     DEFAULT_PROFILE[f"{_suffix}_level"] = 0
+
+
+def _crew_upgrade_cost(level: int) -> int:
+    """Cost to upgrade mechanic/pit from level to level+1 (levels 0..99)."""
+    return int(50000 * (1 + (level + 1) * 0.05))
+
+
+def _car_engine_tires_cost(next_combined_level: int) -> int:
+    """Cost to upgrade engine or tires when new combined (engine+tires) level is next_combined_level (1..200)."""
+    return int(20000 * (1 + next_combined_level * 0.08))
+
+
+# Profile/frontend: cost arrays for display (mechanic/pit 0->1..99->100; engine+tires combined 1..200)
+CREW_UPGRADE_COSTS = [_crew_upgrade_cost(l) for l in range(100)]
+CAR_UPGRADE_COSTS = [_car_engine_tires_cost(i) for i in range(1, 201)]
+
+
+# Simulation-only per-level effects (scaled for max 100 so total effect matches old max)
+PIT_THRESHOLD_PER_LEVEL = 0.125      # pit_level contribution to pit threshold (was 2.5 * 5 / 100)
+STRATEGIST_PIT_OFFSET_PER_LEVEL = 0.09   # strategist reduces threshold (was 3 * 3 / 100)
+PIT_RANDOM_THRESHOLD_PER_LEVEL = 0.1    # 55 + pit_level * x (was 2 * 5 / 100)
+FUEL_WEIGHT_PENALTY_PER_LEVEL = 0.0003  # fuel_lvl reduces weight penalty (was 0.01 * 3 / 100)
+FUEL_TECH_WEIGHT_PER_LEVEL = 0.0001     # fuel_tech (was 0.005 * 2 / 100)
+CORNER_GRIP_BRAKES_PER_LEVEL = 0.0012   # brakes (was 0.03 * 4 / 100)
+CORNER_GRIP_AERO_PER_LEVEL = 0.0006     # aero (was 0.02 * 3 / 100)
+CORNER_GRIP_SUSP_PER_LEVEL = 0.0012     # suspension (was 0.04 * 3 / 100)
+COOLING_SPEED_PENALTY_AT_RISK_PER_LEVEL = 0.0015  # cooling reduces engine-issue penalty (was 0.05 * 3 / 100)
+COOLING_DNF_RISK_REDUCTION_PER_LEVEL = 0.006  # cooling reduces DNF chance (was 0.20 * 3 / 100)
+TACTICIAN_WET_PACE_PER_LEVEL = 0.0003  # tactician in wet (was 0.015 * 2 / 100)
+MORALE_TOP_HALF_PACE_PER_LEVEL = 0.0001  # morale (was 0.005 * 2 / 100)
+SPOTTER_DODGE_CHANCE_PER_LEVEL = 0.0045  # spotter dodge (was 0.15 * 3 / 100)
+TYRE_TECH_WEAR_REDUCTION_PER_LEVEL = 0.0018   # tyre_tech (was 0.06 * 3 / 100)
+LOGISTICS_WEAR_REDUCTION_PER_LEVEL = 0.0006   # logistics (was 0.03 * 2 / 100)
+ENGINEER_GRIP_PER_LEVEL = 0.00024   # engineer grip in _effective_speed_and_grip (was 0.008 * 3 / 100)
+PHYSIO_VARIANCE_REDUCTION_PER_LEVEL = 0.0001  # physio (was 0.005 * 2 / 100)
+DATA_ANALYST_QUALLI_PER_LEVEL = 0.00024  # data_analyst quali (was 0.012 * 2 / 100)
 
 
 # ---------- Pydantic ----------
@@ -590,9 +628,9 @@ def _effective_speed_and_grip(entrant: dict, profile: Optional[dict], upgrades_m
         speed *= 1.0 + mechanic * CREW_BONUS_PER_LEVEL
         engineer_lvl = int(profile.get("engineer_level") or 0)
         if engineer_lvl > 0:
-            grip += engineer_lvl * 0.008
+            grip += engineer_lvl * ENGINEER_GRIP_PER_LEVEL
         physio_lvl = int(profile.get("physio_level") or 0)
-        rng_range = max(0.01, 0.03 - physio_lvl * 0.005)
+        rng_range = max(0.01, 0.03 - physio_lvl * PHYSIO_VARIANCE_REDUCTION_PER_LEVEL)
         speed *= 0.985 + random.random() * rng_range
     else:
         speed *= 0.985 + random.random() * 0.03
@@ -717,7 +755,7 @@ def _run_race_simulation_laps(
             entrant = next((e for e in entrants if (e.get("user_id") or e.get("id")) == eid), None)
             up_eng = _get_upgrades(entrant) if entrant else {}
             cooling = int(up_eng.get("cooling_level") or 0)
-            cooling_risk_mult = max(0.4, 1.0 - 0.20 * cooling)
+            cooling_risk_mult = max(0.4, 1.0 - cooling * COOLING_DNF_RISK_REDUCTION_PER_LEVEL)
             dnf_chance = (wear - ENGINE_RISK_THRESHOLD) / (ENGINE_WEAR_MAX - ENGINE_RISK_THRESHOLD) * ENGINE_DNF_CHANCE_PER_LAP_AT_100
             if random.random() < (dnf_chance * cooling_risk_mult):
                 dnf_ids.append(eid)
@@ -730,10 +768,10 @@ def _run_race_simulation_laps(
             prof = profile_by_user.get(eid) or {}
             pit_level = min(MAX_CREW_LEVEL, int(prof.get("pit_level") or 0))
             strategist = crew_cache.get(eid, {}).get("strategist", 0)
-            pit_threshold = min(65, TIRE_PIT_THRESHOLD + pit_level * 2.5 - strategist * 3)
+            pit_threshold = min(65, TIRE_PIT_THRESHOLD + pit_level * PIT_THRESHOLD_PER_LEVEL - strategist * STRATEGIST_PIT_OFFSET_PER_LEVEL)
             if tire_wear[eid] < pit_threshold:
                 pitting.add(eid)
-            elif lap > 1 and lap < num_laps and random.random() < 0.12 and tire_wear[eid] < (55 + pit_level * 2):
+            elif lap > 1 and lap < num_laps and random.random() < 0.12 and tire_wear[eid] < (55 + pit_level * PIT_RANDOM_THRESHOLD_PER_LEVEL):
                 pitting.add(eid)
         for eid in pitting:
             pit_stops.append({"lap": lap, "entrant_id": eid})
@@ -749,14 +787,14 @@ def _run_race_simulation_laps(
             if wear >= ENGINE_RISK_THRESHOLD:
                 up = _get_upgrades(e)
                 cooling = int(up.get("cooling_level") or 0)
-                penalty = min(1.0, ENGINE_SPEED_PENALTY_AT_RISK + 0.05 * cooling)
+                penalty = min(1.0, ENGINE_SPEED_PENALTY_AT_RISK + cooling * COOLING_SPEED_PENALTY_AT_RISK_PER_LEVEL)
                 speed_val *= penalty
             up_fuel = _get_upgrades(e)
             fuel_lvl = int(up_fuel.get("fuel_level") or 0)
             crew = crew_cache.get(eid, {})
             fuel_tech = crew.get("fuel_tech", 0)
             base_weight_penalty = 0.03 * ((num_laps - lap + 1) / max(1, num_laps))
-            weight_penalty = max(0.0, base_weight_penalty - 0.01 * fuel_lvl - 0.005 * fuel_tech)
+            weight_penalty = max(0.0, base_weight_penalty - fuel_lvl * FUEL_WEIGHT_PENALTY_PER_LEVEL - fuel_tech * FUEL_TECH_WEIGHT_PER_LEVEL)
             fuel_weight_mult = 1.0 + weight_penalty
             tire_factor = max(0.3, tire_wear[eid] / 100.0)
             compound_mult = _compound_grip_mult(e)
@@ -768,7 +806,7 @@ def _run_race_simulation_laps(
             accel_lvl = int(up.get("acceleration_level") or 0)
 
             straight_perf = (speed_val * tire_factor * speed_mult) / fuel_weight_mult
-            corner_grip_bonus = compound_mult + brakes * 0.03 + aero * 0.02 + susp * 0.04
+            corner_grip_bonus = compound_mult + brakes * CORNER_GRIP_BRAKES_PER_LEVEL + aero * CORNER_GRIP_AERO_PER_LEVEL + susp * CORNER_GRIP_SUSP_PER_LEVEL
             corner_perf = (grip_val * tire_factor * corner_grip_bonus * speed_mult) / fuel_weight_mult
 
             combined = straight_perf * (1.0 - corner_weight) + corner_perf * corner_weight
@@ -777,14 +815,14 @@ def _run_race_simulation_laps(
 
             tactician = crew.get("tactician", 0)
             if is_wet and tactician > 0:
-                combined *= 1.0 + tactician * 0.015
+                combined *= 1.0 + tactician * TACTICIAN_WET_PACE_PER_LEVEL
 
             morale = crew.get("morale", 0)
             if morale > 0 and lap_results:
                 last_lap = lap_results[-1]
                 pos_idx = last_lap.index(eid) if eid in last_lap else len(last_lap)
                 if pos_idx < len(ids) // 2:
-                    combined *= 1.0 + morale * 0.005
+                    combined *= 1.0 + morale * MORALE_TOP_HALF_PACE_PER_LEVEL
 
             if damage_map.get(eid, 0) > 0:
                 combined *= (1.0 - damage_map[eid])
@@ -829,7 +867,7 @@ def _run_race_simulation_laps(
                 if random.random() < contact_chance:
                     victim = random.choice([eid_a, eid_b])
                     spotter = crew_cache.get(victim, {}).get("spotter", 0)
-                    if spotter > 0 and random.random() < spotter * 0.15:
+                    if spotter > 0 and random.random() < spotter * SPOTTER_DODGE_CHANCE_PER_LEVEL:
                         continue
                     dmg = random.uniform(0.02, 0.08)
                     damage_map[victim] = min(0.25, damage_map.get(victim, 0) + dmg)
@@ -849,7 +887,7 @@ def _run_race_simulation_laps(
                 tyre_tech = crew.get("tyre_tech", 0)
                 logistics = crew.get("logistics", 0)
                 comp_wear = _compound_wear_mult(e)
-                crew_wear_reduction = 1.0 - tyre_tech * 0.06 - logistics * 0.03
+                crew_wear_reduction = 1.0 - tyre_tech * TYRE_TECH_WEAR_REDUCTION_PER_LEVEL - logistics * LOGISTICS_WEAR_REDUCTION_PER_LEVEL
                 wear_this_lap = (TIRE_WEAR_PER_LAP + random.uniform(-2, 2)) * tire_wear_mult * comp_wear * wear_mult_rel * max(0.7, crew_wear_reduction)
                 tire_wear[eid] = max(0, tire_wear[eid] - wear_this_lap)
             tire_wear_after_lap[eid].append(round(tire_wear[eid], 1))
@@ -898,16 +936,16 @@ def _run_qualifying(
         aero = int(up.get("aero_level") or 0)
         susp = int(up.get("suspension_level") or 0)
         straight_perf = speed_val * speed_mult
-        corner_grip_bonus = compound_mult + brakes * 0.03 + aero * 0.02 + susp * 0.04
+        corner_grip_bonus = compound_mult + brakes * CORNER_GRIP_BRAKES_PER_LEVEL + aero * CORNER_GRIP_AERO_PER_LEVEL + susp * CORNER_GRIP_SUSP_PER_LEVEL
         corner_perf = grip_val * corner_grip_bonus * speed_mult
         combined = straight_perf * (1.0 - corner_weight) + corner_perf * corner_weight
         prof = profile_by_user.get(eid) or {}
         data_analyst = int(prof.get("data_analyst_level") or 0)
         if data_analyst > 0 and not e.get("is_npc"):
-            combined *= 1.0 + data_analyst * 0.012
+            combined *= 1.0 + data_analyst * DATA_ANALYST_QUALLI_PER_LEVEL
         tactician_q = int(prof.get("tactician_level") or 0)
         if is_wet and tactician_q > 0 and not e.get("is_npc"):
-            combined *= 1.0 + tactician_q * 0.015
+            combined *= 1.0 + tactician_q * TACTICIAN_WET_PACE_PER_LEVEL
         combined = max(0.01, float(combined))
         lap_time = lap_base / combined
         lap_time = max(20.0, min(300.0, lap_time))
@@ -1013,16 +1051,7 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "crew_tradeoffs": {
             "mechanic": {"label": "Mechanic", "max": MAX_CREW_LEVEL, "costs": CREW_UPGRADE_COSTS, "desc": "+2% speed per level"},
             "pit": {"label": "Pit Crew", "max": MAX_CREW_LEVEL, "costs": CREW_UPGRADE_COSTS, "desc": "Faster pit stops — less time lost per stop (+4% speed recovery/level)"},
-            "strategist": {"label": "Strategist", "max": 3, "cost_base": 40000, "desc": "Optimises pit window — pushes tyres harder before pitting"},
-            "spotter": {"label": "Spotter", "max": 3, "cost_base": 35000, "desc": "Avoids contact damage — 15% dodge chance per level"},
-            "engineer": {"label": "Engineer", "max": 3, "cost_base": 45000, "desc": "Better car setup — +0.8% grip per level"},
-            "tyre_tech": {"label": "Tyre Tech", "max": 3, "cost_base": 38000, "desc": "Reduces tyre wear rate — 6% less degradation per level"},
-            "fuel_tech": {"label": "Fuel Tech", "max": 2, "cost_base": 30000, "desc": "Fuel efficiency — reduces fuel weight penalty"},
-            "data_analyst": {"label": "Data Analyst", "max": 2, "cost_base": 28000, "desc": "Qualifying specialist — +1.2% quali pace per level"},
-            "physio": {"label": "Physio", "max": 2, "cost_base": 25000, "desc": "Driver consistency — reduces random lap variance"},
-            "logistics": {"label": "Logistics", "max": 2, "cost_base": 26000, "desc": "Reduces tyre wear — 3% less degradation per level"},
-            "morale": {"label": "Morale", "max": 2, "cost_base": 32000, "desc": "Team spirit — +0.5% pace when running in top half"},
-            "tactician": {"label": "Tactician", "max": 2, "cost_base": 30000, "desc": "Wet weather specialist — +1.5% pace in rain/snow"},
+            **{suffix: {"label": _CREW_LABELS.get(suffix, suffix.title()), "max": max_lvl, "cost_base": cost_base, "desc": _CREW_DESCS.get(suffix, "")} for suffix, max_lvl, cost_base in CREW_EXTRA_TYPES},
         },
         "car_upgrade_costs": CAR_UPGRADE_COSTS,
         "max_car_upgrade_level": MAX_CAR_UPGRADE_LEVEL,
@@ -1131,7 +1160,7 @@ async def upgrade_crew(body: UpgradeCrewRequest, current_user: dict = Depends(ge
             raise HTTPException(status_code=400, detail="Max level reached")
         if _total_crew_levels(prof) >= RACING_CREW_GLOBAL_CAP:
             raise HTTPException(status_code=400, detail=f"Crew cap reached ({RACING_CREW_GLOBAL_CAP} total levels)")
-        cost = CREW_UPGRADE_COSTS[current + 1] if current + 1 < len(CREW_UPGRADE_COSTS) else CREW_UPGRADE_COSTS[-1]
+        cost = CREW_UPGRADE_COSTS[current] if current < len(CREW_UPGRADE_COSTS) else _crew_upgrade_cost(current)
         await _deduct_crew_bank(current_user["id"], cost)
         await db.racing_profiles.update_one({"user_id": current_user["id"]}, {"$set": {key: current + 1}}, upsert=True)
         return {"message": f"{crew_type} upgraded to level {current + 1}", "new_level": current + 1}
@@ -1144,7 +1173,7 @@ async def upgrade_crew(body: UpgradeCrewRequest, current_user: dict = Depends(ge
                 raise HTTPException(status_code=400, detail=f"Max {suffix} level reached")
             if _total_crew_levels(prof) >= RACING_CREW_GLOBAL_CAP:
                 raise HTTPException(status_code=400, detail=f"Crew cap reached ({RACING_CREW_GLOBAL_CAP} total levels)")
-            cost = cost_base * (current + 1)
+            cost = int(cost_base * (1 + (current + 1) * 0.08))
             await _deduct_crew_bank(current_user["id"], cost)
             await db.racing_profiles.update_one({"user_id": current_user["id"]}, {"$set": {key: current + 1}}, upsert=True)
             return {"message": f"{suffix} upgraded to level {current + 1}", "new_level": current + 1}
@@ -1197,7 +1226,7 @@ async def upgrade_car_part(body: UpgradeCarRequest, current_user: dict = Depends
             raise HTTPException(status_code=400, detail=f"Max {upgrade_type} level reached")
         if _total_upgrade_levels(up_data, doc) >= RACING_UPGRADE_GLOBAL_CAP:
             raise HTTPException(status_code=400, detail=f"Global upgrade cap reached ({RACING_UPGRADE_GLOBAL_CAP} total levels)")
-        cost = 40000 * (current + 1)
+        cost = int(40000 * (1 + (current + 1) * 0.1))
         await _deduct_crew_bank(current_user["id"], cost)
         up_data[key] = current + 1
         await db.racing_upgrades.update_one(
@@ -1238,14 +1267,14 @@ async def upgrade_car_part(body: UpgradeCarRequest, current_user: dict = Depends
         if _total_upgrade_levels(up_data, doc) >= RACING_UPGRADE_GLOBAL_CAP:
             raise HTTPException(status_code=400, detail=f"Global upgrade cap reached ({RACING_UPGRADE_GLOBAL_CAP} total levels)")
         cost_map = {
-            "brakes": BRAKES_GEARBOX_COST_BASE * (current + 1),
-            "gearbox": BRAKES_GEARBOX_COST_BASE * (current + 1),
-            "cooling": COOLING_COST_BASE * (current + 1),
-            "weight": WEIGHT_COST_BASE * (current + 1),
-            "fuel": FUEL_COST_BASE * (current + 1),
-            "suspension": SUSPENSION_COST_BASE * (current + 1),
-            "overtaking": OVERTAKING_COST_BASE * (current + 1),
-            "acceleration": ACCELERATION_COST_BASE * (current + 1),
+            "brakes": int(BRAKES_GEARBOX_COST_BASE * (1 + (current + 1) * 0.1)),
+            "gearbox": int(BRAKES_GEARBOX_COST_BASE * (1 + (current + 1) * 0.1)),
+            "cooling": int(COOLING_COST_BASE * (1 + (current + 1) * 0.1)),
+            "weight": int(WEIGHT_COST_BASE * (1 + (current + 1) * 0.1)),
+            "fuel": int(FUEL_COST_BASE * (1 + (current + 1) * 0.1)),
+            "suspension": int(SUSPENSION_COST_BASE * (1 + (current + 1) * 0.1)),
+            "overtaking": int(OVERTAKING_COST_BASE * (1 + (current + 1) * 0.1)),
+            "acceleration": int(ACCELERATION_COST_BASE * (1 + (current + 1) * 0.1)),
         }
         cost = cost_map[upgrade_type]
         await _deduct_crew_bank(current_user["id"], cost)
@@ -1271,7 +1300,7 @@ async def upgrade_car_part(body: UpgradeCarRequest, current_user: dict = Depends
         if _total_upgrade_levels(up_data, None) > RACING_UPGRADE_GLOBAL_CAP:
             raise HTTPException(status_code=400, detail=f"Global upgrade cap reached ({RACING_UPGRADE_GLOBAL_CAP} total levels)")
         next_level = engine + tires + 1
-        cost = CAR_UPGRADE_COSTS[next_level] if next_level < len(CAR_UPGRADE_COSTS) else CAR_UPGRADE_COSTS[-1]
+        cost = _car_engine_tires_cost(next_level)
         await _deduct_crew_bank(current_user["id"], cost)
         await db.user_racing_cars.update_one(
             {"user_id": current_user["id"], "id": instance_id},
@@ -1292,7 +1321,7 @@ async def upgrade_car_part(body: UpgradeCarRequest, current_user: dict = Depends
     if _total_upgrade_levels(up_data, None) > RACING_UPGRADE_GLOBAL_CAP:
         raise HTTPException(status_code=400, detail=f"Global upgrade cap reached ({RACING_UPGRADE_GLOBAL_CAP} total levels)")
     next_level = engine + tires + 1
-    cost = CAR_UPGRADE_COSTS[next_level] if next_level < len(CAR_UPGRADE_COSTS) else CAR_UPGRADE_COSTS[-1]
+    cost = _car_engine_tires_cost(next_level)
     await _deduct_crew_bank(current_user["id"], cost)
     await db.user_racing_cars.update_one(
         {"user_id": current_user["id"], "id": instance_id},
