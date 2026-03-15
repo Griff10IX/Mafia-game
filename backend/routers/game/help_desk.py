@@ -21,6 +21,16 @@ class TicketReply(BaseModel):
     body: str
 
 
+class ErrorReportCreate(BaseModel):
+    error_message: str
+    stack_trace: Optional[str] = None
+    page_url: Optional[str] = None
+
+
+class TicketReward(BaseModel):
+    amount: int
+
+
 class BlacklistAdd(BaseModel):
     word: str
 
@@ -98,14 +108,50 @@ def register(router):
         await db.help_desk_tickets.insert_one(doc)
         return {"id": ticket_id, "message": "Ticket created", "ticket": _ticket_to_response(doc)}
 
+    @router.post("/help-desk/error-report")
+    async def create_error_report(body: ErrorReportCreate, current_user: dict = Depends(get_current_user)):
+        """Create an error report ticket from the ErrorBoundary. Does not count against one-open-ticket limit."""
+        err_msg = (body.error_message or "").strip()[:500] or "Unknown error"
+        stack = (body.stack_trace or "").strip()[:5000] or ""
+        page_url = (body.page_url or "").strip()[:500] or ""
+        subject = f"[Bug Report] {err_msg[:100]}"
+        body_parts = [f"Error: {err_msg}"]
+        if page_url:
+            body_parts.append(f"\nPage URL: {page_url}")
+        if stack:
+            body_parts.append(f"\nStack trace:\n{stack}")
+        body_text = "\n".join(body_parts)[:10_000]
+        ticket_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        doc = {
+            "id": ticket_id,
+            "user_id": current_user["id"],
+            "username": current_user.get("username") or "?",
+            "subject": subject,
+            "body": body_text,
+            "status": "open",
+            "category": "error_report",
+            "created_at": now,
+            "updated_at": now,
+            "replies": [],
+            "closed_at": None,
+            "closed_by_id": None,
+            "rewarded": False,
+            "reward_amount": None,
+        }
+        await db.help_desk_tickets.insert_one(doc)
+        return {"id": ticket_id, "message": "Error report submitted", "ticket": _ticket_to_response(doc)}
+
     @router.get("/help-desk/tickets")
     async def list_tickets(
         status_filter: str | None = None,  # open, closed, or None for all
         current_user: dict = Depends(get_current_user),
     ):
-        """List tickets: own tickets for users; all tickets for admin/mod/hdo."""
-        if _can_manage_tickets(current_user):
+        """List tickets: own tickets for users; all tickets for admin; mods/HDOs see all except error_report."""
+        if _is_admin(current_user):
             query = {}
+        elif _can_manage_tickets(current_user):
+            query = {"category": {"$ne": "error_report"}}
         else:
             query = {"user_id": current_user["id"]}
         if status_filter in ("open", "closed"):
@@ -133,16 +179,25 @@ def register(router):
             "replies": reply_list,
             "closed_at": t.get("closed_at"),
             "closed_by_id": t.get("closed_by_id"),
+            "category": t.get("category"),
+            "rewarded": t.get("rewarded", False),
+            "reward_amount": t.get("reward_amount"),
         }
         return out
 
     @router.get("/help-desk/tickets/{ticket_id}")
     async def get_ticket(ticket_id: str, current_user: dict = Depends(get_current_user)):
-        """Get one ticket. Author or staff only."""
+        """Get one ticket. Author or staff only. Error reports: only admin or author."""
         ticket = await db.help_desk_tickets.find_one({"id": ticket_id}, {"_id": 0})
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
-        if ticket["user_id"] != current_user["id"] and not _can_manage_tickets(current_user):
+        is_author = ticket["user_id"] == current_user["id"]
+        if is_author:
+            pass
+        elif ticket.get("category") == "error_report":
+            if not _is_admin(current_user):
+                raise HTTPException(status_code=403, detail="Only admins can view error reports from other users")
+        elif not _can_manage_tickets(current_user):
             raise HTTPException(status_code=403, detail="Not allowed to view this ticket")
         return _ticket_to_response(ticket)
 
@@ -193,6 +248,53 @@ def register(router):
         )
         updated = await db.help_desk_tickets.find_one({"id": ticket_id}, {"_id": 0})
         return {"message": "Ticket closed", "ticket": _ticket_to_response(updated)}
+
+    @router.post("/help-desk/tickets/{ticket_id}/reward")
+    async def reward_ticket(ticket_id: str, body: TicketReward, current_user: dict = Depends(get_current_user)):
+        """Admin-only: reward the reporting user with cash for an error report."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if not (1 <= body.amount <= 1_000_000):
+            raise HTTPException(status_code=400, detail="Amount must be between 1 and 1,000,000")
+        ticket = await db.help_desk_tickets.find_one({"id": ticket_id}, {"_id": 0})
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+        if ticket.get("category") != "error_report":
+            raise HTTPException(status_code=400, detail="Only error report tickets can be rewarded")
+        if ticket.get("rewarded"):
+            raise HTTPException(status_code=400, detail="This report has already been rewarded")
+        user_id = ticket.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Ticket has no user")
+        await db.users.update_one({"id": user_id}, {"$inc": {"money": body.amount}})
+        now = datetime.now(timezone.utc).isoformat()
+        reply = {
+            "author_id": current_user["id"],
+            "author_username": current_user.get("username") or "?",
+            "author_role": "admin",
+            "body": f"Admin rewarded ${body.amount:,} for this report.",
+            "created_at": now,
+        }
+        await db.help_desk_tickets.update_one(
+            {"id": ticket_id},
+            {
+                "$push": {"replies": reply},
+                "$set": {
+                    "updated_at": now,
+                    "rewarded": True,
+                    "reward_amount": body.amount,
+                },
+            },
+        )
+        await srv.send_notification(
+            user_id,
+            "Bug Report Reward",
+            f"You received ${body.amount:,} for your bug report. Thank you for helping improve the game!",
+            "reward",
+            category="system",
+        )
+        updated = await db.help_desk_tickets.find_one({"id": ticket_id}, {"_id": 0})
+        return {"message": f"Rewarded ${body.amount:,}", "ticket": _ticket_to_response(updated)}
 
     @router.get("/help-desk/check")
     async def help_desk_check(current_user: dict = Depends(get_current_user)):

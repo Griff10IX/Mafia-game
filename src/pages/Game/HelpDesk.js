@@ -22,6 +22,7 @@ const ROLE_LABELS = { user: 'User', admin: 'Admin', mod: 'Mod', hdo: 'HDO' };
 
 export default function HelpDesk() {
   const [canManage, setCanManage] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [canApproveMute, setCanApproveMute] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +37,8 @@ export default function HelpDesk() {
   const [replyBody, setReplyBody] = useState('');
   const [replying, setReplying] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [rewardAmount, setRewardAmount] = useState('');
+  const [rewarding, setRewarding] = useState(false);
   const [forumMutes, setForumMutes] = useState([]);
   const [forumMutesLoading, setForumMutesLoading] = useState(false);
   const [muteUsername, setMuteUsername] = useState('');
@@ -62,10 +65,12 @@ export default function HelpDesk() {
     try {
       const r = await api.get('/help-desk/check');
       setCanManage(!!r.data?.can_manage);
+      setIsAdmin(!!r.data?.is_admin);
       setCanApproveMute(!!r.data?.can_approve_mute);
       setBlacklistCanRemove(!!r.data?.is_admin);
     } catch (_) {
       setCanManage(false);
+      setIsAdmin(false);
       setCanApproveMute(false);
       setBlacklistCanRemove(false);
     }
@@ -190,6 +195,27 @@ export default function HelpDesk() {
       toast.error(e.response?.data?.detail || 'Failed to close ticket');
     } finally {
       setClosing(false);
+    }
+  };
+
+  const handleReward = async (e) => {
+    e.preventDefault();
+    const amount = parseInt(rewardAmount, 10);
+    if (!selectedId || !Number.isInteger(amount) || amount < 1 || amount > 1000000) {
+      toast.error('Enter a valid amount (1–1,000,000)');
+      return;
+    }
+    setRewarding(true);
+    try {
+      const r = await api.post(`/help-desk/tickets/${selectedId}/reward`, { amount });
+      setTicketDetail(r.data?.ticket || null);
+      setRewardAmount('');
+      toast.success(`Rewarded $${amount.toLocaleString()} to ${ticketDetail?.username || 'user'}`);
+      fetchTickets();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to reward');
+    } finally {
+      setRewarding(false);
     }
   };
 
@@ -489,6 +515,29 @@ export default function HelpDesk() {
                     {replying ? 'Sending…' : 'Send reply'}
                   </button>
                 </form>
+              )}
+              {isAdmin && ticketDetail.category === 'error_report' && (
+                <div className="pt-2 border-t border-primary/10 space-y-2">
+                  <span className="text-[9px] font-heading font-bold text-primary uppercase">Reward Cash</span>
+                  {ticketDetail.rewarded ? (
+                    <p className="text-[11px] text-mutedForeground">Already rewarded: ${(ticketDetail.reward_amount || 0).toLocaleString()}</p>
+                  ) : (
+                    <form onSubmit={handleReward} className="flex flex-wrap gap-2 items-end">
+                      <input
+                        type="number"
+                        min={1}
+                        max={1000000}
+                        value={rewardAmount}
+                        onChange={(e) => setRewardAmount(e.target.value)}
+                        placeholder="Amount"
+                        className="w-24 px-2 py-1 bg-secondary border border-primary/20 rounded text-[11px] font-heading"
+                      />
+                      <button type="submit" disabled={rewarding || !rewardAmount.trim()} className="px-2.5 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/50 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50">
+                        {rewarding ? 'Rewarding…' : 'Reward'}
+                      </button>
+                    </form>
+                  )}
+                </div>
               )}
             </div>
           ) : null}

@@ -427,7 +427,7 @@ const GP_TARGA = (t) => interpPtsSmooth(PTS_TARGA, t);
 
 const TRACKS = [
   {
-    id:"chicago", name:"Chicago Board Track", km:3.1, corners:10, lapBase:24, rewardMult:1.0, trackWidth:36,
+    id:"chicago", name:"Chicago Board Track", km:3.1, corners:10, lapBase:24, rewardMult:1.0, trackWidth:40,
     desc:"Banked wooden oval with tight turns",
     getPoint: GP_CHICAGO,
     pitEntry:0.61, pitExit:0.67, sfLine:0.01,
@@ -458,7 +458,7 @@ const TRACKS = [
     },
   },
   {
-    id:"daytona", name:"Daytona Beach", km:4.2, corners:6, lapBase:28, rewardMult:1.2, trackWidth:36,
+    id:"daytona", name:"Daytona Beach", km:4.2, corners:6, lapBase:28, rewardMult:1.2, trackWidth:40,
     desc:"High-speed banked D-oval, 31° banking",
     getPoint: GP_DAYTONA,
     pitEntry:0.55, pitExit:0.62, sfLine:0.0,
@@ -472,7 +472,7 @@ const TRACKS = [
     },
   },
   {
-    id:"indianapolis", name:"Indianapolis", km:4.6, corners:6, lapBase:30, rewardMult:1.3, trackWidth:36,
+    id:"indianapolis", name:"Indianapolis", km:4.6, corners:6, lapBase:30, rewardMult:1.3, trackWidth:40,
     desc:"Superspeedway, 9° banking, Yard of Bricks",
     getPoint: GP_INDIANAPOLIS,
     pitEntry:0.59, pitExit:0.66, sfLine:0.0,
@@ -489,7 +489,7 @@ const TRACKS = [
     },
   },
   {
-    id:"roosevelt", name:"Roosevelt Raceway", km:2.8, corners:18, lapBase:26, rewardMult:1.1, trackWidth:28,
+    id:"roosevelt", name:"Roosevelt Raceway", km:2.8, corners:18, lapBase:26, rewardMult:1.1, trackWidth:32,
     desc:"Technical road course, hairpins and chicanes",
     getPoint: GP_ROOSEVELT,
     pitEntry:0.77, pitExit:0.83, sfLine:0.0,
@@ -523,7 +523,7 @@ const TRACKS = [
     },
   },
   {
-    id:"lakeside", name:"Lakeside Park", km:3.8, corners:14, lapBase:28, rewardMult:1.1, trackWidth:28,
+    id:"lakeside", name:"Lakeside Park", km:3.8, corners:14, lapBase:28, rewardMult:1.1, trackWidth:32,
     desc:"Flowing high-speed sweepers around the lake",
     getPoint: GP_LAKESIDE,
     pitEntry:0.64, pitExit:0.70, sfLine:0.0,
@@ -576,7 +576,7 @@ const TRACKS = [
     },
   },
   {
-    id:"mountain", name:"Mountain Pass", km:4.8, corners:22, lapBase:32, rewardMult:1.25, trackWidth:28,
+    id:"mountain", name:"Mountain Pass", km:4.8, corners:22, lapBase:32, rewardMult:1.25, trackWidth:32,
     desc:"Long elevation changes, switchbacks and S-curves",
     getPoint: GP_MOUNTAIN,
     pitEntry:0.71, pitExit:0.77, sfLine:0.0,
@@ -609,7 +609,7 @@ const TRACKS = [
     },
   },
   {
-    id:"brooklands", name:"Brooklands Banking", km:6.4, corners:8, lapBase:42, rewardMult:1.35, trackWidth:36,
+    id:"brooklands", name:"Brooklands Banking", km:6.4, corners:8, lapBase:42, rewardMult:1.35, trackWidth:40,
     desc:"High-speed banked oval, long back straight — Surrey, England",
     getPoint: GP_BROOKLANDS,
     pitEntry:0.58, pitExit:0.64, sfLine:0.0,
@@ -641,7 +641,7 @@ const TRACKS = [
     },
   },
   {
-    id:"monza", name:"Monza Autodromo", km:8.0, corners:14, lapBase:52, rewardMult:1.4, trackWidth:28,
+    id:"monza", name:"Monza Autodromo", km:8.0, corners:14, lapBase:52, rewardMult:1.4, trackWidth:32,
     desc:"Combined oval and road course — Monza, Italy (est. 1922)",
     getPoint: GP_MONZA,
     pitEntry:0.62, pitExit:0.68, sfLine:0.0,
@@ -656,7 +656,7 @@ const TRACKS = [
     },
   },
   {
-    id:"lemans", name:"Le Mans Sarthe", km:10.7, corners:16, lapBase:65, rewardMult:1.5, trackWidth:30,
+    id:"lemans", name:"Le Mans Sarthe", km:10.7, corners:16, lapBase:65, rewardMult:1.5, trackWidth:34,
     desc:"Ultra-long Mulsanne straight, tight Porsche curves — Le Mans, France (est. 1923)",
     getPoint: GP_LEMANS,
     pitEntry:0.56, pitExit:0.63, sfLine:0.0,
@@ -675,7 +675,7 @@ const TRACKS = [
     },
   },
   {
-    id:"avus", name:"AVUS Speedway", km:12.0, corners:4, lapBase:58, rewardMult:1.45, trackWidth:36,
+    id:"avus", name:"AVUS Speedway", km:12.0, corners:4, lapBase:58, rewardMult:1.45, trackWidth:40,
     desc:"Two massive straights linked by banked hairpins — Berlin, Germany (est. 1921)",
     getPoint: GP_AVUS,
     pitEntry:0.48, pitExit:0.54, sfLine:0.0,
@@ -706,7 +706,7 @@ const TRACKS = [
     },
   },
   {
-    id:"targa", name:"Targa Florio", km:14.5, corners:32, lapBase:80, rewardMult:1.6, trackWidth:22,
+    id:"targa", name:"Targa Florio", km:14.5, corners:32, lapBase:80, rewardMult:1.6, trackWidth:26,
     desc:"Narrow mountain roads, countless switchbacks — Madonie, Sicily (est. 1906)",
     getPoint: GP_TARGA,
     pitEntry:0.72, pitExit:0.78, sfLine:0.0,
@@ -760,13 +760,13 @@ function getCurvature(track, t) {
   return Math.abs(delta) / arcLen;
 }
 
-/** Corner multiplier: 1.0 on straights, drops to ~0.50–0.65 in sharp corners.
+/** Corner multiplier: 1.0 on straights, drops to ~0.77–0.80 in sharp corners (~120 mph).
  *  Grip scales the effective k: higher grip = faster cornering. */
 function getCornerMult(curvature, baseGrip = 0.85) {
   const kBase = 22;
   const gripK = kBase * (1.15 - baseGrip * 0.5);
   const raw = 1 / (1 + curvature * gripK);
-  const minMult = 0.48 + baseGrip * 0.22;
+  const minMult = 0.62 + baseGrip * 0.18;
   return Math.max(minMult, Math.min(1, raw));
 }
 
@@ -1508,8 +1508,8 @@ export default function CircuitRaceView({
       grd.addColorStop(0, clr+"55"); grd.addColorStop(1, clr+"00");
       ctx.fillStyle=grd; ctx.fillRect(px-22,py-22,44,44);
 
-      // Shadow
-      ctx.save(); ctx.translate(px,py+5); ctx.scale(1.2,0.4);
+      // Shadow (car scale 0.88 for smaller cars / overtaking)
+      ctx.save(); ctx.translate(px,py+5); ctx.scale(0.88,0.88); ctx.scale(1.2,0.4);
       ctx.fillStyle="rgba(0,0,0,0.5)"; ctx.beginPath(); ctx.arc(0,0,11,0,Math.PI*2); ctx.fill();
       ctx.restore();
 
@@ -1517,7 +1517,7 @@ export default function CircuitRaceView({
       const curv = getCurvature(track, r.inPit ? 0 : ((r.totalLapsDone ?? 0) + r.trackPos) % 1);
       if (curv > 0.06 && !r.inPit && !r.dnf) {
         const brakeIntensity = Math.min(1, (curv - 0.06) / 0.12);
-        ctx.save(); ctx.translate(px,py); ctx.rotate(angle);
+        ctx.save(); ctx.translate(px,py); ctx.rotate(angle); ctx.scale(0.88,0.88);
         ctx.fillStyle = `rgba(255,30,20,${0.3 + brakeIntensity * 0.5})`;
         ctx.beginPath(); ctx.arc(-12, -3, 2.5, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.arc(-12, 3, 2.5, 0, Math.PI * 2); ctx.fill();
@@ -1529,8 +1529,8 @@ export default function CircuitRaceView({
         ctx.restore();
       }
 
-      // Car body — larger with team color stripe
-      ctx.save(); ctx.translate(px,py); ctx.rotate(angle);
+      // Car body — scale 0.88 for overtaking space
+      ctx.save(); ctx.translate(px,py); ctx.rotate(angle); ctx.scale(0.88,0.88);
       ctx.fillStyle = r.color || "#888";
       ctx.beginPath();
       if (ctx.roundRect) { ctx.roundRect(-11,-5,22,10,3); }
@@ -1551,7 +1551,7 @@ export default function CircuitRaceView({
       // Headlights in night conditions
       if (cond === "night" && !r.inPit && !r.dnf) {
         ctx.save();
-        ctx.translate(px, py); ctx.rotate(angle);
+        ctx.translate(px, py); ctx.rotate(angle); ctx.scale(0.88,0.88);
         const hlGrd = ctx.createRadialGradient(13, 0, 0, 25, 0, 30);
         hlGrd.addColorStop(0, "rgba(255,240,180,0.18)");
         hlGrd.addColorStop(1, "rgba(255,240,180,0)");
@@ -1563,27 +1563,31 @@ export default function CircuitRaceView({
         ctx.restore();
       }
 
-      // Car number circle
+      // Car number circle (scaled with car)
       const isPlayer = r.isPlayer;
       const carNumber = r.position != null ? r.position : drawIdx + 1;
+      ctx.save(); ctx.translate(px, py); ctx.scale(0.88, 0.88);
       ctx.fillStyle = isPlayer ? "#e8c870" : r.color;
-      ctx.beginPath(); ctx.arc(px,py-13,7,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(0,-13,7,0,Math.PI*2); ctx.fill();
       ctx.strokeStyle = isPlayer ? "#0a0c06" : "rgba(0,0,0,0.6)"; ctx.lineWidth=1.2; ctx.stroke();
       ctx.fillStyle = isPlayer ? "#0a0c06" : "#fff";
       ctx.font = `bold 7px Rajdhani,sans-serif`; ctx.textAlign="center"; ctx.textBaseline="middle";
-      ctx.fillText(carNumber, px, py-13);
+      ctx.fillText(String(carNumber), 0, -13);
       ctx.textBaseline = "alphabetic";
+      ctx.restore();
 
-      // Tyre compound dot with blister flash
+      // Tyre compound dot with blister flash (scaled with car)
       const td = TYRE_DEFS[r.currentTyre] || TYRE_DEFS.medium;
+      ctx.save(); ctx.translate(px, py); ctx.scale(0.88, 0.88);
       if (r.tyreBlister) {
         const pulse = 0.5 + 0.5 * Math.sin(nowSec * 8);
         ctx.fillStyle = `rgba(231,76,60,${0.5+pulse*0.5})`;
-        ctx.beginPath(); ctx.arc(px+11,py-6,5,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(11,-6,5,0,Math.PI*2); ctx.fill();
       }
       ctx.fillStyle = td.color;
-      ctx.beginPath(); ctx.arc(px+11,py-6,4,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(11,-6,4,0,Math.PI*2); ctx.fill();
       ctx.strokeStyle="rgba(0,0,0,0.5)"; ctx.lineWidth=0.8; ctx.stroke();
+      ctx.restore();
 
       // Engine health smoke (pre-DNF degradation)
       if (!r.dnf && r.engineHealth != null && r.engineHealth < 40 && !r.inPit) {
@@ -1926,14 +1930,25 @@ export default function CircuitRaceView({
         const prevPos = r.trackPos;
         const SPEED_REALISM_SCALE = 0.168;
         const SPEED_CAP_MPH = 150;
-        const SPEED_SMOOTH = 6.0;
+        const ACCEL_DECEL_BRAKE = 2.5;
+        const ACCEL_DECEL_ACCEL = 4.5;
+        const MAX_SPEED_DELTA_MPH = 8;
+        const applySpeedLerp = (current, target) => {
+          if (target == null) return target;
+          if (current == null) return target;
+          const braking = target < current;
+          const smoothFactor = Math.min(1, dt * (braking ? ACCEL_DECEL_BRAKE : ACCEL_DECEL_ACCEL));
+          let delta = (target - current) * smoothFactor;
+          delta = Math.max(-MAX_SPEED_DELTA_MPH, Math.min(MAX_SPEED_DELTA_MPH, delta));
+          return current + delta;
+        };
         if (r.slideOffUntil > 0 && nowSec < r.slideOffUntil) {
           const lapTime = track.lapBase / effSpeed;
           const advance = (1.0 / lapTime) * dt * 0.18;
           r.trackPos = (r.trackPos + advance + 1) % 1;
           const rawMph = track.km && track.lapBase ? SPEED_REALISM_SCALE * (3600 * track.km * 0.18 * effSpeed) / track.lapBase : null;
           const targetMph = rawMph == null ? null : Math.max(0, Math.min(SPEED_CAP_MPH, rawMph));
-          r.currentSpeedMph = targetMph == null ? targetMph : (r.currentSpeedMph != null ? r.currentSpeedMph + (targetMph - r.currentSpeedMph) * Math.min(1, dt * SPEED_SMOOTH) : targetMph);
+          r.currentSpeedMph = targetMph == null ? targetMph : (r.currentSpeedMph != null ? applySpeedLerp(r.currentSpeedMph, targetMph) : targetMph);
         } else {
           r.slideOffUntil = 0;
           const lapTime = track.lapBase / effSpeed;
@@ -1941,7 +1956,7 @@ export default function CircuitRaceView({
           r.trackPos = (r.trackPos + advance + 1) % 1;
           const rawMph = track.km && track.lapBase ? SPEED_REALISM_SCALE * (3600 * track.km * cornerMult * effSpeed) / track.lapBase : null;
           const targetMph = rawMph == null ? null : Math.max(0, Math.min(SPEED_CAP_MPH, rawMph));
-          r.currentSpeedMph = targetMph == null ? targetMph : (r.currentSpeedMph != null ? r.currentSpeedMph + (targetMph - r.currentSpeedMph) * Math.min(1, dt * SPEED_SMOOTH) : targetMph);
+          r.currentSpeedMph = targetMph == null ? targetMph : (r.currentSpeedMph != null ? applySpeedLerp(r.currentSpeedMph, targetMph) : targetMph);
           if (curvature > 0.25 && effectiveGrip < 0.65 && Math.random() < dt * 0.5 * (0.65 - effectiveGrip) * Math.min(1, curvature / 0.40)) {
             r.slideOffUntil = nowSec + 0.5 + Math.random() * 0.6;
             addIncident(`${r.name} off track!`);
@@ -2190,25 +2205,34 @@ export default function CircuitRaceView({
         }
         setUiPhase("done");
         setCommentary(rand(COMMENTARY.done));
-        const finalOrder = [...racers].sort((a, b) => {
-          if (a.dnf && !b.dnf) return 1;
-          if (!a.dnf && b.dnf) return -1;
-          if (a.dnf && b.dnf) {
-            const progressA = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
-            const progressB = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
-            if (Math.abs(progressB - progressA) > 1e-9) return progressB - progressA;
-            return (b.dnfAtSec ?? 0) - (a.dnfAtSec ?? 0);
-          }
-          const aFin = a.finished && a.finishOrder > 0;
-          const bFin = b.finished && b.finishOrder > 0;
-          if (aFin && bFin) return a.finishOrder - b.finishOrder;
-          if (aFin && !bFin) return -1;
-          if (!aFin && bFin) return 1;
-          const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
-          const pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
-          if (Math.abs(pb - pa) > 1e-9) return pb - pa;
-          return (a.position ?? 99) - (b.position ?? 99);
-        });
+        let finalOrder;
+        if (resultOrder && resultOrder.length > 0) {
+          const orderIdx = (id) => {
+            const i = resultOrder.indexOf(id);
+            return i >= 0 ? i : 9999;
+          };
+          finalOrder = [...racers].sort((a, b) => orderIdx(a.id) - orderIdx(b.id));
+        } else {
+          finalOrder = [...racers].sort((a, b) => {
+            if (a.dnf && !b.dnf) return 1;
+            if (!a.dnf && b.dnf) return -1;
+            if (a.dnf && b.dnf) {
+              const progressA = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
+              const progressB = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+              if (Math.abs(progressB - progressA) > 1e-9) return progressB - progressA;
+              return (b.dnfAtSec ?? 0) - (a.dnfAtSec ?? 0);
+            }
+            const aFin = a.finished && a.finishOrder > 0;
+            const bFin = b.finished && b.finishOrder > 0;
+            if (aFin && bFin) return a.finishOrder - b.finishOrder;
+            if (aFin && !bFin) return -1;
+            if (!aFin && bFin) return 1;
+            const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
+            const pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+            if (Math.abs(pb - pa) > 1e-9) return pb - pa;
+            return (a.position ?? 99) - (b.position ?? 99);
+          });
+        }
         setResults(finalOrder.map((r,i)=>({
           pos:i+1, id:r.id, name:r.name, isPlayer:r.isPlayer,
           color:r.color, carName:r.carName, pitStops:r.pitStops,
@@ -2233,7 +2257,7 @@ export default function CircuitRaceView({
 
     raceStartTimeRef.current = Date.now();
     rafRef.current = requestAnimationFrame(loop);
-  }, [drawTrackCanvas, onComplete, clearSavedRaceState, saveRaceState]);
+  }, [drawTrackCanvas, onComplete, clearSavedRaceState, saveRaceState, resultOrder]);
 
   // ── REPLAY MODE ──
   // When mode==="replay", auto-start using backend data (pre-computed result)
@@ -2317,12 +2341,18 @@ export default function CircuitRaceView({
       if (allFinished) {
         clearSavedRaceState();
         setUiPhase("done");
-        const finalOrder = [...racers].sort((a, b) => {
-          if (a.dnf && !b.dnf) return 1;
-          if (!a.dnf && b.dnf) return -1;
-          if (a.finished && b.finished) return (a.finishOrder || 99) - (b.finishOrder || 99);
-          return (b.totalLapsDone + b.trackPos) - (a.totalLapsDone + a.trackPos);
-        });
+        const finalOrder = resultOrder?.length
+          ? [...racers].sort((a, b) => {
+              const ia = resultOrder.indexOf(a.id);
+              const ib = resultOrder.indexOf(b.id);
+              return (ia >= 0 ? ia : 9999) - (ib >= 0 ? ib : 9999);
+            })
+          : [...racers].sort((a, b) => {
+              if (a.dnf && !b.dnf) return 1;
+              if (!a.dnf && b.dnf) return -1;
+              if (a.finished && b.finished) return (a.finishOrder || 99) - (b.finishOrder || 99);
+              return (b.totalLapsDone + b.trackPos) - (a.totalLapsDone + a.trackPos);
+            });
         setResults(finalOrder.map((r, i) => ({
           pos: i + 1, id: r.id, name: r.name, isPlayer: r.isPlayer,
           color: r.color, carName: r.carName, pitStops: r.pitStops,
@@ -2474,14 +2504,20 @@ export default function CircuitRaceView({
         // Race completed while away - show results immediately
         clearSavedRaceState();
         setUiPhase("done");
-        const finalOrder = [...racers].sort((a, b) => {
-          if (a.dnf && !b.dnf) return 1;
-          if (!a.dnf && b.dnf) return -1;
-          if (a.finished && b.finished) return (a.finishOrder || 99) - (b.finishOrder || 99);
-          const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
-          const pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
-          return pb - pa;
-        });
+        const finalOrder = resultOrder?.length
+          ? [...racers].sort((a, b) => {
+              const ia = resultOrder.indexOf(a.id);
+              const ib = resultOrder.indexOf(b.id);
+              return (ia >= 0 ? ia : 9999) - (ib >= 0 ? ib : 9999);
+            })
+          : [...racers].sort((a, b) => {
+              if (a.dnf && !b.dnf) return 1;
+              if (!a.dnf && b.dnf) return -1;
+              if (a.finished && b.finished) return (a.finishOrder || 99) - (b.finishOrder || 99);
+              const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
+              const pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+              return pb - pa;
+            });
         setResults(finalOrder.map((r,i)=>({
           pos:i+1, id:r.id, name:r.name, isPlayer:r.isPlayer,
           color:r.color, carName:r.carName, pitStops:r.pitStops,

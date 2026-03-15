@@ -1,8 +1,10 @@
 import { Component } from 'react';
+import api from '../utils/api';
+import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
 export default class ErrorBoundary extends Component {
-  state = { hasError: false, error: null };
+  state = { hasError: false, error: null, reported: false, reportLoading: false };
 
   static getDerivedStateFromError(error) {
     return { hasError: true, error };
@@ -14,6 +16,26 @@ export default class ErrorBoundary extends Component {
 
   retry = () => {
     this.setState({ hasError: false, error: null });
+  };
+
+  reportToHelpDesk = () => {
+    if (this.state.reported || this.state.reportLoading) return;
+    const err = this.state.error;
+    const msg = err?.message || String(err);
+    const stack = err?.stack || '';
+    const pageUrl = typeof window !== 'undefined' ? window.location.href : '';
+    this.setState({ reportLoading: true });
+    api.post('/help-desk/error-report', {
+      error_message: msg,
+      stack_trace: stack,
+      page_url: pageUrl,
+    }).then(() => {
+      this.setState({ reported: true, reportLoading: false });
+    }).catch((e) => {
+      this.setState({ reportLoading: false });
+      if (e?.response?.status === 401) return;
+      toast.error(e?.response?.data?.detail || 'Failed to report');
+    });
   };
 
   render() {
@@ -38,7 +60,7 @@ export default class ErrorBoundary extends Component {
                 {err.stack}
               </pre>
             )}
-            <div className="flex gap-3 justify-center">
+            <div className="flex gap-3 justify-center flex-wrap">
               <button
                 type="button"
                 onClick={this.retry}
@@ -58,6 +80,14 @@ export default class ErrorBoundary extends Component {
                 className="px-4 py-2 rounded-sm font-heading font-bold uppercase tracking-wider border border-primary/30 text-mutedForeground hover:text-foreground transition-smooth"
               >
                 Go back
+              </button>
+              <button
+                type="button"
+                onClick={this.reportToHelpDesk}
+                disabled={this.state.reported || this.state.reportLoading}
+                className="px-4 py-2 rounded-sm font-heading font-bold uppercase tracking-wider border border-primary/30 text-mutedForeground hover:text-foreground hover:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed transition-smooth"
+              >
+                {this.state.reported ? 'Reported!' : this.state.reportLoading ? 'Sending…' : 'Report to Help Desk'}
               </button>
             </div>
           </div>
