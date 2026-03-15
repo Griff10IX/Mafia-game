@@ -600,6 +600,12 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
             {"id": current_user["id"]},
             {"$inc": inc},
         )
+        # Referral: referrer gets 5% of crime profit (game-paid)
+        referred_by = current_user.get("referred_by")
+        if referred_by and referred_by != current_user["id"] and reward > 0:
+            referral_cash = max(0, int(reward * 0.05))
+            if referral_cash > 0:
+                await db.users.update_one({"id": referred_by}, {"$inc": {"money": referral_cash}})
         if inc.get("respect_points"):
             await log_respect_earned(current_user["id"], inc["respect_points"], "crimes")
         if inc.get("loot_box_pieces"):

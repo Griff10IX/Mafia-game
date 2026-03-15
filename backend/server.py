@@ -504,6 +504,8 @@ class UserResponse(BaseModel):
     properties_until: Optional[str] = None
     jailbust_bonus_until: Optional[str] = None
     censor_profanity: bool = False  # when true, chat/forum show swear words as ***
+    referred_by: Optional[str] = None  # referrer user id (set at signup via referral code)
+    referred_by_username: Optional[str] = None  # referrer username for display
 
 class NotificationCreate(BaseModel):
     title: str

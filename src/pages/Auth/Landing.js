@@ -44,6 +44,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
   const [resendCooldownSeconds, setResendCooldownSeconds] = useState(0);
   const [bannerEnabled, setBannerEnabled]           = useState(false);
   const [bannerMessage, setBannerMessage]           = useState('');
+  const [referralCode, setReferralCode]             = useState('');
 
   // Fetch launch status on mount
   useEffect(() => {
@@ -86,6 +87,13 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
   }, [launchStatus.loginLocked, launchStatus.lockUntil, calculateCountdown]);
 
   const DEFAULT_BANNER_MESSAGE = 'Beta round end: March 24 6pm. Full game release March 28th 6pm. This beta lets you try the game and features before launch.';
+
+  // Read ?ref= from URL for referral (e.g. ?ref=Username)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref && (ref.trim()).length > 0) setReferralCode(ref.trim());
+  }, []);
 
   useEffect(() => {
     api.get('/landing-banner')
@@ -135,7 +143,12 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       const endpoint = isLogin ? '/auth/login' : '/auth/register';
       const payload  = isLogin
         ? { email: formData.email, password: formData.password }
-        : { email: formData.email, username: formData.username, password: formData.password };
+        : {
+            email: formData.email,
+            username: formData.username,
+            password: formData.password,
+            ...(referralCode ? { referral_code: referralCode } : {}),
+          };
 
       const response = await api.post(endpoint, payload);
 
@@ -529,6 +542,12 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                 </div>
               )}
 
+              {!isLogin && referralCode && (
+                <p className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                  Referred by {referralCode}
+                </p>
+              )}
+
               {/* Submit */}
               <button
                 type="submit"
@@ -616,13 +635,6 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
               style={{ color: 'var(--noir-primary)', opacity: 0.5 }}
             >
               MafiaWars.co.uk™
-            </p>
-            <p
-              className="font-heading text-[8px] mt-1 max-w-xs mx-auto"
-              style={{ color: 'var(--noir-muted)', opacity: 0.6, lineHeight: '1.4' }}
-            >
-              This is an online text-based game. All in-game currency and items have no real-world value. 
-              You must be 18+ to play. Play responsibly.
             </p>
           </div>
 

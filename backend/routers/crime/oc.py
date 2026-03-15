@@ -600,6 +600,14 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
                 )
             except Exception as e:
                 logger.exception("Rank-up notification (team OC): %s", e)
+    # Referral: referrer gets 5% of OC profit for heist runner (game-paid)
+    if cash_each > 0:
+        uid_doc = await db.users.find_one({"id": uid}, {"_id": 0, "referred_by": 1})
+        referred_by = (uid_doc or {}).get("referred_by")
+        if referred_by and referred_by != uid:
+            referral_cash = max(0, int(cash_each * 0.05))
+            if referral_cash > 0:
+                await db.users.update_one({"id": referred_by}, {"$inc": {"money": referral_cash}})
     msg = random.choice(OC_TEAM_HEIST_SUCCESS_MESSAGES).format(job_name=job["name"])
     return {
         "success": True,

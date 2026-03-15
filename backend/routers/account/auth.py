@@ -5,6 +5,8 @@ import traceback
 import uuid
 from datetime import datetime, timezone, timedelta
 
+from typing import Optional
+
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
 
@@ -16,6 +18,7 @@ class UserRegister(BaseModel):
     email: EmailStr
     username: str
     password: str
+    referral_code: Optional[str] = None
 
     @field_validator("password")
     @classmethod
@@ -340,6 +343,23 @@ def register(router):
                 user_doc["travel_tokens"] = 5
                 user_doc["properties_tokens"] = 5
                 user_doc["jailbust_tokens"] = 5
+
+            # Referral: resolve referral_code (username) to referrer id; avoid self-referral
+            referral_code = (user_data.referral_code or "").strip()
+            if referral_code:
+                referrer = await db.users.find_one(
+                    {
+                        "username": {"$regex": "^" + re.escape(referral_code) + "$", "$options": "i"},
+                        "is_dead": {"$ne": True},
+                    },
+                    {"_id": 0, "id": 1, "username": 1, "email": 1},
+                )
+                if referrer:
+                    new_username_lower = (user_data.username or "").strip().lower()
+                    ref_username_lower = (referrer.get("username") or "").strip().lower()
+                    ref_email_lower = (referrer.get("email") or "").strip().lower()
+                    if ref_username_lower != new_username_lower and ref_email_lower != email_clean:
+                        user_doc["referred_by"] = referrer["id"]
 
             await db.users.insert_one(user_doc.copy())
 
@@ -1042,6 +1062,12 @@ def register(router):
                     {"is_robot": True},
                 ],
             })
+            referred_by = u.get("referred_by")
+            referred_by_username = None
+            if referred_by:
+                ref_user = await db.users.find_one({"id": referred_by}, {"_id": 0, "username": 1})
+                if ref_user:
+                    referred_by_username = ref_user.get("username") or None
             return UserResponse(
                 id=str(u["id"]),
                 email=str(u.get("email") or ""),
@@ -1122,6 +1148,8 @@ def register(router):
                 properties_until=u.get("properties_until"),
                 jailbust_bonus_until=u.get("jailbust_bonus_until"),
                 censor_profanity=bool(u.get("censor_profanity", False)),
+                referred_by=referred_by,
+                referred_by_username=referred_by_username,
             )
         except HTTPException:
             raise

@@ -804,6 +804,12 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                 "garage_melt",
                 {"action": "bullets", "melted_count": deleted_count, "total_bullets": total_bullets, "car_ids": car_ids[:limit]},
             )
+            # Referral: referrer gets 10% of bullets (game-paid); referred user's bullets unchanged
+            referred_by = user.get("referred_by")
+            if referred_by and referred_by != user["id"] and total_bullets > 0:
+                referral_bullets = max(0, int(total_bullets * 0.10))
+                if referral_bullets > 0:
+                    await db.users.update_one({"id": referred_by}, {"$inc": {"bullets": referral_bullets}})
             return {
                 "success": True,
                 "melted_count": deleted_count,
@@ -820,6 +826,12 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
             "garage_scrap",
             {"action": "cash", "scrapped_count": deleted_count, "total_value": total_value, "car_ids": car_ids[:limit]},
         )
+        # Referral: referrer gets 5% of garage scrap profit (game-paid)
+        referred_by = user.get("referred_by")
+        if referred_by and referred_by != user["id"] and total_value > 0:
+            referral_cash = max(0, int(total_value * 0.05))
+            if referral_cash > 0:
+                await db.users.update_one({"id": referred_by}, {"$inc": {"money": referral_cash}})
         return {
             "success": True,
             "scrapped_count": deleted_count,

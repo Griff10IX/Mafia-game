@@ -1459,6 +1459,55 @@ export default function Profile() {
               <div className="prof-art-line text-primary mx-3" />
             </div>
 
+            {/* Referral */}
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">
+                  Referral
+                </h2>
+              </div>
+              <div className="p-3 space-y-2">
+                {me?.referred_by_username && (
+                  <p className="text-[11px] text-mutedForeground font-heading">
+                    Referred by: <span className="text-foreground font-semibold">{me.referred_by_username}</span>
+                  </p>
+                )}
+                <p className="text-[11px] text-mutedForeground font-heading mb-1.5">
+                  Share your link. When someone signs up with it, you earn (game-paid, not taken from them):
+                </p>
+                <ul className="text-[11px] text-mutedForeground font-heading list-disc list-inside space-y-0.5 mb-2">
+                  <li>10% of their bullets from melting cars</li>
+                  <li>5% of their crime profit</li>
+                  <li>5% of their OC heist profit</li>
+                  <li>5% of their garage scrap (cash) profit</li>
+                </ul>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={typeof window !== 'undefined' ? `${window.location.origin}/?ref=${encodeURIComponent(me?.username || '')}` : ''}
+                    className="flex-1 min-w-0 px-2 py-1.5 rounded border border-input bg-secondary text-[11px] font-mono text-foreground"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = typeof window !== 'undefined' ? `${window.location.origin}/?ref=${encodeURIComponent(me?.username || '')}` : '';
+                      if (url && navigator.clipboard?.writeText) {
+                        navigator.clipboard.writeText(url).then(() => toast.success('Link copied')).catch(() => toast.error('Copy failed'));
+                      } else {
+                        toast.error('Copy not supported');
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-xs hover:bg-primary/30"
+                  >
+                    Copy link
+                  </button>
+                </div>
+              </div>
+              <div className="prof-art-line text-primary mx-3" />
+            </div>
+
             {/* Notifications */}
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
