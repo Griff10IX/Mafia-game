@@ -2208,34 +2208,26 @@ export default function CircuitRaceView({
         }
         setUiPhase("done");
         setCommentary(rand(COMMENTARY.done));
-        let finalOrder;
-        if (resultOrder && resultOrder.length > 0) {
-          const orderIdx = (id) => {
-            const i = resultOrder.indexOf(id);
-            return i >= 0 ? i : 9999;
-          };
-          finalOrder = [...racers].sort((a, b) => orderIdx(a.id) - orderIdx(b.id));
-        } else {
-          finalOrder = [...racers].sort((a, b) => {
-            if (a.dnf && !b.dnf) return 1;
-            if (!a.dnf && b.dnf) return -1;
-            if (a.dnf && b.dnf) {
-              const progressA = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
-              const progressB = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
-              if (Math.abs(progressB - progressA) > 1e-9) return progressB - progressA;
-              return (b.dnfAtSec ?? 0) - (a.dnfAtSec ?? 0);
-            }
-            const aFin = a.finished && a.finishOrder > 0;
-            const bFin = b.finished && b.finishOrder > 0;
-            if (aFin && bFin) return a.finishOrder - b.finishOrder;
-            if (aFin && !bFin) return -1;
-            if (!aFin && bFin) return 1;
-            const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
-            const pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
-            if (Math.abs(pb - pa) > 1e-9) return pb - pa;
-            return (a.position ?? 99) - (b.position ?? 99);
-          });
-        }
+        // Use live result: order by actual finish order (who crossed the line when) so results screen matches what the user saw
+        const finalOrder = [...racers].sort((a, b) => {
+          if (a.dnf && !b.dnf) return 1;
+          if (!a.dnf && b.dnf) return -1;
+          if (a.dnf && b.dnf) {
+            const progressA = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
+            const progressB = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+            if (Math.abs(progressB - progressA) > 1e-9) return progressB - progressA;
+            return (b.dnfAtSec ?? 0) - (a.dnfAtSec ?? 0);
+          }
+          const aFin = a.finished && a.finishOrder > 0;
+          const bFin = b.finished && b.finishOrder > 0;
+          if (aFin && bFin) return a.finishOrder - b.finishOrder;
+          if (aFin && !bFin) return -1;
+          if (!aFin && bFin) return 1;
+          const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
+          const pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+          if (Math.abs(pb - pa) > 1e-9) return pb - pa;
+          return (a.position ?? 99) - (b.position ?? 99);
+        });
         setResults(finalOrder.map((r,i)=>({
           pos:i+1, id:r.id, name:r.name, isPlayer:r.isPlayer,
           color:r.color, carName:r.carName, pitStops:r.pitStops,
@@ -2344,18 +2336,13 @@ export default function CircuitRaceView({
       if (allFinished) {
         clearSavedRaceState();
         setUiPhase("done");
-        const finalOrder = resultOrder?.length
-          ? [...racers].sort((a, b) => {
-              const ia = resultOrder.indexOf(a.id);
-              const ib = resultOrder.indexOf(b.id);
-              return (ia >= 0 ? ia : 9999) - (ib >= 0 ? ib : 9999);
-            })
-          : [...racers].sort((a, b) => {
-              if (a.dnf && !b.dnf) return 1;
-              if (!a.dnf && b.dnf) return -1;
-              if (a.finished && b.finished) return (a.finishOrder || 99) - (b.finishOrder || 99);
-              return (b.totalLapsDone + b.trackPos) - (a.totalLapsDone + a.trackPos);
-            });
+        // Use live result (saved finishOrder + progress) so results match what the user saw
+        const finalOrder = [...racers].sort((a, b) => {
+          if (a.dnf && !b.dnf) return 1;
+          if (!a.dnf && b.dnf) return -1;
+          if (a.finished && b.finished) return (a.finishOrder || 99) - (b.finishOrder || 99);
+          return (b.totalLapsDone + b.trackPos) - (a.totalLapsDone + a.trackPos);
+        });
         setResults(finalOrder.map((r, i) => ({
           pos: i + 1, id: r.id, name: r.name, isPlayer: r.isPlayer,
           color: r.color, carName: r.carName, pitStops: r.pitStops,
@@ -2507,20 +2494,15 @@ export default function CircuitRaceView({
         // Race completed while away - show results immediately
         clearSavedRaceState();
         setUiPhase("done");
-        const finalOrder = resultOrder?.length
-          ? [...racers].sort((a, b) => {
-              const ia = resultOrder.indexOf(a.id);
-              const ib = resultOrder.indexOf(b.id);
-              return (ia >= 0 ? ia : 9999) - (ib >= 0 ? ib : 9999);
-            })
-          : [...racers].sort((a, b) => {
-              if (a.dnf && !b.dnf) return 1;
-              if (!a.dnf && b.dnf) return -1;
-              if (a.finished && b.finished) return (a.finishOrder || 99) - (b.finishOrder || 99);
-              const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
-              const pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
-              return pb - pa;
-            });
+        // Use live result (saved finishOrder + progress) so results match what the user saw
+        const finalOrder = [...racers].sort((a, b) => {
+          if (a.dnf && !b.dnf) return 1;
+          if (!a.dnf && b.dnf) return -1;
+          if (a.finished && b.finished) return (a.finishOrder || 99) - (b.finishOrder || 99);
+          const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
+          const pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+          return pb - pa;
+        });
         setResults(finalOrder.map((r,i)=>({
           pos:i+1, id:r.id, name:r.name, isPlayer:r.isPlayer,
           color:r.color, carName:r.carName, pitStops:r.pitStops,
