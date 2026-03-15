@@ -1097,9 +1097,14 @@ export default function CircuitRaceView({
     // ── Track decorations ──
     if (track.drawExtra) track.drawExtra(ctx, sx, sy);
 
-    // ── Cars ──
+    // ── Cars ── (back to front by progress; when close, player drawn last so our car is never covered)
     if (!racerArr?.length) return;
-    const drawOrder = [...racerArr].reverse();
+    const drawOrder = [...racerArr].sort((a, b) => {
+      const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
+      const pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+      if (Math.abs(pa - pb) > 0.02) return pa - pb;
+      return (a.isPlayer ? 1 : 0) - (b.isPlayer ? 1 : 0);
+    });
     const trkPos = drawOrder.map(r => r.inPit ? -1 : ((((r.totalLapsDone??0)+r.trackPos)%1)+1)%1);
 
     drawOrder.forEach((r, di) => {

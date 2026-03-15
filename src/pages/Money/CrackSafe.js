@@ -522,9 +522,9 @@ export default function CrackSafe() {
       {/* Main two-column */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
 
-        {/* Left: Safe visual + inputs */}
+        {/* Left: Safe visual + inputs — self-start so card height ends at content (guess button), no stretch */}
         <div
-          className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cs-fade-in min-w-0 max-w-md lg:max-w-sm`}
+          className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cs-fade-in min-w-0 max-w-md lg:max-w-sm self-start`}
           style={{ animationDelay: '0.1s' }}
         >
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
