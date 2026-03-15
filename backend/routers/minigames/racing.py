@@ -163,7 +163,12 @@ MAX_COOLING_LEVEL = 3
 MAX_WEIGHT_LEVEL = 3
 WINS_FOR_WEIGHT = 2
 MAX_FUEL_LEVEL = 3
-# New stats: brakes +grip -power, gearbox +speed -grip, cooling -engine wear, weight +speed +grip (unlock 2 wins), fuel +power
+MAX_SUSPENSION_LEVEL = 3
+SUSPENSION_GRIP_PER_LEVEL = 0.03
+SUSPENSION_SPEED_PENALTY_PER_LEVEL = 0.015
+WINS_FOR_SUSPENSION = 1
+SUSPENSION_COST_BASE = 35000
+# New stats: brakes +grip -power, gearbox +speed -grip, cooling -engine wear, weight +speed +grip (unlock 2 wins), fuel +power, suspension +corner grip -straight speed
 BRAKES_GRIP_PER_LEVEL = 0.02
 BRAKES_POWER_PENALTY_PER_LEVEL = 0.01
 GEARBOX_SPEED_PER_LEVEL = 0.02
@@ -339,7 +344,7 @@ def _car_tier_index(car_id: str) -> int:
 
 
 def _total_upgrade_levels(up: dict, doc: Optional[dict] = None) -> int:
-    """Sum of all 10 car upgrade levels for global cap. doc = user_racing_car for engine/tires fallback."""
+    """Sum of all 11 car upgrade levels for global cap. doc = user_racing_car for engine/tires fallback."""
     engine = int(up.get("engine_level") or (doc or {}).get("engine_level") or 0)
     tires = int(up.get("tires_level") or (doc or {}).get("tires_level") or 0)
     aero = int(up.get("aero_level") or 0)
@@ -350,7 +355,8 @@ def _total_upgrade_levels(up: dict, doc: Optional[dict] = None) -> int:
     cooling = int(up.get("cooling_level") or 0)
     weight = int(up.get("weight_level") or 0)
     fuel = int(up.get("fuel_level") or 0)
-    return engine + tires + aero + reliability + championship + brakes + gearbox + cooling + weight + fuel
+    suspension = int(up.get("suspension_level") or 0)
+    return engine + tires + aero + reliability + championship + brakes + gearbox + cooling + weight + fuel + suspension
 
 
 def _effective_speed_and_grip_display(entrant: dict, profile: Optional[dict], upgrades_map: Dict[str, dict]) -> tuple:
@@ -369,6 +375,7 @@ def _effective_speed_and_grip_display(entrant: dict, profile: Optional[dict], up
     gearbox = int(up.get("gearbox_level") or 0)
     weight = int(up.get("weight_level") or 0)
     fuel = int(up.get("fuel_level") or 0)
+    suspension = int(up.get("suspension_level") or 0)
     championship = bool(up.get("championship_upgrade") or profile and profile.get("championship_upgrade_purchased"))
     speed = base_speed * (
         1.0
@@ -379,10 +386,11 @@ def _effective_speed_and_grip_display(entrant: dict, profile: Optional[dict], up
         - brakes * BRAKES_POWER_PENALTY_PER_LEVEL
         + fuel * FUEL_POWER_PER_LEVEL
         + weight * WEIGHT_SPEED_PER_LEVEL
+        - suspension * SUSPENSION_SPEED_PENALTY_PER_LEVEL
     )
     speed *= 1.0 + gearbox * GEARBOX_SPEED_PER_LEVEL
     grip = base_grip + tires * TIRES_GRIP_PER_LEVEL - engine * ENGINE_GRIP_PENALTY_PER_LEVEL - aero * AERO_GRIP_PENALTY_PER_LEVEL
-    grip = grip + brakes * BRAKES_GRIP_PER_LEVEL - gearbox * GEARBOX_GRIP_PENALTY_PER_LEVEL + weight * WEIGHT_GRIP_PER_LEVEL
+    grip = grip + brakes * BRAKES_GRIP_PER_LEVEL - gearbox * GEARBOX_GRIP_PENALTY_PER_LEVEL + weight * WEIGHT_GRIP_PER_LEVEL + suspension * SUSPENSION_GRIP_PER_LEVEL
     if championship:
         speed *= 1.02
         grip = min(1.0, grip * 1.02)
@@ -540,6 +548,7 @@ def _effective_speed_and_grip(entrant: dict, profile: Optional[dict], upgrades_m
     gearbox = int(up.get("gearbox_level") or 0)
     weight = int(up.get("weight_level") or 0)
     fuel = int(up.get("fuel_level") or 0)
+    suspension = int(up.get("suspension_level") or 0)
     championship = bool(up.get("championship_upgrade"))
     speed = base_speed * (
         1.0
@@ -550,10 +559,11 @@ def _effective_speed_and_grip(entrant: dict, profile: Optional[dict], upgrades_m
         - brakes * BRAKES_POWER_PENALTY_PER_LEVEL
         + fuel * FUEL_POWER_PER_LEVEL
         + weight * WEIGHT_SPEED_PER_LEVEL
+        - suspension * SUSPENSION_SPEED_PENALTY_PER_LEVEL
     )
     speed *= 1.0 + gearbox * GEARBOX_SPEED_PER_LEVEL
     grip = base_grip + tires * TIRES_GRIP_PER_LEVEL - engine * ENGINE_GRIP_PENALTY_PER_LEVEL - aero * AERO_GRIP_PENALTY_PER_LEVEL
-    grip = grip + brakes * BRAKES_GRIP_PER_LEVEL - gearbox * GEARBOX_GRIP_PENALTY_PER_LEVEL + weight * WEIGHT_GRIP_PER_LEVEL
+    grip = grip + brakes * BRAKES_GRIP_PER_LEVEL - gearbox * GEARBOX_GRIP_PENALTY_PER_LEVEL + weight * WEIGHT_GRIP_PER_LEVEL + suspension * SUSPENSION_GRIP_PER_LEVEL
     if championship:
         speed *= 1.02
         grip = min(1.0, grip * 1.02)
@@ -736,9 +746,10 @@ def _run_race_simulation_laps(
             up = _get_upgrades(e)
             brakes = int(up.get("brakes_level") or 0)
             aero = int(up.get("aero_level") or 0)
+            susp = int(up.get("suspension_level") or 0)
 
             straight_perf = (speed_val * tire_factor * speed_mult) / fuel_weight_mult
-            corner_grip_bonus = compound_mult + brakes * 0.03 + aero * 0.02
+            corner_grip_bonus = compound_mult + brakes * 0.03 + aero * 0.02 + susp * 0.04
             corner_perf = (grip_val * tire_factor * corner_grip_bonus * speed_mult) / fuel_weight_mult
 
             combined = straight_perf * (1.0 - corner_weight) + corner_perf * corner_weight
@@ -850,8 +861,9 @@ def _run_qualifying(
         up = upgrades_map.get(e.get("racing_car_instance_id") or e.get("id") or "") or {}
         brakes = int(up.get("brakes_level") or 0)
         aero = int(up.get("aero_level") or 0)
+        susp = int(up.get("suspension_level") or 0)
         straight_perf = speed_val * speed_mult
-        corner_grip_bonus = compound_mult + brakes * 0.03 + aero * 0.02
+        corner_grip_bonus = compound_mult + brakes * 0.03 + aero * 0.02 + susp * 0.04
         corner_perf = grip_val * corner_grip_bonus * speed_mult
         combined = straight_perf * (1.0 - corner_weight) + corner_perf * corner_weight
         prof = profile_by_user.get(eid) or {}
@@ -981,16 +993,17 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "max_car_upgrade_level": MAX_CAR_UPGRADE_LEVEL,
         "global_upgrade_cap": RACING_UPGRADE_GLOBAL_CAP,
         "upgrade_tradeoffs": {
-            "engine": {"positive": "+4% power", "negative": "−3% grip", "per_level": True, "max": MAX_CAR_UPGRADE_LEVEL},
-            "tires": {"positive": "+5% grip", "negative": "−2% power", "per_level": True, "max": MAX_CAR_UPGRADE_LEVEL},
-            "aero": {"positive": "+3% top speed", "negative": "−2% grip", "unlock": f"{WINS_FOR_AERO_RELIABILITY}+ win(s)", "per_level": True, "max": MAX_AERO_LEVEL},
+            "engine": {"positive": "+4% straight power", "negative": "−3% grip (slower cornering)", "per_level": True, "max": MAX_CAR_UPGRADE_LEVEL},
+            "tires": {"positive": "+5% grip (faster cornering, less off-track)", "negative": "−2% power", "per_level": True, "max": MAX_CAR_UPGRADE_LEVEL},
+            "aero": {"positive": "+3% straight speed, +corner downforce", "negative": "−2% grip", "unlock": f"{WINS_FOR_AERO_RELIABILITY}+ win(s)", "per_level": True, "max": MAX_AERO_LEVEL},
             "reliability": {"positive": "−8% tyre wear", "negative": "−2% power", "unlock": f"{WINS_FOR_AERO_RELIABILITY}+ win(s)", "per_level": True, "max": MAX_RELIABILITY_LEVEL},
             "championship": {"positive": "+2% speed & grip", "negative": "—", "unlock": f"{WINS_FOR_CHAMPIONSHIP_UPGRADE}+ wins", "cost": CHAMPIONSHIP_UPGRADE_COST},
-            "brakes": {"positive": "+2% grip", "negative": "−1% power", "per_level": True, "max": MAX_BRAKES_LEVEL, "cost_base": BRAKES_GEARBOX_COST_BASE},
-            "gearbox": {"positive": "+2% speed", "negative": "−1% grip", "per_level": True, "max": MAX_GEARBOX_LEVEL, "cost_base": BRAKES_GEARBOX_COST_BASE},
+            "brakes": {"positive": "+2% grip (faster cornering)", "negative": "−1% power", "per_level": True, "max": MAX_BRAKES_LEVEL, "cost_base": BRAKES_GEARBOX_COST_BASE},
+            "gearbox": {"positive": "+2% straight speed", "negative": "−1% grip (slower cornering)", "per_level": True, "max": MAX_GEARBOX_LEVEL, "cost_base": BRAKES_GEARBOX_COST_BASE},
             "cooling": {"positive": "−5% engine wear, lower DNF risk", "negative": "—", "per_level": True, "max": MAX_COOLING_LEVEL, "cost_base": COOLING_COST_BASE},
             "weight": {"positive": "+1% speed & grip", "negative": "—", "unlock": f"{WINS_FOR_WEIGHT}+ wins", "per_level": True, "max": MAX_WEIGHT_LEVEL, "cost_base": WEIGHT_COST_BASE},
             "fuel": {"positive": "+2% power, less fuel-weight penalty", "negative": "—", "per_level": True, "max": MAX_FUEL_LEVEL, "cost_base": FUEL_COST_BASE},
+            "suspension": {"positive": "+3% corner grip, +4% corner pace", "negative": "−1.5% straight speed", "unlock": f"{WINS_FOR_SUSPENSION}+ win(s)", "per_level": True, "max": MAX_SUSPENSION_LEVEL, "cost_base": SUSPENSION_COST_BASE},
         },
         "tyre_compounds": TYRE_COMPOUNDS,
         "wins": int(prof.get("wins") or 0),
@@ -1157,13 +1170,15 @@ async def upgrade_car_part(body: UpgradeCarRequest, current_user: dict = Depends
         )
         return {"message": f"{upgrade_type} upgraded", key: current + 1}
 
-    if upgrade_type in ("brakes", "gearbox", "cooling", "weight", "fuel"):
+    if upgrade_type in ("brakes", "gearbox", "cooling", "weight", "fuel", "suspension"):
         up = await db.racing_upgrades.find_one({"user_id": current_user["id"], "racing_car_instance_id": instance_id}, {"_id": 0})
         up_data = dict(up) if up else {}
         up_data.setdefault("engine_level", doc.get("engine_level") or 0)
         up_data.setdefault("tires_level", doc.get("tires_level") or 0)
         if upgrade_type == "weight" and wins < WINS_FOR_WEIGHT:
             raise HTTPException(status_code=400, detail=f"Weight upgrade requires {WINS_FOR_WEIGHT}+ wins")
+        if upgrade_type == "suspension" and wins < WINS_FOR_SUSPENSION:
+            raise HTTPException(status_code=400, detail=f"Suspension upgrade requires {WINS_FOR_SUSPENSION}+ win(s)")
         key = f"{upgrade_type}_level"
         max_lvl_map = {
             "brakes": MAX_BRAKES_LEVEL,
@@ -1171,6 +1186,7 @@ async def upgrade_car_part(body: UpgradeCarRequest, current_user: dict = Depends
             "cooling": MAX_COOLING_LEVEL,
             "weight": MAX_WEIGHT_LEVEL,
             "fuel": MAX_FUEL_LEVEL,
+            "suspension": MAX_SUSPENSION_LEVEL,
         }
         max_lvl = max_lvl_map[upgrade_type]
         current = int(up_data.get(key) or 0)
@@ -1184,6 +1200,7 @@ async def upgrade_car_part(body: UpgradeCarRequest, current_user: dict = Depends
             "cooling": COOLING_COST_BASE * (current + 1),
             "weight": WEIGHT_COST_BASE * (current + 1),
             "fuel": FUEL_COST_BASE * (current + 1),
+            "suspension": SUSPENSION_COST_BASE * (current + 1),
         }
         cost = cost_map[upgrade_type]
         await _deduct_crew_bank(current_user["id"], cost)

@@ -760,11 +760,13 @@ function getCurvature(track, t) {
   return Math.abs(delta) / arcLen;
 }
 
-/** Corner multiplier: 1.0 on straights, ~0.55–0.70 in sharp corners (1920s era = must brake). Scale by grip. */
+/** Corner multiplier: 1.0 on straights, drops to ~0.50–0.65 in sharp corners.
+ *  Grip scales the effective k: higher grip = faster cornering. */
 function getCornerMult(curvature, baseGrip = 0.85) {
-  const k = 3.0;
-  const raw = 1 / (1 + curvature * k);
-  const minMult = 0.52 + (baseGrip - 0.5) * 0.26;
+  const kBase = 22;
+  const gripK = kBase * (1.15 - baseGrip * 0.5);
+  const raw = 1 / (1 + curvature * gripK);
+  const minMult = 0.48 + baseGrip * 0.22;
   return Math.max(minMult, Math.min(1, raw));
 }
 
@@ -1260,6 +1262,7 @@ export default function CircuitRaceView({
     const pitExitEnd = track.pitExit + pitMerge;
     const pitRange = track.pitExit - track.pitEntry;
 
+    const PIT_BLEND_ZONE = 0.08;
     const getPitPoint = (frac) => {
       const f0 = pitEntryStart + (pitExitEnd - pitEntryStart) * frac;
       const f = ((f0 % 1) + 1) % 1;
@@ -1267,8 +1270,8 @@ export default function CircuitRaceView({
       const pp2 = track.getPoint(((f + 0.005) % 1 + 1) % 1);
       const ang = Math.atan2(pp2.y - pp.y, pp2.x - pp.x) + Math.PI / 2;
       let blend = 0;
-      if (frac < 0.15) blend = (frac / 0.15) * (frac / 0.15);
-      else if (frac > 0.85) blend = ((1 - frac) / 0.15) * ((1 - frac) / 0.15);
+      if (frac < PIT_BLEND_ZONE) blend = (frac / PIT_BLEND_ZONE) * (frac / PIT_BLEND_ZONE);
+      else if (frac > 1 - PIT_BLEND_ZONE) blend = ((1 - frac) / PIT_BLEND_ZONE) * ((1 - frac) / PIT_BLEND_ZONE);
       else blend = 1;
       const d = blend * pitOffset;
       return { x: sx(pp.x) + Math.cos(ang) * d, y: sy(pp.y) + Math.sin(ang) * d };
@@ -1295,8 +1298,8 @@ export default function CircuitRaceView({
         const pp2 = track.getPoint(((f + 0.005) % 1 + 1) % 1);
         const ang = Math.atan2(pp2.y - pp.y, pp2.x - pp.x) + Math.PI / 2;
         let blend = 0;
-        if (frac < 0.15) blend = (frac / 0.15) * (frac / 0.15);
-        else if (frac > 0.85) blend = ((1 - frac) / 0.15) * ((1 - frac) / 0.15);
+        if (frac < PIT_BLEND_ZONE) blend = (frac / PIT_BLEND_ZONE) * (frac / PIT_BLEND_ZONE);
+        else if (frac > 1 - PIT_BLEND_ZONE) blend = ((1 - frac) / PIT_BLEND_ZONE) * ((1 - frac) / PIT_BLEND_ZONE);
         else blend = 1;
         const d = blend * pitOffset + edge * 5;
         const ox = sx(pp.x) + Math.cos(ang) * d;
@@ -1324,7 +1327,7 @@ export default function CircuitRaceView({
     ctx.globalAlpha = 1;
 
     // Speed limit dashes at pit entry/exit
-    [0.12, 0.88].forEach((frac) => {
+    [0.05, 0.95].forEach((frac) => {
       const pt = getPitPoint(frac);
       const pt2 = getPitPoint(frac + 0.03);
       const a = Math.atan2(pt2.y - pt.y, pt2.x - pt.x) + Math.PI / 2;
@@ -1343,17 +1346,17 @@ export default function CircuitRaceView({
     ctx.fillText("PIT LANE", pitMidPt.x, pitMidPt.y + 3);
     ctx.restore();
 
-    // Pit entry/exit markers on track
-    const pitEntryPt = track.getPoint(track.pitEntry);
-    ctx.fillStyle = "rgba(232,200,112,0.75)";
-    ctx.beginPath(); ctx.arc(sx(pitEntryPt.x), sy(pitEntryPt.y), 4, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "rgba(232,200,112,0.85)"; ctx.font = "bold 6px Cinzel,serif"; ctx.textAlign = "center";
-    ctx.fillText("IN", sx(pitEntryPt.x), sy(pitEntryPt.y) - 8);
-    const pitExitPt = track.getPoint(track.pitExit);
-    ctx.fillStyle = "rgba(232,200,112,0.55)";
-    ctx.beginPath(); ctx.arc(sx(pitExitPt.x), sy(pitExitPt.y), 3, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "rgba(232,200,112,0.65)"; ctx.font = "5px Cinzel,serif";
-    ctx.fillText("OUT", sx(pitExitPt.x), sy(pitExitPt.y) - 7);
+    // Pit entry/exit markers at the actual start/end of the pit lane
+    const pitInPt = getPitPoint(0.0);
+    ctx.fillStyle = "rgba(232,200,112,0.85)";
+    ctx.beginPath(); ctx.arc(pitInPt.x, pitInPt.y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(232,200,112,0.95)"; ctx.font = "bold 7px Cinzel,serif"; ctx.textAlign = "center";
+    ctx.fillText("IN", pitInPt.x, pitInPt.y - 10);
+    const pitOutPt = getPitPoint(1.0);
+    ctx.fillStyle = "rgba(232,200,112,0.65)";
+    ctx.beginPath(); ctx.arc(pitOutPt.x, pitOutPt.y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(232,200,112,0.80)"; ctx.font = "bold 7px Cinzel,serif";
+    ctx.fillText("OUT", pitOutPt.x, pitOutPt.y - 10);
 
     // Start/finish line
     const sfPt = track.getPoint(track.sfLine);
@@ -1435,31 +1438,19 @@ export default function CircuitRaceView({
       if (r.inPit) {
         const pitDur = r.pitDurationSeconds || 3;
         const pitProgress = r.pitEndAt ? Math.max(0, Math.min(1, 1 - (r.pitEndAt - nowSec) / pitDur)) : 0.5;
-        const pitEntryStart2 = track.pitEntry - 0.03;
-        const pitExitEnd2 = track.pitExit + 0.03;
         let pitFrac;
-        let blend;
         if (pitProgress < 0.2) {
           pitFrac = (pitProgress / 0.2) * 0.4;
-          blend = pitFrac / 0.15;
-          blend = Math.min(1, blend * blend);
         } else if (pitProgress > 0.8) {
           pitFrac = 0.6 + ((pitProgress - 0.8) / 0.2) * 0.4;
-          const exitBlend = (1 - pitFrac) / 0.15;
-          blend = Math.min(1, exitBlend * exitBlend);
         } else {
           pitFrac = 0.4 + ((pitProgress - 0.2) / 0.6) * 0.2;
-          blend = 1;
         }
-        const f0 = pitEntryStart2 + (pitExitEnd2 - pitEntryStart2) * pitFrac;
-        const f = ((f0 % 1) + 1) % 1;
-        const pp = track.getPoint(f);
-        const pp2 = track.getPoint(((f + 0.005) % 1 + 1) % 1);
-        const pitAng = Math.atan2(pp2.y - pp.y, pp2.x - pp.x) + Math.PI / 2;
-        const d = blend * (halfW + 22);
-        px = sx(pp.x) + Math.cos(pitAng) * d;
-        py = sy(pp.y) + Math.sin(pitAng) * d;
-        angle = Math.atan2(sy(pp2.y) - sy(pp.y), sx(pp2.x) - sx(pp.x));
+        const pitPt = getPitPoint(pitFrac);
+        px = pitPt.x;
+        py = pitPt.y;
+        const pitPt2 = getPitPoint(Math.min(1, pitFrac + 0.02));
+        angle = Math.atan2(pitPt2.y - pitPt.y, pitPt2.x - pitPt.x);
       } else {
         const tRaw = progress < 0 ? 0 : ((progress % 1) + 1) % 1;
         const t = (tRaw + spread) % 1;
@@ -2290,6 +2281,73 @@ export default function CircuitRaceView({
         strategyType:"normal", reliabilityWearMult: Math.max(0.7, 1.0 - pitLvl * 0.05),
       };
     });
+    // Check for saved state (user navigated away / refreshed during this race)
+    const savedState = getSavedRaceState();
+    if (savedState && !restoredFromStorageRef.current && (savedState.uiPhase === "racing" || savedState.uiPhase === "qualifying" || savedState.uiPhase === "done")) {
+      restoredFromStorageRef.current = true;
+      const realTimeElapsed = (Date.now() - savedState.timestamp) / 1000;
+
+      for (const r of racers) {
+        const saved = savedState.racers?.find(s => s.id === r.id);
+        if (saved) {
+          r.trackPos = saved.trackPos ?? r.trackPos;
+          r.totalLapsDone = saved.totalLapsDone ?? r.totalLapsDone;
+          r.lapCount = saved.lapCount ?? r.lapCount;
+          r.finished = saved.finished ?? r.finished;
+          r.finishOrder = saved.finishOrder ?? r.finishOrder;
+          r.tyreWear = saved.tyreWear ?? r.tyreWear;
+          r.currentTyre = saved.currentTyre ?? r.currentTyre;
+          r.pitStops = saved.pitStops ?? r.pitStops;
+          r.inPit = saved.inPit ?? r.inPit;
+          r.pitEndAt = 0;
+          r.position = saved.position ?? r.position;
+          r.lapTimes = saved.lapTimes ?? r.lapTimes;
+          r.fuelLoad = saved.fuelLoad ?? r.fuelLoad;
+          r.baseSpeed = saved.baseSpeed ?? r.baseSpeed;
+          r.baseGrip = saved.baseGrip ?? r.baseGrip;
+          r.dnf = saved.dnf ?? r.dnf;
+        }
+      }
+
+      if (realTimeElapsed > 0.5 && !savedState.allFinished) {
+        fastForwardRace(racers, track, totalLaps, realTimeElapsed, cond);
+      }
+
+      const allFinished = racers.every(r => r.finished || r.dnf) || savedState.allFinished;
+      if (allFinished) {
+        clearSavedRaceState();
+        setUiPhase("done");
+        const finalOrder = [...racers].sort((a, b) => {
+          if (a.dnf && !b.dnf) return 1;
+          if (!a.dnf && b.dnf) return -1;
+          if (a.finished && b.finished) return (a.finishOrder || 99) - (b.finishOrder || 99);
+          return (b.totalLapsDone + b.trackPos) - (a.totalLapsDone + a.trackPos);
+        });
+        setResults(finalOrder.map((r, i) => ({
+          pos: i + 1, id: r.id, name: r.name, isPlayer: r.isPlayer,
+          color: r.color, carName: r.carName, pitStops: r.pitStops,
+          lapTimes: r.lapTimes, dnf: r.dnf,
+          bestLap: r.lapTimes?.length ? Math.min(...r.lapTimes) : null,
+          hasFastestLap: false,
+        })));
+        setCommentary("Race finished!");
+        const resultOrderIds = finalOrder.map(r => r.id);
+        const dnfIds = finalOrder.filter(r => r.dnf).map(r => r.id);
+        setTimeout(() => onComplete?.(resultOrderIds, dnfIds), 500);
+        return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+      }
+
+      raceStartTimeRef.current = savedState.raceStartRealTime || Date.now();
+      stateRef.current = { racers, track, nLaps: totalLaps, wd: WEATHER_DEFS[cond] || WEATHER_DEFS.clear };
+      setUiPhase("racing");
+      const leaderLap = Math.max(1, ...racers.map(r => r.lapCount));
+      setLapDisplay(`${leaderLap} / ${totalLaps}`);
+      setCommentary("Race resumed...");
+      replayLoopStartedRef.current = true;
+      startRaceLoop(track, cond, totalLaps, racers);
+      return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+    }
+
     stateRef.current = { racers, track, nLaps: totalLaps, wd: WEATHER_DEFS[cond] || WEATHER_DEFS.clear };
     stateRef.current.pendingReplay = { racers, track, cond, totalLaps };
     setUiPhase("countdown");
@@ -2435,7 +2493,7 @@ export default function CircuitRaceView({
         const resultOrderIds = finalOrder.map((r) => r.id);
         const dnfIds = finalOrder.filter((r) => r.dnf).map((r) => r.id);
         setTimeout(()=>onComplete?.(resultOrderIds, dnfIds), 500);
-        return;
+        return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
       }
       
       // Resume the race with fast-forwarded state
@@ -2445,7 +2503,7 @@ export default function CircuitRaceView({
       setLapDisplay(`${leaderLap} / ${savedState.numLaps || totalLaps}`);
       setCommentary("Race continued...");
       startRaceLoop(track, cond, savedState.numLaps || totalLaps, racers);
-      return;
+      return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
     }
     
     const seen = new Set();
