@@ -491,7 +491,7 @@ export default function CrackSafe() {
   }
 
   return (
-    <div className={`space-y-3 max-w-5xl mx-auto ${styles.pageContent}`}>
+    <div className={`space-y-3 max-w-4xl mx-auto ${styles.pageContent}`}>
       <style>{CS_STYLES}</style>
 
       {/* Page header */}
@@ -524,7 +524,7 @@ export default function CrackSafe() {
 
         {/* Left: Safe visual + inputs */}
         <div
-          className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cs-fade-in`}
+          className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cs-fade-in min-w-0 max-w-md lg:max-w-sm`}
           style={{ animationDelay: '0.1s' }}
         >
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -568,7 +568,7 @@ export default function CrackSafe() {
             {isAdmin && (
               <div className="w-full flex items-center justify-center gap-2 text-[10px] font-heading text-red-400/70">
                 <Infinity size={12} />
-                <span>Admin — unlimited attempts</span>
+                <span>Unlimited (admin)</span>
               </div>
             )}
 
@@ -588,7 +588,7 @@ export default function CrackSafe() {
               <button
                 onClick={handleGuess}
                 disabled={guessing}
-                className="w-full py-3 rounded-lg font-heading font-bold text-sm uppercase tracking-widest transition-all"
+                className="w-full py-2.5 rounded-lg font-heading font-bold text-sm uppercase tracking-widest transition-all"
                 style={{
                   background: guessing ? 'rgba(50,50,50,0.8)' : 'linear-gradient(135deg, rgba(234,179,8,0.14), rgba(180,130,0,0.08))',
                   border: `1px solid ${guessing ? 'rgba(80,80,80,0.5)' : 'rgba(234,179,8,0.45)'}`,
@@ -597,7 +597,7 @@ export default function CrackSafe() {
                   cursor: guessing ? 'not-allowed' : 'pointer',
                 }}
               >
-                {guessing ? '🔐 Cracking...' : `Guess (${formatMoney(info?.entry_cost ?? 1_000_000)})`}
+                {guessing ? '🔐 Cracking...' : `Guess ${formatMoney(info?.entry_cost ?? 1_000_000)}`}
               </button>
             )}
 
@@ -610,7 +610,7 @@ export default function CrackSafe() {
         </div>
 
         {/* Right: Info + clues + winners */}
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0">
 
           {/* Rules / info */}
           <div
@@ -654,9 +654,9 @@ export default function CrackSafe() {
                 { id: 'properties', name: 'Property Token', desc: '3x property income, 1h — 1–3 types, 1–2 each (25% chance)' },
                 { id: 'jailbust_bonus', name: 'Jailbust Token', desc: '+10% bust success, 1h — 1–3 types, 1–2 each (25% chance)' },
               ]).map((r) => (
-                <div key={r.id} className="flex items-start gap-2 px-2 py-1 rounded border border-amber-500/10 bg-amber-950/10">
+                <div key={r.id} className="flex items-start gap-2 px-2 py-1 rounded border border-amber-500/10 bg-amber-950/10 min-w-0">
                   <span className="text-[10px] font-heading font-bold text-amber-400 shrink-0">{r.name}</span>
-                  <span className="text-[9px] text-zinc-400 font-heading flex-1">{r.desc}</span>
+                  <span className="text-[9px] text-zinc-400 font-heading flex-1 min-w-0 truncate" title={r.desc}>{r.desc}</span>
                 </div>
               ))}
             </div>
@@ -677,13 +677,13 @@ export default function CrackSafe() {
               ) : clues.map((clue, i) => (
                 <div
                   key={clue.id}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg border cs-clue-in ${clue.unlocked ? 'border-primary/20 bg-primary/5' : 'border-zinc-800/30 bg-zinc-900/20'}`}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg border cs-clue-in min-w-0 ${clue.unlocked ? 'border-primary/20 bg-primary/5' : 'border-zinc-800/30 bg-zinc-900/20'}`}
                   style={{ animationDelay: `${i * 0.07}s` }}
                 >
                   <span className={`font-heading font-bold text-[10px] shrink-0 ${clue.unlocked ? 'text-primary' : 'text-zinc-700'}`}>
                     #{clue.id}
                   </span>
-                  <span className={`text-xs font-heading flex-1 ${clue.unlocked ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                  <span className={`text-xs font-heading flex-1 min-w-0 truncate ${clue.unlocked ? 'text-zinc-300' : 'text-zinc-700'}`} title={clue.unlocked ? clue.text : `Unlocks after ${clue.unlock_after} attempts`}>
                     {clue.unlocked
                       ? clue.text
                       : `Unlocks after ${clue.unlock_after} attempts`}

@@ -56,7 +56,7 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
             items.append({
                 "id": f"booze_rotation_{rotation_index}",
                 "type": "booze_prices",
-                "message": "Booze prices just changed! Check Booze Run for new rates.",
+                "message": "Booze prices just changed — see Booze Run for rates.",
                 "at": rotation_start_iso,
             })
     except Exception:
