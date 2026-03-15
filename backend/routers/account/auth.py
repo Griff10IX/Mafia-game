@@ -1121,6 +1121,7 @@ def register(router):
                 travel_until=u.get("travel_until"),
                 properties_until=u.get("properties_until"),
                 jailbust_bonus_until=u.get("jailbust_bonus_until"),
+                censor_profanity=bool(u.get("censor_profanity", False)),
             )
         except HTTPException:
             raise

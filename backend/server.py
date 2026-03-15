@@ -503,6 +503,7 @@ class UserResponse(BaseModel):
     travel_until: Optional[str] = None
     properties_until: Optional[str] = None
     jailbust_bonus_until: Optional[str] = None
+    censor_profanity: bool = False  # when true, chat/forum show swear words as ***
 
 class NotificationCreate(BaseModel):
     title: str
