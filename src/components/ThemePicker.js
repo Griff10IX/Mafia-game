@@ -359,13 +359,13 @@ export default function ThemePicker({ open, onClose }) {
         className={`${styles.panel} rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col`}
         style={{
           background: themeVariant === 'modern'
-            ? 'linear-gradient(180deg, rgba(17,24,39,0.96) 0%, rgba(9,14,24,0.97) 100%)'
+            ? 'linear-gradient(180deg, rgba(40,47,62,0.96) 0%, rgba(27,33,45,0.97) 100%)'
             : 'linear-gradient(180deg,#1c1917 0%,#141210 100%)',
           border: themeVariant === 'modern'
-            ? '1px solid rgba(var(--noir-primary-rgb),0.28)'
+            ? '1px solid rgba(var(--noir-primary-rgb),0.22)'
             : '1px solid rgba(212,175,55,0.15)',
           boxShadow: themeVariant === 'modern'
-            ? '0 0 0 1px rgba(var(--noir-primary-rgb),0.12),0 38px 90px rgba(2,6,23,0.82)'
+            ? '0 0 0 1px rgba(var(--noir-primary-rgb),0.08),0 38px 90px rgba(7,10,16,0.78)'
             : '0 0 0 1px rgba(0,0,0,0.5),0 32px 80px rgba(0,0,0,0.85)',
         }}
         onClick={e => e.stopPropagation()}
@@ -377,7 +377,7 @@ export default function ThemePicker({ open, onClose }) {
           className="px-4 py-3 flex items-center justify-between gap-3 shrink-0 border-b border-zinc-800/80"
           style={{
             background: themeVariant === 'modern'
-              ? 'linear-gradient(90deg,rgba(var(--noir-primary-rgb),0.15) 0%, rgba(var(--noir-primary-rgb),0.06) 42%, transparent 100%)'
+              ? 'linear-gradient(90deg,rgba(var(--noir-primary-rgb),0.11) 0%, rgba(var(--noir-primary-rgb),0.04) 42%, transparent 100%)'
               : 'linear-gradient(90deg,rgba(212,175,55,0.09) 0%,transparent 60%)',
           }}
         >
