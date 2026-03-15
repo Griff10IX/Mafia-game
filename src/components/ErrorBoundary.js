@@ -48,7 +48,13 @@ export default class ErrorBoundary extends Component {
               </button>
               <button
                 type="button"
-                onClick={() => window.history.back()}
+                onClick={() => {
+                  if (typeof window !== 'undefined' && window.history.length > 1) {
+                    window.history.back();
+                  } else {
+                    window.location.href = '/';
+                  }
+                }}
                 className="px-4 py-2 rounded-sm font-heading font-bold uppercase tracking-wider border border-primary/30 text-mutedForeground hover:text-foreground transition-smooth"
               >
                 Go back

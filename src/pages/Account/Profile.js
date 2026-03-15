@@ -221,6 +221,8 @@ const ProfileInfoCard = ({
   isAdmin = false,
   isModerator = false,
   onStaffActionDone,
+  staffDetailsOpen = false,
+  setStaffDetailsOpen,
   achievementBadges = [],
 }) => {
   const isAdminProfile = profile.rank_name === 'Admin';
@@ -1696,6 +1698,8 @@ export default function Profile() {
                 const res = await api.get(`/users/${encodeURIComponent(username || profile?.username)}/profile`);
                 setProfile(res.data);
               }}
+              staffDetailsOpen={staffDetailsOpen}
+              setStaffDetailsOpen={setStaffDetailsOpen}
               achievementBadges={profile.achievement_badges || []}
             />
 
