@@ -433,18 +433,17 @@ export default function Travel() {
       <style>{TRAVEL_STYLES}</style>
 
       {/* Page header */}
-      <div className="relative trv-fade-in">
+      <div className="relative trv-fade-in flex items-center gap-2 flex-wrap">
         <p className="text-[9px] text-zinc-500 font-heading italic">Fly or drive — airports and cars. Move between cities.</p>
-      </div>
-
-      {autoRankBoozeOn && (
-        <div className={`p-2 ${styles.panel} border border-amber-500/40 rounded-md text-[10px] flex items-center gap-1.5 trv-fade-in`}>
-          <Bot size={10} className="text-amber-400 shrink-0" />
-          <span className="text-amber-200/90">
-            <strong className="text-amber-300">Auto Rank booze running is on.</strong> Manual travel is disabled. Turn off booze running in <Link to="/auto-rank" className="underline font-bold">Auto Rank</Link> to travel.
+        {autoRankBoozeOn && (
+          <span
+            title="Auto Rank booze running is on. Manual travel is disabled. Turn off booze in Auto Rank to travel."
+            className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-amber-500/40 bg-amber-500/10"
+          >
+            <Bot size={14} className="text-amber-400" />
           </span>
-        </div>
-      )}
+        )}
+      </div>
 
       {user?.travel_until && (
         <div className="trv-fade-in">

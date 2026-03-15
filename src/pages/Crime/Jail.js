@@ -166,16 +166,14 @@ const JailStatusCard = ({
   );
 };
 
-const AutoRankJailNotice = () => (
-  <div className={`relative p-2 ${styles.panel} border border-amber-500/40 rounded-md j-fade-in overflow-hidden`}>
-    <div className="h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
-    <div className="flex items-center gap-1.5">
-      <Bot size={10} className="text-amber-400 shrink-0" />
-      <span className="text-amber-200/80 text-[10px]">
-        <strong className="text-amber-300">Auto Rank</strong> — Busts are running automatically. Manual play disabled.
-      </span>
-    </div>
-  </div>
+// Compact status icon: Auto Rank active
+const AutoRankIcon = () => (
+  <span
+    title="Auto Rank — Busts are running automatically. Manual play disabled."
+    className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-amber-500/40 bg-amber-500/10 j-fade-in"
+  >
+    <Bot size={14} className="text-amber-400" />
+  </span>
 );
 
 const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPlayDisabled }) => {
@@ -475,11 +473,10 @@ export default function Jail() {
     <div className={`space-y-2 ${styles.pageContent}`} data-testid="jail-page">
       <style>{JAIL_STYLES}</style>
 
-      <div className="relative j-fade-in">
+      <div className="relative j-fade-in flex items-center gap-2 flex-wrap">
         <p className="text-[9px] text-zinc-500 font-heading italic">Bust out jailed players for RP. Set a reward if you get locked up.</p>
+        {autoRankJailDisabled && <AutoRankIcon />}
       </div>
-
-      {autoRankJailDisabled && <AutoRankJailNotice />}
 
       {user?.jailbust_bonus_until && (
         <div className="j-fade-in">

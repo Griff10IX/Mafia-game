@@ -68,17 +68,14 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const AutoRankBoozeNotice = () => (
-  <div className={`relative p-2 ${styles.panel} border border-amber-500/30 rounded-md overflow-hidden bz-fade-in`}>
-    <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-amber-500/50" />
-    <div className="flex items-center gap-1.5">
-      <Bot size={10} className="text-amber-400 shrink-0" />
-      <div>
-        <span className="text-[9px] font-heading font-bold text-amber-300 uppercase tracking-wider">Auto Rank Active</span>
-        <p className="text-[9px] text-amber-200/60 font-heading mt-0.5">Booze running is automated — buy, travel, sell. Manual trading disabled.</p>
-      </div>
-    </div>
-  </div>
+// Compact status icon: Auto Rank booze active
+const AutoRankIcon = () => (
+  <span
+    title="Auto Rank Active — Booze running is automated (buy, travel, sell). Manual trading disabled."
+    className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-amber-500/40 bg-amber-500/10 bz-fade-in"
+  >
+    <Bot size={14} className="text-amber-400" />
+  </span>
 );
 
 const StatsCard = ({ config, timer }) => {
@@ -795,11 +792,10 @@ export default function BoozeRun() {
       <style>{BOOZE_STYLES}</style>
 
       {/* ── Page Header ── */}
-      <div className="relative bz-fade-in">
+      <div className="relative bz-fade-in flex items-center gap-2 flex-wrap">
         <p className="text-[9px] text-zinc-500 font-heading italic">Buy low, smuggle fast, sell high — and pray the Feds don't catch you.</p>
+        {autoRankBoozeDisabled && <AutoRankIcon />}
       </div>
-
-      {autoRankBoozeDisabled && <AutoRankBoozeNotice />}
 
       {user?.booze_until && (
         <div className="bz-fade-in">
