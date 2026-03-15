@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import styles from '../styles/noir.module.css';
 
 const REFRESH_SECONDS = 30;
 
@@ -41,20 +42,28 @@ export default function ServerUnavailableOverlay() {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95"
-      style={{ fontFamily: 'var(--font-heading, system-ui)' }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      style={{
+        fontFamily: 'var(--font-heading, system-ui)',
+        backgroundColor: 'rgba(0, 0, 0, 0.92)',
+      }}
     >
-      <div className="text-center max-w-sm mx-6 p-6 rounded-xl border-2 border-amber-500/60 bg-amber-950/80 shadow-2xl shadow-amber-950/50 ring-2 ring-amber-400/20">
-        <p className="text-amber-100 text-lg font-bold mb-2">
+      <div
+        className={`${styles.panel} text-center max-w-sm mx-6 p-6 rounded-xl border border-primary/30 shadow-2xl`}
+        style={{
+          boxShadow: '0 0 0 1px rgba(var(--noir-primary-rgb), 0.15), 0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+        }}
+      >
+        <p className={`${styles.textGold} text-lg font-heading font-bold mb-2 uppercase tracking-wider`}>
           Server unavailable
         </p>
-        <p className="text-amber-200/90 text-sm mb-4">
+        <p className={`${styles.textMuted} text-sm mb-4`}>
           Try again in {countdown} second{countdown !== 1 ? 's' : ''}. The page will refresh automatically.
         </p>
         <button
           type="button"
           onClick={refresh}
-          className="px-5 py-2.5 rounded-lg border-2 border-amber-500 bg-amber-600/50 text-amber-50 font-bold uppercase tracking-wider hover:bg-amber-600 transition-colors"
+          className={`${styles.btnPrimary} px-5 py-2.5 font-heading font-bold uppercase tracking-wider transition-opacity hover:opacity-90`}
         >
           Refresh now
         </button>

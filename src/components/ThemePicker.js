@@ -884,7 +884,7 @@ export default function ThemePicker({ open, onClose }) {
                 />
               </TabSection>
 
-              <TabSection title="Kill notification style" sub="Attack page: show kill result as popup or as a banner between the event and Kill User section">
+              <TabSection title="Toast style" sub="Show all notifications as popup or as a banner (like on Attack page).">
                 <Pills
                   options={[
                     { id: 'popup', label: 'Popup' },

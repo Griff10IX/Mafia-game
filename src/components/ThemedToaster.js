@@ -6,6 +6,7 @@ const TOAST_POSITION_KEY = 'toast_position';
 const TOAST_CLOSE_KEY = 'toast_close_button';
 const TOAST_CUSTOM_X_KEY = 'toast_custom_x';
 const TOAST_CUSTOM_Y_KEY = 'toast_custom_y';
+const KILL_TOAST_STYLE_KEY = 'kill_toast_style';
 
 function loadToastPosition() {
   try {
@@ -41,10 +42,32 @@ function saveToastCustomXY(x, y) {
   } catch (_) {}
 }
 
+function loadToastStyle() {
+  try {
+    const v = localStorage.getItem(KILL_TOAST_STYLE_KEY);
+    if (v === 'banner' || v === 'popup') return v;
+  } catch (_) {}
+  return 'popup';
+}
+
+/** Banner-style toast classNames matching Attack page KillNotificationBanner */
+const BANNER_TOAST_CLASSNAMES = {
+  toast: 'group toast app-toast rounded-md border px-3 py-2 font-heading shadow-lg',
+  title: 'text-[11px] font-heading font-bold',
+  description: 'text-[10px] font-heading text-mutedForeground mt-0.5',
+  success: 'bg-primary/10 border-primary/30 text-primary',
+  error: 'bg-destructive/10 border-destructive/30 text-destructive',
+  warning: 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400',
+  default: 'bg-muted/20 border-border text-foreground',
+  actionButton: 'px-2 py-1 text-[10px] font-heading font-bold uppercase tracking-wider rounded border border-current opacity-80 hover:opacity-100',
+  cancelButton: 'group-[.toast]:bg-muted group-[.toast]:text-muted-foreground',
+};
+
 export function ThemedToaster() {
   const [toastPosition, setToastPosition] = useState(loadToastPosition);
   const [closeButton, setCloseButton] = useState(loadToastCloseButton);
   const [customXY, setCustomXY] = useState(loadToastCustomXY);
+  const [toastStyle, setToastStyle] = useState(loadToastStyle);
   const customXYRef = useRef(customXY);
   customXYRef.current = customXY;
   const [dragging, setDragging] = useState(false);
@@ -58,6 +81,12 @@ export function ThemedToaster() {
     };
     window.addEventListener('toast-prefs-changed', handler);
     return () => window.removeEventListener('toast-prefs-changed', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => setToastStyle(loadToastStyle());
+    window.addEventListener('kill-toast-style-changed', handler);
+    return () => window.removeEventListener('kill-toast-style-changed', handler);
   }, []);
 
   const handleDragStart = useCallback((e) => {
@@ -98,8 +127,9 @@ export function ThemedToaster() {
     };
   }, [dragging, dragStart]);
 
-  const isCustom = toastPosition === 'custom';
-  const position = isCustom ? 'bottom-center' : toastPosition;
+  const isBanner = toastStyle === 'banner';
+  const isCustom = !isBanner && toastPosition === 'custom';
+  const position = isBanner ? 'top-center' : (isCustom ? 'bottom-center' : toastPosition);
   const offset = isCustom ? 0 : (position.startsWith('bottom') ? 'max(16px, env(safe-area-inset-bottom, 16px))' : 'max(16px, env(safe-area-inset-top, 16px))');
 
   const toasterStyle = isCustom
@@ -111,6 +141,10 @@ export function ThemedToaster() {
         bottom: 'auto',
         transform: 'none',
       }
+    : undefined;
+
+  const toastOptions = isBanner
+    ? { classNames: BANNER_TOAST_CLASSNAMES }
     : undefined;
 
   return (
@@ -149,6 +183,7 @@ export function ThemedToaster() {
         offset={offset}
         closeButton={closeButton}
         style={toasterStyle}
+        toastOptions={toastOptions}
       />
     </>
   );
