@@ -326,7 +326,7 @@ const GTAProgressBar = ({ progress }) => {
             height: '100%',
             width: `${barPct}%`,
             minWidth: barPct > 0 ? 3 : 0,
-            background: 'linear-gradient(to right, #d4af37, #ca8a04)',
+            background: 'linear-gradient(to right, var(--noir-primary), #ca8a04)',
             borderRadius: 9999,
             transition: 'width 0.3s ease',
           }}

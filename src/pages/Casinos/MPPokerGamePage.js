@@ -122,7 +122,7 @@ function Card({ card, hidden, index = 0, total = 1, small = false, medium = fals
 /* ─── Chip Stack ─── */
 function ChipStack({ amount, small = false }) {
   if (!amount || amount <= 0) return null;
-  const colors = ['#e53e3e', '#3182ce', '#38a169', '#d4af37', '#805ad5'];
+  const colors = ['#e53e3e', '#3182ce', '#38a169', 'var(--noir-primary)', '#805ad5'];
   const count = Math.min(5, Math.ceil(Math.log10(amount + 1)));
   return (
     <div className="inline-flex flex-col-reverse items-center" style={{ gap: 1 }}>
@@ -151,7 +151,7 @@ function TurnTimer({ seconds, isMyTurn }) {
   const circ = 2 * Math.PI * r;
   const dash = pct * circ;
   const urgent = seconds <= 10;
-  const color = urgent ? '#f87171' : isMyTurn ? '#d4af37' : 'rgba(255,255,255,0.4)';
+  const color = urgent ? '#f87171' : isMyTurn ? 'var(--noir-primary)' : 'rgba(255,255,255,0.4)';
   return (
     <svg width="38" height="38" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
       <circle cx="19" cy="19" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2.5" />
@@ -174,15 +174,15 @@ function StartCountdown({ seconds }) {
     <div className="flex flex-col items-center gap-2">
       <svg width="64" height="64" style={{ transform: 'rotate(-90deg)' }}>
         <circle cx="32" cy="32" r={r} fill="none" stroke="rgba(212,175,55,0.1)" strokeWidth="3.5" />
-        <circle cx="32" cy="32" r={r} fill="none" stroke="#d4af37" strokeWidth="3.5"
+        <circle cx="32" cy="32" r={r} fill="none" stroke="var(--noir-primary)" strokeWidth="3.5"
           strokeDasharray={`${pct * circ} ${circ}`} strokeLinecap="round"
           style={{ transition: 'stroke-dasharray 0.9s linear' }} />
         <text x="32" y="32" textAnchor="middle" dominantBaseline="central"
-          fill="#d4af37" fontSize="20" fontWeight="700" fontFamily="Cinzel, serif"
+          fill="var(--noir-primary)" fontSize="20" fontWeight="700" fontFamily="Cinzel, serif"
           transform="rotate(90,32,32)">{seconds}</text>
       </svg>
       <p className="text-[9px] font-heading font-bold uppercase tracking-[0.2em] animate-pkr-pulse"
-        style={{ background: 'linear-gradient(180deg,#ffd700,#c9a84c)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+        style={{ background: 'linear-gradient(180deg,#ffd700,var(--noir-primary-bright))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
         Game Starting…
       </p>
     </div>
@@ -202,14 +202,14 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
 
   let borderColor = 'rgba(90,62,27,0.6)';
   let glow = 'none';
-  if (isCurrent) { borderColor = '#c9a84c'; glow = '0 0 20px rgba(212,175,55,0.35)'; }
+  if (isCurrent) { borderColor = 'var(--noir-primary-bright)'; glow = '0 0 20px rgba(212,175,55,0.35)'; }
   else if (isMe) { borderColor = 'rgba(212,175,55,0.4)'; }
   else if (folded) { borderColor = 'rgba(255,255,255,0.1)'; }
 
   let statusBadge = null;
   if (folded) statusBadge = { label: 'Folded', color: '#6b7280' };
   else if (allIn) statusBadge = { label: 'All-In', color: '#f59e0b' };
-  else if (isCurrent) statusBadge = { label: 'Turn', color: '#d4af37' };
+  else if (isCurrent) statusBadge = { label: 'Turn', color: 'var(--noir-primary)' };
   else if (waiting && ready) statusBadge = { label: '✓ Ready', color: '#34d399' };
   else if (waiting) statusBadge = { label: 'Waiting', color: '#6b7280' };
 
@@ -236,11 +236,11 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
         }}>
         {isDealer && (
           <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-black z-10"
-            style={{ background: '#d4af37', color: '#1a1200', border: '1.5px solid #1a1200' }}>D</div>
+            style={{ background: 'var(--noir-primary)', color: '#1a1200', border: '1.5px solid #1a1200' }}>D</div>
         )}
         <div className="text-center">
           <div className="text-[9px] font-heading font-bold truncate"
-            style={{ color: isMe ? '#d4af37' : 'rgba(255,255,255,0.85)', maxWidth: 80 }}>
+            style={{ color: isMe ? 'var(--noir-primary)' : 'rgba(255,255,255,0.85)', maxWidth: 80 }}>
             {p.username}{isMe ? ' ★' : ''}
           </div>
           <div className="text-[8px] font-heading" style={{ color: 'rgba(110,231,183,0.6)' }}>
@@ -266,7 +266,7 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
         </div>
       )}
       {isMe && p.current_hand_name && (
-        <div className="text-[8px] font-heading font-bold mt-0.5" style={{ color: '#d4af37' }}>
+        <div className="text-[8px] font-heading font-bold mt-0.5" style={{ color: 'var(--noir-primary)' }}>
           {p.current_hand_name}
         </div>
       )}
@@ -672,7 +672,7 @@ export default function MPPokerGamePage() {
     );
   }
 
-  const goldBar = { height: 3, background: 'linear-gradient(90deg,#5a3e1b,#c9a84c,#8b6914,#c9a84c,#5a3e1b)' };
+  const goldBar = { height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' };
   const feltBg = {
     background: 'radial-gradient(ellipse 90% 70% at 50% 50%, #0d7a35 0%, #0a5e2a 50%, #0c3d1a 100%)',
     boxShadow: 'inset 0 0 80px rgba(0,0,0,0.4), 0 4px 24px rgba(0,0,0,0.5)',
@@ -751,7 +751,7 @@ export default function MPPokerGamePage() {
           <div className="p-5" style={feltBg}>
             <div className="text-center space-y-4">
               <p className="text-sm font-heading font-bold uppercase tracking-[0.2em]"
-                style={{ background: 'linear-gradient(180deg,#ffd700,#c9a84c)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                style={{ background: 'linear-gradient(180deg,#ffd700,var(--noir-primary-bright))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                 Waiting for Players
               </p>
               <p className="text-[9px] font-heading" style={{ color: 'rgba(110,231,183,0.4)' }}>
@@ -761,7 +761,7 @@ export default function MPPokerGamePage() {
               <div className="flex flex-wrap justify-center gap-2">
                 {players.map((p) => (
                   <span key={p.user_id} className="px-3 py-1 rounded-full text-[9px] font-heading font-bold"
-                    style={{ background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.3)', color: '#d4af37' }}>
+                    style={{ background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.3)', color: 'var(--noir-primary)' }}>
                     {p.username}
                   </span>
                 ))}
@@ -795,7 +795,7 @@ export default function MPPokerGamePage() {
           <div className="p-5 space-y-5" style={feltBg}>
             <div className="text-center space-y-1">
               <p className="text-sm font-heading font-bold uppercase tracking-[0.2em]"
-                style={{ background: 'linear-gradient(180deg,#ffd700,#c9a84c)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                style={{ background: 'linear-gradient(180deg,#ffd700,var(--noir-primary-bright))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                 {players.length >= (game?.max_players ?? 6) ? 'Table Full — Ready Up!' : 'Ready Up!'}
               </p>
               <p className="text-[9px] font-heading" style={{ color: 'rgba(110,231,183,0.4)' }}>
@@ -818,7 +818,7 @@ export default function MPPokerGamePage() {
                   ) : (
                     <button type="button" disabled={readyLoading} onClick={markReady}
                       className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 font-heading font-bold text-[11px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 animate-pkr-ready"
-                      style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 4px 16px rgba(212,175,55,0.3)' }}>
+                      style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200', boxShadow: '0 4px 16px rgba(212,175,55,0.3)' }}>
                       <CheckCircle2 size={15} />
                       {readyLoading ? 'Readying…' : "I'm Ready"}
                     </button>
@@ -845,7 +845,7 @@ export default function MPPokerGamePage() {
                   <div className="w-2 h-2 rounded-full flex-shrink-0 transition-all"
                     style={{ background: p.ready ? '#34d399' : 'rgba(255,255,255,0.15)', boxShadow: p.ready ? '0 0 6px rgba(52,211,153,0.5)' : 'none' }} />
                   <span className="text-[9px] font-heading font-bold truncate"
-                    style={{ color: p.user_id === myUserId ? '#d4af37' : 'rgba(255,255,255,0.75)' }}>
+                    style={{ color: p.user_id === myUserId ? 'var(--noir-primary)' : 'rgba(255,255,255,0.75)' }}>
                     {p.username}{p.user_id === myUserId ? ' (You)' : ''}
                   </span>
                   {p.ready && <CheckCircle2 size={10} className="ml-auto shrink-0" style={{ color: '#34d399' }} />}
@@ -894,7 +894,7 @@ export default function MPPokerGamePage() {
               style={{
                 background: 'radial-gradient(ellipse at 50% 50%, #0f8a3e 0%, #0a6b2e 60%, #085c26 100%)',
                 border: '6px solid #5a3e1b',
-                boxShadow: 'inset 0 0 40px rgba(0,0,0,0.35), 0 0 0 2px #c9a84c',
+                boxShadow: 'inset 0 0 40px rgba(0,0,0,0.35), 0 0 0 2px var(--noir-primary-bright)',
               }} />
 
             {/* Pot display in center */}
@@ -908,11 +908,11 @@ export default function MPPokerGamePage() {
                   </div>
                 )}
                 <div className="px-3 py-1 rounded-full text-[9px] font-heading font-bold"
-                  style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(212,175,55,0.3)', color: '#d4af37' }}>
+                  style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(212,175,55,0.3)', color: 'var(--noir-primary)' }}>
                   {street ? `${STREET_LABELS[street] || street} · ` : ''}Pot {formatMoneyFull(pot)}
                 </div>
                 {myPlayer?.current_hand_name && board.length >= 3 && myPlayer?.status !== 'folded' && (
-                  <p className="text-[9px] font-heading font-bold" style={{ color: '#d4af37' }}>
+                  <p className="text-[9px] font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
                     Your hand: {myPlayer.current_hand_name}
                   </p>
                 )}
@@ -926,7 +926,7 @@ export default function MPPokerGamePage() {
                         <TurnTimer seconds={turnSecondsLeft} isMyTurn={isMyTurn} />
                       )}
                       <span className="text-[9px] font-heading font-bold animate-pkr-pulse"
-                        style={{ color: isMyTurn ? '#d4af37' : 'rgba(255,255,255,0.5)' }}>
+                        style={{ color: isMyTurn ? 'var(--noir-primary)' : 'rgba(255,255,255,0.5)' }}>
                         {isMyTurn ? '🎴 Your Turn' : `${currentTurnPlayer?.is_bot ? 'Dealer' : (currentTurnPlayer?.username ?? '?')}'s turn`}
                       </span>
                     </div>
@@ -1013,7 +1013,7 @@ export default function MPPokerGamePage() {
                   {needToCall > 0 ? (
                     <button type="button" disabled={actionLoading} onClick={() => act('all_in')}
                       className="px-5 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                      style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200' }}>
+                      style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
                       All-In (committed)
                     </button>
                   ) : (
@@ -1043,7 +1043,7 @@ export default function MPPokerGamePage() {
                   ) : (
                     <button type="button" disabled={actionLoading} onClick={() => act('call')}
                       className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                      style={{ borderColor: '#c9a84c', background: 'rgba(212,175,55,0.12)', color: '#d4af37' }}>
+                      style={{ borderColor: 'var(--noir-primary-bright)', background: 'rgba(212,175,55,0.12)', color: 'var(--noir-primary)' }}>
                       Call {formatMoneyFull(Math.min(needToCall, myStack))}
                     </button>
                   )}
@@ -1069,7 +1069,7 @@ export default function MPPokerGamePage() {
                   <button type="button" disabled={actionLoading || !raiseAmount}
                     onClick={() => { act(needToCall > 0 ? 'raise' : 'bet', parseInt(raiseAmount, 10) || minRaise); setRaiseAmount(''); }}
                     className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                    style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200' }}>
+                    style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
                     {needToCall > 0 ? 'Raise' : 'Bet'}
                   </button>
                   {[0.5, 0.75, 1].map((f) => {
@@ -1103,7 +1103,7 @@ export default function MPPokerGamePage() {
             </div>
             <div>
               <p className="text-sm font-heading font-bold uppercase tracking-[0.2em]"
-                style={{ background: 'linear-gradient(180deg,#ffd700,#c9a84c)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                style={{ background: 'linear-gradient(180deg,#ffd700,var(--noir-primary-bright))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                 All In — Running It Out
               </p>
               <p className="text-[9px] font-heading mt-1 animate-pkr-pulse" style={{ color: 'rgba(110,231,183,0.5)' }}>
@@ -1114,7 +1114,7 @@ export default function MPPokerGamePage() {
             {isVsDealer && (
               <button type="button" onClick={fetchGame}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all"
-                style={{ borderColor: 'rgba(212,175,55,0.35)', background: 'rgba(212,175,55,0.08)', color: '#d4af37' }}>
+                style={{ borderColor: 'rgba(212,175,55,0.35)', background: 'rgba(212,175,55,0.08)', color: 'var(--noir-primary)' }}>
                 ↻ Check Result
               </button>
             )}
@@ -1141,7 +1141,7 @@ export default function MPPokerGamePage() {
         const pot = winner?.payout ?? 0;
 
         return (
-          <div className="rounded-xl overflow-hidden border-2 animate-pkr-fade" style={{ borderColor: didWin ? '#c9a84c' : '#5a3e1b' }}>
+          <div className="rounded-xl overflow-hidden border-2 animate-pkr-fade" style={{ borderColor: didWin ? 'var(--noir-primary-bright)' : '#5a3e1b' }}>
             <div style={goldBar} />
 
             {/* Big winner banner */}
@@ -1156,12 +1156,12 @@ export default function MPPokerGamePage() {
               <div>
                 <p className="text-2xl font-heading font-black uppercase tracking-wider"
                   style={didWin
-                    ? { background: 'linear-gradient(180deg,#ffd700,#c9a84c)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }
+                    ? { background: 'linear-gradient(180deg,#ffd700,var(--noir-primary-bright))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }
                     : { color: '#f87171' }}>
                   {didWin ? '🏆 You Win' : `${winnerName} Wins`}
                 </p>
                 {winnerHand && (
-                  <p className="text-[11px] font-heading font-bold mt-1" style={{ color: didWin ? '#d4af37' : 'rgba(255,255,255,0.45)' }}>
+                  <p className="text-[11px] font-heading font-bold mt-1" style={{ color: didWin ? 'var(--noir-primary)' : 'rgba(255,255,255,0.45)' }}>
                     {didWin ? `with ${winnerHand}` : `with ${winnerHand}`}
                   </p>
                 )}
@@ -1188,7 +1188,7 @@ export default function MPPokerGamePage() {
                           ))}
                         </div>
                         <div className="text-center">
-                          <p className="text-[9px] font-heading font-bold" style={{ color: pWon ? '#d4af37' : 'rgba(255,255,255,0.45)' }}>
+                          <p className="text-[9px] font-heading font-bold" style={{ color: pWon ? 'var(--noir-primary)' : 'rgba(255,255,255,0.45)' }}>
                             {pName} {pWon ? '✓' : '✗'}
                           </p>
                           {pResult?.hand && (
@@ -1210,7 +1210,7 @@ export default function MPPokerGamePage() {
               </p>
               <Link to="/casino/mp-poker"
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-2 text-[9px] font-heading font-bold uppercase tracking-wider active:scale-[0.97] transition-all"
-                style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200' }}>
+                style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
                 ♠ New Hand
               </Link>
             </div>
@@ -1242,8 +1242,8 @@ export default function MPPokerGamePage() {
                     {[
                       { label: 'Fold', color: '#f87171', desc: 'Surrender your hand. You lose any chips already bet.' },
                       { label: 'Check', color: '#a1a1aa', desc: 'Pass without betting — only if no one has bet this round.' },
-                      { label: 'Call', color: '#d4af37', desc: 'Match the current bet to stay in the hand.' },
-                      { label: 'Raise / Bet', color: '#d4af37', desc: 'Increase the bet. Others must call your raise or fold.' },
+                      { label: 'Call', color: 'var(--noir-primary)', desc: 'Match the current bet to stay in the hand.' },
+                      { label: 'Raise / Bet', color: 'var(--noir-primary)', desc: 'Increase the bet. Others must call your raise or fold.' },
                       { label: 'All-In', color: '#fb7185', desc: 'Bet everything you have. You play for the pot up to your stack.' },
                     ].map((a) => (
                       <div key={a.label} className="flex gap-2 items-start px-2.5 py-2 rounded-lg"
@@ -1267,7 +1267,7 @@ export default function MPPokerGamePage() {
                     ].map((s) => (
                       <div key={s.name} className="px-2 py-2 rounded-lg text-center"
                         style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <p className="text-[8px] font-heading font-bold mb-0.5" style={{ color: '#d4af37' }}>{s.name}</p>
+                        <p className="text-[8px] font-heading font-bold mb-0.5" style={{ color: 'var(--noir-primary)' }}>{s.name}</p>
                         <p className="text-[7px] font-heading leading-snug" style={{ color: 'rgba(255,255,255,0.45)' }}>{s.desc}</p>
                       </div>
                     ))}
@@ -1292,11 +1292,11 @@ export default function MPPokerGamePage() {
                       <div key={h.rank} className="flex items-center gap-2 px-2.5 py-1.5 rounded"
                         style={{ background: 'rgba(255,255,255,0.025)' }}>
                         <span className="text-[8px] font-heading font-black w-4 shrink-0 text-center"
-                          style={{ color: Number(h.rank) <= 3 ? '#d4af37' : Number(h.rank) <= 6 ? 'rgba(212,175,55,0.6)' : 'rgba(255,255,255,0.3)' }}>
+                          style={{ color: Number(h.rank) <= 3 ? 'var(--noir-primary)' : Number(h.rank) <= 6 ? 'rgba(212,175,55,0.6)' : 'rgba(255,255,255,0.3)' }}>
                           {h.rank}
                         </span>
                         <span className="text-[8px] font-heading font-bold w-28 shrink-0"
-                          style={{ color: Number(h.rank) <= 3 ? '#d4af37' : 'rgba(255,255,255,0.7)' }}>
+                          style={{ color: Number(h.rank) <= 3 ? 'var(--noir-primary)' : 'rgba(255,255,255,0.7)' }}>
                           {h.name}
                         </span>
                         <span className="text-[7px] font-mono flex-1 hidden sm:block" style={{ color: 'rgba(255,255,255,0.3)' }}>{h.example}</span>
@@ -1308,7 +1308,7 @@ export default function MPPokerGamePage() {
 
                 {/* Blinds explained */}
                 <div className="px-2.5 py-2 rounded-lg" style={{ background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.1)' }}>
-                  <p className="text-[8px] font-heading font-bold mb-1" style={{ color: '#d4af37' }}>Blinds</p>
+                  <p className="text-[8px] font-heading font-bold mb-1" style={{ color: 'var(--noir-primary)' }}>Blinds</p>
                   <p className="text-[8px] font-heading leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
                     The Small Blind and Big Blind are forced bets posted before cards are dealt. They rotate each hand to keep action moving. The Big Blind is double the Small Blind.
                     You must at least call the Big Blind to stay in pre-flop.
@@ -1333,7 +1333,7 @@ export default function MPPokerGamePage() {
               ? <p className="text-[9px] font-heading text-center py-2" style={{ color: 'rgba(255,255,255,0.15)' }}>No messages yet…</p>
               : (game.chat || []).slice(-30).map((c, i) => (
                   <div key={c.at || i} className="text-[9px] font-heading leading-relaxed">
-                    <span className="font-semibold" style={{ color: '#c9a84c' }}>{c.username}:</span>{' '}
+                    <span className="font-semibold" style={{ color: 'var(--noir-primary-bright)' }}>{c.username}:</span>{' '}
                     <span className="text-foreground break-words">{c.message}</span>
                   </div>
                 ))

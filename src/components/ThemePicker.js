@@ -388,6 +388,7 @@ export default function ThemePicker({ open, onClose }) {
                 setButtonStyle(DEFAULT_BUTTON_STYLE_ID); setWritingColour(DEFAULT_WRITING_COLOUR_ID);
                 setMutedWritingColour(null); setTextStyle(DEFAULT_TEXT_STYLE_ID);
                 resetButtonToDefault(); resetAccentLineToDefault();
+                setMobileNavStyle('sidebar');
               }}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-heading font-bold uppercase tracking-wider border border-zinc-700 bg-zinc-800/80 text-zinc-400 hover:border-primary/40 hover:text-primary transition-all"
               data-testid="theme-reset-default"

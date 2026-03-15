@@ -366,7 +366,7 @@ function drawRing(ctx, W, H) {
 
   // Corner posts
   const posts = [[rl, rt], [rr, rt], [rl, rb], [rr, rb]];
-  const pc = ["#c9a84c", "#bb2222", "#bb2222", "#c9a84c"];
+  const pc = ["var(--noir-primary-bright)", "#bb2222", "#bb2222", "var(--noir-primary-bright)"];
   posts.forEach(([x, y], i) => {
     ctx.fillStyle = pc[i]; ctx.fillRect(x-3, y-3, 6, 6);
   });
@@ -488,7 +488,7 @@ function drawRoundCard(ctx, W, H, roundNum, progress) {
   ctx.strokeStyle = "rgba(201,168,76,0.6)";
   ctx.lineWidth = 1.5;
   ctx.strokeRect(W * 0.3, H * 0.35, W * 0.4, H * 0.18);
-  ctx.fillStyle = "#c9a84c";
+  ctx.fillStyle = "var(--noir-primary-bright)";
   ctx.font = "bold 18px Cinzel,serif";
   ctx.textAlign = "center";
   ctx.fillText(`ROUND ${roundNum}`, W/2, H * 0.35 + H * 0.12);
@@ -520,13 +520,13 @@ function drawCanvasBars(ctx, W, H, state, nameA, nameB) {
   // Fighter A bars (left)
   ctx.fillStyle = "rgba(255,255,255,0.06)";
   ctx.fillRect(gap, y, barW, barH);
-  ctx.fillStyle = state.hpA > 30 ? "#c9a84c" : "#cc4444";
+  ctx.fillStyle = state.hpA > 30 ? "var(--noir-primary-bright)" : "#cc4444";
   ctx.fillRect(gap, y, barW * (state.hpA / 100), barH);
   ctx.fillStyle = "rgba(255,255,255,0.06)";
   ctx.fillRect(gap, y + barH + 2, barW, 4);
   ctx.fillStyle = "#3a8aaa";
   ctx.fillRect(gap, y + barH + 2, barW * (state.stamA / 100), 4);
-  ctx.fillStyle = "#c9a84c"; ctx.font = "bold 9px Cinzel,serif"; ctx.textAlign = "left";
+  ctx.fillStyle = "var(--noir-primary-bright)"; ctx.font = "bold 9px Cinzel,serif"; ctx.textAlign = "left";
   ctx.fillText(nameA, gap, y - 4);
 
   // Fighter B bars (right)
@@ -543,7 +543,7 @@ function drawCanvasBars(ctx, W, H, state, nameA, nameB) {
   ctx.fillText(nameB, W - gap, y - 4);
 
   // Round
-  ctx.fillStyle = "#c9a84c"; ctx.font = "bold 11px Cinzel,serif"; ctx.textAlign = "center";
+  ctx.fillStyle = "var(--noir-primary-bright)"; ctx.font = "bold 11px Cinzel,serif"; ctx.textAlign = "center";
   ctx.fillText(`R${state.round}/12`, W/2, y + 4);
 }
 

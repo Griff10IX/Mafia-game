@@ -737,8 +737,8 @@ export default function Crimes() {
         <div className={`relative ${styles.panel} rounded-md overflow-hidden cr-fade-in`} style={{ animationDelay: '0.08s', border: '1px solid rgba(184,145,68,0.2)' }}>
           <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(184,145,68,0.5), transparent)' }} />
           <div className="px-2.5 py-1.5 border-b flex items-center gap-2" style={{ background: 'rgba(184,145,68,0.06)', borderColor: 'rgba(184,145,68,0.15)' }}>
-            <Star size={10} style={{ color: '#c9a84c' }} />
-            <span className="text-[9px] font-heading font-bold uppercase tracking-[0.12em]" style={{ color: '#c9a84c' }}>
+            <Star size={10} style={{ color: 'var(--noir-primary-bright)' }} />
+            <span className="text-[9px] font-heading font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--noir-primary-bright)' }}>
               Prestige Crimes
             </span>
             <span className="text-[8px] font-heading text-zinc-600 ml-1">— exclusive to each prestige level</span>

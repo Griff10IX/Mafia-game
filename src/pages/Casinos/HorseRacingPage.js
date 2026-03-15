@@ -81,8 +81,8 @@ function RaceTrack({
         </div>
         {/* Sponsor boards */}
         <div className="absolute bottom-0 left-0 right-0 flex justify-between px-2 gap-1">
-          <div className="px-2 py-0.5 rounded-sm text-[8px] font-heading font-bold uppercase tracking-wider opacity-70" style={{ background: 'rgba(0,0,0,0.4)', color: '#d4af37' }}>Official Partner</div>
-          <div className="px-2 py-0.5 rounded-sm text-[8px] font-heading font-bold uppercase tracking-wider opacity-70" style={{ background: 'rgba(0,0,0,0.4)', color: '#d4af37' }}>Live Odds</div>
+          <div className="px-2 py-0.5 rounded-sm text-[8px] font-heading font-bold uppercase tracking-wider opacity-70" style={{ background: 'rgba(0,0,0,0.4)', color: 'var(--noir-primary)' }}>Official Partner</div>
+          <div className="px-2 py-0.5 rounded-sm text-[8px] font-heading font-bold uppercase tracking-wider opacity-70" style={{ background: 'rgba(0,0,0,0.4)', color: 'var(--noir-primary)' }}>Live Odds</div>
         </div>
       </div>
 
@@ -152,7 +152,7 @@ function RaceTrack({
                   style={{
                     background: 'rgba(0,0,0,0.3)',
                     borderLeft: `3px solid ${color}`,
-                    color: isSelected ? '#d4af37' : '#ccc',
+                    color: isSelected ? 'var(--noir-primary)' : '#ccc',
                   }}
                 >
                   {lane.horse.name}
@@ -247,7 +247,7 @@ function RaceTrack({
           )}
           {gatesOpen && (
             <span className="px-3 py-1 rounded-full text-[10px] font-heading font-bold uppercase tracking-wider animate-pulse"
-              style={{ background: 'rgba(0,0,0,0.6)', color: '#d4af37', border: '1px solid rgba(212,175,55,0.3)' }}
+              style={{ background: 'rgba(0,0,0,0.6)', color: 'var(--noir-primary)', border: '1px solid rgba(212,175,55,0.3)' }}
             >
               {liveCommentary || 'Race in progress'}
             </span>
@@ -777,7 +777,7 @@ export default function HorseRacingPage() {
             )}
             <button onClick={acceptBuyBack} disabled={buyBackActionLoading || (buyBackSecondsLeft !== null && buyBackSecondsLeft <= 0)}
               className="rounded-lg px-5 py-2 text-xs font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40"
-              style={{ background: 'linear-gradient(180deg, #d4af37, #8a6e18)', borderColor: '#c9a84c', color: '#1a1200' }}
+              style={{ background: 'linear-gradient(180deg, var(--noir-primary), #8a6e18)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}
             >
               {buyBackActionLoading ? '...' : `Accept (${(buyBackOffer.points_offered || 0).toLocaleString()} pts)`}
             </button>
@@ -911,7 +911,7 @@ export default function HorseRacingPage() {
                 boxShadow: '0 4px 24px rgba(0,0,0,0.4), inset 0 0 40px rgba(0,0,0,0.2)',
               }}
             >
-              <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, #c9a84c, #8b6914, #c9a84c, #5a3e1b)' }} />
+              <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, var(--noir-primary-bright), #8b6914, var(--noir-primary-bright), #5a3e1b)' }} />
 
               <div className="p-3 space-y-3">
                 {/* Horse selection */}
@@ -984,7 +984,7 @@ export default function HorseRacingPage() {
                             background: `radial-gradient(circle at 40% 35%, ${qb.color}, ${qb.color}dd)`,
                             border: `2px dashed ${qb.color}88`,
                             color: qb.text,
-                            boxShadow: bet === String(qb.value) ? '0 0 0 2px #d4af37' : '0 2px 4px rgba(0,0,0,0.3)',
+                            boxShadow: bet === String(qb.value) ? '0 0 0 2px var(--noir-primary)' : '0 2px 4px rgba(0,0,0,0.3)',
                           }}
                         >
                           {qb.label}
@@ -1011,8 +1011,8 @@ export default function HorseRacingPage() {
                   disabled={!canBet}
                   className="w-full rounded-lg py-2.5 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
                   style={{
-                    background: 'linear-gradient(180deg, #d4af37, #a08020, #8a6e18)',
-                    borderColor: '#c9a84c',
+                    background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
+                    borderColor: 'var(--noir-primary-bright)',
                     color: '#1a1200',
                     boxShadow: '0 4px 16px rgba(212,175,55,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
                   }}
@@ -1021,7 +1021,7 @@ export default function HorseRacingPage() {
                 </button>
               </div>
 
-              <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, #c9a84c, #8b6914, #c9a84c, #5a3e1b)' }} />
+              <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, var(--noir-primary-bright), #8b6914, var(--noir-primary-bright), #5a3e1b)' }} />
             </div>
           )}
 
@@ -1033,8 +1033,8 @@ export default function HorseRacingPage() {
                 disabled={!canPlaceSameBet}
                 className="flex-1 rounded-lg py-2.5 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 active:scale-[0.98] transition-all"
                 style={{
-                  background: 'linear-gradient(180deg, #d4af37, #a08020, #8a6e18)',
-                  borderColor: '#c9a84c',
+                  background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
+                  borderColor: 'var(--noir-primary-bright)',
                   color: '#1a1200',
                   boxShadow: '0 4px 16px rgba(212,175,55,0.3)',
                 }}

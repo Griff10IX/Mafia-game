@@ -1097,12 +1097,13 @@ export default function Layout({ children }) {
       `}</style>
       {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
       <div
-        className={`fixed left-0 top-0 h-full w-52 ${styles.sidebar} z-50 transform transition-transform duration-300 ${mobileNavStyle === 'bottom' ? 'hidden md:translate-x-0 md:block' : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}`}
+        data-layout="sidebar"
+        className={`fixed left-0 top-0 h-full w-48 ${styles.sidebar} z-50 transform transition-transform duration-300 ${mobileNavStyle === 'bottom' ? 'hidden md:translate-x-0 md:block' : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}`}
         style={sidebarBgStyle}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className={`h-14 flex items-center px-3 border-b ${styles.borderGoldLight} shrink-0`}>
+          <div className={`h-12 flex items-center px-2.5 border-b ${styles.borderGoldLight} shrink-0`}>
             <div className="flex items-center gap-1.5 w-full">
               <div className="w-4 h-px shrink-0" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
               <h1 className={`text-base font-heading font-bold tracking-widest truncate ${styles.sidebarHeaderTitle}`} data-testid="app-logo">MAFIA WARS</h1>
@@ -1125,7 +1126,7 @@ export default function Layout({ children }) {
           </div>
 
           {/* Navigation */}
-          <nav className={`flex-1 overflow-y-auto px-2.5 py-2 ${styles.sidebarNav} min-h-0`}>
+          <nav className={`flex-1 overflow-y-auto px-2 py-1 ${styles.sidebarNav} min-h-0`}>
             <div className="space-y-0">
               {(sidebarLayout === 'categorized' || sidebarLayout === 'categorized_classic') ? (
                 <>
@@ -1219,12 +1220,12 @@ export default function Layout({ children }) {
           {user && (
             <div className={`px-2 py-1 border-t ${styles.borderGoldLight} shrink-0 space-y-0.5`}>
               <button type="button" onClick={() => setThemePickerOpen(true)}
-              className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+              className="w-full flex items-center justify-center gap-1 px-2 py-1 rounded-sm transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
                 data-testid="theme-picker-button">
                 <Palette size={12} />Theme
               </button>
               <button onClick={handleLogout} data-testid="logout-button"
-                className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-r from-red-700 to-red-900 text-white border border-red-600/50 rounded-lg hover:opacity-90 transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold">
+                className="w-full flex items-center justify-center gap-1 px-2 py-1 bg-gradient-to-r from-red-700 to-red-900 text-white border border-red-600/50 rounded-sm hover:opacity-90 transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold">
                 <LogOut size={12} />Logout
               </button>
             </div>
@@ -1238,7 +1239,7 @@ export default function Layout({ children }) {
       )}
 
       {/* ── TOP BAR ─────────────────────────────────────────────────────────── */}
-      <div className={`fixed top-0 right-0 left-0 md:left-52 min-h-[46px] md:min-h-0 md:h-14 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-2 py-1.5 md:px-4 md:py-0 gap-1.5 md:gap-3 ${mobileStatsDisplay === 'right_sidebar' ? 'md:right-52' : ''}`}>
+      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 md:left-48 min-h-[40px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-1.5 py-1 md:px-3 md:py-0 gap-1 md:gap-2 ${mobileStatsDisplay === 'right_sidebar' ? 'md:right-52' : ''}`}>
         <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0 overflow-hidden md:justify-end">
           {mobileNavStyle !== 'bottom' && (
             <button onClick={() => setSidebarOpen(!sidebarOpen)} data-testid="mobile-menu-toggle"
@@ -1482,7 +1483,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
-      <main className={`md:ml-52 mt-14 min-h-screen p-4 md:p-7 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-24 md:pb-6' : ''} ${mobileStatsDisplay === 'right_sidebar' ? 'md:mr-52' : ''}`}>
+      <main data-layout="main" className={`md:ml-48 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-24 md:pb-6' : ''} ${mobileStatsDisplay === 'right_sidebar' ? 'md:mr-52' : ''}`}>
         {needsEmailVerification && (
           <div className="mb-3 px-3 py-2 rounded-sm flex items-center gap-2 flex-wrap" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', border: '1px solid rgba(var(--noir-primary-rgb), 0.4)' }}>
             <Mail size={16} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
@@ -1537,7 +1538,7 @@ export default function Layout({ children }) {
               <PanelRight size={18} style={{ color: 'var(--noir-primary)' }} />
             </button>
           )}
-          <div className={`fixed right-0 w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${isMobileViewport ? (rightSidebarOpen ? 'translate-x-0' : 'translate-x-full') : 'translate-x-0'} ${isMobileViewport ? 'top-0 h-full' : 'md:top-0 md:h-full'}`} style={sidebarBgStyle}>
+          <div data-layout="right-sidebar" className={`fixed right-0 w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${isMobileViewport ? (rightSidebarOpen ? 'translate-x-0' : 'translate-x-full') : 'translate-x-0'} ${isMobileViewport ? 'top-0 h-full' : 'md:top-0 md:h-full'}`} style={sidebarBgStyle}>
 
             {/* IMPROVEMENT 4: username + rank in header */}
             <div className={`h-12 flex items-center justify-between px-2.5 border-b ${styles.borderGoldLight} shrink-0 gap-2`}>

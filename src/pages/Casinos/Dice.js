@@ -38,7 +38,7 @@ function DiceVisual({ isRolling, result, rollingNumber }) {
               className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl flex items-center justify-center animate-dice-tumble"
               style={{
                 background: 'linear-gradient(135deg, #2a2520, #1a1612)',
-                border: '3px solid #c9a84c',
+                border: '3px solid var(--noir-primary-bright)',
                 boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 20px rgba(212,175,55,0.15)',
               }}
             >
@@ -532,7 +532,7 @@ export default function Dice() {
         <div
           className="p-4 rounded-lg border-2 space-y-3"
           style={{
-            borderColor: '#c9a84c',
+            borderColor: 'var(--noir-primary-bright)',
             background: 'linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.03))',
           }}
         >
@@ -548,7 +548,7 @@ export default function Dice() {
             )}
             <button onClick={acceptBuyBack} disabled={buyBackActionLoading || (buyBackSecondsLeft !== null && buyBackSecondsLeft <= 0)}
               className="rounded-lg px-5 py-2 text-xs font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40"
-              style={{ background: 'linear-gradient(180deg, #d4af37, #8a6e18)', borderColor: '#c9a84c', color: '#1a1200' }}
+              style={{ background: 'linear-gradient(180deg, var(--noir-primary), #8a6e18)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}
             >
               {buyBackActionLoading ? '...' : `Accept (${(buyBackOffer.points_offered || 0).toLocaleString()} pts)`}
             </button>
@@ -612,7 +612,7 @@ export default function Dice() {
           }}
         >
           {/* Gold rail */}
-          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, #c9a84c, #8b6914, #c9a84c, #5a3e1b)' }} />
+          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, var(--noir-primary-bright), #8b6914, var(--noir-primary-bright), #5a3e1b)' }} />
 
           <div className="p-4 sm:p-5">
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-5">
@@ -665,7 +665,7 @@ export default function Dice() {
                           background: `radial-gradient(circle at 40% 35%, ${qb.color}, ${qb.color}dd)`,
                           border: `2px dashed ${qb.color}88`,
                           color: qb.text,
-                          boxShadow: stake === String(qb.value) ? `0 0 0 2px #d4af37, 0 2px 8px rgba(0,0,0,0.3)` : '0 2px 6px rgba(0,0,0,0.3)',
+                          boxShadow: stake === String(qb.value) ? `0 0 0 2px var(--noir-primary), 0 2px 8px rgba(0,0,0,0.3)` : '0 2px 6px rgba(0,0,0,0.3)',
                         }}
                       >
                         {qb.label}
@@ -723,8 +723,8 @@ export default function Dice() {
                   disabled={!canBet || diceLoading || playing}
                   className="w-full rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
                   style={{
-                    background: 'linear-gradient(180deg, #d4af37, #a08020, #8a6e18)',
-                    borderColor: '#c9a84c',
+                    background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
+                    borderColor: 'var(--noir-primary-bright)',
                     color: '#1a1200',
                     boxShadow: '0 4px 16px rgba(212,175,55,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
                   }}
@@ -736,7 +736,7 @@ export default function Dice() {
           </div>
 
           {/* Bottom rail */}
-          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, #c9a84c, #8b6914, #c9a84c, #5a3e1b)' }} />
+          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, var(--noir-primary-bright), #8b6914, var(--noir-primary-bright), #5a3e1b)' }} />
         </div>
       )}
 

@@ -11,7 +11,7 @@ const DIFFICULTIES = {
   godfather: { label: "Godfather", cols: 30, rows: 16, mines: 99, subtitle: "Don't look back", points: 60 },
 };
 
-const CELL_COLORS = ["", "#d4af37", "#a0c4ff", "#e05c5c", "#9b7fd4", "#e08c5c", "#5ccce0", "#e0e0e0", "#888"];
+const CELL_COLORS = ["", "var(--noir-primary)", "#a0c4ff", "#e05c5c", "#9b7fd4", "#e08c5c", "#5ccce0", "#e0e0e0", "#888"];
 
 function createBoard(rows, cols) {
   return Array.from({ length: rows }, (_, r) =>
@@ -228,16 +228,16 @@ export default function Minesweeper() {
           transition: all 0.2s;
           text-transform: uppercase;
         }
-        .diff-btn:hover { border-color: rgba(212,175,55,0.7); color: #d4af37; }
+        .diff-btn:hover { border-color: rgba(212,175,55,0.7); color: var(--noir-primary); }
         .diff-btn.active {
           background: rgba(212,175,55,0.1);
-          border-color: #d4af37;
-          color: #d4af37;
+          border-color: var(--noir-primary);
+          color: var(--noir-primary);
         }
         .new-game-btn {
           background: rgba(212,175,55,0.08);
           border: 1px solid rgba(212,175,55,0.5);
-          color: #d4af37;
+          color: var(--noir-primary);
           font-family: 'Cinzel', serif;
           font-size: 12px;
           letter-spacing: 0.12em;
@@ -246,7 +246,7 @@ export default function Minesweeper() {
           transition: all 0.2s;
           text-transform: uppercase;
         }
-        .new-game-btn:hover { background: rgba(212,175,55,0.18); border-color: #d4af37; }
+        .new-game-btn:hover { background: rgba(212,175,55,0.18); border-color: var(--noir-primary); }
         .stat-box {
           background: rgba(0,0,0,0.4);
           border: 1px solid rgba(212,175,55,0.2);
@@ -278,7 +278,7 @@ export default function Minesweeper() {
         <div style={{ fontSize: 11, letterSpacing: "0.3em", color: "rgba(212,175,55,0.5)", marginBottom: 6, textTransform: "uppercase" }}>
           The Family's Game
         </div>
-        <h1 style={{ fontSize: 28, fontWeight: 900, color: "#d4af37", margin: 0, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        <h1 style={{ fontSize: 28, fontWeight: 900, color: "var(--noir-primary)", margin: 0, letterSpacing: "0.08em", textTransform: "uppercase" }}>
           Minefield
         </h1>
         <div style={{ fontSize: 11, color: "rgba(212,175,55,0.35)", letterSpacing: "0.2em", marginTop: 4, fontFamily: "'Crimson Text', serif", fontStyle: "italic" }}>
@@ -299,7 +299,7 @@ export default function Minesweeper() {
       <div style={{ display: "flex", gap: 12, marginBottom: "1rem", alignItems: "center", justifyContent: "center", flexWrap: "wrap" }}>
         <div className="stat-box">
           <div style={{ fontSize: 9, color: "rgba(212,175,55,0.5)", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 2 }}>Snitches</div>
-          <div style={{ fontSize: 20, color: "#d4af37", fontWeight: 700, letterSpacing: "0.05em" }}>
+          <div style={{ fontSize: 20, color: "var(--noir-primary)", fontWeight: 700, letterSpacing: "0.05em" }}>
             {String(Math.max(0, minesLeft)).padStart(3, "0")}
           </div>
         </div>
@@ -310,7 +310,7 @@ export default function Minesweeper() {
 
         <div className="stat-box">
           <div style={{ fontSize: 9, color: "rgba(212,175,55,0.5)", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 2 }}>Time</div>
-          <div style={{ fontSize: 20, color: "#d4af37", fontWeight: 700, letterSpacing: "0.05em" }}>
+          <div style={{ fontSize: 20, color: "var(--noir-primary)", fontWeight: 700, letterSpacing: "0.05em" }}>
             {fmtTime(Math.min(elapsed, 999))}
           </div>
         </div>
@@ -357,14 +357,14 @@ export default function Minesweeper() {
             <div className="overlay-banner">
               {phase === "won" ? (
                 <>
-                  <div style={{ fontSize: 22, color: "#d4af37", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                  <div style={{ fontSize: 22, color: "var(--noir-primary)", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>
                     The Don Approves
                   </div>
                   <div style={{ fontSize: 13, color: "rgba(212,175,55,0.6)", marginTop: 6, fontFamily: "'Crimson Text', serif", fontStyle: "italic" }}>
                     You navigated the field — {fmtTime(elapsed)} — like a true made man.
                   </div>
                   {reward && (
-                    <div style={{ marginTop: 8, fontSize: 12, color: "#d4af37" }}>
+                    <div style={{ marginTop: 8, fontSize: 12, color: "var(--noir-primary)" }}>
                       +${reward.cash?.toLocaleString()} cash • +{reward.respect} respect
                     </div>
                   )}

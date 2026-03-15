@@ -389,8 +389,8 @@ export default function Prestige() {
         style={{ animationDelay: '0.12s', border: '1px solid rgba(184,145,68,0.18)' }}
       >
         <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: 'rgba(184,145,68,0.15)', background: 'rgba(184,145,68,0.05)' }}>
-          <Star size={14} style={{ color: '#c9a84c' }} />
-          <span className="text-xs font-heading font-bold uppercase tracking-widest" style={{ color: '#c9a84c' }}>
+          <Star size={14} style={{ color: 'var(--noir-primary-bright)' }} />
+          <span className="text-xs font-heading font-bold uppercase tracking-widest" style={{ color: 'var(--noir-primary-bright)' }}>
             Prestige Crimes
           </span>
           <span className="ml-auto text-[8px] font-heading text-zinc-600 uppercase tracking-wider">Exclusive per level</span>

@@ -1094,7 +1094,7 @@ function SettingsScreen({settings,onSave}) {
   return (
     <div style={{width:"100%",maxWidth:520,margin:"0 auto",padding:"0 0 1rem"}}>
       <div style={{fontSize:10,letterSpacing:"0.3em",color:"rgba(212,175,55,0.4)",textTransform:"uppercase",marginBottom:4,textAlign:"center"}}>Pre-Game</div>
-      <h2 style={{fontSize:20,fontWeight:700,color:"#d4af37",margin:"0 0 16px",textAlign:"center",letterSpacing:"0.1em"}}>BRIEFING ROOM</h2>
+      <h2 style={{fontSize:20,fontWeight:700,color:"var(--noir-primary)",margin:"0 0 16px",textAlign:"center",letterSpacing:"0.1em"}}>BRIEFING ROOM</h2>
 
       <div style={{background:"rgba(0,0,0,0.4)",border:"1px solid rgba(212,175,55,0.18)",padding:"0.85rem 1rem",marginBottom:10}}>
         <div style={{fontSize:10,color:"rgba(212,175,55,0.45)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:10}}>Fleet Composition</div>
@@ -1109,8 +1109,8 @@ function SettingsScreen({settings,onSave}) {
                 borderRadius:2,WebkitTapHighlightColor:"transparent",
                 minHeight:44, // touch-friendly tap target
               }}>
-                <div style={{width:14,height:14,borderRadius:2,border:`1px solid ${sel?"#d4af37":"rgba(212,175,55,0.3)"}`,
-                  background:sel?"#d4af37":"transparent",flexShrink:0,
+                <div style={{width:14,height:14,borderRadius:2,border:`1px solid ${sel?"var(--noir-primary)":"rgba(212,175,55,0.3)"}`,
+                  background:sel?"var(--noir-primary)":"transparent",flexShrink:0,
                   display:"flex",alignItems:"center",justifyContent:"center"}}>
                   {sel&&<span style={{fontSize:9,color:"#000",fontWeight:700}}>✓</span>}
                 </div>
@@ -1146,7 +1146,7 @@ function SettingsScreen({settings,onSave}) {
             <div style={{width:36,height:20,borderRadius:10,position:"relative",flexShrink:0,
               background:s[key]?"rgba(212,175,55,0.35)":"rgba(255,255,255,0.08)",
               border:`1px solid ${s[key]?"rgba(212,175,55,0.6)":"rgba(255,255,255,0.15)"}`,}}>
-              <div style={{width:14,height:14,borderRadius:7,background:s[key]?"#d4af37":"rgba(255,255,255,0.25)",
+              <div style={{width:14,height:14,borderRadius:7,background:s[key]?"var(--noir-primary)":"rgba(255,255,255,0.25)",
                 position:"absolute",top:2,left:s[key]?19:2,transition:"all 0.2s"}}/>
             </div>
             <div>
@@ -1178,7 +1178,7 @@ function SettingsScreen({settings,onSave}) {
 
       <button onClick={()=>onSave(s)} style={{
         width:"100%",padding:"12px 0",background:"rgba(212,175,55,0.1)",
-        border:"1px solid rgba(212,175,55,0.45)",color:"#d4af37",
+        border:"1px solid rgba(212,175,55,0.45)",color:"var(--noir-primary)",
         fontFamily:"'Cinzel',serif",fontSize:12,letterSpacing:"0.15em",
         cursor:"pointer",textTransform:"uppercase",WebkitTapHighlightColor:"transparent",
       }}>
@@ -1418,7 +1418,7 @@ export default function Battleships() {
       newSunk.forEach(ship=>{
         const cells=getShipCells(ng,ship.id);
         setTimeout(()=>fxRef.current.add(makeSunkVolley(cells,CELL)),250);
-        pushEvent(isPlayer?`You sunk their ${ship.name}!`:`They sunk your ${ship.name}!`, isPlayer?"#d4af37":"#e05050");
+        pushEvent(isPlayer?`You sunk their ${ship.name}!`:`They sunk your ${ship.name}!`, isPlayer?"var(--noir-primary)":"#e05050");
         if (settings.sinkingCutscene) {
           const pending={result:allSunk(ng,allShips)?isPlayer?"won":"lost":null};
           setCutscene({ship,cells:cells.map(([rr,cc])=>[rr,cc])});
@@ -1499,7 +1499,7 @@ export default function Battleships() {
         @keyframes ev-in{0%{opacity:0;transform:translateY(-10px)}12%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
         @keyframes tglow{0%,100%{text-shadow:0 0 25px rgba(212,175,55,0.25)}50%{text-shadow:0 0 45px rgba(212,175,55,0.55),0 0 80px rgba(212,175,55,0.18)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-        .nb{background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.32);color:#d4af37;
+        .nb{background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.32);color:var(--noir-primary);
           font-family:'Cinzel',serif;font-size:11px;letter-spacing:0.1em;padding:9px 14px;
           cursor:pointer;transition:all 0.2s;text-transform:uppercase;
           -webkit-tap-highlight-color:transparent;touch-action:manipulation;}
@@ -1512,14 +1512,14 @@ export default function Battleships() {
         .tab-btn{flex:1;padding:8px 0;background:transparent;border:1px solid rgba(212,175,55,0.2);
           color:rgba(212,175,55,0.45);font-family:'Cinzel',serif;font-size:10px;letter-spacing:0.08em;
           cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all 0.2s;}
-        .tab-btn.active{background:rgba(212,175,55,0.12);border-color:rgba(212,175,55,0.5);color:#d4af37;}
+        .tab-btn.active{background:rgba(212,175,55,0.12);border-color:rgba(212,175,55,0.5);color:var(--noir-primary);}
         * { box-sizing: border-box; }
       `}</style>
 
       {/* Title */}
       <div style={{textAlign:"center",marginBottom:"0.9rem"}}>
         <div style={{fontSize:9,letterSpacing:"0.35em",color:"rgba(212,175,55,0.38)",marginBottom:3,textTransform:"uppercase"}}>The Family's Navy</div>
-        <h1 style={{fontSize:isMobile?22:28,fontWeight:900,color:"#d4af37",margin:0,letterSpacing:"0.1em",textTransform:"uppercase",animation:"tglow 4s ease-in-out infinite"}}>Rum Runner</h1>
+        <h1 style={{fontSize:isMobile?22:28,fontWeight:900,color:"var(--noir-primary)",margin:0,letterSpacing:"0.1em",textTransform:"uppercase",animation:"tglow 4s ease-in-out infinite"}}>Rum Runner</h1>
         <div style={{fontSize:10,color:"rgba(212,175,55,0.28)",letterSpacing:"0.12em",marginTop:3,fontFamily:"'Crimson Text',serif",fontStyle:"italic"}}>Sink the Feds before they sink you</div>
       </div>
 
@@ -1573,9 +1573,9 @@ export default function Battleships() {
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",
             maxWidth:isMobile?GRID*CELL+20:990,
             padding:"6px 12px",background:"rgba(0,0,0,0.55)",border:"1px solid rgba(212,175,55,0.12)"}}>
-            <div style={{fontSize:10,color:"rgba(212,175,55,0.55)"}}>Yours: <span style={{color:"#d4af37",fontWeight:700}}>{playerLeft}</span></div>
+            <div style={{fontSize:10,color:"rgba(212,175,55,0.55)"}}>Yours: <span style={{color:"var(--noir-primary)",fontWeight:700}}>{playerLeft}</span></div>
             <div style={{fontSize:isMobile?10:12,letterSpacing:"0.08em",fontWeight:600,
-              color:screen==="won"?"#d4af37":screen==="lost"?"#e05050":playerTurn?"#d4af37":"rgba(212,175,55,0.4)"}}>
+              color:screen==="won"?"var(--noir-primary)":screen==="lost"?"#e05050":playerTurn?"var(--noir-primary)":"rgba(212,175,55,0.4)"}}>
               {screen==="won"?"✦ VICTORY":screen==="lost"?"✕ DEFEATED":playerTurn?"▶ YOUR MOVE":"⧗ INCOMING..."}
             </div>
             <div style={{fontSize:10,color:"rgba(212,175,55,0.55)"}}>Feds: <span style={{color:"#e05c5c",fontWeight:700}}>{aiLeft}</span></div>
@@ -1636,7 +1636,7 @@ export default function Battleships() {
                   <div style={{fontSize:9,color:"rgba(212,175,55,0.3)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:6}}>Your Fleet</div>
                   {activeShips.map(ship=>(
                     <div key={ship.id} className={`fr${sunkByAi.includes(ship.id)?" gone":""}`}>
-                      <div style={{width:6,height:6,borderRadius:"50%",flexShrink:0,background:sunkByAi.includes(ship.id)?"#e05050":"#d4af37"}}/>
+                      <div style={{width:6,height:6,borderRadius:"50%",flexShrink:0,background:sunkByAi.includes(ship.id)?"#e05050":"var(--noir-primary)"}}/>
                       <span style={{fontSize:10,color:sunkByAi.includes(ship.id)?"rgba(224,80,80,0.4)":"rgba(212,175,55,0.7)"}}>{ship.name}</span>
                     </div>
                   ))}
@@ -1671,7 +1671,7 @@ export default function Battleships() {
               border:`1px solid ${screen==="won"?"rgba(212,175,55,0.4)":"rgba(192,57,43,0.4)"}`,
               maxWidth:isMobile?"100%":480,width:"100%"}}>
               <div style={{fontSize:isMobile?18:22,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",
-                color:screen==="won"?"#d4af37":"#c0392b",
+                color:screen==="won"?"var(--noir-primary)":"#c0392b",
                 textShadow:`0 0 25px ${screen==="won"?"rgba(212,175,55,0.45)":"rgba(192,57,43,0.45)"}`}}>
                 {screen==="won"?"The Feds Are Sunk":"Your Fleet Is Gone"}
               </div>

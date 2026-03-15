@@ -563,9 +563,9 @@ export const THEME_WRITING_SECTIONS = [
 export const DEFAULT_COLOUR_ID = 'gold';
 /** Default button colour when user has not set one (Assign-button style: dark olive-gold, bright border). */
 export const DEFAULT_BUTTON_COLOUR_ID = 'dark-gold';
-export const DEFAULT_WRITING_COLOUR_ID = 'gray-200';
+export const DEFAULT_WRITING_COLOUR_ID = 'default';
 export const DEFAULT_TEXT_STYLE_ID = 'normal';
-export const DEFAULT_FONT_ID = 'clean';
+export const DEFAULT_FONT_ID = 'classic';
 export const DEFAULT_BUTTON_STYLE_ID = 'original';
 export const DEFAULT_TEXTURE_ID = 'none';
 

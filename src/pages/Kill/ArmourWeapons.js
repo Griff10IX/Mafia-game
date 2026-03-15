@@ -139,12 +139,12 @@ function ProductionGauge({ production, maxProduction = 10000 }) {
           const t2 = toXY(deg, 43);
           return <line key={i} x1={t1.x} y1={t1.y} x2={t2.x} y2={t2.y} stroke="#666" strokeWidth="1" />;
         })}
-        <line x1="50" y1="50" x2={needle.x} y2={needle.y} stroke="#d4af37" strokeWidth="2" strokeLinecap="round" style={{ transition: 'all 1s ease-out' }} />
-        <circle cx="50" cy="50" r="4" fill="#d4af37" />
+        <line x1="50" y1="50" x2={needle.x} y2={needle.y} stroke="var(--noir-primary)" strokeWidth="2" strokeLinecap="round" style={{ transition: 'all 1s ease-out' }} />
+        <circle cx="50" cy="50" r="4" fill="var(--noir-primary)" />
         <circle cx="50" cy="50" r="2" fill="#1a1a1a" />
         <defs>
           <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#d4af37" />
+            <stop offset="0%" stopColor="var(--noir-primary)" />
             <stop offset="60%" stopColor="#f59e0b" />
             <stop offset="100%" stopColor="#ef4444" />
           </linearGradient>
@@ -579,7 +579,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
 
         {/* Warning stripe */}
         <div className="h-1.5 sm:h-2" style={{
-          background: 'repeating-linear-gradient(135deg, #d4af37 0px, #d4af37 6px, #1a1a1a 6px, #1a1a1a 12px)',
+          background: 'repeating-linear-gradient(135deg, var(--noir-primary) 0px, var(--noir-primary) 6px, #1a1a1a 6px, #1a1a1a 12px)',
           opacity: 0.6,
         }} />
 
@@ -1229,7 +1229,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
 
         {/* Bottom warning stripe */}
         <div className="h-1.5 sm:h-2" style={{
-          background: 'repeating-linear-gradient(135deg, #d4af37 0px, #d4af37 6px, #1a1a1a 6px, #1a1a1a 12px)',
+          background: 'repeating-linear-gradient(135deg, var(--noir-primary) 0px, var(--noir-primary) 6px, #1a1a1a 6px, #1a1a1a 12px)',
           opacity: 0.6,
         }} />
       </div>

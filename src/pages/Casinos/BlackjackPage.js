@@ -436,7 +436,7 @@ export default function Blackjack() {
 
       {/* Buy-back offer */}
       {buyBackOffer && (
-        <div className="p-4 rounded-lg border-2 space-y-3" style={{ borderColor: '#c9a84c', background: 'linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.03))' }}>
+        <div className="p-4 rounded-lg border-2 space-y-3" style={{ borderColor: 'var(--noir-primary-bright)', background: 'linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.03))' }}>
           <h3 className="font-heading font-bold text-primary uppercase tracking-wider text-sm">Buy-Back Offer</h3>
           <p className="text-xs text-mutedForeground">Accept for {(buyBackOffer.points_offered || 0).toLocaleString()} pts or reject to keep table</p>
           <div className="flex flex-wrap items-center gap-2">
@@ -447,7 +447,7 @@ export default function Blackjack() {
             )}
             <button onClick={acceptBuyBack} disabled={buyBackActionLoading || (buyBackSecondsLeft !== null && buyBackSecondsLeft <= 0)}
               className="rounded-lg px-5 py-2 text-xs font-heading font-bold uppercase border-2 disabled:opacity-40"
-              style={{ background: 'linear-gradient(180deg, #d4af37, #8a6e18)', borderColor: '#c9a84c', color: '#1a1200' }}
+              style={{ background: 'linear-gradient(180deg, var(--noir-primary), #8a6e18)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}
             >Accept</button>
             <button onClick={rejectBuyBack} disabled={buyBackActionLoading}
               className="bg-zinc-800 border border-zinc-600 text-foreground px-5 py-2 rounded-lg text-xs font-heading font-bold uppercase disabled:opacity-40"
@@ -506,7 +506,7 @@ export default function Blackjack() {
             boxShadow: '0 4px 24px rgba(0,0,0,0.5), inset 0 0 60px rgba(0,0,0,0.2)',
           }}
         >
-          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, #c9a84c, #8b6914, #c9a84c, #5a3e1b)' }} />
+          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, var(--noir-primary-bright), #8b6914, var(--noir-primary-bright), #5a3e1b)' }} />
 
           <div className="p-4 sm:p-6">
             {!game ? (
@@ -517,7 +517,7 @@ export default function Blackjack() {
                   <p
                     className="text-sm sm:text-base font-heading font-bold uppercase tracking-[0.2em]"
                     style={{
-                      background: 'linear-gradient(180deg, #ffd700, #c9a84c)',
+                      background: 'linear-gradient(180deg, #ffd700, var(--noir-primary-bright))',
                       WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                     }}
                   >
@@ -548,7 +548,7 @@ export default function Blackjack() {
                         background: `radial-gradient(circle at 40% 35%, ${qb.color}, ${qb.color}dd)`,
                         border: `2px dashed ${qb.color}88`,
                         color: qb.text,
-                        boxShadow: bet === String(qb.value) ? '0 0 0 2px #d4af37, 0 3px 8px rgba(0,0,0,0.3)' : '0 2px 6px rgba(0,0,0,0.3)',
+                        boxShadow: bet === String(qb.value) ? '0 0 0 2px var(--noir-primary), 0 3px 8px rgba(0,0,0,0.3)' : '0 2px 6px rgba(0,0,0,0.3)',
                       }}
                     >{qb.label}</button>
                   ))}
@@ -560,8 +560,8 @@ export default function Blackjack() {
                   disabled={!canPlay}
                   className="rounded-lg px-10 py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
                   style={{
-                    background: 'linear-gradient(180deg, #d4af37, #a08020, #8a6e18)',
-                    borderColor: '#c9a84c', color: '#1a1200',
+                    background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
+                    borderColor: 'var(--noir-primary-bright)', color: '#1a1200',
                     boxShadow: '0 4px 16px rgba(212,175,55,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
                   }}
                 >
@@ -636,7 +636,7 @@ export default function Blackjack() {
                     <>
                       <button onClick={hit} disabled={loading}
                         className="w-28 sm:w-36 rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 active:scale-[0.98] transition-all"
-                        style={{ background: 'linear-gradient(180deg, #d4af37, #a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 4px 12px rgba(212,175,55,0.2)' }}
+                        style={{ background: 'linear-gradient(180deg, var(--noir-primary), #a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200', boxShadow: '0 4px 12px rgba(212,175,55,0.2)' }}
                       >Hit</button>
                       <button onClick={stand} disabled={loading}
                         className="w-28 sm:w-36 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border border-zinc-600 disabled:opacity-40 active:scale-[0.98] transition-all"
@@ -645,7 +645,7 @@ export default function Blackjack() {
                   ) : (
                     <button onClick={playAgain}
                       className="rounded-lg px-10 py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 active:scale-[0.98] transition-all"
-                      style={{ background: 'linear-gradient(180deg, #d4af37, #a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 4px 16px rgba(212,175,55,0.3)' }}
+                      style={{ background: 'linear-gradient(180deg, var(--noir-primary), #a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200', boxShadow: '0 4px 16px rgba(212,175,55,0.3)' }}
                     >Play Again</button>
                   )}
                 </div>
@@ -653,7 +653,7 @@ export default function Blackjack() {
             )}
           </div>
 
-          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, #c9a84c, #8b6914, #c9a84c, #5a3e1b)' }} />
+          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, var(--noir-primary-bright), #8b6914, var(--noir-primary-bright), #5a3e1b)' }} />
         </div>
       )}
 

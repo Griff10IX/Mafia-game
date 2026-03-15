@@ -184,7 +184,7 @@ export default function Gauntlet() {
     loadLeaderboard(lbPeriod);
   }, [lbPeriod, loadLeaderboard]);
 
-  const spawnParticles = useCallback((x, y, color = "#c9a84c") => {
+  const spawnParticles = useCallback((x, y, color = "var(--noir-primary-bright)") => {
     const newP = Array.from({ length: 8 }, (_, i) => ({
       id: Date.now() + i,
       x,
@@ -300,7 +300,7 @@ export default function Gauntlet() {
           newScore++;
           setFlashGold(true);
           setTimeout(() => setFlashGold(false), 260);
-          spawnParticles(80, newY, theme.accent || "#c9a84c");
+          spawnParticles(80, newY, theme.accent || "var(--noir-primary-bright)");
           return { ...p, scored: true };
         }
         return p;

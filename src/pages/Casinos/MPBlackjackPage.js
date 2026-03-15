@@ -161,7 +161,7 @@ export default function MPBlackjackPage() {
           className={`relative ${styles.panel} rounded-xl overflow-hidden border-2 mpbj-fade`}
           style={{ borderColor: '#5a3e1b', animationDelay: '0.02s' }}
         >
-          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,#c9a84c,#8b6914,#c9a84c,#5a3e1b)' }} />
+          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' }} />
 
           <div className="px-3 py-2.5 border-b border-primary/20" style={{ background: 'rgba(212,175,55,0.06)' }}>
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Deal New Game</h2>
@@ -244,8 +244,8 @@ export default function MPBlackjackPage() {
                   <div onClick={() => set((v) => !v)}
                     className="relative w-8 h-4 rounded-full transition-all flex-shrink-0"
                     style={{
-                      background: val ? 'linear-gradient(90deg,#d4af37,#a08020)' : 'rgba(255,255,255,0.1)',
-                      border: val ? '1px solid #c9a84c' : '1px solid rgba(255,255,255,0.15)',
+                      background: val ? 'linear-gradient(90deg,var(--noir-primary),#a08020)' : 'rgba(255,255,255,0.1)',
+                      border: val ? '1px solid var(--noir-primary-bright)' : '1px solid rgba(255,255,255,0.15)',
                       cursor: 'pointer',
                     }}>
                     <div className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
@@ -259,7 +259,7 @@ export default function MPBlackjackPage() {
             <div className="flex items-center gap-2 pt-1">
               <button type="button" disabled={creating} onClick={handleCreate}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 3px 10px rgba(212,175,55,0.2)' }}>
+                style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200', boxShadow: '0 3px 10px rgba(212,175,55,0.2)' }}>
                 <Spade size={13} />
                 {creating ? 'Dealing…' : 'Deal Cards'}
               </button>
@@ -270,7 +270,7 @@ export default function MPBlackjackPage() {
             </div>
           </div>
 
-          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,#c9a84c,#8b6914,#c9a84c,#5a3e1b)' }} />
+          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' }} />
         </div>
       )}
 
@@ -288,9 +288,9 @@ export default function MPBlackjackPage() {
             onClick={() => setCreateOpen((o) => !o)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all"
             style={{
-              background: createOpen ? 'linear-gradient(180deg,#d4af37,#a08020)' : 'rgba(212,175,55,0.12)',
-              borderColor: '#c9a84c',
-              color: createOpen ? '#1a1200' : '#d4af37',
+              background: createOpen ? 'linear-gradient(180deg,var(--noir-primary),#a08020)' : 'rgba(212,175,55,0.12)',
+              borderColor: 'var(--noir-primary-bright)',
+              color: createOpen ? '#1a1200' : 'var(--noir-primary)',
               boxShadow: createOpen ? '0 3px 10px rgba(212,175,55,0.2)' : 'none',
             }}
           >
@@ -337,7 +337,7 @@ export default function MPBlackjackPage() {
                             isReady
                               ? { background: 'rgba(139,92,246,0.15)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)' }
                               : isPlaying
-                              ? { background: 'rgba(212,175,55,0.15)', color: '#d4af37', border: '1px solid rgba(212,175,55,0.3)' }
+                              ? { background: 'rgba(212,175,55,0.15)', color: 'var(--noir-primary)', border: '1px solid rgba(212,175,55,0.3)' }
                               : isCompleted
                               ? { background: 'rgba(161,161,170,0.12)', color: '#a1a1aa', border: '1px solid rgba(161,161,170,0.2)' }
                               : { background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)' }
@@ -372,7 +372,7 @@ export default function MPBlackjackPage() {
                         {pips.map((filled, i) => (
                           <div key={i} className="w-2 h-2 rounded-full"
                             style={{
-                              background: filled ? '#d4af37' : 'rgba(255,255,255,0.1)',
+                              background: filled ? 'var(--noir-primary)' : 'rgba(255,255,255,0.1)',
                               border: filled ? '1px solid rgba(212,175,55,0.6)' : '1px solid rgba(255,255,255,0.1)',
                             }}
                           />
@@ -383,7 +383,7 @@ export default function MPBlackjackPage() {
                       {isPlaying && g.phase === 'playing' && (g.current_turn_username != null || g.turn_seconds_left != null) && (
                         <div className="text-[9px] font-heading flex items-center gap-1.5 mt-0.5">
                           <span className="text-mutedForeground">Turn:</span>
-                          <span style={{ color: g.current_turn_is_you ? '#d4af37' : 'inherit', fontWeight: g.current_turn_is_you ? 700 : 400 }}>
+                          <span style={{ color: g.current_turn_is_you ? 'var(--noir-primary)' : 'inherit', fontWeight: g.current_turn_is_you ? 700 : 400 }}>
                             {g.current_turn_is_you ? 'You' : (g.current_turn_username ?? '—')}
                           </span>
                           {typeof g.turn_seconds_left === 'number' && (
@@ -413,8 +413,8 @@ export default function MPBlackjackPage() {
                           onClick={() => handleJoin(g.id)}
                           className="rounded-lg border-2 px-3 py-1.5 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
                           style={{
-                            background: 'linear-gradient(180deg,#d4af37,#a08020)',
-                            borderColor: '#c9a84c',
+                            background: 'linear-gradient(180deg,var(--noir-primary),#a08020)',
+                            borderColor: 'var(--noir-primary-bright)',
                             color: '#1a1200',
                             boxShadow: '0 2px 8px rgba(212,175,55,0.2)',
                           }}

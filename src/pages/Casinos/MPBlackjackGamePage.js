@@ -119,7 +119,7 @@ function PlayerSeat({ p, isMe, isCurrent, showCards, isWinner }) {
   else if (isEliminated)   { badgeLabel = 'Out';     badgeStyle = { background: 'rgba(239,68,68,0.2)', color: '#ef4444' }; }
   else if (isBust)    { badgeLabel = 'Bust';    badgeStyle = { background: 'rgba(248,113,113,0.2)', color: '#f87171' }; }
   else if (isStood)   { badgeLabel = 'Stand';   badgeStyle = { background: 'rgba(161,161,170,0.2)', color: '#a1a1aa' }; }
-  else if (isCurrent) { badgeLabel = 'Playing'; badgeStyle = { background: 'rgba(212,175,55,0.2)', color: '#d4af37' }; }
+  else if (isCurrent) { badgeLabel = 'Playing'; badgeStyle = { background: 'rgba(212,175,55,0.2)', color: 'var(--noir-primary)' }; }
   else if (isReady)   { badgeLabel = '✓ Ready'; badgeStyle = { background: 'rgba(52,211,153,0.2)', color: '#34d399' }; }
   else if (isWaiting) { badgeLabel = 'Waiting'; badgeStyle = { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)' }; }
   else if (hand.length && showCards) { badgeLabel = String(total); }
@@ -128,7 +128,7 @@ function PlayerSeat({ p, isMe, isCurrent, showCards, isWinner }) {
   return (
     <div className="rounded-xl overflow-hidden border-2 transition-all duration-300"
       style={{
-        borderColor: isWinner ? '#34d399' : isEliminated ? 'rgba(239,68,68,0.3)' : isCurrent ? '#c9a84c' : isMe ? 'rgba(212,175,55,0.35)' : 'rgba(90,62,27,0.5)',
+        borderColor: isWinner ? '#34d399' : isEliminated ? 'rgba(239,68,68,0.3)' : isCurrent ? 'var(--noir-primary-bright)' : isMe ? 'rgba(212,175,55,0.35)' : 'rgba(90,62,27,0.5)',
         background: isWinner ? 'linear-gradient(180deg,rgba(52,211,153,0.08),rgba(0,0,0,0.35))' : isEliminated ? 'rgba(239,68,68,0.04)' : isCurrent ? 'linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.28)',
         boxShadow: isWinner ? '0 0 28px rgba(52,211,153,0.35), 0 0 14px rgba(52,211,153,0.2), inset 0 0 20px rgba(0,0,0,0.2)' : isCurrent ? '0 0 24px rgba(212,175,55,0.18),inset 0 0 20px rgba(0,0,0,0.2)' : 'none',
         opacity: isEliminated ? 0.5 : 1,
@@ -136,7 +136,7 @@ function PlayerSeat({ p, isMe, isCurrent, showCards, isWinner }) {
       <div className="px-2.5 py-1.5 flex items-center justify-between gap-1"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.22)' }}>
         <span className="text-[9px] font-heading font-bold truncate"
-          style={{ color: isMe ? '#d4af37' : 'rgba(255,255,255,0.75)', maxWidth: 72 }}>
+          style={{ color: isMe ? 'var(--noir-primary)' : 'rgba(255,255,255,0.75)', maxWidth: 72 }}>
           {isEliminated && <Skull size={8} className="inline mr-0.5 opacity-50" />}
           {p.username}{isMe ? ' (You)' : ''}
         </span>
@@ -165,7 +165,7 @@ function TurnTimer({ seconds, isMyTurn }) {
   const circ = 2 * Math.PI * r;
   const dash = pct * circ;
   const urgent = seconds <= 10;
-  const color = urgent ? '#f87171' : isMyTurn ? '#d4af37' : 'rgba(255,255,255,0.35)';
+  const color = urgent ? '#f87171' : isMyTurn ? 'var(--noir-primary)' : 'rgba(255,255,255,0.35)';
   return (
     <svg width="44" height="44" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
       <circle cx="22" cy="22" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="3" />
@@ -189,15 +189,15 @@ function StartCountdown({ seconds }) {
     <div className="flex flex-col items-center gap-2">
       <svg width="72" height="72" style={{ transform: 'rotate(-90deg)' }}>
         <circle cx="36" cy="36" r={r} fill="none" stroke="rgba(212,175,55,0.1)" strokeWidth="4" />
-        <circle cx="36" cy="36" r={r} fill="none" stroke="#d4af37" strokeWidth="4"
+        <circle cx="36" cy="36" r={r} fill="none" stroke="var(--noir-primary)" strokeWidth="4"
           strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
           style={{ transition: 'stroke-dasharray 0.9s linear' }} />
         <text x="36" y="36" textAnchor="middle" dominantBaseline="central"
-          fill="#d4af37" fontSize="22" fontWeight="700" fontFamily="Cinzel, serif"
+          fill="var(--noir-primary)" fontSize="22" fontWeight="700" fontFamily="Cinzel, serif"
           transform="rotate(90,36,36)">{seconds}</text>
       </svg>
       <p className="text-[10px] font-heading font-bold uppercase tracking-[0.2em] animate-turn-pulse"
-        style={{ background: 'linear-gradient(180deg,#ffd700,#c9a84c)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+        style={{ background: 'linear-gradient(180deg,#ffd700,var(--noir-primary-bright))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
         Game Starting…
       </p>
     </div>
@@ -502,7 +502,7 @@ export default function MPBlackjackGamePage() {
     background: 'linear-gradient(180deg,#0c3d1a 0%,#0a5e2a 20%,#0d7a35 50%,#0a5e2a 80%,#0c3d1a 100%)',
     boxShadow: '0 4px 24px rgba(0,0,0,0.5),inset 0 0 60px rgba(0,0,0,0.2)',
   };
-  const goldBar = { height: 3, background: 'linear-gradient(90deg,#5a3e1b,#c9a84c,#8b6914,#c9a84c,#5a3e1b)' };
+  const goldBar = { height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' };
 
   return (
     <div className={`space-y-3 ${styles.pageContent}`} data-testid="mp-blackjack-game-page">
@@ -569,7 +569,7 @@ export default function MPBlackjackGamePage() {
           <div style={goldBar} />
           <div className="p-6 text-center space-y-4">
             <p className="text-sm font-heading font-bold uppercase tracking-[0.2em]"
-              style={{ background: 'linear-gradient(180deg,#ffd700,#c9a84c)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              style={{ background: 'linear-gradient(180deg,#ffd700,var(--noir-primary-bright))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               Waiting for Players
             </p>
             <p className="text-[9px] font-heading uppercase tracking-wider" style={{ color: 'rgba(110,231,183,0.4)' }}>
@@ -578,7 +578,7 @@ export default function MPBlackjackGamePage() {
             <div className="flex flex-wrap justify-center gap-2">
               {players.map((p) => (
                 <span key={p.user_id} className="px-3 py-1 rounded-full text-[9px] font-heading font-bold"
-                  style={{ background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.3)', color: '#d4af37' }}>
+                  style={{ background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.3)', color: 'var(--noir-primary)' }}>
                   {p.username}
                 </span>
               ))}
@@ -624,7 +624,7 @@ export default function MPBlackjackGamePage() {
               ) : (
                 <>
                   <p className="text-sm font-heading font-bold uppercase tracking-[0.2em]"
-                    style={{ background: 'linear-gradient(180deg,#ffd700,#c9a84c)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                    style={{ background: 'linear-gradient(180deg,#ffd700,var(--noir-primary-bright))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                     {activePlayers.length >= (game?.max_players ?? 6) ? 'Table Full — Ready Up!' : 'Ready Up!'}
                   </p>
                   <p className="text-[9px] font-heading" style={{ color: 'rgba(110,231,183,0.5)' }}>
@@ -650,7 +650,7 @@ export default function MPBlackjackGamePage() {
                   ) : (
                     <button type="button" disabled={readyLoading} onClick={markReady}
                       className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 font-heading font-bold text-[11px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 animate-ready-pulse"
-                      style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 4px 16px rgba(212,175,55,0.3)' }}>
+                      style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200', boxShadow: '0 4px 16px rgba(212,175,55,0.3)' }}>
                       <CheckCircle2 size={15} />
                       {readyLoading ? 'Readying…' : "I'm Ready"}
                     </button>
@@ -677,7 +677,7 @@ export default function MPBlackjackGamePage() {
                   <div className="w-2 h-2 rounded-full flex-shrink-0 transition-all"
                     style={{ background: p.ready ? '#34d399' : 'rgba(255,255,255,0.12)', boxShadow: p.ready ? '0 0 6px rgba(52,211,153,0.5)' : 'none' }} />
                   <span className="text-[9px] font-heading font-bold truncate"
-                    style={{ color: p.user_id === myUserId ? '#d4af37' : 'rgba(255,255,255,0.7)' }}>
+                    style={{ color: p.user_id === myUserId ? 'var(--noir-primary)' : 'rgba(255,255,255,0.7)' }}>
                     {p.username}
                     {p.user_id === myUserId ? ' (You)' : ''}
                   </span>
@@ -788,7 +788,7 @@ export default function MPBlackjackGamePage() {
                 )}
                 <span className="text-[10px] font-heading font-bold uppercase tracking-wider animate-turn-pulse"
                   style={{
-                    color: isMyTurn ? '#d4af37' : 'rgba(255,255,255,0.45)',
+                    color: isMyTurn ? 'var(--noir-primary)' : 'rgba(255,255,255,0.45)',
                     textShadow: isMyTurn ? '0 0 12px rgba(212,175,55,0.4)' : 'none',
                   }}>
                   {isMyTurn ? '🎴 Your Turn' : `${players[currentTurnIndex]?.username ?? 'Player'}'s Turn`}
@@ -827,7 +827,7 @@ export default function MPBlackjackGamePage() {
                       ? (cardLimit === 2 ? 'No hits allowed' : `Hit limit reached (${cardLimit - 2} hit${cardLimit - 2 > 1 ? 's' : ''})`)
                       : ''}
                     className="w-28 sm:w-32 rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 active:scale-[0.97] transition-all"
-                    style={{ background: 'linear-gradient(180deg,#d4af37,#a08020,#8a6e18)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 4px 12px rgba(212,175,55,0.25)' }}>
+                    style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020,#8a6e18)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200', boxShadow: '0 4px 12px rgba(212,175,55,0.25)' }}>
                     {actionLoading ? '…' : 'Hit'}
                   </button>
                   <button type="button" disabled={actionLoading} onClick={stand}
@@ -896,7 +896,7 @@ export default function MPBlackjackGamePage() {
               ? <p className="text-[9px] font-heading text-center py-2" style={{ color: 'rgba(255,255,255,0.15)' }}>No messages yet…</p>
               : (game.chat || []).map((c, i) => (
                   <div key={i} className="text-[9px] font-heading leading-relaxed">
-                    <span className="font-semibold" style={{ color: '#c9a84c' }}>{c.username}:</span>{' '}
+                    <span className="font-semibold" style={{ color: 'var(--noir-primary-bright)' }}>{c.username}:</span>{' '}
                     <span className="text-foreground break-words">{c.message}</span>
                   </div>
                 ))
@@ -967,7 +967,7 @@ export default function MPBlackjackGamePage() {
             <div className="px-3 py-2.5 border-t border-primary/20">
               <Link to="/casino/mp-blackjack"
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-2 text-[9px] font-heading font-bold uppercase tracking-wider active:scale-[0.97] transition-all"
-                style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 3px 10px rgba(212,175,55,0.2)' }}>
+                style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200', boxShadow: '0 3px 10px rgba(212,175,55,0.2)' }}>
                 <Spade size={11} /> {noWinner ? 'Play Again' : 'New Game'}
               </Link>
             </div>

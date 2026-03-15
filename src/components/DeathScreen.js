@@ -318,7 +318,7 @@ export default function DeathScreen({ user, onLogout }) {
           <button
             type="button"
             onClick={handleNewLife}
-            style={{ flex: 1, padding: 13, fontFamily: 'serif', fontSize: 8.5, letterSpacing: '.22em', textTransform: 'uppercase', cursor: 'pointer', background: 'rgba(184,145,68,.1)', border: '1px solid rgba(184,145,68,.35)', color: '#c9a84c', position: 'relative', overflow: 'hidden', transition: 'all .25s' }}
+            style={{ flex: 1, padding: 13, fontFamily: 'serif', fontSize: 8.5, letterSpacing: '.22em', textTransform: 'uppercase', cursor: 'pointer', background: 'rgba(184,145,68,.1)', border: '1px solid rgba(184,145,68,.35)', color: 'var(--noir-primary-bright)', position: 'relative', overflow: 'hidden', transition: 'all .25s' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(184,145,68,.2)'; e.currentTarget.style.boxShadow = '0 0 24px rgba(184,145,68,.12)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(184,145,68,.1)'; e.currentTarget.style.boxShadow = 'none'; }}
           >

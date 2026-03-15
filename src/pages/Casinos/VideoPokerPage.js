@@ -80,7 +80,7 @@ function PokerCard({ card, held, onToggleHold, canHold, index, dealing, revealed
         className={`vp-card-btn relative rounded-md sm:rounded-lg overflow-hidden transition-all ${canHold ? 'cursor-pointer hover:scale-[1.03] active:scale-[0.97]' : 'cursor-default'}`}
         style={{
           boxShadow: held
-            ? '0 0 0 3px #d4af37, 0 6px 20px rgba(212,175,55,0.4)'
+            ? '0 0 0 3px var(--noir-primary), 0 6px 20px rgba(212,175,55,0.4)'
             : '0 4px 16px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.2)',
           transform: held ? 'translateY(-6px)' : 'translateY(0)',
           animation: dealing ? `card-deal-vp 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) ${index * 0.1}s backwards` : undefined,
@@ -497,7 +497,7 @@ export default function VideoPoker() {
             )}
             <button onClick={acceptBuyBack} disabled={buyBackActionLoading || (buyBackSecondsLeft !== null && buyBackSecondsLeft <= 0)}
               className="rounded-lg px-5 py-2 text-xs font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40"
-              style={{ background: 'linear-gradient(180deg, #d4af37, #8a6e18)', borderColor: '#c9a84c', color: '#1a1200' }}
+              style={{ background: 'linear-gradient(180deg, var(--noir-primary), #8a6e18)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}
             >
               {buyBackActionLoading ? '...' : `Accept (${(buyBackOffer.points_offered || 0).toLocaleString()} pts)`}
             </button>
@@ -520,7 +520,7 @@ export default function VideoPoker() {
             boxShadow: '0 4px 24px rgba(0,0,0,0.5), inset 0 0 60px rgba(0,0,0,0.2)',
           }}
         >
-          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, #c9a84c, #8b6914, #c9a84c, #5a3e1b)' }} />
+          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, var(--noir-primary-bright), #8b6914, var(--noir-primary-bright), #5a3e1b)' }} />
 
           <div className="p-3 sm:p-5">
             {/* Pay Table */}
@@ -552,7 +552,7 @@ export default function VideoPoker() {
                 <div className="text-center">
                   <p
                     className="text-sm sm:text-base font-heading font-bold uppercase tracking-[0.2em]"
-                    style={{ background: 'linear-gradient(180deg, #ffd700, #c9a84c)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+                    style={{ background: 'linear-gradient(180deg, #ffd700, var(--noir-primary-bright))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
                   >
                     Video Poker
                   </p>
@@ -579,7 +579,7 @@ export default function VideoPoker() {
                         background: `radial-gradient(circle at 40% 35%, ${qb.color}, ${qb.color}dd)`,
                         border: `2px dashed ${qb.color}88`,
                         color: qb.text,
-                        boxShadow: bet === String(qb.value) ? '0 0 0 2px #d4af37, 0 3px 8px rgba(0,0,0,0.3)' : '0 2px 6px rgba(0,0,0,0.3)',
+                        boxShadow: bet === String(qb.value) ? '0 0 0 2px var(--noir-primary), 0 3px 8px rgba(0,0,0,0.3)' : '0 2px 6px rgba(0,0,0,0.3)',
                       }}
                     >{qb.label}</button>
                   ))}
@@ -590,8 +590,8 @@ export default function VideoPoker() {
                   disabled={!canDeal}
                   className="rounded-lg px-10 py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
                   style={{
-                    background: 'linear-gradient(180deg, #d4af37, #a08020, #8a6e18)',
-                    borderColor: '#c9a84c', color: '#1a1200',
+                    background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
+                    borderColor: 'var(--noir-primary-bright)', color: '#1a1200',
                     boxShadow: '0 4px 16px rgba(212,175,55,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
                   }}
                 >
@@ -656,8 +656,8 @@ export default function VideoPoker() {
                       disabled={loading}
                       className="rounded-lg px-10 py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 active:scale-[0.98] transition-all"
                       style={{
-                        background: 'linear-gradient(180deg, #d4af37, #a08020, #8a6e18)',
-                        borderColor: '#c9a84c', color: '#1a1200',
+                        background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
+                        borderColor: 'var(--noir-primary-bright)', color: '#1a1200',
                         boxShadow: '0 4px 16px rgba(212,175,55,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
                       }}
                     >
@@ -668,8 +668,8 @@ export default function VideoPoker() {
                       onClick={playAgain}
                       className="rounded-lg px-10 py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 active:scale-[0.98] transition-all"
                       style={{
-                        background: 'linear-gradient(180deg, #d4af37, #a08020, #8a6e18)',
-                        borderColor: '#c9a84c', color: '#1a1200',
+                        background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
+                        borderColor: 'var(--noir-primary-bright)', color: '#1a1200',
                         boxShadow: '0 4px 16px rgba(212,175,55,0.3)',
                       }}
                     >
@@ -681,7 +681,7 @@ export default function VideoPoker() {
             )}
           </div>
 
-          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, #c9a84c, #8b6914, #c9a84c, #5a3e1b)' }} />
+          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, var(--noir-primary-bright), #8b6914, var(--noir-primary-bright), #5a3e1b)' }} />
         </div>
       )}
 

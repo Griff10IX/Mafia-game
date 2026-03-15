@@ -105,7 +105,7 @@ function RouletteWheel({ rotationDeg, spinning, lastResult, size = 260 }) {
       <div
         className="absolute inset-0 rounded-full"
         style={{
-          background: 'conic-gradient(from 30deg, #5a3e1b, #8b6914, #c9a84c, #8b6914, #5a3e1b, #3e2a0f, #5a3e1b)',
+          background: 'conic-gradient(from 30deg, #5a3e1b, #8b6914, var(--noir-primary-bright), #8b6914, #5a3e1b, #3e2a0f, #5a3e1b)',
           boxShadow: '0 4px 24px rgba(0,0,0,0.6), inset 0 0 12px rgba(0,0,0,0.4)',
         }}
       />
@@ -164,7 +164,7 @@ function RouletteWheel({ rotationDeg, spinning, lastResult, size = 260 }) {
                 <path
                   d={piePath(cx, cy, outerR, startDeg, endDeg)}
                   fill={fill}
-                  stroke="#c9a84c"
+                  stroke="var(--noir-primary-bright)"
                   strokeWidth="0.4"
                   filter="url(#seg-shadow)"
                 />
@@ -185,14 +185,14 @@ function RouletteWheel({ rotationDeg, spinning, lastResult, size = 260 }) {
             );
           })}
           {/* Inner ring separator */}
-          <circle cx={cx} cy={cy} r={58} fill="none" stroke="#c9a84c" strokeWidth="1.2" />
+          <circle cx={cx} cy={cy} r={58} fill="none" stroke="var(--noir-primary-bright)" strokeWidth="1.2" />
           {/* Decorative spokes */}
           {WHEEL_ORDER.map((_, i) => {
             const deg = i * segAngle;
             const inner = polar(cx, cy, 58, deg);
             const outer = polar(cx, cy, outerR, deg);
             return (
-              <line key={`spoke-${i}`} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke="#c9a84c" strokeWidth="0.5" opacity="0.6" />
+              <line key={`spoke-${i}`} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke="var(--noir-primary-bright)" strokeWidth="0.5" opacity="0.6" />
             );
           })}
         </svg>
@@ -202,7 +202,7 @@ function RouletteWheel({ rotationDeg, spinning, lastResult, size = 260 }) {
         className="absolute rounded-full z-10"
         style={{
           inset: '32%',
-          background: 'radial-gradient(circle at 40% 35%, #c9a84c, #8b6914 40%, #5a3e1b 70%, #3e2a0f)',
+          background: 'radial-gradient(circle at 40% 35%, var(--noir-primary-bright), #8b6914 40%, #5a3e1b 70%, #3e2a0f)',
           boxShadow: '0 2px 12px rgba(0,0,0,0.5), inset 0 1px 4px rgba(255,255,255,0.15)',
           border: '2px solid #8b6914',
         }}
@@ -238,7 +238,7 @@ function Chip({ label, color, ring, selected, onClick, size = 36 }) {
         background: `radial-gradient(circle at 40% 35%, ${color}, ${ring})`,
         border: `2px dashed ${ring}`,
         boxShadow: selected
-          ? `0 0 0 2px #d4af37, 0 4px 12px rgba(0,0,0,0.4)`
+          ? `0 0 0 2px var(--noir-primary), 0 4px 12px rgba(0,0,0,0.4)`
           : `0 2px 6px rgba(0,0,0,0.3)`,
         color: color === '#e4e4e7' || color === '#16a34a' ? '#000' : '#fff',
         fontSize: Math.max(8, size * 0.24),
@@ -250,7 +250,7 @@ function Chip({ label, color, ring, selected, onClick, size = 36 }) {
         className="absolute rounded-full pointer-events-none"
         style={{
           inset: 4,
-          border: `1.5px solid ${selected ? '#d4af37' : 'rgba(255,255,255,0.2)'}`,
+          border: `1.5px solid ${selected ? 'var(--noir-primary)' : 'rgba(255,255,255,0.2)'}`,
         }}
       />
     </button>
@@ -582,7 +582,7 @@ export default function Rlt() {
         <div
           className="p-4 rounded-lg border-2 space-y-3"
           style={{
-            borderColor: '#c9a84c',
+            borderColor: 'var(--noir-primary-bright)',
             background: 'linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.03))',
           }}
         >
@@ -598,7 +598,7 @@ export default function Rlt() {
             )}
             <button onClick={acceptBuyBack} disabled={buyBackActionLoading || (buyBackSecondsLeft !== null && buyBackSecondsLeft <= 0)}
               className="rounded-lg px-5 py-2 text-xs font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40"
-              style={{ background: 'linear-gradient(180deg, #d4af37, #8a6e18)', borderColor: '#c9a84c', color: '#1a1200' }}
+              style={{ background: 'linear-gradient(180deg, var(--noir-primary), #8a6e18)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}
             >
               {buyBackActionLoading ? '...' : `Accept (${(buyBackOffer.points_offered || 0).toLocaleString()} pts)`}
             </button>
@@ -662,7 +662,7 @@ export default function Rlt() {
           }}
         >
           {/* Gold rail trim */}
-          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, #c9a84c, #8b6914, #c9a84c, #5a3e1b)' }} />
+          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, var(--noir-primary-bright), #8b6914, var(--noir-primary-bright), #5a3e1b)' }} />
 
           <div className="p-3 sm:p-4">
             {/* Bet info bar */}
@@ -764,8 +764,8 @@ export default function Rlt() {
                   disabled={!canSpin}
                   className="w-full max-w-[200px] rounded-lg px-6 py-2.5 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
                   style={{
-                    background: 'linear-gradient(180deg, #d4af37, #a08020, #8a6e18)',
-                    borderColor: '#c9a84c',
+                    background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
+                    borderColor: 'var(--noir-primary-bright)',
                     color: '#1a1200',
                     boxShadow: '0 4px 16px rgba(212,175,55,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
                   }}
@@ -885,7 +885,7 @@ export default function Rlt() {
           </div>
 
           {/* Bottom rail */}
-          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, #c9a84c, #8b6914, #c9a84c, #5a3e1b)' }} />
+          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, var(--noir-primary-bright), #8b6914, var(--noir-primary-bright), #5a3e1b)' }} />
         </div>
       )}
 

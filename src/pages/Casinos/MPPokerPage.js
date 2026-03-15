@@ -133,7 +133,7 @@ export default function MPPokerPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pkr-lobby-fade" style={{ animationDelay: '0.04s' }}>
         {/* Vs Dealer */}
         <div className={`relative ${styles.panel} rounded-xl overflow-hidden border-2`} style={{ borderColor: '#5a3e1b' }}>
-          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,#c9a84c,#8b6914,#c9a84c,#5a3e1b)' }} />
+          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' }} />
           <div className="p-4">
             <div className="flex items-center gap-2 mb-1.5">
               <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'rgba(212,175,55,0.15)', border: '1px solid rgba(212,175,55,0.3)' }}>
@@ -150,8 +150,8 @@ export default function MPPokerPage() {
             <button type="button" onClick={() => setVsDealerOpen((o) => !o)}
               className="w-full py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider transition-all active:scale-[0.97]"
               style={{
-                background: vsDealerOpen ? 'linear-gradient(180deg,#d4af37,#a08020)' : 'rgba(212,175,55,0.1)',
-                borderColor: '#c9a84c', color: vsDealerOpen ? '#1a1200' : '#d4af37',
+                background: vsDealerOpen ? 'linear-gradient(180deg,var(--noir-primary),#a08020)' : 'rgba(212,175,55,0.1)',
+                borderColor: 'var(--noir-primary-bright)', color: vsDealerOpen ? '#1a1200' : 'var(--noir-primary)',
               }}>
               {vsDealerOpen ? 'Close' : 'Take a Seat'}
             </button>
@@ -162,18 +162,18 @@ export default function MPPokerPage() {
                   className="w-full px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
                 <button type="button" onClick={handlePlayVsDealer} disabled={vsDealerStarting}
                   className="w-full py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase disabled:opacity-50 active:scale-[0.97] transition-all"
-                  style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200' }}>
+                  style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
                   {vsDealerStarting ? 'Dealing…' : 'Deal Cards'}
                 </button>
               </div>
             )}
           </div>
-          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,#c9a84c,#8b6914,#c9a84c,#5a3e1b)' }} />
+          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' }} />
         </div>
 
         {/* Multiplayer */}
         <div className={`relative ${styles.panel} rounded-xl overflow-hidden border-2`} style={{ borderColor: '#5a3e1b' }}>
-          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,#c9a84c,#8b6914,#c9a84c,#5a3e1b)' }} />
+          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' }} />
           <div className="p-4">
             <div className="flex items-center gap-2 mb-1.5">
               <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'rgba(212,175,55,0.15)', border: '1px solid rgba(212,175,55,0.3)' }}>
@@ -190,8 +190,8 @@ export default function MPPokerPage() {
             <button type="button" onClick={() => setCreateOpen((o) => !o)}
               className="w-full py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider transition-all active:scale-[0.97] flex items-center justify-center gap-1.5"
               style={{
-                background: createOpen ? 'linear-gradient(180deg,#d4af37,#a08020)' : 'rgba(212,175,55,0.1)',
-                borderColor: '#c9a84c', color: createOpen ? '#1a1200' : '#d4af37',
+                background: createOpen ? 'linear-gradient(180deg,var(--noir-primary),#a08020)' : 'rgba(212,175,55,0.1)',
+                borderColor: 'var(--noir-primary-bright)', color: createOpen ? '#1a1200' : 'var(--noir-primary)',
               }}>
               <PlusCircle size={12} />
               {createOpen ? 'Close' : 'Deal New Table'}
@@ -222,13 +222,13 @@ export default function MPPokerPage() {
                 </div>
                 <button type="button" onClick={handleCreate} disabled={creating}
                   className="w-full py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase disabled:opacity-50 active:scale-[0.97] transition-all mt-1"
-                  style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200' }}>
+                  style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
                   {creating ? 'Creating…' : 'Open Table'}
                 </button>
               </div>
             )}
           </div>
-          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,#c9a84c,#8b6914,#c9a84c,#5a3e1b)' }} />
+          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' }} />
         </div>
       </div>
 
@@ -264,7 +264,7 @@ export default function MPPokerPage() {
                         <span className="text-[10px] font-heading font-bold text-foreground">{g.creator_username ?? '—'}</span>
                         <span className="text-[8px] font-heading font-bold px-1.5 py-0.5 rounded-full uppercase"
                           style={isPlaying
-                            ? { background: 'rgba(212,175,55,0.15)', color: '#d4af37', border: '1px solid rgba(212,175,55,0.3)' }
+                            ? { background: 'rgba(212,175,55,0.15)', color: 'var(--noir-primary)', border: '1px solid rgba(212,175,55,0.3)' }
                             : isReady
                             ? { background: 'rgba(139,92,246,0.15)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)' }
                             : { background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)' }
@@ -288,7 +288,7 @@ export default function MPPokerPage() {
                       <div className="flex items-center gap-1">
                         {pips.map((filled, i) => (
                           <div key={i} className="w-2 h-2 rounded-full"
-                            style={{ background: filled ? '#d4af37' : 'rgba(255,255,255,0.1)', border: filled ? '1px solid rgba(212,175,55,0.6)' : '1px solid rgba(255,255,255,0.1)' }} />
+                            style={{ background: filled ? 'var(--noir-primary)' : 'rgba(255,255,255,0.1)', border: filled ? '1px solid rgba(212,175,55,0.6)' : '1px solid rgba(255,255,255,0.1)' }} />
                         ))}
                         <span className="text-[8px] font-heading text-mutedForeground ml-1">{g.player_count}/{g.max_players}</span>
                       </div>
@@ -304,7 +304,7 @@ export default function MPPokerPage() {
                       {!isIn && !full && (
                         <button type="button" disabled={joiningId !== null} onClick={() => handleJoin(g.id)}
                           className="rounded-lg border-2 px-3 py-1.5 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                          style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200' }}>
+                          style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
                           {joiningId === g.id ? '…' : 'Buy In'}
                         </button>
                       )}

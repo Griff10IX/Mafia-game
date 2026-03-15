@@ -125,7 +125,7 @@ function Chip({ label, color, ring, selected, onClick, size = 36 }) {
         width: size, height: size,
         background: `radial-gradient(circle at 40% 35%, ${color}, ${ring})`,
         border: `2px dashed ${ring}`,
-        boxShadow: selected ? '0 0 0 2px #d4af37, 0 4px 12px rgba(0,0,0,0.4)' : '0 2px 6px rgba(0,0,0,0.3)',
+        boxShadow: selected ? '0 0 0 2px var(--noir-primary), 0 4px 12px rgba(0,0,0,0.4)' : '0 2px 6px rgba(0,0,0,0.3)',
         color: color === '#e4e4e7' || color === '#16a34a' ? '#000' : '#fff',
         fontSize: Math.max(8, size * 0.24),
       }}
@@ -133,7 +133,7 @@ function Chip({ label, color, ring, selected, onClick, size = 36 }) {
       <span className="relative z-10 drop-shadow-sm">{label}</span>
       <div
         className="absolute rounded-full pointer-events-none"
-        style={{ inset: 4, border: `1.5px solid ${selected ? '#d4af37' : 'rgba(255,255,255,0.2)'}` }}
+        style={{ inset: 4, border: `1.5px solid ${selected ? 'var(--noir-primary)' : 'rgba(255,255,255,0.2)'}` }}
       />
     </button>
   );

@@ -6,7 +6,7 @@ import styles from "../../styles/noir.module.css";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CAR_COLORS = [
-  "#d4af37","#dc2626","#3b82f6","#16a34a",
+  "var(--noir-primary)","#dc2626","#3b82f6","#16a34a",
   "#9333ea","#f97316","#ec4899","#14b8a6",
 ];
 
@@ -997,7 +997,7 @@ export default function CircuitRaceView({
 
     // Pit boxes — colored rectangles along pit lane
     const numBoxes = 6;
-    const boxColors = ["#d4af37", "#dc2626", "#3b82f6", "#16a34a", "#9333ea", "#f97316"];
+    const boxColors = ["var(--noir-primary)", "#dc2626", "#3b82f6", "#16a34a", "#9333ea", "#f97316"];
     for (let b = 0; b < numBoxes; b++) {
       const bf = track.pitEntry + (track.pitExit - track.pitEntry) * ((b + 0.5) / numBoxes);
       const bp = track.getPoint(((bf % 1) + 1) % 1);
