@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
@@ -24,6 +24,58 @@ const PROFILE_STYLES = `
   .prof-banner-content .forum-content-ytube-iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; border-radius: 8px; }
   details.prof-staff-details[open] .prof-staff-chevron { transform: rotate(180deg); }
 `;
+
+const BADGE_CAT_COLORS = {
+  crimes: '#d4af37', gta: '#a78bfa', jail_busts: '#60a5fa', kills: '#f87171',
+  oc_heists: '#34d399', bullets_melted: '#fb923c', booze_runs: '#2dd4bf',
+  hitlist_npc: '#f472b6',
+};
+const BADGE_MASTERY = {
+  crimes:         { 100000: 'gold', 1000000: 'diamond', 15000000: 'obsidian' },
+  gta:            { 10000: 'gold', 100000: 'diamond', 1000000: 'obsidian' },
+  jail_busts:     { 10000: 'gold', 100000: 'diamond', 1000000: 'obsidian' },
+  kills:          { 1000: 'gold', 10000: 'diamond', 100000: 'obsidian' },
+  oc_heists:      { 1000: 'gold', 10000: 'diamond', 100000: 'obsidian' },
+  bullets_melted: { 100000: 'gold', 1000000: 'diamond', 5000000: 'obsidian' },
+  booze_runs:     { 1000: 'gold', 10000: 'diamond', 100000: 'obsidian' },
+  hitlist_npc:    { 500: 'gold', 2500: 'diamond', 10000: 'obsidian' },
+};
+const MASTERY_COLORS = { gold: '#ffd700', diamond: '#b9f2ff', obsidian: '#c084fc' };
+
+function MiniShield({ color, mastery, label, size = 22 }) {
+  const h = size * 1.22;
+  const mc = mastery ? MASTERY_COLORS[mastery] : null;
+  const c = mc || color;
+  const fs = label.length > 3 ? 3.2 : label.length > 2 ? 3.6 : 4.2;
+  return (
+    <svg width={size} height={h} viewBox="0 0 14 17" style={{ display: 'block' }}>
+      {mastery === 'obsidian' && (
+        <defs>
+          <linearGradient id={`mp-og-${label}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#7c3aed" /><stop offset="40%" stopColor="#c084fc" /><stop offset="100%" stopColor="#ef4444" />
+          </linearGradient>
+        </defs>
+      )}
+      {mastery === 'diamond' && (
+        <defs>
+          <linearGradient id={`mp-dg-${label}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#b9f2ff" /><stop offset="50%" stopColor="#e0f7ff" /><stop offset="100%" stopColor="#7dd3fc" />
+          </linearGradient>
+        </defs>
+      )}
+      <path d="M1 4.5 L1 10 Q1 15 7 16.5 Q13 15 13 10 L13 4.5 L7 3 Z"
+        fill={mastery === 'obsidian' ? `url(#mp-og-${label})` : mastery === 'diamond' ? `url(#mp-dg-${label})` : `${c}30`}
+        fillOpacity={mastery ? 0.3 : 1}
+        stroke={c} strokeWidth={mastery ? '1.2' : '0.9'}
+      />
+      <path d="M3 6 L3 10 Q3 13 7 14.2 Q11 13 11 10 L11 6 L7 5 Z"
+        fill="none" stroke={c} strokeWidth="0.5" opacity={mastery ? 0.5 : 0.35}
+      />
+      <polygon points="4,4 7,1 10,4" fill={`${c}80`} stroke={c} strokeWidth="0.6" />
+      <text x="7" y="11.5" textAnchor="middle" fontFamily="Cinzel,serif" fontSize={fs} fontWeight="700" fill={c} letterSpacing="0.2">{label}</text>
+    </svg>
+  );
+}
 
 function formatDateTime(iso) {
   if (!iso) return '-';
@@ -220,6 +272,7 @@ const ProfileInfoCard = ({
   isAdmin = false,
   isModerator = false,
   onStaffActionDone,
+  achievementBadges = [],
 }) => {
   const isAdminProfile = profile.rank_name === 'Admin';
   const isModeratorProfile = profile.rank_name === 'Moderator';
@@ -508,6 +561,31 @@ const ProfileInfoCard = ({
               </div>
             </div>
           </div>
+          {/* Achievement Badges under Honours */}
+          {achievementBadges?.length > 0 && (
+            <div className="border-t border-zinc-700/30 px-2.5 py-1.5 md:px-3 md:py-1.5">
+              <div className="flex items-center gap-0.5 mb-1">
+                <Award size={9} className="text-primary shrink-0" />
+                <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">Badges</span>
+                <span className="text-[7px] text-mutedForeground font-heading ml-1">
+                  {achievementBadges.reduce((s, c) => s + c.unlocked_count, 0)} unlocked
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-0.5 items-end">
+                {achievementBadges.map((cat) =>
+                  cat.unlocked_targets.map((t) => {
+                    const mastery = (BADGE_MASTERY[cat.id] || {})[t] || null;
+                    const lbl = t >= 1_000_000 ? `${Math.floor(t / 1_000_000)}M` : t >= 1000 ? `${Math.floor(t / 1000)}K` : String(t);
+                    return (
+                      <span key={`${cat.id}-${t}`} title={`${cat.name}: ${lbl}`}>
+                        <MiniShield color={BADGE_CAT_COLORS[cat.id] || '#d4af37'} mastery={mastery} label={lbl} size={mastery ? 25 : 22} />
+                      </span>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
           {/* Compact Cars row under Honours/Properties (no label) */}
           {showCarsOnProfile !== false && topCars?.length > 0 && (
             <div className="border-t border-zinc-700/30 px-2 py-0.5 md:px-3">
@@ -1680,6 +1758,7 @@ export default function Profile() {
                 const res = await api.get(`/users/${encodeURIComponent(username || profile?.username)}/profile`);
                 setProfile(res.data);
               }}
+              achievementBadges={profile.achievement_badges || []}
             />
 
             {!isMe && profile.admin_stats && (

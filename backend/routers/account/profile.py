@@ -349,6 +349,8 @@ def register(router):
             {"rank": jail_rank, "label": "Most Jail Busts"},
             {"rank": points_spent_rank, "label": "Most Points Spent"},
         ]
+        from routers.game.achievements import compute_profile_badges
+        achievement_badges = compute_profile_badges(user)
         owned_casinos = dice_casinos + roulette_casinos + blackjack_casinos + horseracing_casinos + slots_casinos + videopoker_casinos
 
         if property_ and user_id != current_user.get("id") and property_.get("type") == "airport":
@@ -412,6 +414,7 @@ def register(router):
             "profile_banner_text": (user.get("profile_banner_text") or "").strip() or None,
             "badges": user.get("badges") or [],
             "founding_member": bool(user.get("founding_member")),
+            "achievement_badges": achievement_badges,
         }
         if not is_own_profile:
             for key in (

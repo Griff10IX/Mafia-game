@@ -3,10 +3,6 @@
 
 from fastapi import Depends
 
-# Defer server import to avoid circular import (server imports this module)
-# Badge definitions: id, category, name, progress_key (user field), targets (sorted ascending)
-# progress_key "rank_id" is special: derived from rank_points via get_rank_info
-RANK_IDS = list(range(1, 14))  # Rat..Godfather
 BADGE_CATEGORIES = [
     {
         "id": "crimes",
@@ -56,12 +52,6 @@ BADGE_CATEGORIES = [
         "progress_key": "hitlist_npc_kills",
         "targets": [5, 10, 15, 25, 40, 50, 75, 100, 150, 250, 400, 500, 750, 1000, 1500, 2500, 4000, 5000, 7500, 10000],
     },
-    {
-        "id": "rank",
-        "name": "Rank",
-        "progress_key": "rank_id",
-        "targets": RANK_IDS,
-    },
 ]
 
 # Benefit labels for bonus categories (excludes rank)
@@ -75,6 +65,24 @@ BONUS_BENEFITS = {
     "booze_runs": "Booze profit",
     "hitlist_npc": "Hitlist NPC rewards",
 }
+
+
+def compute_profile_badges(user: dict) -> list:
+    """Return a compact list of unlocked badges for profile display (no DB call needed)."""
+    result = []
+    for cat in BADGE_CATEGORIES:
+        progress = int(user.get(cat["progress_key"]) or 0)
+        unlocked = [t for t in sorted(cat["targets"]) if progress >= t]
+        if not unlocked:
+            continue
+        result.append({
+            "id": cat["id"],
+            "name": cat["name"],
+            "unlocked_count": len(unlocked),
+            "total_tiers": len(cat["targets"]),
+            "unlocked_targets": unlocked,
+        })
+    return result
 
 
 async def get_badge_bonuses(user_id: str) -> dict:
@@ -92,8 +100,6 @@ async def get_badge_bonuses(user_id: str) -> dict:
     user = u or {}
     out = {}
     for cat in BADGE_CATEGORIES:
-        if cat["id"] == "rank":
-            continue
         computed = _compute_category(cat, user)
         out[cat["id"]] = computed["unlocked_count"]
     return out
@@ -101,36 +107,17 @@ async def get_badge_bonuses(user_id: str) -> dict:
 
 def _fmt(target: int, key: str) -> str:
     """Format target for display."""
-    if key in ("bullets_melted", "crimes", "gta", "jail_busts", "kills", "oc_heists", "booze_runs", "hitlist_npc"):
-        if target >= 1_000_000:
-            return f"{target // 1_000_000}M"
-        if target >= 1000:
-            return f"{target // 1000}K"
-    if key in ("rank", "rank_id"):
-        from server import RANKS
-        r = next((x for x in RANKS if x["id"] == target), None)
-        return r["name"] if r else str(target)
+    if target >= 1_000_000:
+        return f"{target // 1_000_000}M"
+    if target >= 1000:
+        return f"{target // 1000}K"
     return str(target)
 
 
 def _compute_category(cat: dict, user: dict) -> dict:
     """Compute badge state for one category."""
-    from server import get_rank_info, RANKS
     key = cat["progress_key"]
-    if key == "rank_id":
-        rank_points = int(user.get("rank_points") or 0)
-        prestige_level = int(user.get("prestige_level") or 0)
-        mult = 1.0
-        if prestige_level > 0:
-            try:
-                from server import PRESTIGE_CONFIGS
-                cfg = PRESTIGE_CONFIGS.get(prestige_level, {})
-                mult = float(cfg.get("threshold_mult", 1.0))
-            except Exception:
-                pass
-        progress = get_rank_info(rank_points, mult)[0]
-    else:
-        progress = int(user.get(key) or 0)
+    progress = int(user.get(key) or 0)
 
     targets = sorted(cat["targets"])
     unlocked = [t for t in targets if progress >= t]
@@ -156,7 +143,7 @@ def _compute_category(cat: dict, user: dict) -> dict:
         "id": cat["id"],
         "name": cat["name"],
         "progress": progress,
-        "progress_display": _fmt(progress, key) if key != "rank_id" else next((r["name"] for r in RANKS if r["id"] == progress), str(progress)),
+        "progress_display": _fmt(progress, key),
         "unlocked_count": len(unlocked),
         "total_tiers": len(targets),
         "next_target": next_target,

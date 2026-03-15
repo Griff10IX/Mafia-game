@@ -31,7 +31,6 @@ const CATEGORY_COLORS = {
   bullets_melted: { color: '#fb923c', glow: 'rgba(251,146,60,0.35)' },
   booze_runs:     { color: '#2dd4bf', glow: 'rgba(45,212,191,0.35)' },
   hitlist_npc:    { color: '#f472b6', glow: 'rgba(244,114,182,0.35)' },
-  rank:           { color: '#d4af37', glow: 'rgba(212,175,55,0.35)' },
 };
 
 const MASTERY_TIERS = {
@@ -49,7 +48,6 @@ const SPECIAL_MILESTONES = {
   bullets_melted: { 100000: 'gold', 1000000: 'diamond', 5000000: 'obsidian' },
   booze_runs:     { 1000: 'gold', 10000: 'diamond', 100000: 'obsidian' },
   hitlist_npc:    { 500: 'gold', 2500: 'diamond', 10000: 'obsidian' },
-  rank:           { 13: 'obsidian' },
 };
 
 const LOCKED_COLOR = '#3f3f46';
