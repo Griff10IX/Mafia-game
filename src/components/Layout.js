@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2 } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus } from 'lucide-react';
 import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache } from '../utils/api';
 import { setCrimesPrefetch, getCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -109,6 +109,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/account/inventory', label: 'My Inventory' },
         { path: '/money/loot-box', label: 'Loot Box' },
         { path: '/account/profile', label: 'Edit Profile' },
+        { path: '/account/referral', label: 'Referral' },
         { path: '/account/settings', label: 'IP & Devices' },
         { path: '/game/stats', label: 'Stats' },
         { path: '/account/stats', label: 'My Stats' },
@@ -764,7 +765,7 @@ export default function Layout({ children }) {
   const PATH_TO_CATEGORY = isCategorizedClassic
     ? {
         '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/account/missions': 'information',
-        '/account/profile': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
+        '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
         '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information', '/game/leaderboard': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
         '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
@@ -777,7 +778,7 @@ export default function Layout({ children }) {
       }
     : {
         '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/account/missions': 'information',
-        '/account/inventory': 'information', '/money/loot-box': 'information', '/account/profile': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
+        '/account/inventory': 'information', '/money/loot-box': 'information',         '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
         '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
         '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',

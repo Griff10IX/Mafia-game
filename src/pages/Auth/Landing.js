@@ -543,9 +543,14 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
               )}
 
               {!isLogin && referralCode && (
-                <p className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
-                  Referred by {referralCode}
-                </p>
+                <>
+                  <p className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                    Referred by {referralCode}
+                  </p>
+                  <p className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                    You&apos;ll get a free premium rank bar, 500 respect points, and bonus tokens (non-tradeable).
+                  </p>
+                </>
               )}
 
               {/* Submit */}

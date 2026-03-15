@@ -809,7 +809,10 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
             if referred_by and referred_by != user["id"] and total_bullets > 0:
                 referral_bullets = max(0, int(total_bullets * 0.10))
                 if referral_bullets > 0:
-                    await db.users.update_one({"id": referred_by}, {"$inc": {"bullets": referral_bullets}})
+                    await db.users.update_one(
+                        {"id": referred_by},
+                        {"$inc": {"bullets": referral_bullets, "referral_earnings_melt_bullets": referral_bullets}},
+                    )
             return {
                 "success": True,
                 "melted_count": deleted_count,
@@ -831,7 +834,10 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
         if referred_by and referred_by != user["id"] and total_value > 0:
             referral_cash = max(0, int(total_value * 0.05))
             if referral_cash > 0:
-                await db.users.update_one({"id": referred_by}, {"$inc": {"money": referral_cash}})
+                await db.users.update_one(
+                    {"id": referred_by},
+                    {"$inc": {"money": referral_cash, "referral_earnings_garage_scrap": referral_cash}},
+                )
         return {
             "success": True,
             "scrapped_count": deleted_count,

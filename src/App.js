@@ -25,6 +25,7 @@ const MyStats = lazy(() => import("./pages/Account/MyStats"));
 const Objectives = lazy(() => import("./pages/Account/Objectives"));
 const Prestige = lazy(() => import("./pages/Account/Prestige"));
 const Profile = lazy(() => import("./pages/Account/Profile"));
+const Referral = lazy(() => import("./pages/Account/Referral"));
 
 // Auth pages
 const LockedPage = lazy(() => import("./pages/Auth/LockedPage"));
@@ -1315,6 +1316,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <IPRules />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/account/referral"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Referral />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

@@ -326,12 +326,14 @@ async def create_token_offer(offer: CreateTokenOffer, current_user: dict = Depen
     if active_token_offers >= 10:
         raise HTTPException(status_code=400, detail="Maximum 10 token offers at once")
     field = TOKEN_CONFIG[offer.token_type]["count_field"]
-    user = await db.users.find_one({"id": user_id}, {"_id": 0, field: 1})
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, field: 1, "referral_tokens": 1})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     have = int(user.get(field) or 0)
-    if have < offer.quantity:
-        raise HTTPException(status_code=400, detail=f"Insufficient {offer.token_type} tokens (have {have})")
+    referral_count = int((user.get("referral_tokens") or {}).get(field) or 0)
+    sellable = max(0, have - referral_count)
+    if sellable < offer.quantity:
+        raise HTTPException(status_code=400, detail="Insufficient sellable tokens (referral tokens cannot be sold on Quick Trade)")
     await db.users.update_one({"id": user_id}, {"$inc": {field: -offer.quantity}})
     new_offer = {
         "user_id": user_id,

@@ -97,6 +97,15 @@ PREREGISTER_REWARDS = {
     "badge": "Founding Member",
 }
 
+# Referred-user signup benefits (tokens are non-sellable on Quick Trade)
+REFERRED_USER_RESPECT = 500
+REFERRED_USER_TOKENS_PER_TYPE = 2
+# Count fields for consumable tokens (must match TOKEN_CONFIG in armoury)
+REFERRED_USER_TOKEN_COUNT_FIELDS = [
+    "xp_crimes_tokens", "xp_gta_tokens", "melt_tokens", "oc_reduced_tokens",
+    "booze_tokens", "racket_tokens", "travel_tokens", "properties_tokens", "jailbust_tokens",
+]
+
 
 def register(router):
     """Register auth routes. Dependencies from server to avoid circular imports."""
@@ -360,6 +369,15 @@ def register(router):
                     ref_email_lower = (referrer.get("email") or "").strip().lower()
                     if ref_username_lower != new_username_lower and ref_email_lower != email_clean:
                         user_doc["referred_by"] = referrer["id"]
+                        # Referred-user benefits: premium rank bar, respect, tokens (non-sellable on Quick Trade)
+                        user_doc["premium_rank_bar"] = True
+                        user_doc["respect_points"] = int(user_doc.get("respect_points") or 0) + REFERRED_USER_RESPECT
+                        referral_tokens = {}
+                        for count_field in REFERRED_USER_TOKEN_COUNT_FIELDS:
+                            n = REFERRED_USER_TOKENS_PER_TYPE
+                            user_doc[count_field] = int(user_doc.get(count_field) or 0) + n
+                            referral_tokens[count_field] = n
+                        user_doc["referral_tokens"] = referral_tokens
 
             await db.users.insert_one(user_doc.copy())
 
@@ -1225,6 +1243,33 @@ def register(router):
             {"$set": {"account_locked_user_reply": body.reply, "account_locked_user_reply_at": now_iso}},
         )
         return {"message": "Your reply has been recorded.", "user_reply_at": now_iso}
+
+    @router.get("/account/referral")
+    async def get_referral(current_user: dict = Depends(get_current_user)):
+        """Referral page: link, referred-by, signup bonus if applicable, and earnings breakdown by source."""
+        user_id = current_user.get("id")
+        username = (current_user.get("username") or "").strip()
+        referred_by = current_user.get("referred_by")
+        referred_by_username = None
+        if referred_by:
+            ref_user = await db.users.find_one({"id": referred_by}, {"_id": 0, "username": 1})
+            if ref_user:
+                referred_by_username = ref_user.get("username") or None
+        earnings = {
+            "melt_bullets": int(current_user.get("referral_earnings_melt_bullets") or 0),
+            "crime_profit": int(current_user.get("referral_earnings_crime") or 0),
+            "oc_profit": int(current_user.get("referral_earnings_oc") or 0),
+            "garage_scrap": int(current_user.get("referral_earnings_garage_scrap") or 0),
+        }
+        signup_bonus = None
+        if referred_by_username:
+            signup_bonus = "Premium rank bar, 500 respect points, and 18 tokens (use them; they can't be sold on Quick Trade)."
+        return {
+            "username": username,
+            "referred_by_username": referred_by_username,
+            "signup_bonus": signup_bonus,
+            "earnings": earnings,
+        }
 
     @router.get("/user/casino-property")
     async def get_casino_property(current_user: dict = Depends(get_current_user)):
