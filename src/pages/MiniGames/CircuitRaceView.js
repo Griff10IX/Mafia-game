@@ -430,7 +430,7 @@ const GP_TARGA = (t) => interpPtsSmooth(PTS_TARGA, t);
 
 const TRACKS = [
   {
-    id:"chicago", name:"Chicago Board Track", km:3.1, corners:10, lapBase:24, rewardMult:1.0, trackWidth:40,
+    id:"chicago", name:"Chicago Board Track", km:3.1, corners:10, lapBase:24, rewardMult:1.0, trackWidth:50,
     desc:"Banked wooden oval with tight turns",
     getPoint: GP_CHICAGO,
     pitEntry:0.61, pitExit:0.67, sfLine:0.01,
@@ -461,7 +461,7 @@ const TRACKS = [
     },
   },
   {
-    id:"daytona", name:"Daytona Beach", km:4.2, corners:6, lapBase:28, rewardMult:1.2, trackWidth:40,
+    id:"daytona", name:"Daytona Beach", km:4.2, corners:6, lapBase:28, rewardMult:1.2, trackWidth:50,
     desc:"High-speed banked D-oval, 31° banking",
     getPoint: GP_DAYTONA,
     pitEntry:0.55, pitExit:0.62, sfLine:0.0,
@@ -475,7 +475,7 @@ const TRACKS = [
     },
   },
   {
-    id:"indianapolis", name:"Indianapolis", km:4.6, corners:6, lapBase:30, rewardMult:1.3, trackWidth:40,
+    id:"indianapolis", name:"Indianapolis", km:4.6, corners:6, lapBase:30, rewardMult:1.3, trackWidth:50,
     desc:"Superspeedway, 9° banking, Yard of Bricks",
     getPoint: GP_INDIANAPOLIS,
     pitEntry:0.59, pitExit:0.66, sfLine:0.0,
@@ -492,7 +492,7 @@ const TRACKS = [
     },
   },
   {
-    id:"roosevelt", name:"Roosevelt Raceway", km:2.8, corners:18, lapBase:26, rewardMult:1.1, trackWidth:32,
+    id:"roosevelt", name:"Roosevelt Raceway", km:2.8, corners:18, lapBase:26, rewardMult:1.1, trackWidth:40,
     desc:"Technical road course, hairpins and chicanes",
     getPoint: GP_ROOSEVELT,
     pitEntry:0.77, pitExit:0.83, sfLine:0.0,
@@ -526,7 +526,7 @@ const TRACKS = [
     },
   },
   {
-    id:"lakeside", name:"Lakeside Park", km:3.8, corners:14, lapBase:28, rewardMult:1.1, trackWidth:32,
+    id:"lakeside", name:"Lakeside Park", km:3.8, corners:14, lapBase:28, rewardMult:1.1, trackWidth:40,
     desc:"Flowing high-speed sweepers around the lake",
     getPoint: GP_LAKESIDE,
     pitEntry:0.64, pitExit:0.70, sfLine:0.0,
@@ -550,7 +550,7 @@ const TRACKS = [
     },
   },
   {
-    id:"harbor", name:"Harbor Front", km:3.0, corners:24, lapBase:25, rewardMult:1.05, trackWidth:24,
+    id:"harbor", name:"Harbor Front", km:3.0, corners:24, lapBase:25, rewardMult:1.05, trackWidth:30,
     desc:"Narrow dockside street track, cranes and containers",
     getPoint: GP_HARBOR,
     pitEntry:0.79, pitExit:0.85, sfLine:0.0,
@@ -579,7 +579,7 @@ const TRACKS = [
     },
   },
   {
-    id:"mountain", name:"Mountain Pass", km:4.8, corners:22, lapBase:32, rewardMult:1.25, trackWidth:32,
+    id:"mountain", name:"Mountain Pass", km:4.8, corners:22, lapBase:32, rewardMult:1.25, trackWidth:40,
     desc:"Long elevation changes, switchbacks and S-curves",
     getPoint: GP_MOUNTAIN,
     pitEntry:0.71, pitExit:0.77, sfLine:0.0,
@@ -612,7 +612,7 @@ const TRACKS = [
     },
   },
   {
-    id:"brooklands", name:"Brooklands Banking", km:6.4, corners:8, lapBase:42, rewardMult:1.35, trackWidth:40,
+    id:"brooklands", name:"Brooklands Banking", km:6.4, corners:8, lapBase:42, rewardMult:1.35, trackWidth:50,
     desc:"High-speed banked oval, long back straight — Surrey, England",
     getPoint: GP_BROOKLANDS,
     pitEntry:0.58, pitExit:0.64, sfLine:0.0,
@@ -659,7 +659,7 @@ const TRACKS = [
     },
   },
   {
-    id:"lemans", name:"Le Mans Sarthe", km:10.7, corners:16, lapBase:65, rewardMult:1.5, trackWidth:34,
+    id:"lemans", name:"Le Mans Sarthe", km:10.7, corners:16, lapBase:65, rewardMult:1.5, trackWidth:43,
     desc:"Ultra-long Mulsanne straight, tight Porsche curves — Le Mans, France (est. 1923)",
     getPoint: GP_LEMANS,
     pitEntry:0.56, pitExit:0.63, sfLine:0.0,
@@ -678,7 +678,7 @@ const TRACKS = [
     },
   },
   {
-    id:"avus", name:"AVUS Speedway", km:12.0, corners:4, lapBase:58, rewardMult:1.45, trackWidth:40,
+    id:"avus", name:"AVUS Speedway", km:12.0, corners:4, lapBase:58, rewardMult:1.45, trackWidth:50,
     desc:"Two massive straights linked by banked hairpins — Berlin, Germany (est. 1921)",
     getPoint: GP_AVUS,
     pitEntry:0.48, pitExit:0.54, sfLine:0.0,
@@ -709,7 +709,7 @@ const TRACKS = [
     },
   },
   {
-    id:"targa", name:"Targa Florio", km:14.5, corners:32, lapBase:80, rewardMult:1.6, trackWidth:26,
+    id:"targa", name:"Targa Florio", km:14.5, corners:32, lapBase:80, rewardMult:1.6, trackWidth:33,
     desc:"Narrow mountain roads, countless switchbacks — Madonie, Sicily (est. 1906)",
     getPoint: GP_TARGA,
     pitEntry:0.72, pitExit:0.78, sfLine:0.0,
@@ -928,6 +928,7 @@ export default function CircuitRaceView({
         baseSpeed: r.baseSpeed,
         baseGrip: r.baseGrip,
         overtakeBoostUntil: r.overtakeBoostUntil,
+        carNumber: r.carNumber,
       })),
       safetyCar: { active: safetyCar?.active, endsAtSec: safetyCar?.endsAtSec },
       fastestLap: { holderId: fastestLap?.holderId, time: fastestLap?.time },
@@ -1568,16 +1569,16 @@ export default function CircuitRaceView({
         ctx.restore();
       }
 
-      // Car number circle (scaled with car)
+      // Car number circle: use fixed car number (grid number) so overtaking doesn't swap numbers/identity
       const isPlayer = r.isPlayer;
-      const carNumber = r.position != null ? r.position : drawIdx + 1;
+      const displayNumber = r.carNumber != null ? r.carNumber : (drawIdx + 1);
       ctx.save(); ctx.translate(px, py); ctx.scale(CAR_DISPLAY_SCALE, CAR_DISPLAY_SCALE);
       ctx.fillStyle = isPlayer ? "#e8c870" : r.color;
       ctx.beginPath(); ctx.arc(0,-13,7,0,Math.PI*2); ctx.fill();
       ctx.strokeStyle = isPlayer ? "#0a0c06" : "rgba(0,0,0,0.6)"; ctx.lineWidth=1.2; ctx.stroke();
       ctx.fillStyle = isPlayer ? "#0a0c06" : "#fff";
       ctx.font = `bold 7px Rajdhani,sans-serif`; ctx.textAlign="center"; ctx.textBaseline="middle";
-      ctx.fillText(String(carNumber), 0, -13);
+      ctx.fillText(String(displayNumber), 0, -13);
       ctx.textBaseline = "alphabetic";
       ctx.restore();
 
@@ -1701,6 +1702,7 @@ export default function CircuitRaceView({
       reliabilityWearMult: playerRelMult,
       pitStrategy: buildPitStrategy(pTyre, nLaps, weatherWear, playerRelMult),
       finished:false, finishOrder:0, visible:true, position:1,
+      carNumber: 1,
       lapTimes:[],
       slideOffUntil:0, pitExitUntil: null,
       engineHealth:100, dnf:false, dnfAtSec:0, dnfSparks:[],
@@ -1732,6 +1734,7 @@ export default function CircuitRaceView({
         reliabilityWearMult: npcRelMult,
         pitStrategy: buildPitStrategy(t, nLaps, weatherWear, npcRelMult, pitOffset, npcStrat),
         finished:false, finishOrder:0, visible:true, position:i+2,
+        carNumber: i + 2,
         lapTimes:[],
         slideOffUntil:0, pitExitUntil: null,
         engineHealth:100, dnf:false, dnfAtSec:0, dnfSparks:[],
@@ -2319,7 +2322,7 @@ export default function CircuitRaceView({
         pitDurationSeconds: pitDurationSeconds(pitLvl, false),
         pitDurationEmergencySeconds: pitDurationSeconds(pitLvl, true),
         baseSpeed, baseGrip: effGrip,
-        pitStrategy: replayPitStrategy, finished:false, finishOrder:0, visible:true, position:i+1, lapTimes:[],
+        pitStrategy: replayPitStrategy, finished:false, finishOrder:0, visible:true, position:i+1, carNumber: i + 1, lapTimes:[],
         tireWearByLap: tire_wear_after_lap[id],
         slideOffUntil: 0, pitExitUntil: null,
         engineHealth:100, dnf:false, dnfAtSec:0, dnfSparks:[],
@@ -2500,6 +2503,7 @@ export default function CircuitRaceView({
           finishOrder: saved?.finishOrder ?? 0,
           visible: true,
           position: saved?.position ?? (i + 1),
+          carNumber: saved?.carNumber ?? (i + 1),
           lapTimes: saved?.lapTimes ?? [],
           slideOffUntil: 0,
           pitExitUntil: null,
@@ -2605,6 +2609,7 @@ export default function CircuitRaceView({
         finishOrder: 0,
         visible: true,
         position: i + 1,
+        carNumber: i + 1,
         lapTimes: [],
         slideOffUntil: 0,
         pitExitUntil: null,
@@ -2653,6 +2658,7 @@ export default function CircuitRaceView({
                   slideOffUntil: 0,
                   pitExitUntil: null,
                   position: gi + 1,
+                  carNumber: gi + 1,
                   pitStrategy: buildPitStrategy(r.currentTyre, pr.totalLaps, qWeatherWear, r.reliabilityWearMult || 1, r.isPlayer ? 0 : Math.floor(Math.random()*3)-1, r.strategyType || "normal"),
                   engineHealth:100, dnf:false, dnfAtSec:0, dnfSparks:[],
                   fuelLoad:100,
@@ -2734,6 +2740,7 @@ export default function CircuitRaceView({
               slideOffUntil: 0,
               pitExitUntil: null,
               position: i + 1,
+              carNumber: i + 1,
               pitStrategy: buildPitStrategy(r.currentTyre, numLaps, weatherWear, r.reliabilityWearMult || 1, r.isPlayer ? 0 : Math.floor(Math.random()*3)-1, r.strategyType || "normal"),
               engineHealth:100, dnf:false, dnfAtSec:0, dnfSparks:[],
               fuelLoad:100,
