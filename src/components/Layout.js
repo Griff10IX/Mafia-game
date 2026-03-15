@@ -95,6 +95,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/casino/mp-blackjack', label: 'MP Blackjack' },
         { path: '/casino/mp-poker', label: 'Poker' },
         { path: '/sports-betting', label: 'Sports Betting' },
+        { path: '/my-properties', label: 'My Properties' },
       ],
     },
     {
@@ -924,8 +925,8 @@ export default function Layout({ children }) {
   const casinoNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-casino-group" onClick={() => setCasinoOpen((v) => !v)}
-        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/casino' || location.pathname.startsWith('/casino/') || location.pathname === '/sports-betting') ? styles.navItemActive : styles.sidebarNavLink}`}
-        style={(location.pathname === '/casino' || location.pathname.startsWith('/casino/') || location.pathname === '/sports-betting') ? sidebarActiveGroupStyle : undefined}>
+        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/casino' || location.pathname.startsWith('/casino/') || location.pathname === '/sports-betting' || location.pathname === '/my-properties') ? styles.navItemActive : styles.sidebarNavLink}`}
+        style={(location.pathname === '/casino' || location.pathname.startsWith('/casino/') || location.pathname === '/sports-betting' || location.pathname === '/my-properties') ? sidebarActiveGroupStyle : undefined}>
         <Dice5 size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
         <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Casino</span>
         {casinoOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
@@ -943,6 +944,7 @@ export default function Layout({ children }) {
             { to: '/casino/mp-blackjack', label: 'MP Blackjack', testId: 'nav-mp-blackjack', matchPrefix: true },
             { to: '/casino/mp-poker', label: 'Poker', testId: 'nav-mp-poker', matchPrefix: true },
             { to: '/sports-betting', label: 'Sports Betting', testId: 'nav-sports-betting' },
+            { to: '/my-properties', label: 'My Properties', testId: 'nav-my-properties' },
           ].map((item, idx) => {
             const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;
             return (
