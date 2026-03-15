@@ -479,6 +479,11 @@ export default function Jail() {
         </div>
       )}
 
+      <div className="relative j-fade-in flex items-center gap-2 flex-wrap">
+        <p className="text-[9px] text-zinc-500 font-heading italic">Bust out jailed players for RP. Set a reward if you get locked up.</p>
+        {autoRankJailDisabled && <AutoRankIcon />}
+      </div>
+
       <JailStatusCard
         inJail={jailStatus.in_jail}
         secondsRemaining={jailStatus.seconds_remaining}
@@ -590,11 +595,6 @@ export default function Jail() {
           </div>
         )}
         <div className="j-art-line text-primary mx-2.5" />
-      </div>
-
-      <div className="relative j-fade-in flex items-center gap-2 flex-wrap">
-        <p className="text-[9px] text-zinc-500 font-heading italic">Bust out jailed players for RP. Set a reward if you get locked up.</p>
-        {autoRankJailDisabled && <AutoRankIcon />}
       </div>
 
       <InfoSection />

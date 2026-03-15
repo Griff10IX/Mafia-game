@@ -1,10 +1,14 @@
 # Dead-alive: 5% tax — you receive 95% of dead account's money and points (one-time)
 # 50% of tokens are also restored
+# Revive: pay 50k points to bring back a dead account (same email, once per email)
+from datetime import datetime, timezone
+
 from fastapi import Depends, HTTPException
 from routers.kill.armoury import TOKEN_CONFIG
 
 REVEAL_KILLER_COST = 1000
 TOKEN_RESTORE_PERCENT = 0.50  # 50% of tokens restored on Dead > Alive
+REVIVE_COST = 50_000  # points to revive one dead account (same email, once per email)
 
 
 def register(router):
@@ -18,7 +22,9 @@ def register(router):
     _username_pattern = srv._username_pattern
     verify_password = srv.verify_password
     DeadAliveRetrieveRequest = srv.DeadAliveRetrieveRequest
+    DeadAliveReviveRequest = srv.DeadAliveReviveRequest
     DEAD_ALIVE_PERCENT = srv.DEAD_ALIVE_PERCENT
+    DEFAULT_HEALTH = srv.DEFAULT_HEALTH
 
     @router.post("/death/reveal-killer")
     async def reveal_killer(current_user: dict = Depends(get_current_user)):
@@ -127,4 +133,154 @@ def register(router):
             "points_transferred": add_points,
             "money_transferred": add_money,
             "tokens_restored": tokens_restored,
+        }
+
+    @router.get("/dead-alive/revive-eligibility")
+    async def revive_eligibility(current_user: dict = Depends(get_current_user_verified)):
+        """Return whether current user can revive a dead account (same email, 50k points, once per email) and list dead usernames for that email."""
+        email = (current_user.get("email") or "").strip().lower()
+        if not email:
+            return {
+                "can_revive": False,
+                "reason": "No email linked to this account.",
+                "points_balance": int(current_user.get("points") or 0),
+                "revive_used": False,
+                "dead_accounts_same_email": [],
+            }
+        if current_user.get("is_dead"):
+            return {
+                "can_revive": False,
+                "reason": "You must be alive to revive another account.",
+                "points_balance": int(current_user.get("points") or 0),
+                "revive_used": False,
+                "dead_accounts_same_email": [],
+            }
+        points_balance = int(current_user.get("points") or 0)
+        revive_used_doc = await db.revive_used_by_email.find_one({"email": email}, {"_id": 0})
+        revive_used = bool(revive_used_doc)
+        if revive_used:
+            return {
+                "can_revive": False,
+                "reason": "This email has already used its one-time revive.",
+                "points_balance": points_balance,
+                "revive_used": True,
+                "dead_accounts_same_email": [],
+            }
+        if points_balance < REVIVE_COST:
+            return {
+                "can_revive": False,
+                "reason": f"You need {REVIVE_COST:,} points to revive an account (you have {points_balance:,}).",
+                "points_balance": points_balance,
+                "revive_used": False,
+                "dead_accounts_same_email": [],
+            }
+        dead_same_email = await db.users.find(
+            {"email": email, "is_dead": True},
+            {"_id": 0, "username": 1},
+        ).to_list(50)
+        dead_accounts_same_email = [{"username": u.get("username")} for u in dead_same_email if u.get("username")]
+        return {
+            "can_revive": True,
+            "reason": None,
+            "points_balance": points_balance,
+            "revive_used": False,
+            "dead_accounts_same_email": dead_accounts_same_email,
+        }
+
+    @router.post("/dead-alive/revive")
+    async def dead_alive_revive(request: DeadAliveReviveRequest, current_user: dict = Depends(get_current_user_verified)):
+        """Pay 50,000 points to revive one dead account linked to the same email. Reviver's money and points (minus 50k) transfer to revived account; reviver becomes dead. One-time per email."""
+        email = (current_user.get("email") or "").strip().lower()
+        if not email:
+            raise HTTPException(status_code=400, detail="No email linked to this account.")
+        if current_user.get("is_dead"):
+            raise HTTPException(status_code=400, detail="You must be alive to revive another account.")
+        points_balance = int(current_user.get("points") or 0)
+        if points_balance < REVIVE_COST:
+            raise HTTPException(
+                status_code=400,
+                detail=f"You need {REVIVE_COST:,} points to revive (you have {points_balance:,}).",
+            )
+        revive_used_doc = await db.revive_used_by_email.find_one({"email": email}, {"_id": 0})
+        if revive_used_doc:
+            raise HTTPException(status_code=400, detail="This email has already used its one-time revive.")
+
+        username_pattern = _username_pattern(request.dead_username)
+        dead_user = await db.users.find_one({"username": username_pattern}, {"_id": 0})
+        if not dead_user:
+            raise HTTPException(status_code=404, detail="No account found with that username.")
+        if not dead_user.get("is_dead"):
+            raise HTTPException(status_code=400, detail="That account is not dead.")
+        dead_email = (dead_user.get("email") or "").strip().lower()
+        if dead_email != email:
+            raise HTTPException(status_code=400, detail="That account is not linked to this email.")
+
+        reviver_money = int(current_user.get("money") or 0)
+        reviver_points_after = points_balance - REVIVE_COST
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        # 1) Deduct 50k points from current user (atomic)
+        res = await db.users.find_one_and_update(
+            {"id": current_user["id"], "points": {"$gte": REVIVE_COST}},
+            {"$inc": {"points": -REVIVE_COST}},
+            projection={"_id": 0, "id": 1},
+        )
+        if not res:
+            raise HTTPException(status_code=400, detail="Not enough points (balance may have changed).")
+
+        try:
+            # 2) Revive dead account: alive, receive reviver's money and points (after 50k deduction)
+            await db.users.update_one(
+                {"id": dead_user["id"]},
+                {
+                    "$set": {
+                        "is_dead": False,
+                        "dead_at": None,
+                        "money": reviver_money,
+                        "points": reviver_points_after,
+                        "health": DEFAULT_HEALTH,
+                        "in_jail": False,
+                    },
+                    "$unset": {
+                        "killed_by_username": "",
+                        "killed_by_user_id": "",
+                        "killed_by_family_name": "",
+                        "points_at_death": "",
+                        "money_at_death": "",
+                        "tokens_at_death": "",
+                        "traveling_to": "",
+                        "travel_arrives_at": "",
+                        "jail_until": "",
+                    },
+                },
+            )
+            # 3) Kill reviving account
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {
+                    "$set": {
+                        "is_dead": True,
+                        "dead_at": now_iso,
+                        "points_at_death": reviver_points_after,
+                        "money_at_death": reviver_money,
+                        "money": 0,
+                        "points": 0,
+                        "health": 0,
+                    },
+                },
+            )
+            # 4) Record revive used for this email
+            await db.revive_used_by_email.insert_one({"email": email})
+        except Exception as e:
+            # Refund points if we failed after deducting
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {"$inc": {"points": REVIVE_COST}},
+            )
+            raise e
+
+        revived_username = dead_user.get("username") or request.dead_username
+        return {
+            "message": f"{revived_username} has been revived with your money and points. This account is now dead; log in as {revived_username} to continue.",
+            "revived_username": revived_username,
         }

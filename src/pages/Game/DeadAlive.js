@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { KeyRound, AlertCircle, Skull, DollarSign, Info } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { KeyRound, AlertCircle, Skull, DollarSign, Info, Zap } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+
+const REVIVE_COST = 50000;
 
 const DA_STYLES = `
   .da-fade-in  { animation: da-fade-in 0.5s ease-out both; }
@@ -23,6 +25,39 @@ export default function DeadAlive() {
   const [deadUsername, setDeadUsername] = useState('');
   const [deadPassword, setDeadPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const [reviveEligibility, setReviveEligibility] = useState(null);
+  const [reviveUsername, setReviveUsername] = useState('');
+  const [reviveLoading, setReviveLoading] = useState(false);
+  const [reviveSuccess, setReviveSuccess] = useState(null);
+
+  useEffect(() => {
+    api.get('/dead-alive/revive-eligibility')
+      .then((r) => setReviveEligibility(r.data))
+      .catch(() => setReviveEligibility({ can_revive: false, reason: 'Could not load.', dead_accounts_same_email: [] }));
+  }, []);
+
+  const handleRevive = async (e) => {
+    e.preventDefault();
+    const toRevive = (reviveUsername || '').trim();
+    if (!toRevive) {
+      toast.error('Choose or enter the dead account username to revive.');
+      return;
+    }
+    setReviveLoading(true);
+    setReviveSuccess(null);
+    try {
+      const response = await api.post('/dead-alive/revive', { dead_username: toRevive });
+      toast.success(response.data.message);
+      setReviveSuccess(response.data.revived_username);
+      setReviveUsername('');
+      setReviveEligibility((prev) => prev ? { ...prev, can_revive: false, revive_used: true, dead_accounts_same_email: [] } : null);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Revive failed.');
+    } finally {
+      setReviveLoading(false);
+    }
+  };
 
   const handleRetrieve = async (e) => {
     e.preventDefault();
@@ -181,6 +216,89 @@ export default function DeadAlive() {
           <div className="h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
         </div>
       </div>
+
+      {/* ── Revive a fallen account (50k points, same email, once per email) ── */}
+      {reviveEligibility != null && (
+        <div className="da-fade-in space-y-3 max-w-3xl">
+          <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+            <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-5 py-3 border-b border-primary/20 bg-primary/8">
+              <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+                Revive a Fallen Account
+              </h2>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-[11px] font-heading leading-relaxed" style={{ color: 'var(--noir-muted)' }}>
+                Pay {REVIVE_COST.toLocaleString()} points once to bring back one of your dead accounts linked to the same email.
+                This account will become dead; only your money and points (minus the cost) move to the revived account. No mission or rank transfer. One-time per email.
+              </p>
+              {reviveEligibility.revive_used && (
+                <p className="text-[11px] font-heading text-amber-400" style={{ color: 'var(--noir-foreground)' }}>
+                  This email has already used its one-time revive.
+                </p>
+              )}
+              {!reviveEligibility.revive_used && !reviveEligibility.can_revive && reviveEligibility.reason && (
+                <p className="text-[11px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                  {reviveEligibility.reason}
+                </p>
+              )}
+              {!reviveEligibility.revive_used && reviveEligibility.can_revive && (
+                <form onSubmit={handleRevive} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-heading uppercase tracking-widest" style={{ color: 'var(--noir-muted)' }}>
+                      Dead account to revive (same email)
+                    </label>
+                    {reviveEligibility.dead_accounts_same_email?.length > 0 ? (
+                      <select
+                        value={reviveUsername}
+                        onChange={(e) => setReviveUsername(e.target.value)}
+                        className={`da-input w-full ${styles.input} px-3 py-2.5 text-sm rounded transition-all`}
+                        style={{ color: 'var(--noir-foreground)', fontFamily: 'inherit' }}
+                        data-testid="revive-username-select"
+                      >
+                        <option value="">Select account</option>
+                        {reviveEligibility.dead_accounts_same_email.map((a) => (
+                          <option key={a.username} value={a.username}>{a.username}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={reviveUsername}
+                        onChange={(e) => setReviveUsername(e.target.value)}
+                        placeholder="Username of dead account (same email)"
+                        autoComplete="off"
+                        className={`da-input w-full ${styles.input} px-3 py-2.5 text-sm rounded transition-all`}
+                        style={{ color: 'var(--noir-foreground)', fontFamily: 'inherit' }}
+                        data-testid="revive-username"
+                      />
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between px-3 py-2 rounded bg-primary/10 border border-primary/20 text-[11px] font-heading" style={{ color: 'var(--noir-foreground)' }}>
+                    <span style={{ color: 'var(--noir-muted)' }}>Your points</span>
+                    <span>{(reviveEligibility.points_balance ?? 0).toLocaleString()} <span style={{ color: 'var(--noir-muted)' }}>(cost {REVIVE_COST.toLocaleString()})</span></span>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={reviveLoading || !reviveUsername.trim()}
+                    className="w-full flex items-center justify-center gap-2.5 py-3 rounded border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary font-heading font-bold uppercase tracking-[0.12em] transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-[11px] active:scale-[0.98]"
+                    data-testid="revive-submit"
+                  >
+                    <Zap size={15} />
+                    {reviveLoading ? 'Reviving…' : `Revive (${REVIVE_COST.toLocaleString()} points)`}
+                  </button>
+                </form>
+              )}
+              {reviveSuccess && (
+                <p className="text-[11px] font-heading text-primary">
+                  Log in as <strong>{reviveSuccess}</strong> to continue.
+                </p>
+              )}
+            </div>
+            <div className="h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

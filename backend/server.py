@@ -513,6 +513,11 @@ class DeadAliveRetrieveRequest(BaseModel):
     dead_username: str
     dead_password: str
 
+
+class DeadAliveReviveRequest(BaseModel):
+    dead_username: str
+
+
 class AvatarUpdateRequest(BaseModel):
     avatar_data: str  # data URL: data:image/...;base64,...
 
