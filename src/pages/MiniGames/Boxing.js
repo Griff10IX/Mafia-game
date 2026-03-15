@@ -13,12 +13,12 @@ const goldBright = "var(--noir-primary-bright)";
 function StatBar({ label, value, max = 80, color = goldBright }) {
   const pct = Math.min(100, (value / max) * 100);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-      <span style={{ width: 32, fontSize: 9, color: "var(--noir-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
-      <div style={{ flex: 1, height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+      <span style={{ width: 36, fontSize: 10, color: "var(--noir-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
+      <div style={{ flex: 1, height: 7, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 3, transition: "width 0.3s" }} />
       </div>
-      <span style={{ width: 24, textAlign: "right", fontSize: 10, color: "#e0d0a0" }}>{value}</span>
+      <span style={{ width: 26, textAlign: "right", fontSize: 11, color: "#e0d0a0" }}>{value}</span>
     </div>
   );
 }
@@ -345,41 +345,41 @@ function FightReplay({ fight, onClose }) {
   const scorecard = fight?.scorecard;
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.92)", display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", borderBottom: "1px solid rgba(201,168,76,0.2)", flexShrink: 0 }}>
-        <button onClick={onClose} className={styles.btnPrimary} style={{ padding: "8px 14px", minHeight: 40, fontSize: 10 }}>Close</button>
-        <div style={{ fontSize: 11, color: gold, letterSpacing: "0.12em" }}>{nameA} vs {nameB}</div>
-        <div style={{ display: "flex", gap: 4 }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.95)", display: "flex", flexDirection: "column" }}>
+      <div className="flex items-center justify-between px-3 sm:px-4 py-2 shrink-0" style={{ borderBottom: "1px solid rgba(201,168,76,0.2)" }}>
+        <button onClick={onClose} className={styles.btnPrimary} style={{ padding: "10px 16px", minHeight: 44, fontSize: 11 }}>Close</button>
+        <div className="text-xs sm:text-sm truncate px-2" style={{ color: gold, letterSpacing: "0.1em" }}>{nameA} vs {nameB}</div>
+        <div className="flex gap-1.5">
           {[1, 2, 4].map(s => (
-            <button key={s} onClick={() => setSpeed(s)} style={{
-              padding: "6px 10px", minHeight: 36, fontSize: 9, border: "1px solid rgba(201,168,76,0.4)", borderRadius: 2,
+            <button key={s} onClick={() => setSpeed(s)} className="touch-manipulation active:scale-95" style={{
+              padding: "8px 12px", minHeight: 44, minWidth: 44, fontSize: 11, border: "1px solid rgba(201,168,76,0.4)", borderRadius: 3,
               background: speed === s ? "rgba(201,168,76,0.25)" : "rgba(255,255,255,0.03)",
               color: speed === s ? "#f0e0b0" : "#8a7a5a", cursor: "pointer",
             }}>x{s}</button>
           ))}
-          {!finished && <button onClick={skipToEnd} style={{ padding: "6px 10px", minHeight: 36, fontSize: 9, border: "1px solid rgba(201,168,76,0.4)", borderRadius: 2, background: "rgba(255,255,255,0.03)", color: "#8a7a5a", cursor: "pointer" }}>Skip</button>}
+          {!finished && <button onClick={skipToEnd} className="touch-manipulation active:scale-95" style={{ padding: "8px 12px", minHeight: 44, fontSize: 11, border: "1px solid rgba(201,168,76,0.4)", borderRadius: 3, background: "rgba(255,255,255,0.03)", color: "#8a7a5a", cursor: "pointer" }}>Skip</button>}
         </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ position: "relative", width: "100%", maxWidth: 720, margin: "0 auto", aspectRatio: "16/9", flexShrink: 0 }}>
           <canvas ref={canvasRef} width={640} height={360} style={{ width: "100%", height: "100%", display: "block" }} />
         </div>
-        <div style={{ flex: 1, overflow: "auto", padding: "8px 14px", fontSize: 10, lineHeight: 1.6, color: "#e0d0b0", minHeight: 0 }}>
+        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-2 min-h-0" style={{ fontSize: 11, lineHeight: 1.7, color: "#e0d0b0" }}>
           {commentary.map((c, i) => (
             <div key={i} style={{
-              marginBottom: c.type === "round" ? 6 : 1,
+              marginBottom: c.type === "round" ? 8 : 2,
               fontWeight: c.type === "round" || c.type === "result" ? 700 : 400,
               color: c.type === "round" ? gold : c.type === "knockdown" ? "#ff6666" : c.type === "result" ? gold : c.type === "miss" ? "#7a6a5a" : c.type === "roundEnd" ? "#aa9a6a" : "#c8b898",
-              fontSize: c.type === "round" || c.type === "result" ? 11 : 10,
+              fontSize: c.type === "round" || c.type === "result" ? 12 : 11,
             }}>{c.text}</div>
           ))}
           <div ref={commentEndRef} />
         </div>
 
         {finished && fightStats && (
-          <div style={{ flexShrink: 0, padding: "10px 14px", paddingBottom: "max(10px, env(safe-area-inset-bottom))", borderTop: "1px solid rgba(201,168,76,0.2)", background: "rgba(0,0,0,0.6)" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 4, fontSize: 10, color: "#d0c090", maxWidth: 400, margin: "0 auto" }}>
+          <div className="shrink-0 px-3 sm:px-4 py-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))", borderTop: "1px solid rgba(201,168,76,0.2)", background: "rgba(0,0,0,0.6)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: "6px 8px", fontSize: 11, color: "#d0c090", maxWidth: 400, margin: "0 auto" }}>
               <div style={{ textAlign: "right" }}>{fightStats.a?.landed}</div>
               <div style={{ textAlign: "center", color: "#7a6a4a" }}>Landed</div>
               <div>{fightStats.b?.landed}</div>
@@ -391,17 +391,17 @@ function FightReplay({ fight, onClose }) {
               <div>{fightStats.b?.kds}</div>
             </div>
             {scorecard && scorecard.a?.length > 0 && (
-              <div style={{ marginTop: 6, maxWidth: 400, margin: "6px auto 0" }}>
-                <div style={{ fontSize: 9, color: "#7a6a4a", textAlign: "center", marginBottom: 2 }}>Scorecard</div>
-                <div style={{ display: "flex", justifyContent: "center", gap: 4, flexWrap: "wrap", fontSize: 9 }}>
+              <div style={{ marginTop: 8, maxWidth: 400, margin: "8px auto 0" }}>
+                <div style={{ fontSize: 10, color: "#7a6a4a", textAlign: "center", marginBottom: 3 }}>Scorecard</div>
+                <div style={{ display: "flex", justifyContent: "center", gap: 4, flexWrap: "wrap", fontSize: 10 }}>
                   {scorecard.a.map((sa, ri) => (
-                    <div key={ri} style={{ textAlign: "center", padding: "2px 4px", background: "rgba(255,255,255,0.03)", borderRadius: 2, minWidth: 28 }}>
+                    <div key={ri} style={{ textAlign: "center", padding: "3px 5px", background: "rgba(255,255,255,0.03)", borderRadius: 2, minWidth: 30 }}>
                       <div style={{ color: "#7a6a4a" }}>R{ri + 1}</div>
                       <div style={{ color: sa > scorecard.b[ri] ? gold : sa < scorecard.b[ri] ? "#bb3333" : "#888" }}>{sa}-{scorecard.b[ri]}</div>
                     </div>
                   ))}
                 </div>
-                <div style={{ textAlign: "center", fontSize: 10, color: gold, marginTop: 4 }}>
+                <div style={{ textAlign: "center", fontSize: 11, color: gold, marginTop: 4 }}>
                   {scorecard.a.reduce((s, v) => s + v, 0)} - {scorecard.b.reduce((s, v) => s + v, 0)}
                 </div>
               </div>
@@ -637,48 +637,48 @@ export default function Boxing() {
 
   return (
     <div className={styles.page} style={{ minHeight: "100vh", fontFamily: "'Cinzel', serif" }}>
-      <div className={styles.pageContent} style={{ padding: "12px 18px", borderBottom: "1px solid var(--noir-border-light)" }}>
-        <div style={{ fontSize: 16, letterSpacing: "0.2em", color: gold }}>THE UNDERGROUND RING</div>
-        <div style={{ fontSize: 9, color: "var(--noir-muted)", letterSpacing: "0.12em", marginTop: 2 }}>TRAIN &bull; FIGHT &bull; BET &bull; DOMINATE</div>
+      <div className={styles.pageContent} style={{ padding: "14px 16px", borderBottom: "1px solid var(--noir-border-light)" }}>
+        <div className="text-sm sm:text-base" style={{ letterSpacing: "0.2em", color: gold }}>THE UNDERGROUND RING</div>
+        <div style={{ fontSize: 10, color: "var(--noir-muted)", letterSpacing: "0.12em", marginTop: 2 }}>TRAIN &bull; FIGHT &bull; BET &bull; DOMINATE</div>
       </div>
 
       {/* Tab bar */}
       <div className={styles.pageContent} style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--noir-border-light)" }}>
         {TABS.map((t, i) => (
-          <button key={t} onClick={() => setTab(i)} style={{
-            flex: 1, padding: "10px 0", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase",
+          <button key={t} onClick={() => setTab(i)} className="touch-manipulation active:scale-95 transition-transform" style={{
+            flex: 1, padding: "12px 0", fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase",
             background: tab === i ? "rgba(201,168,76,0.1)" : "transparent",
             color: tab === i ? "#f0e0b0" : "var(--noir-muted)",
             border: "none", borderBottom: tab === i ? "2px solid #c9a84c" : "2px solid transparent",
-            cursor: "pointer", fontFamily: "inherit",
+            cursor: "pointer", fontFamily: "inherit", minHeight: 44,
           }}>{t}</button>
         ))}
       </div>
 
-      <div className={styles.pageContent} style={{ padding: "14px 18px" }}>
-        {error && <div style={{ fontSize: 10, color: "#ff6666", marginBottom: 8, padding: "6px 10px", background: "rgba(255,60,60,0.08)", borderRadius: 4 }}>{error}</div>}
+      <div className={styles.pageContent} style={{ padding: "14px 12px" }}>
+        {error && <div style={{ fontSize: 11, color: "#ff6666", marginBottom: 10, padding: "8px 12px", background: "rgba(255,60,60,0.08)", borderRadius: 4 }}>{error}</div>}
 
-        {loading && !profile && <div style={{ textAlign: "center", padding: 30, color: "var(--noir-muted)", fontSize: 11 }}>Loading fighter profile...</div>}
+        {loading && !profile && <div style={{ textAlign: "center", padding: 30, color: "var(--noir-muted)", fontSize: 12 }}>Loading fighter profile...</div>}
 
         {/* ── TAB 0: FIGHTER ── */}
         {tab === 0 && profile && (
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 14 }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             {/* Fighter Card */}
             <div className={panelCls}>
               <div className={headerCls}>
                 <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Your Fighter</h2>
               </div>
-              <div className="p-3">
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+              <div className="p-3 sm:p-4">
+                <div className="flex justify-between items-start mb-3">
                   <div>
-                    <div style={{ fontSize: 12, color: "#e0d0a0", fontWeight: 700 }}>Rating {profile.rating || 1000}</div>
-                    <div style={{ fontSize: 9, color: "var(--noir-muted)" }}>Level {profile.level || 1}</div>
+                    <div style={{ fontSize: 13, color: "#e0d0a0", fontWeight: 700 }}>Rating {profile.rating || 1000}</div>
+                    <div style={{ fontSize: 10, color: "var(--noir-muted)" }}>Level {profile.level || 1}</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 11, color: "#e0d0a0" }}>
+                    <div style={{ fontSize: 12, color: "#e0d0a0" }}>
                       {profile.wins || 0}W - {profile.losses || 0}L - {profile.draws || 0}D
                     </div>
-                    <div style={{ fontSize: 9, color: "var(--noir-muted)" }}>
+                    <div style={{ fontSize: 10, color: "var(--noir-muted)" }}>
                       Streak: {profile.streak || 0} | Best: {profile.best_streak || 0} | KOs: {profile.ko_wins || 0}
                     </div>
                   </div>
@@ -686,13 +686,13 @@ export default function Boxing() {
 
                 {/* XP bar */}
                 {xpNext && (
-                  <div style={{ marginBottom: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--noir-muted)", marginBottom: 2 }}>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--noir-muted)", marginBottom: 3 }}>
                       <span>XP</span>
                       <span>{profile.xp || 0} / {xpNext}</span>
                     </div>
-                    <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
-                      <div style={{ width: `${xpPct}%`, height: "100%", background: "linear-gradient(90deg, #c9a84c, #e8d080)", borderRadius: 2 }} />
+                    <div style={{ height: 5, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ width: `${xpPct}%`, height: "100%", background: "linear-gradient(90deg, #c9a84c, #e8d080)", borderRadius: 3 }} />
                     </div>
                   </div>
                 )}
@@ -701,14 +701,14 @@ export default function Boxing() {
                   <StatBar key={k} label={STAT_LABELS[k]} value={profile[k] || 10} />
                 ))}
 
-                <div style={{ fontSize: 9, color: "var(--noir-muted)", marginTop: 8 }}>
+                <div style={{ fontSize: 10, color: "var(--noir-muted)", marginTop: 10 }}>
                   Total earnings: ${(profile.total_earnings || 0).toLocaleString()}
                 </div>
               </div>
             </div>
 
             {/* Training + Allocation */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="flex flex-col gap-3 md:gap-4">
               {/* Stat Points */}
               {(profile.stat_points || 0) > 0 && (
                 <div className={panelCls}>
@@ -717,11 +717,11 @@ export default function Boxing() {
                       Allocate Points ({profile.stat_points})
                     </h2>
                   </div>
-                  <div className="p-3" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  <div className="p-3 flex flex-wrap gap-2">
                     {STAT_KEYS.map(k => (
                       <button key={k} onClick={() => handleAllocate(k)} disabled={busy === `alloc:${k}`}
-                        className={styles.btnPrimary}
-                        style={{ padding: "8px 14px", minHeight: 40, fontSize: 10, cursor: busy === `alloc:${k}` ? "wait" : "pointer" }}>
+                        className={`${styles.btnPrimary} touch-manipulation active:scale-95`}
+                        style={{ padding: "10px 16px", minHeight: 44, fontSize: 11, cursor: busy === `alloc:${k}` ? "wait" : "pointer" }}>
                         +1 {STAT_LABELS[k]}
                       </button>
                     ))}
@@ -734,22 +734,22 @@ export default function Boxing() {
                 <div className={headerCls}>
                   <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Training</h2>
                 </div>
-                <div className="p-3">
-                  <div style={{ fontSize: 9, color: "var(--noir-muted)", marginBottom: 8 }}>Spend cash to train stats. Cost scales with level.</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div className="p-3 sm:p-4">
+                  <div style={{ fontSize: 10, color: "var(--noir-muted)", marginBottom: 10 }}>Spend cash to train stats. Cost scales with level.</div>
+                  <div className="flex flex-col gap-2">
                     {STAT_KEYS.map(k => {
                       const cost = trainCosts[k] || 0;
                       const atMax = (profile[k] || 10) >= 80;
                       return (
-                        <div key={k} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", background: "rgba(255,255,255,0.02)", borderRadius: 3, border: "1px solid rgba(201,168,76,0.15)" }}>
+                        <div key={k} className="flex items-center justify-between rounded" style={{ padding: "10px 12px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(201,168,76,0.15)" }}>
                           <div>
-                            <span style={{ fontSize: 10, color: "#e0d0a0", textTransform: "uppercase" }}>{STAT_LABELS[k]}</span>
-                            <span style={{ fontSize: 9, color: "var(--noir-muted)", marginLeft: 6 }}>{profile[k] || 10}/80</span>
+                            <span style={{ fontSize: 11, color: "#e0d0a0", textTransform: "uppercase" }}>{STAT_LABELS[k]}</span>
+                            <span style={{ fontSize: 10, color: "var(--noir-muted)", marginLeft: 8 }}>{profile[k] || 10}/80</span>
                           </div>
                           <button onClick={() => handleTrain(k)}
                             disabled={busy === `train:${k}` || atMax}
-                            className={styles.btnPrimary}
-                            style={{ padding: "6px 12px", minHeight: 36, fontSize: 9, cursor: atMax ? "default" : busy === `train:${k}` ? "wait" : "pointer" }}>
+                            className={`${styles.btnPrimary} touch-manipulation active:scale-95`}
+                            style={{ padding: "8px 14px", minHeight: 44, fontSize: 10, cursor: atMax ? "default" : busy === `train:${k}` ? "wait" : "pointer" }}>
                             {atMax ? "MAX" : `Train $${cost.toLocaleString()}`}
                           </button>
                         </div>
@@ -765,9 +765,9 @@ export default function Boxing() {
                   <div className={headerCls}>
                     <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Recent Fights</h2>
                   </div>
-                  <div className="p-3" style={{ maxHeight: 160, overflowY: "auto" }}>
+                  <div className="p-3" style={{ maxHeight: 200, overflowY: "auto" }}>
                     {history.slice(0, 8).map(h => (
-                      <div key={h.fight_id} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid rgba(201,168,76,0.08)", fontSize: 9 }}>
+                      <div key={h.fight_id} className="flex justify-between py-1.5" style={{ borderBottom: "1px solid rgba(201,168,76,0.08)", fontSize: 10 }}>
                         <span style={{ color: h.result === "win" ? "#6a9a4a" : h.result === "loss" ? "#aa4444" : "#888" }}>
                           {h.result.toUpperCase()} vs {h.opponent}
                         </span>
@@ -785,19 +785,19 @@ export default function Boxing() {
 
         {/* ── TAB 1: FIGHT ── */}
         {tab === 1 && profile && (
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.2fr) minmax(0,1fr)", gap: 14 }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             {/* NPC Opponents */}
             <div className={panelCls}>
               <div className={headerCls}>
                 <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Underground Opponents</h2>
               </div>
-              <div className="p-3" style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 500, overflowY: "auto" }}>
+              <div className="p-3 flex flex-col gap-2" style={{ maxHeight: 600, overflowY: "auto" }}>
                 {npcs.map(npc => (
-                  <div key={npc.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 4, border: "1px solid rgba(201,168,76,0.12)" }}>
+                  <div key={npc.id} className="flex items-center justify-between rounded" style={{ padding: "10px 12px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(201,168,76,0.12)" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 11, color: "#e0d0a0", fontWeight: 700 }}>{npc.name}</div>
-                      <div style={{ fontSize: 8, color: "var(--noir-muted)", marginTop: 1, fontStyle: "italic" }}>{npc.flavor}</div>
-                      <div style={{ display: "flex", gap: 8, marginTop: 4, fontSize: 9, color: "#9a8a5a" }}>
+                      <div style={{ fontSize: 12, color: "#e0d0a0", fontWeight: 700 }}>{npc.name}</div>
+                      <div style={{ fontSize: 9, color: "var(--noir-muted)", marginTop: 1, fontStyle: "italic" }}>{npc.flavor}</div>
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1" style={{ fontSize: 10, color: "#9a8a5a" }}>
                         <span>PWR {npc.power}</span>
                         <span>SPD {npc.speed}</span>
                         <span>DEF {npc.defense}</span>
@@ -805,11 +805,11 @@ export default function Boxing() {
                       </div>
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
-                      <div style={{ fontSize: 9, color: "#6a9a4a", marginBottom: 4 }}>${npc.reward.toLocaleString()}</div>
+                      <div style={{ fontSize: 10, color: "#6a9a4a", marginBottom: 4 }}>${npc.reward.toLocaleString()}</div>
                       <button onClick={() => handleFightNpc(npc.id)}
                         disabled={busy === `npc:${npc.id}`}
-                        className={styles.btnPrimary}
-                        style={{ padding: "8px 16px", minHeight: 36, fontSize: 10, cursor: busy === `npc:${npc.id}` ? "wait" : "pointer" }}>
+                        className={`${styles.btnPrimary} touch-manipulation active:scale-95`}
+                        style={{ padding: "10px 18px", minHeight: 44, fontSize: 11, cursor: busy === `npc:${npc.id}` ? "wait" : "pointer" }}>
                         Fight
                       </button>
                     </div>
@@ -819,34 +819,34 @@ export default function Boxing() {
             </div>
 
             {/* PvP Challenges */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="flex flex-col gap-3 md:gap-4">
               <div className={panelCls}>
                 <div className={headerCls}>
                   <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">PvP Challenge</h2>
                 </div>
-                <div className="p-3">
-                  <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                <div className="p-3 sm:p-4">
+                  <div className="flex gap-2 mb-3">
                     <input value={challengeTarget} onChange={e => setChallengeTarget(e.target.value)}
                       placeholder="Username" className={styles.input}
-                      style={{ flex: 1, minHeight: 40, padding: "8px 10px", fontSize: 10 }}
+                      style={{ flex: 1, minHeight: 44, padding: "10px 12px", fontSize: 11 }}
                       onKeyDown={e => e.key === "Enter" && handleChallenge()} />
                     <button onClick={handleChallenge} disabled={busy === "challenge" || !challengeTarget.trim()}
-                      className={styles.btnPrimary}
-                      style={{ padding: "8px 14px", minHeight: 40, fontSize: 10, cursor: busy === "challenge" ? "wait" : "pointer" }}>
+                      className={`${styles.btnPrimary} touch-manipulation active:scale-95`}
+                      style={{ padding: "10px 16px", minHeight: 44, fontSize: 11, cursor: busy === "challenge" ? "wait" : "pointer" }}>
                       Challenge
                     </button>
                   </div>
 
                   {challenges.incoming.length > 0 && (
-                    <div style={{ marginBottom: 10 }}>
-                      <div style={{ fontSize: 9, color: gold, marginBottom: 4, letterSpacing: "0.1em" }}>INCOMING CHALLENGES</div>
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 10, color: gold, marginBottom: 6, letterSpacing: "0.1em" }}>INCOMING CHALLENGES</div>
                       {challenges.incoming.map(ch => (
-                        <div key={ch.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(201,168,76,0.08)" }}>
-                          <span style={{ fontSize: 10, color: "#e0d0a0" }}>{ch.challenger_username}</span>
+                        <div key={ch.id} className="flex items-center justify-between py-2" style={{ borderBottom: "1px solid rgba(201,168,76,0.08)" }}>
+                          <span style={{ fontSize: 11, color: "#e0d0a0" }}>{ch.challenger_username}</span>
                           <button onClick={() => handleAccept(ch.id)}
                             disabled={busy === `accept:${ch.id}`}
-                            className={styles.btnPrimary}
-                            style={{ padding: "6px 12px", minHeight: 36, fontSize: 9, cursor: busy === `accept:${ch.id}` ? "wait" : "pointer" }}>
+                            className={`${styles.btnPrimary} touch-manipulation active:scale-95`}
+                            style={{ padding: "8px 14px", minHeight: 44, fontSize: 10, cursor: busy === `accept:${ch.id}` ? "wait" : "pointer" }}>
                             Accept
                           </button>
                         </div>
@@ -856,13 +856,14 @@ export default function Boxing() {
 
                   {challenges.outgoing.length > 0 && (
                     <div>
-                      <div style={{ fontSize: 9, color: "var(--noir-muted)", marginBottom: 4, letterSpacing: "0.1em" }}>OUTGOING CHALLENGES</div>
+                      <div style={{ fontSize: 10, color: "var(--noir-muted)", marginBottom: 6, letterSpacing: "0.1em" }}>OUTGOING CHALLENGES</div>
                       {challenges.outgoing.map(ch => (
-                        <div key={ch.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(201,168,76,0.08)" }}>
-                          <span style={{ fontSize: 10, color: "#d0c090" }}>vs {ch.target_username}</span>
+                        <div key={ch.id} className="flex items-center justify-between py-2" style={{ borderBottom: "1px solid rgba(201,168,76,0.08)" }}>
+                          <span style={{ fontSize: 11, color: "#d0c090" }}>vs {ch.target_username}</span>
                           <button onClick={() => handleCancelChallenge(ch.id)}
                             disabled={busy === `cancel:${ch.id}`}
-                            style={{ padding: "4px 10px", fontSize: 9, border: "1px solid rgba(201,168,76,0.3)", borderRadius: 2, background: "rgba(255,255,255,0.03)", color: "#aa7744", cursor: "pointer" }}>
+                            className="touch-manipulation active:scale-95"
+                            style={{ padding: "8px 14px", minHeight: 44, fontSize: 10, border: "1px solid rgba(201,168,76,0.3)", borderRadius: 3, background: "rgba(255,255,255,0.03)", color: "#aa7744", cursor: "pointer" }}>
                             Cancel
                           </button>
                         </div>
@@ -871,7 +872,7 @@ export default function Boxing() {
                   )}
 
                   {challenges.incoming.length === 0 && challenges.outgoing.length === 0 && (
-                    <div style={{ fontSize: 9, color: "#7a6a4a", textAlign: "center", padding: 10 }}>No active challenges</div>
+                    <div style={{ fontSize: 10, color: "#7a6a4a", textAlign: "center", padding: 12 }}>No active challenges</div>
                   )}
                 </div>
               </div>
@@ -881,37 +882,37 @@ export default function Boxing() {
 
         {/* ── TAB 2: BETS ── */}
         {tab === 2 && (
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 14 }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             <div className={panelCls}>
               <div className={headerCls}>
                 <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Open Fights to Bet On</h2>
               </div>
-              <div className="p-3">
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                  <span style={{ fontSize: 9, color: "var(--noir-muted)" }}>Stake</span>
+              <div className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span style={{ fontSize: 10, color: "var(--noir-muted)" }}>Stake</span>
                   <input type="number" value={betStake} onChange={e => setBetStake(e.target.value)}
-                    className={styles.input} style={{ width: 100, padding: "6px 8px", fontSize: 10 }} />
+                    className={styles.input} style={{ width: 110, padding: "8px 10px", fontSize: 11, minHeight: 44 }} />
                 </div>
                 {challenges.incoming.length === 0 && challenges.outgoing.length === 0 && (
-                  <div style={{ fontSize: 9, color: "#7a6a4a", textAlign: "center", padding: 10 }}>No pending challenges to bet on</div>
+                  <div style={{ fontSize: 10, color: "#7a6a4a", textAlign: "center", padding: 12 }}>No pending challenges to bet on</div>
                 )}
                 {[...challenges.incoming, ...challenges.outgoing].map(ch => (
-                  <div key={`bet-${ch.id}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(201,168,76,0.08)" }}>
+                  <div key={`bet-${ch.id}`} className="flex items-center justify-between py-2" style={{ borderBottom: "1px solid rgba(201,168,76,0.08)" }}>
                     <div>
-                      <div style={{ fontSize: 10, color: "#d0c090" }}>{ch.challenger_username} vs {ch.target_username}</div>
-                      <div style={{ fontSize: 9, color: "#7a6a4a" }}>Odds: A {ch.odds?.a ?? "-"} / B {ch.odds?.b ?? "-"}</div>
+                      <div style={{ fontSize: 11, color: "#d0c090" }}>{ch.challenger_username} vs {ch.target_username}</div>
+                      <div style={{ fontSize: 10, color: "#7a6a4a" }}>Odds: A {ch.odds?.a ?? "-"} / B {ch.odds?.b ?? "-"}</div>
                     </div>
-                    <div style={{ display: "flex", gap: 4 }}>
+                    <div className="flex gap-1.5">
                       <button onClick={() => handlePlaceBet(ch.id, "a")}
                         disabled={!!busy}
-                        className={styles.btnPrimary}
-                        style={{ padding: "4px 8px", fontSize: 9 }}>
+                        className={`${styles.btnPrimary} touch-manipulation active:scale-95`}
+                        style={{ padding: "8px 12px", minHeight: 44, fontSize: 10 }}>
                         Bet A
                       </button>
                       <button onClick={() => handlePlaceBet(ch.id, "b")}
                         disabled={!!busy}
-                        className={styles.btnPrimary}
-                        style={{ padding: "4px 8px", fontSize: 9 }}>
+                        className={`${styles.btnPrimary} touch-manipulation active:scale-95`}
+                        style={{ padding: "8px 12px", minHeight: 44, fontSize: 10 }}>
                         Bet B
                       </button>
                     </div>
@@ -924,15 +925,15 @@ export default function Boxing() {
               <div className={headerCls}>
                 <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Your Bets</h2>
               </div>
-              <div className="p-3" style={{ maxHeight: 300, overflowY: "auto" }}>
+              <div className="p-3 sm:p-4" style={{ maxHeight: 360, overflowY: "auto" }}>
                 {betsData.open.length === 0 && betsData.settled.length === 0 && (
-                  <div style={{ fontSize: 9, color: "#7a6a4a", textAlign: "center", padding: 10 }}>No bets yet</div>
+                  <div style={{ fontSize: 10, color: "#7a6a4a", textAlign: "center", padding: 12 }}>No bets yet</div>
                 )}
                 {betsData.open.length > 0 && (
                   <>
-                    <div style={{ fontSize: 9, color: gold, marginBottom: 4 }}>OPEN</div>
+                    <div style={{ fontSize: 10, color: gold, marginBottom: 6 }}>OPEN</div>
                     {betsData.open.map(b => (
-                      <div key={b.id} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 9, borderBottom: "1px solid rgba(201,168,76,0.06)" }}>
+                      <div key={b.id} className="flex justify-between py-1.5" style={{ fontSize: 10, borderBottom: "1px solid rgba(201,168,76,0.06)" }}>
                         <span style={{ color: "#d0c090" }}>{b.challenger_username} vs {b.target_username} ({b.fighter.toUpperCase()})</span>
                         <span style={{ color: "var(--noir-muted)" }}>${b.stake?.toLocaleString()} @ {b.odds}x</span>
                       </div>
@@ -941,9 +942,9 @@ export default function Boxing() {
                 )}
                 {betsData.settled.length > 0 && (
                   <>
-                    <div style={{ fontSize: 9, color: "var(--noir-muted)", marginTop: 8, marginBottom: 4 }}>SETTLED</div>
+                    <div style={{ fontSize: 10, color: "var(--noir-muted)", marginTop: 10, marginBottom: 6 }}>SETTLED</div>
                     {betsData.settled.slice(0, 15).map(b => (
-                      <div key={b.id} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 9, borderBottom: "1px solid rgba(201,168,76,0.06)" }}>
+                      <div key={b.id} className="flex justify-between py-1.5" style={{ fontSize: 10, borderBottom: "1px solid rgba(201,168,76,0.06)" }}>
                         <span style={{ color: "#d0c090" }}>{b.fighter.toUpperCase()}</span>
                         <span style={{ color: b.status === "won" ? "#6a9a4a" : b.status === "lost" ? "#aa4444" : "var(--noir-muted)" }}>
                           {b.status} ${b.stake?.toLocaleString()}
@@ -959,18 +960,17 @@ export default function Boxing() {
 
         {/* ── TAB 3: RANKINGS ── */}
         {tab === 3 && (
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 14 }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             <div className={panelCls}>
               <div className={headerCls}>
                 <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Weekly Leaderboard</h2>
               </div>
-              <div className="p-3">
-                {!leaderboard && <div style={{ fontSize: 9, color: "#7a6a4a", textAlign: "center", padding: 10 }}>No data yet</div>}
+              <div className="p-3 sm:p-4">
+                {!leaderboard && <div style={{ fontSize: 10, color: "#7a6a4a", textAlign: "center", padding: 12 }}>No data yet</div>}
                 {leaderboard?.standings?.slice(0, 15).map(row => (
-                  <div key={row.user_id} style={{
-                    display: "flex", justifyContent: "space-between", padding: "4px 0",
+                  <div key={row.user_id} className="flex justify-between py-1.5" style={{
                     borderBottom: "1px solid rgba(201,168,76,0.08)",
-                    color: row.is_current_user ? "#f5e8c8" : "#d0c090", fontSize: 10,
+                    color: row.is_current_user ? "#f5e8c8" : "#d0c090", fontSize: 11,
                   }}>
                     <span>
                       <span style={{ color: row.rank <= 3 ? gold : "var(--noir-muted)", fontWeight: row.rank <= 3 ? 700 : 400, marginRight: 6 }}>#{row.rank}</span>
@@ -986,16 +986,16 @@ export default function Boxing() {
               <div className={headerCls}>
                 <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">League Info</h2>
               </div>
-              <div className="p-3" style={{ fontSize: 10, color: "var(--noir-muted)", lineHeight: 1.8 }}>
+              <div className="p-3 sm:p-4" style={{ fontSize: 11, color: "var(--noir-muted)", lineHeight: 1.9 }}>
                 <div><strong style={{ color: "#e0d0a0" }}>Points:</strong> 3 per win, +1 bonus for KO/TKO</div>
                 <div><strong style={{ color: "#e0d0a0" }}>Weekly Prizes:</strong></div>
-                <div style={{ paddingLeft: 10 }}>
+                <div style={{ paddingLeft: 12 }}>
                   <div>#1: $5,000</div>
                   <div>#2: $3,000</div>
                   <div>#3: $1,000</div>
                   <div>#4-10: $500</div>
                 </div>
-                <div style={{ marginTop: 8, fontSize: 9, color: "#7a6a4a" }}>Payouts reset every Monday at midnight UTC.</div>
+                <div style={{ marginTop: 10, fontSize: 10, color: "#7a6a4a" }}>Payouts reset every Monday at midnight UTC.</div>
               </div>
             </div>
           </div>

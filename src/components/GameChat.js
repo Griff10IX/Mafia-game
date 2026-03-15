@@ -377,7 +377,7 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
       <div
         ref={scrollRef}
         data-chat-part="messages"
-        className="flex-1 min-h-[120px] max-h-[220px] sm:min-h-[130px] sm:max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-thin touch-pan-y"
+        className="flex-1 min-h-[180px] max-h-[400px] sm:min-h-[200px] sm:max-h-[380px] overflow-y-auto overflow-x-hidden scrollbar-thin touch-pan-y"
         style={{ scrollbarColor: 'rgba(var(--noir-primary-rgb), 0.15) transparent' }}
       >
         {prefs.muted && (
