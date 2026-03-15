@@ -85,6 +85,18 @@ _bodyguards_cache: dict = {}
 _BODYGUARDS_CACHE_TTL_SEC = 10
 _BODYGUARDS_CACHE_MAX_ENTRIES = 5000
 
+# Per (user_id, slot) lock: different slots can run in parallel (faster), same slot serialized (stops race)
+_hire_locks: dict = {}
+_hire_locks_meta_lock = asyncio.Lock()
+
+
+async def _hire_lock(user_id: str, slot: int):
+    key = (user_id, slot)
+    async with _hire_locks_meta_lock:
+        if key not in _hire_locks:
+            _hire_locks[key] = asyncio.Lock()
+        return _hire_locks[key]
+
 
 def _invalidate_bodyguards_cache(user_id: str):
     _bodyguards_cache.pop(user_id, None)
@@ -460,6 +472,11 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
 async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Depends(get_current_user)):
     slot = request.slot
     is_robot = request.is_robot
+    async with await _hire_lock(current_user["id"], slot):
+        return await _do_hire_bodyguard(slot, is_robot, current_user)
+
+
+async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     if await db.bodyguards.find_one({"bodyguard_user_id": current_user["id"], "is_robot": False}, {"_id": 1}):
         raise HTTPException(
             status_code=400,
@@ -536,7 +553,8 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
         "hire_cost": total_cost,
         "bodyguard_username": robot_name if is_robot else None,
     })
-    msg = f"You've hired {robot_name if is_robot else 'a human bodyguard slot'} for {total_cost} points."
+    name_part = robot_name if is_robot else "a human bodyguard"
+    msg = f"You hired {name_part} for {total_cost} points (slot {slot}/4). Past hires show here — max 4 at once."
     asyncio.create_task(send_notification(
         current_user["id"],
         "🛡️ Bodyguard Hired",

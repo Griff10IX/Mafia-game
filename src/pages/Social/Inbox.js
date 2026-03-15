@@ -785,6 +785,11 @@ export default function Inbox() {
         <div className="grid grid-cols-1 lg:grid-cols-5">
           {/* Message List */}
           <div className={`lg:col-span-2 border-r border-primary/20 bg-secondary/20 overflow-y-auto ${selectedNotification ? 'max-h-[40vh] lg:max-h-[480px]' : 'max-h-[480px]'}`}>
+            {filter === 'bodyguard' && filteredNotifications.length > 0 && (
+              <div className="px-2 py-1.5 border-b border-primary/20 bg-amber-500/5 text-[9px] text-mutedForeground font-heading italic">
+                Past hires shown here. Max 4 bodyguards at once — dropping creates space for new hires.
+              </div>
+            )}
             {filteredNotifications.length === 0 ? (
               <div className="p-4 text-center">
                 <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
