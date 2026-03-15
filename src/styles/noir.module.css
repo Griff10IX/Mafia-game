@@ -3,6 +3,7 @@
 /* Palette: sidebar = true black; content = charcoal; cards = darker grey; gold accents */
 :root {
   --noir-bg: #000000;
+  --noir-background: var(--noir-bg);
   --noir-panel: #0d0d0d;
   --noir-content: #1a1a1a;
   --noir-surface: #282828;
@@ -687,4 +688,19 @@ body[data-theme-variant="modern"] [data-chat-part="send"],
 body[data-theme-variant="modern"] [data-chat-part="aux-btn"] {
   background: var(--modern-composer-btn, rgba(var(--noir-primary-rgb), 0.1)) !important;
   border-color: var(--modern-composer-btn-border, rgba(var(--noir-primary-rgb), 0.28)) !important;
+}
+
+/* Modern: bottom nav and touch ball (variables handle colours; optional refinements) */
+body[data-theme-variant="modern"] [data-layout="bottom-nav"] nav {
+  border-top-color: var(--modern-divider, rgba(161, 161, 170, 0.14));
+}
+body[data-theme-variant="modern"] [data-layout="bottom-nav-submenu"] {
+  border-color: var(--modern-divider, rgba(161, 161, 170, 0.14));
+}
+body[data-theme-variant="modern"] [data-layout="touch-ball"] button {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(var(--noir-primary-rgb), 0.12);
+}
+body[data-theme-variant="modern"] [data-layout="touch-ball-panel"] {
+  border-color: var(--modern-border-soft, rgba(161, 161, 170, 0.18));
+  box-shadow: var(--modern-glow-soft, 0 18px 48px rgba(12, 12, 14, 0.65));
 }

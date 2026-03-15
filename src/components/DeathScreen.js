@@ -139,7 +139,7 @@ export default function DeathScreen({ user, onLogout }) {
   };
 
   return (
-    <div style={{
+    <div data-death-screen style={{
       position: 'fixed', inset: 0, zIndex: 9999,
       background: 'radial-gradient(ellipse 100% 55% at 50% 0%, rgba(184,145,68,0.045) 0%, transparent 58%), radial-gradient(ellipse 80% 45% at 50% 100%, rgba(184,145,68,0.025) 0%, transparent 52%), linear-gradient(180deg, #0f0e13 0%, #13121a 100%)',
       overflowY: 'auto', overflowX: 'hidden',

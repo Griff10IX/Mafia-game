@@ -970,7 +970,7 @@ export default function Layout({ children }) {
           {/* IMPROVEMENT 1: rank bar always visible (not just md+) */}
           <div className="flex flex-col flex-1 shrink-0 min-w-0" style={{ minWidth: isMobile ? 28 : rankColMinWidthPx }}>
             <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading truncate">{rankName}</span>
-            <div className="shrink-0" style={{ width: isMobile ? Math.max(20, rankBarWidthPx) : rankBarWidthPx, position: 'relative', height: Math.max(4, Math.round(6 * chipHeightScale)), backgroundColor: '#2a2a2a', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
+            <div className="shrink-0" style={{ width: isMobile ? Math.max(20, rankBarWidthPx) : rankBarWidthPx, position: 'relative', height: Math.max(4, Math.round(6 * chipHeightScale)), backgroundColor: 'var(--noir-raised)', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
               <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 2 : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
             </div>
           </div>
@@ -1559,7 +1559,7 @@ export default function Layout({ children }) {
               {rankProgress && (
                 <div className="pt-1 pb-2 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}>
                   <p className="text-[9px] font-heading uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-muted)' }}>Rank Progress</p>
-                  <div className="h-1.5 w-full rounded-full overflow-hidden mb-1" style={{ backgroundColor: '#2a2a2a' }}>
+                  <div className="h-1.5 w-full rounded-full overflow-hidden mb-1" style={{ backgroundColor: 'var(--noir-raised)' }}>
                     <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
                   </div>
                   <p className="text-[9px] font-heading" style={{ color: 'var(--noir-primary)' }}>{(user?.premium_rank_bar ? (Number(rankProgress.rank_points_progress) || 0).toFixed(2) : (Number(rankProgress.rank_points_progress) || 0).toFixed(0))}% · {rankProgress.current_rank_name}</p>
@@ -1688,14 +1688,14 @@ export default function Layout({ children }) {
 
       {/* ── MOBILE BOTTOM NAV ────────────────────────────────────────────────── */}
       {mobileNavStyle === 'bottom' && (
-        <div ref={mobileBottomNavRef} className="md:hidden fixed bottom-0 left-0 right-0 z-40">
+        <div ref={mobileBottomNavRef} data-layout="bottom-nav" className="md:hidden fixed bottom-0 left-0 right-0 z-40">
           {/* IMPROVEMENT 3: 3-column grid submenu */}
           {mobileBottomMenuOpen && (() => {
             const group = mobileBottomNavItems.find((i) => i.type === 'group' && i.id === mobileBottomMenuOpen);
             if (!group || group.type !== 'group') return null;
             return (
-              <div className="absolute bottom-full left-0 right-0 border-t border-primary/20 shadow-2xl max-h-[60vh] overflow-y-auto"
-                style={{ backgroundColor: 'rgba(16,16,16,0.98)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--noir-border-mid)' }}
+              <div data-layout="bottom-nav-submenu" className="absolute bottom-full left-0 right-0 border-t border-primary/20 shadow-2xl max-h-[60vh] overflow-y-auto"
+                style={{ backgroundColor: 'var(--noir-content)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--noir-border-mid)' }}
                 role="menu">
                 {/* Group title */}
                 <div className="flex items-center justify-center gap-2 px-3 py-2 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.15)' }}>
@@ -1749,7 +1749,7 @@ export default function Layout({ children }) {
                         className="flex items-center justify-center text-center px-1 py-3 rounded-md border font-heading text-[9px] uppercase tracking-wider transition-all gap-1 min-h-[44px] touch-manipulation"
                         style={isActive
                           ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.5)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.14)', color: 'var(--noir-primary)' }
-                          : { borderColor: 'rgba(var(--noir-primary-rgb), 0.12)', backgroundColor: 'rgba(26,26,26,0.8)', color: 'var(--noir-foreground)' }}
+                          : { borderColor: 'rgba(var(--noir-primary-rgb), 0.12)', backgroundColor: 'var(--noir-content)', color: 'var(--noir-foreground)' }}
                         title={isGtaExclusive ? 'Exclusive car in GTA pool!' : undefined}>
                         {isGtaExclusive && <span className="text-violet-400 font-bold shrink-0" aria-hidden>★</span>}
                         <span className="leading-tight">{sub.label}</span>
@@ -1828,7 +1828,7 @@ export default function Layout({ children }) {
 
       {/* ── TOUCH BALL ───────────────────────────────────────────────────────── */}
       {user && notificationBallPosition && isMobileViewport && mobileStatsDisplay === 'touch_ball' && (
-        <div ref={notificationBallRef} className="fixed z-50 touch-none" style={{ left: notificationBallPosition.x, top: notificationBallPosition.y, width: 56, height: 56 }}>
+        <div ref={notificationBallRef} data-layout="touch-ball" className="fixed z-50 touch-none" style={{ left: notificationBallPosition.x, top: notificationBallPosition.y, width: 56, height: 56 }}>
           <button type="button"
             className="relative w-full h-full rounded-full flex items-center justify-center shadow-xl border-2 transition-transform active:scale-95 select-none"
             style={{
@@ -1892,7 +1892,7 @@ export default function Layout({ children }) {
           </button>
 
           {notificationPanelOpen && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[min(340px,calc(100vw-1.5rem))] max-h-[min(85vh,520px)] flex flex-col rounded-xl border-2 shadow-xl overflow-hidden"
+            <div data-layout="touch-ball-panel" className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[min(340px,calc(100vw-1.5rem))] max-h-[min(85vh,520px)] flex flex-col rounded-xl border-2 shadow-xl overflow-hidden"
               style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}>
               <div className="p-3 border-b shrink-0 flex items-center gap-2" style={{ borderColor: 'var(--noir-border)' }}>
                 <h3 className="font-heading font-semibold text-sm shrink-0" style={{ color: 'var(--noir-primary)' }}>Stats & Notifications</h3>
@@ -1933,7 +1933,7 @@ export default function Layout({ children }) {
                       <TrendingUp size={18} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
                       <div className="flex-1 min-w-0">
                         <p className="font-heading text-xs truncate" style={{ color: 'var(--noir-muted)' }}>{rankProgress.current_rank_name}</p>
-                        <div className="h-1.5 w-full rounded-full mt-1 overflow-hidden" style={{ backgroundColor: '#2a2a2a' }}>
+                        <div className="h-1.5 w-full rounded-full mt-1 overflow-hidden" style={{ backgroundColor: 'var(--noir-raised)' }}>
                           <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
                         </div>
                       </div>
@@ -2003,7 +2003,7 @@ export default function Layout({ children }) {
           <div style={{
             textAlign: 'center', padding: '32px 48px', borderRadius: 16,
             border: '1px solid rgba(var(--noir-primary-rgb), 0.3)',
-            backgroundColor: 'rgba(10,10,10,0.95)',
+            backgroundColor: 'var(--noir-content)',
             boxShadow: '0 0 40px rgba(0,0,0,0.6)',
           }}>
             <div style={{ fontSize: 48, fontFamily: 'var(--font-heading, "Cinzel", serif)', fontWeight: 700, color: 'var(--noir-primary)', lineHeight: 1 }}>

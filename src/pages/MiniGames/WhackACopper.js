@@ -397,7 +397,7 @@ export default function WhackACopper() {
   const displayMisses = livesMode > 0 ? "❤".repeat(Math.max(0, lives)) : missCount;
 
   return (
-    <div className={`${styles.root} ${panic ? styles.rootPanic : ""} ${shaking ? styles.rootShake : ""}`}>
+    <div data-game="whack-a-copper" className={`${styles.root} ${panic ? styles.rootPanic : ""} ${shaking ? styles.rootShake : ""}`}>
       <div className={styles.header}>
         <Link to="/casino/mini-games/leaderboard" className="text-primary text-[9px] font-heading uppercase tracking-wider hover:underline block mb-1">
           ← Mini Games Leaderboard

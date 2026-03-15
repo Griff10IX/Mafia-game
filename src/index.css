@@ -51,6 +51,16 @@ body[data-theme-variant="modern"] {
   --app-surface-padding: 1.1rem;
   --app-page-gutter: 1rem;
   --app-card-shadow: 0 10px 30px rgba(0, 0, 0, 0.32);
+  /* Override base noir vars so Layout, bottom nav, touch ball, and page components use modern palette */
+  --noir-bg: #0e0e10;
+  --noir-background: var(--noir-bg);
+  --noir-panel: #121214;
+  --noir-content: #161618;
+  --noir-surface: var(--modern-surface-2, #1e1e22);
+  --noir-raised: #28282e;
+  --noir-border: var(--modern-border-soft, rgba(161, 161, 170, 0.18));
+  --noir-border-light: rgba(161, 161, 170, 0.12);
+  --noir-border-mid: var(--modern-divider, rgba(161, 161, 170, 0.14));
   --modern-surface-1: #161618;
   --modern-surface-2: #1e1e22;
   --modern-surface-3: #28282e;
@@ -86,6 +96,16 @@ body[data-theme-variant="modern"] .app-toaster .app-toast {
   background: linear-gradient(180deg, rgba(39, 39, 44, 0.97) 0%, rgba(30, 30, 34, 0.97) 100%) !important;
   border-color: var(--modern-border-strong) !important;
   box-shadow: var(--modern-glow-soft) !important;
+}
+
+body[data-theme-variant="modern"] [data-death-screen] {
+  background: radial-gradient(ellipse 100% 55% at 50% 0%, rgba(var(--noir-primary-rgb), 0.06) 0%, transparent 58%), radial-gradient(ellipse 80% 45% at 50% 100%, rgba(var(--noir-primary-rgb), 0.03) 0%, transparent 52%), linear-gradient(180deg, var(--noir-bg) 0%, var(--noir-content) 100%) !important;
+}
+
+/* WhackACopper: override hardcoded gradient for Modern theme */
+body[data-theme-variant="modern"] [data-game="whack-a-copper"] {
+  background: linear-gradient(180deg, var(--noir-bg) 0%, var(--noir-content) 50%, var(--noir-panel) 100%) !important;
+  color: var(--noir-foreground);
 }
 
 /* Main content scrollbar – same as left sidebar (dark theme) */
