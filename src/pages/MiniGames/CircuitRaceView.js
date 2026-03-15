@@ -646,7 +646,7 @@ const TRACKS = [
 
 const PROFILE_N = 256;
 const _profileCache = new Map();
-const PROFILE_CACHE_KEY = "v5"; // bump to invalidate when profile logic changes (e.g. finish straight zone)
+const PROFILE_CACHE_KEY = "v6"; // bump to invalidate when profile logic changes (e.g. finish straight zone)
 
 // FIX B1: uses geometry discontinuity detection instead of blanket 5% bypass
 function getCurvature(track, t) {
@@ -687,10 +687,16 @@ function buildSpeedProfile(track) {
   const key = `${track.id}:${PROFILE_CACHE_KEY}`;
   if (_profileCache.has(key)) return _profileCache.get(key);
   const N = PROFILE_N, raw = new Float32Array(N);
-  // Pass 1: raw corner speed from curvature
+  // Pass 1: raw corner speed from curvature; force full speed on start/finish straight so braking pass can't pull it down
+  const sfRawStart = Math.floor(N * 0.92); // last 8% of lap = full speed
+  const sfRawEndFirst = Math.floor(N * 0.08); // first 8% of lap = full speed
   for (let i = 0; i < N; i++) {
-    const c = getCurvature(track, i/N);
-    raw[i] = c < 0.005 ? 1.0 : Math.max(0.55, 1/(1 + c*18));
+    if (i >= sfRawStart || i <= sfRawEndFirst) {
+      raw[i] = 1.0;
+    } else {
+      const c = getCurvature(track, i/N);
+      raw[i] = c < 0.005 ? 1.0 : Math.max(0.55, 1/(1 + c*18));
+    }
   }
   // Pass 2: braking (3 iterations, scan backwards). Skip wrap at lap boundary so we don't brake into the finish line every lap.
   for (let iter = 0; iter < 3; iter++) {
@@ -1505,7 +1511,7 @@ export default function CircuitRaceView({
                     const defPenalty = defending ? 0.25 : 0;
                     const success = Math.random() < Math.max(0.12, Math.min(0.88, baseChance - tyrePenalty - defPenalty));
                     if (success) r.overtakeBoostUntil = nowSec + 0.4;
-                    if (setOvertakeNotifRef.current) setOvertakeNotifRef.current({ text: success ? `Overtake on #${targetCarNum} successful!` : `Overtake on #${targetCarNum} failed!`, success, until: Date.now() + 1800 });
+                    if (r.isPlayer && setOvertakeNotifRef.current) setOvertakeNotifRef.current({ text: success ? `Overtake on #${targetCarNum} successful!` : `Overtake on #${targetCarNum} failed!`, success, until: Date.now() + 1800 });
                     addInc(success ? `${r.name} overtook #${targetCarNum}` : `${r.name} failed to overtake #${targetCarNum}`);
                   };
                   const secondId = r.overtakeAttempt.secondTargetId;
@@ -1518,7 +1524,7 @@ export default function CircuitRaceView({
                     const success2 = Math.random() < Math.max(0.1, Math.min(0.82, baseChance2 - (defending2 ? 0.22 : 0)));
                     if (success2) r.overtakeBoostUntil = nowSec + 0.35;
                     const text2 = success2 ? `Overtake on #${secondNum} successful!` : `Overtake on #${secondNum} failed!`;
-                    setTimeout(() => { if (setOvertakeNotifRef.current) setOvertakeNotifRef.current({ text: text2, success: success2, until: Date.now() + 1800 }); }, 400);
+                    if (r.isPlayer) setTimeout(() => { if (setOvertakeNotifRef.current) setOvertakeNotifRef.current({ text: text2, success: success2, until: Date.now() + 1800 }); }, 400);
                   }
                   r.overtakeAttempt = null;
                   r.targetLane = 0;
@@ -1547,8 +1553,11 @@ export default function CircuitRaceView({
                 r.lastOvertakeAttemptAt = nowSec;
                 carAhead.defendingUntil = nowSec + 0.4;
                 carAhead.targetLane = chosenLane;
-                const notifText = doDouble ? `Attempting take over on number ${r.overtakeAttempt.targetCarNumber} and ${r.overtakeAttempt.secondTargetCarNumber}` : `Attempting take over on number ${r.overtakeAttempt.targetCarNumber}`;
-                if (setOvertakeNotifRef.current) setOvertakeNotifRef.current({ text: notifText, success: null, until: Date.now() + 2000 });
+                if (r.isPlayer) {
+                  const notifText = doDouble ? `Attempting take over on number ${r.overtakeAttempt.targetCarNumber} and ${r.overtakeAttempt.secondTargetCarNumber}` : `Attempting take over on number ${r.overtakeAttempt.targetCarNumber}`;
+                  if (setOvertakeNotifRef.current) setOvertakeNotifRef.current({ text: notifText, success: null, until: Date.now() + 2000 });
+                }
+                if (carAhead.isPlayer && setOvertakeNotifRef.current) setOvertakeNotifRef.current({ text: `Defending from car #${r.carNumber ?? ""}`, success: null, until: Date.now() + 2000 });
               } else if (gap1 > 0 && gap1 <= 0.035 && !scActive && Math.random() < dt * 0.6 * ((r.overtakingLevel || 0) / 100) + dt * 0.04) {
                 r.overtakeBoostUntil = nowSec + 0.4;
               }
