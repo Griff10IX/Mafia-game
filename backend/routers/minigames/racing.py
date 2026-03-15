@@ -14,7 +14,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import Depends, HTTPException, Header
 from pydantic import BaseModel
 
-from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, send_notification
+from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, send_notification, log_gambling
 
 # ---------- Constants ----------
 def _now_iso() -> str:
@@ -63,6 +63,24 @@ CREW_BANK_DEBT_LIMIT = -50_000
 RANK_POINTS_BY_POSITION = [15, 10, 6, 4, 2, 1, 0, 0]
 RACING_REP_BY_POSITION = [5, 3, 2, 1, 0, 0, 0, 0]
 
+SPONSOR_TIERS = [
+    {"min_rep": 0,   "name": "None",             "income_per_race": 0},
+    {"min_rep": 10,  "name": "Local Garage",      "income_per_race": 500},
+    {"min_rep": 25,  "name": "City Motors",        "income_per_race": 1500},
+    {"min_rep": 50,  "name": "State Auto Group",   "income_per_race": 3500},
+    {"min_rep": 100, "name": "National Racing Co.", "income_per_race": 7500},
+    {"min_rep": 200, "name": "Grand Prix Alliance", "income_per_race": 15000},
+]
+
+def _get_sponsor(racing_rep: int) -> dict:
+    best = SPONSOR_TIERS[0]
+    for t in SPONSOR_TIERS:
+        if racing_rep >= t["min_rep"]:
+            best = t
+    return best
+
+LAPS_PRIZE_SCALE_BASE = 3  # base laps for prize calculation; longer races scale up
+
 CREW_UPGRADE_COSTS = [0, 50000, 120000, 250000, 500000, 1000000]
 CREW_BONUS_PER_LEVEL = 0.02
 CAR_UPGRADE_COSTS = [0, 20000, 50000, 100000, 200000]
@@ -80,6 +98,7 @@ TYRE_COST_SOFT = 800
 TYRE_COST_MEDIUM = 500
 TYRE_COST_HARD = 400
 TYRE_COST_INTER = 650
+TYRE_COST_FULL_WET = 900
 # Trade-offs: engine +power -grip, tires +grip -power, aero +speed -grip (unlock 1+ win), reliability -wear -power (unlock 1+ win)
 ENGINE_POWER_PER_LEVEL = 0.04
 ENGINE_GRIP_PENALTY_PER_LEVEL = 0.03
@@ -157,6 +176,7 @@ TYRE_COMPOUNDS = [
     {"id": "medium", "name": "Medium", "wear_mult": 1.0, "grip_mult": 1.0},
     {"id": "hard", "name": "Hard", "wear_mult": 0.65, "grip_mult": 0.96},
     {"id": "inter", "name": "Intermediate", "wear_mult": 1.1, "grip_mult": 1.02, "wet_grip_bonus": 0.12},
+    {"id": "full_wet", "name": "Full Wet", "wear_mult": 1.3, "grip_mult": 0.98, "wet_grip_bonus": 0.22},
 ]
 
 # Weather: affects tire wear and grip/speed. Set when race starts (random).
@@ -165,6 +185,7 @@ WEATHER_TYPES = [
     {"id": "rain", "name": "Rain", "tire_wear_mult": 1.55, "speed_mult": 0.90},
     {"id": "snow", "name": "Snow", "tire_wear_mult": 2.0, "speed_mult": 0.82},
     {"id": "very_hot", "name": "Very hot", "tire_wear_mult": 1.45, "speed_mult": 0.95},
+    {"id": "night", "name": "Night", "tire_wear_mult": 1.05, "speed_mult": 0.97},
 ]
 
 def _get_weather(weather_id: str) -> dict:
@@ -183,6 +204,8 @@ DEFAULT_PROFILE = {
     "tyre_stock_soft": TYRE_STOCK_INITIAL,
     "tyre_stock_medium": TYRE_STOCK_INITIAL,
     "tyre_stock_hard": TYRE_STOCK_INITIAL,
+    "tyre_stock_inter": 0,
+    "tyre_stock_full_wet": 0,
     "crew_bank": 0,
 }
 for _suffix, _max, _ in CREW_EXTRA_TYPES:
@@ -237,8 +260,22 @@ class BuyTyresRequest(BaseModel):
 
 
 class CompleteRaceRequest(BaseModel):
-    result_order: Optional[List[str]] = None  # optional client finish order; backend computes official order
-    dnf_ids: Optional[List[str]] = None  # entrant ids that did not finish (mechanical failure, fuel, etc.)
+    result_order: Optional[List[str]] = None
+    dnf_ids: Optional[List[str]] = None
+
+
+class PlaceRaceBetRequest(BaseModel):
+    race_id: str
+    entrant_id: str  # the participant user_id being bet on to win
+    stake: int
+
+
+class RaceChallengeCreateRequest(BaseModel):
+    target_username: str
+    track_id: str
+    stake: int = 0
+    laps: int = 3
+    weather_id: Optional[str] = None
 
 
 class CreateRacingTeamRequest(BaseModel):
@@ -407,6 +444,14 @@ async def _check_racing_week_and_season() -> None:
         )
         if res.modified_count == 0:
             return
+        # Payout end-of-week leaderboard rewards to top 5
+        WEEK_REWARDS = [100000, 60000, 40000, 25000, 15000]
+        top_profs = await db.racing_profiles.find({}, {"_id": 0, "user_id": 1, "wins": 1}).sort("wins", -1).limit(5).to_list(5)
+        for i, tp in enumerate(top_profs):
+            reward = WEEK_REWARDS[i] if i < len(WEEK_REWARDS) else 0
+            if reward > 0 and tp.get("user_id"):
+                await db.users.update_one({"id": tp["user_id"]}, {"$inc": {"money": reward}})
+                await send_notification(tp["user_id"], f"🏆 Weekly racing leaderboard #{i+1}! Earned ${reward:,}", "racing_weekly_reward")
         await db.racing_profiles.update_many(
             {},
             {"$set": {"mechanic_level": 0, "pit_level": 0, "crew_bank": 0, **{f"{s}_level": 0 for s, _, _ in CREW_EXTRA_TYPES}}},
@@ -730,11 +775,12 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         week_ends_utc = None
         season_ends_utc = None
     # Ensure tyre stock and crew_bank exist for existing users (one-time default)
-    for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard", "tyre_stock_inter"):
+    for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard", "tyre_stock_inter", "tyre_stock_full_wet"):
         if prof.get(key) is None:
+            default_val = TYRE_STOCK_INITIAL if key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard") else 0
             await db.racing_profiles.update_one(
                 {"user_id": current_user["id"]},
-                {"$set": {key: TYRE_STOCK_INITIAL}},
+                {"$set": {key: default_val}},
             )
             prof[key] = TYRE_STOCK_INITIAL
     if prof.get("crew_bank") is None:
@@ -823,8 +869,9 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "tyre_stock_soft": int(prof.get("tyre_stock_soft") or TYRE_STOCK_INITIAL),
         "tyre_stock_medium": int(prof.get("tyre_stock_medium") or TYRE_STOCK_INITIAL),
         "tyre_stock_hard": int(prof.get("tyre_stock_hard") or TYRE_STOCK_INITIAL),
-        "tyre_stock_inter": int(prof.get("tyre_stock_inter") or TYRE_STOCK_INITIAL),
-        "tyre_costs": {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD, "inter": TYRE_COST_INTER},
+        "tyre_stock_inter": int(prof.get("tyre_stock_inter") or 0),
+        "tyre_stock_full_wet": int(prof.get("tyre_stock_full_wet") or 0),
+        "tyre_costs": {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD, "inter": TYRE_COST_INTER, "full_wet": TYRE_COST_FULL_WET},
         "engine_repair_cost_per_pct": ENGINE_REPAIR_COST_PER_PCT,
         "engine_replace_cost": ENGINE_REPLACE_COST,
         "crew_bank_debt_limit": CREW_BANK_DEBT_LIMIT,
@@ -835,6 +882,8 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "racing_season_ends_utc": season_ends_utc,
         "free_engine_repair_available": (prof.get("free_engine_repair_used_season_start_utc") or "") != (meta.get("season_start_utc") or ""),
         "next_automated_race_utc": _next_automated_race_utc(),
+        "sponsor": _get_sponsor(int(prof.get("racing_rep") or 0)),
+        "sponsor_tiers": SPONSOR_TIERS,
     }
 
 
@@ -1122,10 +1171,10 @@ async def replace_engine(body: ReplaceEngineRequest, current_user: dict = Depend
 async def buy_tyres(body: BuyTyresRequest, current_user: dict = Depends(get_current_user_verified)):
     """Buy tyre sets (soft, medium, hard) to add to stock."""
     compound = (body.compound or "medium").strip().lower()
-    if compound not in ("soft", "medium", "hard", "inter"):
-        raise HTTPException(status_code=400, detail="compound must be soft, medium, hard, or inter")
+    if compound not in ("soft", "medium", "hard", "inter", "full_wet"):
+        raise HTTPException(status_code=400, detail="compound must be soft, medium, hard, inter, or full_wet")
     quantity = max(1, min(20, int(body.quantity or 1)))
-    cost_map = {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD, "inter": TYRE_COST_INTER}
+    cost_map = {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD, "inter": TYRE_COST_INTER, "full_wet": TYRE_COST_FULL_WET}
     cost = cost_map[compound] * quantity
     await _deduct_crew_bank(current_user["id"], cost, allow_debt=True)
     await _ensure_racing_profile(current_user["id"])
@@ -1289,10 +1338,11 @@ async def join_race(race_id: str, body: JoinRaceRequest, current_user: dict = De
     compound = (body.tyre_compound or "medium").strip().lower() if hasattr(body, "tyre_compound") else "medium"
     prof = await _ensure_racing_profile(current_user["id"])
     _require_racing_team(prof)
-    for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard", "tyre_stock_inter"):
+    for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard", "tyre_stock_inter", "tyre_stock_full_wet"):
         if prof.get(key) is None:
-            await db.racing_profiles.update_one({"user_id": current_user["id"]}, {"$set": {key: TYRE_STOCK_INITIAL}})
-            prof[key] = TYRE_STOCK_INITIAL
+            default_val = TYRE_STOCK_INITIAL if key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard") else 0
+            await db.racing_profiles.update_one({"user_id": current_user["id"]}, {"$set": {key: default_val}})
+            prof[key] = default_val
     tyre_stock = int(prof.get(f"tyre_stock_{compound}") or 0)
     if tyre_stock < 1:
         raise HTTPException(status_code=400, detail=f"No {compound} tyres in stock. Buy tyres in My ride.")
@@ -1825,6 +1875,8 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
     pot = entry_fee * len(participants) * REWARD_POOL_PCT
     if pot < RACING_BASE_CASH_POOL:
         pot = RACING_BASE_CASH_POOL
+    lap_scale = max(1.0, num_laps / LAPS_PRIZE_SCALE_BASE) if num_laps > LAPS_PRIZE_SCALE_BASE else 1.0
+    pot = int(pot * lap_scale)
     rewards = []
     for i, entrant_id in enumerate(result_order):
         position = i + 1
@@ -1836,13 +1888,18 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
         cash = 0 if is_dnf else int(pot * pct * reward_mult)
         rp = 0 if is_dnf else (RANK_POINTS_BY_POSITION[i] if i < len(RANK_POINTS_BY_POSITION) else 0)
         rep = 0 if is_dnf else (RACING_REP_BY_POSITION[i] if i < len(RACING_REP_BY_POSITION) else 0)
+        sponsor_income = 0
         if entrant and not entrant.get("is_npc"):
             uid = entrant.get("user_id")
+            prof_for_sponsor = profile_by_user.get(uid) or {}
+            sponsor = _get_sponsor(int(prof_for_sponsor.get("racing_rep") or 0))
+            sponsor_income = sponsor.get("income_per_race", 0) if not is_dnf else 0
+            total_crew_income = cash + sponsor_income
             if not is_dnf:
                 await db.users.update_one({"id": uid}, {"$inc": {"rank_points": rp}})
                 await db.racing_profiles.update_one(
                     {"user_id": uid},
-                    {"$inc": {"racing_rep": rep, "races_completed": 1, "wins": 1 if position == 1 else 0, "crew_bank": cash}},
+                    {"$inc": {"racing_rep": rep, "races_completed": 1, "wins": 1 if position == 1 else 0, "crew_bank": total_crew_income}},
                     upsert=True,
                 )
                 try:
@@ -1876,7 +1933,7 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
                 {"$inc": {f"tyre_stock_{compound}": -1}},
                 upsert=True,
             )
-        rewards.append({"entrant_id": entrant_id, "position": position, "cash": cash, "rank_points": rp, "racing_rep": rep, "dnf": is_dnf})
+        rewards.append({"entrant_id": entrant_id, "position": position, "cash": cash, "rank_points": rp, "racing_rep": rep, "dnf": is_dnf, "sponsor_income": sponsor_income})
     now = _now_iso()
     await db.racing_races.update_one(
         {"id": race_id},
@@ -1901,6 +1958,12 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
     race["lap_results"] = lap_results
     race["pit_stops"] = pit_stops
     race["tire_wear_after_lap"] = tire_wear_after_lap
+    winner_id = result_order[0] if result_order else None
+    if winner_id and winner_id not in dnf_ids:
+        asyncio.create_task(_settle_race_bets(race_id, winner_id))
+    else:
+        asyncio.create_task(_refund_race_bets(race_id))
+    asyncio.create_task(_update_track_records(race_id, race.get("track_id") or "", lap_results, participants))
     return {"message": "Race completed", "race": race}
 
 
@@ -2015,6 +2078,468 @@ async def get_latest_automated_race(current_user: dict = Depends(get_current_use
     return {"race": race, "next_automated_race_utc": _next_automated_race_utc()}
 
 
+# ---------- Racing Bets ----------
+
+def _compute_race_odds(participants: list) -> Dict[str, float]:
+    """Generate odds per entrant based on car effective_speed/grip and racing_rep."""
+    scores = {}
+    for p in participants:
+        speed = float(p.get("effective_speed") or p.get("speed") or 50)
+        grip = float(p.get("effective_grip") or p.get("grip") or 50)
+        rep = float(p.get("racing_rep") or 0)
+        scores[p.get("user_id") or p.get("id")] = speed + grip * 0.8 + rep * 0.3
+    total = sum(scores.values()) or 1
+    odds = {}
+    for eid, sc in scores.items():
+        raw_prob = sc / total
+        fair_odds = 1.0 / max(raw_prob, 0.01)
+        odds[eid] = round(max(1.15, min(fair_odds * 0.92, 25.0)), 2)
+    return odds
+
+
+async def get_race_bet_odds(race_id: str, current_user: dict = Depends(get_current_user)):
+    race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    if not race:
+        raise HTTPException(status_code=404, detail="Race not found")
+    participants = list(race.get("participants") or [])
+    odds = _compute_race_odds(participants)
+    entrants = []
+    for p in participants:
+        eid = p.get("user_id") or p.get("id")
+        entrants.append({
+            "entrant_id": eid,
+            "username": p.get("username") or p.get("name") or "?",
+            "car_name": p.get("car_name") or "?",
+            "odds": odds.get(eid, 2.0),
+        })
+    return {"race_id": race_id, "entrants": entrants, "state": race.get("state")}
+
+
+async def place_race_bet(payload: PlaceRaceBetRequest, current_user: dict = Depends(get_current_user_verified)):
+    race_id = (payload.race_id or "").strip()
+    entrant_id = (payload.entrant_id or "").strip()
+    stake = int(payload.stake or 0)
+    if stake <= 0:
+        raise HTTPException(status_code=400, detail="Stake must be > 0")
+
+    race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    if not race:
+        raise HTTPException(status_code=404, detail="Race not found")
+    if race.get("state") != "open":
+        raise HTTPException(status_code=400, detail="Bets only accepted while race is open")
+
+    participants = list(race.get("participants") or [])
+    valid_ids = {(p.get("user_id") or p.get("id")) for p in participants}
+    if entrant_id not in valid_ids:
+        raise HTTPException(status_code=400, detail="Invalid entrant")
+    if entrant_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot bet on yourself")
+
+    odds = _compute_race_odds(participants)
+    entrant_odds = odds.get(entrant_id, 2.0)
+
+    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
+    money = int((user or {}).get("money") or 0)
+    if stake > money:
+        raise HTTPException(status_code=400, detail="Insufficient cash")
+
+    bet_id = str(uuid.uuid4())
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -stake}})
+
+    entrant_info = next((p for p in participants if (p.get("user_id") or p.get("id")) == entrant_id), {})
+    await db.racing_bets.insert_one({
+        "id": bet_id, "user_id": current_user["id"],
+        "race_id": race_id, "entrant_id": entrant_id,
+        "entrant_username": entrant_info.get("username") or entrant_info.get("name") or "?",
+        "odds": entrant_odds, "stake": stake, "status": "open",
+        "created_at": _now_iso(),
+    })
+    await log_gambling(
+        current_user["id"], current_user.get("username") or "?", "racing_bet",
+        {"bet_id": bet_id, "race_id": race_id, "entrant_id": entrant_id, "odds": entrant_odds, "stake": stake},
+    )
+    who = entrant_info.get("username") or entrant_info.get("name") or "?"
+    return {"message": f"Bet ${stake:,} on {who} at {entrant_odds}x", "bet_id": bet_id}
+
+
+async def list_race_bets(current_user: dict = Depends(get_current_user_verified)):
+    open_bets = await db.racing_bets.find(
+        {"user_id": current_user["id"], "status": "open"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    settled = await db.racing_bets.find(
+        {"user_id": current_user["id"], "status": {"$in": ["won", "lost", "refunded"]}}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return {"open": open_bets, "settled": settled}
+
+
+async def _settle_race_bets(race_id: str, winner_id: str):
+    now = _now_iso()
+    bets = await db.racing_bets.find({"race_id": race_id, "status": "open"}, {"_id": 0}).to_list(2000)
+    for bet in bets:
+        won = bet.get("entrant_id") == winner_id
+        status = "won" if won else "lost"
+        res = await db.racing_bets.update_one(
+            {"id": bet["id"], "status": "open"},
+            {"$set": {"status": status, "settled_at": now}}
+        )
+        if res.modified_count > 0 and won:
+            payout = int(int(bet.get("stake") or 0) * float(bet.get("odds") or 1.0))
+            if payout > 0:
+                await db.users.update_one({"id": bet["user_id"]}, {"$inc": {"money": payout}})
+        u = await db.users.find_one({"id": bet["user_id"]}, {"_id": 0, "username": 1})
+        await log_gambling(
+            bet["user_id"], (u or {}).get("username", "?"), "racing_bet_settle",
+            {"bet_id": bet["id"], "race_id": race_id, "status": status, "settled_at": now},
+        )
+
+
+async def _refund_race_bets(race_id: str):
+    now = _now_iso()
+    bets = await db.racing_bets.find({"race_id": race_id, "status": "open"}, {"_id": 0}).to_list(2000)
+    for bet in bets:
+        res = await db.racing_bets.update_one(
+            {"id": bet["id"], "status": "open"},
+            {"$set": {"status": "refunded", "settled_at": now}}
+        )
+        if res.modified_count > 0:
+            stake = int(bet.get("stake") or 0)
+            if stake > 0:
+                await db.users.update_one({"id": bet["user_id"]}, {"$inc": {"money": stake}})
+
+
+# ---------- Head-to-Head Challenges ----------
+
+async def create_race_challenge(payload: RaceChallengeCreateRequest, current_user: dict = Depends(get_current_user_verified)):
+    target_name = (payload.target_username or "").strip()
+    if not target_name:
+        raise HTTPException(status_code=400, detail="Target username required")
+    target = await db.users.find_one({"username": {"$regex": f"^{target_name}$", "$options": "i"}}, {"_id": 0, "id": 1, "username": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Player not found")
+    if target["id"] == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot challenge yourself")
+
+    track = _get_track(payload.track_id)
+    if not track:
+        raise HTTPException(status_code=400, detail="Invalid track")
+    stake = max(0, min(ENTRY_FEE_MAX, int(payload.stake or 0)))
+    laps = max(NUM_LAPS_MIN, min(NUM_LAPS_MAX, int(payload.laps or 3)))
+    weather_id = (payload.weather_id or "").strip().lower() or "clear"
+    weather = _get_weather(weather_id)
+
+    if stake > 0:
+        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
+        if int((user or {}).get("money") or 0) < stake:
+            raise HTTPException(status_code=400, detail="Insufficient cash for stake")
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -stake}})
+
+    challenge_id = str(uuid.uuid4())
+    doc = {
+        "id": challenge_id,
+        "challenger_id": current_user["id"],
+        "challenger_username": current_user.get("username") or "?",
+        "target_id": target["id"],
+        "target_username": target["username"],
+        "track_id": payload.track_id,
+        "track_name": track.get("name", payload.track_id),
+        "stake": stake,
+        "laps": laps,
+        "weather": weather_id,
+        "weather_name": weather.get("name", "Clear"),
+        "state": "pending",
+        "created_at": _now_iso(),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat().replace("+00:00", "Z"),
+    }
+    await db.racing_challenges.insert_one(doc)
+    doc.pop("_id", None)
+
+    await send_notification(target["id"], f"⚔ {current_user.get('username','?')} challenges you to a race on {track.get('name','')}! Stake: ${stake:,}", "racing_challenge")
+    return {"message": f"Challenge sent to {target['username']}", "challenge_id": challenge_id, "challenge": doc}
+
+
+async def list_race_challenges(current_user: dict = Depends(get_current_user_verified)):
+    incoming = await db.racing_challenges.find(
+        {"target_id": current_user["id"], "state": "pending"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    outgoing = await db.racing_challenges.find(
+        {"challenger_id": current_user["id"], "state": "pending"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    completed = await db.racing_challenges.find(
+        {"$or": [{"challenger_id": current_user["id"]}, {"target_id": current_user["id"]}], "state": "completed"},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(20)
+    return {"incoming": incoming, "outgoing": outgoing, "completed": completed}
+
+
+async def accept_race_challenge(challenge_id: str, current_user: dict = Depends(get_current_user_verified)):
+    ch = await db.racing_challenges.find_one({"id": challenge_id, "state": "pending"}, {"_id": 0})
+    if not ch:
+        raise HTTPException(status_code=404, detail="Challenge not found or already resolved")
+    if ch["target_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your challenge to accept")
+
+    stake = int(ch.get("stake") or 0)
+    if stake > 0:
+        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
+        if int((user or {}).get("money") or 0) < stake:
+            raise HTTPException(status_code=400, detail="Insufficient cash for stake")
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -stake}})
+
+    # Build minimal participants
+    ch_prof = await _ensure_racing_profile(ch["challenger_id"])
+    tgt_prof = await _ensure_racing_profile(current_user["id"])
+    ch_car = await db.user_racing_cars.find_one({"user_id": ch["challenger_id"], "id": ch_prof.get("selected_racing_car_id")}, {"_id": 0})
+    tgt_car = await db.user_racing_cars.find_one({"user_id": current_user["id"], "id": tgt_prof.get("selected_racing_car_id")}, {"_id": 0})
+
+    participants = [
+        {
+            "user_id": ch["challenger_id"], "username": ch.get("challenger_username", "?"),
+            "car_name": (ch_car or {}).get("car_name", "?"), "is_npc": False,
+            "racing_car_instance_id": ch_prof.get("selected_racing_car_id"),
+            "speed": float((ch_car or {}).get("effective_speed") or 50),
+            "grip": float((ch_car or {}).get("effective_grip") or 0.5),
+            "tyre_compound": "medium",
+        },
+        {
+            "user_id": current_user["id"], "username": current_user.get("username", "?"),
+            "car_name": (tgt_car or {}).get("car_name", "?"), "is_npc": False,
+            "racing_car_instance_id": tgt_prof.get("selected_racing_car_id"),
+            "speed": float((tgt_car or {}).get("effective_speed") or 50),
+            "grip": float((tgt_car or {}).get("effective_grip") or 0.5),
+            "tyre_compound": "medium",
+        },
+    ]
+
+    race_id = str(uuid.uuid4())
+    track = _get_track(ch["track_id"])
+    weather_id = ch.get("weather") or "clear"
+    num_laps = ch.get("laps") or 3
+    weather = _get_weather(weather_id)
+
+    race_doc = {
+        "id": race_id, "track_id": ch["track_id"], "track_name": ch.get("track_name", ""),
+        "entry_fee": 0, "max_grid": 2, "state": "completed",
+        "created_by": ch["challenger_id"], "created_at": _now_iso(),
+        "weather": weather_id, "weather_name": weather.get("name", "Clear"),
+        "participants": participants, "laps": num_laps,
+        "challenge_id": challenge_id, "is_h2h": True,
+    }
+
+    # Run deterministic sim
+    profile_by_user = {ch["challenger_id"]: ch_prof, current_user["id"]: tgt_prof}
+    ch_ups = await db.racing_upgrades.find({"user_id": ch["challenger_id"]}, {"_id": 0}).to_list(50)
+    tgt_ups = await db.racing_upgrades.find({"user_id": current_user["id"]}, {"_id": 0}).to_list(50)
+    upgrades_map = {}
+    for u in ch_ups + tgt_ups:
+        uid = u.get("user_id")
+        if uid not in upgrades_map:
+            upgrades_map[uid] = u
+
+    engine_wear_by_entrant = {}
+    for p in participants:
+        uid = p.get("user_id")
+        inst_id = p.get("racing_car_instance_id")
+        if uid and inst_id:
+            car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0, "engine_wear": 1})
+            engine_wear_by_entrant[uid] = float(car_doc.get("engine_wear") or 0) if car_doc else 0.0
+
+    with _SeededRandom(f"race:{race_id}"):
+        lap_results, result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids = _run_race_simulation_laps(
+            participants, profile_by_user, upgrades_map, num_laps, weather_id=weather_id, engine_wear_by_entrant=engine_wear_by_entrant
+        )
+
+    winner_id = result_order[0] if result_order else None
+    total_pot = stake * 2
+    rewards = []
+    for i, eid in enumerate(result_order):
+        is_dnf = eid in sim_dnf_ids
+        position = i + 1
+        cash_won = total_pot if position == 1 and not is_dnf else 0
+        rewards.append({"entrant_id": eid, "position": position, "cash": cash_won, "dnf": is_dnf})
+
+    if winner_id and winner_id not in sim_dnf_ids:
+        await db.users.update_one({"id": winner_id}, {"$inc": {"money": total_pot}})
+    else:
+        await db.users.update_one({"id": ch["challenger_id"]}, {"$inc": {"money": stake}})
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": stake}})
+
+    race_doc["result_order"] = result_order
+    race_doc["rewards"] = rewards
+    race_doc["dnf_ids"] = list(sim_dnf_ids or [])
+    race_doc["lap_results"] = lap_results
+    race_doc["pit_stops"] = pit_stops
+    race_doc["tire_wear_after_lap"] = tire_wear_after_lap
+    race_doc["completed_at"] = _now_iso()
+
+    await db.racing_races.insert_one(race_doc)
+    race_doc.pop("_id", None)
+
+    await db.racing_challenges.update_one(
+        {"id": challenge_id},
+        {"$set": {"state": "completed", "race_id": race_id, "winner_id": winner_id, "completed_at": _now_iso()}}
+    )
+
+    winner_name = ch.get("challenger_username") if winner_id == ch["challenger_id"] else current_user.get("username", "?")
+    await send_notification(ch["challenger_id"], f"🏁 Race result vs {current_user.get('username','?')}: {winner_name} wins! Stake: ${total_pot:,}", "racing_challenge_result")
+
+    return {"message": f"Race complete! {winner_name} wins!", "race": race_doc, "winner_id": winner_id}
+
+
+async def decline_race_challenge(challenge_id: str, current_user: dict = Depends(get_current_user_verified)):
+    ch = await db.racing_challenges.find_one({"id": challenge_id, "state": "pending"}, {"_id": 0})
+    if not ch:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+    if ch["target_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your challenge")
+
+    stake = int(ch.get("stake") or 0)
+    if stake > 0:
+        await db.users.update_one({"id": ch["challenger_id"]}, {"$inc": {"money": stake}})
+
+    await db.racing_challenges.update_one({"id": challenge_id}, {"$set": {"state": "declined", "declined_at": _now_iso()}})
+    await send_notification(ch["challenger_id"], f"{current_user.get('username','?')} declined your race challenge.", "racing_challenge_declined")
+    return {"message": "Challenge declined"}
+
+
+# ---------- Race History & Stats ----------
+
+async def get_race_history(current_user: dict = Depends(get_current_user_verified), limit: int = 30):
+    """Return the player's recent completed races."""
+    races = await db.racing_races.find(
+        {"state": "completed", "participants.user_id": current_user["id"]},
+        {"_id": 0, "id": 1, "track_id": 1, "track_name": 1, "weather": 1, "laps": 1,
+         "completed_at": 1, "result_order": 1, "rewards": 1, "dnf_ids": 1, "participants": 1}
+    ).sort("completed_at", -1).limit(limit).to_list(limit)
+
+    history = []
+    for race in races:
+        result_order = race.get("result_order") or []
+        rewards = race.get("rewards") or []
+        my_reward = next((r for r in rewards if r.get("entrant_id") == current_user["id"]), None)
+        position = my_reward.get("position") if my_reward else None
+        cash = my_reward.get("cash", 0) if my_reward else 0
+        is_dnf = current_user["id"] in (race.get("dnf_ids") or [])
+        num_entrants = len(race.get("participants") or [])
+        history.append({
+            "race_id": race["id"],
+            "track_id": race.get("track_id"),
+            "track_name": race.get("track_name") or race.get("track_id"),
+            "weather": race.get("weather"),
+            "laps": race.get("laps"),
+            "completed_at": race.get("completed_at"),
+            "position": position,
+            "cash": cash,
+            "dnf": is_dnf,
+            "num_entrants": num_entrants,
+        })
+    return {"history": history}
+
+
+async def get_race_track_records(current_user: dict = Depends(get_current_user)):
+    """Return best lap times per track (global and personal)."""
+    records = {}
+    for track in TRACKS:
+        tid = track["id"]
+        global_best = await db.racing_records.find_one(
+            {"track_id": tid, "type": "global"}, {"_id": 0}
+        )
+        personal_best = await db.racing_records.find_one(
+            {"track_id": tid, "type": "personal", "user_id": current_user["id"]}, {"_id": 0}
+        )
+        records[tid] = {
+            "track_name": track.get("name", tid),
+            "global_best_lap": global_best.get("best_lap") if global_best else None,
+            "global_holder": global_best.get("username") if global_best else None,
+            "personal_best_lap": personal_best.get("best_lap") if personal_best else None,
+        }
+    return {"records": records}
+
+
+async def _update_track_records(race_id: str, track_id: str, lap_results: list, participants: list):
+    """After a race completes, update global and personal lap records."""
+    for entrant_laps in lap_results:
+        eid = entrant_laps.get("entrant_id")
+        laps = entrant_laps.get("laps") or []
+        entrant = next((p for p in participants if (p.get("user_id") or p.get("id")) == eid), None)
+        username = (entrant.get("username") or entrant.get("name") or "?") if entrant else "?"
+        is_npc = bool(entrant.get("is_npc")) if entrant else True
+        for lap_data in laps:
+            lap_time = float(lap_data.get("time") or lap_data.get("lap_time") or 999)
+            if lap_time <= 0 or lap_time >= 999:
+                continue
+            # Global record
+            global_rec = await db.racing_records.find_one({"track_id": track_id, "type": "global"}, {"_id": 0})
+            if not global_rec or lap_time < float(global_rec.get("best_lap") or 999):
+                await db.racing_records.update_one(
+                    {"track_id": track_id, "type": "global"},
+                    {"$set": {"best_lap": round(lap_time, 3), "user_id": eid, "username": username,
+                              "race_id": race_id, "set_at": _now_iso()}},
+                    upsert=True,
+                )
+            # Personal record (skip NPCs)
+            if not is_npc:
+                personal_rec = await db.racing_records.find_one(
+                    {"track_id": track_id, "type": "personal", "user_id": eid}, {"_id": 0}
+                )
+                if not personal_rec or lap_time < float(personal_rec.get("best_lap") or 999):
+                    await db.racing_records.update_one(
+                        {"track_id": track_id, "type": "personal", "user_id": eid},
+                        {"$set": {"best_lap": round(lap_time, 3), "username": username,
+                                  "race_id": race_id, "set_at": _now_iso()}},
+                        upsert=True,
+                    )
+
+
+async def get_race_season_stats(current_user: dict = Depends(get_current_user_verified)):
+    """Return player's stats for the current season."""
+    prof = await _ensure_racing_profile(current_user["id"])
+    meta = await db.racing_meta.find_one({"id": "main"}, {"_id": 0})
+    season_start = None
+    if meta:
+        try:
+            season_start = datetime.fromisoformat(meta.get("season_start_utc", "")).replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            pass
+
+    match_filter = {"state": "completed", "participants.user_id": current_user["id"]}
+    if season_start:
+        match_filter["completed_at"] = {"$gte": season_start.isoformat().replace("+00:00", "Z")}
+
+    races = await db.racing_races.find(match_filter, {
+        "_id": 0, "rewards": 1, "dnf_ids": 1
+    }).to_list(5000)
+
+    wins = 0
+    podiums = 0
+    dnfs = 0
+    total_earnings = 0
+    total_races = len(races)
+
+    for race in races:
+        rewards = race.get("rewards") or []
+        my_reward = next((r for r in rewards if r.get("entrant_id") == current_user["id"]), None)
+        if my_reward:
+            pos = my_reward.get("position", 99)
+            if pos == 1:
+                wins += 1
+            if pos <= 3:
+                podiums += 1
+            total_earnings += int(my_reward.get("cash") or 0)
+        if current_user["id"] in (race.get("dnf_ids") or []):
+            dnfs += 1
+
+    return {
+        "season_stats": {
+            "total_races": total_races,
+            "wins": wins,
+            "podiums": podiums,
+            "dnfs": dnfs,
+            "total_earnings": total_earnings,
+            "racing_rep": int(prof.get("racing_rep") or 0),
+        }
+    }
+
+
 def register(router):
     router.add_api_route("/racing/cars", get_racing_cars, methods=["GET"])
     router.add_api_route("/racing/tracks", get_racing_tracks, methods=["GET"])
@@ -2036,6 +2561,16 @@ def register(router):
     router.add_api_route("/racing/comps", get_racing_comps, methods=["GET"])
     router.add_api_route("/racing/comps/{comp_id}/enter", enter_racing_comp, methods=["POST"])
     router.add_api_route("/racing/automated/latest", get_latest_automated_race, methods=["GET"])
+    router.add_api_route("/racing/bets/place", place_race_bet, methods=["POST"])
+    router.add_api_route("/racing/bets", list_race_bets, methods=["GET"])
+    router.add_api_route("/racing/races/{race_id}/odds", get_race_bet_odds, methods=["GET"])
+    router.add_api_route("/racing/history", get_race_history, methods=["GET"])
+    router.add_api_route("/racing/records", get_race_track_records, methods=["GET"])
+    router.add_api_route("/racing/season-stats", get_race_season_stats, methods=["GET"])
+    router.add_api_route("/racing/challenges", list_race_challenges, methods=["GET"])
+    router.add_api_route("/racing/challenges/create", create_race_challenge, methods=["POST"])
+    router.add_api_route("/racing/challenges/{challenge_id}/accept", accept_race_challenge, methods=["POST"])
+    router.add_api_route("/racing/challenges/{challenge_id}/decline", decline_race_challenge, methods=["POST"])
 
     # Cron: automated daily races (same X-Cron-Secret as Auto Rank)
     cron_secret = (os.environ.get("CRON_SECRET") or "").strip()

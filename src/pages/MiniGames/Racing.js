@@ -31,10 +31,9 @@ const WEATHER_OPTIONS = [
   { id: "snow", name: "Snow", icon: "❄️" },
   { id: "very_hot", name: "Very Hot", icon: "🔥" },
 ];
-const WEATHER_ID_FOR_API = (id) => (id === "night" ? "clear" : id);
+const WEATHER_ID_FOR_API = (id) => id;
 
 function effectiveTyreStock(compound, profile) {
-  if (compound === "full_wet") return profile?.tyre_stock_inter ?? 0;
   return profile?.[`tyre_stock_${compound}`] ?? 0;
 }
 
@@ -148,6 +147,18 @@ export default function Racing() {
   const [teamCreating, setTeamCreating] = useState(false);
   const [latestAutomated, setLatestAutomated] = useState(_cached?.latestAutomated ?? null);
   const [nextAutoRaceUtc, setNextAutoRaceUtc] = useState(_cached?.nextAutoRaceUtc ?? null);
+  const [raceBets, setRaceBets] = useState({ open: [], settled: [] });
+  const [raceHistory, setRaceHistory] = useState([]);
+  const [seasonStats, setSeasonStats] = useState(null);
+  const [trackRecords, setTrackRecords] = useState({});
+  const [betOdds, setBetOdds] = useState(null);
+  const [bettingRaceId, setBettingRaceId] = useState(null);
+  const [betStake, setBetStake] = useState("");
+  const [betEntrant, setBetEntrant] = useState("");
+  const [placingBet, setPlacingBet] = useState(false);
+  const [challenges, setChallenges] = useState({ incoming: [], outgoing: [], completed: [] });
+  const [challengeForm, setChallengeForm] = useState({ target_username: "", track_id: "", stake: 0, laps: 3, weather_id: "clear" });
+  const [challengeCreating, setChallengeCreating] = useState(false);
   const refreshTimer = useRef(null);
 
   const applyProfile = useCallback((d) => {
@@ -157,6 +168,7 @@ export default function Racing() {
       tyre_stock_medium: d.tyre_stock_medium,
       tyre_stock_hard: d.tyre_stock_hard,
       tyre_stock_inter: d.tyre_stock_inter,
+      tyre_stock_full_wet: d.tyre_stock_full_wet,
       tyre_costs: d.tyre_costs || {},
       engine_repair_cost_per_pct: d.engine_repair_cost_per_pct,
       engine_replace_cost: d.engine_replace_cost,
@@ -170,6 +182,9 @@ export default function Racing() {
       crew_levels_used: d.crew_levels_used ?? 0,
       crew_global_cap: d.crew_global_cap ?? 24,
       crew_tradeoffs: d.crew_tradeoffs || null,
+      sponsor: d.sponsor || null,
+      sponsor_tiers: d.sponsor_tiers || [],
+      racing_rep: d.profile?.racing_rep ?? 0,
     };
     setProfile(p);
     setCars(d.owned_cars || []);
@@ -238,6 +253,71 @@ export default function Racing() {
     try { const r = await api.get("/racing/races/open"); setOpenRaces(r.data?.races || []); } catch {}
   }, []);
 
+  const fetchBets = useCallback(async () => {
+    try { const r = await api.get("/racing/bets"); setRaceBets(r.data || { open: [], settled: [] }); } catch {}
+  }, []);
+
+  const fetchHistory = useCallback(async () => {
+    try { const r = await api.get("/racing/history"); setRaceHistory(r.data?.history || []); } catch {}
+  }, []);
+
+  const fetchSeasonStats = useCallback(async () => {
+    try { const r = await api.get("/racing/season-stats"); setSeasonStats(r.data?.season_stats || null); } catch {}
+  }, []);
+
+  const fetchTrackRecords = useCallback(async () => {
+    try { const r = await api.get("/racing/records"); setTrackRecords(r.data?.records || {}); } catch {}
+  }, []);
+
+  const fetchBetOdds = useCallback(async (raceId) => {
+    try { const r = await api.get(`/racing/races/${raceId}/odds`); setBetOdds(r.data); } catch {}
+  }, []);
+
+  const fetchChallenges = useCallback(async () => {
+    try { const r = await api.get("/racing/challenges"); setChallenges(r.data || { incoming: [], outgoing: [], completed: [] }); } catch {}
+  }, []);
+
+  const handleCreateChallenge = useCallback(async () => {
+    if (!challengeForm.target_username || !challengeForm.track_id) { toast.error("Fill in target and track"); return; }
+    setChallengeCreating(true);
+    try {
+      const r = await api.post("/racing/challenges/create", challengeForm);
+      toast.success(r.data?.message || "Challenge sent");
+      setChallengeForm(f => ({ ...f, target_username: "" }));
+      fetchChallenges();
+    } catch (e) { toast.error(apiDetail(e)); }
+    finally { setChallengeCreating(false); }
+  }, [challengeForm, fetchChallenges]);
+
+  const handleAcceptChallenge = useCallback(async (id) => {
+    try {
+      const r = await api.post(`/racing/challenges/${id}/accept`);
+      toast.success(r.data?.message || "Race complete");
+      if (r.data?.race) setActiveRace(r.data.race);
+      fetchChallenges();
+    } catch (e) { toast.error(apiDetail(e)); }
+  }, [fetchChallenges]);
+
+  const handleDeclineChallenge = useCallback(async (id) => {
+    try {
+      await api.post(`/racing/challenges/${id}/decline`);
+      toast.success("Challenge declined");
+      fetchChallenges();
+    } catch (e) { toast.error(apiDetail(e)); }
+  }, [fetchChallenges]);
+
+  const handlePlaceBet = useCallback(async () => {
+    if (!bettingRaceId || !betEntrant || !betStake) return;
+    setPlacingBet(true);
+    try {
+      const r = await api.post("/racing/bets/place", { race_id: bettingRaceId, entrant_id: betEntrant, stake: Number(betStake) });
+      toast.success(r.data?.message || "Bet placed");
+      setBetStake(""); setBetEntrant(""); setBettingRaceId(null); setBetOdds(null);
+      fetchBets();
+    } catch (e) { toast.error(apiDetail(e)); }
+    finally { setPlacingBet(false); }
+  }, [bettingRaceId, betEntrant, betStake, fetchBets]);
+
   useEffect(() => {
     if (_cached && Date.now() - _racingLastFetch < RACING_REFRESH) {
       setLoading(false);
@@ -269,12 +349,18 @@ export default function Racing() {
     })();
   }, [raceIdParam]);
 
+  useEffect(() => {
+    if (tab === "bets") fetchBets();
+    if (tab === "history") { fetchHistory(); fetchSeasonStats(); fetchTrackRecords(); }
+    if (tab === "challenges") fetchChallenges();
+  }, [tab, fetchBets, fetchHistory, fetchSeasonStats, fetchTrackRecords, fetchChallenges]);
+
   const createRacePayload = () => ({
     track_id: createForm.track_id,
     entry_fee: Number(createForm.entry_fee) || 0,
     max_grid: Number(createForm.max_grid) || 6,
     laps: Number(createForm.laps) || 3,
-    tyre_compound: (createForm.tyre_compound === "full_wet" ? "inter" : createForm.tyre_compound) || "medium",
+    tyre_compound: createForm.tyre_compound || "medium",
     weather_id: WEATHER_ID_FOR_API(createForm.weather_id || "clear"),
   });
 
@@ -495,6 +581,9 @@ export default function Racing() {
 
   const tabs = [
     { id: "races", label: "Races" },
+    { id: "challenges", label: "H2H" },
+    { id: "bets", label: "Bets" },
+    { id: "history", label: "History" },
     { id: "myride", label: "My Ride" },
     { id: "crew", label: "Crew" },
     { id: "leaderboard", label: "Board" },
@@ -593,6 +682,7 @@ export default function Racing() {
             playerCarName={playerCarName}
             playerPitLevel={profile?.pit_level ?? 0}
             currentUserId={profile?.user_id}
+            rewards={activeRace.rewards || null}
             onReset={() => setActiveRace(null)}
           />
         </div>
@@ -871,7 +961,7 @@ export default function Racing() {
                           </div>
                           <button type="button" className={styles.btnPrimary + " text-[10px] min-h-[32px] touch-manipulation px-2 py-0.5 flex-shrink-0"}
                             disabled={joiningId === race.id || !selectedInstanceId || race.participants?.some((p) => p.user_id === profile?.user_id) || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 || effectiveTyreStock(joinTyre, profile) < 1}
-                            onClick={() => handleJoinRace(race, selectedInstanceId, joinTyre === "full_wet" ? "inter" : joinTyre)}>
+                            onClick={() => handleJoinRace(race, selectedInstanceId, joinTyre)}>
                             {joiningId === race.id ? "…" : "Join"}
                           </button>
                         </div>
@@ -1149,6 +1239,31 @@ export default function Racing() {
                 })()}
               </div>
             </div>
+
+            {/* Sponsor Deal */}
+            <div className={styles.panel + " overflow-hidden mt-3"}>
+              <CardHead title="Sponsor Deal" right={
+                <span className="text-[10px] text-[var(--noir-primary)]">{profile?.sponsor?.name || "None"}</span>
+              } />
+              <div className="p-3">
+                <p className="text-[10px] text-[var(--noir-muted)] mb-2">Earn passive income per race based on your racing rep. Higher rep = better sponsors.</p>
+                <div className="text-[11px] mb-2">
+                  Current: <span className="text-[var(--noir-primary)] font-semibold">{profile?.sponsor?.name || "None"}</span>
+                  {profile?.sponsor?.income_per_race > 0 && (
+                    <span className="text-[var(--noir-muted)]"> — ${(profile.sponsor.income_per_race || 0).toLocaleString()} per race</span>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  {(profile?.sponsor_tiers || []).map((t, i) => (
+                    <div key={i} className="flex items-center justify-between py-0.5 text-[10px]"
+                      style={{ opacity: (profile?.racing_rep ?? 0) >= t.min_rep ? 1 : 0.4 }}>
+                      <span>{t.name} <span className="text-[var(--noir-muted)]">({t.min_rep}+ rep)</span></span>
+                      <span className="text-[var(--noir-primary)]">${(t.income_per_race || 0).toLocaleString()}/race</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1222,7 +1337,263 @@ export default function Racing() {
             </div>
           </div>
         )}
-      </div>
+
+        {/* ─── CHALLENGES (H2H) TAB ─── */}
+        {tab === "challenges" && (
+          <div>
+            <div className={styles.panel + " p-3 mb-3"}>
+              <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Challenge a Player</div>
+              <div className="space-y-2">
+                <input type="text" value={challengeForm.target_username} onChange={e => setChallengeForm(f => ({ ...f, target_username: e.target.value }))}
+                  placeholder="Opponent username" className="w-full min-h-[36px] px-2 text-[11px] bg-transparent border border-[var(--noir-border)] rounded text-[var(--noir-foreground)]" />
+                <div className="grid grid-cols-2 gap-2">
+                  <select value={challengeForm.track_id} onChange={e => setChallengeForm(f => ({ ...f, track_id: e.target.value }))}
+                    className="min-h-[36px] px-2 text-[11px] bg-transparent border border-[var(--noir-border)] rounded text-[var(--noir-foreground)]">
+                    <option value="">Track</option>
+                    {tracks.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                  <input type="number" min={0} value={challengeForm.stake} onChange={e => setChallengeForm(f => ({ ...f, stake: Number(e.target.value) || 0 }))}
+                    placeholder="Stake $" className="min-h-[36px] px-2 text-[11px] bg-transparent border border-[var(--noir-border)] rounded text-[var(--noir-foreground)]" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="number" min={2} max={20} value={challengeForm.laps} onChange={e => setChallengeForm(f => ({ ...f, laps: Math.max(2, Math.min(20, Number(e.target.value) || 3)) }))}
+                    placeholder="Laps" className="min-h-[36px] px-2 text-[11px] bg-transparent border border-[var(--noir-border)] rounded text-[var(--noir-foreground)]" />
+                  <select value={challengeForm.weather_id} onChange={e => setChallengeForm(f => ({ ...f, weather_id: e.target.value }))}
+                    className="min-h-[36px] px-2 text-[11px] bg-transparent border border-[var(--noir-border)] rounded text-[var(--noir-foreground)]">
+                    {WEATHER_OPTIONS.map(w => <option key={w.id} value={w.id}>{w.icon} {w.name}</option>)}
+                  </select>
+                </div>
+                <button type="button" className={styles.btnPrimary + " w-full text-[11px] min-h-[40px]"} disabled={challengeCreating}
+                  onClick={handleCreateChallenge}>{challengeCreating ? "Sending..." : "Send Challenge"}</button>
+              </div>
+            </div>
+
+            {/* Incoming challenges */}
+            {challenges.incoming.length > 0 && (
+              <div className={styles.panel + " p-3 mb-3"}>
+                <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Incoming Challenges</div>
+                <div className="space-y-2">
+                  {challenges.incoming.map(ch => (
+                    <div key={ch.id} className={styles.panel + " p-2"}>
+                      <div className="text-[11px] font-semibold">{ch.challenger_username} <span className="text-[var(--noir-muted)]">wants to race</span></div>
+                      <div className="text-[10px] text-[var(--noir-muted)]">{ch.track_name} · {ch.laps} laps · {ch.weather_name} · ${(ch.stake || 0).toLocaleString()} stake</div>
+                      <div className="flex gap-2 mt-1">
+                        <button type="button" className={styles.btnPrimary + " text-[10px] px-3 py-1"} onClick={() => handleAcceptChallenge(ch.id)}>Accept</button>
+                        <button type="button" className="text-[10px] text-red-400 px-3 py-1 border border-red-400/30 rounded" onClick={() => handleDeclineChallenge(ch.id)}>Decline</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Outgoing challenges */}
+            {challenges.outgoing.length > 0 && (
+              <div className={styles.panel + " p-3 mb-3"}>
+                <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Outgoing Challenges</div>
+                <div className="space-y-1">
+                  {challenges.outgoing.map(ch => (
+                    <div key={ch.id} className="flex items-center justify-between py-1 border-b border-[var(--noir-border)]">
+                      <span className="text-[11px]">vs {ch.target_username} <span className="text-[var(--noir-muted)]">· {ch.track_name} · ${(ch.stake||0).toLocaleString()}</span></span>
+                      <span className="text-[10px] text-yellow-400">Pending</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Recent H2H Results */}
+            {challenges.completed.length > 0 && (
+              <div className={styles.panel + " p-3"}>
+                <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Recent Results</div>
+                <div className="space-y-1">
+                  {challenges.completed.map(ch => {
+                    const isChallenger = ch.challenger_id === profile?.user_id;
+                    const won = ch.winner_id === profile?.user_id;
+                    return (
+                      <div key={ch.id} className="flex items-center justify-between py-1 border-b border-[var(--noir-border)]">
+                        <span className="text-[11px]">
+                          vs {isChallenger ? ch.target_username : ch.challenger_username}
+                          <span className="text-[var(--noir-muted)]"> · {ch.track_name}</span>
+                        </span>
+                        <span className={won ? "text-[11px] text-green-400" : "text-[11px] text-red-400"}>{won ? "Won" : "Lost"} ${(ch.stake||0).toLocaleString()}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── BETS TAB ─── */}
+        {tab === "bets" && (
+          <div>
+            <div className={styles.panel + " p-3 mb-3"}>
+              <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Place a Bet</div>
+              <p className="text-[10px] text-[var(--noir-muted)] mb-3">Bet on who will win an open race. Odds based on car stats and racing rep.</p>
+              {openRaces.filter(r => r.state === "open").length === 0 ? (
+                <p className="text-[10px] text-[var(--noir-muted)]">No open races to bet on right now.</p>
+              ) : (
+                <div className="space-y-2">
+                  {openRaces.filter(r => r.state === "open").map(race => (
+                    <div key={race.id} className={styles.panel + " p-2"}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px] font-semibold">{race.track_name || race.track_id}</span>
+                        <span className="text-[9px] text-[var(--noir-muted)]">{race.participants?.length || 0} entrants · ${(race.entry_fee || 0).toLocaleString()} fee</span>
+                      </div>
+                      {bettingRaceId === race.id && betOdds ? (
+                        <div className="space-y-2 mt-2">
+                          <div className="grid grid-cols-2 gap-1">
+                            {(betOdds.entrants || []).map(e => (
+                              <button key={e.entrant_id} type="button"
+                                className={"p-1.5 text-[10px] border rounded " + (betEntrant === e.entrant_id ? "border-[var(--noir-primary)] bg-[rgba(201,164,96,.1)]" : "border-[var(--noir-border)]")}
+                                onClick={() => setBetEntrant(e.entrant_id)}>
+                                <span className="font-semibold">{e.username}</span>
+                                <span className="text-[var(--noir-primary)] ml-1">{e.odds}x</span>
+                                <span className="text-[var(--noir-muted)] block text-[9px]">{e.car_name}</span>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input type="number" min={1} value={betStake} onChange={e => setBetStake(e.target.value)} placeholder="Stake $"
+                              className="flex-1 min-h-[36px] px-2 text-[11px] bg-transparent border border-[var(--noir-border)] rounded text-[var(--noir-foreground)]" />
+                            <button type="button" className={styles.btnPrimary + " text-[10px] px-3 min-h-[36px]"} disabled={!betEntrant || !betStake || placingBet}
+                              onClick={handlePlaceBet}>{placingBet ? "…" : "Place Bet"}</button>
+                            <button type="button" className="text-[10px] text-[var(--noir-muted)] px-2 min-h-[36px]"
+                              onClick={() => { setBettingRaceId(null); setBetOdds(null); setBetEntrant(""); setBetStake(""); }}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button type="button" className={styles.btnPrimary + " text-[10px] px-3 py-1 mt-1"}
+                          onClick={() => { setBettingRaceId(race.id); fetchBetOdds(race.id); }}>View Odds & Bet</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className={styles.panel + " p-3 mb-3"}>
+              <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">My Bets</div>
+              {!raceBets.open.length && !raceBets.settled.length ? (
+                <p className="text-[10px] text-[var(--noir-muted)]">No bets yet. Place one on an open race above!</p>
+              ) : (
+                <>
+                  {raceBets.open.length > 0 && (
+                    <div className="mb-3">
+                      <div className="text-[10px] text-[var(--noir-muted)] uppercase tracking-wider mb-1">Open</div>
+                      {raceBets.open.map(b => (
+                        <div key={b.id} className="flex items-center justify-between py-1 border-b border-[var(--noir-border)]">
+                          <span className="text-[11px]">{b.entrant_username} <span className="text-[var(--noir-primary)]">{b.odds}x</span></span>
+                          <span className="text-[10px] text-[var(--noir-muted)]">${(b.stake || 0).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {raceBets.settled.length > 0 && (
+                    <div>
+                      <div className="text-[10px] text-[var(--noir-muted)] uppercase tracking-wider mb-1">Settled</div>
+                      {raceBets.settled.map(b => (
+                        <div key={b.id} className="flex items-center justify-between py-1 border-b border-[var(--noir-border)]">
+                          <span className="text-[11px]">{b.entrant_username}
+                            <span className={b.status === "won" ? "text-green-400 ml-1" : b.status === "refunded" ? "text-yellow-400 ml-1" : "text-red-400 ml-1"}>
+                              {b.status === "won" ? `Won $${Math.round(b.stake * b.odds).toLocaleString()}` : b.status === "refunded" ? "Refunded" : "Lost"}
+                            </span>
+                          </span>
+                          <span className="text-[10px] text-[var(--noir-muted)]">${(b.stake || 0).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+              <button type="button" className="text-[10px] text-[var(--noir-primary)] mt-2" onClick={fetchBets}>Refresh</button>
+            </div>
+          </div>
+        )}
+
+        {/* ─── HISTORY TAB ─── */}
+        {tab === "history" && (
+          <div>
+            {/* Season Stats Card */}
+            <div className={styles.panel + " p-3 mb-3"}>
+              <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Season Stats</div>
+              {!seasonStats ? (
+                <p className="text-[10px] text-[var(--noir-muted)]">Loading...</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  {[
+                    { label: "Races", val: seasonStats.total_races },
+                    { label: "Wins", val: seasonStats.wins },
+                    { label: "Podiums", val: seasonStats.podiums },
+                    { label: "DNFs", val: seasonStats.dnfs },
+                    { label: "Earnings", val: `$${(seasonStats.total_earnings || 0).toLocaleString()}` },
+                    { label: "Rep", val: seasonStats.racing_rep },
+                  ].map(s => (
+                    <div key={s.label} className={styles.panel + " p-2"}>
+                      <div className="text-[14px] font-semibold text-[var(--noir-primary)]">{s.val}</div>
+                      <div className="text-[9px] text-[var(--noir-muted)] uppercase tracking-wider">{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Track Records Card */}
+            <div className={styles.panel + " p-3 mb-3"}>
+              <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Track Records</div>
+              {Object.keys(trackRecords).length === 0 ? (
+                <p className="text-[10px] text-[var(--noir-muted)]">No records set yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {Object.entries(trackRecords).map(([tid, rec]) => (
+                    <div key={tid} className="flex items-center justify-between py-1 border-b border-[var(--noir-border)]">
+                      <span className="text-[11px] font-semibold">{rec.track_name}</span>
+                      <div className="text-right">
+                        {rec.global_best_lap ? (
+                          <div className="text-[10px]"><span className="text-[var(--noir-primary)]">{rec.global_best_lap.toFixed(3)}s</span> <span className="text-[var(--noir-muted)]">by {rec.global_holder}</span></div>
+                        ) : <div className="text-[10px] text-[var(--noir-muted)]">No record</div>}
+                        {rec.personal_best_lap ? (
+                          <div className="text-[9px] text-[var(--noir-muted)]">Your best: {rec.personal_best_lap.toFixed(3)}s</div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Race History List */}
+            <div className={styles.panel + " p-3"}>
+              <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Recent Races</div>
+              {raceHistory.length === 0 ? (
+                <p className="text-[10px] text-[var(--noir-muted)]">No completed races yet.</p>
+              ) : (
+                <div className="space-y-1">
+                  {raceHistory.map(r => (
+                    <div key={r.race_id} className="flex items-center justify-between py-1.5 border-b border-[var(--noir-border)]">
+                      <div>
+                        <div className="text-[11px] font-semibold">{r.track_name}</div>
+                        <div className="text-[9px] text-[var(--noir-muted)]">{r.laps} laps · {r.weather} · {r.num_entrants} cars</div>
+                      </div>
+                      <div className="text-right">
+                        {r.dnf ? (
+                          <span className="text-[11px] text-red-400">DNF</span>
+                        ) : (
+                          <span className="text-[11px]">P{r.position} <span className="text-[var(--noir-primary)]">${(r.cash || 0).toLocaleString()}</span></span>
+                        )}
+                        <div className="text-[9px] text-[var(--noir-muted)]">{r.completed_at ? new Date(r.completed_at).toLocaleDateString() : ""}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button type="button" className="text-[10px] text-[var(--noir-primary)] mt-2" onClick={fetchHistory}>Refresh</button>
+            </div>
+          </div>
+        )}
+        </div>
     </div>
   );
 }

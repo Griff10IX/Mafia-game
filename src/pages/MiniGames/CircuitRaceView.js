@@ -640,6 +640,7 @@ export default function CircuitRaceView({
   playerTyreId = "medium",
   playerPitLevel = 0,
   currentUserId = null, // in replay: mark this user as "You" and show first in standings
+  rewards: rewardsProp = null, // backend reward data [{entrant_id, position, cash, rank_points, racing_rep, dnf}]
 }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
@@ -662,6 +663,11 @@ export default function CircuitRaceView({
   const [incidentLog, setIncidentLog] = useState([]);
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
   const speedMultRef = useRef(1);
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
+  const [raceProgress, setRaceProgress] = useState(0);
+  const [manualPitRequested, setManualPitRequested] = useState(false);
+  const manualPitRef = useRef(false);
   const pitNotifTimer = useRef(null);
   const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 640);
   useEffect(() => {
@@ -671,6 +677,8 @@ export default function CircuitRaceView({
   }, []);
 
   useEffect(() => { speedMultRef.current = speedMultiplier; }, [speedMultiplier]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+  useEffect(() => { manualPitRef.current = manualPitRequested; }, [manualPitRequested]);
 
   // ── RACE STATE PERSISTENCE (for live races) ──
   // Race continues in real-time even when user navigates away
@@ -860,20 +868,49 @@ export default function CircuitRaceView({
     bg.addColorStop(0, wd.bg1); bg.addColorStop(1, wd.bg2);
     ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
 
-    // Weather particles
+    // Weather particles (enhanced)
     if (cond === "rain") {
-      ctx.strokeStyle = "rgba(150,185,225,0.14)"; ctx.lineWidth = 0.9;
-      for (let i=0;i<60;i++) {
-        const x=((i*47+Date.now()*0.06)%W), y=((i*61+Date.now()*0.09)%H);
-        ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+1.5,y+7); ctx.stroke();
+      const t = Date.now();
+      // Rain streaks - layered for depth
+      ctx.lineWidth = 0.7;
+      for (let layer = 0; layer < 3; layer++) {
+        const count = [80, 50, 30][layer];
+        const alpha = [0.08, 0.14, 0.22][layer];
+        const len = [5, 8, 12][layer];
+        const speed = [0.04, 0.07, 0.11][layer];
+        ctx.strokeStyle = `rgba(150,185,225,${alpha})`;
+        ctx.lineWidth = 0.5 + layer * 0.3;
+        for (let i = 0; i < count; i++) {
+          const x = ((i * 47 + layer * 111 + t * speed) % W);
+          const y = ((i * 61 + layer * 73 + t * (speed * 1.5)) % H);
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 1.5, y + len); ctx.stroke();
+        }
+      }
+      // Puddle reflections on track surface
+      ctx.fillStyle = "rgba(120,160,200,0.04)";
+      for (let i = 0; i < 12; i++) {
+        const p = track.getPoint((i / 12 + t * 0.00001) % 1);
+        ctx.beginPath(); ctx.ellipse(sx(p.x), sy(p.y), 12 + Math.sin(t * 0.003 + i) * 4, 3, 0, 0, Math.PI * 2); ctx.fill();
       }
     }
     if (cond === "snow") {
-      ctx.fillStyle = "rgba(210,225,255,0.18)";
-      for (let i=0;i<35;i++) {
-        const x=((i*53+Date.now()*0.025)%W), y=((i*71+Date.now()*0.035)%H);
-        ctx.beginPath(); ctx.arc(x,y,1.3,0,Math.PI*2); ctx.fill();
+      const t = Date.now();
+      // Snowflakes - multi-layer with drift
+      for (let layer = 0; layer < 3; layer++) {
+        const count = [50, 35, 20][layer];
+        const alpha = [0.12, 0.2, 0.32][layer];
+        const size = [1, 1.5, 2.2][layer];
+        const speed = [0.015, 0.025, 0.04][layer];
+        ctx.fillStyle = `rgba(210,225,255,${alpha})`;
+        for (let i = 0; i < count; i++) {
+          const drift = Math.sin(t * 0.001 + i * 0.5) * 15;
+          const x = ((i * 53 + layer * 89 + t * speed + drift) % (W + 40)) - 20;
+          const y = ((i * 71 + layer * 97 + t * (speed * 1.2)) % H);
+          ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
+        }
       }
+      // Snow accumulation glow at edges
+      ctx.fillStyle = "rgba(220,230,255,0.02)"; ctx.fillRect(0, 0, W, H);
     }
     if (cond === "night") {
       [0.08,0.22,0.38,0.52,0.66,0.80].forEach((f,li)=>{
@@ -902,7 +939,22 @@ export default function CircuitRaceView({
       });
     }
     if (cond === "very_hot") {
-      ctx.fillStyle="rgba(255,80,0,0.03)"; ctx.fillRect(0,0,W,H);
+      ctx.fillStyle = "rgba(255,80,0,0.03)"; ctx.fillRect(0, 0, W, H);
+      // Heat shimmer lines across track
+      const t = Date.now();
+      ctx.save();
+      ctx.globalAlpha = 0.04;
+      for (let i = 0; i < 8; i++) {
+        const p = track.getPoint((i / 8 + t * 0.000005) % 1);
+        const wave = Math.sin(t * 0.004 + i * 2) * 6;
+        ctx.strokeStyle = "rgba(255,180,80,0.25)";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(sx(p.x) - 20, sy(p.y) + wave);
+        ctx.bezierCurveTo(sx(p.x) - 7, sy(p.y) - wave, sx(p.x) + 7, sy(p.y) + wave, sx(p.x) + 20, sy(p.y) - wave);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     // ── TRACK SURFACE ──
@@ -1237,8 +1289,44 @@ export default function CircuitRaceView({
       ctx.beginPath(); ctx.arc(px+11,py-6,4,0,Math.PI*2); ctx.fill();
       ctx.strokeStyle="rgba(0,0,0,0.5)"; ctx.lineWidth=0.8; ctx.stroke();
 
-      // DNF spark particles
+      // Engine health smoke (pre-DNF degradation)
+      if (!r.dnf && r.engineHealth != null && r.engineHealth < 40 && !r.inPit) {
+        const smokeAlpha = Math.max(0, (40 - r.engineHealth) / 40) * 0.35;
+        for (let si = 0; si < 3; si++) {
+          const sAge = (nowSec * 1.5 + si * 0.5) % 2;
+          const smokeX = px - Math.cos(angle) * 8 + (Math.sin(nowSec * 3 + si) * 3);
+          const smokeY = py - Math.sin(angle) * 8 - sAge * 12;
+          const smokeSize = 3 + sAge * 4;
+          ctx.fillStyle = `rgba(80,80,80,${smokeAlpha * (1 - sAge / 2)})`;
+          ctx.beginPath(); ctx.arc(smokeX, smokeY, smokeSize, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
+      // DNF spark particles + fire/smoke
       if (r.dnf && r.dnfSparks && r.dnfSparks.length > 0) {
+        // Smoke plume
+        const dnfAge = nowSec - (r.dnfAtSec || nowSec);
+        if (dnfAge < 8) {
+          for (let si = 0; si < 5; si++) {
+            const sAge = (dnfAge * 0.8 + si * 0.4) % 3;
+            const smokeX = px + (Math.sin(nowSec * 2 + si) * 5);
+            const smokeY = py - sAge * 18 - 5;
+            const smokeSize = 4 + sAge * 6;
+            const smokeAlpha = Math.max(0, 0.3 * (1 - sAge / 3) * Math.min(1, (8 - dnfAge) / 2));
+            ctx.fillStyle = `rgba(60,60,60,${smokeAlpha})`;
+            ctx.beginPath(); ctx.arc(smokeX, smokeY, smokeSize, 0, Math.PI * 2); ctx.fill();
+          }
+          // Fire glow
+          if (dnfAge < 4) {
+            const fireAlpha = Math.max(0, 0.25 * (1 - dnfAge / 4));
+            const fireGrd = ctx.createRadialGradient(px, py, 2, px, py, 15);
+            fireGrd.addColorStop(0, `rgba(255,120,0,${fireAlpha})`);
+            fireGrd.addColorStop(1, "rgba(255,80,0,0)");
+            ctx.fillStyle = fireGrd;
+            ctx.beginPath(); ctx.arc(px, py, 15, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+        // Sparks
         r.dnfSparks.forEach(sp=>{
           const age = nowSec - sp.born;
           if (age > sp.life) return;
@@ -1376,6 +1464,11 @@ export default function CircuitRaceView({
 
     const loop = (now) => {
       try {
+      if (pausedRef.current) {
+        lastFrameTime = now;
+        rafRef.current = requestAnimationFrame(loop);
+        return;
+      }
       let dt = (now - lastFrameTime) / 1000;
       if (firstFrame) { firstFrame = false; dt = 0; }
       dt = Math.min(0.05, dt) * speedMul();
@@ -1623,8 +1716,20 @@ export default function CircuitRaceView({
           }
         }
 
-        // Pit decision
-        if (!r.inPit && r.pitStrategy.length > 0) {
+        // Manual pit call for the player
+        if (r.isPlayer && !r.inPit && manualPitRef.current) {
+          const distToPit = Math.abs(((r.trackPos - track.pitEntry) + 1) % 1);
+          if (distToPit < 0.12) {
+            r.inPit = true;
+            const dur = (r.pitDurationSeconds != null ? r.pitDurationSeconds : 3.0) + 0.5;
+            r.pitEndAt = nowSec + dur;
+            addIncident(`${r.name} — manual pit stop`);
+            setPitNotif("MANUAL PIT — Changing tyres + refuel…");
+            setManualPitRequested(false);
+          }
+        }
+        // Pit decision (auto)
+        if (!r.inPit && r.pitStrategy.length > 0 && !(r.isPlayer && manualPitRef.current)) {
           const next = r.pitStrategy[0];
           const currentLap = r.totalLapsDone + 1;
           const shouldPit = currentLap >= next.lap && r.tyreWear < 45;
@@ -1727,6 +1832,12 @@ export default function CircuitRaceView({
           sectorTimes: r.sectorTimes,
         };
       }));
+
+      // Track race progress (0-1) for scrubber
+      if (nLaps > 0) {
+        const maxProgress = sorted.length ? Math.max(...sorted.map(r => (r.totalLapsDone + r.trackPos) / nLaps)) : 0;
+        setRaceProgress(Math.min(1, maxProgress));
+      }
 
       const activeRacers = racers.filter(r => !r.finished && !r.dnf);
       if (activeRacers.length === 0) {
@@ -2321,7 +2432,7 @@ export default function CircuitRaceView({
           <div className={styles.panel} style={{ padding:"0.6rem", flex:"0 0 auto" }}>
             <div className="font-heading" style={{ fontSize:"8px", letterSpacing:".22em", textTransform:"uppercase", color:"var(--noir-muted)", marginBottom:"4px" }}>Laps</div>
             <input type="number" min={2} max={20} value={numLaps}
-              onChange={e=>setNumLaps(Math.max(2,Math.min(5,parseInt(e.target.value)||3)))}
+              onChange={e=>setNumLaps(Math.max(2,Math.min(20,parseInt(e.target.value)||3)))}
               style={{ width:56, minHeight:44, background:"transparent", border:"1px solid var(--noir-border)", color:"var(--noir-foreground)", fontFamily:"'Rajdhani',sans-serif", fontSize:14, padding:"6px 8px", textAlign:"center", touchAction:"manipulation" }}
             />
           </div>
@@ -2379,20 +2490,47 @@ export default function CircuitRaceView({
           </div>
         </div>
 
-        {/* Speed control buttons */}
+        {/* Speed control + pause/resume */}
         {(uiPhase === "qualifying" || uiPhase === "racing") && (
-          <div style={{ position:"absolute", top:30, right:8, display:"flex", gap:2, pointerEvents:"auto" }}>
-            {[1,2,4].map(x=>(
-              <button key={x} type="button" onClick={()=>setSpeedMultiplier(x)}
+          <div style={{ position:"absolute", top:30, right:8, display:"flex", flexDirection:"column", gap:3, pointerEvents:"auto", alignItems:"flex-end" }}>
+            <div style={{ display:"flex", gap:2 }}>
+              <button type="button" onClick={()=>setPaused(p=>!p)}
                 style={{
-                  fontFamily:"'Cinzel',serif", fontSize:9, fontWeight:700, padding:"2px 6px",
-                  background: speedMultiplier===x ? "rgba(201,164,96,.35)" : "rgba(0,0,0,.6)",
-                  border:`1px solid ${speedMultiplier===x?"var(--noir-primary)":"rgba(201,164,96,.2)"}`,
-                  color: speedMultiplier===x ? "var(--noir-primary)" : "var(--noir-muted)",
+                  fontFamily:"'Cinzel',serif", fontSize:9, fontWeight:700, padding:"2px 8px",
+                  background: paused ? "rgba(201,164,96,.35)" : "rgba(0,0,0,.6)",
+                  border:`1px solid ${paused?"var(--noir-primary)":"rgba(201,164,96,.2)"}`,
+                  color: paused ? "var(--noir-primary)" : "var(--noir-muted)",
                   cursor:"pointer", touchAction:"manipulation",
                 }}
-              >x{x}</button>
-            ))}
+              >{paused ? "▶" : "⏸"}</button>
+              {[1,2,4].map(x=>(
+                <button key={x} type="button" onClick={()=>setSpeedMultiplier(x)}
+                  style={{
+                    fontFamily:"'Cinzel',serif", fontSize:9, fontWeight:700, padding:"2px 6px",
+                    background: speedMultiplier===x ? "rgba(201,164,96,.35)" : "rgba(0,0,0,.6)",
+                    border:`1px solid ${speedMultiplier===x?"var(--noir-primary)":"rgba(201,164,96,.2)"}`,
+                    color: speedMultiplier===x ? "var(--noir-primary)" : "var(--noir-muted)",
+                    cursor:"pointer", touchAction:"manipulation",
+                  }}
+                >x{x}</button>
+              ))}
+            </div>
+            {/* Progress bar */}
+            <div style={{ width:100, height:4, background:"rgba(255,255,255,.1)", borderRadius:2, overflow:"hidden" }}>
+              <div style={{ width:`${Math.round(raceProgress*100)}%`, height:"100%", background:"var(--noir-primary)", borderRadius:2, transition:"width .3s ease" }} />
+            </div>
+            {/* Manual Pit button */}
+            {uiPhase === "racing" && (
+              <button type="button" onClick={() => setManualPitRequested(p => !p)}
+                style={{
+                  fontFamily:"'Cinzel',serif", fontSize:9, fontWeight:700, padding:"3px 10px",
+                  background: manualPitRequested ? "rgba(230,80,80,.35)" : "rgba(0,0,0,.6)",
+                  border:`1px solid ${manualPitRequested?"#e74c3c":"rgba(201,164,96,.2)"}`,
+                  color: manualPitRequested ? "#e74c3c" : "var(--noir-muted)",
+                  cursor:"pointer", touchAction:"manipulation",
+                }}
+              >{manualPitRequested ? "PIT CALLED" : "PIT"}</button>
+            )}
           </div>
         )}
 
@@ -2542,10 +2680,39 @@ export default function CircuitRaceView({
           <div className="font-heading" style={{ fontSize:"11px", letterSpacing:".25em", textTransform:"uppercase", color:"var(--noir-primary)", marginBottom:"0.5rem" }}>
             Race Results
           </div>
+
+          {/* Podium Celebration */}
+          {results.length >= 3 && (
+            <div style={{ display:"flex", justifyContent:"center", alignItems:"flex-end", gap:4, marginBottom:12, padding:"8px 0" }}>
+              {[1, 0, 2].map(podiumIdx => {
+                const r = results[podiumIdx];
+                if (!r || r.dnf) return null;
+                const heights = [60, 44, 34];
+                const colors = ["linear-gradient(135deg,#a87820,#e8c870)", "linear-gradient(135deg,#888,#ccc)", "linear-gradient(135deg,#8b4513,#cd853f)"];
+                const labels = ["1st", "2nd", "3rd"];
+                const h = heights[podiumIdx];
+                return (
+                  <div key={podiumIdx} style={{ display:"flex", flexDirection:"column", alignItems:"center", width:70 }}>
+                    <div style={{ width:9, height:9, borderRadius:"50%", background:r.color, marginBottom:3, boxShadow:`0 0 8px ${r.color}` }} />
+                    <div style={{ fontSize:10, fontWeight:600, color:"var(--noir-foreground)", textAlign:"center", maxWidth:70, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:2 }}>
+                      {r.name}
+                    </div>
+                    <div style={{
+                      width:56, height:h, background:colors[podiumIdx], borderRadius:"4px 4px 0 0",
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontFamily:"'Cinzel',serif", fontSize:12, fontWeight:700,
+                      color: podiumIdx === 0 ? "#0a0c06" : podiumIdx === 1 ? "#333" : "#fff",
+                      animation: podiumIdx === 0 ? "winPulse 2s infinite" : "none",
+                    }}>{labels[podiumIdx]}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {results.map((r,i)=>{
-            const purses = [0.40,0.25,0.15,0.10,0.05,0.03,0.02,0.00];
-            const pool = 5000 * 8 * 0.9;
-            const purse = r.dnf ? 0 : Math.round(pool * (purses[i]||0));
+            const backendReward = rewardsProp?.find(rw => rw.entrant_id === r.id);
+            const purse = backendReward ? (backendReward.cash || 0) : (() => { const purses = [0.40,0.25,0.15,0.10,0.05,0.03,0.02,0.00]; const pool = 5000 * 8 * 0.9; return r.dnf ? 0 : Math.round(pool * (purses[i]||0)); })();
             const best = r.bestLap ? `Best: ${r.bestLap.toFixed(2)}s` : "";
             return (
               <div key={r.id}
