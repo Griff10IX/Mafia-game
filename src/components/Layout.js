@@ -865,22 +865,24 @@ export default function Layout({ children }) {
   const categoryHeaderStyle = { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.12)', color: 'var(--noir-primary)' };
   const navDividerEl = (key) => showSidebarDividers ? <div key={key} className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" /> : null;
 
+  const isRankingPath = (p) => p === '/game/ranking' || (p && (p.startsWith('/game/ranking/') || p.startsWith('/crime/') || p === '/organised-crime' || p === '/account/prestige'));
   const rankingNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-ranking-group" onClick={() => setRankingOpen((v) => !v)}
-        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/game/ranking' || location.pathname.startsWith('/game/ranking/') || location.pathname.startsWith('/crime/') || location.pathname === '/organised-crime' || location.pathname === '/account/prestige') ? styles.navItemActive : styles.sidebarNavLink}`}
-        style={(location.pathname === '/game/ranking' || location.pathname.startsWith('/game/ranking/') || location.pathname.startsWith('/crime/') || location.pathname === '/organised-crime' || location.pathname === '/account/prestige') ? sidebarActiveGroupStyle : undefined}>
-        <Target size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
-        <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Ranking</span>
+        className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isRankingPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+        style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
+        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', color: isRankingPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Ranking</span>
         {!rankingOpen && (rankingCounts.crimes > 0 || rankingCounts.gta > 0) && (
           <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30 shrink-0">
             {rankingCounts.crimes + rankingCounts.gta}
           </span>
         )}
-        {rankingOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
+        {rankingOpen ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
+        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
       </button>
       {rankingOpen && (
-        <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
+        <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
           <Link to="/crime/crimes" onClick={() => setSidebarOpen(false)} onMouseEnter={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }} onFocus={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }}
             className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/crimes' ? styles.navItemActivePage : styles.sidebarNavLink}`}
             style={location.pathname === '/crime/crimes' ? sidebarActiveStyle : undefined} data-testid="nav-crimes">
@@ -932,7 +934,7 @@ export default function Layout({ children }) {
         <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
       </button>
       {combatOpen && (
-        <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
+        <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
           {[
             { to: '/kill/attack', label: 'Attack', testId: 'nav-attack', Icon: Sword },
             { to: '/kill/attempts', label: 'Attempts', testId: 'nav-attempts', Icon: Crosshair },
@@ -957,17 +959,19 @@ export default function Layout({ children }) {
     </div>
   );
 
+  const isCasinoPath = (p) => p === '/casino' || (p && (p.startsWith('/casino/') || p === '/sports-betting' || p === '/my-properties'));
   const casinoNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-casino-group" onClick={() => setCasinoOpen((v) => !v)}
-        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/casino' || location.pathname.startsWith('/casino/') || location.pathname === '/sports-betting' || location.pathname === '/my-properties') ? styles.navItemActive : styles.sidebarNavLink}`}
-        style={(location.pathname === '/casino' || location.pathname.startsWith('/casino/') || location.pathname === '/sports-betting' || location.pathname === '/my-properties') ? sidebarActiveGroupStyle : undefined}>
-        <Dice5 size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
-        <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Casino</span>
-        {casinoOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
+        className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCasinoPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+        style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
+        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', color: isCasinoPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Casino</span>
+        {casinoOpen ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
+        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
       </button>
       {casinoOpen && (
-        <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
+        <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
           {[
             { to: '/casino/dice', label: 'Dice', testId: 'nav-dice' },
             { to: '/casino/rlt', label: 'Roulette', testId: 'nav-roulette' },
@@ -996,17 +1000,19 @@ export default function Layout({ children }) {
     </div>
   );
 
+  const isMiniGamesPath = (p) => p && p.startsWith('/casino/mini-games/');
   const miniGamesNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-minigames-group" onClick={() => setMiniGamesOpen((v) => !v)}
-        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname.startsWith('/casino/mini-games/') ? styles.navItemActive : styles.sidebarNavLink}`}
-        style={location.pathname.startsWith('/casino/mini-games/') ? sidebarActiveGroupStyle : undefined}>
-        <Gamepad2 size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
-        <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Mini games</span>
-        {miniGamesOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
+        className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMiniGamesPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+        style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
+        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', color: isMiniGamesPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Mini games</span>
+        {miniGamesOpen ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
+        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
       </button>
       {miniGamesOpen && (
-        <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
+        <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
           {[
             { to: '/casino/mini-games/racing', label: 'Racing', testId: 'nav-racing' },
             { to: '/casino/mini-games/boxing', label: 'Boxing', testId: 'nav-boxing', matchPrefix: true },
