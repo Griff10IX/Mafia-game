@@ -923,11 +923,12 @@ export default function Layout({ children }) {
   const combatNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-combat-group" onClick={() => setCombatOpen((v) => !v)}
-        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${isCombatPath(location.pathname) ? styles.navItemActive : styles.sidebarNavLink}`}
-        style={isCombatPath(location.pathname) ? sidebarActiveGroupStyle : undefined}>
-        <Sword size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
-        <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Combat</span>
-        {combatOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
+        className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCombatPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+        style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
+        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', color: isCombatPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Combat</span>
+        {combatOpen ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
+        <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
       </button>
       {combatOpen && (
         <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
