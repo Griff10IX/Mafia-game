@@ -189,6 +189,12 @@ api.interceptors.response.use(
     } else {
       // No response: network error, timeout, or server unreachable (often after server restart)
       error.response = { status: 0, data: { detail: NETWORK_ERROR_MSG } };
+      if (process.env.NODE_ENV === 'development' && typeof console !== 'undefined') {
+        const base = error.config?.baseURL ?? '';
+        const path = error.config?.url ?? '';
+        const full = base ? (base.replace(/\/$/, '') + '/' + path.replace(/^\//, '')) : path;
+        console.warn('[api] No response (connection problem). Request URL:', full, 'Error:', error.message);
+      }
     }
     // Full-screen overlay only for clear server-down cases (avoids false positives from cache/dedup or single bad gateway on background requests)
     const status = error.response?.status;
