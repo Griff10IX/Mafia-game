@@ -646,7 +646,7 @@ const TRACKS = [
 
 const PROFILE_N = 256;
 const _profileCache = new Map();
-const PROFILE_CACHE_KEY = "v4"; // bump to invalidate when profile logic changes (e.g. finish straight zone)
+const PROFILE_CACHE_KEY = "v5"; // bump to invalidate when profile logic changes (e.g. finish straight zone)
 
 // FIX B1: uses geometry discontinuity detection instead of blanket 5% bypass
 function getCurvature(track, t) {
@@ -662,6 +662,25 @@ function getCurvature(track, t) {
   if (delta > Math.PI)  delta -= 2*Math.PI;
   if (delta < -Math.PI) delta += 2*Math.PI;
   return Math.abs(delta) / ((l1+l2)/2);
+}
+
+// Signed corner direction: -1 = left turn, 0 = straight, 1 = right turn (for inside/outside overtake choice)
+const CORNER_THRESH = 0.005;
+function getCornerDirection(track, t) {
+  const eps = 0.006;
+  const p0 = track.getPoint(((t - eps) % 1 + 1) % 1);
+  const p1 = track.getPoint(t);
+  const p2 = track.getPoint((t + eps) % 1);
+  const dx1 = p1.x - p0.x, dy1 = p1.y - p0.y;
+  const dx2 = p2.x - p1.x, dy2 = p2.y - p1.y;
+  const l1 = Math.hypot(dx1, dy1) || 1e-6, l2 = Math.hypot(dx2, dy2) || 1e-6;
+  if ((l1 + l2) / 2 > 40) return 0;
+  let delta = Math.atan2(dy2, dx2) - Math.atan2(dy1, dx1);
+  if (delta > Math.PI) delta -= 2 * Math.PI;
+  if (delta < -Math.PI) delta += 2 * Math.PI;
+  const curvature = Math.abs(delta) / ((l1 + l2) / 2);
+  if (curvature < CORNER_THRESH) return 0;
+  return delta > 0 ? 1 : -1;
 }
 
 function buildSpeedProfile(track) {
@@ -701,16 +720,13 @@ function buildSpeedProfile(track) {
   const mn = Math.min(...raw), mx = Math.max(...raw), rng = mx-mn||1;
   const profile = new Float32Array(N);
   for (let i = 0; i < N; i++) profile[i] = 0.56 + ((raw[i]-mn)/rng)*0.44;
-  // No slowdown at start/finish: use max speed in approach/exit range so cars don't slow every lap before the line
+  // Force minimum speed at start/finish so cars never slow before/after the line (braking pass can't pull these below floor)
   const runStart = 204; // ~0.80 lap – start of "run to the line" zone
   const runEnd = N - 1; // 255
-  let refRun = profile[runStart];
-  for (let i = runStart; i <= runEnd; i++) refRun = Math.max(refRun, profile[i]);
-  for (let i = runStart; i <= runEnd; i++) profile[i] = Math.max(profile[i], Math.min(1.0, refRun));
-  const refIdxFirst = 16; // ~0.06 lap – reference speed for exit from line
-  let refFirst = profile[refIdxFirst];
-  for (let i = 0; i <= 24; i++) refFirst = Math.max(refFirst, profile[i]);
-  for (let i = 0; i <= 15; i++) profile[i] = Math.max(profile[i], Math.min(1.0, refFirst));
+  const trackMax = Math.max(...profile);
+  const sfMin = Math.max(0.90, trackMax * 0.95); // at least 90% or 95% of track max – no dip at the line
+  for (let i = runStart; i <= runEnd; i++) profile[i] = Math.max(profile[i], Math.min(1.0, sfMin));
+  for (let i = 0; i <= 15; i++) profile[i] = Math.max(profile[i], Math.min(1.0, sfMin));
   const cap = (i, arr) => {
     const prev = arr[(i-1+N)%N], next = arr[(i+1)%N];
     const m = Math.max(prev, next);
@@ -808,6 +824,9 @@ export default function CircuitRaceView({
   const [commentary, setCommentary] = useState("Select track & tyres, then start");
   const [standings,  setStandings]  = useState([]);
   const [pitNotif,   setPitNotif]   = useState(null);
+  const [overtakeNotif, setOvertakeNotif] = useState(null);
+  const setOvertakeNotifRef = useRef(setOvertakeNotif);
+  useEffect(() => { setOvertakeNotifRef.current = setOvertakeNotif; });
   const [lapDisp,    setLapDisp]    = useState("—");
   const [results,    setResults]    = useState(null);
   const [spMult,     setSpMult]     = useState(1);
@@ -824,6 +843,13 @@ export default function CircuitRaceView({
   useEffect(() => { spMultRef.current = spMult; },  [spMult]);
   useEffect(() => { pausedRef.current = paused; },  [paused]);
   useEffect(() => { manPitRef.current = manPit; },  [manPit]);
+
+  useEffect(() => {
+    if (!overtakeNotif || !overtakeNotif.until) return;
+    const ms = Math.max(0, overtakeNotif.until - Date.now());
+    const t = setTimeout(() => setOvertakeNotif(null), ms);
+    return () => clearTimeout(t);
+  }, [overtakeNotif]);
 
   const SKEY = raceId ? `rcv3_${raceId}` : null;
   const lastSave = useRef(0);
@@ -1127,12 +1153,18 @@ export default function CircuitRaceView({
         const tRaw=((prog%1)+1)%1, t=(tRaw+0.006*di)%1;
         const p=track.getPoint(t), p2=track.getPoint((t+0.006)%1);
         angle=Math.atan2(sy(p2.y)-sy(p.y), sx(p2.x)-sx(p.x));
-        let latOff = 0;
+        const laneOff = (r.lane ?? 0) * (halfW * 0.35);
+        let overlapOff = 0;
         const myPos = trkPos[di];
         if (!(r.slideOffUntil>0&&nowSec<r.slideOffUntil)) {
-          trkPos.forEach((op,oi) => { if (oi!==di&&op>=0&&Math.abs(op-myPos)<0.02) latOff=((di%3)-1)*(halfW*0.60); });
+          drawOrder.forEach((or,oi) => {
+            if (oi !== di && trkPos[oi] >= 0 && Math.abs(trkPos[oi] - myPos) < 0.02) {
+              const otherLane = or.lane ?? 0;
+              if (Math.abs((r.lane ?? 0) - otherLane) < 0.5) overlapOff = ((di % 3) - 1) * (halfW * 0.25);
+            }
+          });
         }
-        const offs = (r.slideOffUntil>0&&nowSec<r.slideOffUntil) ? (halfW+9) : latOff;
+        const offs = (r.slideOffUntil>0&&nowSec<r.slideOffUntil) ? (halfW+9) : laneOff + overlapOff;
         px = sx(p.x)+Math.cos(angle+Math.PI/2)*offs;
         py = sy(p.y)+Math.sin(angle+Math.PI/2)*offs;
       }
@@ -1321,6 +1353,7 @@ export default function CircuitRaceView({
       slideOffUntil:0,pitExitUntil:null,engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],
       fuelLoad:100,currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
       inSlipstream:false,tyreBlister:false,strategyType:"normal",overtakingLevel:0,overtakeBoostUntil:0,currentSpeedMph:null,
+      lane:0,targetLane:null,overtakeAttempt:null,defendingUntil:0,lastOvertakeAttemptAt:0,
     }];
     for (let i=0; i<7; i++) {
       const st=NPC_STATS[i%NPC_STATS.length], t=NPC_TYRES[i] in TYRE_DEFS?NPC_TYRES[i]:"medium";
@@ -1339,6 +1372,7 @@ export default function CircuitRaceView({
         // FIX B5: overtaking scales with car speed tier
         overtakingLevel:Math.max(0,Math.round((st.bs-0.88)*200)),
         overtakeBoostUntil:0,currentSpeedMph:null,
+        lane:0,targetLane:null,overtakeAttempt:null,defendingUntil:0,lastOvertakeAttemptAt:0,
       });
     }
     return racers;
@@ -1346,7 +1380,8 @@ export default function CircuitRaceView({
 
   // ─── RACE LOOP ──────────────────────────────────────────────────────────
   const startRaceLoop = useCallback((track, cond, nLaps, racerArr, options = {}) => {
-    const { onQualifyingComplete } = options;
+    const { onQualifyingComplete, mode: loopMode = "live" } = options;
+    const isReplay = loopMode === "replay";
     buildSpeedProfile(track); // warm cache
 
     let curWd=WEATHER_DEFS[cond]||WEATHER_DEFS.clear, curCond=cond;
@@ -1382,6 +1417,21 @@ export default function CircuitRaceView({
 
         if(weatherChg){const lL=Math.max(0,...racers.map(r=>r.totalLapsDone??0));if(lL>=weatherChg.lap){curWd=WEATHER_DEFS[weatherChg.to]||WEATHER_DEFS.clear;curCond=weatherChg.to;stateRef.current.wd=curWd;addInc(`Weather → ${curWd.label}`);setCommentary(rnd(COMMENTARY.weatherChange));weatherChg=null;}}
         const wd=curWd;
+
+        // Lane lerp and defending expiry (live only)
+        if (!isReplay) {
+          racers.forEach(r => {
+            if (r.targetLane != null && r.lane !== r.targetLane) {
+              const step = dt * 2;
+              r.lane = r.lane < r.targetLane ? Math.min(r.targetLane, r.lane + step) : Math.max(r.targetLane, r.lane - step);
+              if (Math.abs(r.lane - r.targetLane) < 0.05) r.lane = r.targetLane;
+            }
+            if (r.defendingUntil > 0 && nowSec >= r.defendingUntil) {
+              r.defendingUntil = 0;
+              r.targetLane = 0;
+            }
+          });
+        }
 
         racers.forEach(r => {
           if(r.finished&&!r.dnf)return;
@@ -1429,16 +1479,85 @@ export default function CircuitRaceView({
           const gapLdr=lP-((myP?.prog)??0);
           if(gapLdr>0.15&&!scActive)effSpeed*=1+Math.min(0.08,gapLdr*0.25);
 
-          // Slipstream + overtake
-          r.inSlipstream=false;
-          if(myP&&myP.idx>0){
-            const ahP=(prevSorted[myP.idx-1].totalLapsDone??0)+(prevSorted[myP.idx-1].trackPos??0);
-            const sl=ahP-((myP.prog)??0);
-            if(sl>0&&sl<0.025&&!scActive){effSpeed*=1.04;r.inSlipstream=true;}
-            if(sl>0&&sl<=0.035&&!scActive&&Math.random()<dt*0.6*((r.overtakingLevel||0)/100)+dt*0.04)r.overtakeBoostUntil=nowSec+0.4;
+          const trackT=((r.trackPos%1)+1)%1;
+
+          // Slipstream + realistic overtake (lane, attempt, resolve, defending) — live only
+          r.inSlipstream = false;
+          if (myP && myP.idx > 0) {
+            const carAhead = prevSorted[myP.idx - 1];
+            const ahP = (carAhead.totalLapsDone ?? 0) + (carAhead.trackPos ?? 0);
+            const gap1 = ahP - (myP.prog ?? 0);
+            const gap2 = myP.idx > 1 ? (prevSorted[myP.idx - 2].totalLapsDone ?? 0) + (prevSorted[myP.idx - 2].trackPos ?? 0) - (myP.prog ?? 0) : 0;
+            if (gap1 > 0 && gap1 < 0.025 && !scActive) { effSpeed *= 1.04; r.inSlipstream = true; }
+
+            if (!isReplay) {
+              const OVERTAKE_DURATION = 0.6;
+              const OVERTAKE_COOLDOWN = 2;
+
+              if (r.overtakeAttempt) {
+                const elapsed = nowSec - (r.overtakeAttempt.startedAt || 0);
+                if (elapsed >= OVERTAKE_DURATION) {
+                  const resolveOne = (targetId, targetCarNum) => {
+                    const def = racers.find(x => x.id === targetId);
+                    const defending = def && (def.defendingUntil || 0) > nowSec - 0.3;
+                    const baseChance = 0.35 + (r.overtakingLevel || 0) / 150;
+                    const tyrePenalty = (r.tyreWear < 50) ? 0.15 : (r.tyreWear < 70) ? 0.08 : 0;
+                    const defPenalty = defending ? 0.25 : 0;
+                    const success = Math.random() < Math.max(0.12, Math.min(0.88, baseChance - tyrePenalty - defPenalty));
+                    if (success) r.overtakeBoostUntil = nowSec + 0.4;
+                    if (setOvertakeNotifRef.current) setOvertakeNotifRef.current({ text: success ? `Overtake on #${targetCarNum} successful!` : `Overtake on #${targetCarNum} failed!`, success, until: Date.now() + 1800 });
+                    addInc(success ? `${r.name} overtook #${targetCarNum}` : `${r.name} failed to overtake #${targetCarNum}`);
+                  };
+                  const secondId = r.overtakeAttempt.secondTargetId;
+                  const secondNum = r.overtakeAttempt.secondTargetCarNumber;
+                  resolveOne(r.overtakeAttempt.targetId, r.overtakeAttempt.targetCarNumber);
+                  if (secondId != null && secondNum != null) {
+                    const def2 = racers.find(x => x.id === secondId);
+                    const defending2 = def2 && (def2.defendingUntil || 0) > nowSec - 0.3;
+                    const baseChance2 = 0.28 + (r.overtakingLevel || 0) / 180;
+                    const success2 = Math.random() < Math.max(0.1, Math.min(0.82, baseChance2 - (defending2 ? 0.22 : 0)));
+                    if (success2) r.overtakeBoostUntil = nowSec + 0.35;
+                    const text2 = success2 ? `Overtake on #${secondNum} successful!` : `Overtake on #${secondNum} failed!`;
+                    setTimeout(() => { if (setOvertakeNotifRef.current) setOvertakeNotifRef.current({ text: text2, success: success2, until: Date.now() + 1800 }); }, 400);
+                  }
+                  r.overtakeAttempt = null;
+                  r.targetLane = 0;
+                }
+              } else if (gap1 > 0 && gap1 <= 0.04 && !scActive && (nowSec - (r.lastOvertakeAttemptAt || 0)) >= OVERTAKE_COOLDOWN) {
+                const curvature = getCurvature(track, trackT);
+                const cornerDir = getCornerDirection(track, trackT);
+                const aheadLane = carAhead.lane ?? 0;
+                let chosenLane = 0;
+                if (cornerDir !== 0) {
+                  const preferInside = Math.random() < 0.55;
+                  chosenLane = preferInside ? cornerDir : -cornerDir;
+                } else {
+                  chosenLane = aheadLane > 0 ? -1 : aheadLane < 0 ? 1 : (Math.random() < 0.5 ? -1 : 1);
+                }
+                const doDouble = gap2 > 0 && gap2 <= 0.045 && curvature < 0.08 && (r.overtakingLevel || 0) > 50 && Math.random() < 0.5;
+                r.overtakeAttempt = {
+                  targetId: carAhead.id,
+                  targetCarNumber: carAhead.carNumber ?? prevMap[carAhead.id]?.idx + 1,
+                  startedAt: nowSec,
+                  side: chosenLane === (cornerDir || 1) ? "inside" : "outside",
+                  secondTargetId: doDouble ? prevSorted[myP.idx - 2]?.id : undefined,
+                  secondTargetCarNumber: doDouble ? (prevSorted[myP.idx - 2]?.carNumber ?? myP.idx - 1) : undefined,
+                };
+                r.targetLane = chosenLane;
+                r.lastOvertakeAttemptAt = nowSec;
+                carAhead.defendingUntil = nowSec + 0.4;
+                carAhead.targetLane = chosenLane;
+                const notifText = doDouble ? `Attempting take over on number ${r.overtakeAttempt.targetCarNumber} and ${r.overtakeAttempt.secondTargetCarNumber}` : `Attempting take over on number ${r.overtakeAttempt.targetCarNumber}`;
+                if (setOvertakeNotifRef.current) setOvertakeNotifRef.current({ text: notifText, success: null, until: Date.now() + 2000 });
+              } else if (gap1 > 0 && gap1 <= 0.035 && !scActive && Math.random() < dt * 0.6 * ((r.overtakingLevel || 0) / 100) + dt * 0.04) {
+                r.overtakeBoostUntil = nowSec + 0.4;
+              }
+            } else {
+              if (gap1 > 0 && gap1 <= 0.035 && !scActive && Math.random() < dt * 0.6 * ((r.overtakingLevel || 0) / 100) + dt * 0.04) r.overtakeBoostUntil = nowSec + 0.4;
+            }
           }
-          if(nowSec<(r.overtakeBoostUntil||0))effSpeed*=1.04;
-          if(scActive)effSpeed=Math.min(effSpeed,0.35*r.baseSpeed);
+          if (nowSec < (r.overtakeBoostUntil || 0)) effSpeed *= 1.04;
+          if (scActive) effSpeed = Math.min(effSpeed, 0.35 * r.baseSpeed);
 
           // Engine push/save modes
           const isLast2=r.totalLapsDone>=nLaps-2;
@@ -1446,7 +1565,6 @@ export default function CircuitRaceView({
           else if(myP&&myP.idx===0){const s2P=prevSorted[1]?(prevSorted[1].totalLapsDone??0)+(prevSorted[1].trackPos??0):0;if((myP.prog??0)-s2P>0.08)effSpeed*=0.98;}
 
           // Physics corner profile (pre-computed)
-          const trackT=((r.trackPos%1)+1)%1;
           const profile=buildSpeedProfile(track);
           const pidx=Math.round(trackT*(PROFILE_N-1));
           const cornerSM=Math.max(0.50,Math.min(1.0,profile[pidx]+(effGrip-0.85)*0.6));
@@ -1635,6 +1753,7 @@ export default function CircuitRaceView({
         inSlipstream:false, tyreBlister:false, strategyType:"normal",
         reliabilityWearMult:Math.max(0.7,1-pitLvl*0.05),
         overtakingLevel:0, overtakeBoostUntil:0, currentSpeedMph:null,
+        lane:0, targetLane:null, overtakeAttempt:null, defendingUntil:0, lastOvertakeAttemptAt:0,
       };
     });
 
@@ -1651,8 +1770,7 @@ export default function CircuitRaceView({
           if (pr?.racers?.length) {
             setTimeout(() => {
               setUiPhase("qualifying"); setLapDisp("Qualifying"); setCommentary("Qualifying lap — grid set by this lap");
-              startRaceLoop(pr.track, pr.cond, 1, pr.racers, {
-              onQualifyingComplete: (sortedRacers) => {
+              startRaceLoop(pr.track, pr.cond, 1, pr.racers, { mode: "replay", onQualifyingComplete: (sortedRacers) => {
                 const qWd = WEATHER_DEFS[pr.cond] || WEATHER_DEFS.clear;
                 const gridRacers = sortedRacers.map((r, gi) => ({
                   ...r, trackPos: (sortedRacers.length - gi) * 0.012, totalLapsDone: 0, lapCount: 1,
@@ -1686,7 +1804,7 @@ export default function CircuitRaceView({
     if (rpStarted.current) return;
     const pr = stateRef.current?.pendingReplay;
     if (!pr?.racers?.length) return;
-    rpStarted.current=true; startRaceLoop(pr.track,pr.cond,pr.totalLaps,pr.racers);
+    rpStarted.current=true; startRaceLoop(pr.track,pr.cond,pr.totalLaps,pr.racers,{ mode: "replay" });
   }, [mode, uiPhase, startRaceLoop]);
 
   // ─── LIVE MODE ──────────────────────────────────────────────────────────
@@ -1727,6 +1845,7 @@ export default function CircuitRaceView({
         fuelLoad:100,currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
         inSlipstream:false,tyreBlister:false,strategyType:ns,
         overtakingLevel:ovt,overtakeBoostUntil:0,currentSpeedMph:null,
+        lane:0,targetLane:null,overtakeAttempt:null,defendingUntil:0,lastOvertakeAttemptAt:0,
       };
     });
     stateRef.current={racers,track,nLaps:totalLaps,wd};
@@ -1741,8 +1860,7 @@ export default function CircuitRaceView({
           if(pr){
             setTimeout(()=>{
               setUiPhase("qualifying");setLapDisp("Qualifying");setCommentary("Qualifying lap — grid set by this lap");
-              startRaceLoop(pr.track,pr.cond,1,pr.racers,{
-                onQualifyingComplete:(sortedRacers)=>{
+              startRaceLoop(pr.track,pr.cond,1,pr.racers,{ mode: "replay", onQualifyingComplete:(sortedRacers)=>{
                   const qWd=WEATHER_DEFS[pr.cond]||WEATHER_DEFS.clear;
                   const gridRacers=sortedRacers.map((r,gi)=>({
                     ...r,trackPos:(sortedRacers.length-gi)*0.012,totalLapsDone:0,lapCount:1,
@@ -1752,9 +1870,10 @@ export default function CircuitRaceView({
                     engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
                     currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
                     inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,
+                    lane:0,targetLane:null,overtakeAttempt:null,defendingUntil:0,lastOvertakeAttemptAt:0,
                   }));
                   setCommentary("Grid set — race start!");
-                  setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${pr.totalLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(pr.track,pr.cond,pr.totalLaps,gridRacers);},2200);
+                  setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${pr.totalLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(pr.track,pr.cond,pr.totalLaps,gridRacers,{ mode: "replay" });},2200);
                 },
               });
             }, 600);
@@ -1801,9 +1920,10 @@ export default function CircuitRaceView({
                 engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
                 currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
                 inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,
+                lane:0,targetLane:null,overtakeAttempt:null,defendingUntil:0,lastOvertakeAttemptAt:0,
               }));
               setCommentary("Grid set — race start!");
-              setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${numLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(track,cond,numLaps,grid);},2200);
+              setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${numLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(track,cond,numLaps,grid,{ mode: "live" });},2200);
             },
           });
         }, 600);
@@ -1955,6 +2075,18 @@ export default function CircuitRaceView({
         {/* Pit notification */}
         {pitNotif&&(
           <div style={{ position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(0,0,0,.90)",border:"1px solid var(--noir-primary)",padding:"6px 14px",fontFamily:"'Cinzel',serif",fontSize:"clamp(9px,2.5vw,12px)",letterSpacing:".18em",color:"var(--noir-primary)",whiteSpace:"nowrap",pointerEvents:"none" }}>{pitNotif}</div>
+        )}
+
+        {/* Overtake attempt / result notification */}
+        {overtakeNotif && (
+          <div style={{
+            position:"absolute",top:"42%",left:"50%",transform:"translate(-50%,-50%)",
+            background:overtakeNotif.success === true ? "rgba(0,40,0,.92)" : overtakeNotif.success === false ? "rgba(40,0,0,.92)" : "rgba(0,0,0,.90)",
+            border:overtakeNotif.success === true ? "1px solid rgba(80,200,80,.6)" : overtakeNotif.success === false ? "1px solid rgba(220,80,80,.6)" : "1px solid var(--noir-primary)",
+            padding:"6px 14px",fontFamily:"'Cinzel',serif",fontSize:"clamp(9px,2.5vw,12px)",letterSpacing:".12em",
+            color:overtakeNotif.success === true ? "#90e090" : overtakeNotif.success === false ? "#f0a0a0" : "var(--noir-primary)",
+            whiteSpace:"nowrap",pointerEvents:"none",
+          }}>{overtakeNotif.text}</div>
         )}
       </div>
 
