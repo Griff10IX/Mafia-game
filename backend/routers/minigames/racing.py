@@ -30,15 +30,32 @@ RACING_CARS: List[dict] = [
 ]
 
 TRACKS: List[dict] = [
-    {"id": "chicago_board", "name": "Chicago Board Track", "reward_mult": 1.0},
-    {"id": "daytona_beach", "name": "Daytona Beach Road Course", "reward_mult": 1.2},
-    {"id": "roosevelt", "name": "Roosevelt Raceway", "reward_mult": 1.1},
-    {"id": "indianapolis", "name": "Indianapolis Motor Speedway", "reward_mult": 1.3},
-    {"id": "brooklands", "name": "Brooklands Banking", "reward_mult": 1.35},
-    {"id": "monza", "name": "Monza Autodromo", "reward_mult": 1.4},
-    {"id": "lemans", "name": "Le Mans Sarthe", "reward_mult": 1.5},
-    {"id": "avus", "name": "AVUS Speedway", "reward_mult": 1.45},
-    {"id": "targa", "name": "Targa Florio", "reward_mult": 1.6},
+    {"id": "chicago_board", "name": "Chicago Board Track", "reward_mult": 1.0,
+     "lap_base": 24, "km": 3.1, "corners": 10, "corner_severity": 0.3, "track_width": 1.0},
+    {"id": "daytona_beach", "name": "Daytona Beach Road Course", "reward_mult": 1.2,
+     "lap_base": 28, "km": 4.2, "corners": 6, "corner_severity": 0.35, "track_width": 1.1},
+    {"id": "roosevelt", "name": "Roosevelt Raceway", "reward_mult": 1.1,
+     "lap_base": 26, "km": 2.8, "corners": 18, "corner_severity": 0.55, "track_width": 0.85},
+    {"id": "indianapolis", "name": "Indianapolis Motor Speedway", "reward_mult": 1.3,
+     "lap_base": 30, "km": 4.6, "corners": 4, "corner_severity": 0.25, "track_width": 1.2},
+    {"id": "boardwalk", "name": "Boardwalk Circuit", "reward_mult": 1.15,
+     "lap_base": 27, "km": 3.4, "corners": 22, "corner_severity": 0.6, "track_width": 0.8},
+    {"id": "lakeside", "name": "Lakeside Park", "reward_mult": 1.1,
+     "lap_base": 28, "km": 3.8, "corners": 14, "corner_severity": 0.4, "track_width": 0.95},
+    {"id": "harbor", "name": "Harbor Front", "reward_mult": 1.05,
+     "lap_base": 25, "km": 3.0, "corners": 24, "corner_severity": 0.65, "track_width": 0.75},
+    {"id": "mountain", "name": "Mountain Pass", "reward_mult": 1.25,
+     "lap_base": 32, "km": 4.8, "corners": 22, "corner_severity": 0.6, "track_width": 0.85},
+    {"id": "brooklands", "name": "Brooklands Banking", "reward_mult": 1.35,
+     "lap_base": 42, "km": 6.4, "corners": 8, "corner_severity": 0.3, "track_width": 1.15},
+    {"id": "monza", "name": "Monza Autodromo", "reward_mult": 1.4,
+     "lap_base": 52, "km": 8.0, "corners": 14, "corner_severity": 0.5, "track_width": 1.0},
+    {"id": "lemans", "name": "Le Mans Sarthe", "reward_mult": 1.5,
+     "lap_base": 65, "km": 10.7, "corners": 16, "corner_severity": 0.45, "track_width": 1.05},
+    {"id": "avus", "name": "AVUS Speedway", "reward_mult": 1.45,
+     "lap_base": 58, "km": 12.0, "corners": 4, "corner_severity": 0.2, "track_width": 1.1},
+    {"id": "targa", "name": "Targa Florio", "reward_mult": 1.6,
+     "lap_base": 80, "km": 14.5, "corners": 32, "corner_severity": 0.8, "track_width": 0.7},
 ]
 
 RACING_NPCS: List[dict] = [
@@ -539,7 +556,7 @@ def _effective_speed_and_grip(entrant: dict, profile: Optional[dict], upgrades_m
     if profile and not entrant.get("is_npc"):
         crew_total = _total_crew_levels(profile)
         speed *= 1.0 + crew_total * CREW_BONUS_PER_LEVEL
-    speed *= 0.97 + random.random() * 0.06
+    speed *= 0.985 + random.random() * 0.03
     speed = max(1.0, speed)
     grip = max(0.5, min(1.0, grip))
     return (speed, grip)
@@ -590,9 +607,11 @@ def _run_race_simulation_laps(
     num_laps: int,
     weather_id: str = "clear",
     engine_wear_by_entrant: Optional[Dict[str, float]] = None,
+    track: Optional[dict] = None,
 ) -> tuple:
-    """Run lap-by-lap simulation with tire wear, pit stops, weather, optional engine DNF/speed limit.
-    Lap 1 is the first race lap (qualifying is not included). Returns (lap_results, result_order, pit_stops, tire_wear_after_lap, dnf_ids)."""
+    """Run lap-by-lap simulation with tire wear, pit stops, weather, contact damage, optional engine DNF/speed limit.
+    Uses split straight/corner performance model weighted by track geometry.
+    Returns (lap_results, result_order, pit_stops, tire_wear_after_lap, dnf_ids, incidents)."""
     engine_wear_by_entrant = engine_wear_by_entrant or {}
     weather = _get_weather(weather_id)
     tire_wear_mult = float(weather.get("tire_wear_mult", 1.0))
@@ -603,6 +622,16 @@ def _run_race_simulation_laps(
     pit_stops: List[Dict[str, Any]] = []
     tire_wear_after_lap: Dict[str, List[float]] = {eid: [100.0] for eid in ids}
     dnf_ids: List[str] = []
+    damage_map: Dict[str, float] = {eid: 0.0 for eid in ids}
+    incidents: List[Dict[str, Any]] = []
+
+    track = track or {}
+    corners = int(track.get("corners") or 10)
+    corner_severity = float(track.get("corner_severity") or 0.4)
+    is_wet = weather_id in ("rain", "snow")
+    corner_weight = min(0.6, corners * corner_severity * 0.015)
+    if is_wet:
+        corner_weight = min(0.75, corner_weight * 1.35)
 
     def _compound_wear_mult(entrant: dict) -> float:
         cid = (entrant.get("tyre_compound") or "medium").lower()
@@ -611,7 +640,7 @@ def _run_race_simulation_laps(
                 return float(c.get("wear_mult", 1.0))
         return 1.0
 
-    def _compound_grip_mult(entrant: dict, is_wet: bool = False) -> float:
+    def _compound_grip_mult(entrant: dict) -> float:
         cid = (entrant.get("tyre_compound") or "medium").lower()
         for c in TYRE_COMPOUNDS:
             if c.get("id") == cid:
@@ -621,34 +650,31 @@ def _run_race_simulation_laps(
                 return mult
         return 1.0
 
+    def _get_upgrades(entrant: dict) -> dict:
+        return upgrades_map.get(entrant.get("racing_car_instance_id") or entrant.get("id") or "") or {}
+
     for lap in range(1, num_laps + 1):
-        # Engine failure check (high wear: chance of DNF or speed penalty this lap)
-        engine_issue_this_lap: Dict[str, bool] = {}  # eid -> True if DNF
+        engine_issue_this_lap: Dict[str, bool] = {}
         for eid, wear in engine_wear_by_entrant.items():
             if eid in dnf_ids:
                 continue
             if wear < ENGINE_RISK_THRESHOLD:
                 continue
-            # Cooling reduces in-race engine risk (in addition to reducing post-race wear).
             entrant = next((e for e in entrants if (e.get("user_id") or e.get("id")) == eid), None)
-            up_key = (entrant.get("racing_car_instance_id") or entrant.get("id") or "") if entrant else ""
-            up_eng = upgrades_map.get(up_key, {})
+            up_eng = _get_upgrades(entrant) if entrant else {}
             cooling = int(up_eng.get("cooling_level") or 0)
-            cooling_risk_mult = max(0.4, 1.0 - 0.20 * cooling)  # 0..3 => 1.0,0.8,0.6,0.4
-            # Chance of DNF increases with wear; at 100% use ENGINE_DNF_CHANCE_PER_LAP_AT_100
+            cooling_risk_mult = max(0.4, 1.0 - 0.20 * cooling)
             dnf_chance = (wear - ENGINE_RISK_THRESHOLD) / (ENGINE_WEAR_MAX - ENGINE_RISK_THRESHOLD) * ENGINE_DNF_CHANCE_PER_LAP_AT_100
             if random.random() < (dnf_chance * cooling_risk_mult):
                 dnf_ids.append(eid)
-                engine_issue_this_lap[eid] = True  # DNF
+                engine_issue_this_lap[eid] = True
 
-        # Pit when tire below threshold — higher pit_level = pit earlier (lap before wear hurts speed)
         pitting = set()
         for eid in ids:
             if eid in dnf_ids:
                 continue
             prof = profile_by_user.get(eid) or {}
             pit_level = min(MAX_CREW_LEVEL, int(prof.get("pit_level") or 0))
-            # Smarter team: pit at higher wear (e.g. 50 + 2.5*level → 50–62.5) so they pit before wear affects speed
             pit_threshold = min(65, TIRE_PIT_THRESHOLD + pit_level * 2.5)
             if tire_wear[eid] < pit_threshold:
                 pitting.add(eid)
@@ -657,7 +683,6 @@ def _run_race_simulation_laps(
         for eid in pitting:
             pit_stops.append({"lap": lap, "entrant_id": eid})
 
-        # Lap performance: speed, grip, tire compound, tire wear; DNFs get 0 speed
         lap_speeds = []
         for e in entrants:
             eid = e.get("user_id") or e.get("id")
@@ -665,25 +690,32 @@ def _run_race_simulation_laps(
                 lap_speeds.append((eid, 0.0))
                 continue
             speed_val, grip_val = _effective_speed_and_grip(e, profile_by_user.get(eid) or {}, upgrades_map)
-            # Engine issues (high wear but no DNF): speed penalty
             wear = engine_wear_by_entrant.get(eid) or 0
             if wear >= ENGINE_RISK_THRESHOLD:
-                up = upgrades_map.get(e.get("racing_car_instance_id") or eid) or {}
+                up = _get_upgrades(e)
                 cooling = int(up.get("cooling_level") or 0)
-                # Cooling softens the penalty when the engine is in the risk zone.
-                penalty = min(1.0, ENGINE_SPEED_PENALTY_AT_RISK + 0.05 * cooling)  # 0..3 => 0.85,0.90,0.95,1.0
+                penalty = min(1.0, ENGINE_SPEED_PENALTY_AT_RISK + 0.05 * cooling)
                 speed_val *= penalty
-            # Fuel upgrade reduces early-race weight penalty (small but meaningful).
-            up_fuel = upgrades_map.get(e.get("racing_car_instance_id") or eid) or {}
+            up_fuel = _get_upgrades(e)
             fuel_lvl = int(up_fuel.get("fuel_level") or 0)
-            # Heavier at start: up to +3% penalty on lap 1, fades to ~0 by final lap.
             base_weight_penalty = 0.03 * ((num_laps - lap + 1) / max(1, num_laps))
-            weight_penalty = max(0.0, base_weight_penalty - 0.01 * fuel_lvl)  # fuel 0..3 reduces penalty up to 3%
+            weight_penalty = max(0.0, base_weight_penalty - 0.01 * fuel_lvl)
             fuel_weight_mult = 1.0 + weight_penalty
             tire_factor = max(0.3, tire_wear[eid] / 100.0)
-            is_wet = weather_id in ("rain", "snow")
-            compound_mult = _compound_grip_mult(e, is_wet=is_wet)
-            combined = (speed_val * (0.7 + 0.3 * grip_val) * tire_factor * speed_mult * compound_mult) / fuel_weight_mult
+            compound_mult = _compound_grip_mult(e)
+
+            up = _get_upgrades(e)
+            brakes = int(up.get("brakes_level") or 0)
+            aero = int(up.get("aero_level") or 0)
+
+            straight_perf = (speed_val * tire_factor * speed_mult) / fuel_weight_mult
+            corner_grip_bonus = compound_mult + brakes * 0.03 + aero * 0.02
+            corner_perf = (grip_val * tire_factor * corner_grip_bonus * speed_mult) / fuel_weight_mult
+
+            combined = straight_perf * (1.0 - corner_weight) + corner_perf * corner_weight
+
+            if damage_map.get(eid, 0) > 0:
+                combined *= (1.0 - damage_map[eid])
             if eid in pitting:
                 combined *= PIT_PENALTY_FACTOR
             lap_speeds.append((eid, combined))
@@ -693,12 +725,29 @@ def _run_race_simulation_laps(
         order = [x[0] for x in lap_speeds]
         lap_results.append(order)
 
-        # Update tire wear (compound affects wear rate; reliability reduces it)
+        active_ids = [eid for eid in ids if eid not in dnf_ids]
+        for i in range(len(active_ids)):
+            for j in range(i + 1, len(active_ids)):
+                eid_a, eid_b = active_ids[i], active_ids[j]
+                score_a = next((s for e, s in lap_speeds if e == eid_a), 0)
+                score_b = next((s for e, s in lap_speeds if e == eid_b), 0)
+                if score_a <= 0 or score_b <= 0:
+                    continue
+                closeness = abs(score_a - score_b) / max(score_a, score_b)
+                if closeness > 0.05:
+                    continue
+                contact_chance = corner_severity * 0.08
+                if random.random() < contact_chance:
+                    victim = random.choice([eid_a, eid_b])
+                    dmg = random.uniform(0.02, 0.08)
+                    damage_map[victim] = min(0.25, damage_map.get(victim, 0) + dmg)
+                    incidents.append({"lap": lap, "entrant_ids": [eid_a, eid_b], "damaged": victim, "damage_pct": round(dmg * 100, 1)})
+
         for e in entrants:
             eid = e.get("user_id") or e.get("id")
             if eid in dnf_ids:
                 continue
-            up = upgrades_map.get(e.get("racing_car_instance_id") or eid) or {}
+            up = _get_upgrades(e)
             rel = int(up.get("reliability_level") or 0)
             wear_mult_rel = max(0.5, 1.0 - rel * RELIABILITY_WEAR_REDUCTION_PER_LEVEL)
             if eid in pitting:
@@ -709,14 +758,13 @@ def _run_race_simulation_laps(
                 tire_wear[eid] = max(0, tire_wear[eid] - wear_this_lap)
             tire_wear_after_lap[eid].append(round(tire_wear[eid], 1))
 
-    # Result order: finishers by last lap order, then DNFs
     if lap_results:
         last_order = lap_results[-1]
         finishers = [eid for eid in last_order if eid not in dnf_ids]
         result_order = finishers + dnf_ids
     else:
         result_order = ids
-    return lap_results, result_order, pit_stops, tire_wear_after_lap, dnf_ids
+    return lap_results, result_order, pit_stops, tire_wear_after_lap, dnf_ids, incidents
 
 
 def _run_qualifying(
@@ -727,14 +775,18 @@ def _run_qualifying(
     weather_id: str = "clear",
 ) -> tuple:
     """One-lap qualifying: order by single-lap performance (no tire wear).
-    Returns grid order (pole first). Does not count as a race lap — lap 1 is the first race lap after the start."""
+    Returns grid order (pole first). Uses split straight/corner formula matching race simulation."""
     weather = _get_weather(weather_id)
     speed_mult = float(weather.get("speed_mult", 1.0))
     lap_times = []
-    lap_base = float((track or {}).get("lap_base") or 0) if track else 0.0
-    if lap_base <= 0:
-        # Fallback: assume a ~90s lap baseline for ordering when track data missing.
-        lap_base = 90.0
+    track = track or {}
+    lap_base = float(track.get("lap_base") or 90.0)
+    corners = int(track.get("corners") or 10)
+    corner_severity = float(track.get("corner_severity") or 0.4)
+    is_wet = weather_id in ("rain", "snow")
+    corner_weight = min(0.6, corners * corner_severity * 0.015)
+    if is_wet:
+        corner_weight = min(0.75, corner_weight * 1.35)
     for e in entrants:
         eid = e.get("user_id") or e.get("id")
         speed_val, grip_val = _effective_speed_and_grip(e, profile_by_user.get(eid) or {}, upgrades_map)
@@ -742,13 +794,18 @@ def _run_qualifying(
         for c in TYRE_COMPOUNDS:
             if c.get("id") == (e.get("tyre_compound") or "medium"):
                 compound_mult = float(c.get("grip_mult", 1.0))
+                if is_wet and c.get("wet_grip_bonus"):
+                    compound_mult += float(c.get("wet_grip_bonus", 0))
                 break
-        combined = speed_val * (0.7 + 0.3 * grip_val) * speed_mult * compound_mult
+        up = upgrades_map.get(e.get("racing_car_instance_id") or e.get("id") or "") or {}
+        brakes = int(up.get("brakes_level") or 0)
+        aero = int(up.get("aero_level") or 0)
+        straight_perf = speed_val * speed_mult
+        corner_grip_bonus = compound_mult + brakes * 0.03 + aero * 0.02
+        corner_perf = grip_val * corner_grip_bonus * speed_mult
+        combined = straight_perf * (1.0 - corner_weight) + corner_perf * corner_weight
         combined = max(0.01, float(combined))
-        # Convert performance to a time-like metric: lower is better.
-        # This preserves the existing performance model but makes qualifying "fastest lap wins".
         lap_time = lap_base / combined
-        # Clamp to reasonable bounds to avoid pathological results if combined spikes.
         lap_time = max(20.0, min(300.0, lap_time))
         lap_times.append((eid, lap_time))
     random.shuffle(lap_times)
@@ -1533,8 +1590,8 @@ async def _start_race_internal(race_id: str) -> dict:
         p["reliability_level"] = int(up.get("reliability_level") or 0) if up else 0
     # Pre-compute race simulation so live replay matches final results
     with _SeededRandom(f"race:{race_id}"):
-        lap_results, result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids = _run_race_simulation_laps(
-            participants, profile_by_user, upgrades_map, num_laps, weather_id=weather_id, engine_wear_by_entrant=engine_wear_by_entrant
+        lap_results, result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids, sim_incidents = _run_race_simulation_laps(
+            participants, profile_by_user, upgrades_map, num_laps, weather_id=weather_id, engine_wear_by_entrant=engine_wear_by_entrant, track=track
         )
     dnf_ids_list = list(sim_dnf_ids or [])
     now = _now_iso()
@@ -1556,6 +1613,7 @@ async def _start_race_internal(race_id: str) -> dict:
             "pit_stops": pit_stops,
             "tire_wear_after_lap": tire_wear_after_lap,
             "dnf_ids": dnf_ids_list,
+            "incidents": sim_incidents,
             "rewards": None,
             "completed_at": None,
         }},
@@ -1725,8 +1783,8 @@ async def _create_automated_race(slot_label: str) -> Optional[str]:
                     base.update(up)
                 upgrades_map[inst_id] = base
                 engine_wear_by_entrant[uid] = float((car_d or {}).get("engine_wear") or 0)
-    lap_results, sim_result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids = _run_race_simulation_laps(
-        participants_after, profile_by_user, upgrades_map, actual_laps, weather_id, engine_wear_by_entrant,
+    lap_results, sim_result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids, sim_incidents = _run_race_simulation_laps(
+        participants_after, profile_by_user, upgrades_map, actual_laps, weather_id, engine_wear_by_entrant, track=track,
     )
     body = CompleteRaceRequest(result_order=sim_result_order, dnf_ids=sim_dnf_ids)
     # Build a minimal mock user for the complete_race call
@@ -1736,7 +1794,7 @@ async def _create_automated_race(slot_label: str) -> Optional[str]:
     # Store simulation detail for replay
     await db.racing_races.update_one(
         {"id": race_id},
-        {"$set": {"lap_results": lap_results, "pit_stops": pit_stops, "tire_wear_after_lap": tire_wear_after_lap}},
+        {"$set": {"lap_results": lap_results, "pit_stops": pit_stops, "tire_wear_after_lap": tire_wear_after_lap, "incidents": sim_incidents}},
     )
     return race_id
 
@@ -1885,8 +1943,8 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
                     car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0, "engine_wear": 1})
                     engine_wear_by_entrant[uid] = float(car_doc.get("engine_wear") or 0) if car_doc else 0.0
         with _SeededRandom(f"race:{race_id}"):
-            lap_results, result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids = _run_race_simulation_laps(
-                participants, profile_by_user, upgrades_map, num_laps, weather_id=weather_id, engine_wear_by_entrant=engine_wear_by_entrant
+            lap_results, result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids, sim_incidents = _run_race_simulation_laps(
+                participants, profile_by_user, upgrades_map, num_laps, weather_id=weather_id, engine_wear_by_entrant=engine_wear_by_entrant, track=track
             )
         dnf_ids = list(sim_dnf_ids or [])
     # Load profiles for sponsor income calculation (needed for rewards)
@@ -2370,8 +2428,8 @@ async def accept_race_challenge(challenge_id: str, current_user: dict = Depends(
             engine_wear_by_entrant[uid] = float(car_doc.get("engine_wear") or 0) if car_doc else 0.0
 
     with _SeededRandom(f"race:{race_id}"):
-        lap_results, result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids = _run_race_simulation_laps(
-            participants, profile_by_user, upgrades_map, num_laps, weather_id=weather_id, engine_wear_by_entrant=engine_wear_by_entrant
+        lap_results, result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids, sim_incidents = _run_race_simulation_laps(
+            participants, profile_by_user, upgrades_map, num_laps, weather_id=weather_id, engine_wear_by_entrant=engine_wear_by_entrant, track=track
         )
 
     winner_id = result_order[0] if result_order else None
