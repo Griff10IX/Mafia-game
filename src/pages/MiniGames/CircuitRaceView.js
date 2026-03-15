@@ -6,7 +6,7 @@ import styles from "../../styles/noir.module.css";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CAR_COLORS = [
-  "var(--noir-primary)","#dc2626","#3b82f6","#16a34a",
+  "#d4af37","#dc2626","#3b82f6","#16a34a",
   "#9333ea","#f97316","#ec4899","#14b8a6",
 ];
 
@@ -998,7 +998,7 @@ export default function CircuitRaceView({
 
     // Pit boxes — colored rectangles along pit lane
     const numBoxes = 6;
-    const boxColors = ["var(--noir-primary)", "#dc2626", "#3b82f6", "#16a34a", "#9333ea", "#f97316"];
+    const boxColors = ["#d4af37", "#dc2626", "#3b82f6", "#16a34a", "#9333ea", "#f97316"];
     for (let b = 0; b < numBoxes; b++) {
       const bf = track.pitEntry + (track.pitExit - track.pitEntry) * ((b + 0.5) / numBoxes);
       const bp = track.getPoint(((bf % 1) + 1) % 1);
@@ -1155,8 +1155,9 @@ export default function CircuitRaceView({
       }
 
       // Speed glow
+      const clr = r.color || "#888";
       const grd = ctx.createRadialGradient(px,py,0,px,py,22);
-      grd.addColorStop(0, r.color+"55"); grd.addColorStop(1, r.color+"00");
+      grd.addColorStop(0, clr+"55"); grd.addColorStop(1, clr+"00");
       ctx.fillStyle=grd; ctx.fillRect(px-22,py-22,44,44);
 
       // Shadow
@@ -1182,8 +1183,11 @@ export default function CircuitRaceView({
 
       // Car body — larger with team color stripe
       ctx.save(); ctx.translate(px,py); ctx.rotate(angle);
-      ctx.fillStyle = r.color;
-      ctx.beginPath(); ctx.roundRect(-11,-5,22,10,3); ctx.fill();
+      ctx.fillStyle = r.color || "#888";
+      ctx.beginPath();
+      if (ctx.roundRect) { ctx.roundRect(-11,-5,22,10,3); }
+      else { ctx.moveTo(-8,-5); ctx.lineTo(8,-5); ctx.quadraticCurveTo(11,-5,11,-2); ctx.lineTo(11,2); ctx.quadraticCurveTo(11,5,8,5); ctx.lineTo(-8,5); ctx.quadraticCurveTo(-11,5,-11,2); ctx.lineTo(-11,-2); ctx.quadraticCurveTo(-11,-5,-8,-5); ctx.closePath(); }
+      ctx.fill();
       ctx.strokeStyle="rgba(255,255,255,0.25)"; ctx.lineWidth=0.8; ctx.stroke();
       // Team color accent stripe
       ctx.fillStyle = "rgba(255,255,255,0.15)";
@@ -1418,7 +1422,7 @@ export default function CircuitRaceView({
       racers.forEach((r) => {
         if (r.finished && !r.dnf) return;
         if (r.dnf) {
-          if (r.visible && nowSec > r.dnfAtSec + 2) r.visible = false;
+          if (r.visible && nowSec > r.dnfAtSec + 30) r.visible = false;
           if (r.visible) {
             const lapTime = track.lapBase;
             r.trackPos = (r.trackPos + (1.0 / lapTime) * dt * 0.05 + 1) % 1;
@@ -1586,7 +1590,7 @@ export default function CircuitRaceView({
           if (r.totalLapsDone >= nLaps) {
             r.finished = true;
             r.finishOrder = nextFinishOrder++;
-            r.finishVisibleUntil = nowSec + 1.5;
+            r.finishVisibleUntil = nowSec + 9999;
             if (r.finishOrder === 1) {
               finishFlashUntil = nowSec + 2.0;
               stateRef.current.finishFlashUntil = finishFlashUntil;

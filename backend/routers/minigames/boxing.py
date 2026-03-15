@@ -59,6 +59,7 @@ async def _ensure_profile(user_id: str) -> dict:
         return prof
     doc = {"user_id": user_id, **DEFAULT_PROFILE}
     await db.boxing_profiles.insert_one(doc)
+    doc.pop("_id", None)
     return doc
 
 
@@ -471,6 +472,7 @@ async def boxing_fight_npc(payload: FightNpcRequest, current_user: dict = Depend
         "created_at": now,
     }
     await db.boxing_fights.insert_one(fight_doc)
+    fight_doc.pop("_id", None)
 
     await db.boxing_events.insert_one({
         "id": str(uuid.uuid4()),
@@ -545,6 +547,7 @@ async def boxing_challenge_create(payload: ChallengeRequest, current_user: dict 
         "created_at": now,
     }
     await db.boxing_challenges.insert_one(doc)
+    doc.pop("_id", None)
     return {"message": f"Challenge sent to {opp['username']}", "challenge_id": challenge_id, "challenge": doc}
 
 
@@ -637,6 +640,7 @@ async def boxing_challenge_accept(payload: AcceptChallengeRequest, current_user:
         "created_at": now,
     }
     await db.boxing_fights.insert_one(fight_doc)
+    fight_doc.pop("_id", None)
 
     await db.boxing_challenges.update_one({"id": cid}, {"$set": {"state": "completed", "fight_id": fight_id, "winner_id": winner_id}})
 
