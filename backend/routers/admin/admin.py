@@ -65,6 +65,12 @@ class GTAExclusivePoolRequest(BaseModel):
     released: bool
 
 
+class GiveEveryoneExclusiveCarsRequest(BaseModel):
+    """Give every user a car they don't already have. loot_exclusive = car21, al_capone = car20."""
+    loot_exclusive: bool = False
+    al_capone: bool = False
+
+
 class AdminChangeEmailRequest(BaseModel):
     new_email: str
 
@@ -413,6 +419,57 @@ def register(router):
             upsert=True,
         )
         return {"message": f"Al Capone exclusive {'released into' if body.released else 'retracted from'} GTA car pool", "released": body.released}
+
+    @router.post("/admin/give-everyone-exclusive-cars")
+    async def admin_give_everyone_exclusive_cars(body: GiveEveryoneExclusiveCarsRequest, current_user: dict = Depends(get_current_user)):
+        """Give every user the selected exclusive car(s) if they don't already have them. loot_exclusive = car21, al_capone = car20. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if not body.loot_exclusive and not body.al_capone:
+            raise HTTPException(status_code=400, detail="Select at least one: loot_exclusive or al_capone")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        cars_to_give = []
+        if body.loot_exclusive:
+            c = next((x for x in CARS if x.get("id") == "car21"), None)
+            if c:
+                cars_to_give.append(("car21", c["name"]))
+        if body.al_capone:
+            c = next((x for x in CARS if x.get("id") == "car20"), None)
+            if c:
+                cars_to_give.append(("car20", c["name"]))
+        if not cars_to_give:
+            raise HTTPException(status_code=400, detail="Exclusive car(s) not found in catalog")
+        users = await db.users.find({}, {"_id": 0, "id": 1}).to_list(100_000)
+        given = {car_id: 0 for car_id, _ in cars_to_give}
+        skipped = {car_id: 0 for car_id, _ in cars_to_give}
+        for u in users:
+            user_id = u.get("id")
+            if not user_id:
+                continue
+            for car_id, car_name in cars_to_give:
+                existing = await db.user_cars.find_one({"user_id": user_id, "car_id": car_id}, {"_id": 1})
+                if existing:
+                    skipped[car_id] += 1
+                else:
+                    await db.user_cars.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "user_id": user_id,
+                        "car_id": car_id,
+                        "car_name": car_name,
+                        "acquired_at": now_iso,
+                    })
+                    given[car_id] += 1
+        msg_parts = []
+        if body.loot_exclusive:
+            msg_parts.append(f"Loot exclusive (car21): {given['car21']} given, {skipped['car21']} already had")
+        if body.al_capone:
+            msg_parts.append(f"Al Capone (car20): {given['car20']} given, {skipped['car20']} already had")
+        return {
+            "message": "; ".join(msg_parts),
+            "given": given,
+            "skipped": skipped,
+            "total_users": len(users),
+        }
 
     @router.post("/admin/slots/set-draw-in-minutes")
     async def admin_slots_set_draw_in_minutes(minutes: int = 1, current_user: dict = Depends(get_current_user)):

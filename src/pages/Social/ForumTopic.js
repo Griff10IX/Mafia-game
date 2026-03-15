@@ -294,11 +294,14 @@ export default function ForumTopic() {
     if (!activeDesignerComp?.id || !commentId) return;
     setDesignerSubmittingCommentId(commentId);
     try {
-      await api.post(`/forum/designer/competitions/${activeDesignerComp.id}/entries`, { comment_id: commentId });
+      await api.post(`/forum/designer/competitions/${activeDesignerComp.id}/entries`, {
+        comment_id: String(commentId).trim(),
+      });
       toast.success('Entry submitted');
       setMyEntryCommentId(commentId);
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed');
+      const detail = err.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : 'Failed to submit entry');
     } finally {
       setDesignerSubmittingCommentId(null);
     }

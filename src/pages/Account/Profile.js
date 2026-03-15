@@ -319,24 +319,9 @@ const ProfileInfoCard = ({
           )}
         </div>
         <div className="flex items-center gap-1.5 md:gap-2 shrink-0 flex-wrap justify-end">
-          {/* Rank + prestige side-by-side */}
-          <div className="flex items-center gap-1 md:gap-1.5">
-            <div
-              className={`flex items-center gap-1 px-1.5 py-0.5 md:px-2 md:py-1 rounded-md border-2 bg-primary/20 ${roleColor ? '' : 'border-primary/50'}`}
-              style={roleColor ? { borderColor: `${roleColor}80`, backgroundColor: `${roleColor}20` } : undefined}
-            >
-              <Shield size={12} className={!roleColor ? 'text-primary' : ''} style={roleColor ? { color: roleColor } : undefined} />
-              <span
-                className={`text-[9px] md:text-[10px] font-heading font-bold uppercase ${roleColor ? '' : 'text-primary'}`}
-                style={roleColor ? { color: roleColor } : undefined}
-              >
-                {profile.rank_name || '—'}
-              </span>
-            </div>
-            {profile.prestige_level > 0 && (
-              <PrestigeBadge level={profile.prestige_level} size="icon" showLabel />
-            )}
-          </div>
+          {profile.prestige_level > 0 && (
+            <PrestigeBadge level={profile.prestige_level} size="icon" showLabel />
+          )}
 
           {/* Action buttons group */}
           <div className="flex items-center gap-1 md:gap-1.5">

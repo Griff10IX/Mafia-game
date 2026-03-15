@@ -550,7 +550,6 @@ function drawCanvasBars(ctx, W, H, state, nameA, nameB) {
 // ── COMPONENT ─────────────────────────────────────────────────────────────────
 export default function Boxing3D() {
   const refs = useRef({ fight: null });
-  const [arenaFightResult, setArenaFightResult] = useState(null);
   const [liveCommentary, setLiveCommentary] = useState([]);
   const commentaryEndRef = useRef(null);
   const streamTimeoutsRef = useRef([]);
@@ -620,7 +619,6 @@ export default function Boxing3D() {
     prevArenaMatchIdRef.current = arenaMatchId;
     if (wasInArena && !arenaMatchId) {
       setNpcFightState(null);
-      setArenaFightResult(null);
       refreshMatches();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only run when leaving arena (arenaMatchId clears)
@@ -644,16 +642,37 @@ export default function Boxing3D() {
         if (m) {
           setArenaMatchDetail(m);
           arenaMatchDetailRef.current = m;
-          if (m.state === "finished") {
-            const sr = { winner: m.winner, finish_reason: m.finish_reason || "" };
-            setArenaServerResult(sr);
-          }
-          // Keep HP and round in sync with server so bar and "End of round" are correct
           const hp = m.hp || {};
+          const stam = m.stam || {};
           const serverRound = m.round ?? 1;
           setHpA(hp.a != null ? hp.a : 100);
           setHpB(hp.b != null ? hp.b : 100);
+          setStamA(stam.a != null ? stam.a : 100);
+          setStamB(stam.b != null ? stam.b : 100);
           setRound(serverRound);
+          const fs = fightStateRef.current;
+          if (fs) {
+            fs.hpA = hp.a != null ? hp.a : 100;
+            fs.hpB = hp.b != null ? hp.b : 100;
+            fs.stamA = stam.a != null ? stam.a : 100;
+            fs.stamB = stam.b != null ? stam.b : 100;
+            fs.round = serverRound;
+          }
+          if (m.state === "finished") {
+            setGameState("done");
+            const sr = { winner: m.winner, finish_reason: m.finish_reason || "" };
+            setArenaServerResult(sr);
+            const nameA = m.a_username || "Fighter A";
+            const nameB = m.b_username || "Fighter B";
+            const winnerName = m.winner === m.a_id ? nameA : m.winner === m.b_id ? nameB : "";
+            const reason = (m.finish_reason || "decision").replace(/_/g, " ");
+            setWinText(winnerName ? `${winnerName} wins by ${reason}` : `Fight over: ${reason}`);
+            if (fs) {
+              fs.finished = true;
+              if (m.winner === m.a_id) fs.fighterB = { anim: "ko", animStart: performance.now() };
+              else if (m.winner === m.b_id) fs.fighterA = { anim: "ko", animStart: performance.now() };
+            }
+          }
         }
       }).catch(() => {});
     };
@@ -671,49 +690,8 @@ export default function Boxing3D() {
     return () => clearInterval(id);
   }, [arenaMatchId, arenaMatchDetail?.id, arenaMatchDetail?.state]);
 
-  useEffect(() => {
-    if (!arenaMatchId || !arenaMatchDetail?.id || arenaStartedRef.current) return;
-    arenaStartedRef.current = true;
-    const baseA = FIGHTERS[0];
-    const baseB = FIGHTERS[1];
-    const scaleStat = (v, base) => {
-      const n = Number(v || 1);
-      if (!Number.isFinite(n)) return base;
-      return Math.max(45, Math.min(95, 45 + n * 3));
-    };
-    const youStats = effective || profile || null;
-    const opponentName = arenaMatchDetail.b_username || "";
-    const npc = (npcs || []).find((n) => n.name === opponentName) || (npcs && npcs[0]) || null;
-    const simA = youStats ? {
-      name: (me?.username ? `${me.username.toUpperCase()}` : baseA.name),
-      power: scaleStat(youStats.power, baseA.power),
-      speed: scaleStat(youStats.speed, baseA.speed),
-      stamina: scaleStat(youStats.stamina, baseA.stamina),
-      defense: scaleStat(youStats.defense, baseA.defense),
-      accuracy: scaleStat(youStats.accuracy, baseA.accuracy ?? 65),
-      chin: scaleStat(youStats.chin ?? 1, 65),
-      recovery: scaleStat(youStats.recovery ?? 1, baseA.recovery ?? 62),
-    } : baseA;
-    const simB = npc ? {
-      name: npc.name,
-      power: scaleStat(npc.power, baseB.power),
-      speed: scaleStat(npc.speed, baseB.speed),
-      stamina: scaleStat(npc.stamina, baseB.stamina),
-      defense: scaleStat(npc.defense, baseB.defense),
-      accuracy: scaleStat(npc.accuracy, baseB.accuracy ?? 72),
-      chin: scaleStat(npc.chin ?? npc.accuracy ?? 5, 60),
-      recovery: scaleStat(npc.recovery ?? 5, baseB.recovery ?? 60),
-    } : baseB;
-    const result = simulateFight(simA, simB);
-    result.nameA = simA.name;
-    result.nameB = simB.name;
-    setArenaFightResult(result);
-    // Bars and round will be driven by live commentary stream
-    setGameState("done");
-    const wName = result.winner === "a" ? result.nameA : result.winner === "b" ? result.nameB : "";
-    setWinText(result.reason === "Draw" ? "DRAW" : `${wName.split(" ")[0]} WINS — ${result.reason}`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arenaMatchId, arenaMatchDetail?.id, npcs?.length]);
+  // Server is the only source of truth: round, hp, stam, winner, finish_reason come from poll.
+  // No client-side fight simulation for outcome.
 
   useEffect(() => {
     let cancelled = false;
@@ -993,146 +971,46 @@ export default function Boxing3D() {
   const gold = "var(--noir-primary)";
   const crimson = "#b5463c"; // opponent accent (contrast)
 
-  const commentaryLinesToStream = useMemo(() => {
-    const res = arenaFightResult;
-    if (!res || !res.events || !res.events.length) return [];
-    const nameA = res.nameA || "Fighter A";
-    const nameB = res.nameB || "Fighter B";
-    const cap = (s) => (s && s[0].toUpperCase() + s.slice(1)) || s;
+  // Commentary from server rounds only (interpretive replay)
+  const serverCommentary = useMemo(() => {
+    const m = arenaMatchDetail;
+    const rounds = m?.rounds || [];
+    if (!rounds.length) return [];
+    const nameA = m?.a_username || "Fighter A";
+    const nameB = m?.b_username || "Fighter B";
     const lines = [];
-    let lastRound = 0;
-    const events = res.events;
-    for (let idx = 0; idx < events.length; idx++) {
-      const ev = events[idx];
-
-      // Clinch events
-      if (ev.type === "clinch") {
-        if (ev.round !== lastRound) { lastRound = ev.round; lines.push({ type: "round", text: `Round ${ev.round}`, round: ev.round, ev }); }
-        lines.push({ type: "clinch", text: "They clinch in the center of the ring. Ref breaks them apart.", ev });
-        continue;
-      }
-      // Round-end events (scorecard + corner)
-      if (ev.type === "roundEnd") {
-        const scoreStr = `${ev.scoreA}-${ev.scoreB}`;
-        lines.push({ type: "roundEnd", text: `— End of Round ${ev.round} (${scoreStr}) —`, ev });
-        if (ev.cornerAdvice) lines.push({ type: "corner", text: `Corner: "${ev.cornerAdvice}"`, ev });
-        // Cut warnings between rounds
-        if (ev.cutStateA && ev.cutStateA.severity > 0.5) {
-          const sev = ev.cutStateA.severity > 0.7 ? "getting worse — doctor may check it" : "swelling up";
-          lines.push({ type: "cutWarn", text: `Cut over ${nameA}'s ${ev.cutStateA.loc} is ${sev}.`, ev });
-        }
-        if (ev.cutStateB && ev.cutStateB.severity > 0.5) {
-          const sev = ev.cutStateB.severity > 0.7 ? "getting worse — doctor may check it" : "swelling up";
-          lines.push({ type: "cutWarn", text: `Cut over ${nameB}'s ${ev.cutStateB.loc} is ${sev}.`, ev });
-        }
-        continue;
-      }
-
-      if (ev.round !== lastRound) {
-        lastRound = ev.round;
-        lines.push({ type: "round", text: `Round ${ev.round}`, round: ev.round, ev });
-      }
-
-      if (ev.aLanded) {
-        lines.push({ type: "exchange", text: `${nameA} lands a ${cap(ev.aPunch)} for ${ev.aDmg} damage.`, side: "a", ev });
-      } else {
-        lines.push({ type: "exchange", text: `${nameA} misses with a ${cap(ev.aPunch)}.`, side: "a", ev });
-      }
-      if (ev.isCombo && ev.comboSide === "a") {
-        lines.push({ type: "combo", text: `Beautiful ${ev.comboCount}-punch combo from ${nameA}!`, side: "a", ev });
-      }
-      if (ev.bLanded) {
-        lines.push({ type: "exchange", text: `${nameB} lands a ${cap(ev.bPunch)} for ${ev.bDmg} damage.`, side: "b", ev });
-      } else {
-        lines.push({ type: "exchange", text: `${nameB} misses with a ${cap(ev.bPunch)}.`, side: "b", ev });
-      }
-      if (ev.isCombo && ev.comboSide === "b") {
-        lines.push({ type: "combo", text: `Beautiful ${ev.comboCount}-punch combo from ${nameB}!`, side: "b", ev });
-      }
-      if (ev.aKD) lines.push({ type: "kd", text: `KNOCKDOWN! ${nameA} drops ${nameB}!`, side: "b", ev });
-      if (ev.bKD) lines.push({ type: "kd", text: `KNOCKDOWN! ${nameB} puts ${nameA} on the canvas!`, side: "a", ev });
-      if (ev.cutA) {
-        const sev = ev.cutA.severity > 0.6 ? "Bad cut" : "Cut";
-        lines.push({ type: "cut", text: `${sev} opened over ${nameA}'s ${ev.cutA.loc}!`, side: "a", ev });
-      }
-      if (ev.cutB) {
-        const sev = ev.cutB.severity > 0.6 ? "Bad cut" : "Cut";
-        lines.push({ type: "cut", text: `${sev} opened over ${nameB}'s ${ev.cutB.loc}!`, side: "b", ev });
-      }
+    for (const r of rounds) {
+      const n = r.round ?? 0;
+      const ah = r.a_hits ?? 0, ad = r.a_dmg ?? 0, bh = r.b_hits ?? 0, bd = r.b_dmg ?? 0;
+      lines.push({ type: "round", text: `Round ${n}: ${nameA} ${ah} punches (${ad} dmg), ${nameB} ${bh} punches (${bd} dmg).`, round: n });
     }
-    const winnerName = res.winner === "a" ? nameA : res.winner === "b" ? nameB : "";
-    lines.push({ type: "result", text: res.reason === "Draw" ? "Draw." : `Fight over. ${winnerName} wins by ${res.reason}.` });
     return lines;
-  }, [arenaFightResult]);
+  }, [arenaMatchDetail?.rounds, arenaMatchDetail?.a_username, arenaMatchDetail?.b_username]);
 
-  // Keep speedMultRef in sync
+  useEffect(() => {
+    setLiveCommentary(serverCommentary);
+  }, [serverCommentary]);
+
   useEffect(() => { speedMultRef.current = speedMult; }, [speedMult]);
 
-  // Stream commentary line-by-line and drive canvas animations
   useEffect(() => {
-    if (!arenaFightResult?.events?.length || commentaryLinesToStream.length === 0) return;
-    setLiveCommentary([]);
-    setHpA(100); setHpB(100); setStamA(100); setStamB(100); setRound(1);
-    fightStateRef.current = {
-      fighterA: { anim: "idle", animStart: 0 }, fighterB: { anim: "idle", animStart: 0 },
-      hpA: 100, hpB: 100, stamA: 100, stamB: 100, round: 1,
-      showRoundCard: false, roundCardNum: 0, roundCardStart: 0,
-      koCountdown: null, hitParticles: [], finished: false,
-    };
-    const baseDelays = { round: 320, exchange: 90, roundEnd: 140, kd: 1800, cut: 200, result: 650, clinch: 220, corner: 260, combo: 200, cutWarn: 200 };
-    let i = 0;
-    const schedule = () => {
-      if (i >= commentaryLinesToStream.length) return;
-      const line = commentaryLinesToStream[i];
-      const baseMs = baseDelays[line.type] ?? 90;
-      const ms = Math.max(20, baseMs / speedMultRef.current);
-      const t = setTimeout(() => {
-        setLiveCommentary((prev) => [...prev, line]);
-        const fs = fightStateRef.current;
-        const now = performance.now();
-        if (line.ev) {
-          fs.hpA = line.ev.hpA; fs.hpB = line.ev.hpB;
-          fs.stamA = line.ev.stamA ?? fs.stamA; fs.stamB = line.ev.stamB ?? fs.stamB;
-          fs.round = line.ev.round;
-          setHpA(line.ev.hpA); setHpB(line.ev.hpB);
-          setStamA(line.ev.stamA ?? fs.stamA); setStamB(line.ev.stamB ?? fs.stamB);
-          setRound(line.ev.round);
-        }
-        // Drive canvas fighter animations
-        if (line.type === "exchange" && line.side === "a" && line.ev) {
-          fs.fighterA = { anim: line.ev.aPunch, animStart: now, landed: line.ev.aLanded };
-          if (line.ev.aLanded) fs.fighterB = { anim: "hit", animStart: now };
-          if (line.ev.aLanded) {
-            for (let k=0;k<5;k++) fs.hitParticles.push({ x: canvasRef.current ? canvasRef.current.width * 0.57 : 365, y: canvasRef.current ? canvasRef.current.height * 0.38 : 200, vx: (Math.random()-0.5)*80, vy: -25-Math.random()*35, life: 0.5+Math.random()*0.3, born: now });
-          }
-        } else if (line.type === "exchange" && line.side === "b" && line.ev) {
-          fs.fighterB = { anim: line.ev.bPunch, animStart: now, landed: line.ev.bLanded };
-          if (line.ev.bLanded) fs.fighterA = { anim: "hit", animStart: now };
-          if (line.ev.bLanded) {
-            for (let k=0;k<5;k++) fs.hitParticles.push({ x: canvasRef.current ? canvasRef.current.width * 0.43 : 275, y: canvasRef.current ? canvasRef.current.height * 0.38 : 200, vx: (Math.random()-0.5)*80, vy: -25-Math.random()*35, life: 0.5+Math.random()*0.3, born: now });
-          }
-        } else if (line.type === "kd") {
-          const side = line.side;
-          if (side === "a") { fs.fighterA = { anim: "down", animStart: now }; fs.koCountdown = { side: "a", count: 0, start: now }; }
-          if (side === "b") { fs.fighterB = { anim: "down", animStart: now }; fs.koCountdown = { side: "b", count: 0, start: now }; }
-        } else if (line.type === "round") {
-          fs.showRoundCard = true; fs.roundCardNum = line.round; fs.roundCardStart = now;
-          fs.fighterA = { anim: "idle", animStart: now }; fs.fighterB = { anim: "idle", animStart: now };
-          fs.koCountdown = null;
-          setTimeout(() => { fs.showRoundCard = false; }, 1200 / speedMultRef.current);
-        } else if (line.type === "result") {
-          fs.finished = true;
-          if (arenaFightResult.winner === "a") fs.fighterB = { anim: "ko", animStart: now };
-          else if (arenaFightResult.winner === "b") fs.fighterA = { anim: "ko", animStart: now };
-        }
-        i++;
-        schedule();
-      }, ms);
-      streamTimeoutsRef.current.push(t);
-    };
-    schedule();
-    return () => { streamTimeoutsRef.current.forEach(clearTimeout); streamTimeoutsRef.current = []; };
-  }, [arenaFightResult, commentaryLinesToStream]);
+    if (!arenaMatchId || !arenaMatchDetail) return;
+    const m = arenaMatchDetail;
+    const fs = fightStateRef.current;
+    if (!fs) return;
+    const hp = m.hp || {};
+    const stam = m.stam || {};
+    fs.hpA = hp.a != null ? hp.a : 100;
+    fs.hpB = hp.b != null ? hp.b : 100;
+    fs.stamA = stam.a != null ? stam.a : 100;
+    fs.stamB = stam.b != null ? stam.b : 100;
+    fs.round = m.round ?? 1;
+    if (m.state === "counting") {
+      fs.koCountdown = { side: m.down_fighter === "a" ? "a" : "b", count: 0, start: performance.now() };
+      if (m.down_fighter === "a") fs.fighterA = { anim: "down", animStart: performance.now() };
+      else if (m.down_fighter === "b") fs.fighterB = { anim: "down", animStart: performance.now() };
+    }
+  }, [arenaMatchId, arenaMatchDetail]);
 
   // Canvas animation loop
   useEffect(() => {
@@ -1200,10 +1078,11 @@ export default function Boxing3D() {
     const nameB = arenaMatchDetail?.b_username || "Opponent";
     const m = arenaMatchDetail;
     const matchOver = m?.state === "finished" || gameState === "done";
-    const showPostFight = matchOver && arenaFightResult && liveCommentary.length > 0;
-    const statsA = arenaFightResult?.stats?.a;
-    const statsB = arenaFightResult?.stats?.b;
-    const sc = arenaFightResult?.scorecard;
+    const showPostFight = matchOver;
+    const rounds = m?.rounds || [];
+    const statsA = rounds.length ? { landed: rounds.reduce((s, r) => s + (r.a_hits || 0), 0), thrown: 0, dmg: rounds.reduce((s, r) => s + (r.a_dmg || 0), 0), kds: (m?.kds?.a ?? 0) } : null;
+    const statsB = rounds.length ? { landed: rounds.reduce((s, r) => s + (r.b_hits || 0), 0), thrown: 0, dmg: rounds.reduce((s, r) => s + (r.b_dmg || 0), 0), kds: (m?.kds?.b ?? 0) } : null;
+    const sc = rounds.length ? { a: rounds.map(r => (r.a_dmg || 0) > (r.b_dmg || 0) ? 10 : (r.b_dmg || 0) > (r.a_dmg || 0) ? 9 : 10), b: rounds.map(r => (r.b_dmg || 0) > (r.a_dmg || 0) ? 10 : (r.a_dmg || 0) > (r.b_dmg || 0) ? 9 : 10) } : null;
     return (
       <div className={styles.page} style={{height:"100vh",overflow:"hidden",fontFamily:"'Cinzel',serif",display:"flex",flexDirection:"column"}}>
         <div className={styles.pageContent} style={{padding:"6px 10px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--noir-border-light)",minHeight:40}}>
@@ -1226,8 +1105,12 @@ export default function Boxing3D() {
             />
           </div>
           <div style={{flex:1,overflow:"auto",padding:"8px 12px",fontSize:10,lineHeight:1.5,color:"#e0d0b0",minHeight:0}}>
-            {!arenaFightResult && <div style={{textAlign:"center",color:"var(--noir-muted)",paddingTop:12}}>Simulating fight…</div>}
-            {arenaFightResult && liveCommentary.length === 0 && <div style={{textAlign:"center",color:"var(--noir-muted)",paddingTop:12}}>Live commentary…</div>}
+            {!m && <div style={{textAlign:"center",color:"var(--noir-muted)",paddingTop:12}}>Loading match…</div>}
+            {m?.state === "counting" && (
+              <div style={{textAlign:"center",color:"#ff8888",paddingTop:8,fontWeight:700}}>
+                Knockdown! Count… {m?.count_ends_at ? `${Math.max(0, Math.ceil((new Date(m.count_ends_at).getTime() - Date.now()) / 1000))}s` : ""}
+              </div>
+            )}
             {fightLogLines && fightLogLines.map((item, i) => (
               <div key={i} style={{
                 marginBottom: item.type === "round" ? 6 : 1,
@@ -1250,16 +1133,11 @@ export default function Boxing3D() {
           {showPostFight && (
             <div style={{flexShrink:0,padding:"10px 14px",paddingBottom:"max(10px, env(safe-area-inset-bottom))",borderTop:"1px solid rgba(201,168,76,0.2)",background:"rgba(0,0,0,0.6)"}}>
               {winText && <div style={{fontSize:12,color:gold,textAlign:"center",fontWeight:700,marginBottom:6}}>{winText}</div>}
-              {matchOver && arenaServerResult && (() => {
-                const wn = arenaServerResult.winner === m?.a_id ? nameA : nameB;
-                const rs = (arenaServerResult.finish_reason || "decision").replace(/_/g, " ");
-                return <div style={{fontSize:9,color:"#a09070",textAlign:"center",marginBottom:6}}>Official: {wn} wins by {rs}</div>;
-              })()}
               {statsA && statsB && (
                 <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:4,fontSize:9,color:"#d0c090",maxWidth:420,margin:"0 auto"}}>
-                  <div style={{textAlign:"right"}}>{statsA.landed}/{statsA.thrown} ({statsA.thrown?Math.round(statsA.landed/statsA.thrown*100):0}%)</div>
+                  <div style={{textAlign:"right"}}>{statsA.landed} landed</div>
                   <div style={{textAlign:"center",color:"#7a6a4a"}}>Punches</div>
-                  <div>{statsB.landed}/{statsB.thrown} ({statsB.thrown?Math.round(statsB.landed/statsB.thrown*100):0}%)</div>
+                  <div>{statsB.landed} landed</div>
                   <div style={{textAlign:"right"}}>{statsA.dmg}</div>
                   <div style={{textAlign:"center",color:"#7a6a4a"}}>Total Dmg</div>
                   <div>{statsB.dmg}</div>

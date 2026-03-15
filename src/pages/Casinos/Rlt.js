@@ -404,7 +404,13 @@ export default function Rlt() {
       const res = await api.post('/casino/roulette/spin', { bets: payload });
       const data = res.data || {};
 
-      if (!useAnimation) { applyResult(data); return; }
+      if (!useAnimation) {
+        const idx = WHEEL_ORDER.indexOf(data.result);
+        const finalRotation = 10 * 360 - (idx >= 0 ? idx : 0) * SEG - SEG / 2;
+        setWheelRotation(finalRotation);
+        applyResult(data);
+        return;
+      }
 
       pendingResultRef.current = data;
       await new Promise((r) => setTimeout(r, 60));
@@ -678,10 +684,10 @@ export default function Rlt() {
               {/* ── Left column: Wheel, chips, spin ── */}
               <div className="flex flex-col items-center gap-3 min-w-0">
                 {/* Wheel */}
-                <div className={`rounded-full p-1 ${spinning ? 'animate-spin-pulse' : ''}`}>
+                <div className={`rounded-full p-1 ${spinning && useAnimation ? 'animate-spin-pulse' : ''}`}>
                   <RouletteWheel
                     rotationDeg={wheelRotation}
-                    spinning={spinning}
+                    spinning={spinning && useAnimation}
                     lastResult={lastResult}
                     size={200}
                   />

@@ -8,7 +8,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from server import db, get_current_user, send_notification, send_notification_to_all, _is_admin, _is_moderator
 
@@ -62,7 +62,15 @@ class CompetitionUpdate(BaseModel):
 
 
 class EntryCreate(BaseModel):
-    comment_id: str  # post (comment) in the competition topic
+    comment_id: str  # post (comment) in the competition topic — submission does not validate or restrict comment content (e.g. emoji/URLs are allowed)
+
+    @field_validator("comment_id", mode="before")
+    @classmethod
+    def normalize_comment_id(cls, v):
+        if v is None:
+            return ""
+        s = str(v).strip()
+        return s
 
 
 class VoteRequest(BaseModel):
@@ -285,7 +293,9 @@ async def get_active_competition(current_user: dict = Depends(get_current_user))
 
 
 async def add_entry(comp_id: str, body: EntryCreate, current_user: dict = Depends(get_current_user)):
-    """Submit a post (comment) in the competition topic as your entry. One entry per user."""
+    """Submit a post (comment) in the competition topic as your entry. One entry per user. Comment content (e.g. emoji, URLs) is not validated."""
+    if not (body.comment_id or "").strip():
+        raise HTTPException(status_code=400, detail="Comment ID is required")
     comp = await db.designer_competitions.find_one({"id": comp_id}, {"_id": 0})
     if not comp:
         raise HTTPException(status_code=404, detail="Competition not found")
@@ -294,8 +304,9 @@ async def add_entry(comp_id: str, body: EntryCreate, current_user: dict = Depend
         raise HTTPException(status_code=400, detail="This competition has no entry topic")
     if comp.get("status") != "active":
         raise HTTPException(status_code=400, detail="Competition is not active")
+    comment_id = body.comment_id.strip()
     comment = await db.forum_comments.find_one(
-        {"id": body.comment_id},
+        {"id": comment_id},
         {"_id": 0, "topic_id": 1, "author_id": 1, "author_username": 1, "gif_url": 1, "content": 1},
     )
     if not comment:
@@ -315,7 +326,7 @@ async def add_entry(comp_id: str, body: EntryCreate, current_user: dict = Depend
     doc = {
         "id": entry_id,
         "competition_id": comp_id,
-        "comment_id": body.comment_id,
+        "comment_id": comment_id,
         "user_id": current_user["id"],
         "author_username": current_user.get("username") or comment.get("author_username", "?"),
         "created_at": now,

@@ -406,6 +406,7 @@ export default function Admin() {
   const [gtaLogsLoading, setGtaLogsLoading] = useState(false);
   const [gtaExclusiveReleased, setGtaExclusiveReleased] = useState(null);
   const [gtaExclusiveLoading, setGtaExclusiveLoading] = useState(false);
+  const [giveEveryoneExclusiveLoading, setGiveEveryoneExclusiveLoading] = useState(false);
   const [jailLogsUsername, setJailLogsUsername] = useState('');
   const [jailLogsLimit, setJailLogsLimit] = useState(500);
   const [jailLogsData, setJailLogsData] = useState(null);
@@ -1995,6 +1996,21 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
       setGtaExclusiveLoading(false);
+    }
+  };
+
+  const handleGiveEveryoneExclusiveCars = async (lootExclusive, alCapone) => {
+    setGiveEveryoneExclusiveLoading(true);
+    try {
+      const res = await api.post('/admin/give-everyone-exclusive-cars', {
+        loot_exclusive: lootExclusive,
+        al_capone: alCapone,
+      });
+      toast.success(res.data?.message || 'Done');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setGiveEveryoneExclusiveLoading(false);
     }
   };
 
@@ -4117,6 +4133,35 @@ export default function Admin() {
                 )}
               </div>
               <p className="text-[10px] text-mutedForeground font-heading">When released, the Al Capone exclusive can drop from GTA (very rare). Only one in game at a time. GTA logs are in the &quot;GTA logs (post data)&quot; section further down.</p>
+              <div className="pt-3 border-t border-zinc-700/50 space-y-2">
+                <span className="text-[10px] font-heading text-mutedForeground block">Give every user an exclusive car (if they don&apos;t already have it):</span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={giveEveryoneExclusiveLoading}
+                    onClick={() => handleGiveEveryoneExclusiveCars(true, false)}
+                    className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-[10px] font-heading font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
+                  >
+                    {giveEveryoneExclusiveLoading ? '…' : 'Give everyone loot exclusive (car21)'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={giveEveryoneExclusiveLoading}
+                    onClick={() => handleGiveEveryoneExclusiveCars(false, true)}
+                    className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-[10px] font-heading font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
+                  >
+                    {giveEveryoneExclusiveLoading ? '…' : 'Give everyone Al Capone (car20)'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={giveEveryoneExclusiveLoading}
+                    onClick={() => handleGiveEveryoneExclusiveCars(true, true)}
+                    className="px-2 py-1 rounded border border-amber-500/40 bg-amber-500/10 text-[10px] font-heading font-bold text-amber-400 hover:bg-amber-500/20 disabled:opacity-50"
+                  >
+                    {giveEveryoneExclusiveLoading ? '…' : 'Give everyone both'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
