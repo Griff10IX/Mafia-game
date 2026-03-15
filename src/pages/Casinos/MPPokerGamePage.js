@@ -1323,30 +1323,30 @@ export default function MPPokerGamePage() {
 
       {/* ══ CHAT ══ */}
       {!isVsDealer && amIPlayer && (
-        <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 animate-pkr-fade`}>
-          <div className="px-3 py-2 border-b border-primary/20 flex items-center gap-1.5" style={{ background: 'rgba(234,179,8,0.06)' }}>
+        <div data-chat-surface="table" data-chat-game="poker" className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 animate-pkr-fade`}>
+          <div data-chat-part="header" className="px-3 py-2 border-b border-primary/20 flex items-center gap-1.5" style={{ background: 'rgba(234,179,8,0.06)' }}>
             <MessageSquare size={11} className="text-primary" />
             <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">Table Chat</span>
           </div>
-          <div className="max-h-[120px] overflow-y-auto p-2.5 space-y-1.5" style={{ background: 'rgba(0,0,0,0.2)' }}>
+          <div data-chat-part="messages" className="max-h-[120px] overflow-y-auto p-2.5 space-y-1.5" style={{ background: 'rgba(0,0,0,0.2)' }}>
             {(game.chat || []).length === 0
               ? <p className="text-[9px] font-heading text-center py-2" style={{ color: 'rgba(255,255,255,0.15)' }}>No messages yet…</p>
               : (game.chat || []).slice(-30).map((c, i) => (
-                  <div key={c.at || i} className="text-[9px] font-heading leading-relaxed">
+                  <div key={c.at || i} data-chat-part="message-row" className="text-[9px] font-heading leading-relaxed">
                     <span className="font-semibold" style={{ color: 'var(--noir-primary-bright)' }}>{c.username}:</span>{' '}
-                    <span className="text-foreground break-words">{c.message}</span>
+                    <span data-chat-part="message-text" className="text-foreground break-words">{c.message}</span>
                   </div>
                 ))
             }
             <div ref={chatEndRef} />
           </div>
           {status !== 'completed' && (
-            <form onSubmit={sendChat} className="p-2 border-t border-primary/20 flex gap-1.5">
-              <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)}
+            <form onSubmit={sendChat} data-chat-part="composer" className="p-2 border-t border-primary/20 flex gap-1.5">
+              <input type="text" data-chat-part="input" value={chatInput} onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Say something…" maxLength={200}
                 className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg text-[11px] font-heading focus:outline-none"
                 style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(234,179,8,0.15)', color: 'inherit' }} />
-              <button type="submit" disabled={sendingChat || !chatInput.trim()}
+              <button type="submit" data-chat-part="send" disabled={sendingChat || !chatInput.trim()}
                 className="px-3 py-1.5 rounded-lg text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-40 transition-colors">
                 {sendingChat ? '…' : 'Send'}
               </button>

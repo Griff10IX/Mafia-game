@@ -9,12 +9,12 @@ const Toaster = ({
   return (
     <Sonner
       theme={theme}
-      className="toaster group"
+      className="toaster app-toaster group"
       toastOptions={{
         style: { color: 'var(--noir-toast-foreground, var(--noir-foreground, #f5f5f5))' },
         classNames: {
           toast:
-            "group toast group-[.toaster]:bg-background group-[.toaster]:border-border group-[.toaster]:shadow-lg",
+            "group toast app-toast group-[.toaster]:bg-background group-[.toaster]:border-border group-[.toaster]:shadow-lg",
           description: "group-[.toast]:text-muted-foreground",
           actionButton:
             "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",

@@ -164,9 +164,9 @@ export default function InboxChat() {
   }
 
   return (
-    <div className={`${styles.pageContent} flex flex-col h-[calc(100vh-10rem)] max-h-[700px] min-h-[320px]`}>
+    <div data-chat-surface="inbox" className={`${styles.pageContent} flex flex-col h-[calc(100vh-10rem)] max-h-[700px] min-h-[320px]`}>
       {/* Header */}
-      <div className="flex items-center gap-3 py-3 border-b border-primary/20 shrink-0">
+      <div data-chat-part="header" className="flex items-center gap-3 py-3 border-b border-primary/20 shrink-0">
         <button
           type="button"
           onClick={() => navigate('/inbox')}
@@ -186,6 +186,7 @@ export default function InboxChat() {
       {/* Messages (Telegram-style bubbles) */}
       <div
         ref={scrollContainerRef}
+        data-chat-part="messages"
         className="flex-1 overflow-y-auto p-4 space-y-3 bg-background/50"
       >
         {thread.length === 0 ? (
@@ -196,6 +197,8 @@ export default function InboxChat() {
           thread.map((msg) => (
             <div
               key={msg.id}
+              data-chat-part="message-row"
+              data-chat-own={msg.from_me ? 'true' : 'false'}
               className={`flex ${msg.from_me ? 'justify-end' : 'justify-start'}`}
             >
               <div
@@ -205,7 +208,7 @@ export default function InboxChat() {
                     : `${styles.panel} border border-primary/20 text-foreground rounded-bl-md`
                 }`}
               >
-                <p className="text-sm font-heading whitespace-pre-wrap break-words">
+                <p data-chat-part="message-text" className="text-sm font-heading whitespace-pre-wrap break-words">
                   {censorProfanity ? filterProfanity(msg.message) : msg.message}
                 </p>
                 {msg.gif_url && (
@@ -216,6 +219,7 @@ export default function InboxChat() {
                   />
                 )}
                 <p
+                  data-chat-part="timestamp"
                   className={`text-[10px] mt-1 ${
                     msg.from_me ? 'text-primaryForeground/80' : 'text-mutedForeground'
                   }`}
@@ -232,6 +236,7 @@ export default function InboxChat() {
       {/* Reply box (Telegram-style input at bottom) + GIPHY + gangster emojis below */}
       <form
         onSubmit={handleSend}
+        data-chat-part="composer"
         className={`p-3 border-t border-primary/20 ${styles.panel} shrink-0`}
       >
         {showGifPicker && (
@@ -245,6 +250,7 @@ export default function InboxChat() {
         <div className="flex gap-2 mb-2">
           <button
             type="button"
+            data-chat-part="aux-btn"
             onClick={() => setShowGifPicker((v) => !v)}
             className="shrink-0 w-10 h-10 rounded-full border border-primary/30 text-primary flex items-center justify-center hover:bg-primary/10 transition-colors"
             title="Search GIFs"
@@ -254,6 +260,7 @@ export default function InboxChat() {
           </button>
           <input
             type="text"
+            data-chat-part="input"
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             placeholder="Message..."
@@ -262,6 +269,7 @@ export default function InboxChat() {
           />
           <button
             type="submit"
+            data-chat-part="send"
             disabled={sending || !replyText.trim()}
             className="shrink-0 w-10 h-10 rounded-full bg-primary/20 text-primary border border-primary/40 flex items-center justify-center hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity font-heading"
             aria-label="Send"

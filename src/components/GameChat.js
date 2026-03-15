@@ -229,10 +229,11 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
   };
 
   return (
-    <div className="flex flex-col min-h-0 border-t mt-2 w-full" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}>
+    <div className="flex flex-col min-h-0 border-t mt-2 w-full" data-chat-surface="game" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}>
 
       {/* ── Header (always visible; when minimized this is the only row) ── */}
       <div
+        data-chat-part="header"
         className="flex items-center justify-between px-2 sm:px-3 py-2 sm:py-2 shrink-0 min-h-[44px] cursor-pointer select-none"
         style={{ background: 'rgba(var(--noir-primary-rgb), 0.06)', borderBottom: isMinimized ? 'none' : '1px solid rgba(var(--noir-primary-rgb), 0.12)' }}
         onClick={isMinimized ? toggleMinimized : undefined}
@@ -335,6 +336,7 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
       {/* ── Messages ── */}
       <div
         ref={scrollRef}
+        data-chat-part="messages"
         className="flex-1 min-h-[120px] max-h-[220px] sm:min-h-[130px] sm:max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-thin touch-pan-y"
         style={{ scrollbarColor: 'rgba(var(--noir-primary-rgb), 0.15) transparent' }}
       >
@@ -358,6 +360,8 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
             return (
               <div
                 key={m.id}
+                data-chat-part="message-row"
+                data-chat-own={isOwn ? 'true' : 'false'}
                 className="group relative px-2 sm:px-3 py-1.5 sm:py-1"
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
               >
@@ -383,12 +387,12 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
                     </span>
                   )}
                   {m.message && m.message !== '(GIF)' && (
-                    <span style={{ color: 'rgba(255,255,255,0.68)' }}>{censorProfanity ? filterProfanity(m.message) : m.message}</span>
+                    <span data-chat-part="message-text" style={{ color: 'rgba(255,255,255,0.68)' }}>{censorProfanity ? filterProfanity(m.message) : m.message}</span>
                   )}
                 </div>
 
                 {/* Timestamp */}
-                <div className="text-[8.5px] font-heading mt-0.5" style={{ color: 'rgba(255,255,255,0.2)', letterSpacing: '0.04em' }}>
+                <div data-chat-part="timestamp" className="text-[8.5px] font-heading mt-0.5" style={{ color: 'rgba(255,255,255,0.2)', letterSpacing: '0.04em' }}>
                   {formatChatTime(m.created_at)}
                 </div>
 
@@ -419,6 +423,7 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
 
       {/* ── Input area ── */}
       <div
+        data-chat-part="composer"
         className="shrink-0 px-2 pt-2 pb-2 flex flex-col gap-1.5"
         style={{ borderTop: '1px solid rgba(var(--noir-primary-rgb), 0.1)', background: 'rgba(0,0,0,0.2)' }}
       >
@@ -426,6 +431,7 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
         <form onSubmit={handleSend} className="flex items-stretch gap-1 flex-wrap sm:flex-nowrap">
           <input
             type="text"
+            data-chat-part="input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={prefs.muted ? 'Muted' : 'Say something, wise guy...'}
@@ -445,6 +451,7 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
           {/* GIF */}
           <button
             type="button"
+            data-chat-part="aux-btn"
             onClick={() => setShowGifPicker((v) => !v)}
             disabled={prefs.muted}
             className="shrink-0 min-w-[36px] min-h-[44px] sm:min-w-0 sm:min-h-0 px-2 rounded-sm font-heading text-[9px] tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center touch-manipulation active:scale-95"
@@ -461,6 +468,7 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
           {/* Emoji toggle */}
           <button
             type="button"
+            data-chat-part="aux-btn"
             onClick={() => setShowEmojis((v) => !v)}
             disabled={prefs.muted}
             className="shrink-0 min-w-[36px] min-h-[44px] sm:min-w-0 sm:min-h-0 px-2 rounded-sm text-[13px] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center touch-manipulation active:scale-95"
@@ -476,6 +484,7 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
           {/* Send */}
           <button
             type="submit"
+            data-chat-part="send"
             disabled={sending || prefs.muted || !(input || '').trim()}
             className="shrink-0 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 px-2.5 rounded-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center touch-manipulation active:scale-95"
             style={{
