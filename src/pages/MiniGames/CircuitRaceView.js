@@ -646,7 +646,7 @@ const TRACKS = [
 
 const PROFILE_N = 256;
 const _profileCache = new Map();
-const PROFILE_CACHE_KEY = "v2"; // bump to invalidate when profile logic changes (e.g. finish-line cap)
+const PROFILE_CACHE_KEY = "v3"; // bump to invalidate when profile logic changes (e.g. finish straight zone)
 
 // FIX B1: uses geometry discontinuity detection instead of blanket 5% bypass
 function getCurvature(track, t) {
@@ -701,14 +701,18 @@ function buildSpeedProfile(track) {
   const mn = Math.min(...raw), mx = Math.max(...raw), rng = mx-mn||1;
   const profile = new Float32Array(N);
   for (let i = 0; i < N; i++) profile[i] = 0.56 + ((raw[i]-mn)/rng)*0.44;
-  // Remove any dip at start/finish line: last ~2% and first ~1% of lap must not be slower than neighbors
+  // No slowdown at start/finish: last ~6% and first ~6% of lap at least as fast as the approach/exit
+  const refIdx = 235; // ~0.92 lap – reference speed for run to the line
+  const refIdxFirst = 16; // ~0.06 lap – reference speed for exit from line
+  for (let i = 244; i <= N - 1; i++) profile[i] = Math.max(profile[i], Math.min(1.0, profile[refIdx]));
+  for (let i = 0; i <= 15; i++) profile[i] = Math.max(profile[i], Math.min(1.0, profile[refIdxFirst]));
   const cap = (i, arr) => {
     const prev = arr[(i-1+N)%N], next = arr[(i+1)%N];
     const m = Math.max(prev, next);
     if (arr[i] < m) arr[i] = Math.min(1.0, m);
   };
   for (let i = 0; i <= 2; i++) cap(i, profile);
-  for (let i = N-3; i <= N-1; i++) cap(i, profile);
+  for (let i = N - 3; i <= N - 1; i++) cap(i, profile);
   _profileCache.set(key, profile);
   return profile;
 }
@@ -1635,8 +1639,9 @@ export default function CircuitRaceView({
           clearInterval(cdRef.current); cdRef.current=null;
           const pr = stateRef.current?.pendingReplay;
           if (pr?.racers?.length) {
-            setUiPhase("qualifying"); setLapDisp("Qualifying"); setCommentary("Qualifying lap — grid set by this lap");
-            startRaceLoop(pr.track, pr.cond, 1, pr.racers, {
+            setTimeout(() => {
+              setUiPhase("qualifying"); setLapDisp("Qualifying"); setCommentary("Qualifying lap — grid set by this lap");
+              startRaceLoop(pr.track, pr.cond, 1, pr.racers, {
               onQualifyingComplete: (sortedRacers) => {
                 const qWd = WEATHER_DEFS[pr.cond] || WEATHER_DEFS.clear;
                 const gridRacers = sortedRacers.map((r, gi) => ({
@@ -1655,6 +1660,7 @@ export default function CircuitRaceView({
                 }, 2200);
               },
             });
+            }, 600);
           }
           return 0;
         }
@@ -1723,23 +1729,25 @@ export default function CircuitRaceView({
           clearInterval(cdRef.current);cdRef.current=null;
           const pr=stateRef.current?.pendingReplay;
           if(pr){
-            setUiPhase("qualifying");setLapDisp("Qualifying");setCommentary("Qualifying lap — grid set by this lap");
-            startRaceLoop(pr.track,pr.cond,1,pr.racers,{
-              onQualifyingComplete:(sortedRacers)=>{
-                const qWd=WEATHER_DEFS[pr.cond]||WEATHER_DEFS.clear;
-                const gridRacers=sortedRacers.map((r,gi)=>({
-                  ...r,trackPos:(sortedRacers.length-gi)*0.012,totalLapsDone:0,lapCount:1,
-                  finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
-                  inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:gi+1,carNumber:gi+1,
-                  pitStrategy:buildStrategy(r.currentTyre,pr.totalLaps,qWd.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
-                  engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
-                  currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
-                  inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,
-                }));
-                setCommentary("Grid set — race start!");
-                setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${pr.totalLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(pr.track,pr.cond,pr.totalLaps,gridRacers);},2200);
-              },
-            });
+            setTimeout(()=>{
+              setUiPhase("qualifying");setLapDisp("Qualifying");setCommentary("Qualifying lap — grid set by this lap");
+              startRaceLoop(pr.track,pr.cond,1,pr.racers,{
+                onQualifyingComplete:(sortedRacers)=>{
+                  const qWd=WEATHER_DEFS[pr.cond]||WEATHER_DEFS.clear;
+                  const gridRacers=sortedRacers.map((r,gi)=>({
+                    ...r,trackPos:(sortedRacers.length-gi)*0.012,totalLapsDone:0,lapCount:1,
+                    finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
+                    inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:gi+1,carNumber:gi+1,
+                    pitStrategy:buildStrategy(r.currentTyre,pr.totalLaps,qWd.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
+                    engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
+                    currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
+                    inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,
+                  }));
+                  setCommentary("Grid set — race start!");
+                  setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${pr.totalLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(pr.track,pr.cond,pr.totalLaps,gridRacers);},2200);
+                },
+              });
+            }, 600);
           }
           return 0;
         }
@@ -1770,23 +1778,25 @@ export default function CircuitRaceView({
       c--;setCountdown(c);
       if(c<=0){
         clearInterval(cdI);
-        setUiPhase("qualifying");setLapDisp("Qualifying");setCommentary("Qualifying lap — grid order set");
-        startRaceLoop(track,cond,1,racers,{
-          onQualifyingComplete:(sorted)=>{
-            const wd2=WEATHER_DEFS[cond]||WEATHER_DEFS.clear;
-            const grid=sorted.map((r,i)=>({
-              ...r,trackPos:(sorted.length-i)*0.012,totalLapsDone:0,lapCount:1,
-              finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
-              inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:i+1,carNumber:i+1,
-              pitStrategy:buildStrategy(r.currentTyre,numLaps,wd2.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
-              engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
-              currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
-              inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,
-            }));
-            setCommentary("Grid set — race start!");
-            setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${numLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(track,cond,numLaps,grid);},2200);
-          },
-        });
+        setTimeout(()=>{
+          setUiPhase("qualifying");setLapDisp("Qualifying");setCommentary("Qualifying lap — grid order set");
+          startRaceLoop(track,cond,1,racers,{
+            onQualifyingComplete:(sorted)=>{
+              const wd2=WEATHER_DEFS[cond]||WEATHER_DEFS.clear;
+              const grid=sorted.map((r,i)=>({
+                ...r,trackPos:(sorted.length-i)*0.012,totalLapsDone:0,lapCount:1,
+                finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
+                inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:i+1,carNumber:i+1,
+                pitStrategy:buildStrategy(r.currentTyre,numLaps,wd2.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
+                engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
+                currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
+                inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,
+              }));
+              setCommentary("Grid set — race start!");
+              setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${numLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(track,cond,numLaps,grid);},2200);
+            },
+          });
+        }, 600);
       }
     },1000);
   },[uiPhase,selTrack,effCond,numLaps,chosenTyre,buildRacers,resizeCanvas,startRaceLoop]);
