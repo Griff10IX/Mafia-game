@@ -26,6 +26,7 @@ const DEFAULT_SETTINGS = {
   hitDebris: true,
   aiDelay: 1100,
   gridSize: 10,
+  difficulty: "normal",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -93,25 +94,74 @@ function allSunk(grid,ships) { return ships.every(s=>isShipSunk(grid,s.id)); }
 function getShipCells(grid,shipId) { return grid.flatMap(row=>row.filter(c=>c.ship===shipId).map(c=>[c.r,c.c])); }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AI
+// AI — difficulty-aware (easy / normal / hard)
 // ─────────────────────────────────────────────────────────────────────────────
-function aiShot(aiState,playerGrid,size=GRID) {
-  const {mode,targets}=aiState;
+function aiShot(aiState, playerGrid, difficulty="normal", size=GRID) {
+  const {mode,targets,direction}=aiState;
+
+  // Easy: purely random, no target tracking
+  if (difficulty==="easy") {
+    const avail=[];
+    for (let i=0;i<size;i++) for (let j=0;j<size;j++)
+      if (!playerGrid[i][j].hit&&!playerGrid[i][j].miss) avail.push([i,j]);
+    if (!avail.length) return {r:0,c:0,newTargets:[],newMode:"hunt"};
+    // Easy occasionally skips good shots — 25% chance to pick from non-checkerboard
+    const pick=avail[Math.floor(Math.random()*avail.length)];
+    return {r:pick[0],c:pick[1],newTargets:[],newMode:"hunt"};
+  }
+
+  // Normal & Hard: target-mode with queued cells
   if (mode==="target"&&targets.length>0) {
     const [r,c]=targets[0];
-    return {r,c,newTargets:targets.slice(1),newMode:targets.length>1?"target":"hunt"};
+    return {r,c,newTargets:targets.slice(1),newMode:targets.length>1?"target":"hunt",direction};
   }
+
+  // Hunt mode
   const avail=[];
-  for (let i=0;i<size;i++) for (let j=0;j<size;j++)
-    if (!playerGrid[i][j].hit&&!playerGrid[i][j].miss&&(i+j)%2===0) avail.push([i,j]);
+  if (difficulty==="hard") {
+    // Hard: use smallest unsunk ship size for optimal spacing
+    const unsunkSizes=[];
+    for (let i=0;i<size;i++) for (let j=0;j<size;j++) {
+      const s=playerGrid[i][j].ship;
+      if (s&&!playerGrid[i][j].hit) {
+        const shipCat=SHIP_CATALOGUE.find(sh=>sh.id===s);
+        if (shipCat&&!unsunkSizes.includes(shipCat.size)) unsunkSizes.push(shipCat.size);
+      }
+    }
+    const minSize=unsunkSizes.length>0?Math.min(...unsunkSizes):2;
+    for (let i=0;i<size;i++) for (let j=0;j<size;j++)
+      if (!playerGrid[i][j].hit&&!playerGrid[i][j].miss&&(i+j)%minSize===0) avail.push([i,j]);
+  } else {
+    for (let i=0;i<size;i++) for (let j=0;j<size;j++)
+      if (!playerGrid[i][j].hit&&!playerGrid[i][j].miss&&(i+j)%2===0) avail.push([i,j]);
+  }
   if (!avail.length) for (let i=0;i<size;i++) for (let j=0;j<size;j++)
     if (!playerGrid[i][j].hit&&!playerGrid[i][j].miss) avail.push([i,j]);
+  if (!avail.length) return {r:0,c:0,newTargets:[],newMode:"hunt"};
   const [r,c]=avail[Math.floor(Math.random()*avail.length)];
   return {r,c,newTargets:[],newMode:"hunt"};
 }
-function addTargets(targets,r,c,grid,size=GRID) {
-  return [...targets,...[[-1,0],[1,0],[0,-1],[0,1]].map(([dr,dc])=>[r+dr,c+dc])
-    .filter(([nr,nc])=>nr>=0&&nr<size&&nc>=0&&nc<size&&!grid[nr][nc].hit&&!grid[nr][nc].miss)];
+
+function addTargets(targets, r, c, grid, difficulty="normal", firstHit=null, size=GRID) {
+  const dirs=[[-1,0],[1,0],[0,-1],[0,1]];
+  let candidates=dirs.map(([dr,dc])=>[r+dr,c+dc])
+    .filter(([nr,nc])=>nr>=0&&nr<size&&nc>=0&&nc<size&&!grid[nr][nc].hit&&!grid[nr][nc].miss);
+
+  if (difficulty==="hard"&&firstHit) {
+    // Lock onto the detected axis when we have 2+ hits in a line
+    const dr=r-firstHit[0], dc=c-firstHit[1];
+    if (dr!==0||dc!==0) {
+      const axis=Math.abs(dr)>0?"v":"h";
+      candidates=candidates.filter(([nr,nc])=>
+        axis==="v"?nc===c:nr===r
+      );
+      if (candidates.length===0) {
+        candidates=dirs.map(([ddr,ddc])=>[r+ddr,c+ddc])
+          .filter(([nr,nc])=>nr>=0&&nr<size&&nc>=0&&nc<size&&!grid[nr][nc].hit&&!grid[nr][nc].miss);
+      }
+    }
+  }
+  return [...targets,...candidates];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1133,6 +1183,26 @@ function SettingsScreen({settings,onSave}) {
       </div>
 
       <div style={{background:"rgba(0,0,0,0.4)",border:"1px solid rgba(212,175,55,0.18)",padding:"0.85rem 1rem",marginBottom:10}}>
+        <div style={{fontSize:10,color:"rgba(212,175,55,0.45)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:10}}>Difficulty</div>
+        <div style={{display:"flex",gap:6}}>
+          {[{k:"easy",label:"Easy",desc:"Random fire, no tracking"},{k:"normal",label:"Normal",desc:"Checkerboard hunt + targeting"},{k:"hard",label:"Hard",desc:"Smart spacing + axis lock"}].map(d=>(
+            <div key={d.k} onClick={()=>setS(p=>({...p,difficulty:d.k}))} style={{
+              flex:1,padding:"10px 8px",cursor:"pointer",textAlign:"center",
+              border:`1px solid ${s.difficulty===d.k?"rgba(212,175,55,0.55)":"rgba(212,175,55,0.1)"}`,
+              background:s.difficulty===d.k?"rgba(212,175,55,0.1)":"transparent",
+              borderRadius:2,WebkitTapHighlightColor:"transparent",minHeight:44,
+            }}>
+              <div style={{fontSize:11,color:s.difficulty===d.k?"var(--noir-primary)":"rgba(212,175,55,0.5)",fontWeight:s.difficulty===d.k?700:400,letterSpacing:"0.05em"}}>{d.label}</div>
+              <div style={{fontSize:9,color:"rgba(212,175,55,0.3)",fontFamily:"'Crimson Text',serif",marginTop:3}}>{d.desc}</div>
+              {d.k!=="normal"&&<div style={{fontSize:8,color:d.k==="easy"?"rgba(100,180,100,0.6)":"rgba(255,150,50,0.6)",marginTop:3}}>
+                {d.k==="easy"?"×0.6 rewards":"×1.5 rewards"}
+              </div>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{background:"rgba(0,0,0,0.4)",border:"1px solid rgba(212,175,55,0.18)",padding:"0.85rem 1rem",marginBottom:10}}>
         <div style={{fontSize:10,color:"rgba(212,175,55,0.45)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:10}}>Visual Effects</div>
         {[
           {key:"sinkingCutscene",label:"Sinking Cutscene",desc:"Full-screen animation when a ship sinks"},
@@ -1332,8 +1402,21 @@ export default function Battleships() {
   const [shotsFired,setShotsFired]=useState(0);
   const [gameStartTime,setGameStartTime]=useState(null);
   const [winSubmitted,setWinSubmitted]=useState(false);
-  // Mobile battle tab: "yours" | "enemy"
   const [battleTab, setBattleTab] = useState("enemy");
+  const [consecutiveHits,setConsecutiveHits]=useState(0);
+  const [bonusShotActive,setBonusShotActive]=useState(false);
+  const [elapsedTime,setElapsedTime]=useState(0);
+  const [winReward,setWinReward]=useState(null);
+  // Special abilities — one use per game each
+  const [abilities,setAbilities]=useState({airRecon:false,sonarPing:false,salvo:false});
+  const [abilityMode,setAbilityMode]=useState(null); // "airRecon"|"sonarPing"|"salvo"|null
+  const [salvoShots,setSalvoShots]=useState(0);
+  const [sonarResult,setSonarResult]=useState(null);
+  const [screenShake,setScreenShake]=useState(false);
+  // Leaderboard / stats
+  const [leaderboard,setLeaderboard]=useState(null);
+  const [myStats,setMyStats]=useState(null);
+  const [showStats,setShowStats]=useState(false);
   const aiTimerRef=useRef(null);
   const playerFxRef=useRef({add:()=>{}});
   const aiFxRef=useRef({add:()=>{}});
@@ -1344,6 +1427,34 @@ export default function Battleships() {
     setTimeout(()=>setEvents(e=>e.filter(ev=>ev.id!==id)),3500);
   };
 
+  // Timer tick
+  useEffect(()=>{
+    if (screen!=="battle"||!gameStartTime) return;
+    const iv=setInterval(()=>setElapsedTime(Math.floor((Date.now()-gameStartTime)/1000)),1000);
+    return()=>clearInterval(iv);
+  },[screen,gameStartTime]);
+
+  // Fetch leaderboard + stats on mount and after wins
+  useEffect(()=>{
+    const fetchStats=async()=>{
+      try {
+        const [lb,st]=await Promise.all([
+          api.get('/battleships/leaderboard'),
+          api.get('/battleships/my-stats'),
+        ]);
+        if (lb.data?.leaderboard) setLeaderboard(lb.data.leaderboard);
+        if (st.data?.stats) setMyStats(st.data.stats);
+      } catch {}
+    };
+    fetchStats();
+  },[winSubmitted]);
+
+  // Screen shake helper
+  const triggerShake=useCallback(()=>{
+    setScreenShake(true);
+    setTimeout(()=>setScreenShake(false),300);
+  },[]);
+
   const submitWin=useCallback(async()=>{
     if (winSubmitted) return;
     setWinSubmitted(true);
@@ -1353,15 +1464,18 @@ export default function Battleships() {
         shots_fired:shotsFired,
         ships_lost:sunkByAi.length,
         time_seconds:timeSeconds,
+        fleet_size:activeShips.length,
+        difficulty:settings.difficulty,
       });
       if (res.data?.reward) {
+        setWinReward(res.data.reward);
         toast.success(`Victory! +$${res.data.reward.cash.toLocaleString()} +${res.data.reward.respect} Respect`);
       }
     } catch (err) {
       const msg=err?.response?.data?.detail||'Failed to record win';
       if (!msg.includes('limit')) toast.error(msg);
     }
-  },[winSubmitted,gameStartTime,shotsFired,sunkByAi.length]);
+  },[winSubmitted,gameStartTime,shotsFired,sunkByAi.length,activeShips.length,settings.difficulty]);
 
   useEffect(()=>{
     if (screen==="won"&&!winSubmitted) submitWin();
@@ -1372,10 +1486,13 @@ export default function Battleships() {
     setSettings(s); setActiveShips(ships);
     setPlayerGrid(emptyGrid()); setAiGrid(autoPlaceAll(ships));
     setPlacingIdx(0); setHoriz(true); setHoverCell(null); setPlacedShips([]);
-    setAiState({mode:"hunt",targets:[],hits:[]}); setPlayerTurn(true);
+    setAiState({mode:"hunt",targets:[],hits:[],firstHit:null}); setPlayerTurn(true);
     setSunkByPlayer([]); setSunkByAi([]); setEvents([]); setCutscene(null);
     setShotsFired(0); setGameStartTime(null); setWinSubmitted(false);
-    setBattleTab("enemy");
+    setBattleTab("enemy"); setConsecutiveHits(0); setBonusShotActive(false);
+    setElapsedTime(0); setWinReward(null);
+    setAbilities({airRecon:false,sonarPing:false,salvo:false});
+    setAbilityMode(null); setSalvoShots(0); setSonarResult(null);
     setScreen("place");
   };
 
@@ -1434,11 +1551,91 @@ export default function Battleships() {
     return isHit?"hit":"miss";
   };
 
+  // Air Recon: reveal a 3×3 area on the AI grid
+  const handleAirRecon=(r,c)=>{
+    if (abilities.airRecon) return;
+    setAbilities(a=>({...a,airRecon:true}));
+    setAbilityMode(null);
+    const ng=aiGrid.map(row=>row.map(cl=>({...cl})));
+    for (let dr=-1;dr<=1;dr++) for (let dc=-1;dc<=1;dc++) {
+      const nr=r+dr,nc=c+dc;
+      if (nr>=0&&nr<GRID&&nc>=0&&nc<GRID&&!ng[nr][nc].hit&&!ng[nr][nc].miss) {
+        ng[nr][nc]=ng[nr][nc].ship?{...ng[nr][nc],hit:true}:{...ng[nr][nc],miss:true};
+        if (ng[nr][nc].ship) {
+          if (settings.hitDebris) aiFxRef.current.add(makeHitExplosion(nc*CELL+CELL/2,nr*CELL+CELL/2,CELL));
+          triggerShake();
+        } else {
+          if (settings.hitDebris) aiFxRef.current.add(makeMissExplosion(nc*CELL+CELL/2,nr*CELL+CELL/2,CELL));
+        }
+      }
+    }
+    setAiGrid(ng);
+    setShotsFired(s=>s+1);
+    const newSunk=activeShips.filter(s=>isShipSunk(ng,s.id)&&!sunkByPlayer.includes(s.id));
+    if (newSunk.length>0) {
+      setSunkByPlayer(p=>[...p,...newSunk.map(s=>s.id)]);
+      newSunk.forEach(ship=>{
+        const cells=getShipCells(ng,ship.id);
+        setTimeout(()=>aiFxRef.current.add(makeSunkVolley(cells,CELL)),250);
+        pushEvent(`You sunk their ${ship.name}!`,"var(--noir-primary)");
+      });
+      if (allSunk(ng,activeShips)) { setScreen("won"); return; }
+    }
+    pushEvent("✈ Air Recon — area scanned!","#60b0ff");
+    setPlayerTurn(false);
+  };
+
+  // Sonar Ping: reveal whether ships exist in a 5×5 area
+  const handleSonarPing=(r,c)=>{
+    if (abilities.sonarPing) return;
+    setAbilities(a=>({...a,sonarPing:true}));
+    setAbilityMode(null);
+    let shipCount=0;
+    for (let dr=-2;dr<=2;dr++) for (let dc=-2;dc<=2;dc++) {
+      const nr=r+dr,nc=c+dc;
+      if (nr>=0&&nr<GRID&&nc>=0&&nc<GRID&&aiGrid[nr][nc].ship&&!aiGrid[nr][nc].hit) shipCount++;
+    }
+    setSonarResult({r,c,count:shipCount});
+    pushEvent(shipCount>0?`🔊 Sonar: ${shipCount} cell${shipCount>1?"s":""} detected nearby!`:"🔊 Sonar: All clear in this area.","#50c8ff");
+    setTimeout(()=>setSonarResult(null),3000);
+    setPlayerTurn(false);
+  };
+
   const handleFireAtAi=(r,c)=>{
     if (!playerTurn||screen!=="battle") return;
+
+    // Handle ability modes
+    if (abilityMode==="airRecon") { handleAirRecon(r,c); return; }
+    if (abilityMode==="sonarPing") { handleSonarPing(r,c); return; }
+
     const res=fireAndProcess(r,c,aiGrid,setAiGrid,true,sunkByPlayer,setSunkByPlayer,aiFxRef,playerGrid,setPlayerGrid,activeShips);
     if (res===false) return;
     setShotsFired(s=>s+1);
+
+    // Salvo mode — get 3 shots
+    if (abilityMode==="salvo") {
+      const next=salvoShots+1;
+      setSalvoShots(next);
+      if (next>=3) { setAbilityMode(null); setSalvoShots(0); setPlayerTurn(false); }
+      return;
+    }
+
+    // Streak: 3+ consecutive hits grants a bonus shot
+    if (res==="hit") {
+      const newStreak=consecutiveHits+1;
+      setConsecutiveHits(newStreak);
+      if (newStreak>=3&&!bonusShotActive) {
+        setBonusShotActive(true);
+        pushEvent("🔥 Hot streak — BONUS SHOT!","#ffa500");
+        return;
+      }
+      if (bonusShotActive) { setBonusShotActive(false); setConsecutiveHits(0); }
+    } else {
+      setConsecutiveHits(0);
+      setBonusShotActive(false);
+    }
+
+    if (res==="hit") triggerShake();
     if (res!=="sunk"||!settings.sinkingCutscene) setPlayerTurn(false);
     else setPlayerTurn(false);
   };
@@ -1449,37 +1646,54 @@ export default function Battleships() {
     if (p?.result) setScreen(p.result);
   };
 
+  const aiStateRef=useRef(aiState);
+  aiStateRef.current=aiState;
+  const playerGridRef=useRef(playerGrid);
+  playerGridRef.current=playerGrid;
+  const activeShipsRef=useRef(activeShips);
+  activeShipsRef.current=activeShips;
+  const sunkByAiRef=useRef(sunkByAi);
+  sunkByAiRef.current=sunkByAi;
+  const settingsRef=useRef(settings);
+  settingsRef.current=settings;
+
   useEffect(()=>{
     if (screen!=="battle"||playerTurn||cutscene) return;
     aiTimerRef.current=setTimeout(()=>{
-      const {r,c,newTargets,newMode}=aiShot(aiState,playerGrid);
-      const cell=playerGrid[r][c]; const isHit=!!cell.ship;
-      if (settings.hitDebris) playerFxRef.current.add(isHit?makeHitExplosion(c*CELL+CELL/2,r*CELL+CELL/2,CELL):makeMissExplosion(c*CELL+CELL/2,r*CELL+CELL/2,CELL));
-      const ng=playerGrid.map(row=>row.map(cl=>cl.r===r&&cl.c===c?{...cl,hit:isHit,miss:!isHit}:cl));
+      const _aiState=aiStateRef.current;
+      const _playerGrid=playerGridRef.current;
+      const _activeShips=activeShipsRef.current;
+      const _sunkByAi=sunkByAiRef.current;
+      const _settings=settingsRef.current;
+
+      const {r,c,newTargets,newMode}=aiShot(_aiState,_playerGrid,_settings.difficulty);
+      const cell=_playerGrid[r][c]; const isHit=!!cell.ship;
+      if (_settings.hitDebris) playerFxRef.current.add(isHit?makeHitExplosion(c*CELL+CELL/2,r*CELL+CELL/2,CELL):makeMissExplosion(c*CELL+CELL/2,r*CELL+CELL/2,CELL));
+      if (isHit) triggerShake();
+      const ng=_playerGrid.map(row=>row.map(cl=>cl.r===r&&cl.c===c?{...cl,hit:isHit,miss:!isHit}:cl));
       let ut=newTargets,um=newMode;
-      if (isHit){ut=addTargets(newTargets,r,c,playerGrid);um="target";}
-      const ns=activeShips.filter(s=>isShipSunk(ng,s.id)&&!sunkByAi.includes(s.id));
+      const fh=isHit?(_aiState.firstHit||[r,c]):_aiState.firstHit;
+      if (isHit){ut=addTargets(newTargets,r,c,_playerGrid,_settings.difficulty,fh);um="target";}
+      const ns=_activeShips.filter(s=>isShipSunk(ng,s.id)&&!_sunkByAi.includes(s.id));
       if (ns.length>0) {
         setSunkByAi(p=>[...p,...ns.map(s=>s.id)]);
         ns.forEach(ship=>{
           const cells=getShipCells(ng,ship.id);
           setTimeout(()=>playerFxRef.current.add(makeSunkVolley(cells,CELL)),250);
           pushEvent(`They sunk your ${ship.name}!`,"#e05050");
-          if (settings.sinkingCutscene) { setCutscene({ship,cells}); setPendingAfterCutscene({result:allSunk(ng,activeShips)?"lost":null}); }
-          else if (allSunk(ng,activeShips)) setScreen("lost");
+          if (_settings.sinkingCutscene) { setCutscene({ship,cells}); setPendingAfterCutscene({result:allSunk(ng,_activeShips)?"lost":null}); }
+          else if (allSunk(ng,_activeShips)) setScreen("lost");
         });
         ut=[];um="hunt";
       } else { pushEvent(isHit?"They found you!":"They missed!",isHit?"#e05050":"#50a070"); }
-      setAiState({mode:um,targets:ut,hits:[...aiState.hits,[r,c]]});
+      setAiState({mode:um,targets:ut,hits:[..._aiState.hits,[r,c]],firstHit:um==="hunt"?null:fh});
       setPlayerGrid(ng);
-      if (!settings.sinkingCutscene&&allSunk(ng,activeShips)){setScreen("lost");return;}
+      if (!_settings.sinkingCutscene&&allSunk(ng,_activeShips)){setScreen("lost");return;}
       setPlayerTurn(true);
-      // On mobile, switch to player view briefly when AI hits
       if (isMobile && isHit) { setBattleTab("yours"); setTimeout(()=>setBattleTab("enemy"),1800); }
     },settings.aiDelay);
     return()=>clearTimeout(aiTimerRef.current);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- AI turn effect: omit activeShips/aiState/playerGrid etc to avoid re-trigger loops
-  },[playerTurn,screen,cutscene,CELL,isMobile]);
+  },[playerTurn,screen,cutscene,CELL,isMobile,settings.aiDelay,triggerShake]);
 
   const resetToSettings=()=>setScreen("settings");
 
@@ -1498,6 +1712,7 @@ export default function Battleships() {
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
         @keyframes ev-in{0%{opacity:0;transform:translateY(-10px)}12%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
         @keyframes tglow{0%,100%{text-shadow:0 0 25px rgba(212,175,55,0.25)}50%{text-shadow:0 0 45px rgba(212,175,55,0.55),0 0 80px rgba(212,175,55,0.18)}}
+        @keyframes screenShake{0%{transform:translate(0)}20%{transform:translate(-3px,2px)}40%{transform:translate(3px,-2px)}60%{transform:translate(-2px,1px)}80%{transform:translate(2px,-1px)}100%{transform:translate(0)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
         .nb{background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.32);color:var(--noir-primary);
           font-family:'Cinzel',serif;font-size:11px;letter-spacing:0.1em;padding:9px 14px;
@@ -1524,7 +1739,12 @@ export default function Battleships() {
       </div>
 
       {/* SETTINGS */}
-      {screen==="settings"&&<SettingsScreen settings={settings} onSave={handleSaveSettings}/>}
+      {screen==="settings"&&(
+        <>
+          <SettingsScreen settings={settings} onSave={handleSaveSettings}/>
+          <button className="nb" onClick={()=>setShowStats(true)} style={{marginTop:8,fontSize:10,opacity:0.6}}>📊 Stats & Leaderboard</button>
+        </>
+      )}
 
       {/* PLACEMENT */}
       {screen==="place"&&(
@@ -1576,10 +1796,54 @@ export default function Battleships() {
             <div style={{fontSize:10,color:"rgba(212,175,55,0.55)"}}>Yours: <span style={{color:"var(--noir-primary)",fontWeight:700}}>{playerLeft}</span></div>
             <div style={{fontSize:isMobile?10:12,letterSpacing:"0.08em",fontWeight:600,
               color:screen==="won"?"var(--noir-primary)":screen==="lost"?"#e05050":playerTurn?"var(--noir-primary)":"rgba(212,175,55,0.4)"}}>
-              {screen==="won"?"✦ VICTORY":screen==="lost"?"✕ DEFEATED":playerTurn?"▶ YOUR MOVE":"⧗ INCOMING..."}
+              {screen==="won"?"✦ VICTORY":screen==="lost"?"✕ DEFEATED":playerTurn?(abilityMode?`⚡ ${abilityMode==="airRecon"?"AIR RECON":"SONAR PING"} — pick target`:"▶ YOUR MOVE"):"⧗ INCOMING..."}
             </div>
             <div style={{fontSize:10,color:"rgba(212,175,55,0.55)"}}>Feds: <span style={{color:"#e05c5c",fontWeight:700}}>{aiLeft}</span></div>
           </div>
+
+          {/* HUD — shots / time / accuracy */}
+          <div style={{display:"flex",gap:isMobile?10:20,justifyContent:"center",alignItems:"center",
+            padding:"4px 14px",background:"rgba(0,0,0,0.35)",border:"1px solid rgba(212,175,55,0.08)",
+            width:"100%",maxWidth:isMobile?GRID*CELL+20:990}}>
+            <div style={{fontSize:10,color:"rgba(212,175,55,0.5)"}}>Shots: <span style={{color:"var(--noir-primary)",fontWeight:600}}>{shotsFired}</span></div>
+            <div style={{fontSize:10,color:"rgba(212,175,55,0.5)"}}>Time: <span style={{color:"var(--noir-primary)",fontWeight:600}}>
+              {Math.floor(elapsedTime/60)}:{String(elapsedTime%60).padStart(2,'0')}</span></div>
+            {shotsFired>0&&<div style={{fontSize:10,color:"rgba(212,175,55,0.5)"}}>Accuracy: <span style={{color:"var(--noir-primary)",fontWeight:600}}>
+              {Math.round((sunkByPlayer.reduce((a,id)=>{const sh=activeShips.find(s=>s.id===id);return a+(sh?sh.size:0);},0)+(()=>{let h=0;aiGrid.forEach(row=>row.forEach(c=>{if(c.hit&&c.ship&&!sunkByPlayer.includes(c.ship))h++;}));return h;})())/shotsFired*100)}%
+            </span></div>}
+            {consecutiveHits>=2&&<div style={{fontSize:10,color:"#ffa500",fontWeight:600}}>🔥 ×{consecutiveHits}</div>}
+          </div>
+
+          {/* Ability buttons */}
+          {screen==="battle"&&playerTurn&&(
+            <div style={{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap",width:"100%",maxWidth:isMobile?GRID*CELL+20:990}}>
+              {activeShips.some(s=>s.id==="carrier")&&!abilities.airRecon&&(
+                <button className="nb" onClick={()=>setAbilityMode(m=>m==="airRecon"?null:"airRecon")}
+                  style={{fontSize:9,padding:"6px 10px",background:abilityMode==="airRecon"?"rgba(100,170,255,0.15)":"rgba(212,175,55,0.07)",
+                    borderColor:abilityMode==="airRecon"?"rgba(100,170,255,0.5)":"rgba(212,175,55,0.32)"}}>
+                  ✈ Air Recon
+                </button>
+              )}
+              {activeShips.some(s=>s.id==="submarine")&&!abilities.sonarPing&&(
+                <button className="nb" onClick={()=>setAbilityMode(m=>m==="sonarPing"?null:"sonarPing")}
+                  style={{fontSize:9,padding:"6px 10px",background:abilityMode==="sonarPing"?"rgba(80,200,255,0.15)":"rgba(212,175,55,0.07)",
+                    borderColor:abilityMode==="sonarPing"?"rgba(80,200,255,0.5)":"rgba(212,175,55,0.32)"}}>
+                  🔊 Sonar Ping
+                </button>
+              )}
+              {activeShips.some(s=>s.id==="battleship")&&!abilities.salvo&&(
+                <button className="nb" onClick={()=>{
+                  if (abilityMode==="salvo") { setAbilityMode(null); setSalvoShots(0); }
+                  else { setAbilityMode("salvo"); setSalvoShots(0); setAbilities(a=>({...a,salvo:true})); pushEvent("💣 SALVO — fire 3 shots!","#ff8c00"); }
+                }}
+                  style={{fontSize:9,padding:"6px 10px",background:abilityMode==="salvo"?"rgba(255,140,0,0.15)":"rgba(212,175,55,0.07)",
+                    borderColor:abilityMode==="salvo"?"rgba(255,140,0,0.5)":"rgba(212,175,55,0.32)"}}>
+                  💣 Salvo {abilityMode==="salvo"?`(${3-salvoShots} left)`:"(×3)"}
+                </button>
+              )}
+              {abilityMode&&<button className="nb" onClick={()=>{setAbilityMode(null);setSalvoShots(0);}} style={{fontSize:9,padding:"6px 10px",opacity:0.5}}>✕ Cancel</button>}
+            </div>
+          )}
 
           {/* Events */}
           <div style={{minHeight:20,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
@@ -1589,13 +1853,19 @@ export default function Battleships() {
             ))}
           </div>
 
-          {/* MOBILE: tab switcher + single board */}
+          {/* MOBILE: tab switcher + single board with swipe */}
           {isMobile ? (
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,width:"100%"}}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,width:"100%",
+              animation:screenShake?"screenShake 0.3s ease":"none"}}
+              onTouchStart={e=>{e.currentTarget._touchX=e.touches[0].clientX;}}
+              onTouchEnd={e=>{
+                const dx=e.changedTouches[0].clientX-(e.currentTarget._touchX||0);
+                if (Math.abs(dx)>50) setBattleTab(dx<0?"yours":"enemy");
+              }}>
               {/* Tab buttons */}
               <div style={{display:"flex",width:"100%",maxWidth:GRID*CELL+20,gap:0,border:"1px solid rgba(212,175,55,0.2)"}}>
                 <button className={`tab-btn${battleTab==="enemy"?" active":""}`} onClick={()=>setBattleTab("enemy")}>
-                  ⚔ Fed Waters {!playerTurn&&screen==="battle"?"":""}
+                  ⚔ Fed Waters
                 </button>
                 <button className={`tab-btn${battleTab==="yours"?" active":""}`} onClick={()=>setBattleTab("yours")}>
                   🛡 Your Waters
@@ -1625,7 +1895,8 @@ export default function Battleships() {
             </div>
           ) : (
             /* DESKTOP: original side-by-side layout */
-            <div style={{display:"flex",gap:16,flexWrap:"wrap",justifyContent:"center",alignItems:"flex-start"}}>
+            <div style={{display:"flex",gap:16,flexWrap:"wrap",justifyContent:"center",alignItems:"flex-start",
+              animation:screenShake?"screenShake 0.3s ease":"none"}}>
               <Board grid={playerGrid} isAi={false} interactive={false} phase={screen}
                 hoverCells={new Set()} hoverValid={false}
                 onHover={()=>{}} onLeave={()=>{}} onPlace={()=>{}} onFire={null}
@@ -1665,27 +1936,143 @@ export default function Battleships() {
             </div>
           )}
 
-          {/* End game panel */}
-          {(screen==="won"||screen==="lost")&&(
-            <div style={{marginTop:8,textAlign:"center",padding:"1rem 1.5rem",background:"rgba(4,7,12,0.97)",
-              border:`1px solid ${screen==="won"?"rgba(212,175,55,0.4)":"rgba(192,57,43,0.4)"}`,
-              maxWidth:isMobile?"100%":480,width:"100%"}}>
-              <div style={{fontSize:isMobile?18:22,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",
-                color:screen==="won"?"var(--noir-primary)":"#c0392b",
-                textShadow:`0 0 25px ${screen==="won"?"rgba(212,175,55,0.45)":"rgba(192,57,43,0.45)"}`}}>
-                {screen==="won"?"The Feds Are Sunk":"Your Fleet Is Gone"}
+          {/* End game panel — detailed stats card */}
+          {(screen==="won"||screen==="lost")&&(()=>{
+            const totalEnemyCells=activeShips.reduce((a,s)=>a+s.size,0);
+            const hitCells=aiGrid.flat().filter(c=>c.hit).length;
+            const accuracy=shotsFired>0?Math.round(hitCells/shotsFired*100):0;
+            const timeStr=`${Math.floor(elapsedTime/60)}:${String(elapsedTime%60).padStart(2,'0')}`;
+            return (
+              <div style={{marginTop:8,textAlign:"center",padding:"1.2rem 1.5rem",background:"rgba(4,7,12,0.97)",
+                border:`1px solid ${screen==="won"?"rgba(212,175,55,0.4)":"rgba(192,57,43,0.4)"}`,
+                maxWidth:isMobile?"100%":480,width:"100%",animation:"fadeIn 0.4s ease"}}>
+                <div style={{fontSize:isMobile?18:22,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",
+                  color:screen==="won"?"var(--noir-primary)":"#c0392b",
+                  textShadow:`0 0 25px ${screen==="won"?"rgba(212,175,55,0.45)":"rgba(192,57,43,0.45)"}`}}>
+                  {screen==="won"?"The Feds Are Sunk":"Your Fleet Is Gone"}
+                </div>
+                <div style={{fontSize:12,marginTop:7,fontFamily:"'Crimson Text',serif",fontStyle:"italic",lineHeight:1.6,
+                  color:screen==="won"?"rgba(212,175,55,0.55)":"rgba(192,57,43,0.65)"}}>
+                  {screen==="won"?"The rum runs free tonight. The Don raises a glass to your name."
+                    :"Prohibition wins this round. The Feds got their man."}
+                </div>
+
+                {/* Stats grid */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,margin:"14px 0",
+                  padding:"10px",background:"rgba(0,0,0,0.3)",border:"1px solid rgba(212,175,55,0.1)"}}>
+                  {[
+                    {label:"Shots Fired",val:shotsFired},
+                    {label:"Accuracy",val:`${accuracy}%`},
+                    {label:"Time",val:timeStr},
+                    {label:"Ships Lost",val:sunkByAi.length},
+                    {label:"Ships Sunk",val:sunkByPlayer.length},
+                    {label:"Difficulty",val:settings.difficulty.charAt(0).toUpperCase()+settings.difficulty.slice(1)},
+                  ].map(s=>(
+                    <div key={s.label}>
+                      <div style={{fontSize:8,color:"rgba(212,175,55,0.35)",letterSpacing:"0.15em",textTransform:"uppercase"}}>{s.label}</div>
+                      <div style={{fontSize:16,fontWeight:700,color:"var(--noir-primary)",marginTop:2}}>{s.val}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Rewards (win only) */}
+                {screen==="won"&&winReward&&(
+                  <div style={{display:"flex",gap:16,justifyContent:"center",padding:"8px 0",
+                    borderTop:"1px solid rgba(212,175,55,0.1)",borderBottom:"1px solid rgba(212,175,55,0.1)",margin:"6px 0"}}>
+                    <div style={{fontSize:14,color:"#4caf50",fontWeight:700}}>+${winReward.cash?.toLocaleString()}</div>
+                    <div style={{fontSize:14,color:"#ff9800",fontWeight:700}}>+{winReward.respect} Respect</div>
+                  </div>
+                )}
+
+                <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:12}}>
+                  <button className="nb" onClick={()=>handleSaveSettings(settings)}>New Game</button>
+                  <button className="nb" onClick={()=>setShowStats(true)} style={{fontSize:10}}>📊 Stats</button>
+                  <button className="nb" onClick={resetToSettings} style={{fontSize:10,opacity:0.6}}>⚙ Settings</button>
+                </div>
               </div>
-              <div style={{fontSize:12,marginTop:7,fontFamily:"'Crimson Text',serif",fontStyle:"italic",lineHeight:1.6,
-                color:screen==="won"?"rgba(212,175,55,0.55)":"rgba(192,57,43,0.65)"}}>
-                {screen==="won"?"The rum runs free tonight. The Don raises a glass to your name."
-                  :"Prohibition wins this round. The Feds got their man."}
-              </div>
-              <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:12}}>
-                <button className="nb" onClick={()=>handleSaveSettings(settings)}>New Game</button>
-                <button className="nb" onClick={resetToSettings} style={{fontSize:10,opacity:0.6}}>⚙ Settings</button>
-              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Sonar ping overlay */}
+      {sonarResult&&inGame&&(
+        <div style={{position:"fixed",inset:0,zIndex:500,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{fontSize:28,fontWeight:700,color:sonarResult.count>0?"#50c8ff":"#50a070",
+            textShadow:sonarResult.count>0?"0 0 30px rgba(80,200,255,0.6)":"0 0 20px rgba(80,160,110,0.5)",
+            animation:"fadeIn 0.3s ease",fontFamily:"'Cinzel',serif"}}>
+            {sonarResult.count>0?`🔊 ${sonarResult.count} target${sonarResult.count>1?"s":""} detected`:"🔊 Area clear"}
+          </div>
+        </div>
+      )}
+
+      {/* Stats & Leaderboard modal */}
+      {showStats&&(
+        <div style={{position:"fixed",inset:0,zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",
+          background:"rgba(0,0,0,0.85)",backdropFilter:"blur(4px)",padding:16}}
+          onClick={()=>setShowStats(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"rgba(6,8,16,0.98)",border:"1px solid rgba(212,175,55,0.3)",
+            padding:"1.5rem",maxWidth:520,width:"100%",maxHeight:"80vh",overflowY:"auto",animation:"fadeIn 0.3s ease"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <h3 style={{margin:0,fontSize:16,color:"var(--noir-primary)",letterSpacing:"0.1em"}}>CAPTAIN'S LOG</h3>
+              <button onClick={()=>setShowStats(false)} style={{background:"none",border:"none",color:"rgba(212,175,55,0.5)",
+                fontSize:18,cursor:"pointer",padding:4}}>✕</button>
             </div>
-          )}
+
+            {/* Personal stats */}
+            {myStats&&(
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:9,color:"rgba(212,175,55,0.4)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:8}}>Your Record</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                  {[
+                    {l:"Total Wins",v:myStats.total_wins},
+                    {l:"Best Shots",v:myStats.best_shots||"—"},
+                    {l:"Avg Shots",v:myStats.avg_shots||"—"},
+                    {l:"Perfect Games",v:myStats.perfect_games},
+                    {l:"Ships Lost",v:myStats.total_ships_lost},
+                    {l:"Best Time",v:myStats.best_time?`${Math.floor(myStats.best_time/60)}:${String(myStats.best_time%60).padStart(2,'0')}`:"—"},
+                    {l:"Total Cash",v:myStats.total_cash?`$${myStats.total_cash.toLocaleString()}`:"$0"},
+                    {l:"Total Respect",v:myStats.total_respect||0},
+                  ].map(s=>(
+                    <div key={s.l} style={{padding:"6px 8px",background:"rgba(0,0,0,0.3)",border:"1px solid rgba(212,175,55,0.08)"}}>
+                      <div style={{fontSize:8,color:"rgba(212,175,55,0.35)",letterSpacing:"0.1em",textTransform:"uppercase"}}>{s.l}</div>
+                      <div style={{fontSize:14,fontWeight:700,color:"var(--noir-primary)",marginTop:2}}>{s.v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Leaderboard */}
+            {leaderboard&&leaderboard.length>0&&(
+              <div>
+                <div style={{fontSize:9,color:"rgba(212,175,55,0.4)",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:8}}>Top Captains</div>
+                <div style={{border:"1px solid rgba(212,175,55,0.1)"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"30px 1fr 60px 60px",gap:0,padding:"6px 8px",
+                    background:"rgba(212,175,55,0.05)",borderBottom:"1px solid rgba(212,175,55,0.1)"}}>
+                    <div style={{fontSize:8,color:"rgba(212,175,55,0.4)"}}>#</div>
+                    <div style={{fontSize:8,color:"rgba(212,175,55,0.4)"}}>Captain</div>
+                    <div style={{fontSize:8,color:"rgba(212,175,55,0.4)",textAlign:"right"}}>Shots</div>
+                    <div style={{fontSize:8,color:"rgba(212,175,55,0.4)",textAlign:"right"}}>Time</div>
+                  </div>
+                  {leaderboard.map((row,i)=>(
+                    <div key={i} style={{display:"grid",gridTemplateColumns:"30px 1fr 60px 60px",gap:0,padding:"5px 8px",
+                      borderBottom:i<leaderboard.length-1?"1px solid rgba(212,175,55,0.06)":"none"}}>
+                      <div style={{fontSize:10,color:i<3?"var(--noir-primary)":"rgba(212,175,55,0.4)",fontWeight:i<3?700:400}}>{i+1}</div>
+                      <div style={{fontSize:10,color:"rgba(212,175,55,0.7)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.username}</div>
+                      <div style={{fontSize:10,color:"var(--noir-primary)",textAlign:"right",fontWeight:600}}>{row.shots_fired}</div>
+                      <div style={{fontSize:10,color:"rgba(212,175,55,0.5)",textAlign:"right"}}>
+                        {row.time_seconds?`${Math.floor(row.time_seconds/60)}:${String(row.time_seconds%60).padStart(2,'0')}`:"—"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {(!leaderboard||leaderboard.length===0)&&!myStats&&(
+              <div style={{fontSize:11,color:"rgba(212,175,55,0.35)",fontStyle:"italic",textAlign:"center",padding:20}}>No stats recorded yet. Win a game to get started!</div>
+            )}
+          </div>
         </div>
       )}
 

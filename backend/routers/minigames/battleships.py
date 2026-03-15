@@ -22,6 +22,8 @@ class BattleshipsWinRequest(BaseModel):
     shots_fired: int
     ships_lost: int
     time_seconds: int
+    fleet_size: int = 5
+    difficulty: str = "normal"
 
 
 def register(router):
@@ -31,10 +33,12 @@ def register(router):
         shots_fired = int(body.shots_fired or 0)
         ships_lost = int(body.ships_lost or 0)
         time_seconds = int(body.time_seconds or 0)
+        fleet_size = max(2, min(8, int(body.fleet_size or 5)))
+        difficulty = body.difficulty if body.difficulty in ("easy", "normal", "hard") else "normal"
 
-        if shots_fired < 5:
+        if shots_fired < fleet_size:
             raise HTTPException(status_code=400, detail="Invalid game data.")
-        if ships_lost < 0 or ships_lost > 8:
+        if ships_lost < 0 or ships_lost > fleet_size:
             raise HTTPException(status_code=400, detail="Invalid ships lost value.")
         if time_seconds < 10:
             raise HTTPException(status_code=400, detail="Game too short.")
@@ -69,9 +73,11 @@ def register(router):
             upsert=True,
         )
 
-        ships_saved = 5 - ships_lost
-        cash = BASE_CASH + (ships_saved * BONUS_PER_SHIP_SAVED)
-        respect = BASE_RESPECT + (ships_saved * BONUS_RESPECT_PER_SHIP)
+        ships_saved = fleet_size - ships_lost
+        diff_mult = {"easy": 0.6, "normal": 1.0, "hard": 1.5}.get(difficulty, 1.0)
+        fleet_mult = fleet_size / 5.0
+        cash = int((BASE_CASH + (ships_saved * BONUS_PER_SHIP_SAVED)) * diff_mult * fleet_mult)
+        respect = int((BASE_RESPECT + (ships_saved * BONUS_RESPECT_PER_SHIP)) * diff_mult * fleet_mult)
 
         await db.users.update_one(
             {"id": current_user["id"]},
@@ -83,6 +89,8 @@ def register(router):
             "username": current_user.get("username") or "?",
             "shots_fired": shots_fired,
             "ships_lost": ships_lost,
+            "fleet_size": fleet_size,
+            "difficulty": difficulty,
             "time_seconds": time_seconds,
             "cash": cash,
             "respect": respect,
@@ -92,7 +100,9 @@ def register(router):
 
         try:
             from routers.minigames.minigame_leaderboard import log_minigame_play
-            efficiency_score = max(1, (100 - shots_fired) * 10 + ships_saved * 50)
+            total_enemy_cells = sum([5,4,4,3,3,3,2,2][:fleet_size])
+            accuracy_pct = (total_enemy_cells / max(1, shots_fired)) * 100
+            efficiency_score = max(1, int(accuracy_pct * 10 + ships_saved * 50 * diff_mult))
             await log_minigame_play(current_user["id"], current_user.get("username"), "battleships", efficiency_score)
         except Exception:
             pass
@@ -149,12 +159,15 @@ def register(router):
                     "avg_shots": {"$avg": "$shots_fired"},
                     "total_ships_lost": {"$sum": "$ships_lost"},
                     "perfect_games": {"$sum": {"$cond": [{"$eq": ["$ships_lost", 0]}, 1, 0]}},
+                    "total_cash": {"$sum": {"$ifNull": ["$cash", 0]}},
+                    "total_respect": {"$sum": {"$ifNull": ["$respect", 0]}},
+                    "best_time": {"$min": "$time_seconds"},
                 }
             },
         ]
         rows = await db.battleships_wins.aggregate(pipeline).to_list(1)
         if not rows:
-            return {"stats": {"total_wins": 0, "best_shots": None, "avg_shots": None, "total_ships_lost": 0, "perfect_games": 0}}
+            return {"stats": {"total_wins": 0, "best_shots": None, "avg_shots": None, "total_ships_lost": 0, "perfect_games": 0, "total_cash": 0, "total_respect": 0, "best_time": None}}
         row = rows[0]
         return {
             "stats": {
@@ -163,5 +176,8 @@ def register(router):
                 "avg_shots": round(row.get("avg_shots", 0), 1) if row.get("avg_shots") else None,
                 "total_ships_lost": row.get("total_ships_lost", 0),
                 "perfect_games": row.get("perfect_games", 0),
+                "total_cash": row.get("total_cash", 0),
+                "total_respect": row.get("total_respect", 0),
+                "best_time": row.get("best_time"),
             }
         }
