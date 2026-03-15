@@ -770,7 +770,7 @@ export default function Layout({ children }) {
         '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
         '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information', '/game/leaderboard': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
-        '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
+        '__combat__': 'combat', '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '/social/forum': 'messaging', '/social/inbox': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game/daily-rewards': 'money',
@@ -783,7 +783,7 @@ export default function Layout({ children }) {
         '/account/inventory': 'information', '/money/loot-box': 'information',         '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
         '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
-        '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
+        '__combat__': 'combat', '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '/social/forum': 'messaging', '/social/inbox': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game/daily-rewards': 'money', '/casino/mini-games/flappy': 'money',
@@ -793,12 +793,12 @@ export default function Layout({ children }) {
       };
   const SIDEBAR_CATEGORIES = isCategorizedClassic
     ? [
-        { id: 'information', label: 'INFORMATION' }, { id: 'ranking', label: 'RANKING' }, { id: 'combat', label: 'COMBAT' },
+        { id: 'information', label: 'INFORMATION' }, { id: 'combat', label: 'COMBAT' }, { id: 'ranking', label: 'RANKING' },
         { id: 'minigames', label: 'MINI GAMES' },
         { id: 'travel', label: 'TRAVEL' }, { id: 'messaging', label: 'MESSAGING' }, { id: 'money', label: 'MONEY' }, { id: 'other', label: 'OTHER' },
       ]
     : [
-        { id: 'information', label: 'You' }, { id: 'ranking', label: 'Ranking' }, { id: 'combat', label: 'Combat' },
+        { id: 'information', label: 'You' }, { id: 'combat', label: 'Combat' }, { id: 'ranking', label: 'Ranking' },
         { id: 'minigames', label: 'Mini games' },
         { id: 'travel', label: 'Travel' }, { id: 'messaging', label: 'Messages' }, { id: 'money', label: 'Money' }, { id: 'other', label: 'Other' },
       ];
