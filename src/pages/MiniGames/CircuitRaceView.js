@@ -1930,8 +1930,10 @@ export default function CircuitRaceView({
             r.inSlipstream = true;
           }
           // Overtake attempt: when close (side-by-side range), chance per frame to get short speed boost
-          if (slipGap > 0 && slipGap <= 0.035 && !scActive && (r.overtakingLevel || 0) > 0) {
-            if (Math.random() < dt * 0.6 * ((r.overtakingLevel || 0) / 100)) {
+          const ovtLevel = r.overtakingLevel || 0;
+          if (slipGap > 0 && slipGap <= 0.035 && !scActive) {
+            const chance = dt * 0.6 * (ovtLevel / 100) + dt * 0.04;
+            if (Math.random() < chance) {
               r.overtakeBoostUntil = nowSec + 0.4;
             }
           }
@@ -2046,8 +2048,9 @@ export default function CircuitRaceView({
               r.pitEndAt = nowSec + (r.pitDurationSeconds || 3);
             }
           } else {
-            // Don't overwrite high wear (e.g. 100 after pit) with stale end-of-lap value
-            if (targetWear >= r.tyreWear - 5 || r.tyreWear < 90) {
+            // Don't overwrite only when clearly stale after pit (100 -> old lap value). Allow normal wear sync.
+            const wouldOverwritePitExit = r.tyreWear >= 95 && targetWear < 60;
+            if (!wouldOverwritePitExit) {
               r.tyreWear = targetWear;
             }
           }
@@ -2502,7 +2505,7 @@ export default function CircuitRaceView({
           sectorTimes:[null,null,null], currentSector:0, lastSectorCross:0, bestSectors:[Infinity,Infinity,Infinity], sectorDelta:null,
           inSlipstream:false, tyreBlister:false,
           strategyType: npcStrat,
-          overtakingLevel: p.overtaking_level ?? 0,
+          overtakingLevel: isPlayer ? (p.overtaking_level ?? 0) : (p.overtaking_level ?? (20 + Math.floor(Math.random() * 31))),
           overtakeBoostUntil: saved?.overtakeBoostUntil ?? 0,
         };
       });
@@ -2607,7 +2610,7 @@ export default function CircuitRaceView({
         sectorTimes:[null,null,null], currentSector:0, lastSectorCross:0, bestSectors:[Infinity,Infinity,Infinity], sectorDelta:null,
         inSlipstream:false, tyreBlister:false,
         strategyType: npcStrat,
-        overtakingLevel: p.overtaking_level ?? 0,
+        overtakingLevel: isPlayer ? (p.overtaking_level ?? 0) : (p.overtaking_level ?? (20 + Math.floor(Math.random() * 31))),
         overtakeBoostUntil: 0,
       };
     });
