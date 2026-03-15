@@ -1710,17 +1710,16 @@ async def startup_db():
                 logging.exception("Mini games weekly payout ticker: %s", e)
             await asyncio.sleep(60)
     asyncio.create_task(minigame_payout_ticker())
-    # Boxing: round-by-round match ticker (check every 1s), plus weekly league payout (check every 60s)
+    # Boxing: expire stale challenges (every 30s) + weekly league payout (every 60s)
     from routers.minigames import boxing as boxing_router
-    async def boxing_match_ticker():
+    async def boxing_challenge_expiry_ticker():
         while True:
             try:
-                await boxing_router.advance_running_matches(db)
-                await boxing_router.advance_counting_matches(db)
+                await boxing_router.expire_stale_challenges(db)
             except Exception as e:
-                logging.exception("Boxing match ticker: %s", e)
-            await asyncio.sleep(1)
-    asyncio.create_task(boxing_match_ticker())
+                logging.exception("Boxing challenge expiry ticker: %s", e)
+            await asyncio.sleep(30)
+    asyncio.create_task(boxing_challenge_expiry_ticker())
     async def boxing_weekly_payout_ticker():
         while True:
             try:

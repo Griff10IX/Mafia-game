@@ -1,453 +1,119 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
-import api from "../../utils/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import api, { getApiErrorMessage } from "../../utils/api";
 import styles from "../../styles/noir.module.css";
 
-// ── FIGHT ENGINE ─────────────────────────────────────────────────────────────
-function rand(a, b) { return a + Math.random() * (b - a); }
-function randInt(a, b) { return Math.floor(rand(a, b + 1)); }
-function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-function lerp(a, b, t) { return a + (b - a) * t; }
+const STAT_KEYS = ["power", "speed", "defense", "stamina"];
+const STAT_LABELS = { power: "PWR", speed: "SPD", defense: "DEF", stamina: "STA" };
+const TABS = ["Fighter", "Fight", "Bets", "Rankings"];
 
-// Real punch damage ranges (pro boxing calibrated)
-const PUNCH_DMG  = {
-  jab:      [3, 8],    // stiff jab / pawing jab range
-  cross:    [8, 18],   // power cross
-  hook:     [10, 22],  // lead hook — often the KO punch
-  uppercut: [11, 24],  // short uppercut at close range
-  body:     [6, 14],   // body shot — saps stamina more than hp
-};
-// Accuracy at full energy vs full defense
-const PUNCH_ACC  = { jab:0.70, cross:0.58, hook:0.53, uppercut:0.48, body:0.62 };
-// Stamina cost per thrown punch
-const PUNCH_STAM = { jab:1.2, cross:2.2, hook:3.0, uppercut:3.2, body:2.6 };
-// Cut probability per landed punch (hooks/cross most likely to open cuts)
-const PUNCH_CUT  = { jab:0.018, cross:0.030, hook:0.045, uppercut:0.025, body:0.005 };
-// Which location gets cut — eyebrow for most, cheek for hooks
-const CUT_LOCS   = { jab:"eyebrow", cross:"eyebrow", hook:"cheek", uppercut:"eyebrow", body:"nose" };
+const gold = "var(--noir-primary)";
+const goldBright = "var(--noir-primary-bright)";
 
-function choosePunch(f) {
-  const tired   = f.stam < 25;
-  const hurt    = f.hp < 35;
-  const pressng = f.aggression > 0.5;
-  // Tired fighter jabs more, hurt fighter clinches/bodies, aggressive fighter hooks
-  const w = {
-    jab:      tired ? 50 : hurt ? 35 : pressng ? 20 : 28,
-    cross:    tired ? 8  : hurt ? 12 : pressng ? 24 : 22,
-    hook:     tired ? 6  : hurt ? 8  : pressng ? 28 : 18,
-    uppercut: tired ? 4  : hurt ? 5  : pressng ? 12 : 14,
-    body:     tired ? 8  : hurt ? 20 : pressng ? 16 : 18,
-  };
-  let r = Math.random() * Object.values(w).reduce((a,b)=>a+b,0);
-  for (const [k,v] of Object.entries(w)) { r-=v; if(r<=0) return k; }
-  return "jab";
+function StatBar({ label, value, max = 80, color = goldBright }) {
+  const pct = Math.min(100, (value / max) * 100);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+      <span style={{ width: 32, fontSize: 9, color: "var(--noir-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
+      <div style={{ flex: 1, height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 3, transition: "width 0.3s" }} />
+      </div>
+      <span style={{ width: 24, textAlign: "right", fontSize: 10, color: "#e0d0a0" }}>{value}</span>
+    </div>
+  );
 }
 
-function simulateFight(aS, bS) {
-  const init = (s) => ({
-    ...s,
-    hp: 100, stam: 100, kds: 0,
-    aggression:  clamp((s.power  - s.defense)  / 60 + 0.42 + rand(-0.12, 0.12), 0.08, 0.95),
-    pressure:    clamp((s.speed  - s.defense)  / 80 + 0.38 + rand(-0.1,  0.1),  0.08, 0.90),
-    counterpunch:clamp((s.defense - s.power)   / 70 + 0.35 + rand(-0.1,  0.1),  0.05, 0.85),
-    cutSus:      clamp(1 - (s.defense||60)/130 + (1-(s.chin||65)/100)*0.3, 0.15, 0.85),
-    cut: null, cutRound: null, docStopRisk: 0, momentum: 0,
-    totalDmgDealt: 0, totalHits: 0, totalThrown: 0,
-    consecutiveHits: 0,
-  });
+// ── Canvas fight replay ─────────────────────────────────────────────────────
 
-  const a = init(aS);
-  const b = init(bS);
-  const events = [];
-  const scorecard = { a: [], b: [] };
-
-  for (let round=1; round<=12; round++) {
-    let roundDmgA = 0, roundDmgB = 0, roundKdA = 0, roundKdB = 0;
-    const baseEx = round <= 3 ? 9 : round <= 6 ? 8 : 7;
-    const exchanges = baseEx + randInt(-1, 3);
-
-    for (let i=0; i<exchanges; i++) {
-      if (a.hp<=0 || b.hp<=0) break;
-
-      // Clinch: when both fighters are exhausted, chance of clinch
-      if (a.stam < 25 && b.stam < 25 && Math.random() < 0.25) {
-        a.stam = Math.min(100, a.stam + 3);
-        b.stam = Math.min(100, b.stam + 3);
-        events.push({
-          type: "clinch", round,
-          hpA: Math.round(a.hp), hpB: Math.round(b.hp),
-          stamA: Math.round(a.stam), stamB: Math.round(b.stam),
-          cutStateA: a.cut ? {...a.cut} : null, cutStateB: b.cut ? {...b.cut} : null,
-        });
-        continue;
-      }
-
-      const apt = choosePunch(a);
-      const aAcc = clamp(
-        PUNCH_ACC[apt]
-        + ((a.accuracy != null ? a.accuracy : 70) - 70) / 400
-        + (a.speed - b.defense) / 520
-        - (1 - a.stam/100) * 0.28
-        + a.momentum * 0.04
-        + (a.aggression - 0.5) * 0.06,
-        0.10, 0.88
-      );
-      const aL = Math.random() < aAcc;
-      let aDmg = 0, aKD = false, aCutEv = null;
-      a.totalThrown++;
-
-      if (aL) {
-        const [lo, hi] = PUNCH_DMG[apt];
-        aDmg = rand(lo, hi) * (a.power / 76) * (1 + (1 - b.stam/100) * 0.22) * (1 + a.momentum * 0.06);
-        a.consecutiveHits++;
-        // Combo bonus: 3+ consecutive hits deal extra damage
-        if (a.consecutiveHits >= 3) aDmg *= 1.15;
-        b.hp = Math.max(0, b.hp - aDmg);
-        a.totalHits++;
-        a.totalDmgDealt += aDmg;
-        roundDmgA += aDmg;
-
-        if (apt === "body") {
-          b.stam = Math.max(0, b.stam - aDmg * 0.55);
-          b.hp = Math.min(100, b.hp + aDmg * 0.25);
-        }
-
-        const hurtMultB = b.hp < 30 ? 2.0 : b.hp < 50 ? 1.4 : 1.0;
-        const kdChance = apt !== "body"
-          ? (aDmg / 16) * (1 - b.chin/120) * (0.25 + 0.75 * (1 - b.stam/100)) * (1 + a.power/180) * hurtMultB
-          : 0;
-        if (Math.random() < kdChance && b.hp > 0 && b.kds < 3) {
-          b.kds++; b.hp = Math.max(1, b.hp - 6); aKD = true; roundKdA++;
-          a.momentum = Math.min(1, a.momentum + 0.4);
-          b.momentum = Math.max(-1, b.momentum - 0.4);
-        }
-
-        if (apt !== "body") {
-          const cutBase = PUNCH_CUT[apt] * b.cutSus;
-          if (Math.random() < cutBase * (b.cut ? 1.8 : 1.0)) {
-            const loc = CUT_LOCS[apt];
-            if (b.cut && b.cut.loc === loc) {
-              b.cut.severity = Math.min(1, b.cut.severity + rand(0.12, 0.32));
-              b.docStopRisk += b.cut.severity * 0.4;
-            } else if (!b.cut) {
-              b.cut = { loc, severity: rand(0.15, 0.45) };
-              b.cutRound = round;
-            }
-            aCutEv = { target:"b", loc, severity: b.cut.severity };
-          }
-        }
-        a.momentum = clamp(a.momentum + 0.08, -1, 1);
-        b.momentum = clamp(b.momentum - 0.08, -1, 1);
-      } else {
-        a.consecutiveHits = 0;
-        a.momentum = clamp(a.momentum - 0.03, -1, 1);
-      }
-      a.stam = Math.max(0, a.stam - PUNCH_STAM[apt] * (aL ? 1.0 : 0.38));
-
-      const bpt = choosePunch(b);
-      const bAcc = clamp(
-        PUNCH_ACC[bpt]
-        + ((b.accuracy != null ? b.accuracy : 70) - 70) / 400
-        + (b.speed - a.defense) / 520
-        - (1 - b.stam/100) * 0.28
-        + b.momentum * 0.04
-        + (b.aggression - 0.5) * 0.06,
-        0.10, 0.88
-      );
-      const bL = Math.random() < bAcc;
-      let bDmg = 0, bKD = false, bCutEv = null;
-      b.totalThrown++;
-
-      if (bL) {
-        const [lo, hi] = PUNCH_DMG[bpt];
-        bDmg = rand(lo, hi) * (b.power / 76) * (1 + (1 - a.stam/100) * 0.22) * (1 + b.momentum * 0.06);
-        b.consecutiveHits++;
-        if (b.consecutiveHits >= 3) bDmg *= 1.15;
-        a.hp = Math.max(0, a.hp - bDmg);
-        b.totalHits++;
-        b.totalDmgDealt += bDmg;
-        roundDmgB += bDmg;
-
-        if (bpt === "body") {
-          a.stam = Math.max(0, a.stam - bDmg * 0.55);
-          a.hp = Math.min(100, a.hp + bDmg * 0.25);
-        }
-
-        const hurtMultA = a.hp < 30 ? 2.0 : a.hp < 50 ? 1.4 : 1.0;
-        const kdChance = bpt !== "body"
-          ? (bDmg / 16) * (1 - a.chin/120) * (0.25 + 0.75 * (1 - a.stam/100)) * (1 + b.power/180) * hurtMultA
-          : 0;
-        if (Math.random() < kdChance && a.hp > 0 && a.kds < 3) {
-          a.kds++; a.hp = Math.max(1, a.hp - 6); bKD = true; roundKdB++;
-          b.momentum = Math.min(1, b.momentum + 0.4);
-          a.momentum = Math.max(-1, a.momentum - 0.4);
-        }
-
-        if (bpt !== "body") {
-          const cutBase = PUNCH_CUT[bpt] * a.cutSus;
-          if (Math.random() < cutBase * (a.cut ? 1.8 : 1.0)) {
-            const loc = CUT_LOCS[bpt];
-            if (a.cut && a.cut.loc === loc) {
-              a.cut.severity = Math.min(1, a.cut.severity + rand(0.12, 0.32));
-              a.docStopRisk += a.cut.severity * 0.4;
-            } else if (!a.cut) {
-              a.cut = { loc, severity: rand(0.15, 0.45) };
-              a.cutRound = round;
-            }
-            bCutEv = { target:"a", loc, severity: a.cut.severity };
-          }
-        }
-        b.momentum = clamp(b.momentum + 0.08, -1, 1);
-        a.momentum = clamp(a.momentum - 0.08, -1, 1);
-      } else {
-        b.consecutiveHits = 0;
-        b.momentum = clamp(b.momentum - 0.03, -1, 1);
-      }
-      b.stam = Math.max(0, b.stam - PUNCH_STAM[bpt] * (bL ? 1.0 : 0.38));
-
-      const docStop = i === exchanges - 1 && round > 1 && (
-        (a.cut && a.cut.severity > 0.78 && a.docStopRisk > 1.4) ||
-        (b.cut && b.cut.severity > 0.78 && b.docStopRisk > 1.4)
-      );
-      if (docStop && !aKD && !bKD) {
-        if (a.cut && a.cut.severity > 0.78 && a.docStopRisk > 1.4) a.hp = 0;
-        if (b.cut && b.cut.severity > 0.78 && b.docStopRisk > 1.4) b.hp = 0;
-      }
-
-      const isFinal = a.hp<=0 || b.hp<=0 || a.kds>=3 || b.kds>=3;
-      const isCombo = (aL && a.consecutiveHits >= 3) || (bL && b.consecutiveHits >= 3);
-
-      events.push({
-        round,
-        hpA: Math.round(a.hp), hpB: Math.round(b.hp),
-        stamA: Math.round(a.stam), stamB: Math.round(b.stam),
-        aPunch: apt, aLanded: aL, aDmg: Math.round(aDmg*10)/10, aKD,
-        bPunch: bpt, bLanded: bL, bDmg: Math.round(bDmg*10)/10, bKD,
-        cutA: bCutEv || null, cutB: aCutEv || null,
-        cutStateA: a.cut ? {...a.cut} : null, cutStateB: b.cut ? {...b.cut} : null,
-        isFinal, isCombo,
-        comboSide: aL && a.consecutiveHits >= 3 ? "a" : bL && b.consecutiveHits >= 3 ? "b" : null,
-        comboCount: aL && a.consecutiveHits >= 3 ? a.consecutiveHits : bL && b.consecutiveHits >= 3 ? b.consecutiveHits : 0,
-      });
-
-      if (isFinal) break;
-    }
-
-    // Check if the fight ended mid-round (KO/TKO)
-    const fightOver = a.hp <= 0 || b.hp <= 0 || a.kds >= 3 || b.kds >= 3;
-
-    if (fightOver) {
-      // For a clean KO (HP=0 but no KD was registered on the final blow),
-      // inject a synthetic knockdown so the canvas shows a proper drop animation
-      const lastEv = events[events.length - 1];
-      if (lastEv && !lastEv.aKD && !lastEv.bKD && (a.hp <= 0 || b.hp <= 0)) {
-        if (b.hp <= 0) lastEv.aKD = true;
-        if (a.hp <= 0) lastEv.bKD = true;
-      }
-      break;
-    }
-
-    // 10-point must scoring (only for completed rounds, not KO rounds)
-    let scoreA = 10, scoreB = 10;
-    if (roundDmgA > roundDmgB * 1.2) scoreB = 9;
-    else if (roundDmgB > roundDmgA * 1.2) scoreA = 9;
-    else if (roundDmgA > roundDmgB) scoreB = 9;
-    else if (roundDmgB > roundDmgA) scoreA = 9;
-    else { scoreA = 10; scoreB = 10; }
-    if (roundKdA > 0) scoreB = Math.max(7, scoreB - roundKdA);
-    if (roundKdB > 0) scoreA = Math.max(7, scoreA - roundKdB);
-    scorecard.a.push(scoreA);
-    scorecard.b.push(scoreB);
-
-    // Corner advice event
-    const cornerAdvice = [];
-    if (b.stam < 30) cornerAdvice.push("Work the body, he's tiring");
-    else if (a.hp < 40) cornerAdvice.push("Stay behind that jab, be smart");
-    if (a.cut && a.cut.severity > 0.5) cornerAdvice.push("Protect that cut");
-    if (b.cut && b.cut.severity > 0.4) cornerAdvice.push("Go after that cut");
-    const totalScoreA = scorecard.a.reduce((s,v)=>s+v,0);
-    const totalScoreB = scorecard.b.reduce((s,v)=>s+v,0);
-    if (totalScoreA > totalScoreB) cornerAdvice.push("You're ahead on the cards");
-    else if (totalScoreB > totalScoreA && round > 3) cornerAdvice.push("You need this round");
-    const advice = cornerAdvice.length ? cornerAdvice[Math.floor(Math.random()*cornerAdvice.length)] : null;
-
-    events.push({
-      type: "roundEnd", round,
-      hpA: Math.round(a.hp), hpB: Math.round(b.hp),
-      stamA: Math.round(a.stam), stamB: Math.round(b.stam),
-      cutStateA: a.cut ? {...a.cut} : null, cutStateB: b.cut ? {...b.cut} : null,
-      scoreA, scoreB, cornerAdvice: advice,
-    });
-
-    // Between-round recovery
-    const aRec = 4 + ((a.stamina != null ? a.stamina : 62) / 100) * 8 + ((a.recovery != null ? a.recovery : 62) / 100) * 6;
-    const bRec = 4 + ((b.stamina != null ? b.stamina : 62) / 100) * 8 + ((b.recovery != null ? b.recovery : 62) / 100) * 6;
-    a.stam = Math.min(100, a.stam + aRec);
-    b.stam = Math.min(100, b.stam + bRec);
-    a.hp = Math.min(100, a.hp + 1 + ((a.recovery != null ? a.recovery : 62) / 100) * 2);
-    b.hp = Math.min(100, b.hp + 1 + ((b.recovery != null ? b.recovery : 62) / 100) * 2);
-    a.momentum *= 0.5;
-    b.momentum *= 0.5;
-    if (a.cut) a.cut.severity = Math.min(1, a.cut.severity + 0.04);
-    if (b.cut) b.cut.severity = Math.min(1, b.cut.severity + 0.04);
-  }
-
-  let winner=null, reason="Decision";
-  if (a.hp<=0 || a.kds>=3) {
-    winner="b";
-    reason = a.kds>=3 ? "TKO" : (a.cut && a.cut.severity > 0.78 ? "TKO" : "KO");
-  } else if (b.hp<=0 || b.kds>=3) {
-    winner="a";
-    reason = b.kds>=3 ? "TKO" : (b.cut && b.cut.severity > 0.78 ? "TKO" : "KO");
-  } else {
-    // 10-point must decision with 3 virtual judges
-    const totalA = scorecard.a.reduce((s,v)=>s+v,0);
-    const totalB = scorecard.b.reduce((s,v)=>s+v,0);
-    const jitter = () => randInt(-1, 1);
-    const j1a = totalA + jitter(), j1b = totalB + jitter();
-    const j2a = totalA + jitter(), j2b = totalB + jitter();
-    const j3a = totalA + jitter(), j3b = totalB + jitter();
-    const winsA = (j1a > j1b ? 1 : 0) + (j2a > j2b ? 1 : 0) + (j3a > j3b ? 1 : 0);
-    const winsB = (j1b > j1a ? 1 : 0) + (j2b > j2a ? 1 : 0) + (j3b > j3a ? 1 : 0);
-    if (winsA >= 2) { winner = "a"; reason = winsA === 3 ? "Unanimous decision" : "Split decision"; }
-    else if (winsB >= 2) { winner = "b"; reason = winsB === 3 ? "Unanimous decision" : "Split decision"; }
-    else { winner = a.totalDmgDealt > b.totalDmgDealt ? "a" : "b"; reason = "Majority decision"; }
-  }
-  return {
-    events, winner, reason, scorecard,
-    stats: {
-      a: { thrown: a.totalThrown, landed: a.totalHits, dmg: Math.round(a.totalDmgDealt), kds: a.kds },
-      b: { thrown: b.totalThrown, landed: b.totalHits, dmg: Math.round(b.totalDmgDealt), kds: b.kds },
-    },
-  };
-}
-
-// ── FIGHTERS DATA ────────────────────────────────────────────────────────────
-const FIGHTERS=[
-  {name:"Tommy 'The Bull' Moran",  power:82,speed:66,stamina:74,defense:60,accuracy:65,chin:70,recovery:62,color:0x1a4a9a,colorCSS:"#2a5aaa"},
-  {name:"Sal 'Switchblade' Ricci", power:68,speed:84,stamina:78,defense:76,accuracy:72,chin:62,recovery:60,color:0x9a1a1a,colorCSS:"#bb2222"},
-];
-
-// ── CANVAS FIGHT RENDERER ────────────────────────────────────────────────────
 function drawRing(ctx, W, H) {
-  const cx = W / 2, cy = H * 0.55;
-  const rw = W * 0.82, rh = H * 0.46;
-  const rl = cx - rw/2, rt = cy - rh/2, rr = cx + rw/2, rb = cy + rh/2;
+  const cx = W / 2, cy = H * 0.52;
+  const rw = W * 0.8, rh = H * 0.44;
+  const rl = cx - rw / 2, rt = cy - rh / 2, rr = cx + rw / 2, rb = cy + rh / 2;
 
-  // Crowd silhouette strip
-  const crowdH = rt - 4;
-  if (crowdH > 10) {
-    ctx.fillStyle = "#0e0e14";
-    ctx.fillRect(0, 0, W, crowdH);
-    for (let i = 0; i < 40; i++) {
-      const sx = (i / 40) * W + Math.sin(i * 1.7) * 6;
-      const sh = 8 + Math.sin(i * 2.3) * 4;
-      ctx.fillStyle = `rgba(${30+i%20},${25+i%15},${35+i%10},0.7)`;
-      ctx.beginPath();
-      ctx.arc(sx, crowdH - sh/2, 3 + (i%3), 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillRect(sx - 2, crowdH - sh/2 + 2, 4, sh/2);
-    }
-  }
+  ctx.fillStyle = "#0e0e14";
+  ctx.fillRect(0, 0, W, rt - 2);
 
-  // Ring floor
   ctx.fillStyle = "#2a2218";
   ctx.fillRect(rl, rt, rw, rh);
   ctx.fillStyle = "#352e20";
-  ctx.fillRect(rl + 10, rt + 10, rw - 20, rh - 20);
+  ctx.fillRect(rl + 8, rt + 8, rw - 16, rh - 16);
 
-  // Ropes
   for (let i = 0; i < 3; i++) {
-    const ry = rt + rh * (0.12 + i * 0.38);
-    ctx.strokeStyle = i === 1 ? "rgba(201,168,76,0.6)" : "rgba(138,122,90,0.4)";
+    const ry = rt + rh * (0.15 + i * 0.35);
+    ctx.strokeStyle = i === 1 ? "rgba(201,168,76,0.5)" : "rgba(138,122,90,0.3)";
     ctx.lineWidth = i === 1 ? 2 : 1.5;
-    ctx.beginPath(); ctx.moveTo(rl - 3, ry); ctx.lineTo(rr + 3, ry); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rl - 2, ry); ctx.lineTo(rr + 2, ry); ctx.stroke();
   }
 
-  // Corner posts
-  const posts = [[rl, rt], [rr, rt], [rl, rb], [rr, rb]];
-  const pc = ["var(--noir-primary-bright)", "#bb2222", "#bb2222", "var(--noir-primary-bright)"];
-  posts.forEach(([x, y], i) => {
-    ctx.fillStyle = pc[i]; ctx.fillRect(x-3, y-3, 6, 6);
+  [[rl, rt], [rr, rt], [rl, rb], [rr, rb]].forEach(([x, y], i) => {
+    ctx.fillStyle = i < 2 ? "#c9a84c" : "#aa3333";
+    ctx.fillRect(x - 3, y - 3, 6, 6);
   });
 
-  ctx.strokeStyle = "rgba(201,168,76,0.2)"; ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(201,168,76,0.15)";
+  ctx.lineWidth = 1;
   ctx.strokeRect(rl, rt, rw, rh);
   return { rl, rt, rr, rb, rw, rh, cx, cy };
 }
 
-function drawFighter(ctx, x, y, facing, anim, progress, color, hp) {
+function drawFighter(ctx, x, y, facing, anim, progress, color, gloveColor) {
   ctx.save();
   ctx.translate(x, y);
   const s = facing === "right" ? 1 : -1;
   ctx.scale(s, 1);
 
   const bob = Math.sin(performance.now() / 280) * 2;
-  const isIdle = anim === "idle";
   const isHit = anim === "hit";
-  const isPunch = ["jab","cross","hook","uppercut","body"].includes(anim);
+  const isPunch = ["jab", "cross", "hook", "uppercut", "body"].includes(anim);
   const isDown = anim === "down" || anim === "ko";
   const hitShake = isHit ? Math.sin(progress * 20) * 3 : 0;
-  const downAngle = isDown
-    ? (anim === "ko" ? (Math.PI / 2.5) : Math.min(1, progress * 3) * (Math.PI / 2.5))
-    : 0;
 
   if (isDown) {
-    ctx.translate(0, 10 * Math.min(1, anim === "ko" ? 1 : progress * 3));
-    ctx.rotate(downAngle);
+    const fallProg = anim === "ko" ? 1 : Math.min(1, progress * 3);
+    ctx.translate(0, 10 * fallProg);
+    ctx.rotate(fallProg * (Math.PI / 2.5));
   }
 
-  // Body
-  const bodyY = isIdle ? bob : isHit ? bob + hitShake : 0;
+  const bodyY = isHit ? bob + hitShake : bob;
+
   ctx.fillStyle = color;
   ctx.beginPath();
-  const bx = -8, by = -24 + bodyY, bw = 16, bh = 28, br = 3;
-  ctx.moveTo(bx+br, by); ctx.lineTo(bx+bw-br, by); ctx.quadraticCurveTo(bx+bw, by, bx+bw, by+br);
-  ctx.lineTo(bx+bw, by+bh-br); ctx.quadraticCurveTo(bx+bw, by+bh, bx+bw-br, by+bh);
-  ctx.lineTo(bx+br, by+bh); ctx.quadraticCurveTo(bx, by+bh, bx, by+bh-br);
-  ctx.lineTo(bx, by+br); ctx.quadraticCurveTo(bx, by, bx+br, by);
+  ctx.moveTo(-5, -24 + bodyY); ctx.lineTo(5, -24 + bodyY);
+  ctx.quadraticCurveTo(8, -24 + bodyY, 8, -21 + bodyY);
+  ctx.lineTo(8, 4 + bodyY);
+  ctx.quadraticCurveTo(8, 7 + bodyY, 5, 7 + bodyY);
+  ctx.lineTo(-5, 7 + bodyY);
+  ctx.quadraticCurveTo(-8, 7 + bodyY, -8, 4 + bodyY);
+  ctx.lineTo(-8, -21 + bodyY);
+  ctx.quadraticCurveTo(-8, -24 + bodyY, -5, -24 + bodyY);
   ctx.closePath();
   ctx.fill();
 
-  // Head
-  ctx.fillStyle = color;
   ctx.beginPath();
   ctx.arc(0, -32 + bodyY, 8, 0, Math.PI * 2);
   ctx.fill();
 
-  // Cut indicator
-  if (hp < 50) {
-    ctx.fillStyle = "rgba(200,40,40,0.6)";
-    ctx.beginPath(); ctx.arc(5, -34 + bodyY, 2, 0, Math.PI * 2); ctx.fill();
-  }
-
-  // Legs
   ctx.strokeStyle = color; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(-4, 4 + bodyY); ctx.lineTo(-6, 20 + bodyY); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(4, 4 + bodyY); ctx.lineTo(6, 20 + bodyY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-4, 7 + bodyY); ctx.lineTo(-6, 22 + bodyY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(4, 7 + bodyY); ctx.lineTo(6, 22 + bodyY); ctx.stroke();
 
-  // Arms & gloves
-  const gloveColor = facing === "right" ? "#d4a832" : "#cc3333";
   if (isPunch && progress < 1) {
     const ext = Math.sin(progress * Math.PI);
-    let gx = 12, gy = -18 + bodyY;
+    let gx = 12, gy = -20 + bodyY;
     if (anim === "jab") { gx = 12 + ext * 22; gy = -20 + bodyY; }
     else if (anim === "cross") { gx = 10 + ext * 26; gy = -18 + bodyY; }
     else if (anim === "hook") { gx = 10 + ext * 18; gy = -22 + bodyY - ext * 4; }
     else if (anim === "uppercut") { gx = 10 + ext * 14; gy = -18 + bodyY - ext * 16; }
-    else if (anim === "body") { gx = 10 + ext * 20; gy = -10 + bodyY; }
-    // Lead arm (punching)
+    else if (anim === "body") { gx = 10 + ext * 20; gy = -8 + bodyY; }
     ctx.strokeStyle = color; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.moveTo(6, -18 + bodyY); ctx.lineTo(gx, gy); ctx.stroke();
     ctx.fillStyle = gloveColor;
     ctx.beginPath(); ctx.arc(gx, gy, 4, 0, Math.PI * 2); ctx.fill();
-    // Rear arm (guard)
     ctx.strokeStyle = color; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.moveTo(-4, -18 + bodyY); ctx.lineTo(-6, -26 + bodyY); ctx.stroke();
     ctx.fillStyle = gloveColor;
     ctx.beginPath(); ctx.arc(-6, -26 + bodyY, 3.5, 0, Math.PI * 2); ctx.fill();
   } else {
-    // Guard position
     ctx.strokeStyle = color; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.moveTo(6, -18 + bodyY); ctx.lineTo(10, -26 + bodyY); ctx.stroke();
     ctx.fillStyle = gloveColor;
@@ -457,1131 +123,883 @@ function drawFighter(ctx, x, y, facing, anim, progress, color, hp) {
     ctx.beginPath(); ctx.arc(-2, -28 + bodyY, 3.5, 0, Math.PI * 2); ctx.fill();
   }
 
-  // Hit flash
   if (isHit && progress < 0.3) {
-    ctx.fillStyle = `rgba(255,255,255,${0.6 * (1 - progress/0.3)})`;
+    ctx.fillStyle = `rgba(255,255,255,${0.5 * (1 - progress / 0.3)})`;
     ctx.beginPath(); ctx.arc(0, -20 + bodyY, 14, 0, Math.PI * 2); ctx.fill();
   }
 
   ctx.restore();
 }
 
-function drawHitParticles(ctx, particles, now) {
-  particles.forEach(p => {
-    const age = (now - p.born) / 1000;
-    if (age > p.life) return;
-    const frac = age / p.life;
-    const px = p.x + p.vx * age;
-    const py = p.y + p.vy * age + 40 * age * age;
-    ctx.fillStyle = `rgba(255,${200 + Math.floor(Math.random()*55)},100,${1-frac})`;
-    ctx.beginPath(); ctx.arc(px, py, 2*(1-frac), 0, Math.PI*2); ctx.fill();
-  });
-}
+function drawBars(ctx, W, H, hpA, hpB, stamA, stamB, round, nameA, nameB) {
+  const barW = W * 0.32, barH = 6, gap = 10, y = H - 28;
 
-function drawRoundCard(ctx, W, H, roundNum, progress) {
-  if (progress <= 0 || progress > 1) return;
-  const alpha = progress < 0.15 ? progress/0.15 : progress > 0.85 ? (1-progress)/0.15 : 1;
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = "rgba(0,0,0,0.7)";
-  ctx.fillRect(W * 0.3, H * 0.35, W * 0.4, H * 0.18);
-  ctx.strokeStyle = "rgba(201,168,76,0.6)";
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(W * 0.3, H * 0.35, W * 0.4, H * 0.18);
-  ctx.fillStyle = "var(--noir-primary-bright)";
-  ctx.font = "bold 18px Cinzel,serif";
-  ctx.textAlign = "center";
-  ctx.fillText(`ROUND ${roundNum}`, W/2, H * 0.35 + H * 0.12);
-  ctx.restore();
-}
-
-function drawKOCountdown(ctx, W, H, count) {
-  if (count == null || count <= 0) return;
-  ctx.save();
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  ctx.fillRect(0, 0, W, H);
-  const pulse = 1 + Math.sin(performance.now() / 150) * 0.08;
-  ctx.translate(W/2, H * 0.42);
-  ctx.scale(pulse, pulse);
-  ctx.fillStyle = "#ff4444";
-  ctx.font = "bold 48px Cinzel,serif";
-  ctx.textAlign = "center";
-  ctx.fillText(String(count), 0, 0);
-  ctx.font = "12px Cinzel,serif";
-  ctx.fillStyle = "#e0d0b0";
-  ctx.fillText("DOWN!", 0, 22);
-  ctx.restore();
-}
-
-function drawCanvasBars(ctx, W, H, state, nameA, nameB) {
-  const barW = W * 0.32, barH = 6, gap = 10;
-  const y = H - 30;
-
-  // Fighter A bars (left)
   ctx.fillStyle = "rgba(255,255,255,0.06)";
   ctx.fillRect(gap, y, barW, barH);
-  ctx.fillStyle = state.hpA > 30 ? "var(--noir-primary-bright)" : "#cc4444";
-  ctx.fillRect(gap, y, barW * (state.hpA / 100), barH);
+  ctx.fillStyle = hpA > 30 ? "#c9a84c" : "#cc4444";
+  ctx.fillRect(gap, y, barW * Math.max(0, hpA / 100), barH);
   ctx.fillStyle = "rgba(255,255,255,0.06)";
-  ctx.fillRect(gap, y + barH + 2, barW, 4);
+  ctx.fillRect(gap, y + barH + 2, barW, 3);
   ctx.fillStyle = "#3a8aaa";
-  ctx.fillRect(gap, y + barH + 2, barW * (state.stamA / 100), 4);
-  ctx.fillStyle = "var(--noir-primary-bright)"; ctx.font = "bold 9px Cinzel,serif"; ctx.textAlign = "left";
+  ctx.fillRect(gap, y + barH + 2, barW * Math.max(0, stamA / 100), 3);
+  ctx.fillStyle = "#c9a84c"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "left";
   ctx.fillText(nameA, gap, y - 4);
 
-  // Fighter B bars (right)
   const rx = W - gap - barW;
   ctx.fillStyle = "rgba(255,255,255,0.06)";
   ctx.fillRect(rx, y, barW, barH);
-  ctx.fillStyle = state.hpB > 30 ? "#bb3333" : "#cc4444";
-  ctx.fillRect(rx + barW * (1 - state.hpB / 100), y, barW * (state.hpB / 100), barH);
+  ctx.fillStyle = hpB > 30 ? "#bb3333" : "#cc4444";
+  ctx.fillRect(rx + barW * (1 - Math.max(0, hpB / 100)), y, barW * Math.max(0, hpB / 100), barH);
   ctx.fillStyle = "rgba(255,255,255,0.06)";
-  ctx.fillRect(rx, y + barH + 2, barW, 4);
+  ctx.fillRect(rx, y + barH + 2, barW, 3);
   ctx.fillStyle = "#3a8aaa";
-  ctx.fillRect(rx + barW * (1 - state.stamB / 100), y + barH + 2, barW * (state.stamB / 100), 4);
-  ctx.fillStyle = "#bb3333"; ctx.font = "bold 9px Cinzel,serif"; ctx.textAlign = "right";
+  ctx.fillRect(rx + barW * (1 - Math.max(0, stamB / 100)), y + barH + 2, barW * Math.max(0, stamB / 100), 3);
+  ctx.fillStyle = "#bb3333"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "right";
   ctx.fillText(nameB, W - gap, y - 4);
 
-  // Round
-  ctx.fillStyle = "var(--noir-primary-bright)"; ctx.font = "bold 11px Cinzel,serif"; ctx.textAlign = "center";
-  ctx.fillText(`R${state.round}/12`, W/2, y + 4);
+  ctx.fillStyle = "#c9a84c"; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText(`R${round}/12`, W / 2, y + 4);
 }
 
-// ── COMPONENT ─────────────────────────────────────────────────────────────────
-export default function Boxing3D() {
-  const refs = useRef({ fight: null });
-  const [liveCommentary, setLiveCommentary] = useState([]);
-  const commentaryEndRef = useRef(null);
-  const streamTimeoutsRef = useRef([]);
+// ── Fight Replay Modal ──────────────────────────────────────────────────────
 
-  const [hpA,setHpA]=useState(100);
-  const [hpB,setHpB]=useState(100);
-  const [stamA,setStamA]=useState(100);
-  const [stamB,setStamB]=useState(100);
-  const [round,setRound]=useState(1);
-  const [gameState,setGameState]=useState("idle");
-  const [winText,setWinText]=useState("");
-  const [actionText,setActionText]=useState("");
-  const [koCount,setKoCount]=useState(null); // null | { count:number, side:"a"|"b", name:string, tko:boolean }
-
-  const [npcs, setNpcs] = useState([]);
-  const [npcFightState, setNpcFightState] = useState(null);
-  const npcPollRef = useRef(null);
-
-  const [profile, setProfile] = useState(null);
-  const [effective, setEffective] = useState(null);
-  const [drills, setDrills] = useState({});
-  const [gymInfo, setGymInfo] = useState(null);
-  const [coachInfo, setCoachInfo] = useState(null);
-  const [gearInfo, setGearInfo] = useState(null);
-  const [loadingMeta, setLoadingMeta] = useState(true);
-  const [metaError, setMetaError] = useState("");
-  const [busyAction, setBusyAction] = useState("");
-
-  const [me, setMe] = useState(null);
-  const [opponentName, setOpponentName] = useState("");
-  const [liveMatches, setLiveMatches] = useState([]);
-  const [matchesLoading, setMatchesLoading] = useState(false);
-  const [matchError, setMatchError] = useState("");
-  const [bets, setBets] = useState([]);
-  const [league, setLeague] = useState(null);
-  const [betStake, setBetStake] = useState(10000);
-  const [drillTick, setDrillTick] = useState(0); // force re-render every 1s for cooldown countdown
-  const [narrowLayout, setNarrowLayout] = useState(typeof window !== "undefined" && window.innerWidth < 768);
-
-  const { matchId: arenaMatchId } = useParams();
-  const navigate = useNavigate();
-  const [arenaMatchDetail, setArenaMatchDetail] = useState(null);
-  const [betweenRoundsTick, setBetweenRoundsTick] = useState(0);
-  const [arenaServerResult, setArenaServerResult] = useState(null);
-  const arenaStartedRef = useRef(false);
-  const prevArenaMatchIdRef = useRef(undefined);
-  const arenaMatchDetailRef = useRef(null);
-
+function FightReplay({ fight, onClose }) {
   const canvasRef = useRef(null);
-  const animFrameRef = useRef(null);
-  const fightStateRef = useRef({
-    fighterA: { anim: "idle", animStart: 0, punchType: null, landed: false },
-    fighterB: { anim: "idle", animStart: 0, punchType: null, landed: false },
-    hpA: 100, hpB: 100, stamA: 100, stamB: 100, round: 1,
-    showRoundCard: false, roundCardNum: 0, roundCardStart: 0,
-    koCountdown: null, hitParticles: [], finished: false,
-  });
-  const [speedMult, setSpeedMult] = useState(1);
-  const speedMultRef = useRef(1);
+  const animRef = useRef(null);
+  const stateRef = useRef(null);
+  const [speed, setSpeed] = useState(1);
+  const speedRef = useRef(1);
+  const [commentary, setCommentary] = useState([]);
+  const [finished, setFinished] = useState(false);
+  const commentEndRef = useRef(null);
 
-  const flashMsg=(msg,ms=1600)=>{ setActionText(msg); setTimeout(()=>setActionText(""),ms); };
-  const getErr = (e) => e?.response?.data?.detail || e?.message || "Something went wrong";
+  useEffect(() => { speedRef.current = speed; }, [speed]);
 
-  // When returning from arena to gym: clear npc fight state (so buttons work) and refresh match list
+  const nameA = fight?.a_username || "Fighter A";
+  const nameB = fight?.b_username || "Fighter B";
+  const rounds = fight?.rounds || [];
+
   useEffect(() => {
-    const wasInArena = prevArenaMatchIdRef.current != null && prevArenaMatchIdRef.current !== "";
-    prevArenaMatchIdRef.current = arenaMatchId;
-    if (wasInArena && !arenaMatchId) {
-      setNpcFightState(null);
-      refreshMatches();
+    if (!fight || !rounds.length) return;
+
+    const allEvents = [];
+    for (const r of rounds) {
+      allEvents.push({ type: "roundStart", round: r.round });
+      for (const ex of (r.exchanges || [])) {
+        allEvents.push({ type: "exchange", round: r.round, ...ex });
+      }
+      allEvents.push({ type: "roundEnd", round: r.round, hp: r.hp, stam: r.stam, kds: r.kds, dmg: r.dmg });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- only run when leaving arena (arenaMatchId clears)
-  }, [arenaMatchId]);
 
-  useEffect(() => {
-    if (!arenaMatchId) return;
-    setArenaServerResult(null);
-    arenaStartedRef.current = false;
-    api.get(`/boxing/matches/${arenaMatchId}`).then((r) => {
-      setArenaMatchDetail(r.data?.match || null);
-      arenaMatchDetailRef.current = r.data?.match || null;
-    }).catch(() => setArenaMatchDetail(null));
-  }, [arenaMatchId]);
-
-  useEffect(() => {
-    if (!arenaMatchId) return;
-    const poll = () => {
-      api.get(`/boxing/matches/${arenaMatchId}`).then((r) => {
-        const m = r.data?.match;
-        if (m) {
-          setArenaMatchDetail(m);
-          arenaMatchDetailRef.current = m;
-          const hp = m.hp || {};
-          const stam = m.stam || {};
-          const serverRound = m.round ?? 1;
-          setHpA(hp.a != null ? hp.a : 100);
-          setHpB(hp.b != null ? hp.b : 100);
-          setStamA(stam.a != null ? stam.a : 100);
-          setStamB(stam.b != null ? stam.b : 100);
-          setRound(serverRound);
-          const fs = fightStateRef.current;
-          if (fs) {
-            fs.hpA = hp.a != null ? hp.a : 100;
-            fs.hpB = hp.b != null ? hp.b : 100;
-            fs.stamA = stam.a != null ? stam.a : 100;
-            fs.stamB = stam.b != null ? stam.b : 100;
-            fs.round = serverRound;
-          }
-          if (m.state === "finished") {
-            setGameState("done");
-            const sr = { winner: m.winner, finish_reason: m.finish_reason || "" };
-            setArenaServerResult(sr);
-            const nameA = m.a_username || "Fighter A";
-            const nameB = m.b_username || "Fighter B";
-            const winnerName = m.winner === m.a_id ? nameA : m.winner === m.b_id ? nameB : "";
-            const reason = (m.finish_reason || "decision").replace(/_/g, " ");
-            setWinText(winnerName ? `${winnerName} wins by ${reason}` : `Fight over: ${reason}`);
-            if (fs) {
-              fs.finished = true;
-              if (m.winner === m.a_id) fs.fighterB = { anim: "ko", animStart: performance.now() };
-              else if (m.winner === m.b_id) fs.fighterA = { anim: "ko", animStart: performance.now() };
-            }
-          }
-        }
-      }).catch(() => {});
+    stateRef.current = {
+      eventIndex: 0, events: allEvents,
+      hpA: 100, hpB: 100, stamA: 100, stamB: 100, round: 1,
+      fighterA: { anim: "idle", start: 0 },
+      fighterB: { anim: "idle", start: 0 },
+      lastEventTime: performance.now(), eventDelay: 400,
+      done: false,
     };
-    // Poll every 1s so we catch "counting" and "finished" quickly (count start + 10-count KO)
-    const id = setInterval(poll, 1000);
-    poll();
-    return () => clearInterval(id);
-  }, [arenaMatchId]);
+    setCommentary([]);
+    setFinished(false);
+
+    const render = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) { animRef.current = requestAnimationFrame(render); return; }
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+      const now = performance.now();
+      const st = stateRef.current;
+      if (!st) { animRef.current = requestAnimationFrame(render); return; }
+
+      const delay = st.eventDelay / speedRef.current;
+      if (!st.done && now - st.lastEventTime >= delay && st.eventIndex < st.events.length) {
+        const ev = st.events[st.eventIndex];
+        st.eventIndex++;
+        st.lastEventTime = now;
+
+        if (ev.type === "roundStart") {
+          st.round = ev.round;
+          st.eventDelay = 600;
+          setCommentary(c => [...c, { text: `── Round ${ev.round} ──`, type: "round" }]);
+        } else if (ev.type === "exchange") {
+          const isA = ev.side === "a";
+          const attackerName = isA ? nameA : nameB;
+          const defenderName = isA ? nameB : nameA;
+          if (ev.landed) {
+            if (isA) {
+              st.fighterA = { anim: ev.punch, start: now };
+              st.fighterB = { anim: "hit", start: now };
+            } else {
+              st.fighterB = { anim: ev.punch, start: now };
+              st.fighterA = { anim: "hit", start: now };
+            }
+            let line = `${attackerName} lands a ${ev.punch} for ${ev.dmg} dmg`;
+            let type = "hit";
+            if (ev.knockdown) {
+              line += ` — ${defenderName} is DOWN!`;
+              type = "knockdown";
+              if (isA) st.fighterB = { anim: "down", start: now };
+              else st.fighterA = { anim: "down", start: now };
+            }
+            setCommentary(c => [...c, { text: line, type }]);
+          } else {
+            if (isA) st.fighterA = { anim: ev.punch, start: now };
+            else st.fighterB = { anim: ev.punch, start: now };
+            setCommentary(c => [...c, { text: `${attackerName} throws a ${ev.punch} — misses`, type: "miss" }]);
+          }
+          st.eventDelay = ev.knockdown ? 800 : 300;
+        } else if (ev.type === "roundEnd") {
+          st.hpA = ev.hp?.a ?? st.hpA;
+          st.hpB = ev.hp?.b ?? st.hpB;
+          st.stamA = ev.stam?.a ?? st.stamA;
+          st.stamB = ev.stam?.b ?? st.stamB;
+          setCommentary(c => [...c, {
+            text: `End R${ev.round}: ${nameA} HP ${ev.hp?.a ?? "?"} | ${nameB} HP ${ev.hp?.b ?? "?"}`,
+            type: "roundEnd",
+          }]);
+          st.eventDelay = 800;
+        }
+
+        if (st.eventIndex >= st.events.length) {
+          st.done = true;
+          const w = fight.winner_side;
+          const winnerName = w === "a" ? nameA : w === "b" ? nameB : null;
+          const reason = (fight.reason || "decision").replace(/_/g, " ");
+          if (w === "a") st.fighterB = { anim: "ko", start: now };
+          else if (w === "b") st.fighterA = { anim: "ko", start: now };
+          setCommentary(c => [...c, {
+            text: winnerName ? `${winnerName} wins by ${reason}!` : `Fight ends: ${reason}`,
+            type: "result",
+          }]);
+          setFinished(true);
+        }
+      }
+
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#12121a";
+      ctx.fillRect(0, 0, W, H);
+
+      const ring = drawRing(ctx, W, H);
+      const fAx = ring.rl + ring.rw * 0.38;
+      const fBx = ring.rl + ring.rw * 0.62;
+      const fY = ring.rt + ring.rh * 0.55;
+
+      const punchDur = 300;
+      const downDur = 1500;
+      const koDur = 99999;
+
+      const durA = st.fighterA.anim === "ko" ? koDur : st.fighterA.anim === "down" ? downDur : punchDur;
+      const durB = st.fighterB.anim === "ko" ? koDur : st.fighterB.anim === "down" ? downDur : punchDur;
+      const progA = st.fighterA.start ? Math.min(1, (now - st.fighterA.start) / durA) : 1;
+      const progB = st.fighterB.start ? Math.min(1, (now - st.fighterB.start) / durB) : 1;
+      const animA = progA >= 1 && st.fighterA.anim !== "ko" ? "idle" : st.fighterA.anim;
+      const animB = progB >= 1 && st.fighterB.anim !== "ko" ? "idle" : st.fighterB.anim;
+
+      drawFighter(ctx, fAx, fY, "right", animA, progA, "rgba(180,155,90,0.85)", "#d4a832");
+      drawFighter(ctx, fBx, fY, "left", animB, progB, "rgba(180,60,50,0.85)", "#cc3333");
+      drawBars(ctx, W, H, st.hpA, st.hpB, st.stamA, st.stamB, st.round, nameA, nameB);
+
+      animRef.current = requestAnimationFrame(render);
+    };
+
+    animRef.current = requestAnimationFrame(render);
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fight]);
 
   useEffect(() => {
-    if (!arenaMatchId || !arenaMatchDetail?.id) return;
-    const s = arenaMatchDetail.state;
-    if (s !== "running" && s !== "counting") return;
-    const id = setInterval(() => setBetweenRoundsTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
-  }, [arenaMatchId, arenaMatchDetail?.id, arenaMatchDetail?.state]);
+    commentEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [commentary]);
 
-  // Server is the only source of truth: round, hp, stam, winner, finish_reason come from poll.
-  // No client-side fight simulation for outcome.
+  const skipToEnd = () => {
+    const st = stateRef.current;
+    if (!st) return;
+    st.eventIndex = st.events.length;
+    st.done = true;
+
+    const lastRound = rounds[rounds.length - 1];
+    if (lastRound) {
+      st.hpA = lastRound.hp?.a ?? 0;
+      st.hpB = lastRound.hp?.b ?? 0;
+      st.stamA = lastRound.stam?.a ?? 0;
+      st.stamB = lastRound.stam?.b ?? 0;
+      st.round = lastRound.round;
+    }
+    const w = fight.winner_side;
+    if (w === "a") st.fighterB = { anim: "ko", start: performance.now() };
+    else if (w === "b") st.fighterA = { anim: "ko", start: performance.now() };
+
+    const lines = [];
+    for (const r of rounds) {
+      lines.push({ text: `── Round ${r.round} ──`, type: "round" });
+      lines.push({ text: `${nameA}: ${r.dmg?.a ?? 0} dmg | ${nameB}: ${r.dmg?.b ?? 0} dmg`, type: "roundEnd" });
+    }
+    const winnerName = w === "a" ? nameA : w === "b" ? nameB : null;
+    const reason = (fight.reason || "decision").replace(/_/g, " ");
+    lines.push({ text: winnerName ? `${winnerName} wins by ${reason}!` : `Fight ends: ${reason}`, type: "result" });
+    setCommentary(lines);
+    setFinished(true);
+  };
+
+  const fightStats = fight?.fight_stats;
+  const scorecard = fight?.scorecard;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.92)", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", borderBottom: "1px solid rgba(201,168,76,0.2)", flexShrink: 0 }}>
+        <button onClick={onClose} className={styles.btnPrimary} style={{ padding: "8px 14px", minHeight: 40, fontSize: 10 }}>Close</button>
+        <div style={{ fontSize: 11, color: gold, letterSpacing: "0.12em" }}>{nameA} vs {nameB}</div>
+        <div style={{ display: "flex", gap: 4 }}>
+          {[1, 2, 4].map(s => (
+            <button key={s} onClick={() => setSpeed(s)} style={{
+              padding: "6px 10px", minHeight: 36, fontSize: 9, border: "1px solid rgba(201,168,76,0.4)", borderRadius: 2,
+              background: speed === s ? "rgba(201,168,76,0.25)" : "rgba(255,255,255,0.03)",
+              color: speed === s ? "#f0e0b0" : "#8a7a5a", cursor: "pointer",
+            }}>x{s}</button>
+          ))}
+          {!finished && <button onClick={skipToEnd} style={{ padding: "6px 10px", minHeight: 36, fontSize: 9, border: "1px solid rgba(201,168,76,0.4)", borderRadius: 2, background: "rgba(255,255,255,0.03)", color: "#8a7a5a", cursor: "pointer" }}>Skip</button>}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        <div style={{ position: "relative", width: "100%", maxWidth: 720, margin: "0 auto", aspectRatio: "16/9", flexShrink: 0 }}>
+          <canvas ref={canvasRef} width={640} height={360} style={{ width: "100%", height: "100%", display: "block" }} />
+        </div>
+        <div style={{ flex: 1, overflow: "auto", padding: "8px 14px", fontSize: 10, lineHeight: 1.6, color: "#e0d0b0", minHeight: 0 }}>
+          {commentary.map((c, i) => (
+            <div key={i} style={{
+              marginBottom: c.type === "round" ? 6 : 1,
+              fontWeight: c.type === "round" || c.type === "result" ? 700 : 400,
+              color: c.type === "round" ? gold : c.type === "knockdown" ? "#ff6666" : c.type === "result" ? gold : c.type === "miss" ? "#7a6a5a" : c.type === "roundEnd" ? "#aa9a6a" : "#c8b898",
+              fontSize: c.type === "round" || c.type === "result" ? 11 : 10,
+            }}>{c.text}</div>
+          ))}
+          <div ref={commentEndRef} />
+        </div>
+
+        {finished && fightStats && (
+          <div style={{ flexShrink: 0, padding: "10px 14px", paddingBottom: "max(10px, env(safe-area-inset-bottom))", borderTop: "1px solid rgba(201,168,76,0.2)", background: "rgba(0,0,0,0.6)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 4, fontSize: 10, color: "#d0c090", maxWidth: 400, margin: "0 auto" }}>
+              <div style={{ textAlign: "right" }}>{fightStats.a?.landed}</div>
+              <div style={{ textAlign: "center", color: "#7a6a4a" }}>Landed</div>
+              <div>{fightStats.b?.landed}</div>
+              <div style={{ textAlign: "right" }}>{fightStats.a?.dmg}</div>
+              <div style={{ textAlign: "center", color: "#7a6a4a" }}>Total Dmg</div>
+              <div>{fightStats.b?.dmg}</div>
+              <div style={{ textAlign: "right" }}>{fightStats.a?.kds}</div>
+              <div style={{ textAlign: "center", color: "#7a6a4a" }}>Knockdowns</div>
+              <div>{fightStats.b?.kds}</div>
+            </div>
+            {scorecard && scorecard.a?.length > 0 && (
+              <div style={{ marginTop: 6, maxWidth: 400, margin: "6px auto 0" }}>
+                <div style={{ fontSize: 9, color: "#7a6a4a", textAlign: "center", marginBottom: 2 }}>Scorecard</div>
+                <div style={{ display: "flex", justifyContent: "center", gap: 4, flexWrap: "wrap", fontSize: 9 }}>
+                  {scorecard.a.map((sa, ri) => (
+                    <div key={ri} style={{ textAlign: "center", padding: "2px 4px", background: "rgba(255,255,255,0.03)", borderRadius: 2, minWidth: 28 }}>
+                      <div style={{ color: "#7a6a4a" }}>R{ri + 1}</div>
+                      <div style={{ color: sa > scorecard.b[ri] ? gold : sa < scorecard.b[ri] ? "#bb3333" : "#888" }}>{sa}-{scorecard.b[ri]}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ textAlign: "center", fontSize: 10, color: gold, marginTop: 4 }}>
+                  {scorecard.a.reduce((s, v) => s + v, 0)} - {scorecard.b.reduce((s, v) => s + v, 0)}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ──────────────────────────────────────────────────────────
+
+export default function Boxing() {
+  const { matchId: fightIdParam } = useParams();
+  const navigate = useNavigate();
+
+  const [tab, setTab] = useState(0);
+  const [profile, setProfile] = useState(null);
+  const [trainCosts, setTrainCosts] = useState({});
+  const [npcs, setNpcs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState("");
+
+  const [challenges, setChallenges] = useState({ incoming: [], outgoing: [] });
+  const [challengeTarget, setChallengeTarget] = useState("");
+  const [betsData, setBetsData] = useState({ open: [], settled: [] });
+  const [betStake, setBetStake] = useState(10000);
+  const [leaderboard, setLeaderboard] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [pendingForBets, setPendingForBets] = useState([]);
+
+  const [replayFight, setReplayFight] = useState(null);
+
+  const err = (e) => getApiErrorMessage(e);
+
+  const loadProfile = useCallback(async () => {
+    try {
+      const res = await api.get("/boxing/me");
+      setProfile(res.data?.profile || null);
+      setTrainCosts(res.data?.train_costs || {});
+      setNpcs(res.data?.npcs || []);
+    } catch (e) {
+      setError(err(e));
+    }
+  }, []);
+
+  const loadChallenges = useCallback(async () => {
+    try {
+      const res = await api.get("/boxing/challenges");
+      setChallenges({ incoming: res.data?.incoming || [], outgoing: res.data?.outgoing || [] });
+    } catch {}
+  }, []);
+
+  const loadBets = useCallback(async () => {
+    try {
+      const res = await api.get("/boxing/bets");
+      setBetsData({ open: res.data?.open || [], settled: res.data?.settled || [] });
+    } catch {}
+  }, []);
+
+  const loadLeaderboard = useCallback(async () => {
+    try {
+      const res = await api.get("/boxing/leaderboard?period=weekly");
+      setLeaderboard(res.data || null);
+    } catch {}
+  }, []);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const res = await api.get("/boxing/history");
+      setHistory(res.data?.history || []);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    api.get("/auth/me").then((r) => { if (!cancelled) setMe(r.data || null); }).catch(() => {});
-    api.get("/boxing/npcs").then((r) => { if (!cancelled) setNpcs(r.data?.npcs || []); }).catch(() => {});
-    const loadMeta = async () => {
+    const init = async () => {
+      setLoading(true);
       try {
-        setLoadingMeta(true);
-        const [profRes, gymRes, coachRes, gearRes] = await Promise.all([
-          api.get("/boxing/profile"),
-          api.get("/boxing/gym"),
-          api.get("/boxing/coaches"),
-          api.get("/boxing/gear"),
+        const [profRes, chRes, betsRes, lbRes, histRes] = await Promise.all([
+          api.get("/boxing/me"),
+          api.get("/boxing/challenges"),
+          api.get("/boxing/bets"),
+          api.get("/boxing/leaderboard?period=weekly"),
+          api.get("/boxing/history"),
         ]);
         if (cancelled) return;
         setProfile(profRes.data?.profile || null);
-        setEffective(profRes.data?.effective || null);
-        setDrills(profRes.data?.drills || {});
-        setGymInfo(gymRes.data || null);
-        setCoachInfo(coachRes.data || null);
-        setGearInfo(gearRes.data || null);
-        setMetaError("");
+        setTrainCosts(profRes.data?.train_costs || {});
+        setNpcs(profRes.data?.npcs || []);
+        setChallenges({ incoming: chRes.data?.incoming || [], outgoing: chRes.data?.outgoing || [] });
+        setBetsData({ open: betsRes.data?.open || [], settled: betsRes.data?.settled || [] });
+        setLeaderboard(lbRes.data || null);
+        setHistory(histRes.data?.history || []);
       } catch (e) {
-        if (!cancelled) setMetaError(getErr(e));
+        if (!cancelled) setError(err(e));
       } finally {
-        if (!cancelled) setLoadingMeta(false);
+        if (!cancelled) setLoading(false);
       }
     };
-    loadMeta();
-    const loadMatches = async () => {
-      try {
-        setMatchesLoading(true);
-        const [liveRes, betsRes, leagueRes] = await Promise.all([
-          api.get("/boxing/matches/live"),
-          api.get("/boxing/bets/my-bets"),
-          api.get("/boxing/league?period=weekly"),
-        ]);
-        if (cancelled) return;
-        setLiveMatches(liveRes.data?.matches || []);
-        setBets(betsRes.data?.bets || []);
-        setLeague(leagueRes.data || null);
-        setMatchError("");
-      } catch (e) {
-        if (!cancelled) setMatchError(getErr(e));
-      } finally {
-        if (!cancelled) setMatchesLoading(false);
-      }
-    };
-    loadMatches();
+    init();
     return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    const ref = npcPollRef;
-    return () => { if (ref.current) clearInterval(ref.current); };
-  }, []);
+    if (!fightIdParam) return;
+    api.get(`/boxing/fight/${fightIdParam}`).then(r => {
+      if (r.data?.fight) setReplayFight(r.data.fight);
+    }).catch(() => {});
+  }, [fightIdParam]);
 
-  useEffect(() => {
-    if (!profile || !Object.keys(drills || {}).length) return;
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
-    const interval = isMobile ? 2000 : 1000; // 2s on mobile to reduce re-renders and lag
-    let id;
-    const tick = () => {
-      if (document.visibilityState === "visible") setDrillTick((k) => k + 1);
-    };
-    id = setInterval(tick, interval);
-    return () => clearInterval(id);
-  }, [profile, drills]);
-
-  useEffect(() => {
-    const check = () => setNarrowLayout(window.innerWidth < 768);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
-
-  const startNpcFight = async (npc) => {
-    if (npcFightState && !npcFightState.result) return;
-    setNpcFightState({ matchId: null, npcName: npc.name });
+  const handleTrain = async (stat) => {
+    setBusy(`train:${stat}`);
+    setError("");
     try {
-      const createRes = await api.post("/boxing/matches/create", { opponent_username: npc.name });
-      const matchId = createRes.data?.match_id;
-      if (!matchId) throw new Error("No match id");
-      await api.post("/boxing/matches/ready", { match_id: matchId, ready: true });
-      setNpcFightState((s) => ({ ...s, matchId }));
-      await refreshMatches();
-      navigate(`/boxing/arena/${matchId}`);
-      return;
-    } catch (e) {
-      setMatchError(getErr(e));
-      setNpcFightState({ result: "error", npcName: npc.name, message: e?.response?.data?.detail || e?.message || "Failed" });
-    }
-  };
-
-  const clearNpcResult = () => setNpcFightState(null);
-
-  const handleTrain = async (drillId) => {
-    setBusyAction(`train:${drillId}`);
-    try {
-      const res = await api.post("/boxing/train", { drill_id: drillId });
+      const res = await api.post("/boxing/train", { stat });
       setProfile(res.data?.profile || null);
-      setEffective(res.data?.effective || null);
-      setDrills((d) => ({ ...(d || {}), ...(res.data?.drills || {}) }));
-      setMetaError("");
+      setTrainCosts(res.data?.train_costs || {});
     } catch (e) {
-      setMetaError(getErr(e));
+      setError(err(e));
     } finally {
-      setBusyAction("");
+      setBusy("");
     }
   };
 
-  const handleGymUpgrade = async () => {
-    setBusyAction("gym_upgrade");
+  const handleAllocate = async (stat) => {
+    setBusy(`alloc:${stat}`);
+    setError("");
     try {
-      const res = await api.post("/boxing/gym/upgrade");
+      const res = await api.post("/boxing/allocate", { stat });
       setProfile(res.data?.profile || null);
-      setEffective(res.data?.effective || null);
-      const gymRes = await api.get("/boxing/gym");
-      setGymInfo(gymRes.data || null);
-      setMetaError("");
+      await loadProfile();
     } catch (e) {
-      setMetaError(getErr(e));
+      setError(err(e));
     } finally {
-      setBusyAction("");
+      setBusy("");
     }
   };
 
-  const handleGymMove = async (gymId) => {
-    setBusyAction(`gym_move:${gymId}`);
+  const handleFightNpc = async (npcId) => {
+    setBusy(`npc:${npcId}`);
+    setError("");
     try {
-      const res = await api.post("/boxing/gym/move", { gym_id: gymId });
+      const res = await api.post("/boxing/fight/npc", { npc_id: npcId });
       setProfile(res.data?.profile || null);
-      setEffective(res.data?.effective || null);
-      const gymRes = await api.get("/boxing/gym");
-      setGymInfo(gymRes.data || null);
-      setMetaError("");
+      if (res.data?.fight) setReplayFight(res.data.fight);
+      loadHistory();
     } catch (e) {
-      setMetaError(getErr(e));
+      setError(err(e));
     } finally {
-      setBusyAction("");
+      setBusy("");
     }
   };
 
-  const handleCoachHire = async (coachId) => {
-    setBusyAction(`coach:${coachId}`);
-    try {
-      const res = await api.post("/boxing/coach/hire", { coach_id: coachId });
-      setProfile(res.data?.profile || null);
-      setEffective(res.data?.effective || null);
-      const coachRes = await api.get("/boxing/coaches");
-      setCoachInfo(coachRes.data || null);
-      setMetaError("");
-    } catch (e) {
-      setMetaError(getErr(e));
-    } finally {
-      setBusyAction("");
-    }
-  };
-
-  const handleCoachFire = async () => {
-    setBusyAction("coach_fire");
-    try {
-      const res = await api.post("/boxing/coach/fire");
-      setProfile(res.data?.profile || null);
-      setEffective(res.data?.effective || null);
-      const coachRes = await api.get("/boxing/coaches");
-      setCoachInfo(coachRes.data || null);
-      setMetaError("");
-    } catch (e) {
-      setMetaError(getErr(e));
-    } finally {
-      setBusyAction("");
-    }
-  };
-
-  const handleGearBuy = async (gearId) => {
-    setBusyAction(`buy:${gearId}`);
-    try {
-      await api.post("/boxing/gear/buy", { gear_id: gearId });
-      const gearRes = await api.get("/boxing/gear");
-      setGearInfo(gearRes.data || null);
-      setMetaError("");
-    } catch (e) {
-      setMetaError(getErr(e));
-    } finally {
-      setBusyAction("");
-    }
-  };
-
-  const handleGearEquip = async (slot, gearId) => {
-    setBusyAction(`equip:${slot}:${gearId || "none"}`);
-    try {
-      const res = await api.post("/boxing/gear/equip", { slot, gear_id: gearId || null });
-      setProfile(res.data?.profile || null);
-      setEffective(res.data?.effective || null);
-      const gearRes = await api.get("/boxing/gear");
-      setGearInfo(gearRes.data || null);
-      setMetaError("");
-    } catch (e) {
-      setMetaError(getErr(e));
-    } finally {
-      setBusyAction("");
-    }
-  };
-
-  const refreshMatches = async () => {
-    try {
-      setMatchesLoading(true);
-      const [liveRes, betsRes, leagueRes] = await Promise.all([
-        api.get("/boxing/matches/live"),
-        api.get("/boxing/bets/my-bets"),
-        api.get("/boxing/league?period=weekly"),
-      ]);
-      setLiveMatches(liveRes.data?.matches || []);
-      setBets(betsRes.data?.bets || []);
-      setLeague(leagueRes.data || null);
-      setMatchError("");
-    } catch (e) {
-      setMatchError(getErr(e));
-    } finally {
-      setMatchesLoading(false);
-    }
-  };
-
-  const handleCreateMatch = async () => {
-    const name = (opponentName || "").trim();
+  const handleChallenge = async () => {
+    const name = challengeTarget.trim();
     if (!name) return;
-    setBusyAction("create_match");
+    setBusy("challenge");
+    setError("");
     try {
-      await api.post("/boxing/matches/create", { opponent_username: name });
-      setOpponentName("");
-      await refreshMatches();
+      await api.post("/boxing/fight/challenge", { opponent_username: name });
+      setChallengeTarget("");
+      loadChallenges();
     } catch (e) {
-      setMatchError(getErr(e));
+      setError(err(e));
     } finally {
-      setBusyAction("");
+      setBusy("");
     }
   };
 
-  const handleReadyMatch = async (matchId, ready) => {
-    setBusyAction(`ready:${matchId}`);
+  const handleAccept = async (cid) => {
+    setBusy(`accept:${cid}`);
+    setError("");
     try {
-      await api.post("/boxing/matches/ready", { match_id: matchId, ready });
-      await refreshMatches();
+      const res = await api.post("/boxing/fight/accept", { challenge_id: cid });
+      setProfile(res.data?.profile || null);
+      if (res.data?.fight) setReplayFight(res.data.fight);
+      loadChallenges();
+      loadHistory();
+      loadBets();
     } catch (e) {
-      setMatchError(getErr(e));
+      setError(err(e));
     } finally {
-      setBusyAction("");
+      setBusy("");
     }
   };
 
-  const handlePlaceBet = async (matchId, fighter) => {
-    setBusyAction(`bet:${matchId}:${fighter}`);
+  const handleCancelChallenge = async (cid) => {
+    setBusy(`cancel:${cid}`);
     try {
-      await api.post("/boxing/bets/place", { match_id: matchId, fighter, stake: Number(betStake) || 0 });
-      await refreshMatches();
+      await api.post("/boxing/fight/cancel", { challenge_id: cid });
+      loadChallenges();
     } catch (e) {
-      setMatchError(getErr(e));
+      setError(err(e));
     } finally {
-      setBusyAction("");
+      setBusy("");
     }
   };
 
-  const handleJoinMatch = async (matchId) => {
-    setBusyAction(`join:${matchId}`);
+  const handlePlaceBet = async (challengeId, fighter) => {
+    setBusy(`bet:${challengeId}:${fighter}`);
+    setError("");
     try {
-      await api.post("/boxing/matches/join", { match_id: matchId });
-      await refreshMatches();
+      await api.post("/boxing/bet", { challenge_id: challengeId, fighter, stake: Number(betStake) || 0 });
+      loadBets();
+      loadChallenges();
     } catch (e) {
-      setMatchError(getErr(e));
+      setError(err(e));
     } finally {
-      setBusyAction("");
+      setBusy("");
     }
   };
 
+  const xpNext = profile ? (function () {
+    const lvl = (profile.level || 1) + 1;
+    return lvl <= 50 ? 100 * lvl * (lvl + 1) / 2 : null;
+  })() : null;
+  const xpPct = profile && xpNext ? Math.min(100, ((profile.xp || 0) / xpNext) * 100) : 0;
 
-  const gold = "var(--noir-primary)";
-  const crimson = "#b5463c"; // opponent accent (contrast)
+  const closeReplay = () => {
+    setReplayFight(null);
+    if (fightIdParam) navigate("/casino/mini-games/boxing");
+  };
 
-  // Commentary from server rounds only (interpretive replay)
-  const serverCommentary = useMemo(() => {
-    const m = arenaMatchDetail;
-    const rounds = m?.rounds || [];
-    if (!rounds.length) return [];
-    const nameA = m?.a_username || "Fighter A";
-    const nameB = m?.b_username || "Fighter B";
-    const lines = [];
-    for (const r of rounds) {
-      const n = r.round ?? 0;
-      const ah = r.a_hits ?? 0, ad = r.a_dmg ?? 0, bh = r.b_hits ?? 0, bd = r.b_dmg ?? 0;
-      lines.push({ type: "round", text: `Round ${n}: ${nameA} ${ah} punches (${ad} dmg), ${nameB} ${bh} punches (${bd} dmg).`, round: n });
-    }
-    return lines;
-  }, [arenaMatchDetail?.rounds, arenaMatchDetail?.a_username, arenaMatchDetail?.b_username]);
-
-  useEffect(() => {
-    setLiveCommentary(serverCommentary);
-  }, [serverCommentary]);
-
-  useEffect(() => { speedMultRef.current = speedMult; }, [speedMult]);
-
-  useEffect(() => {
-    if (!arenaMatchId || !arenaMatchDetail) return;
-    const m = arenaMatchDetail;
-    const fs = fightStateRef.current;
-    if (!fs) return;
-    const hp = m.hp || {};
-    const stam = m.stam || {};
-    fs.hpA = hp.a != null ? hp.a : 100;
-    fs.hpB = hp.b != null ? hp.b : 100;
-    fs.stamA = stam.a != null ? stam.a : 100;
-    fs.stamB = stam.b != null ? stam.b : 100;
-    fs.round = m.round ?? 1;
-    if (m.state === "counting") {
-      fs.koCountdown = { side: m.down_fighter === "a" ? "a" : "b", count: 0, start: performance.now() };
-      if (m.down_fighter === "a") fs.fighterA = { anim: "down", animStart: performance.now() };
-      else if (m.down_fighter === "b") fs.fighterB = { anim: "down", animStart: performance.now() };
-    }
-  }, [arenaMatchId, arenaMatchDetail]);
-
-  // Canvas animation loop
-  useEffect(() => {
-    if (!arenaMatchId) return;
-    const render = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) { animFrameRef.current = requestAnimationFrame(render); return; }
-      const ctx = canvas.getContext("2d");
-      const W = canvas.width, H = canvas.height;
-      const now = performance.now();
-      const fs = fightStateRef.current;
-      ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = "#12121a"; ctx.fillRect(0, 0, W, H);
-
-      const ring = drawRing(ctx, W, H);
-      const fAx = ring.rl + ring.rw * 0.40, fAy = ring.rt + ring.rh * 0.55;
-      const fBx = ring.rl + ring.rw * 0.60, fBy = ring.rt + ring.rh * 0.55;
-
-      // Fighter animations — down/ko hold much longer than punches
-      const punchDur = 350;
-      const downDur = 1700;
-      const koDur = 99999;
-      const durA = (fs.fighterA.anim === "down") ? downDur : (fs.fighterA.anim === "ko") ? koDur : punchDur;
-      const durB = (fs.fighterB.anim === "down") ? downDur : (fs.fighterB.anim === "ko") ? koDur : punchDur;
-      const progA = fs.fighterA.animStart ? Math.min(1, (now - fs.fighterA.animStart) / durA) : 1;
-      const progB = fs.fighterB.animStart ? Math.min(1, (now - fs.fighterB.animStart) / durB) : 1;
-      const animA = progA >= 1 ? "idle" : fs.fighterA.anim;
-      const animB = progB >= 1 ? "idle" : fs.fighterB.anim;
-
-      drawFighter(ctx, fAx, fAy, "right", animA, progA, "rgba(180,155,90,0.85)", fs.hpA);
-      drawFighter(ctx, fBx, fBy, "left", animB, progB, "rgba(180,60,50,0.85)", fs.hpB);
-      drawHitParticles(ctx, fs.hitParticles, now);
-      fs.hitParticles = fs.hitParticles.filter(p => (now - p.born)/1000 < p.life);
-
-      const nameA = arenaMatchDetail?.a_username || me?.username || "You";
-      const nameB = arenaMatchDetail?.b_username || "Opponent";
-      drawCanvasBars(ctx, W, H, fs, nameA, nameB);
-
-      if (fs.showRoundCard) {
-        const rp = Math.min(1, (now - fs.roundCardStart) / 1200);
-        drawRoundCard(ctx, W, H, fs.roundCardNum, rp);
-      }
-      if (fs.koCountdown) {
-        const elapsed = (now - fs.koCountdown.start) / 1000;
-        const count = Math.min(10, Math.floor(elapsed * 3.5) + 1);
-        if (elapsed < 3.2) drawKOCountdown(ctx, W, H, count);
-        else fs.koCountdown = null;
-      }
-
-      animFrameRef.current = requestAnimationFrame(render);
-    };
-    animFrameRef.current = requestAnimationFrame(render);
-    return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); };
-  }, [arenaMatchId, arenaMatchDetail, me]);
-
-  // Auto-scroll commentary to bottom as new lines appear
-  useEffect(() => {
-    commentaryEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [liveCommentary]);
-
-  const fightLogLines = liveCommentary.length > 0 ? liveCommentary : null;
-
-  if (arenaMatchId) {
-    const nameA = arenaMatchDetail?.a_username || me?.username || "You";
-    const nameB = arenaMatchDetail?.b_username || "Opponent";
-    const m = arenaMatchDetail;
-    const matchOver = m?.state === "finished" || gameState === "done";
-    const showPostFight = matchOver;
-    const rounds = m?.rounds || [];
-    const statsA = rounds.length ? { landed: rounds.reduce((s, r) => s + (r.a_hits || 0), 0), thrown: 0, dmg: rounds.reduce((s, r) => s + (r.a_dmg || 0), 0), kds: (m?.kds?.a ?? 0) } : null;
-    const statsB = rounds.length ? { landed: rounds.reduce((s, r) => s + (r.b_hits || 0), 0), thrown: 0, dmg: rounds.reduce((s, r) => s + (r.b_dmg || 0), 0), kds: (m?.kds?.b ?? 0) } : null;
-    const sc = rounds.length ? { a: rounds.map(r => (r.a_dmg || 0) > (r.b_dmg || 0) ? 10 : (r.b_dmg || 0) > (r.a_dmg || 0) ? 9 : 10), b: rounds.map(r => (r.b_dmg || 0) > (r.a_dmg || 0) ? 10 : (r.a_dmg || 0) > (r.b_dmg || 0) ? 9 : 10) } : null;
-    return (
-      <div className={styles.page} style={{height:"100vh",overflow:"hidden",fontFamily:"'Cinzel',serif",display:"flex",flexDirection:"column"}}>
-        <div className={styles.pageContent} style={{padding:"6px 10px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--noir-border-light)",minHeight:40}}>
-          <Link to="/boxing" className={styles.btnPrimary} style={{padding:"8px 12px",minHeight:40,fontSize:10,textDecoration:"none",touchAction:"manipulation"}}>← Back</Link>
-          <div style={{fontSize:11,letterSpacing:"0.12em",color:gold}}>{nameA} vs {nameB}</div>
-          <div style={{display:"flex",gap:3}}>
-            {[1,2,4].map(s=>(
-              <button key={s} onClick={()=>setSpeedMult(s)} style={{
-                padding:"6px 10px",minHeight:36,fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,
-                background: speedMult===s ? "rgba(201,168,76,0.25)" : "rgba(255,255,255,0.03)",
-                color: speedMult===s ? "#f0e0b0" : "#8a7a5a", cursor:"pointer", touchAction:"manipulation",
-              }}>x{s}</button>
-            ))}
-          </div>
-        </div>
-        <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",background:"#12121a"}}>
-          <div style={{position:"relative",width:"100%",maxWidth:720,margin:"0 auto",aspectRatio:"16/9",flexShrink:0}}>
-            <canvas ref={canvasRef} width={640} height={360}
-              style={{width:"100%",height:"100%",display:"block",borderBottom:"1px solid rgba(201,168,76,0.15)"}}
-            />
-          </div>
-          <div style={{flex:1,overflow:"auto",padding:"8px 12px",fontSize:10,lineHeight:1.5,color:"#e0d0b0",minHeight:0}}>
-            {!m && <div style={{textAlign:"center",color:"var(--noir-muted)",paddingTop:12}}>Loading match…</div>}
-            {m?.state === "counting" && (
-              <div style={{textAlign:"center",color:"#ff8888",paddingTop:8,fontWeight:700}}>
-                Knockdown! Count… {m?.count_ends_at ? `${Math.max(0, Math.ceil((new Date(m.count_ends_at).getTime() - Date.now()) / 1000))}s` : ""}
-              </div>
-            )}
-            {fightLogLines && fightLogLines.map((item, i) => (
-              <div key={i} style={{
-                marginBottom: item.type === "round" ? 6 : 1,
-                fontWeight: item.type === "round" ? 700 : 400,
-                color: item.type === "round" ? gold
-                  : item.type === "kd" ? "#ff8888"
-                  : item.type === "cut" || item.type === "cutWarn" ? "#cc6666"
-                  : item.type === "combo" ? "#ffcc44"
-                  : item.type === "clinch" ? "#88aacc"
-                  : item.type === "corner" ? "#8aaa6a"
-                  : item.type === "roundEnd" ? "#aa9a6a"
-                  : item.type === "result" ? gold
-                  : "#c8b898",
-                fontSize: item.type === "round" ? 11 : item.type === "result" ? 11 : 10,
-                fontStyle: item.type === "corner" ? "italic" : undefined,
-              }}>{item.text}</div>
-            ))}
-            <div ref={commentaryEndRef} />
-          </div>
-          {showPostFight && (
-            <div style={{flexShrink:0,padding:"10px 14px",paddingBottom:"max(10px, env(safe-area-inset-bottom))",borderTop:"1px solid rgba(201,168,76,0.2)",background:"rgba(0,0,0,0.6)"}}>
-              {winText && <div style={{fontSize:12,color:gold,textAlign:"center",fontWeight:700,marginBottom:6}}>{winText}</div>}
-              {statsA && statsB && (
-                <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:4,fontSize:9,color:"#d0c090",maxWidth:420,margin:"0 auto"}}>
-                  <div style={{textAlign:"right"}}>{statsA.landed} landed</div>
-                  <div style={{textAlign:"center",color:"#7a6a4a"}}>Punches</div>
-                  <div>{statsB.landed} landed</div>
-                  <div style={{textAlign:"right"}}>{statsA.dmg}</div>
-                  <div style={{textAlign:"center",color:"#7a6a4a"}}>Total Dmg</div>
-                  <div>{statsB.dmg}</div>
-                  <div style={{textAlign:"right"}}>{statsA.kds}</div>
-                  <div style={{textAlign:"center",color:"#7a6a4a"}}>Knockdowns</div>
-                  <div>{statsB.kds}</div>
-                </div>
-              )}
-              {sc && sc.a.length > 0 && (
-                <div style={{marginTop:6,maxWidth:420,margin:"6px auto 0"}}>
-                  <div style={{fontSize:9,color:"#7a6a4a",textAlign:"center",marginBottom:2}}>Scorecard</div>
-                  <div style={{display:"flex",justifyContent:"center",gap:4,flexWrap:"wrap",fontSize:9}}>
-                    {sc.a.map((sa, ri) => (
-                      <div key={ri} style={{textAlign:"center",padding:"2px 4px",background:"rgba(255,255,255,0.03)",borderRadius:2,minWidth:28}}>
-                        <div style={{color:"#7a6a4a"}}>R{ri+1}</div>
-                        <div style={{color:sa > sc.b[ri] ? gold : sa < sc.b[ri] ? crimson : "#888"}}>{sa}-{sc.b[ri]}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{textAlign:"center",fontSize:10,color:gold,marginTop:4}}>
-                    {sc.a.reduce((s,v)=>s+v,0)} - {sc.b.reduce((s,v)=>s+v,0)}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          {!showPostFight && winText && (
-            <div style={{flexShrink:0,padding:"6px 10px",paddingBottom:"max(6px, env(safe-area-inset-bottom))",borderTop:"1px solid rgba(201,168,76,0.2)",background:"rgba(0,0,0,0.5)",textAlign:"center"}}>
-              <div style={{fontSize:11,color:gold,fontWeight:700}}>{winText}</div>
-            </div>
-          )}
-        </div>
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
-          @keyframes koCountPulse {
-            0%   { transform: scale(1.35); opacity:0.4; }
-            100% { transform: scale(1.0);  opacity:1; }
-          }
-        `}</style>
-      </div>
-    );
+  if (replayFight) {
+    return <FightReplay fight={replayFight} onClose={closeReplay} />;
   }
 
-  return (
-    <div className={styles.page} style={{minHeight:"100vh",fontFamily:"'Cinzel',serif",display:"flex",flexDirection:"column"}}>
+  const panelCls = `${styles.panel} rounded-lg overflow-hidden border border-primary/20`;
+  const headerCls = "px-3 py-2 bg-primary/5 border-b border-primary/20";
 
-      <div className={styles.pageContent} style={{borderBottom:"1px solid var(--noir-border-light)",padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div>
-          <div style={{fontSize:16,letterSpacing:"0.2em",color:"var(--noir-primary)"}}>BOXING GYM & LEAGUE</div>
-          <div style={{fontSize:9,color:"var(--noir-muted)",letterSpacing:"0.12em"}}>TRAIN • UPGRADE • FIGHT • BET</div>
-        </div>
+  return (
+    <div className={styles.page} style={{ minHeight: "100vh", fontFamily: "'Cinzel', serif" }}>
+      <div className={styles.pageContent} style={{ padding: "12px 18px", borderBottom: "1px solid var(--noir-border-light)" }}>
+        <div style={{ fontSize: 16, letterSpacing: "0.2em", color: gold }}>THE UNDERGROUND RING</div>
+        <div style={{ fontSize: 9, color: "var(--noir-muted)", letterSpacing: "0.12em", marginTop: 2 }}>TRAIN &bull; FIGHT &bull; BET &bull; DOMINATE</div>
       </div>
 
-      <div className={styles.pageContent} style={{padding:"12px 16px 14px",display:"grid",gridTemplateColumns: narrowLayout ? "1fr" : "minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1.2fr)",gap:16}}>
-        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90`} style={{minHeight:140}}>
-          <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
-            <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">Training & stats</h2>
-          </div>
-          <div className="p-2.5 sm:p-3">
-          {metaError && <div style={{fontSize:10,color:"#ff6666",marginBottom:6}}>{metaError}</div>}
-          {loadingMeta && !profile && (
-            <div style={{fontSize:10,color:"#9a8a5a"}}>Loading boxing profile…</div>
-          )}
-          {profile && (
-            <>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"#bba46a",marginBottom:6}}>
-                <span>Rating</span>
-                <span>{profile.rating ?? 1000}</span>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:4,fontSize:10,color:"#e0d0a0",marginBottom:8}}>
-                {["power","speed","stamina","defense","accuracy","chin","recovery"].map((k)=>(
-                  <div key={k} style={{display:"flex",justifyContent:"space-between",background:"rgba(0,0,0,0.18)",padding:"4px 6px",borderRadius:2}}>
-                    <span style={{textTransform:"uppercase",fontSize:9,color:"var(--noir-muted)"}}>{k}</span>
-                    <span>{effective?.[k] ?? profile?.[k] ?? 1}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{fontSize:10,color:"var(--noir-muted)",letterSpacing:"0.08em",marginBottom:4}}>DRILLS</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                {Object.entries(drills || {}).map(([id, d]) => {
-                  const conf = (profile && profile.training && profile.training[id]) || d;
-                  const lastAt = conf?.last_at;
-                  const cooldownSec = typeof d.cooldown_seconds === "number" ? d.cooldown_seconds : 60;
-                  let remainingSec = 0;
-                  if (lastAt) {
-                    try {
-                      const readyAt = new Date(lastAt).getTime() + cooldownSec * 1000;
-                      remainingSec = Math.max(0, Math.ceil((readyAt - Date.now()) / 1000));
-                    } catch (_) { remainingSec = 0; }
-                  }
-                  const available = remainingSec <= 0;
-                  const stamCost = d.stamina_cost != null ? d.stamina_cost : "";
-                  const gainsStr = d.gains && typeof d.gains === "object" ? Object.entries(d.gains).map(([k, v]) => `+${v} ${k}`).join(", ") : "";
-                  return (
-                    <div key={id} style={{display:"flex",flexDirection:"column",gap:2}}>
-                      <button
-                        onClick={() => available && handleTrain(id)}
-                        disabled={busyAction===`train:${id}` || !available}
-                        style={{
-                          padding:"10px 12px",minHeight:44,fontSize:narrowLayout?11:9,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,
-                          background: available ? "rgba(255,255,255,0.02)" : "rgba(60,50,30,0.3)",
-                          color: available ? "#e0d0a0" : "#7a6a4a",
-                          cursor: available && busyAction!==`train:${id}` ? "pointer" : "default",
-                          touchAction:"manipulation",
-                        }}
-                      >
-                        {d.name || id.replace(/_/g," ")}
-                        {available ? <span style={{marginLeft:4,color:"#8a9a6a"}}>Ready</span> : <span style={{marginLeft:4,color:"#6a5a4a"}}>{remainingSec}s</span>}
-                      </button>
-                      {(stamCost || gainsStr) && (
-                        <div style={{fontSize:8,color:"#6a5a4a"}}>
-                          {stamCost ? `${stamCost} stam` : ""}{stamCost && gainsStr ? " · " : ""}{gainsStr}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-          </div>
-        </div>
+      {/* Tab bar */}
+      <div className={styles.pageContent} style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--noir-border-light)" }}>
+        {TABS.map((t, i) => (
+          <button key={t} onClick={() => setTab(i)} style={{
+            flex: 1, padding: "10px 0", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase",
+            background: tab === i ? "rgba(201,168,76,0.1)" : "transparent",
+            color: tab === i ? "#f0e0b0" : "var(--noir-muted)",
+            border: "none", borderBottom: tab === i ? "2px solid #c9a84c" : "2px solid transparent",
+            cursor: "pointer", fontFamily: "inherit",
+          }}>{t}</button>
+        ))}
+      </div>
 
-        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90`} style={{minHeight:140,display:"flex",flexDirection:"column"}}>
-          <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
-            <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">Gym</h2>
-          </div>
-          <div className="p-2.5 sm:p-3 flex-1 flex flex-col gap-3">
-          <div>
-            {gymInfo && (
-              <>
-                <div style={{fontSize:11,color:"#e0d0a0",marginBottom:4}}>
-                  {gymInfo.gym?.name || "Gym"} — Lv {gymInfo.gym_level ?? 0}
+      <div className={styles.pageContent} style={{ padding: "14px 18px" }}>
+        {error && <div style={{ fontSize: 10, color: "#ff6666", marginBottom: 8, padding: "6px 10px", background: "rgba(255,60,60,0.08)", borderRadius: 4 }}>{error}</div>}
+
+        {loading && !profile && <div style={{ textAlign: "center", padding: 30, color: "var(--noir-muted)", fontSize: 11 }}>Loading fighter profile...</div>}
+
+        {/* ── TAB 0: FIGHTER ── */}
+        {tab === 0 && profile && (
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 14 }}>
+            {/* Fighter Card */}
+            <div className={panelCls}>
+              <div className={headerCls}>
+                <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Your Fighter</h2>
+              </div>
+              <div className="p-3">
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#e0d0a0", fontWeight: 700 }}>Rating {profile.rating || 1000}</div>
+                    <div style={{ fontSize: 9, color: "var(--noir-muted)" }}>Level {profile.level || 1}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 11, color: "#e0d0a0" }}>
+                      {profile.wins || 0}W - {profile.losses || 0}L - {profile.draws || 0}D
+                    </div>
+                    <div style={{ fontSize: 9, color: "var(--noir-muted)" }}>
+                      Streak: {profile.streak || 0} | Best: {profile.best_streak || 0} | KOs: {profile.ko_wins || 0}
+                    </div>
+                  </div>
                 </div>
-                <button
-                  onClick={handleGymUpgrade}
-                  disabled={busyAction==="gym_upgrade"}
-                  style={{padding:narrowLayout?"10px 14px":"4px 9px",minHeight:44,fontSize:narrowLayout?11:9,border:"1px solid rgba(201,168,76,0.45)",borderRadius:2,background:"rgba(201,168,76,0.08)",color:"#e0d0a0",cursor:busyAction==="gym_upgrade"?"wait":"pointer",touchAction:"manipulation"}}
-                >
-                  Upgrade gym
-                </button>
-                {gymInfo.gyms && gymInfo.gyms.length > 1 && (
-                  <div style={{marginTop:8,fontSize:9,color:"var(--noir-muted)"}}>
-                    Move gym:
-                    <div style={{marginTop:4,display:"flex",flexWrap:"wrap",gap:4}}>
-                      {gymInfo.gyms.map((g) => (
-                        <button
-                          key={g.id}
-                          onClick={() => handleGymMove(g.id)}
-                          disabled={busyAction===`gym_move:${g.id}` || g.id===gymInfo.gym?.id}
-                          style={{padding:narrowLayout?"10px 12px":"3px 7px",minHeight:44,fontSize:narrowLayout?11:9,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,background:g.id===gymInfo.gym?.id?"rgba(201,168,76,0.18)":"rgba(255,255,255,0.02)",color:"#e0d0a0",cursor:g.id===gymInfo.gym?.id?"default":"pointer",touchAction:"manipulation"}}
-                        >
-                          {g.name}
-                        </button>
-                      ))}
+
+                {/* XP bar */}
+                {xpNext && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--noir-muted)", marginBottom: 2 }}>
+                      <span>XP</span>
+                      <span>{profile.xp || 0} / {xpNext}</span>
+                    </div>
+                    <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
+                      <div style={{ width: `${xpPct}%`, height: "100%", background: "linear-gradient(90deg, #c9a84c, #e8d080)", borderRadius: 2 }} />
                     </div>
                   </div>
                 )}
-              </>
-            )}
-          </div>
 
-          <div>
-            <div style={{fontSize:11,color:"var(--noir-primary)",letterSpacing:"0.16em",marginBottom:6}}>COACH</div>
-            {coachInfo && (
-              <>
-                <div style={{fontSize:10,color:"var(--noir-muted)",marginBottom:4}}>Hire one coach at a time.</div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                  {coachInfo.coaches?.map((c) => {
-                    const isCurrent = coachInfo.coach_id === c.id;
-                    return (
-                      <button
-                        key={c.id}
-                        onClick={() => isCurrent ? handleCoachFire() : handleCoachHire(c.id)}
-                        disabled={busyAction===`coach:${c.id}` || (busyAction==="coach_fire" && isCurrent)}
-                        style={{padding:narrowLayout?"10px 12px":"4px 8px",minHeight:44,fontSize:narrowLayout?11:9,border:"1px solid rgba(201,168,76,0.35)",borderRadius:2,background:isCurrent?"rgba(201,168,76,0.18)":"rgba(255,255,255,0.02)",color:"#e0d0a0",cursor:(busyAction && !isCurrent)?"wait":"pointer",touchAction:"manipulation"}}
-                      >
-                        {isCurrent ? `FIRE ${c.name}` : c.name}
-                      </button>
-                    );
-                  })}
+                {STAT_KEYS.map(k => (
+                  <StatBar key={k} label={STAT_LABELS[k]} value={profile[k] || 10} />
+                ))}
+
+                <div style={{ fontSize: 9, color: "var(--noir-muted)", marginTop: 8 }}>
+                  Total earnings: ${(profile.total_earnings || 0).toLocaleString()}
                 </div>
-              </>
-            )}
-          </div>
-          </div>
-        </div>
+              </div>
+            </div>
 
-        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90`} style={{minHeight:140}}>
-          <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
-            <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">Gear</h2>
-          </div>
-          <div className="p-2.5 sm:p-3">
-          {gearInfo && (
-            <>
-              {typeof gearInfo.total_wins === "number" && (
-                <div style={{fontSize:10,color:"var(--noir-muted)",marginBottom:6}}>Wins: {gearInfo.total_wins}</div>
+            {/* Training + Allocation */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {/* Stat Points */}
+              {(profile.stat_points || 0) > 0 && (
+                <div className={panelCls}>
+                  <div className={headerCls}>
+                    <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">
+                      Allocate Points ({profile.stat_points})
+                    </h2>
+                  </div>
+                  <div className="p-3" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {STAT_KEYS.map(k => (
+                      <button key={k} onClick={() => handleAllocate(k)} disabled={busy === `alloc:${k}`}
+                        className={styles.btnPrimary}
+                        style={{ padding: "8px 14px", minHeight: 40, fontSize: 10, cursor: busy === `alloc:${k}` ? "wait" : "pointer" }}>
+                        +1 {STAT_LABELS[k]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(100px,1fr))",gap:6,fontSize:10}}>
-                {(gearInfo.gear || []).map((g) => {
-                  const owned = (gearInfo.owned_ids || []).includes(g.id);
-                  const equippedSlot = gearInfo.equipped?.[g.slot];
-                  const isEquipped = equippedSlot === g.id;
-                  const unlocked = g.unlocked !== false;
-                  const winsReq = g.wins_required;
-                  const themeLabel = g.theme ? ` · ${g.theme}` : "";
-                  const nameLine = (g.name || g.id) + themeLabel;
-                  return (
-                    <div key={g.id} style={{background: unlocked ? "rgba(255,255,255,0.02)" : "rgba(80,60,40,0.2)",borderRadius:3,padding:"6px 8px",border:isEquipped?"1px solid rgba(201,168,76,0.7)":"1px solid rgba(201,168,76,0.25)",minHeight:72,overflow:"hidden",display:"flex",flexDirection:"column",gap:4}}>
-                      <div style={{fontSize:10,color:unlocked ? "#e0d0a0" : "#6a5a4a",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}} title={nameLine}>{nameLine}</div>
-                      <div style={{fontSize:9,color:"var(--noir-muted)",flexShrink:0}}>{g.slot}</div>
-                      {!unlocked && winsReq != null && <div style={{fontSize:9,color:"#9a7a4a",flexShrink:0}}>Unlock at {winsReq} wins</div>}
-                      <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:"auto"}}>
-                        {!owned && (
-                          <button
-                            onClick={() => unlocked && handleGearBuy(g.id)}
-                            disabled={busyAction===`buy:${g.id}` || !unlocked}
-                            style={{padding:narrowLayout?"8px 10px":"2px 6px",minHeight:narrowLayout?44:28,fontSize:narrowLayout?10:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:unlocked ? "rgba(201,168,76,0.08)" : "rgba(0,0,0,0.2)",color:unlocked ? "#e0d0a0" : "#5a4a3a",cursor:unlocked && busyAction!==`buy:${g.id}` ? "pointer" : "default",touchAction:"manipulation"}}
-                          >
-                            Buy
+
+              {/* Training */}
+              <div className={panelCls}>
+                <div className={headerCls}>
+                  <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Training</h2>
+                </div>
+                <div className="p-3">
+                  <div style={{ fontSize: 9, color: "var(--noir-muted)", marginBottom: 8 }}>Spend cash to train stats. Cost scales with level.</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {STAT_KEYS.map(k => {
+                      const cost = trainCosts[k] || 0;
+                      const atMax = (profile[k] || 10) >= 80;
+                      return (
+                        <div key={k} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", background: "rgba(255,255,255,0.02)", borderRadius: 3, border: "1px solid rgba(201,168,76,0.15)" }}>
+                          <div>
+                            <span style={{ fontSize: 10, color: "#e0d0a0", textTransform: "uppercase" }}>{STAT_LABELS[k]}</span>
+                            <span style={{ fontSize: 9, color: "var(--noir-muted)", marginLeft: 6 }}>{profile[k] || 10}/80</span>
+                          </div>
+                          <button onClick={() => handleTrain(k)}
+                            disabled={busy === `train:${k}` || atMax}
+                            className={styles.btnPrimary}
+                            style={{ padding: "6px 12px", minHeight: 36, fontSize: 9, cursor: atMax ? "default" : busy === `train:${k}` ? "wait" : "pointer" }}>
+                            {atMax ? "MAX" : `Train $${cost.toLocaleString()}`}
                           </button>
-                        )}
-                        {owned && !isEquipped && (
-                          <button
-                            onClick={() => unlocked && handleGearEquip(g.slot, g.id)}
-                            disabled={busyAction===`equip:${g.slot}:${g.id}` || !unlocked}
-                            style={{padding:narrowLayout?"8px 10px":"2px 6px",minHeight:narrowLayout?44:28,fontSize:narrowLayout?10:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:unlocked ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.2)",color:unlocked ? "#e0d0a0" : "#5a4a3a",cursor:unlocked && busyAction!==`equip:${g.slot}:${g.id}` ? "pointer" : "default",touchAction:"manipulation"}}
-                          >
-                            Equip
-                          </button>
-                        )}
-                        {owned && isEquipped && (
-                          <button
-                            onClick={() => handleGearEquip(g.slot, null)}
-                            disabled={busyAction===`equip:${g.slot}:none`}
-                            style={{padding:narrowLayout?"8px 10px":"2px 6px",minHeight:narrowLayout?44:28,fontSize:narrowLayout?10:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(201,168,76,0.22)",color:"#e0d0a0",cursor:busyAction===`equip:${g.slot}:none`?"wait":"pointer",touchAction:"manipulation"}}
-                          >
-                            Unequip
-                          </button>
-                        )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Fight History */}
+              {history.length > 0 && (
+                <div className={panelCls}>
+                  <div className={headerCls}>
+                    <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Recent Fights</h2>
+                  </div>
+                  <div className="p-3" style={{ maxHeight: 160, overflowY: "auto" }}>
+                    {history.slice(0, 8).map(h => (
+                      <div key={h.fight_id} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid rgba(201,168,76,0.08)", fontSize: 9 }}>
+                        <span style={{ color: h.result === "win" ? "#6a9a4a" : h.result === "loss" ? "#aa4444" : "#888" }}>
+                          {h.result.toUpperCase()} vs {h.opponent}
+                        </span>
+                        <span style={{ color: "var(--noir-muted)" }}>
+                          R{h.rounds} {h.reason}{h.reward > 0 ? ` +$${h.reward.toLocaleString()}` : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 1: FIGHT ── */}
+        {tab === 1 && profile && (
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.2fr) minmax(0,1fr)", gap: 14 }}>
+            {/* NPC Opponents */}
+            <div className={panelCls}>
+              <div className={headerCls}>
+                <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Underground Opponents</h2>
+              </div>
+              <div className="p-3" style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 500, overflowY: "auto" }}>
+                {npcs.map(npc => (
+                  <div key={npc.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 4, border: "1px solid rgba(201,168,76,0.12)" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, color: "#e0d0a0", fontWeight: 700 }}>{npc.name}</div>
+                      <div style={{ fontSize: 8, color: "var(--noir-muted)", marginTop: 1, fontStyle: "italic" }}>{npc.flavor}</div>
+                      <div style={{ display: "flex", gap: 8, marginTop: 4, fontSize: 9, color: "#9a8a5a" }}>
+                        <span>PWR {npc.power}</span>
+                        <span>SPD {npc.speed}</span>
+                        <span>DEF {npc.defense}</span>
+                        <span>STA {npc.stamina}</span>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-          </div>
-        </div>
-      </div>
-
-      <div className={styles.pageContent} style={{padding:"12px 16px 20px",borderTop:"1px solid var(--noir-border-light)",display:"grid",gridTemplateColumns: narrowLayout ? "1fr" : "minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,1.0fr)",gap:16}}>
-        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90`} style={{minHeight:120}}>
-          <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20 flex items-center justify-between">
-            <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">Matches</h2>
-            <button onClick={refreshMatches} disabled={matchesLoading} className={styles.btnPrimary} style={{padding:narrowLayout?"10px 12px":"6px 10px",minHeight:36,fontSize:narrowLayout?11:9,cursor:matchesLoading?"wait":"pointer",touchAction:"manipulation"}}>Refresh</button>
-          </div>
-          <div className="p-2.5 sm:p-3">
-          {matchError && <div style={{fontSize:9,color:"#ff6666",marginBottom:4}}>{matchError}</div>}
-          <div style={{display:"flex",gap:4,marginBottom:6,flexWrap:"wrap"}}>
-            <input
-              value={opponentName}
-              onChange={(e)=>setOpponentName(e.target.value)}
-              placeholder="Challenge username (leave blank for open match)"
-              className={styles.input}
-              style={{flex:"0 0 160px",minWidth:120,minHeight:44,padding:"8px 10px",fontSize:narrowLayout?11:9}}
-            />
-            <button
-              onClick={handleCreateMatch}
-              disabled={busyAction==="create_match"}
-              className={styles.btnPrimary}
-              style={{minHeight:44,padding:narrowLayout?"10px 14px":"6px 12px",touchAction:"manipulation",cursor:busyAction==="create_match"?"wait":"pointer"}}
-            >
-              Start Match
-            </button>
-          </div>
-          {npcs.length > 0 && (
-            <div style={{marginBottom:6,fontSize:9,color:"var(--noir-muted)"}}>
-              <div style={{marginBottom:2}}>Quick NPC fight:</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:3}}>
-                {npcs.map((npc)=>(
-                  <button
-                    key={npc.id}
-                    onClick={()=>startNpcFight(npc)}
-                    disabled={npcFightState && !npcFightState.result}
-                    className={styles.btnPrimary}
-                    style={{padding:narrowLayout?"10px 12px":"6px 10px",minHeight:44,fontSize:narrowLayout?11:8,cursor:npcFightState && !npcFightState.result ? "wait" : "pointer",touchAction:"manipulation"}}
-                  >
-                    {npc.name}
-                  </button>
+                    <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
+                      <div style={{ fontSize: 9, color: "#6a9a4a", marginBottom: 4 }}>${npc.reward.toLocaleString()}</div>
+                      <button onClick={() => handleFightNpc(npc.id)}
+                        disabled={busy === `npc:${npc.id}`}
+                        className={styles.btnPrimary}
+                        style={{ padding: "8px 16px", minHeight: 36, fontSize: 10, cursor: busy === `npc:${npc.id}` ? "wait" : "pointer" }}>
+                        Fight
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
-              {npcFightState?.matchId && !npcFightState.result && (
-                <div style={{marginTop:4,color:"#8a9a6a"}}>Fight vs {npcFightState.npcName} in progress…</div>
-              )}
-              {npcFightState?.result && npcFightState.result !== "error" && (
-                <div style={{marginTop:4,color:npcFightState.result==="win"?"#6a9a4a":npcFightState.result==="loss"?"#aa4444":"var(--noir-muted)"}}>
-                  {npcFightState.result==="win"?"You won":npcFightState.result==="loss"?"You lost":"Draw"} vs {npcFightState.npcName}{npcFightState.reason?` (${npcFightState.reason})`:""}
-                  <button onClick={clearNpcResult} style={{marginLeft:6,padding:"1px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(255,255,255,0.03)",color:"#d4c890",cursor:"pointer"}}>OK</button>
-                </div>
-              )}
-              {npcFightState?.result === "error" && (
-                <div style={{marginTop:4,color:"#aa4444"}}>{npcFightState.message} <button onClick={clearNpcResult} style={{marginLeft:6,padding:"1px 6px",fontSize:9,border:"1px solid rgba(201,168,76,0.4)",borderRadius:2,background:"rgba(255,255,255,0.03)",color:"#d4c890",cursor:"pointer"}}>Dismiss</button></div>
-              )}
             </div>
-          )}
-          <div style={{maxHeight:140,overflowY:"auto",fontSize:9}}>
-            {liveMatches.length === 0 && <div style={{color:"#7a6a4a"}}>No pending or live fights.</div>}
-            {liveMatches.map((m) => {
-              const mine = me && (m.a_username === me.username || m.b_username === me.username);
-              const canReady = mine && (m.state==="pending" || m.state==="ready");
-              const canJoin = !mine && m.is_open && !m.b_username && (m.state==="pending" || m.state==="ready");
-              return (
-                <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"3px 0",borderBottom:"1px solid rgba(201,168,76,0.08)"}}>
-                  <div style={{minWidth:0}}>
-                    <div style={{fontSize:9,color:mine?"#f5e8c8":"#d0c090"}}>
-                      {m.a_username} vs {m.b_username} <span style={{color:"#7a6a4a"}}>• {m.state} R{Math.min(Number(m.round) || 0, Number(m.max_rounds) || 12)}/{m.max_rounds ?? 12}</span>
+
+            {/* PvP Challenges */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div className={panelCls}>
+                <div className={headerCls}>
+                  <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">PvP Challenge</h2>
+                </div>
+                <div className="p-3">
+                  <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                    <input value={challengeTarget} onChange={e => setChallengeTarget(e.target.value)}
+                      placeholder="Username" className={styles.input}
+                      style={{ flex: 1, minHeight: 40, padding: "8px 10px", fontSize: 10 }}
+                      onKeyDown={e => e.key === "Enter" && handleChallenge()} />
+                    <button onClick={handleChallenge} disabled={busy === "challenge" || !challengeTarget.trim()}
+                      className={styles.btnPrimary}
+                      style={{ padding: "8px 14px", minHeight: 40, fontSize: 10, cursor: busy === "challenge" ? "wait" : "pointer" }}>
+                      Challenge
+                    </button>
+                  </div>
+
+                  {challenges.incoming.length > 0 && (
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 9, color: gold, marginBottom: 4, letterSpacing: "0.1em" }}>INCOMING CHALLENGES</div>
+                      {challenges.incoming.map(ch => (
+                        <div key={ch.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(201,168,76,0.08)" }}>
+                          <span style={{ fontSize: 10, color: "#e0d0a0" }}>{ch.challenger_username}</span>
+                          <button onClick={() => handleAccept(ch.id)}
+                            disabled={busy === `accept:${ch.id}`}
+                            className={styles.btnPrimary}
+                            style={{ padding: "6px 12px", minHeight: 36, fontSize: 9, cursor: busy === `accept:${ch.id}` ? "wait" : "pointer" }}>
+                            Accept
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                    <div style={{fontSize:8,color:"var(--noir-muted)"}}>HP A {m.hp?.a ?? 0}/100 B {m.hp?.b ?? 0}/100 • Odds A {m.odds?.a ?? "-"} / B {m.odds?.b ?? "-"}</div>
-                  </div>
-                  <div style={{display:"flex",gap:3,flexShrink:0}}>
-                    {canJoin && (
-                      <button
-                        onClick={()=>handleJoinMatch(m.id)}
-                        disabled={busyAction===`join:${m.id}`}
-                        className={styles.btnPrimary}
-                        style={{padding:"2px 5px",fontSize:8,cursor:busyAction===`join:${m.id}`?"wait":"pointer"}}
-                      >
-                        Join
-                      </button>
-                    )}
-                    {mine && m.state==="running" && (
-                      <button
-                        onClick={()=>navigate(`/boxing/arena/${m.id}`)}
-                        className={styles.btnPrimary}
-                        style={{padding:"2px 5px",fontSize:8,cursor:"pointer"}}
-                      >
-                        Watch
-                      </button>
-                    )}
-                    {canReady && (
-                      <button
-                        onClick={()=>handleReadyMatch(m.id,true)}
-                        disabled={busyAction===`ready:${m.id}`}
-                        className={styles.btnPrimary}
-                        style={{padding:"2px 5px",fontSize:8,cursor:busyAction===`ready:${m.id}`?"wait":"pointer"}}
-                      >
-                        Ready
-                      </button>
-                    )}
-                    {!canReady && mine && (
-                      <button
-                        onClick={()=>handleReadyMatch(m.id,false)}
-                        disabled={busyAction===`ready:${m.id}`}
-                        className={styles.btnPrimary}
-                        style={{padding:"2px 5px",fontSize:8,cursor:busyAction===`ready:${m.id}`?"wait":"pointer"}}
-                      >
-                        Unready
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          </div>
-        </div>
+                  )}
 
-        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90`} style={{minHeight:140}}>
-          <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
-            <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">Betting</h2>
-          </div>
-          <div className="p-2.5 sm:p-3">
-          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-            <span style={{fontSize:9,color:"var(--noir-muted)"}}>Stake</span>
-            <input
-              type="number"
-              value={betStake}
-              onChange={(e)=>setBetStake(e.target.value)}
-              className={styles.input}
-              style={{width:90,padding:"3px 6px",fontSize:10}}
-            />
-          </div>
-          <div style={{fontSize:9,color:"#7a6a4a",marginBottom:4}}>Click a fighter to bet:</div>
-          <div style={{maxHeight:120,overflowY:"auto",fontSize:10,marginBottom:8}}>
-            {liveMatches.length === 0 && <div style={{color:"#7a6a4a"}}>No fights open for betting.</div>}
-            {liveMatches.map((m)=>(
-              <div key={`bet-${m.id}`} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderBottom:"1px solid rgba(201,168,76,0.1)"}}>
-                <div style={{marginRight:6}}>
-                  <div style={{color:"#d0c090"}}>{m.a_username} vs {m.b_username}</div>
-                  <div style={{fontSize:9,color:"#7a6a4a"}}>Odds A {m.odds?.a ?? "-"} / B {m.odds?.b ?? "-"}</div>
-                </div>
-                <div style={{display:"flex",gap:4}}>
-                  <button
-                    onClick={()=>handlePlaceBet(m.id,"a")}
-                    disabled={busyAction===`bet:${m.id}:a`}
-                    className={styles.btnPrimary}
-                    style={{padding:"2px 6px",fontSize:9,cursor:busyAction===`bet:${m.id}:a`?"wait":"pointer"}}
-                  >
-                    Bet A
-                  </button>
-                  <button
-                    onClick={()=>handlePlaceBet(m.id,"b")}
-                    disabled={busyAction===`bet:${m.id}:b`}
-                    className={styles.btnPrimary}
-                    style={{padding:"2px 6px",fontSize:9,cursor:busyAction===`bet:${m.id}:b`?"wait":"pointer"}}
-                  >
-                    Bet B
-                  </button>
+                  {challenges.outgoing.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 9, color: "var(--noir-muted)", marginBottom: 4, letterSpacing: "0.1em" }}>OUTGOING CHALLENGES</div>
+                      {challenges.outgoing.map(ch => (
+                        <div key={ch.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(201,168,76,0.08)" }}>
+                          <span style={{ fontSize: 10, color: "#d0c090" }}>vs {ch.target_username}</span>
+                          <button onClick={() => handleCancelChallenge(ch.id)}
+                            disabled={busy === `cancel:${ch.id}`}
+                            style={{ padding: "4px 10px", fontSize: 9, border: "1px solid rgba(201,168,76,0.3)", borderRadius: 2, background: "rgba(255,255,255,0.03)", color: "#aa7744", cursor: "pointer" }}>
+                            Cancel
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {challenges.incoming.length === 0 && challenges.outgoing.length === 0 && (
+                    <div style={{ fontSize: 9, color: "#7a6a4a", textAlign: "center", padding: 10 }}>No active challenges</div>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-          <div style={{fontSize:9,color:"var(--noir-muted)",marginBottom:4}}>My bets</div>
-          <div style={{maxHeight:90,overflowY:"auto",fontSize:10}}>
-            {bets.length === 0 && <div style={{color:"#7a6a4a"}}>No open or settled bets.</div>}
-            {bets.map((b)=>(
-              <div key={b.id} style={{display:"flex",justifyContent:"space-between",padding:"2px 0"}}>
-                <span style={{color:"#d0c090"}}>#{b.match_id.slice(0,6)} • {b.fighter.toUpperCase()}</span>
-                <span style={{color:b.status==="won"?"#6a9a4a":b.status==="lost"?"#aa4444":"var(--noir-muted)"}}>{b.status} ${b.stake}</span>
-              </div>
-            ))}
-          </div>
-          </div>
-        </div>
-
-        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90`} style={{minHeight:140}}>
-          <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
-            <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">League (weekly)</h2>
-          </div>
-          <div className="p-2.5 sm:p-3">
-          {league && (
-            <div style={{maxHeight:210,overflowY:"auto",fontSize:10}}>
-              {league.standings?.slice(0,10).map((row)=>(
-                <div key={row.user_id} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:"1px solid rgba(201,168,76,0.1)",color:row.is_current_user?"#f5e8c8":"#d0c090"}}>
-                  <span>#{row.rank} {row.username}</span>
-                  <span>{row.points} pts · {row.wins}-{row.losses}</span>
-                </div>
-              ))}
             </div>
-          )}
-          {!league && <div style={{fontSize:10,color:"#7a6a4a"}}>League table will appear after fights are recorded.</div>}
           </div>
-        </div>
+        )}
+
+        {/* ── TAB 2: BETS ── */}
+        {tab === 2 && (
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 14 }}>
+            <div className={panelCls}>
+              <div className={headerCls}>
+                <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Open Fights to Bet On</h2>
+              </div>
+              <div className="p-3">
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                  <span style={{ fontSize: 9, color: "var(--noir-muted)" }}>Stake</span>
+                  <input type="number" value={betStake} onChange={e => setBetStake(e.target.value)}
+                    className={styles.input} style={{ width: 100, padding: "6px 8px", fontSize: 10 }} />
+                </div>
+                {challenges.incoming.length === 0 && challenges.outgoing.length === 0 && (
+                  <div style={{ fontSize: 9, color: "#7a6a4a", textAlign: "center", padding: 10 }}>No pending challenges to bet on</div>
+                )}
+                {[...challenges.incoming, ...challenges.outgoing].map(ch => (
+                  <div key={`bet-${ch.id}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(201,168,76,0.08)" }}>
+                    <div>
+                      <div style={{ fontSize: 10, color: "#d0c090" }}>{ch.challenger_username} vs {ch.target_username}</div>
+                      <div style={{ fontSize: 9, color: "#7a6a4a" }}>Odds: A {ch.odds?.a ?? "-"} / B {ch.odds?.b ?? "-"}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button onClick={() => handlePlaceBet(ch.id, "a")}
+                        disabled={!!busy}
+                        className={styles.btnPrimary}
+                        style={{ padding: "4px 8px", fontSize: 9 }}>
+                        Bet A
+                      </button>
+                      <button onClick={() => handlePlaceBet(ch.id, "b")}
+                        disabled={!!busy}
+                        className={styles.btnPrimary}
+                        style={{ padding: "4px 8px", fontSize: 9 }}>
+                        Bet B
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className={panelCls}>
+              <div className={headerCls}>
+                <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Your Bets</h2>
+              </div>
+              <div className="p-3" style={{ maxHeight: 300, overflowY: "auto" }}>
+                {betsData.open.length === 0 && betsData.settled.length === 0 && (
+                  <div style={{ fontSize: 9, color: "#7a6a4a", textAlign: "center", padding: 10 }}>No bets yet</div>
+                )}
+                {betsData.open.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 9, color: gold, marginBottom: 4 }}>OPEN</div>
+                    {betsData.open.map(b => (
+                      <div key={b.id} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 9, borderBottom: "1px solid rgba(201,168,76,0.06)" }}>
+                        <span style={{ color: "#d0c090" }}>{b.challenger_username} vs {b.target_username} ({b.fighter.toUpperCase()})</span>
+                        <span style={{ color: "var(--noir-muted)" }}>${b.stake?.toLocaleString()} @ {b.odds}x</span>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {betsData.settled.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 9, color: "var(--noir-muted)", marginTop: 8, marginBottom: 4 }}>SETTLED</div>
+                    {betsData.settled.slice(0, 15).map(b => (
+                      <div key={b.id} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 9, borderBottom: "1px solid rgba(201,168,76,0.06)" }}>
+                        <span style={{ color: "#d0c090" }}>{b.fighter.toUpperCase()}</span>
+                        <span style={{ color: b.status === "won" ? "#6a9a4a" : b.status === "lost" ? "#aa4444" : "var(--noir-muted)" }}>
+                          {b.status} ${b.stake?.toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 3: RANKINGS ── */}
+        {tab === 3 && (
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 14 }}>
+            <div className={panelCls}>
+              <div className={headerCls}>
+                <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Weekly Leaderboard</h2>
+              </div>
+              <div className="p-3">
+                {!leaderboard && <div style={{ fontSize: 9, color: "#7a6a4a", textAlign: "center", padding: 10 }}>No data yet</div>}
+                {leaderboard?.standings?.slice(0, 15).map(row => (
+                  <div key={row.user_id} style={{
+                    display: "flex", justifyContent: "space-between", padding: "4px 0",
+                    borderBottom: "1px solid rgba(201,168,76,0.08)",
+                    color: row.is_current_user ? "#f5e8c8" : "#d0c090", fontSize: 10,
+                  }}>
+                    <span>
+                      <span style={{ color: row.rank <= 3 ? gold : "var(--noir-muted)", fontWeight: row.rank <= 3 ? 700 : 400, marginRight: 6 }}>#{row.rank}</span>
+                      {row.username}
+                    </span>
+                    <span>{row.points} pts &bull; {row.wins}W-{row.losses}L</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className={panelCls}>
+              <div className={headerCls}>
+                <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">League Info</h2>
+              </div>
+              <div className="p-3" style={{ fontSize: 10, color: "var(--noir-muted)", lineHeight: 1.8 }}>
+                <div><strong style={{ color: "#e0d0a0" }}>Points:</strong> 3 per win, +1 bonus for KO/TKO</div>
+                <div><strong style={{ color: "#e0d0a0" }}>Weekly Prizes:</strong></div>
+                <div style={{ paddingLeft: 10 }}>
+                  <div>#1: $5,000</div>
+                  <div>#2: $3,000</div>
+                  <div>#3: $1,000</div>
+                  <div>#4-10: $500</div>
+                </div>
+                <div style={{ marginTop: 8, fontSize: 9, color: "#7a6a4a" }}>Payouts reset every Monday at midnight UTC.</div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');`}</style>
