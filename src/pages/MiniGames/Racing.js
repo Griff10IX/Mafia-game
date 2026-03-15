@@ -11,6 +11,11 @@ const TRACK_ID_MAP = {
   daytona_beach: "daytona",
   roosevelt: "roosevelt",
   indianapolis: "indianapolis",
+  brooklands: "brooklands",
+  monza: "monza",
+  lemans: "lemans",
+  avus: "avus",
+  targa: "targa",
 };
 
 const TRACKS_FOR_CREATE = [
@@ -22,6 +27,11 @@ const TRACKS_FOR_CREATE = [
   { circuitId: "lakeside", track_id: "daytona_beach", name: "Lakeside Park", km: 3.2, corners: 10 },
   { circuitId: "harbor", track_id: "chicago_board", name: "Harbor Front", km: 2.5, corners: 20 },
   { circuitId: "mountain", track_id: "indianapolis", name: "Mountain Pass", km: 4.2, corners: 18 },
+  { circuitId: "brooklands", track_id: "brooklands", name: "Brooklands Banking", km: 6.4, corners: 8 },
+  { circuitId: "monza", track_id: "monza", name: "Monza Autodromo", km: 8.0, corners: 14 },
+  { circuitId: "lemans", track_id: "lemans", name: "Le Mans Sarthe", km: 10.7, corners: 16 },
+  { circuitId: "avus", track_id: "avus", name: "AVUS Speedway", km: 12.0, corners: 4 },
+  { circuitId: "targa", track_id: "targa", name: "Targa Florio", km: 14.5, corners: 32 },
 ];
 
 const WEATHER_OPTIONS = [

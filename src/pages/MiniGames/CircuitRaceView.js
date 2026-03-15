@@ -524,6 +524,201 @@ const TRACKS = [
       ctx.fillText("MOUNTAIN PASS",sx(400),sy(175)); ctx.restore();
     },
   },
+  {
+    id:"brooklands", name:"Brooklands Banking", km:6.4, corners:8, lapBase:42, rewardMult:1.35,
+    desc:"High-speed banked oval, long back straight — Surrey, England",
+    getPoint:(t)=>interpPtsSmooth([
+      {f:0.000,p:{x:250,y:100}},{f:0.030,p:{x:320,y:88}},{f:0.060,p:{x:400,y:80}},
+      {f:0.090,p:{x:480,y:78}},{f:0.120,p:{x:550,y:80}},{f:0.150,p:{x:610,y:88}},
+      {f:0.180,p:{x:660,y:102}},{f:0.210,p:{x:695,y:125}},{f:0.240,p:{x:715,y:155}},
+      {f:0.270,p:{x:720,y:190}},{f:0.300,p:{x:712,y:225}},{f:0.330,p:{x:690,y:252}},
+      {f:0.360,p:{x:658,y:272}},{f:0.390,p:{x:618,y:285}},{f:0.420,p:{x:570,y:292}},
+      {f:0.450,p:{x:510,y:295}},{f:0.480,p:{x:440,y:296}},{f:0.510,p:{x:370,y:295}},
+      {f:0.540,p:{x:300,y:292}},{f:0.570,p:{x:240,y:285}},{f:0.600,p:{x:190,y:272}},
+      {f:0.640,p:{x:148,y:252}},{f:0.680,p:{x:118,y:225}},{f:0.720,p:{x:100,y:190}},
+      {f:0.760,p:{x:95,y:155}},{f:0.800,p:{x:105,y:125}},{f:0.840,p:{x:128,y:105}},
+      {f:0.880,p:{x:160,y:98}},{f:0.920,p:{x:195,y:96}},{f:0.960,p:{x:225,y:97}},
+      {f:1.000,p:{x:250,y:100}},
+    ], t),
+    pitEntry:0.58, pitExit:0.64, sfLine:0.0,
+    drawExtra:(ctx,sx,sy)=>{
+      drawGrandstand(ctx, sx, sy, 350, 42, 200, 20, 5);
+      drawGrandstand(ctx, sx, sy, 380, 308, 160, 14, 3);
+      drawTreeCluster(ctx, sx, sy, 400, 185, 10, 50);
+      drawTreeCluster(ctx, sx, sy, 160, 200, 5, 22);
+      ctx.save(); ctx.globalAlpha=0.15;
+      ctx.strokeStyle="#c9a460"; ctx.lineWidth=2;
+      [[0.20,0.28],[0.66,0.74]].forEach(([a,b])=>{
+        for(let s=0;s<4;s++){
+          ctx.beginPath();
+          for(let i=0;i<=16;i++){
+            const f=a+(b-a)*i/16;
+            const p=interpPtsSmooth([{f:0.000,p:{x:250,y:100}},{f:0.030,p:{x:320,y:88}},{f:0.060,p:{x:400,y:80}},{f:0.090,p:{x:480,y:78}},{f:0.120,p:{x:550,y:80}},{f:0.150,p:{x:610,y:88}},{f:0.180,p:{x:660,y:102}},{f:0.210,p:{x:695,y:125}},{f:0.240,p:{x:715,y:155}},{f:0.270,p:{x:720,y:190}},{f:0.300,p:{x:712,y:225}},{f:0.330,p:{x:690,y:252}},{f:0.360,p:{x:658,y:272}},{f:0.390,p:{x:618,y:285}},{f:0.420,p:{x:570,y:292}},{f:0.450,p:{x:510,y:295}},{f:0.480,p:{x:440,y:296}},{f:0.510,p:{x:370,y:295}},{f:0.540,p:{x:300,y:292}},{f:0.570,p:{x:240,y:285}},{f:0.600,p:{x:190,y:272}},{f:0.640,p:{x:148,y:252}},{f:0.680,p:{x:118,y:225}},{f:0.720,p:{x:100,y:190}},{f:0.760,p:{x:95,y:155}},{f:0.800,p:{x:105,y:125}},{f:0.840,p:{x:128,y:105}},{f:0.880,p:{x:160,y:98}},{f:0.920,p:{x:195,y:96}},{f:0.960,p:{x:225,y:97}},{f:1.000,p:{x:250,y:100}}],f);
+            const p2=interpPtsSmooth([{f:0.000,p:{x:250,y:100}},{f:0.030,p:{x:320,y:88}},{f:0.060,p:{x:400,y:80}},{f:0.090,p:{x:480,y:78}},{f:0.120,p:{x:550,y:80}},{f:0.150,p:{x:610,y:88}},{f:0.180,p:{x:660,y:102}},{f:0.210,p:{x:695,y:125}},{f:0.240,p:{x:715,y:155}},{f:0.270,p:{x:720,y:190}},{f:0.300,p:{x:712,y:225}},{f:0.330,p:{x:690,y:252}},{f:0.360,p:{x:658,y:272}},{f:0.390,p:{x:618,y:285}},{f:0.420,p:{x:570,y:292}},{f:0.450,p:{x:510,y:295}},{f:0.480,p:{x:440,y:296}},{f:0.510,p:{x:370,y:295}},{f:0.540,p:{x:300,y:292}},{f:0.570,p:{x:240,y:285}},{f:0.600,p:{x:190,y:272}},{f:0.640,p:{x:148,y:252}},{f:0.680,p:{x:118,y:225}},{f:0.720,p:{x:100,y:190}},{f:0.760,p:{x:95,y:155}},{f:0.800,p:{x:105,y:125}},{f:0.840,p:{x:128,y:105}},{f:0.880,p:{x:160,y:98}},{f:0.920,p:{x:195,y:96}},{f:0.960,p:{x:225,y:97}},{f:1.000,p:{x:250,y:100}}],(f+0.005)%1);
+            const ang=Math.atan2(p2.y-p.y,p2.x-p.x)+Math.PI/2;
+            const d=16+s*6;
+            i===0?ctx.moveTo(sx(p.x)+Math.cos(ang)*d,sy(p.y)+Math.sin(ang)*d):ctx.lineTo(sx(p.x)+Math.cos(ang)*d,sy(p.y)+Math.sin(ang)*d);
+          }
+          ctx.stroke();
+        }
+      });
+      ctx.restore();
+      drawSFGantry(ctx, sx, sy, (f)=>interpPtsSmooth([{f:0.000,p:{x:250,y:100}},{f:0.030,p:{x:320,y:88}},{f:0.060,p:{x:400,y:80}},{f:0.090,p:{x:480,y:78}},{f:0.120,p:{x:550,y:80}},{f:0.150,p:{x:610,y:88}},{f:0.180,p:{x:660,y:102}},{f:0.210,p:{x:695,y:125}},{f:0.240,p:{x:715,y:155}},{f:0.270,p:{x:720,y:190}},{f:0.300,p:{x:712,y:225}},{f:0.330,p:{x:690,y:252}},{f:0.360,p:{x:658,y:272}},{f:0.390,p:{x:618,y:285}},{f:0.420,p:{x:570,y:292}},{f:0.450,p:{x:510,y:295}},{f:0.480,p:{x:440,y:296}},{f:0.510,p:{x:370,y:295}},{f:0.540,p:{x:300,y:292}},{f:0.570,p:{x:240,y:285}},{f:0.600,p:{x:190,y:272}},{f:0.640,p:{x:148,y:252}},{f:0.680,p:{x:118,y:225}},{f:0.720,p:{x:100,y:190}},{f:0.760,p:{x:95,y:155}},{f:0.800,p:{x:105,y:125}},{f:0.840,p:{x:128,y:105}},{f:0.880,p:{x:160,y:98}},{f:0.920,p:{x:195,y:96}},{f:0.960,p:{x:225,y:97}},{f:1.000,p:{x:250,y:100}}],f), 0.0);
+      ctx.save(); ctx.globalAlpha=0.13; ctx.fillStyle="#c9a460"; ctx.font="bold 14px Cinzel,serif"; ctx.textAlign="center";
+      ctx.fillText("BROOKLANDS",sx(400),sy(178)); ctx.font="8px Cinzel,serif"; ctx.fillText("BANKING",sx(400),sy(194)); ctx.restore();
+    },
+  },
+  {
+    id:"monza", name:"Monza Autodromo", km:8.0, corners:14, lapBase:52, rewardMult:1.4,
+    desc:"Combined oval and road course — Monza, Italy (est. 1922)",
+    getPoint:(t)=>interpPtsSmooth([
+      {f:0.000,p:{x:340,y:58}},{f:0.030,p:{x:420,y:52}},{f:0.055,p:{x:500,y:50}},
+      {f:0.080,p:{x:575,y:52}},{f:0.105,p:{x:640,y:60}},{f:0.130,p:{x:690,y:78}},
+      {f:0.155,p:{x:720,y:108}},{f:0.175,p:{x:730,y:140}},{f:0.195,p:{x:725,y:172}},
+      {f:0.215,p:{x:705,y:198}},{f:0.240,p:{x:668,y:215}},{f:0.265,p:{x:625,y:222}},
+      {f:0.290,p:{x:580,y:218}},{f:0.315,p:{x:548,y:198}},{f:0.340,p:{x:530,y:172}},
+      {f:0.365,p:{x:525,y:145}},{f:0.385,p:{x:535,y:120}},{f:0.405,p:{x:555,y:105}},
+      {f:0.425,p:{x:578,y:118}},{f:0.445,p:{x:585,y:142}},{f:0.465,p:{x:575,y:168}},
+      {f:0.490,p:{x:548,y:188}},{f:0.515,p:{x:510,y:202}},{f:0.540,p:{x:465,y:210}},
+      {f:0.565,p:{x:415,y:218}},{f:0.590,p:{x:362,y:228}},{f:0.615,p:{x:310,y:242}},
+      {f:0.640,p:{x:265,y:260}},{f:0.665,p:{x:228,y:278}},{f:0.690,p:{x:200,y:298}},
+      {f:0.715,p:{x:178,y:312}},{f:0.735,p:{x:158,y:298}},{f:0.755,p:{x:142,y:275}},
+      {f:0.775,p:{x:128,y:248}},{f:0.795,p:{x:118,y:218}},{f:0.815,p:{x:112,y:185}},
+      {f:0.835,p:{x:110,y:152}},{f:0.855,p:{x:115,y:120}},{f:0.880,p:{x:128,y:95}},
+      {f:0.905,p:{x:152,y:78}},{f:0.930,p:{x:185,y:68}},{f:0.955,p:{x:228,y:62}},
+      {f:0.980,p:{x:280,y:58}},{f:1.000,p:{x:340,y:58}},
+    ], t),
+    pitEntry:0.62, pitExit:0.68, sfLine:0.0,
+    drawExtra:(ctx,sx,sy)=>{
+      drawGrandstand(ctx, sx, sy, 350, 24, 220, 18, 5);
+      drawTreeCluster(ctx, sx, sy, 380, 150, 8, 35);
+      drawTreeCluster(ctx, sx, sy, 650, 160, 5, 18);
+      drawTreeCluster(ctx, sx, sy, 150, 180, 6, 24);
+      drawSFGantry(ctx, sx, sy, (f)=>interpPtsSmooth([{f:0.000,p:{x:340,y:58}},{f:0.030,p:{x:420,y:52}},{f:0.055,p:{x:500,y:50}},{f:0.080,p:{x:575,y:52}},{f:0.105,p:{x:640,y:60}},{f:0.130,p:{x:690,y:78}},{f:0.155,p:{x:720,y:108}},{f:0.175,p:{x:730,y:140}},{f:0.195,p:{x:725,y:172}},{f:0.215,p:{x:705,y:198}},{f:0.240,p:{x:668,y:215}},{f:0.265,p:{x:625,y:222}},{f:0.290,p:{x:580,y:218}},{f:0.315,p:{x:548,y:198}},{f:0.340,p:{x:530,y:172}},{f:0.365,p:{x:525,y:145}},{f:0.385,p:{x:535,y:120}},{f:0.405,p:{x:555,y:105}},{f:0.425,p:{x:578,y:118}},{f:0.445,p:{x:585,y:142}},{f:0.465,p:{x:575,y:168}},{f:0.490,p:{x:548,y:188}},{f:0.515,p:{x:510,y:202}},{f:0.540,p:{x:465,y:210}},{f:0.565,p:{x:415,y:218}},{f:0.590,p:{x:362,y:228}},{f:0.615,p:{x:310,y:242}},{f:0.640,p:{x:265,y:260}},{f:0.665,p:{x:228,y:278}},{f:0.690,p:{x:200,y:298}},{f:0.715,p:{x:178,y:312}},{f:0.735,p:{x:158,y:298}},{f:0.755,p:{x:142,y:275}},{f:0.775,p:{x:128,y:248}},{f:0.795,p:{x:118,y:218}},{f:0.815,p:{x:112,y:185}},{f:0.835,p:{x:110,y:152}},{f:0.855,p:{x:115,y:120}},{f:0.880,p:{x:128,y:95}},{f:0.905,p:{x:152,y:78}},{f:0.930,p:{x:185,y:68}},{f:0.955,p:{x:228,y:62}},{f:0.980,p:{x:280,y:58}},{f:1.000,p:{x:340,y:58}}],f), 0.0);
+      ctx.save(); ctx.globalAlpha=0.13; ctx.fillStyle="#c9a460"; ctx.font="bold 13px Cinzel,serif"; ctx.textAlign="center";
+      ctx.fillText("MONZA",sx(350),sy(170)); ctx.font="8px Cinzel,serif"; ctx.fillText("AUTODROMO",sx(350),sy(185)); ctx.restore();
+    },
+  },
+  {
+    id:"lemans", name:"Le Mans Sarthe", km:10.7, corners:16, lapBase:65, rewardMult:1.5,
+    desc:"Ultra-long Mulsanne straight, tight Porsche curves — Le Mans, France (est. 1923)",
+    getPoint:(t)=>interpPtsSmooth([
+      {f:0.000,p:{x:180,y:92}},{f:0.025,p:{x:230,y:85}},{f:0.050,p:{x:290,y:80}},
+      {f:0.075,p:{x:350,y:78}},{f:0.100,p:{x:410,y:78}},{f:0.130,p:{x:480,y:80}},
+      {f:0.160,p:{x:545,y:85}},{f:0.190,p:{x:610,y:92}},{f:0.220,p:{x:665,y:105}},
+      {f:0.245,p:{x:700,y:125}},{f:0.265,p:{x:718,y:152}},{f:0.285,p:{x:722,y:182}},
+      {f:0.305,p:{x:715,y:210}},{f:0.325,p:{x:698,y:232}},{f:0.350,p:{x:670,y:248}},
+      {f:0.375,p:{x:636,y:258}},{f:0.400,p:{x:600,y:262}},{f:0.425,p:{x:565,y:270}},
+      {f:0.450,p:{x:538,y:285}},{f:0.470,p:{x:520,y:302}},{f:0.490,p:{x:498,y:315}},
+      {f:0.510,p:{x:470,y:322}},{f:0.530,p:{x:440,y:318}},{f:0.550,p:{x:418,y:305}},
+      {f:0.570,p:{x:400,y:288}},{f:0.590,p:{x:378,y:275}},{f:0.610,p:{x:348,y:268}},
+      {f:0.630,p:{x:315,y:265}},{f:0.650,p:{x:280,y:268}},{f:0.670,p:{x:248,y:278}},
+      {f:0.690,p:{x:222,y:292}},{f:0.710,p:{x:198,y:305}},{f:0.730,p:{x:172,y:312}},
+      {f:0.750,p:{x:148,y:308}},{f:0.770,p:{x:128,y:292}},{f:0.790,p:{x:112,y:270}},
+      {f:0.810,p:{x:100,y:245}},{f:0.830,p:{x:92,y:218}},{f:0.855,p:{x:88,y:188}},
+      {f:0.880,p:{x:90,y:158}},{f:0.905,p:{x:98,y:132}},{f:0.930,p:{x:115,y:112}},
+      {f:0.955,p:{x:140,y:100}},{f:0.980,p:{x:165,y:94}},{f:1.000,p:{x:180,y:92}},
+    ], t),
+    pitEntry:0.56, pitExit:0.63, sfLine:0.0,
+    drawExtra:(ctx,sx,sy)=>{
+      drawGrandstand(ctx, sx, sy, 320, 44, 200, 18, 5);
+      drawGrandstand(ctx, sx, sy, 450, 330, 120, 12, 3);
+      drawTreeCluster(ctx, sx, sy, 380, 180, 12, 55);
+      drawTreeCluster(ctx, sx, sy, 620, 195, 5, 18);
+      drawTreeCluster(ctx, sx, sy, 150, 200, 6, 22);
+      ctx.save(); ctx.globalAlpha=0.08; ctx.fillStyle="#3a5a2a";
+      ctx.fillRect(sx(300),sy(120),sx(520)-sx(300),sy(240)-sy(120));
+      ctx.restore();
+      drawSFGantry(ctx, sx, sy, (f)=>interpPtsSmooth([{f:0.000,p:{x:180,y:92}},{f:0.025,p:{x:230,y:85}},{f:0.050,p:{x:290,y:80}},{f:0.075,p:{x:350,y:78}},{f:0.100,p:{x:410,y:78}},{f:0.130,p:{x:480,y:80}},{f:0.160,p:{x:545,y:85}},{f:0.190,p:{x:610,y:92}},{f:0.220,p:{x:665,y:105}},{f:0.245,p:{x:700,y:125}},{f:0.265,p:{x:718,y:152}},{f:0.285,p:{x:722,y:182}},{f:0.305,p:{x:715,y:210}},{f:0.325,p:{x:698,y:232}},{f:0.350,p:{x:670,y:248}},{f:0.375,p:{x:636,y:258}},{f:0.400,p:{x:600,y:262}},{f:0.425,p:{x:565,y:270}},{f:0.450,p:{x:538,y:285}},{f:0.470,p:{x:520,y:302}},{f:0.490,p:{x:498,y:315}},{f:0.510,p:{x:470,y:322}},{f:0.530,p:{x:440,y:318}},{f:0.550,p:{x:418,y:305}},{f:0.570,p:{x:400,y:288}},{f:0.590,p:{x:378,y:275}},{f:0.610,p:{x:348,y:268}},{f:0.630,p:{x:315,y:265}},{f:0.650,p:{x:280,y:268}},{f:0.670,p:{x:248,y:278}},{f:0.690,p:{x:222,y:292}},{f:0.710,p:{x:198,y:305}},{f:0.730,p:{x:172,y:312}},{f:0.750,p:{x:148,y:308}},{f:0.770,p:{x:128,y:292}},{f:0.790,p:{x:112,y:270}},{f:0.810,p:{x:100,y:245}},{f:0.830,p:{x:92,y:218}},{f:0.855,p:{x:88,y:188}},{f:0.880,p:{x:90,y:158}},{f:0.905,p:{x:98,y:132}},{f:0.930,p:{x:115,y:112}},{f:0.955,p:{x:140,y:100}},{f:0.980,p:{x:165,y:94}},{f:1.000,p:{x:180,y:92}}],f), 0.0);
+      ctx.save(); ctx.globalAlpha=0.13; ctx.fillStyle="#c9a460"; ctx.font="bold 12px Cinzel,serif"; ctx.textAlign="center";
+      ctx.fillText("LE MANS",sx(400),sy(168)); ctx.font="8px Cinzel,serif"; ctx.fillText("CIRCUIT DE LA SARTHE",sx(400),sy(183)); ctx.restore();
+    },
+  },
+  {
+    id:"avus", name:"AVUS Speedway", km:12.0, corners:4, lapBase:58, rewardMult:1.45,
+    desc:"Two massive straights linked by banked hairpins — Berlin, Germany (est. 1921)",
+    getPoint:(t)=>interpPtsSmooth([
+      {f:0.000,p:{x:340,y:58}},{f:0.035,p:{x:380,y:56}},{f:0.070,p:{x:430,y:55}},
+      {f:0.105,p:{x:480,y:55}},{f:0.140,p:{x:530,y:55}},{f:0.175,p:{x:580,y:55}},
+      {f:0.210,p:{x:620,y:56}},{f:0.240,p:{x:655,y:60}},{f:0.265,p:{x:685,y:72}},
+      {f:0.285,p:{x:708,y:92}},{f:0.305,p:{x:722,y:118}},{f:0.325,p:{x:728,y:148}},
+      {f:0.345,p:{x:725,y:180}},{f:0.365,p:{x:712,y:208}},{f:0.385,p:{x:690,y:230}},
+      {f:0.405,p:{x:662,y:245}},{f:0.425,p:{x:630,y:252}},{f:0.445,p:{x:595,y:255}},
+      {f:0.465,p:{x:558,y:256}},{f:0.490,p:{x:510,y:256}},{f:0.515,p:{x:460,y:256}},
+      {f:0.540,p:{x:410,y:256}},{f:0.565,p:{x:360,y:255}},{f:0.590,p:{x:310,y:255}},
+      {f:0.615,p:{x:260,y:255}},{f:0.640,p:{x:218,y:252}},{f:0.665,p:{x:185,y:245}},
+      {f:0.690,p:{x:158,y:232}},{f:0.715,p:{x:135,y:212}},{f:0.735,p:{x:118,y:188}},
+      {f:0.755,p:{x:108,y:162}},{f:0.775,p:{x:105,y:135}},{f:0.795,p:{x:110,y:108}},
+      {f:0.815,p:{x:122,y:85}},{f:0.840,p:{x:145,y:68}},{f:0.865,p:{x:175,y:62}},
+      {f:0.895,p:{x:215,y:58}},{f:0.930,p:{x:260,y:57}},{f:0.965,p:{x:305,y:57}},
+      {f:1.000,p:{x:340,y:58}},
+    ], t),
+    pitEntry:0.48, pitExit:0.54, sfLine:0.0,
+    drawExtra:(ctx,sx,sy)=>{
+      drawGrandstand(ctx, sx, sy, 350, 28, 200, 20, 5);
+      drawGrandstand(ctx, sx, sy, 350, 268, 200, 16, 4);
+      drawTreeCluster(ctx, sx, sy, 400, 155, 8, 40);
+      ctx.save(); ctx.globalAlpha=0.15;
+      ctx.strokeStyle="#c9a460"; ctx.lineWidth=2;
+      [[0.27,0.42],[0.70,0.84]].forEach(([a,b])=>{
+        for(let s=0;s<3;s++){
+          ctx.beginPath();
+          for(let i=0;i<=16;i++){
+            const f=a+(b-a)*i/16;
+            const p=interpPtsSmooth([{f:0.000,p:{x:340,y:58}},{f:0.035,p:{x:380,y:56}},{f:0.070,p:{x:430,y:55}},{f:0.105,p:{x:480,y:55}},{f:0.140,p:{x:530,y:55}},{f:0.175,p:{x:580,y:55}},{f:0.210,p:{x:620,y:56}},{f:0.240,p:{x:655,y:60}},{f:0.265,p:{x:685,y:72}},{f:0.285,p:{x:708,y:92}},{f:0.305,p:{x:722,y:118}},{f:0.325,p:{x:728,y:148}},{f:0.345,p:{x:725,y:180}},{f:0.365,p:{x:712,y:208}},{f:0.385,p:{x:690,y:230}},{f:0.405,p:{x:662,y:245}},{f:0.425,p:{x:630,y:252}},{f:0.445,p:{x:595,y:255}},{f:0.465,p:{x:558,y:256}},{f:0.490,p:{x:510,y:256}},{f:0.515,p:{x:460,y:256}},{f:0.540,p:{x:410,y:256}},{f:0.565,p:{x:360,y:255}},{f:0.590,p:{x:310,y:255}},{f:0.615,p:{x:260,y:255}},{f:0.640,p:{x:218,y:252}},{f:0.665,p:{x:185,y:245}},{f:0.690,p:{x:158,y:232}},{f:0.715,p:{x:135,y:212}},{f:0.735,p:{x:118,y:188}},{f:0.755,p:{x:108,y:162}},{f:0.775,p:{x:105,y:135}},{f:0.795,p:{x:110,y:108}},{f:0.815,p:{x:122,y:85}},{f:0.840,p:{x:145,y:68}},{f:0.865,p:{x:175,y:62}},{f:0.895,p:{x:215,y:58}},{f:0.930,p:{x:260,y:57}},{f:0.965,p:{x:305,y:57}},{f:1.000,p:{x:340,y:58}}],f);
+            const p2=interpPtsSmooth([{f:0.000,p:{x:340,y:58}},{f:0.035,p:{x:380,y:56}},{f:0.070,p:{x:430,y:55}},{f:0.105,p:{x:480,y:55}},{f:0.140,p:{x:530,y:55}},{f:0.175,p:{x:580,y:55}},{f:0.210,p:{x:620,y:56}},{f:0.240,p:{x:655,y:60}},{f:0.265,p:{x:685,y:72}},{f:0.285,p:{x:708,y:92}},{f:0.305,p:{x:722,y:118}},{f:0.325,p:{x:728,y:148}},{f:0.345,p:{x:725,y:180}},{f:0.365,p:{x:712,y:208}},{f:0.385,p:{x:690,y:230}},{f:0.405,p:{x:662,y:245}},{f:0.425,p:{x:630,y:252}},{f:0.445,p:{x:595,y:255}},{f:0.465,p:{x:558,y:256}},{f:0.490,p:{x:510,y:256}},{f:0.515,p:{x:460,y:256}},{f:0.540,p:{x:410,y:256}},{f:0.565,p:{x:360,y:255}},{f:0.590,p:{x:310,y:255}},{f:0.615,p:{x:260,y:255}},{f:0.640,p:{x:218,y:252}},{f:0.665,p:{x:185,y:245}},{f:0.690,p:{x:158,y:232}},{f:0.715,p:{x:135,y:212}},{f:0.735,p:{x:118,y:188}},{f:0.755,p:{x:108,y:162}},{f:0.775,p:{x:105,y:135}},{f:0.795,p:{x:110,y:108}},{f:0.815,p:{x:122,y:85}},{f:0.840,p:{x:145,y:68}},{f:0.865,p:{x:175,y:62}},{f:0.895,p:{x:215,y:58}},{f:0.930,p:{x:260,y:57}},{f:0.965,p:{x:305,y:57}},{f:1.000,p:{x:340,y:58}}],(f+0.005)%1);
+            const ang=Math.atan2(p2.y-p.y,p2.x-p.x)+Math.PI/2;
+            const d=16+s*6;
+            i===0?ctx.moveTo(sx(p.x)+Math.cos(ang)*d,sy(p.y)+Math.sin(ang)*d):ctx.lineTo(sx(p.x)+Math.cos(ang)*d,sy(p.y)+Math.sin(ang)*d);
+          }
+          ctx.stroke();
+        }
+      });
+      ctx.restore();
+      drawSFGantry(ctx, sx, sy, (f)=>interpPtsSmooth([{f:0.000,p:{x:340,y:58}},{f:0.035,p:{x:380,y:56}},{f:0.070,p:{x:430,y:55}},{f:0.105,p:{x:480,y:55}},{f:0.140,p:{x:530,y:55}},{f:0.175,p:{x:580,y:55}},{f:0.210,p:{x:620,y:56}},{f:0.240,p:{x:655,y:60}},{f:0.265,p:{x:685,y:72}},{f:0.285,p:{x:708,y:92}},{f:0.305,p:{x:722,y:118}},{f:0.325,p:{x:728,y:148}},{f:0.345,p:{x:725,y:180}},{f:0.365,p:{x:712,y:208}},{f:0.385,p:{x:690,y:230}},{f:0.405,p:{x:662,y:245}},{f:0.425,p:{x:630,y:252}},{f:0.445,p:{x:595,y:255}},{f:0.465,p:{x:558,y:256}},{f:0.490,p:{x:510,y:256}},{f:0.515,p:{x:460,y:256}},{f:0.540,p:{x:410,y:256}},{f:0.565,p:{x:360,y:255}},{f:0.590,p:{x:310,y:255}},{f:0.615,p:{x:260,y:255}},{f:0.640,p:{x:218,y:252}},{f:0.665,p:{x:185,y:245}},{f:0.690,p:{x:158,y:232}},{f:0.715,p:{x:135,y:212}},{f:0.735,p:{x:118,y:188}},{f:0.755,p:{x:108,y:162}},{f:0.775,p:{x:105,y:135}},{f:0.795,p:{x:110,y:108}},{f:0.815,p:{x:122,y:85}},{f:0.840,p:{x:145,y:68}},{f:0.865,p:{x:175,y:62}},{f:0.895,p:{x:215,y:58}},{f:0.930,p:{x:260,y:57}},{f:0.965,p:{x:305,y:57}},{f:1.000,p:{x:340,y:58}}],f), 0.0);
+      ctx.save(); ctx.globalAlpha=0.13; ctx.fillStyle="#c9a460"; ctx.font="bold 16px Cinzel,serif"; ctx.textAlign="center";
+      ctx.fillText("AVUS",sx(400),sy(148)); ctx.font="8px Cinzel,serif"; ctx.fillText("SPEEDWAY",sx(400),sy(165)); ctx.restore();
+    },
+  },
+  {
+    id:"targa", name:"Targa Florio", km:14.5, corners:32, lapBase:80, rewardMult:1.6,
+    desc:"Narrow mountain roads, countless switchbacks — Madonie, Sicily (est. 1906)",
+    getPoint:(t)=>interpPtsSmooth([
+      {f:0.000,p:{x:120,y:180}},{f:0.022,p:{x:148,y:162}},{f:0.044,p:{x:180,y:148}},
+      {f:0.066,p:{x:215,y:138}},{f:0.088,p:{x:252,y:125}},{f:0.110,p:{x:290,y:108}},
+      {f:0.132,p:{x:328,y:92}},{f:0.154,p:{x:368,y:78}},{f:0.176,p:{x:410,y:68}},
+      {f:0.198,p:{x:455,y:62}},{f:0.220,p:{x:500,y:58}},{f:0.242,p:{x:545,y:60}},
+      {f:0.264,p:{x:585,y:68}},{f:0.286,p:{x:618,y:82}},{f:0.308,p:{x:642,y:102}},
+      {f:0.325,p:{x:655,y:125}},{f:0.340,p:{x:658,y:148}},{f:0.355,p:{x:648,y:168}},
+      {f:0.370,p:{x:628,y:182}},{f:0.385,p:{x:605,y:188}},{f:0.400,p:{x:582,y:178}},
+      {f:0.415,p:{x:568,y:162}},{f:0.430,p:{x:562,y:142}},{f:0.445,p:{x:572,y:122}},
+      {f:0.460,p:{x:592,y:110}},{f:0.475,p:{x:618,y:108}},{f:0.490,p:{x:642,y:118}},
+      {f:0.505,p:{x:660,y:138}},{f:0.520,p:{x:672,y:162}},{f:0.535,p:{x:680,y:188}},
+      {f:0.550,p:{x:685,y:215}},{f:0.565,p:{x:682,y:242}},{f:0.580,p:{x:672,y:265}},
+      {f:0.595,p:{x:652,y:282}},{f:0.610,p:{x:625,y:295}},{f:0.625,p:{x:592,y:305}},
+      {f:0.640,p:{x:555,y:312}},{f:0.655,p:{x:515,y:318}},{f:0.670,p:{x:472,y:322}},
+      {f:0.685,p:{x:428,y:320}},{f:0.700,p:{x:388,y:312}},{f:0.715,p:{x:352,y:298}},
+      {f:0.730,p:{x:322,y:280}},{f:0.745,p:{x:298,y:258}},{f:0.760,p:{x:278,y:235}},
+      {f:0.775,p:{x:258,y:255}},{f:0.790,p:{x:235,y:272}},{f:0.805,p:{x:208,y:285}},
+      {f:0.820,p:{x:178,y:292}},{f:0.835,p:{x:150,y:288}},{f:0.850,p:{x:128,y:275}},
+      {f:0.865,p:{x:110,y:258}},{f:0.880,p:{x:98,y:238}},{f:0.900,p:{x:92,y:218}},
+      {f:0.925,p:{x:95,y:200}},{f:0.955,p:{x:105,y:188}},{f:1.000,p:{x:120,y:180}},
+    ], t),
+    pitEntry:0.72, pitExit:0.78, sfLine:0.0,
+    drawExtra:(ctx,sx,sy)=>{
+      drawTreeCluster(ctx, sx, sy, 400, 190, 14, 60);
+      drawTreeCluster(ctx, sx, sy, 200, 180, 8, 30);
+      drawTreeCluster(ctx, sx, sy, 580, 220, 6, 25);
+      drawTreeCluster(ctx, sx, sy, 340, 250, 5, 18);
+      drawGrandstand(ctx, sx, sy, 380, 330, 100, 12, 3);
+      ctx.save(); ctx.globalAlpha=0.06; ctx.fillStyle="#4a6a3a";
+      ctx.beginPath(); ctx.moveTo(sx(300),sy(100)); ctx.lineTo(sx(550),sy(80)); ctx.lineTo(sx(650),sy(200)); ctx.lineTo(sx(500),sy(280)); ctx.lineTo(sx(280),sy(250)); ctx.closePath(); ctx.fill();
+      ctx.restore();
+      drawSFGantry(ctx, sx, sy, (f)=>interpPtsSmooth([{f:0.000,p:{x:120,y:180}},{f:0.022,p:{x:148,y:162}},{f:0.044,p:{x:180,y:148}},{f:0.066,p:{x:215,y:138}},{f:0.088,p:{x:252,y:125}},{f:0.110,p:{x:290,y:108}},{f:0.132,p:{x:328,y:92}},{f:0.154,p:{x:368,y:78}},{f:0.176,p:{x:410,y:68}},{f:0.198,p:{x:455,y:62}},{f:0.220,p:{x:500,y:58}},{f:0.242,p:{x:545,y:60}},{f:0.264,p:{x:585,y:68}},{f:0.286,p:{x:618,y:82}},{f:0.308,p:{x:642,y:102}},{f:0.325,p:{x:655,y:125}},{f:0.340,p:{x:658,y:148}},{f:0.355,p:{x:648,y:168}},{f:0.370,p:{x:628,y:182}},{f:0.385,p:{x:605,y:188}},{f:0.400,p:{x:582,y:178}},{f:0.415,p:{x:568,y:162}},{f:0.430,p:{x:562,y:142}},{f:0.445,p:{x:572,y:122}},{f:0.460,p:{x:592,y:110}},{f:0.475,p:{x:618,y:108}},{f:0.490,p:{x:642,y:118}},{f:0.505,p:{x:660,y:138}},{f:0.520,p:{x:672,y:162}},{f:0.535,p:{x:680,y:188}},{f:0.550,p:{x:685,y:215}},{f:0.565,p:{x:682,y:242}},{f:0.580,p:{x:672,y:265}},{f:0.595,p:{x:652,y:282}},{f:0.610,p:{x:625,y:295}},{f:0.625,p:{x:592,y:305}},{f:0.640,p:{x:555,y:312}},{f:0.655,p:{x:515,y:318}},{f:0.670,p:{x:472,y:322}},{f:0.685,p:{x:428,y:320}},{f:0.700,p:{x:388,y:312}},{f:0.715,p:{x:352,y:298}},{f:0.730,p:{x:322,y:280}},{f:0.745,p:{x:298,y:258}},{f:0.760,p:{x:278,y:235}},{f:0.775,p:{x:258,y:255}},{f:0.790,p:{x:235,y:272}},{f:0.805,p:{x:208,y:285}},{f:0.820,p:{x:178,y:292}},{f:0.835,p:{x:150,y:288}},{f:0.850,p:{x:128,y:275}},{f:0.865,p:{x:110,y:258}},{f:0.880,p:{x:98,y:238}},{f:0.900,p:{x:92,y:218}},{f:0.925,p:{x:95,y:200}},{f:0.955,p:{x:105,y:188}},{f:1.000,p:{x:120,y:180}}],f), 0.0);
+      ctx.save(); ctx.globalAlpha=0.13; ctx.fillStyle="#c9a460"; ctx.font="bold 11px Cinzel,serif"; ctx.textAlign="center";
+      ctx.fillText("TARGA FLORIO",sx(400),sy(175)); ctx.font="7px Cinzel,serif"; ctx.fillText("MADONIE, SICILY",sx(400),sy(190)); ctx.restore();
+    },
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1519,7 +1714,7 @@ export default function CircuitRaceView({
           if (r.visible) {
             const lapTime = track.lapBase;
             r.trackPos = (r.trackPos + (1.0 / lapTime) * dt * 0.05 + 1) % 1;
-            r.currentSpeedKmh = 5;
+            r.currentSpeedMph = 3;
           }
           return;
         }
@@ -1541,7 +1736,7 @@ export default function CircuitRaceView({
               pitNotifTimer.current = setTimeout(() => setPitNotif(null), 2500);
             }
           }
-          r.currentSpeedKmh = 0;
+          r.currentSpeedMph = 0;
           return;
         }
 
@@ -1620,22 +1815,22 @@ export default function CircuitRaceView({
 
         // Movement
         const prevPos = r.trackPos;
-        // 1920s–30s era: max ~130 mph (210 km/h) on straights; scale raw formula to realistic range
-        const SPEED_REALISM_SCALE = 0.32;
-        const SPEED_CAP_KMH = 210;
+        // 1920s-30s era: max 150 mph on straights; formula outputs mph directly
+        const SPEED_REALISM_SCALE = 0.199;
+        const SPEED_CAP_MPH = 150;
         if (r.slideOffUntil > 0 && nowSec < r.slideOffUntil) {
           const lapTime = track.lapBase / effSpeed;
           const advance = (1.0 / lapTime) * dt * 0.18;
           r.trackPos = (r.trackPos + advance + 1) % 1;
-          const rawKmh = track.km && track.lapBase ? SPEED_REALISM_SCALE * (3600 * track.km * 0.18 * effSpeed) / track.lapBase : null;
-          r.currentSpeedKmh = rawKmh == null ? null : Math.max(0, Math.min(SPEED_CAP_KMH, rawKmh));
+          const rawMph = track.km && track.lapBase ? SPEED_REALISM_SCALE * (3600 * track.km * 0.18 * effSpeed) / track.lapBase : null;
+          r.currentSpeedMph = rawMph == null ? null : Math.max(0, Math.min(SPEED_CAP_MPH, rawMph));
         } else {
           r.slideOffUntil = 0;
           const lapTime = track.lapBase / effSpeed;
           const advance = (1.0 / lapTime) * dt * cornerMult;
           r.trackPos = (r.trackPos + advance + 1) % 1;
-          const rawKmh = track.km && track.lapBase ? SPEED_REALISM_SCALE * (3600 * track.km * cornerMult * effSpeed) / track.lapBase : null;
-          r.currentSpeedKmh = rawKmh == null ? null : Math.max(0, Math.min(SPEED_CAP_KMH, rawKmh));
+          const rawMph = track.km && track.lapBase ? SPEED_REALISM_SCALE * (3600 * track.km * cornerMult * effSpeed) / track.lapBase : null;
+          r.currentSpeedMph = rawMph == null ? null : Math.max(0, Math.min(SPEED_CAP_MPH, rawMph));
           if (curvature > 0.10 && effectiveGrip < 0.82 && Math.random() < dt * 2.2 * (0.85 - effectiveGrip) * Math.min(1, curvature / 0.18)) {
             r.slideOffUntil = nowSec + 0.5 + Math.random() * 0.6;
             addIncident(`${r.name} off track!`);
@@ -1691,10 +1886,16 @@ export default function CircuitRaceView({
           }
         }
 
-        // Tyre wear
-        if (r.tireWearByLap && r.tireWearByLap.length)
-          r.tyreWear = r.tireWearByLap[Math.min(r.totalLapsDone, r.tireWearByLap.length - 1)];
-        else {
+        // Tyre wear — for replay data, delay the post-pit reset until after pit check
+        if (r.tireWearByLap && r.tireWearByLap.length) {
+          const lapIdx = Math.min(r.totalLapsDone, r.tireWearByLap.length - 1);
+          const targetWear = r.tireWearByLap[lapIdx];
+          if (targetWear > r.tyreWear + 30 && !r.inPit) {
+            // Wear jumped up significantly (pit happened) — hold at old wear until pit animation fires
+          } else {
+            r.tyreWear = targetWear;
+          }
+        } else {
           const stintLaps = getEffectiveStintLaps(r.currentTyre, wd.wearMult, r.reliabilityWearMult);
           const wearPerLap = 85 / stintLaps;
           const lapTimeSec = track.lapBase / effSpeed;
@@ -1732,7 +1933,8 @@ export default function CircuitRaceView({
         if (!r.inPit && r.pitStrategy.length > 0 && !(r.isPlayer && manualPitRef.current)) {
           const next = r.pitStrategy[0];
           const currentLap = r.totalLapsDone + 1;
-          const shouldPit = currentLap >= next.lap && r.tyreWear < 45;
+          const hasReplayData = r.tireWearByLap && r.tireWearByLap.length > 0;
+          const shouldPit = hasReplayData ? (currentLap >= next.lap) : (currentLap >= next.lap && r.tyreWear < 45);
           if (shouldPit) {
             const distToPit = Math.abs(((r.trackPos - track.pitEntry) + 1) % 1);
             if (distToPit < 0.12) {
@@ -1824,7 +2026,7 @@ export default function CircuitRaceView({
           pitTimeRemaining,
           gap: gapLaps,
           lapsDown: Math.floor(gapLaps),
-          currentSpeedKmh: r.currentSpeedKmh != null ? Math.round(r.currentSpeedKmh) : null,
+          currentSpeedMph: r.currentSpeedMph != null ? Math.round(r.currentSpeedMph) : null,
           hasFastestLap: fastestLap.holderId === r.id,
           inSlipstream: r.inSlipstream,
           fuelLoad: r.fuelLoad != null ? Math.round(r.fuelLoad) : null,
@@ -2451,9 +2653,8 @@ export default function CircuitRaceView({
             </div>
             {(uiPhase === "qualifying" || uiPhase === "racing") && (() => {
               const playerStanding = standings.find(s => s.isPlayer);
-              const speedKmh = playerStanding?.currentSpeedKmh;
-              if (speedKmh == null) return null;
-              const speedMph = Math.round(speedKmh * 0.621371);
+              const speedMph = playerStanding?.currentSpeedMph != null ? Math.round(playerStanding.currentSpeedMph) : null;
+              if (speedMph == null) return null;
               return (
                 <div style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(9px,2vw,11px)", letterSpacing:".12em", color:"#94a890", background:"rgba(0,0,0,.6)", border:"1px solid rgba(201,164,96,.15)", padding:"2px 7px" }}>
                   {speedMph} mph

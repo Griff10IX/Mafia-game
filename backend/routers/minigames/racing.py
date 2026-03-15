@@ -34,6 +34,11 @@ TRACKS: List[dict] = [
     {"id": "daytona_beach", "name": "Daytona Beach Road Course", "reward_mult": 1.2},
     {"id": "roosevelt", "name": "Roosevelt Raceway", "reward_mult": 1.1},
     {"id": "indianapolis", "name": "Indianapolis Motor Speedway", "reward_mult": 1.3},
+    {"id": "brooklands", "name": "Brooklands Banking", "reward_mult": 1.35},
+    {"id": "monza", "name": "Monza Autodromo", "reward_mult": 1.4},
+    {"id": "lemans", "name": "Le Mans Sarthe", "reward_mult": 1.5},
+    {"id": "avus", "name": "AVUS Speedway", "reward_mult": 1.45},
+    {"id": "targa", "name": "Targa Florio", "reward_mult": 1.6},
 ]
 
 RACING_NPCS: List[dict] = [
