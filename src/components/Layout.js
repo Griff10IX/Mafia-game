@@ -279,6 +279,7 @@ export default function Layout({ children }) {
   const [casinoOpen, setCasinoOpen] = useState(false);
   const [miniGamesOpen, setMiniGamesOpen] = useState(false);
   const [combatOpen, setCombatOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(() => ({ information: true, travel: true, messaging: true, money: true, other: true }));
   const [mobileBottomMenuOpen, setMobileBottomMenuOpen] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
@@ -1246,27 +1247,35 @@ export default function Layout({ children }) {
                     const items = navItems.filter((i) => (PATH_TO_CATEGORY[i.path] || 'other') === cat.id);
                     if (!items.length) return null;
                     const useClassicHeader = sidebarLayout === 'categorized_classic';
+                    const isBlockCategory = ['combat', 'ranking', 'minigames'].includes(cat.id);
+                    const open = isBlockCategory ? true : (categoryOpen[cat.id] !== false);
+                    const setOpen = (v) => setCategoryOpen((prev) => ({ ...prev, [cat.id]: typeof v === 'function' ? v(prev[cat.id]) : v }));
                     return (
                       <Fragment key={cat.id}>
-                        {useClassicHeader ? (
-                          <div className="px-2 py-1.5 mt-1 first:mt-0 rounded-sm flex items-center justify-center" style={categoryHeaderStyle}>
-                            <span className="text-[9px] font-heading font-bold uppercase tracking-widest">{cat.label}</span>
-                          </div>
-                        ) : (
-                          <SidebarCatHeader label={cat.label} classic={false} />
+                        {isBlockCategory ? null : (
+                          <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent opacity-90 hover:opacity-100" style={{ padding: '5px 8px 3px 10px', marginTop: 3 }} aria-expanded={open}>
+                            <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+                            <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--noir-muted)', whiteSpace: 'nowrap' }}>{cat.label}</span>
+                            {open ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
+                            <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+                          </button>
                         )}
-                        {items.map((item, idx) => renderNavItem(item, idx > 0))}
-                        {cat.id === 'ranking' && (
+                        {open && (
                           <>
-                            {navDividerEl('prestige-div')}
-                            <Link to="/account/prestige" data-testid="nav-prestige"
-                              className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname === '/account/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
-                              style={location.pathname === '/account/prestige' ? sidebarActiveStyle : undefined}
-                              onClick={() => setSidebarOpen(false)}>
-                              <Trophy size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
-                              <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">Prestige</span>
-                              {rankProgress?.current_rank >= 11 && (user?.prestige_level ?? 0) < 5 && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" title="You can prestige!" />}
-                            </Link>
+                            {items.map((item, idx) => renderNavItem(item, idx > 0))}
+                            {cat.id === 'ranking' && (
+                              <>
+                                {navDividerEl('prestige-div')}
+                                <Link to="/account/prestige" data-testid="nav-prestige"
+                                  className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname === '/account/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
+                                  style={location.pathname === '/account/prestige' ? sidebarActiveStyle : undefined}
+                                  onClick={() => setSidebarOpen(false)}>
+                                  <Trophy size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
+                                  <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">Prestige</span>
+                                  {rankProgress?.current_rank >= 11 && (user?.prestige_level ?? 0) < 5 && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" title="You can prestige!" />}
+                                </Link>
+                              </>
+                            )}
                           </>
                         )}
                       </Fragment>
