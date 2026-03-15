@@ -793,8 +793,8 @@ export default function Layout({ children }) {
   const rankingNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-ranking-group" onClick={() => setRankingOpen((v) => !v)}
-        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/game/ranking' || location.pathname.startsWith('/crime/') || location.pathname === '/organised-crime' || location.pathname === '/account/prestige') ? styles.navItemActive : styles.sidebarNavLink}`}
-        style={(location.pathname === '/game/ranking' || location.pathname.startsWith('/crime/') || location.pathname === '/organised-crime' || location.pathname === '/account/prestige') ? sidebarActiveGroupStyle : undefined}>
+        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/game/ranking' || location.pathname.startsWith('/game/ranking/') || location.pathname.startsWith('/crime/') || location.pathname === '/organised-crime' || location.pathname === '/account/prestige') ? styles.navItemActive : styles.sidebarNavLink}`}
+        style={(location.pathname === '/game/ranking' || location.pathname.startsWith('/game/ranking/') || location.pathname.startsWith('/crime/') || location.pathname === '/organised-crime' || location.pathname === '/account/prestige') ? sidebarActiveGroupStyle : undefined}>
         <Target size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
         <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Ranking</span>
         {!rankingOpen && (rankingCounts.crimes > 0 || rankingCounts.gta > 0) && (
@@ -835,6 +835,10 @@ export default function Layout({ children }) {
           {showSidebarDividers && navDividerEl('rd3')}
           <Link to="/organised-crime" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/organised-crime' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/organised-crime' ? sidebarActiveStyle : undefined} data-testid="nav-organised-crime">
             <span className="uppercase tracking-widest font-heading flex-1">Organised Crime</span>
+          </Link>
+          {showSidebarDividers && navDividerEl('rd4')}
+          <Link to="/game/ranking/badges" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/game/ranking/badges' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/game/ranking/badges' ? sidebarActiveStyle : undefined} data-testid="nav-badges">
+            <span className="uppercase tracking-widest font-heading flex-1">Badges</span>
           </Link>
         </div>
       )}

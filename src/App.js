@@ -50,6 +50,7 @@ const FamilyProfilePage = lazy(() => import("./pages/Game/FamilyProfilePage"));
 const HelpDesk = lazy(() => import("./pages/Game/HelpDesk"));
 const Leaderboard = lazy(() => import("./pages/Game/Leaderboard"));
 const Ranking = lazy(() => import("./pages/Game/Ranking"));
+const RankingBadges = lazy(() => import("./pages/Game/RankingBadges"));
 const States = lazy(() => import("./pages/Game/States"));
 const Stats = lazy(() => import("./pages/Game/Stats"));
 const Store = lazy(() => import("./pages/Game/Store"));
@@ -407,6 +408,18 @@ function App() {
             }
           />
           <Route path="/ranking" element={<Navigate to="/game/ranking" replace />} />
+          <Route
+            path="/game/ranking/badges"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <RankingBadges />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
           {/* ═══ CRIME GROUP ═══ */}
           <Route
             path="/crime/crimes"

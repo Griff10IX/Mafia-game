@@ -1428,7 +1428,7 @@ from routers.admin import admin, security_admin, airport
 from routers.cars import gta
 from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, horseracing, slots, video_poker, mdg, sports_betting
 from routers.crime import crimes, jail, organised_crime, oc
-from routers.game import families, leaderboard, states, stats, store, dead_alive, events, notifications, meta, entertainer
+from routers.game import families, leaderboard, states, stats, store, dead_alive, events, notifications, meta, entertainer, achievements
 from routers.kill import attack, armoury, bodyguards, hitlist
 from routers.minigames import gauntlet, boxing, racing, snake
 from routers.money import bank, stock_market, properties, quicktrade, crack_safe, illegal_business, booze_run, racket, payments
@@ -1499,6 +1499,7 @@ from routers.game import help_desk
 help_desk.register(api_router)
 payments.register(api_router)
 stats.register(api_router)
+achievements.register(api_router)
 dead_alive.register(api_router)
 users.register(api_router)
 giphy.register(api_router)

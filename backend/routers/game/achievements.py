@@ -1,0 +1,166 @@
+# Ranking Achievements / Badges - tiered milestones from early game to 5M+ crimes
+# No DB writes; computed from existing user stats at runtime
+
+from fastapi import Depends
+
+# Defer server import to avoid circular import (server imports this module)
+# Badge definitions: id, category, name, progress_key (user field), targets (sorted ascending)
+# progress_key "rank_id" is special: derived from rank_points via get_rank_info
+RANK_IDS = list(range(1, 14))  # Rat..Godfather
+BADGE_CATEGORIES = [
+    {
+        "id": "crimes",
+        "name": "Crimes",
+        "progress_key": "total_crimes",
+        "targets": [100, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1_000_000, 2_500_000, 5_000_000, 10_000_000, 15_000_000],
+    },
+    {
+        "id": "gta",
+        "name": "GTA",
+        "progress_key": "total_gta",
+        "targets": [50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1_000_000],
+    },
+    {
+        "id": "jail_busts",
+        "name": "Jail Busts",
+        "progress_key": "jail_busts",
+        "targets": [25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1_000_000],
+    },
+    {
+        "id": "kills",
+        "name": "Kills",
+        "progress_key": "total_kills",
+        "targets": [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000],
+    },
+    {
+        "id": "oc_heists",
+        "name": "OC Heists",
+        "progress_key": "total_oc_heists",
+        "targets": [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000],
+    },
+    {
+        "id": "bullets_melted",
+        "name": "Bullets Melted",
+        "progress_key": "bullets_melted",
+        "targets": [1000, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1_000_000, 2_500_000, 5_000_000],
+    },
+    {
+        "id": "booze_runs",
+        "name": "Booze Runs",
+        "progress_key": "booze_runs_count",
+        "targets": [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000],
+    },
+    {
+        "id": "hitlist_npc",
+        "name": "Hitlist NPC Kills",
+        "progress_key": "hitlist_npc_kills",
+        "targets": [10, 25, 50, 100, 250, 500, 1000, 2500, 5000],
+    },
+    {
+        "id": "rank",
+        "name": "Rank",
+        "progress_key": "rank_id",
+        "targets": RANK_IDS,
+    },
+]
+
+
+def _fmt(target: int, key: str) -> str:
+    """Format target for display."""
+    if key in ("bullets_melted", "crimes", "gta", "jail_busts", "kills", "oc_heists", "booze_runs", "hitlist_npc"):
+        if target >= 1_000_000:
+            return f"{target // 1_000_000}M"
+        if target >= 1000:
+            return f"{target // 1000}K"
+    if key in ("rank", "rank_id"):
+        from server import RANKS
+        r = next((x for x in RANKS if x["id"] == target), None)
+        return r["name"] if r else str(target)
+    return str(target)
+
+
+def _compute_category(cat: dict, user: dict) -> dict:
+    """Compute badge state for one category."""
+    from server import get_rank_info, RANKS
+    key = cat["progress_key"]
+    if key == "rank_id":
+        rank_points = int(user.get("rank_points") or 0)
+        prestige_level = int(user.get("prestige_level") or 0)
+        mult = 1.0
+        if prestige_level > 0:
+            try:
+                from server import PRESTIGE_CONFIGS
+                cfg = PRESTIGE_CONFIGS.get(prestige_level, {})
+                mult = float(cfg.get("threshold_mult", 1.0))
+            except Exception:
+                pass
+        progress = get_rank_info(rank_points, mult)[0]
+    else:
+        progress = int(user.get(key) or 0)
+
+    targets = sorted(cat["targets"])
+    unlocked = [t for t in targets if progress >= t]
+    next_target = next((t for t in targets if t > progress), None)
+
+    prev_target = unlocked[-1] if unlocked else 0
+    if next_target is not None:
+        segment = next_target - prev_target
+        current_in_segment = progress - prev_target
+        percent_to_next = min(100, int(100 * current_in_segment / segment)) if segment > 0 else 0
+    else:
+        percent_to_next = 100
+
+    tiers = []
+    for t in targets:
+        tiers.append({
+            "target": t,
+            "label": _fmt(t, key),
+            "unlocked": progress >= t,
+        })
+
+    return {
+        "id": cat["id"],
+        "name": cat["name"],
+        "progress": progress,
+        "progress_display": _fmt(progress, key) if key != "rank_id" else next((r["name"] for r in RANKS if r["id"] == progress), str(progress)),
+        "unlocked_count": len(unlocked),
+        "total_tiers": len(targets),
+        "next_target": next_target,
+        "next_target_label": _fmt(next_target, key) if next_target is not None else None,
+        "percent_to_next": percent_to_next,
+        "tiers": tiers,
+    }
+
+
+def register(router):
+    from server import db, get_current_user
+
+    @router.get("/achievements/me")
+    async def get_achievements_me(current_user: dict = Depends(get_current_user)):
+        """Return badge progress for current user. Grouped by category."""
+        uid = current_user.get("id") or ""
+        u = await db.users.find_one(
+            {"id": uid},
+            {
+                "_id": 0,
+                "total_crimes": 1, "total_gta": 1, "jail_busts": 1, "total_kills": 1,
+                "total_oc_heists": 1, "bullets_melted": 1, "booze_runs_count": 1,
+                "hitlist_npc_kills": 1, "rank_points": 1, "prestige_level": 1,
+            },
+        )
+        user = u or {}
+
+        categories = []
+        total_unlocked = 0
+        total_tiers = 0
+        for cat in BADGE_CATEGORIES:
+            computed = _compute_category(cat, user)
+            categories.append(computed)
+            total_unlocked += computed["unlocked_count"]
+            total_tiers += computed["total_tiers"]
+
+        return {
+            "categories": categories,
+            "total_unlocked": total_unlocked,
+            "total_tiers": total_tiers,
+        }
