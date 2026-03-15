@@ -33,7 +33,7 @@ MIN_OC_INTERVAL_SECONDS = 10
 DEFAULT_OC_INTERVAL_SECONDS = 63  # was 60; 5% slower
 OC_LOOP_INTERVAL_SECONDS = 63  # fallback when config not used
 OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60
-AUTO_RANK_IDLE_TIMEOUT_SECONDS = 12 * 60 * 60  # 12 hours - if no real user activity, auto-rank goes idle (normal users)
+AUTO_RANK_IDLE_TIMEOUT_SECONDS = 24 * 60 * 60  # 24 hours - if no real user activity, auto-rank goes idle (normal users)
 
 
 # ─── Config helpers ───────────────────────────────────────────────
@@ -325,7 +325,7 @@ async def _set_user_idle(db, user_id: str, username: str = "?"):
         {"id": user_id},
         {"$set": {"auto_rank_idle": True, **saved_prefs, **disabled_prefs}}
     )
-    logger.info("Auto rank: user %s went idle (no activity for 12h) - tasks disabled, prefs saved", username)
+    logger.info("Auto rank: user %s went idle (no activity for 24h) - tasks disabled, prefs saved", username)
 
 
 def _is_staff(user: dict) -> bool:
@@ -1600,7 +1600,7 @@ def register(router):
         is_idle = bool((u or {}).get("auto_rank_idle"))
         activity_detail = None
         if is_idle:
-            activity_detail = "Idle — no activity for 12h (will wake on next page visit)"
+            activity_detail = "Idle — no activity for 24h (will wake on next page visit)"
         elif in_jail:
             activity_detail = "In jail — cycles paused"
         elif (u or {}).get("travel_arrives_at") and (u or {}).get("auto_rank_booze"):

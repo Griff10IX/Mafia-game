@@ -671,21 +671,27 @@ function buildSpeedProfile(track) {
     const c = getCurvature(track, i/N);
     raw[i] = c < 0.005 ? 1.0 : Math.max(0.55, 1/(1 + c*18));
   }
-  // Pass 2: braking (3 iterations, scan backwards)
+  // Pass 2: braking (3 iterations, scan backwards). Skip wrap at lap boundary so we don't brake into the finish line every lap.
   for (let iter = 0; iter < 3; iter++) {
     for (let i = N-1; i >= 0; i--) {
-      const lim = raw[(i+1)%N] / 0.960;
+      const next = (i+1) % N;
+      if (next === 0) continue; // don't limit end-of-lap by start-of-lap (avoids artificial slowdown before finish)
+      const lim = raw[next] / 0.960;
       if (raw[i] > lim) raw[i] = lim;
     }
-    for (let i = N-1; i >= 0; i--) { // second sweep for wrap
-      const lim = raw[(i+1)%N] / 0.960;
+    for (let i = N-1; i >= 0; i--) {
+      const next = (i+1) % N;
+      if (next === 0) continue;
+      const lim = raw[next] / 0.960;
       if (raw[i] > lim) raw[i] = lim;
     }
   }
-  // Pass 3: acceleration (scan forward)
+  // Pass 3: acceleration (scan forward). Skip wrap so start of lap isn't limited by end of previous lap.
   for (let iter = 0; iter < 3; iter++) {
     for (let i = 0; i < N; i++) {
-      const lim = raw[(i-1+N)%N] / 0.974;
+      const prev = (i-1+N) % N;
+      if (prev === N-1) continue;
+      const lim = raw[prev] / 0.974;
       if (raw[i] > lim) raw[i] = lim;
     }
   }
@@ -1640,9 +1646,11 @@ export default function CircuitRaceView({
   // ─── LIVE MODE ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (mode !== "live") return;
-    if (!participants.length || !qualifying_order?.length) return;
-    const seen=new Set();
-    const order=qualifying_order.filter(id=>{if(seen.has(id))return false;seen.add(id);return true;});
+    if (!participants.length) return;
+    // Use qualifying_order from backend when present; otherwise derive grid order so qualifying lap still runs
+    const rawOrder = (qualifying_order?.length ? qualifying_order : (resultOrder?.length ? resultOrder : null)) || participants.slice().sort((a, b) => ((b.effective_speed ?? 15) - (a.effective_speed ?? 15))).map(p => p.user_id || p.id);
+    const seen = new Set();
+    const order = rawOrder.filter(id => { if (seen.has(id)) return false; seen.add(id); return true; });
     resizeCanvas();
     const track=TRACKS.find(t=>t.id===initialTrackId)||TRACKS[0];
     const cond=WEATHER_MAP[weatherIdProp]||"clear";

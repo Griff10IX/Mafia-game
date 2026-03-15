@@ -275,10 +275,17 @@ export default function Layout({ children }) {
   const [showBottomNavDividers, setShowBottomNavDividers] = useState(loadBottomNavShowDividers);
   const [draggingStatId, setDraggingStatId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [rankingOpen, setRankingOpen] = useState(false);
-  const [casinoOpen, setCasinoOpen] = useState(false);
-  const [miniGamesOpen, setMiniGamesOpen] = useState(false);
-  const [combatOpen, setCombatOpen] = useState(false);
+  const navSectionKey = (key) => `nav-${key}-open`;
+  const getNavSectionOpen = (key) => {
+    try { return sessionStorage.getItem(navSectionKey(key)) === '1'; } catch { return false; }
+  };
+  const setNavSectionOpen = (key, value) => {
+    try { sessionStorage.setItem(navSectionKey(key), value ? '1' : '0'); } catch {}
+  };
+  const [rankingOpen, setRankingOpen] = useState(() => getNavSectionOpen('ranking'));
+  const [casinoOpen, setCasinoOpen] = useState(() => getNavSectionOpen('casino'));
+  const [miniGamesOpen, setMiniGamesOpen] = useState(() => getNavSectionOpen('minigames'));
+  const [combatOpen, setCombatOpen] = useState(() => getNavSectionOpen('combat'));
   const [categoryOpen, setCategoryOpen] = useState(() => ({ information: true, travel: true, messaging: true, money: true, other: true }));
   const [mobileBottomMenuOpen, setMobileBottomMenuOpen] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -868,7 +875,7 @@ export default function Layout({ children }) {
   const isRankingPath = (p) => p === '/game/ranking' || (p && (p.startsWith('/game/ranking/') || p.startsWith('/crime/') || p === '/organised-crime' || p === '/account/prestige'));
   const rankingNavBlock = (
     <div className="space-y-0.5">
-      <button type="button" data-testid="nav-ranking-group" onClick={() => setRankingOpen((v) => !v)}
+      <button type="button" data-testid="nav-ranking-group" onClick={() => setRankingOpen((v) => { const next = !v; setNavSectionOpen('ranking', next); return next; })}
         className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isRankingPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
         <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
@@ -938,7 +945,7 @@ export default function Layout({ children }) {
   const isCombatPath = (p) => ['/kill/attack', '/kill/attempts', '/kill/hitlist', '/kill/bodyguards', '/kill/armour-weapons'].includes(p) || p?.startsWith('/kill/');
   const combatNavBlock = (
     <div className="space-y-0.5">
-      <button type="button" data-testid="nav-combat-group" onClick={() => setCombatOpen((v) => !v)}
+      <button type="button" data-testid="nav-combat-group" onClick={() => setCombatOpen((v) => { const next = !v; setNavSectionOpen('combat', next); return next; })}
         className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCombatPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
         <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
@@ -975,7 +982,7 @@ export default function Layout({ children }) {
   const isCasinoPath = (p) => p === '/casino' || (p && (p.startsWith('/casino/') || p === '/sports-betting' || p === '/my-properties'));
   const casinoNavBlock = (
     <div className="space-y-0.5">
-      <button type="button" data-testid="nav-casino-group" onClick={() => setCasinoOpen((v) => !v)}
+      <button type="button" data-testid="nav-casino-group" onClick={() => setCasinoOpen((v) => { const next = !v; setNavSectionOpen('casino', next); return next; })}
         className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCasinoPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
         <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
@@ -1016,7 +1023,7 @@ export default function Layout({ children }) {
   const isMiniGamesPath = (p) => p && p.startsWith('/casino/mini-games/');
   const miniGamesNavBlock = (
     <div className="space-y-0.5">
-      <button type="button" data-testid="nav-minigames-group" onClick={() => setMiniGamesOpen((v) => !v)}
+      <button type="button" data-testid="nav-minigames-group" onClick={() => setMiniGamesOpen((v) => { const next = !v; setNavSectionOpen('minigames', next); return next; })}
         className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMiniGamesPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
         <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
