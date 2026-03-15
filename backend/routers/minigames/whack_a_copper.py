@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from server import db, get_current_user
 
-MAX_PLAYS_PER_HOUR = 15
+MAX_PLAYS_PER_HOUR = 10
 MAX_SCORE_ACCEPTED = 50_000
 MIN_SCORE_FOR_REWARD = 100
 CASH_PER_10_POINTS = 1  # $1 per 10 score

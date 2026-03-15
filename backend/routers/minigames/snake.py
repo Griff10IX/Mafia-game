@@ -11,7 +11,7 @@ from routers.minigames.minigame_leaderboard import log_minigame_play
 
 
 MAX_SCORE_ACCEPTED = 50_000
-MAX_PLAYS_PER_HOUR = 15
+MAX_PLAYS_PER_HOUR = 10
 
 # Per-submit caps for each reward type (prevent economy overflow)
 # 75% reduction for beta
@@ -112,7 +112,7 @@ def register(router):
             "Submit your score when you die to credit rewards (cash, respect, rank points, bullets, booze) to your account.",
             "Avoid the jail token — it reduces your score and adds jail time.",
             "Cops appear after 100 points. Don't hit them or you're pinched.",
-            "Speed increases as you collect. Max 15 runs per hour.",
+            "Speed increases as you collect. Max 10 runs per hour.",
         ],
         "max_score_accepted": MAX_SCORE_ACCEPTED,
         "max_plays_per_hour": MAX_PLAYS_PER_HOUR,

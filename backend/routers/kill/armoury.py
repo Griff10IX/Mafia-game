@@ -65,6 +65,7 @@ BRASS_KNUCKLES_WEAPON_ID = "weapon1"  # exclude from shooting range (no bullets)
 # Playing the 3D range: grant more mastery per hit than auto_sim (quicker mastery when you play)
 MASTERY_PCT_PER_LIVE_HIT = 1  # 1% per hit when playing the 3D game (max 30 hits per submit)
 MASTERY_LIVE_HITS_MAX_PER_REQUEST = 30
+SHOOTING_RANGE_MAX_PLAYS_PER_HOUR = 10
 
 
 class StateOptionalRequest(BaseModel):
@@ -1447,12 +1448,60 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
     score = int(request.score) if request.score is not None else 0
     if score < 0:
         raise HTTPException(status_code=400, detail="score must be >= 0.")
-    now = datetime.now(timezone.utc)
+
+    now_dt = datetime.now(timezone.utc).replace(microsecond=0)
+    now_iso = now_dt.isoformat().replace("+00:00", "Z")
+    hour_start = now_dt.replace(minute=0, second=0)
+    hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
+    reset_dt = hour_start + timedelta(hours=1)
+    reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
+
+    meta = await db.user_meta.find_one(
+        {"user_id": current_user["id"]},
+        {"_id": 0, "shooting_range_hour_start": 1, "shooting_range_hour_count": 1},
+    )
+    meta_start = (meta or {}).get("shooting_range_hour_start")
+    meta_count = int((meta or {}).get("shooting_range_hour_count") or 0)
+    if meta_start == hour_start_iso:
+        if meta_count >= SHOOTING_RANGE_MAX_PLAYS_PER_HOUR:
+            remaining = max(0, int((reset_dt - now_dt).total_seconds()))
+            raise HTTPException(
+                status_code=400,
+                detail=f"Hourly limit reached ({SHOOTING_RANGE_MAX_PLAYS_PER_HOUR} plays). Try again in {remaining}s.",
+            )
+        new_count = meta_count + 1
+        await db.user_meta.update_one(
+            {"user_id": current_user["id"]},
+            {
+                "$setOnInsert": {"user_id": current_user["id"]},
+                "$set": {
+                    "shooting_range_hour_start": hour_start_iso,
+                    "shooting_range_hour_reset_at": reset_iso,
+                    "shooting_range_hour_count": new_count,
+                },
+            },
+            upsert=True,
+        )
+    else:
+        new_count = 1
+        await db.user_meta.update_one(
+            {"user_id": current_user["id"]},
+            {
+                "$setOnInsert": {"user_id": current_user["id"]},
+                "$set": {
+                    "shooting_range_hour_start": hour_start_iso,
+                    "shooting_range_hour_reset_at": reset_iso,
+                    "shooting_range_hour_count": 1,
+                },
+            },
+            upsert=True,
+        )
+
     doc = {
         "user_id": current_user["id"],
         "username": current_user.get("username") or "?",
         "score": score,
-        "created_at": now.isoformat(),
+        "created_at": now_iso,
     }
     await db.shooting_range_scores.insert_one(doc)
     try:

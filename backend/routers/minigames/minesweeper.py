@@ -18,7 +18,7 @@ DIFFICULTY_CONFIG = {
     "godfather": {"base_cash": 12_500, "base_respect": 50, "points": 60, "max_time": 1800},
 }
 
-MAX_WINS_PER_HOUR = 20
+MAX_WINS_PER_HOUR = 10
 
 
 class MinesweeperWinRequest(BaseModel):

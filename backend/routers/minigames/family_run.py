@@ -11,7 +11,7 @@ from routers.minigames.minigame_leaderboard import log_minigame_play
 
 
 MAX_SCORE_ACCEPTED = 100_000
-MAX_PLAYS_PER_HOUR = 15
+MAX_PLAYS_PER_HOUR = 10
 
 REWARD_CAPS = {
     "cash": 10_000,

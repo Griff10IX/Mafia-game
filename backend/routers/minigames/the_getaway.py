@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from server import db, get_current_user
 
-MAX_RUNS_PER_HOUR = 15
+MAX_RUNS_PER_HOUR = 10
 
 # 75% reduction for beta
 BASE_CASH = 3_750
