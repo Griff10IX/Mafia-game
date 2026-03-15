@@ -1260,10 +1260,11 @@ def register(router):
             "crime_profit": int(current_user.get("referral_earnings_crime") or 0),
             "oc_profit": int(current_user.get("referral_earnings_oc") or 0),
             "garage_scrap": int(current_user.get("referral_earnings_garage_scrap") or 0),
+            "booze_profit": int(current_user.get("referral_earnings_booze") or 0),
         }
         signup_bonus = None
         if referred_by_username:
-            signup_bonus = "Premium rank bar, 500 respect points, and 18 tokens (use them; they can't be sold on Quick Trade)."
+            signup_bonus = "Premium rank bar, 500 respect points, and 18 tokens (use them; they can't be sold on Quick Trade). Plus 2% higher crime payouts and a slight GTA rare car boost."
         return {
             "username": username,
             "referred_by_username": referred_by_username,

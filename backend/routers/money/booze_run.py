@@ -358,6 +358,15 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
             await update_objectives_progress(user["id"], "booze_runs", 1)
         except Exception:
             pass
+        # Referral: referrer gets 2% of booze profit (game-paid)
+        referred_by = user.get("referred_by")
+        if referred_by and referred_by != user["id"] and profit > 0:
+            referral_cash = max(0, int(profit * 0.02))
+            if referral_cash > 0:
+                await db.users.update_one(
+                    {"id": referred_by},
+                    {"$inc": {"money": referral_cash, "referral_earnings_booze": referral_cash}},
+                )
     _invalidate_config_cache(user["id"])
     return {"message": f"Sold {amount} {booze_name}", "revenue": revenue, "profit": profit, "new_carrying": new_val, "is_run": is_run}
 

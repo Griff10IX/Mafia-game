@@ -564,6 +564,9 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
             reward = int(reward * (1 + bb.get("crimes", 0) * 0.001))
         except Exception:
             pass
+        # Referred user: 2% higher crime payouts
+        if current_user.get("referred_by"):
+            reward = int(reward * 1.02)
         rp_before = int(current_user.get("rank_points") or 0)
         inc = {
             "money": reward,

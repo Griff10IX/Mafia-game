@@ -1474,7 +1474,7 @@ export default function Profile() {
                       Referred by: <span className="text-foreground font-semibold">{me.referred_by_username}</span>
                     </p>
                     <p className="text-[11px] text-mutedForeground font-heading">
-                      Your signup bonus: premium rank bar, 500 respect points, and 18 tokens (use them; they can&apos;t be sold on Quick Trade).
+                      Your signup bonus: premium rank bar, 500 respect points, and 18 tokens (use them; they can&apos;t be sold on Quick Trade). You also get 2% higher crime payouts and a slight GTA rare car boost.
                     </p>
                   </>
                 )}
@@ -1486,6 +1486,7 @@ export default function Profile() {
                   <li>5% of their crime profit</li>
                   <li>5% of their OC heist profit</li>
                   <li>5% of their garage scrap (cash) profit</li>
+                  <li>2% of their booze profit (cash)</li>
                 </ul>
                 <div className="flex flex-wrap items-center gap-2">
                   <input

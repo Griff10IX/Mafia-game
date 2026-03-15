@@ -101,6 +101,7 @@ RESPECT_FROM_GTA_MULT = 0.25
 GTA_EXCLUSIVE_CAR_ID = "car20"
 GTA_EXCLUSIVE_POOL_CONFIG_ID = "gta_exclusive"
 GTA_EXCLUSIVE_DROP_WEIGHT = 0.000006  # ~1 in 167k relative to weight-1.0 cars when all cars in pool
+REFERRED_USER_GTA_RARE_BOOST = 0.15  # Slight GTA rare car weight boost for users who signed up with a referral
 
 # One-time respect_points rewards when total_gta crosses milestones (same progression as busts/crimes)
 GTA_MILESTONES = [
@@ -383,6 +384,9 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             _rare_boost += bb.get("gta", 0) * 0.001
         except Exception:
             pass
+        # Referred user: slight GTA rare car boost
+        if current_user.get("referred_by"):
+            _rare_boost += REFERRED_USER_GTA_RARE_BOOST
         gta_rare_perk = int(current_user.get("gta_rare_drop_perk_attempts_remaining") or 0)
         if gta_rare_perk > 0:
             _rare_boost = max(_rare_boost, 1.0)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { UserPlus, Copy, Crosshair, DollarSign, Car, Building2, BarChart3, Link2 } from 'lucide-react';
+import { UserPlus, Copy, Crosshair, DollarSign, Car, Building2, BarChart3, Link2, Wine } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -85,7 +85,8 @@ export default function Referral() {
     (earnings.melt_bullets || 0) > 0 ||
     (earnings.crime_profit || 0) > 0 ||
     (earnings.oc_profit || 0) > 0 ||
-    (earnings.garage_scrap || 0) > 0;
+    (earnings.garage_scrap || 0) > 0 ||
+    (earnings.booze_profit || 0) > 0;
 
   const cardClass = 'relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ref-fade-in';
   const cardHeaderClass = 'px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20';
@@ -166,7 +167,23 @@ export default function Referral() {
               <li>5% of their crime profit (cash)</li>
               <li>5% of their OC heist profit (cash)</li>
               <li>5% of their garage scrap profit (cash)</li>
+              <li>2% of their booze profit (cash)</li>
             </ul>
+          </div>
+        </div>
+
+        {/* What referred users get — for referrers and referred users */}
+        <div className={cardClass} style={{ animationDelay: '0.18s' }}>
+          <div className={cardHeaderClass}>
+            <h2 className={cardTitleClass}>
+              <UserPlus size={14} className="sm:w-4 sm:h-4" />
+              What referred users get
+            </h2>
+          </div>
+          <div className="p-2.5 sm:p-3">
+            <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">
+              People who sign up with your link get: free premium rank bar, 500 respect, 18 tokens (non-tradeable), 2% higher crime payouts, and a slight GTA rare car boost.
+            </p>
           </div>
         </div>
 
@@ -184,7 +201,7 @@ export default function Referral() {
             ) : (
               <>
                 <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">Lifetime totals from referred users</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                   <StatCard
                     label="Melt bullets"
                     value={Number(earnings.melt_bullets || 0).toLocaleString()}
@@ -194,6 +211,7 @@ export default function Referral() {
                   <StatCard label="Crime profit" value={formatMoney(earnings.crime_profit || 0)} valueColor="text-emerald-400" icon={DollarSign} />
                   <StatCard label="OC profit" value={formatMoney(earnings.oc_profit || 0)} valueColor="text-emerald-400" icon={Building2} />
                   <StatCard label="Garage scrap" value={formatMoney(earnings.garage_scrap || 0)} valueColor="text-emerald-400" icon={Car} />
+                  <StatCard label="Booze profit" value={formatMoney(earnings.booze_profit || 0)} valueColor="text-emerald-400" icon={Wine} />
                 </div>
               </>
             )}
