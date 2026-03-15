@@ -278,6 +278,7 @@ export default function Layout({ children }) {
   const [rankingOpen, setRankingOpen] = useState(false);
   const [casinoOpen, setCasinoOpen] = useState(false);
   const [miniGamesOpen, setMiniGamesOpen] = useState(false);
+  const [combatOpen, setCombatOpen] = useState(false);
   const [mobileBottomMenuOpen, setMobileBottomMenuOpen] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
@@ -816,10 +817,7 @@ export default function Layout({ children }) {
     { path: '/account/stats', icon: BarChart3, label: 'My Stats' },
     { path: '/money/bank', icon: Landmark, label: 'Bank' },
     { path: '/money/stocks', icon: TrendingUp, label: 'Stock Market' },
-    { path: '/kill/attack', icon: Sword, label: 'Attack' },
-    { path: '/kill/attempts', icon: Crosshair, label: 'Attempts' },
-    { path: '/kill/hitlist', icon: ScrollText, label: 'Hitlist' },
-    { path: '/kill/bodyguards', icon: Shield, label: 'Bodyguards' },
+    { path: '__combat__', icon: Sword, label: 'Combat' },
     { path: '/game/travel', icon: Plane, label: 'Travel' },
     { path: '/game/states', icon: MapPin, label: 'States' },
     { path: '/my-properties', icon: Building2, label: 'My Properties' },
@@ -834,7 +832,6 @@ export default function Layout({ children }) {
     { path: '/cars/sell', icon: DollarSign, label: 'Sell Cars' },
     { path: '/cars/buy', icon: ShoppingBag, label: 'Buy Cars' },
     { path: '/money/property', icon: Building, label: 'Properties' },
-    { path: '/kill/armour-weapons', icon: Sword, label: 'Armoury' },
     { path: '/mini-games', icon: Gamepad2, label: 'Mini games' },
     { path: '/casino', icon: Dice5, label: 'Casino' },
     { path: '/money/crack-safe', icon: Lock, label: 'Crack the Safe' },
@@ -922,6 +919,40 @@ export default function Layout({ children }) {
     </div>
   );
 
+  const isCombatPath = (p) => ['/kill/attack', '/kill/attempts', '/kill/hitlist', '/kill/bodyguards', '/kill/armour-weapons'].includes(p) || p?.startsWith('/kill/');
+  const combatNavBlock = (
+    <div className="space-y-0.5">
+      <button type="button" data-testid="nav-combat-group" onClick={() => setCombatOpen((v) => !v)}
+        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${isCombatPath(location.pathname) ? styles.navItemActive : styles.sidebarNavLink}`}
+        style={isCombatPath(location.pathname) ? sidebarActiveGroupStyle : undefined}>
+        <Sword size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
+        <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Combat</span>
+        {combatOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
+      </button>
+      {combatOpen && (
+        <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
+          {[
+            { to: '/kill/attack', label: 'Attack', testId: 'nav-attack' },
+            { to: '/kill/attempts', label: 'Attempts', testId: 'nav-attempts' },
+            { to: '/kill/hitlist', label: 'Hitlist', testId: 'nav-hitlist' },
+            { to: '/kill/bodyguards', label: 'Bodyguards', testId: 'nav-bodyguards' },
+            { to: '/kill/armour-weapons', label: 'Armoury', testId: 'nav-armoury' },
+          ].map((item, idx) => {
+            const isActive = location.pathname === item.to;
+            return (
+              <Fragment key={item.to}>
+                {showSidebarDividers && idx > 0 && navDividerEl(`cb${idx}`)}
+                <Link to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
+                  <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
+                </Link>
+              </Fragment>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
   const casinoNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-casino-group" onClick={() => setCasinoOpen((v) => !v)}
@@ -1002,6 +1033,7 @@ export default function Layout({ children }) {
   const renderNavItem = (item, showDivider) => {
     const navDivider = showDivider ? navDividerEl(`div-${item.path}`) : null;
     if (item.path === '/game/ranking') return <Fragment key="nav-ranking-group">{navDivider}{rankingNavBlock}</Fragment>;
+    if (item.path === '__combat__') return <Fragment key="nav-combat-group">{navDivider}{combatNavBlock}</Fragment>;
     if (item.path === '/casino') return <Fragment key="nav-casino-group">{navDivider}{casinoNavBlock}</Fragment>;
     if (item.path === '/mini-games') return <Fragment key="nav-minigames-group">{navDivider}{miniGamesNavBlock}</Fragment>;
     const Icon = item.icon;
