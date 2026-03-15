@@ -711,6 +711,7 @@ def register(router):
             "muted_writing_colour_id": "mutedWritingColourId",
             "toast_text_colour_id": "toastTextColourId",
             "text_style_id": "textStyleId",
+            "theme_variant": "themeVariant",
             "custom_themes": "customThemes",
             "sidebar_layout": "sidebarLayout",
         }

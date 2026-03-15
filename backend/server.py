@@ -528,6 +528,7 @@ class ThemePreferencesRequest(BaseModel):
     muted_writing_colour_id: Optional[str] = None
     toast_text_colour_id: Optional[str] = None
     text_style_id: Optional[str] = None
+    theme_variant: Optional[str] = None
     custom_themes: Optional[List[Dict]] = None
     sidebar_layout: Optional[str] = None
 

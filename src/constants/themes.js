@@ -568,6 +568,11 @@ export const DEFAULT_TEXT_STYLE_ID = 'normal';
 export const DEFAULT_FONT_ID = 'classic';
 export const DEFAULT_BUTTON_STYLE_ID = 'original';
 export const DEFAULT_TEXTURE_ID = 'none';
+export const DEFAULT_THEME_VARIANT = 'classic';
+export const THEME_VARIANTS = [
+  { id: 'classic', name: 'Classic Layout', description: 'Original mafia layout and spacing' },
+  { id: 'modern', name: 'Modern Layout', description: 'Futuristic layout with modern spacing and sections' },
+];
 
 /**
  * Full presets: one-click theme bundles (colour + texture + optional button/accent/writing/buttonStyle).
@@ -575,9 +580,9 @@ export const DEFAULT_TEXTURE_ID = 'none';
  * Optional: writingColourId, mutedWritingColourId, buttonStyleId, fontId, textStyleId, toastTextColourId for full presets.
  */
 export const THEME_PRESETS = [
-  { id: 'old-default', name: 'Old Default Theme', description: 'Full theme: gold accent, no texture, original buttons, default text & font', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'default', mutedWritingColourId: null, buttonStyleId: 'original', fontId: 'classic', textStyleId: 'normal', toastTextColourId: null, mobileNavStyle: 'sidebar', isFullPreset: true },
-  { id: 'modern-full', name: 'Modern Full', description: 'Modern spacing, cool palette, cleaner typography and layout', colourId: 'tone-2-ocean', textureId: 'modern-soft', buttonColourId: 'electric', accentLineColourId: 'sky', writingColourId: 'cool-white', mutedWritingColourId: 'powder-blue', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', isFullPreset: true },
-  { id: 'original', name: 'Original theme', description: 'Default look before custom themes', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'old-default', name: 'Old Default Theme', description: 'Full theme: gold accent, no texture, original buttons, default text & font', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'default', mutedWritingColourId: null, buttonStyleId: 'original', fontId: 'classic', textStyleId: 'normal', toastTextColourId: null, mobileNavStyle: 'sidebar', themeVariant: 'classic', isFullPreset: true },
+  { id: 'modern-full', name: 'Modern Full', description: 'Modern spacing, cool palette, cleaner typography and layout', colourId: 'tone-2-ocean', textureId: 'modern-soft', buttonColourId: 'electric', accentLineColourId: 'sky', writingColourId: 'cool-white', mutedWritingColourId: 'powder-blue', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', themeVariant: 'modern', isFullPreset: true },
+  { id: 'original', name: 'Original theme', description: 'Default look before custom themes', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null, themeVariant: 'classic' },
   { id: 'default', name: 'Classic Mafia', description: 'Gold, no texture', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'dark-mode', name: 'Dark Mode', description: 'Slate accents, clean', colourId: 'matte-slate', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'telegram', name: 'Telegram', description: 'Teal / sky blue', colourId: 'sky', textureId: 'none', buttonColourId: null, accentLineColourId: null },

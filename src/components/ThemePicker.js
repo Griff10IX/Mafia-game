@@ -11,7 +11,7 @@ import {
   THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS,
   THEME_BUTTON_STYLES, THEME_BUTTON_SHAPES, THEME_DIVIDER_STYLES,
   THEME_SIDEBAR_SPACING, THEME_SIDEBAR_LAYOUT, THEME_TOAST_POSITION, THEME_WRITING_COLOURS, THEME_TEXT_STYLES,
-  THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS,
+  THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS, THEME_VARIANTS,
   DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID,
   DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID,
   getThemeColour,
@@ -212,10 +212,10 @@ export default function ThemePicker({ open, onClose }) {
   const {
     colourId, textureId, buttonColourId, accentLineColourId, fontId,
     buttonStyleId, buttonShapeId, writingColourId, mutedWritingColourId,
-    toastTextColourId, textStyleId, mobileNavStyle,
+    toastTextColourId, textStyleId, mobileNavStyle, themeVariant,
     setColour, setTexture, setButtonColour, setAccentLineColour, setFont,
     setButtonStyle, setButtonShape, setWritingColour, setMutedWritingColour,
-    setToastTextColour, setTextStyle, setMobileNavStyle,
+    setToastTextColour, setTextStyle, setMobileNavStyle, setThemeVariant,
     resetButtonToDefault, resetAccentLineToDefault,
     customThemes, addCustomTheme, removeCustomTheme,
   } = useTheme();
@@ -310,7 +310,8 @@ export default function ThemePicker({ open, onClose }) {
     (p.fontId == null || fontId === p.fontId) &&
     (p.textStyleId == null || textStyleId === p.textStyleId) &&
     (p.toastTextColourId === undefined || (p.toastTextColourId == null ? toastTextColourId == null : toastTextColourId === p.toastTextColourId)) &&
-    (p.mobileNavStyle == null || mobileNavStyle === p.mobileNavStyle);
+    (p.mobileNavStyle == null || mobileNavStyle === p.mobileNavStyle) &&
+    (p.themeVariant == null || themeVariant === p.themeVariant);
 
   const applyPreset = (p) => {
     setColour(p.colourId); setTexture(p.textureId);
@@ -322,6 +323,7 @@ export default function ThemePicker({ open, onClose }) {
     if (p.textStyleId != null) setTextStyle(p.textStyleId);
     if (p.toastTextColourId !== undefined) setToastTextColour(p.toastTextColourId ?? null);
     if (p.mobileNavStyle != null) setMobileNavStyle(p.mobileNavStyle);
+    if (p.themeVariant != null) setThemeVariant(p.themeVariant);
   };
 
   const handleSaveCustom = () => {
@@ -389,6 +391,7 @@ export default function ThemePicker({ open, onClose }) {
                 setMutedWritingColour(null); setTextStyle(DEFAULT_TEXT_STYLE_ID);
                 resetButtonToDefault(); resetAccentLineToDefault();
                 setMobileNavStyle('sidebar');
+                setThemeVariant('classic');
               }}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-heading font-bold uppercase tracking-wider border border-zinc-700 bg-zinc-800/80 text-zinc-400 hover:border-primary/40 hover:text-primary transition-all"
               data-testid="theme-reset-default"
@@ -430,6 +433,33 @@ export default function ThemePicker({ open, onClose }) {
           {/* ════ PRESETS ════ */}
           {activeTab === 'presets' && (
             <>
+              <TabSection icon={PanelLeft} title="Layout mode" sub="Switch between old default layout and full modern futuristic layout">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {THEME_VARIANTS.map((variant) => {
+                    const active = themeVariant === variant.id;
+                    return (
+                      <button
+                        key={variant.id}
+                        type="button"
+                        onClick={() => setThemeVariant(variant.id)}
+                        className={`text-left rounded-lg border px-3 py-2.5 transition-all ${
+                          active
+                            ? 'border-primary/70 bg-primary/12 text-primary'
+                            : 'border-zinc-700/80 bg-zinc-900/70 text-zinc-300 hover:border-primary/35 hover:bg-zinc-800/85'
+                        }`}
+                      >
+                        <div className="text-[10px] font-heading font-black uppercase tracking-wider">
+                          {variant.name}
+                        </div>
+                        <div className="text-[10px] text-zinc-500 mt-0.5">
+                          {variant.description}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </TabSection>
+
               <TabSection icon={Wand2} title="Quick colour presets" sub="Changes accent colour only — leaves text, buttons and layout untouched">
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                   {THEME_PRESETS.filter(p => !p.isFullPreset).map(p => <PresetCard key={p.id} preset={p} active={getPresetIsActive(p)} onSelect={applyPreset} />)}
