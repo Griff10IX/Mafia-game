@@ -19,7 +19,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
   const goItems = [
     { path: '/game/travel', label: 'Travel' },
     { path: '/game/states', label: 'States' },
-    ...(hasCasinoOrProperty ? [{ path: '/my-properties', label: 'My Properties' }] : []),
+    { path: '/my-properties', label: 'My Properties' },
     { path: '/money/property', label: 'Properties' },
     { path: '/cars/garage', label: 'Garage' },
     { path: '/cars/sell', label: 'Sell Cars' },
@@ -821,7 +821,7 @@ export default function Layout({ children }) {
     { path: '/kill/bodyguards', icon: Shield, label: 'Bodyguards' },
     { path: '/game/travel', icon: Plane, label: 'Travel' },
     { path: '/game/states', icon: MapPin, label: 'States' },
-    ...(hasCasinoOrProperty ? [{ path: '/my-properties', icon: Building2, label: 'My Properties' }] : []),
+    { path: '/my-properties', icon: Building2, label: 'My Properties' },
     { path: '/money/booze-run', icon: Wine, label: 'Booze Run' },
     { path: '/money/racket', icon: Building2, label: 'Racket' },
     { path: '/game/users-online', icon: Users, label: 'Users Online' },
