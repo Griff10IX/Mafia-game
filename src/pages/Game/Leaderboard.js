@@ -13,6 +13,11 @@ const LB_STYLES = `
 
 const TOP_OPTIONS = [5, 10, 20, 50, 100];
 
+const EMPTY_BOARDS = {
+  kills: [], crimes: [], gta: [], jail_busts: [], points_spent: [],
+  respect_points: [], bullets_melted: [], stock_market_profit: [], booze_run_profit: [],
+};
+
 function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
   const list = entries || [];
   return (
@@ -98,11 +103,6 @@ export default function Leaderboard() {
   const [viewMode, setViewMode] = useState('alive');
   const intervalRef = useRef(null);
 
-  const emptyBoards = {
-    kills: [], crimes: [], gta: [], jail_busts: [], points_spent: [],
-    respect_points: [], bullets_melted: [], stock_market_profit: [], booze_run_profit: [],
-  };
-
   const fetchLeaderboard = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
@@ -110,7 +110,7 @@ export default function Leaderboard() {
       const response = await api.get('/leaderboards/top', {
         params: { limit: topLimit, dead: viewMode === 'dead', period },
       });
-      setBoards(response.data || emptyBoards);
+      setBoards(response.data || EMPTY_BOARDS);
     } catch (error) {
       if (!silent) toast.error('Failed to load leaderboard');
     } finally {
@@ -121,7 +121,7 @@ export default function Leaderboard() {
 
   useEffect(() => {
     fetchLeaderboard(boards !== null);
-  }, [fetchLeaderboard]);
+  }, [fetchLeaderboard, boards]);
 
   useEffect(() => {
     intervalRef.current = setInterval(() => fetchLeaderboard(true), 60_000);

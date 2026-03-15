@@ -179,6 +179,7 @@ export default function FamilyRun() {
     scoreSubmittedRef.current = false;
     G.current=makeState();
     G.current.phase='playing';
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- makeState is stable (uses G.current)
   }, []);
 
   useEffect(() => {
@@ -217,6 +218,7 @@ export default function FamilyRun() {
     };
     raf.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only init; makeState/render/tick are stable
   }, []);
 
   function tick(g) {

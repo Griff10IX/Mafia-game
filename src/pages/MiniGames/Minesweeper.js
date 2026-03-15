@@ -116,6 +116,7 @@ export default function Minesweeper() {
       submittedRef.current = true;
       submitWin();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- run only when phase becomes "won"; submitWin uses current closure
   }, [phase]);
 
   const submitWin = async () => {

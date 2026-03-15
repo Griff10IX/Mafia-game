@@ -231,12 +231,14 @@
   display: grid;
   gap: 8px;
   padding: 8px;
+  grid-template-columns: repeat(var(--cols, 3), 1fr);
+  grid-template-rows: repeat(var(--rows, 3), minmax(80px, 1fr));
 }
 
 .holeWrapper {
   position: relative;
-  aspect-ratio: 1;
-  max-width: 100px;
+  width: 100%;
+  min-height: 80px;
   margin: 0 auto;
 }
 
@@ -244,6 +246,7 @@
   position: relative;
   width: 100%;
   height: 100%;
+  min-height: 80px;
   border-radius: 50%;
   overflow: hidden;
 }
@@ -274,7 +277,7 @@
 .holeBg {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse 70% 60% at 50% 80%, #2a1a0a 0%, #1a0f05 50%, #0d0804 100%);
+  background: radial-gradient(ellipse 70% 60% at 50% 80%, #3d2a18 0%, #2a1a0c 50%, #1a1008 100%);
 }
 
 .copMover {
@@ -303,7 +306,7 @@
   left: 0;
   right: 0;
   height: 35%;
-  background: linear-gradient(to top, #1a1208 0%, transparent 100%);
+  background: linear-gradient(to top, #2a1a10 0%, transparent 100%);
   pointer-events: none;
 }
 
@@ -311,7 +314,8 @@
   position: absolute;
   inset: -3px;
   border-radius: 50%;
-  border: 3px solid #3d2a15;
+  border: 3px solid #5c4020;
+  box-shadow: inset 0 0 12px rgba(0,0,0,0.5);
   pointer-events: none;
 }
 

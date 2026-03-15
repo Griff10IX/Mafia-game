@@ -104,8 +104,10 @@ export default function MiniGamesLeaderboard() {
     }
   }, []);
 
+  const hasDataRef = useRef(false);
   useEffect(() => {
-    fetchData(data !== null);
+    fetchData(hasDataRef.current);
+    hasDataRef.current = true;
   }, [fetchData]);
 
   useEffect(() => {

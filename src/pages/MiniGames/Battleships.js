@@ -1478,6 +1478,7 @@ export default function Battleships() {
       if (isMobile && isHit) { setBattleTab("yours"); setTimeout(()=>setBattleTab("enemy"),1800); }
     },settings.aiDelay);
     return()=>clearTimeout(aiTimerRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- AI turn effect: omit activeShips/aiState/playerGrid etc to avoid re-trigger loops
   },[playerTurn,screen,cutscene,CELL,isMobile]);
 
   const resetToSettings=()=>setScreen("settings");

@@ -917,7 +917,10 @@ export default function MPPokerGamePage() {
                   </p>
                 )}
                 {status === 'playing' && (phase === 'playing' || isVsDealer) && currentTurnIndex >= 0 && (
-                  <div className="flex flex-col items-center gap-0.5 mt-1">
+                  <div
+                    className="relative flex flex-col items-center gap-0.5 mt-1 px-3 py-2 rounded-lg"
+                    style={{ zIndex: 15, background: 'rgba(0,0,0,0.5)' }}
+                  >
                     <div className="flex items-center gap-2">
                       {turnSecondsLeft != null && currentTurnPlayer?.status !== 'all_in' && (
                         <TurnTimer seconds={turnSecondsLeft} isMyTurn={isMyTurn} />
@@ -929,7 +932,7 @@ export default function MPPokerGamePage() {
                     </div>
                     {turnStatusMessage && (
                       <p className="text-[8px] font-heading text-center max-w-[220px] leading-tight"
-                        style={{ color: 'rgba(255,255,255,0.55)' }}>
+                        style={{ color: 'rgba(255,255,255,0.9)' }}>
                         {turnStatusMessage}
                       </p>
                     )}
