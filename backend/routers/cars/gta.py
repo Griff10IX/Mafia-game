@@ -374,6 +374,13 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         from server import get_prestige_bonus
         _gta_prestige_user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "prestige_level": 1})
         _rare_boost = get_prestige_bonus(_gta_prestige_user or {})["gta_rare_boost"]
+        # Badge bonus: 0.1% per GTA badge
+        try:
+            from routers.game.achievements import get_badge_bonuses
+            bb = await get_badge_bonuses(current_user.get("id") or "")
+            _rare_boost += bb.get("gta", 0) * 0.001
+        except Exception:
+            pass
         gta_rare_perk = int(current_user.get("gta_rare_drop_perk_attempts_remaining") or 0)
         if gta_rare_perk > 0:
             _rare_boost = max(_rare_boost, 1.0)
@@ -775,6 +782,14 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
         if action == "bullets":
             base_cooldown = int(MELT_BULLETS_COOLDOWN_SECONDS * 0.5) if melt_token_active else MELT_BULLETS_COOLDOWN_SECONDS
             cooldown_seconds = base_cooldown * deleted_count
+            # Badge bonus: 0.1% per bullets melted badge reduces cooldown (min 50%)
+            try:
+                from routers.game.achievements import get_badge_bonuses
+                bb = await get_badge_bonuses(user.get("id") or "")
+                bullets_mult = max(0.5, 1 - bb.get("bullets_melted", 0) * 0.001)
+                cooldown_seconds = int(cooldown_seconds * bullets_mult)
+            except Exception:
+                pass
             cooldown_until = now + timedelta(seconds=cooldown_seconds)
             await db.users.update_one(
                 {"id": user["id"]},

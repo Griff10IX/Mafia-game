@@ -290,10 +290,19 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
     total_cost_stored = int(carrying_cost.get(booze_id, 0))
     cost_of_sold = (total_cost_stored * amount // have) if have else 0
     profit = revenue - cost_of_sold
-    new_val = have - amount
-    booze_name = BOOZE_TYPES[booze_index]["name"]
+    # Badge bonus: 0.1% per booze runs badge (applied when is_run)
     buy_location = (user.get("booze_buy_location") or {}).get(booze_id)
     is_run = buy_location is not None and buy_location != current_state
+    if is_run:
+        try:
+            from routers.game.achievements import get_badge_bonuses
+            bb = await get_badge_bonuses(user.get("id") or "")
+            profit = int(profit * (1 + bb.get("booze_runs", 0) * 0.001))
+            revenue = cost_of_sold + profit
+        except Exception:
+            pass
+    new_val = have - amount
+    booze_name = BOOZE_TYPES[booze_index]["name"]
     today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     profit_today = user.get("booze_profit_today", 0)
     profit_today_date = user.get("booze_profit_today_date")

@@ -386,6 +386,8 @@ def _bullets_to_kill(
     target_rank_id: int,
     attacker_weapon_damage: int,
     attacker_rank_id: int,
+    attacker_kill_badges: int = 0,
+    victim_kill_badges: int = 0,
 ) -> int:
     arm = min(max(0, int(target_armour_level or 0)), 6)
     tr = min(max(1, int(target_rank_id or 1)), GODFATHER_RANK_ID)
@@ -398,6 +400,8 @@ def _bullets_to_kill(
     weapon_factor = 1.0 + (dmg / 140.0)
     attacker_factor = 1.0 + (ar - 1) * 0.05
     needed_raw = (base * rank_factor * gap_factor) / weapon_factor / attacker_factor
+    needed_raw *= max(0.5, 1 - attacker_kill_badges * 0.001)
+    needed_raw *= 1 + victim_kill_badges * 0.001
     return max(1, int(math.ceil(needed_raw)))
 
 def _bullets_to_kill_breakdown(
@@ -405,6 +409,8 @@ def _bullets_to_kill_breakdown(
     target_rank_id: int,
     attacker_weapon_damage: int,
     attacker_rank_id: int,
+    attacker_kill_badges: int = 0,
+    victim_kill_badges: int = 0,
 ) -> dict:
     arm = min(max(0, int(target_armour_level or 0)), 6)
     tr = min(max(1, int(target_rank_id or 1)), GODFATHER_RANK_ID)
@@ -417,6 +423,8 @@ def _bullets_to_kill_breakdown(
     weapon_factor = 1.0 + (dmg / 140.0)
     attacker_factor = 1.0 + (ar - 1) * 0.05
     needed_raw = (base * rank_factor * gap_factor) / weapon_factor / attacker_factor
+    needed_raw *= max(0.5, 1 - attacker_kill_badges * 0.001)
+    needed_raw *= 1 + victim_kill_badges * 0.001
     needed_before_clamp = int(math.ceil(needed_raw))
     bullets_required = max(1, needed_before_clamp)
     return {
@@ -701,7 +709,16 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     target_armour = int(target.get("armour_level", 0) or 0)
     inflation = await _apply_kill_inflation_decay(current_user["id"])
     best_damage, best_weapon_name = await _best_weapon_for_user(current_user["id"], current_user.get("equipped_weapon_id"))
-    breakdown = _bullets_to_kill_breakdown(target_armour, target_rank_id, best_damage, attacker_rank_id)
+    attacker_kill_badges = victim_kill_badges = 0
+    try:
+        from routers.game.achievements import get_badge_bonuses
+        bb_a = await get_badge_bonuses(current_user.get("id") or "")
+        bb_v = await get_badge_bonuses(target.get("id") or "") if not target.get("is_npc") else {}
+        attacker_kill_badges = bb_a.get("kills", 0)
+        victim_kill_badges = bb_v.get("kills", 0)
+    except Exception:
+        pass
+    breakdown = _bullets_to_kill_breakdown(target_armour, target_rank_id, best_damage, attacker_rank_id, attacker_kill_badges, victim_kill_badges)
     bullets_base = int(breakdown["bullets_required"])
     bullets_after_inflation = bullets_base * (1.0 + inflation)
     equipped_id = (current_user.get("equipped_weapon_id") or "").strip() or None
@@ -811,7 +828,16 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
 
     best_damage, best_weapon_name = await _best_weapon_for_user(current_user["id"], equipped_weapon_id)
     inflation = await _apply_kill_inflation_decay(current_user["id"])
-    bullets_base = _bullets_to_kill(target_armour, target_rank_id, best_damage, attacker_rank_id)
+    attacker_kill_badges = victim_kill_badges = 0
+    try:
+        from routers.game.achievements import get_badge_bonuses
+        bb_a = await get_badge_bonuses(current_user.get("id") or "")
+        bb_v = await get_badge_bonuses(target.get("id") or "") if not target.get("is_npc") else {}
+        attacker_kill_badges = bb_a.get("kills", 0)
+        victim_kill_badges = bb_v.get("kills", 0)
+    except Exception:
+        pass
+    bullets_base = _bullets_to_kill(target_armour, target_rank_id, best_damage, attacker_rank_id, attacker_kill_badges, victim_kill_badges)
     mastery_pct = await _get_weapon_mastery_pct(current_user["id"], equipped_weapon_id)
     discount = (mastery_pct / 100.0) * (MASTERY_MAX_BULLET_REDUCTION_PCT / 100.0)
     bullets_required = int(math.ceil(bullets_base * (1.0 + inflation) * (1.0 - discount)))
@@ -975,12 +1001,24 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             hitlist_entry = await db.hitlist.find_one({"target_id": victim_id, "target_type": "npc"}, {"_id": 0, "npc_rewards": 1})
             if hitlist_entry:
                 rewards = hitlist_entry.get("npc_rewards") or {}
-                rp_added = int(rewards.get("rank_points", 0) or 0)
-                inc = {"money": int(rewards.get("cash", 0) or 0), "rank_points": rp_added, "bullets": int(rewards.get("bullets", 0) or 0), "total_kills": 1, "hitlist_npc_kills": 1}
+                hitlist_mult = 1.0
+                try:
+                    from routers.game.achievements import get_badge_bonuses
+                    bb = await get_badge_bonuses(current_user.get("id") or "")
+                    hitlist_mult = 1 + bb.get("hitlist_npc", 0) * 0.001
+                except Exception:
+                    pass
+                rp_added = int((rewards.get("rank_points", 0) or 0) * hitlist_mult)
+                inc = {
+                    "money": int((rewards.get("cash", 0) or 0) * hitlist_mult),
+                    "rank_points": rp_added,
+                    "bullets": int((rewards.get("bullets", 0) or 0) * hitlist_mult),
+                    "total_kills": 1,
+                    "hitlist_npc_kills": 1,
+                }
                 if target.get("is_bodyguard"):
                     inc["robot_bodyguard_kills"] = 1
-                # Add respect_points from template + possible random drop
-                reward_respect = int(rewards.get("respect_points", 0) or 0)
+                reward_respect = int((rewards.get("respect_points", 0) or 0) * hitlist_mult)
                 respect_drop = maybe_respect_points_drop()
                 inc["respect_points"] = reward_respect + (respect_drop or 0)
                 booze = rewards.get("booze")
@@ -988,7 +1026,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     booze_ids = [b["id"] for b in BOOZE_TYPES]
                     for bid, amt in booze.items():
                         if bid in booze_ids and amt and int(amt) > 0:
-                            inc[f"booze_carrying.{bid}"] = int(amt)
+                            inc[f"booze_carrying.{bid}"] = int(int(amt) * hitlist_mult)
                             inc[f"booze_carrying_cost.{bid}"] = 0
                 # Prestige bonus: boost NPC hitlist kill cash rewards
                 from server import get_prestige_bonus as _get_prestige_bonus

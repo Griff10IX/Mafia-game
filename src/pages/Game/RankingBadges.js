@@ -37,6 +37,10 @@ export default function RankingBadges() {
   const categories = data?.categories ?? [];
   const totalUnlocked = data?.total_unlocked ?? 0;
   const totalTiers = data?.total_tiers ?? 0;
+  const bonusByCategory = (data?.bonuses ?? []).reduce((acc, b) => {
+    acc[b.id] = b;
+    return acc;
+  }, {});
 
   return (
     <div className={`space-y-6 ${styles.pageContent}`} data-testid="ranking-badges-page">
@@ -69,8 +73,15 @@ export default function RankingBadges() {
                 ) : (
                   <ChevronRight size={16} className="text-primary shrink-0" />
                 )}
-                <span className="font-heading font-bold text-foreground uppercase tracking-wider">{cat.name}</span>
-                <span className="text-mutedForeground text-xs">
+                <div className="flex flex-col min-w-0">
+                  <span className="font-heading font-bold text-foreground uppercase tracking-wider">{cat.name}</span>
+                  {bonusByCategory[cat.id] && (
+                    <span className="text-[10px] text-mutedForeground font-heading">
+                      Badges: +{bonusByCategory[cat.id].bonus_pct}% {bonusByCategory[cat.id].benefit}
+                    </span>
+                  )}
+                </div>
+                <span className="text-mutedForeground text-xs shrink-0">
                   {cat.unlocked_count}/{cat.total_tiers}
                 </span>
                 <div className="flex-1 min-w-0 ml-2">

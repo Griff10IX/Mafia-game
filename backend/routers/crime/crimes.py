@@ -555,6 +555,13 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         # Prestige bonus: boost crime cash payout
         from server import get_prestige_bonus
         reward = int(reward * get_prestige_bonus(current_user)["crime_mult"])
+        # Badge bonus: 0.1% per crimes badge
+        try:
+            from routers.game.achievements import get_badge_bonuses
+            bb = await get_badge_bonuses(current_user.get("id") or "")
+            reward = int(reward * (1 + bb.get("crimes", 0) * 0.001))
+        except Exception:
+            pass
         rp_before = int(current_user.get("rank_points") or 0)
         inc = {
             "money": reward,

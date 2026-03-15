@@ -64,6 +64,40 @@ BADGE_CATEGORIES = [
     },
 ]
 
+# Benefit labels for bonus categories (excludes rank)
+BONUS_BENEFITS = {
+    "crimes": "Crime payout",
+    "gta": "GTA rarity boost",
+    "jail_busts": "Jail bust success",
+    "oc_heists": "OC heist payout",
+    "kills": "Attacker: fewer bullets / Victim: more to survive",
+    "bullets_melted": "Melt cooldown reduction",
+    "booze_runs": "Booze profit",
+    "hitlist_npc": "Hitlist NPC rewards",
+}
+
+
+async def get_badge_bonuses(user_id: str) -> dict:
+    """Return unlocked tier count per bonus category (excludes rank). Keys: crimes, gta, jail_busts, kills, oc_heists, bullets_melted, booze_runs, hitlist_npc."""
+    from server import db
+    u = await db.users.find_one(
+        {"id": user_id},
+        {
+            "_id": 0,
+            "total_crimes": 1, "total_gta": 1, "jail_busts": 1, "total_kills": 1,
+            "total_oc_heists": 1, "bullets_melted": 1, "booze_runs_count": 1,
+            "hitlist_npc_kills": 1, "rank_points": 1, "prestige_level": 1,
+        },
+    )
+    user = u or {}
+    out = {}
+    for cat in BADGE_CATEGORIES:
+        if cat["id"] == "rank":
+            continue
+        computed = _compute_category(cat, user)
+        out[cat["id"]] = computed["unlocked_count"]
+    return out
+
 
 def _fmt(target: int, key: str) -> str:
     """Format target for display."""
@@ -159,8 +193,21 @@ def register(router):
             total_unlocked += computed["unlocked_count"]
             total_tiers += computed["total_tiers"]
 
+        bonuses = []
+        for cat_id, benefit in BONUS_BENEFITS.items():
+            cat_data = next((c for c in categories if c["id"] == cat_id), None)
+            if cat_data:
+                n = cat_data["unlocked_count"]
+                bonuses.append({
+                    "id": cat_id,
+                    "unlocked_count": n,
+                    "bonus_pct": round(n * 0.1, 1),
+                    "benefit": benefit,
+                })
+
         return {
             "categories": categories,
             "total_unlocked": total_unlocked,
             "total_tiers": total_tiers,
+            "bonuses": bonuses,
         }

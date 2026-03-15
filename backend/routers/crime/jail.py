@@ -271,6 +271,13 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     total_attempts = _safe_int(current_user.get("jail_bust_attempts"), 0)
     total_successes = _safe_int(current_user.get("jail_busts"), 0)
     player_success_rate = _player_bust_success_rate(total_attempts, total_successes)
+    # Badge bonus: 0.1% per jail busts badge
+    try:
+        from routers.game.achievements import get_badge_bonuses
+        bb = await get_badge_bonuses(current_user.get("id") or "")
+        player_success_rate = min(0.95, player_success_rate + bb.get("jail_busts", 0) * 0.001)
+    except Exception:
+        pass
     jailbust_bonus_until = current_user.get("jailbust_bonus_until")
     if jailbust_bonus_until:
         try:

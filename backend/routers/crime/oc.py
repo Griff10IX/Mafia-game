@@ -556,6 +556,15 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     _prestige_user = await db.users.find_one({"id": uid}, {"_id": 0, "prestige_level": 1})
     _oc_mult = get_prestige_bonus(_prestige_user or {})["oc_mult"]
     cash_pool = int(cash_pool * _oc_mult)
+    # Badge bonus: 0.1% per OC heists badge
+    try:
+        from routers.game.achievements import get_badge_bonuses
+        bb = await get_badge_bonuses(uid)
+        oc_badge_mult = 1 + bb.get("oc_heists", 0) * 0.001
+        cash_pool = int(cash_pool * oc_badge_mult)
+        rp_pool = int(rp_pool * oc_badge_mult)
+    except Exception:
+        pass
     user_map = {}
     if user_ids:
         users_raw = await db.users.find(
