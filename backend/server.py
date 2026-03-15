@@ -531,6 +531,8 @@ class ThemePreferencesRequest(BaseModel):
     theme_variant: Optional[str] = None
     custom_themes: Optional[List[Dict]] = None
     sidebar_layout: Optional[str] = None
+    mobile_nav_style: Optional[str] = None
+    button_shape_id: Optional[str] = None
 
 
 class ChangePasswordRequest(BaseModel):

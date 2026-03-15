@@ -714,6 +714,8 @@ def register(router):
             "theme_variant": "themeVariant",
             "custom_themes": "customThemes",
             "sidebar_layout": "sidebarLayout",
+            "mobile_nav_style": "mobileNavStyle",
+            "button_shape_id": "buttonShapeId",
         }
         stored = {key_map.get(k, k): v for k, v in updates.items()}
         new_prefs = {**(current_user.get("theme_preferences") or {}), **stored}

@@ -467,6 +467,8 @@ export function ThemeProvider({ children }) {
         localStorage.setItem(STORAGE_KEY_THEME_VARIANT, loadedThemeVariant);
         setThemeVariantState(loadedThemeVariant);
         if (Array.isArray(prefs.customThemes)) { localStorage.setItem(STORAGE_KEY_CUSTOM_THEMES, JSON.stringify(prefs.customThemes)); setCustomThemesState(prefs.customThemes); }
+        if (prefs.mobileNavStyle != null) { localStorage.setItem(STORAGE_KEY_MOBILE_NAV, prefs.mobileNavStyle); setMobileNavStyleState(prefs.mobileNavStyle); }
+        if (prefs.buttonShapeId != null) { localStorage.setItem(STORAGE_KEY_BUTTON_SHAPE, prefs.buttonShapeId); setButtonShapeIdState(prefs.buttonShapeId); }
       } catch (_) {}
     }).catch(() => {}).finally(() => { themeLoadedRef.current = true; });
   }, []);
@@ -490,9 +492,14 @@ export function ThemeProvider({ children }) {
       text_style_id: textStyleId,
       custom_themes: customThemes,
       theme_variant: themeVariant,
+      sidebar_layout: (typeof localStorage !== 'undefined' && localStorage.getItem('sidebar_layout')) || null,
+      mobile_nav_style: mobileNavStyle || null,
+      button_shape_id: buttonShapeId || null,
     };
-    api.patch('/profile/theme', payload).catch(() => {});
-  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant]);
+    api.patch('/profile/theme', payload).then(() => {
+      try { window.dispatchEvent(new CustomEvent('theme-saved')); } catch (_) {}
+    }).catch(() => {});
+  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, mobileNavStyle, buttonShapeId]);
 
   const setColour = useCallback((id) => {
     setColourIdState(id);

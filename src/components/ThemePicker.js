@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import api from '../utils/api';
 import {
   Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2,
@@ -266,6 +267,12 @@ export default function ThemePicker({ open, onClose }) {
   const [chipW, setChipW] = useState(50);
   const [chipH, setChipH] = useState(50);
   useEffect(() => { if (open) { setChipW(loadChip(KEYS.chipW)); setChipH(loadChip(KEYS.chipH)); } }, [open, KEYS.chipW, KEYS.chipH]);
+
+  useEffect(() => {
+    const onSaved = () => toast.success('Theme saved');
+    window.addEventListener('theme-saved', onSaved);
+    return () => window.removeEventListener('theme-saved', onSaved);
+  }, []);
 
   const setChipWP = v => { const n = Math.max(CHIP_MIN,Math.min(CHIP_MAX,v)); setChipW(n); lsSet(KEYS.chipW,n,'topbar-prefs-changed'); };
   const setChipHP = v => { const n = Math.max(CHIP_MIN,Math.min(CHIP_MAX,v)); setChipH(n); lsSet(KEYS.chipH,n,'topbar-prefs-changed'); };
