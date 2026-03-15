@@ -763,13 +763,12 @@ function getCurvature(track, t) {
   return Math.abs(delta) / arcLen;
 }
 
-/** Corner multiplier: 1.0 on straights, drops to ~0.77–0.80 in sharp corners (~120 mph).
- *  Grip scales the effective k: higher grip = faster cornering. */
+/** F1 Clash–style: Cornering stat (grip) drives corner speed. 1.0 on straights, drops in corners; high grip = carry more speed. */
 function getCornerMult(curvature, baseGrip = 0.85) {
   const kBase = 22;
-  const gripK = kBase * (1.15 - baseGrip * 0.5);
+  const gripK = kBase * (1.2 - baseGrip * 0.55);
   const raw = 1 / (1 + curvature * gripK);
-  const minMult = 0.62 + baseGrip * 0.18;
+  const minMult = 0.52 + baseGrip * 0.30;
   return Math.max(minMult, Math.min(1, raw));
 }
 
@@ -1906,9 +1905,10 @@ export default function CircuitRaceView({
         }
         if (r.pitExitUntil != null && nowSec >= r.pitExitUntil) r.pitExitUntil = null;
 
-        // Tyre wear factor
+        // Tyre wear factor (F1 Clash–style: worn tyres hurt more; steeper curve below ~50%)
         const td = TYRE_DEFS[r.currentTyre] || TYRE_DEFS.medium;
-        const wearFactor = Math.max(0.4, r.tyreWear / 100);
+        const wearPct = (r.tyreWear ?? 100) / 100;
+        const wearFactor = Math.max(0.35, Math.pow(wearPct, 1.2));
         const wdGrip = (wd.gripMult != null) ? wd.gripMult : 1.0;
         const effectiveGrip = (r.baseGrip != null ? r.baseGrip : 0.85) * wearFactor * wdGrip;
 
@@ -1920,35 +1920,56 @@ export default function CircuitRaceView({
         const myProgress = prevProgressMap[r.id];
         const leaderProg = prevSorted[0] ? (prevSorted[0].totalLapsDone ?? 0) + (prevSorted[0].trackPos ?? 0) : 0;
         const gapToLeader = leaderProg - (myProgress?.progress ?? 0);
+        const isLastTwoLaps = r.totalLapsDone >= nLaps - 2;
         if (gapToLeader > 0.15 && !scActive) {
           effSpeed *= 1 + Math.min(0.08, gapToLeader * 0.25);
         }
 
         // Slipstream drafting: car close behind gets 4% boost
         r.inSlipstream = false;
+        let slipGap = 999;
         if (myProgress && myProgress.idx > 0) {
           const aheadProg = (prevSorted[myProgress.idx - 1].totalLapsDone ?? 0) + (prevSorted[myProgress.idx - 1].trackPos ?? 0);
-          const slipGap = aheadProg - (myProgress.progress ?? 0);
+          slipGap = aheadProg - (myProgress.progress ?? 0);
           if (slipGap > 0 && slipGap < 0.025 && !scActive) {
             effSpeed *= 1.04;
             r.inSlipstream = true;
           }
-          // Overtake attempt: when close (side-by-side range), chance per frame to get short speed boost
+          // Overtake attempt (F1 Clash: tyre condition + Speed + driver overtaking)
           const ovtLevel = r.overtakingLevel || 0;
           if (slipGap > 0 && slipGap <= 0.035 && !scActive) {
-            const chance = dt * 0.6 * (ovtLevel / 100) + dt * 0.04;
+            const tyreChance = 0.7 + 0.3 * (r.tyreWear ?? 100) / 100;
+            const chance = (dt * 0.6 * (ovtLevel / 100) + dt * 0.04) * tyreChance;
             if (Math.random() < chance) {
               r.overtakeBoostUntil = nowSec + 0.4;
             }
           }
         }
+        const overtakeBoostMult = 0.03 + 0.01 * (r.baseSpeed ?? 1);
         if (nowSec < (r.overtakeBoostUntil || 0)) {
-          effSpeed *= 1.04;
+          effSpeed *= 1 + overtakeBoostMult;
         }
 
         // Safety car speed cap
         if (scActive) {
           effSpeed = Math.min(effSpeed, 0.35 * r.baseSpeed);
+        }
+
+        // Engine mode (F1 Clash: push when chasing or last 2 laps; save when leading comfortably)
+        if (isLastTwoLaps || (myProgress && myProgress.idx > 0 && slipGap > 0 && slipGap <= 0.04)) {
+          r.engineMode = "push";
+          effSpeed *= 1.03;
+        } else if (myProgress && myProgress.idx === 0) {
+          const secondProg = prevSorted[1] ? (prevSorted[1].totalLapsDone ?? 0) + (prevSorted[1].trackPos ?? 0) : 0;
+          const ourProg = myProgress.progress ?? 0;
+          if (ourProg - secondProg > 0.08) {
+            r.engineMode = "save";
+            effSpeed *= 0.98;
+          } else {
+            r.engineMode = "normal";
+          }
+        } else {
+          r.engineMode = "normal";
         }
 
         // Corner-aware speed (tight corners ~120 mph via getCornerMult minMult; same for live + replay)
@@ -1960,8 +1981,8 @@ export default function CircuitRaceView({
         const SPEED_REALISM_SCALE = 0.168;
         const SPEED_CAP_MPH = 150;
         const ACCEL_DECEL_BRAKE = 2.5;
-        const ACCEL_DECEL_ACCEL = 4.5;
-        const MAX_SPEED_DELTA_MPH = 8;
+        const ACCEL_DECEL_ACCEL = 6;
+        const MAX_SPEED_DELTA_MPH = 10;
         const applySpeedLerp = (current, target) => {
           if (target == null) return target;
           if (current == null) return target;
@@ -1981,10 +2002,11 @@ export default function CircuitRaceView({
           r.currentSpeedMph = targetMph == null ? targetMph : (r.currentSpeedMph != null ? applySpeedLerp(r.currentSpeedMph, targetMph) : targetMph);
         } else {
           r.slideOffUntil = 0;
+          const straightSpeedScale = curvature < 0.02 ? (0.95 + 0.1 * (r.baseSpeed ?? 1)) : 1;
           const lapTime = track.lapBase / effSpeed;
-          const advance = (1.0 / lapTime) * dt * cornerMult;
+          const advance = (1.0 / lapTime) * dt * cornerMult * straightSpeedScale;
           r.trackPos = (r.trackPos + advance + 1) % 1;
-          const rawMph = track.km && track.lapBase ? SPEED_REALISM_SCALE * (3600 * track.km * cornerMult * effSpeed) / track.lapBase : null;
+          const rawMph = track.km && track.lapBase ? SPEED_REALISM_SCALE * (3600 * track.km * cornerMult * effSpeed * straightSpeedScale) / track.lapBase : null;
           const targetMph = rawMph == null ? null : Math.max(0, Math.min(maxMphStraightOnly, rawMph));
           r.currentSpeedMph = targetMph == null ? targetMph : (r.currentSpeedMph != null ? applySpeedLerp(r.currentSpeedMph, targetMph) : targetMph);
           if (curvature > 0.25 && effectiveGrip < 0.65 && Math.random() < dt * 0.5 * (0.65 - effectiveGrip) * Math.min(1, curvature / 0.40)) {
@@ -2063,7 +2085,9 @@ export default function CircuitRaceView({
           const stintLaps = getEffectiveStintLaps(r.currentTyre, wd.wearMult, r.reliabilityWearMult);
           const wearPerLap = 85 / stintLaps;
           const lapTimeSec = track.lapBase / effSpeed;
-          const wearPerSec = lapTimeSec > 0 ? wearPerLap / lapTimeSec : wearPerLap / 22;
+          let wearPerSec = lapTimeSec > 0 ? wearPerLap / lapTimeSec : wearPerLap / 22;
+          const engineWearMult = r.engineMode === "push" ? 1.2 : r.engineMode === "save" ? 0.85 : 1;
+          wearPerSec *= engineWearMult;
           r.tyreWear = Math.max(td.minWear, r.tyreWear - wearPerSec * dt);
         }
         // Tyre blister flag
@@ -2095,7 +2119,6 @@ export default function CircuitRaceView({
         }
         // Pit decision (auto) — no pit in last 2 laps so driver doesn't lose places
         const isLastLap = r.totalLapsDone >= nLaps - 1;
-        const isLastTwoLaps = r.totalLapsDone >= nLaps - 2;
         if (!r.inPit && !isLastTwoLaps && r.pitStrategy.length > 0 && !(r.isPlayer && manualPitRef.current)) {
           const next = r.pitStrategy[0];
           const currentLap = r.totalLapsDone + 1;

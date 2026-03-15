@@ -796,7 +796,8 @@ def _run_race_simulation_laps(
             base_weight_penalty = 0.03 * ((num_laps - lap + 1) / max(1, num_laps))
             weight_penalty = max(0.0, base_weight_penalty - fuel_lvl * FUEL_WEIGHT_PENALTY_PER_LEVEL - fuel_tech * FUEL_TECH_WEIGHT_PER_LEVEL)
             fuel_weight_mult = 1.0 + weight_penalty
-            tire_factor = max(0.3, tire_wear[eid] / 100.0)
+            # F1 Clash–style: worn tyres hurt more (steeper curve to match frontend)
+            tire_factor = max(0.3, (tire_wear[eid] / 100.0) ** 1.2)
             compound_mult = _compound_grip_mult(e)
 
             up = _get_upgrades(e)
