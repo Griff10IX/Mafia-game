@@ -942,6 +942,8 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
     if desired_slots != (int(target.get("bodyguard_slots", 0) or 0)):
         await db.users.update_one({"id": target["id"]}, {"$set": {"bodyguard_slots": desired_slots}})
     created = 0
+    intervals_between_ms = []
+    t_prev = time.perf_counter()
     for slot in range(1, count + 1):
         exists = await db.bodyguards.find_one({"user_id": target["id"], "slot_number": slot}, {"_id": 0, "id": 1})
         if exists:
@@ -960,8 +962,14 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
             "hired_at": datetime.now(timezone.utc).isoformat()
         })
         created += 1
+        t_now = time.perf_counter()
+        intervals_between_ms.append(round((t_now - t_prev) * 1000, 3))
+        t_prev = t_now
     _invalidate_bodyguards_cache(target["id"])
-    return {"message": f"Generated {created} robot bodyguard(s) for {target_username}", "created": created, "count_requested": count}
+    payload = {"message": f"Generated {created} robot bodyguard(s) for {target_username}", "created": created, "count_requested": count}
+    if intervals_between_ms:
+        payload["intervals_between_robot_bodyguards_ms"] = intervals_between_ms
+    return payload
 
 
 async def admin_reset_bodyguard_cooldown(current_user: dict = Depends(get_current_user)):

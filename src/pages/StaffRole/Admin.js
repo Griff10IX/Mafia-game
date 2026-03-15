@@ -4,6 +4,7 @@ import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Bui
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
+import StaffUserDetailsPanel from '../../components/StaffUserDetailsPanel';
 import styles from '../../styles/noir.module.css';
 
 const ADMIN_STYLES = `
@@ -225,6 +226,7 @@ export default function Admin() {
   const [cars, setCars] = useState([]);
   const [bgTestCount, setBgTestCount] = useState(2);
   const [collapsed, setCollapsed] = useState(() => loadCollapsed());
+  const [staffUserDetailsOpen, setStaffUserDetailsOpen] = useState(false);
   const [formData, setFormData] = useState({
     targetUsername: '',
     newRank: 1,
@@ -1624,7 +1626,14 @@ export default function Admin() {
         count: bgTestCount,
         replace_existing: true,
       });
-      toast.success(res.data?.message || 'Generated', { duration: 10000 });
+      const data = res.data || {};
+      const msg = data.message || 'Generated';
+      const intervals = data.intervals_between_robot_bodyguards_ms;
+      toast.success(msg, { duration: 10000 });
+      if (Array.isArray(intervals) && intervals.length > 0) {
+        const msStr = intervals.map((ms) => `${Number(ms).toFixed(3)} ms`).join(', ');
+        toast.info(`Time between robot bodyguards: ${msStr}`, { duration: 12000 });
+      }
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed', { duration: 10000 }); }
   };
 
@@ -3075,6 +3084,22 @@ export default function Admin() {
             <ActionRow icon={User} label="View registration info" description="Email, username, created at, IPs for target user">
               <BtnPrimary onClick={handleViewRegistration} disabled={viewRegistrationLoading}>{viewRegistrationLoading ? '...' : 'View'}</BtnPrimary>
             </ActionRow>
+            <ActionRow icon={Shield} label="User Details" description="Full dossier: identity, stats, network (staff-stats panel)">
+              <BtnPrimary
+                onClick={() => setStaffUserDetailsOpen(true)}
+                disabled={!(formData.targetUsername || '').trim()}
+              >
+                View
+              </BtnPrimary>
+            </ActionRow>
+            {!(formData.targetUsername || '').trim() && (
+              <p className="text-[9px] text-mutedForeground font-heading pl-6">Enter target username above.</p>
+            )}
+            <StaffUserDetailsPanel
+              username={(formData.targetUsername || '').trim()}
+              open={staffUserDetailsOpen}
+              onOpenChange={setStaffUserDetailsOpen}
+            />
             {viewRegistrationInfo && (
               <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-1">
                 <div className="font-bold text-primary mb-1">Registration info</div>

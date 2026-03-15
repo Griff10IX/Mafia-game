@@ -9,6 +9,7 @@ import PrestigeBadge from '../../components/PrestigeBadge';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
 import { BadgeShield, BADGE_STYLES as RANKING_BADGE_STYLES } from '../Game/RankingBadges';
+import StaffUserDetailsPanel from '../../components/StaffUserDetailsPanel';
 
 const PROFILE_STYLES = `
   @keyframes prof-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -23,7 +24,6 @@ const PROFILE_STYLES = `
   .prof-banner-content .forum-content-media { max-width: 100%; height: auto; border-radius: 8px; margin: 0.25em 0; display: block; }
   .prof-banner-content .forum-content-ytube { position: relative; width: 100%; max-width: 560px; margin: 0.5em auto; padding-bottom: 56.25%; }
   .prof-banner-content .forum-content-ytube-iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; border-radius: 8px; }
-  details.prof-staff-details[open] .prof-staff-chevron { transform: rotate(180deg); }
 `;
 
 function formatDateTime(iso) {
@@ -387,13 +387,30 @@ const ProfileInfoCard = ({
 
       {/* Staff actions: Lock, Unlock, Kill, Revive, Mute, Unmute, Activity log, Gambling log */}
       {!isMe && (isAdmin || isModerator) && profile?.username && (
-        <StaffProfileActions
-          username={profile.username}
-          isDead={!!profile.is_dead}
-          isAdmin={isAdmin}
-          isModerator={isModerator}
-          onDone={onStaffActionDone}
-        />
+        <>
+          <StaffProfileActions
+            username={profile.username}
+            isDead={!!profile.is_dead}
+            isAdmin={isAdmin}
+            isModerator={isModerator}
+            onDone={onStaffActionDone}
+          />
+          <div className="prof-fade-in">
+            <button
+              type="button"
+              onClick={() => setStaffDetailsOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-primary/30 bg-primary/10 hover:bg-primary/15 transition-colors text-[10px] font-heading font-bold text-primary uppercase tracking-wider"
+            >
+              <Activity size={12} />
+              Details
+            </button>
+          </div>
+          <StaffUserDetailsPanel
+            username={profile.username}
+            open={staffDetailsOpen}
+            onOpenChange={setStaffDetailsOpen}
+          />
+        </>
       )}
 
       <div className="divide-y divide-zinc-700/30">
@@ -950,9 +967,7 @@ export default function Profile() {
   const [bannerTextEdit, setBannerTextEdit] = useState('');
   const [savingBanner, setSavingBanner] = useState(false);
   const bannerTextareaRef = React.useRef(null);
-  const [staffStats, setStaffStats] = useState(null);
-  const [staffStatsLoading, setStaffStatsLoading] = useState(false);
-  const [staffStatsError, setStaffStatsError] = useState(null);
+  const [staffDetailsOpen, setStaffDetailsOpen] = useState(false);
   const username = useMemo(() => usernameParam || me?.username, [usernameParam, me?.username]);
   const isMe = !!(me && profile && me.username === profile.username);
   /** When true, we're viewing our own profile as a visitor would (no settings, no avatar edit, etc.). */
@@ -1058,13 +1073,6 @@ export default function Profile() {
       setBannerTextEdit(profile.profile_banner_text ?? '');
     }
   }, [profile]);
-
-  useEffect(() => {
-    if (username && !(me && profile && me.username === profile.username)) {
-      setStaffStats(null);
-      setStaffStatsError(null);
-    }
-  }, [username, me, profile]);
 
   const fetchPrefs = async () => {
     try {
@@ -1245,29 +1253,6 @@ export default function Profile() {
       }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to toggle ghost mode');
-    }
-  };
-
-  const fetchStaffStats = async () => {
-    const targetUsername = username || profile?.username;
-    if (!targetUsername || staffStatsLoading) return;
-    if (staffStats != null && !staffStatsError) return;
-    setStaffStatsLoading(true);
-    setStaffStatsError(null);
-    try {
-      const res = await api.get(`/users/${encodeURIComponent(targetUsername)}/staff-stats`);
-      setStaffStats(res.data);
-    } catch (e) {
-      const status = e.response?.status;
-      const detail = e.response?.data?.detail;
-      let msg = 'Failed to load';
-      if (status === 403) msg = 'Admin or moderator access required';
-      else if (status === 404) msg = 'User not found';
-      else if (typeof detail === 'string') msg = detail;
-      else msg = getApiErrorMessage(e) || msg;
-      setStaffStatsError(msg);
-    } finally {
-      setStaffStatsLoading(false);
     }
   };
 
@@ -1718,59 +1703,6 @@ export default function Profile() {
               <AdminStatsCard adminStats={profile.admin_stats} />
             )}
 
-            {(isAdmin || isModerator) && !isMe && profile?.username && (
-              <details
-                className={`prof-staff-details relative ${styles.panel} rounded-md overflow-hidden border border-primary/30 prof-fade-in`}
-                onToggle={(e) => { if (e.target.open) fetchStaffStats(); }}
-              >
-                <summary className="list-none cursor-pointer">
-                  <div className="px-2.5 py-2 md:px-3 md:py-2.5 bg-primary/10 border-b border-primary/20 flex items-center justify-between gap-2 hover:bg-primary/15 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <Shield className="w-3.5 h-3.5 md:w-4 md:h-4 text-primary" />
-                      <span className="text-[9px] md:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">User info (staff)</span>
-                    </div>
-                    <ChevronDown className="w-4 h-4 text-primary/80 prof-staff-chevron transition-transform" aria-hidden />
-                  </div>
-                </summary>
-                <div className="p-3 border-t border-primary/20">
-                  {staffStatsLoading && (
-                    <p className="text-xs text-mutedForeground font-heading">Loading…</p>
-                  )}
-                  {staffStatsError && (
-                    <p className="text-xs text-red-400 font-heading flex items-center gap-2 flex-wrap">
-                      <span>{staffStatsError}</span>
-                      <button type="button" onClick={() => { setStaffStatsError(null); fetchStaffStats(); }} className="text-primary hover:opacity-90 font-heading underline">Retry</button>
-                    </p>
-                  )}
-                  {staffStats && !staffStatsLoading && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-[10px] md:text-xs font-heading">
-                      <div><span className="text-mutedForeground">User ID</span><br /><span className="text-foreground font-mono">{staffStats.id ?? '—'}</span></div>
-                      <div><span className="text-mutedForeground">Email</span><br /><span className="text-foreground break-all">{staffStats.email ?? '—'}</span></div>
-                      <div><span className="text-mutedForeground">Created</span><br /><span className="text-foreground">{staffStats.created_at ? formatDateTime(staffStats.created_at) : '—'}</span></div>
-                      <div><span className="text-mutedForeground">Last seen</span><br /><span className="text-foreground">{staffStats.last_seen ? formatDateTime(staffStats.last_seen) : '—'}</span></div>
-                      <div><span className="text-mutedForeground">Rank</span><br /><span className="text-foreground">{staffStats.rank_name ?? '—'} (P{staffStats.prestige_level ?? 0})</span></div>
-                      <div><span className="text-mutedForeground">Crew</span><br /><span className="text-foreground">{staffStats.family_name ?? '—'}</span></div>
-                      <div><span className="text-mutedForeground">Money</span><br /><span className="text-foreground">${Number(staffStats.money ?? 0).toLocaleString()}</span></div>
-                      <div><span className="text-mutedForeground">Points</span><br /><span className="text-foreground">{Number(staffStats.points ?? 0).toLocaleString()}</span></div>
-                      <div><span className="text-mutedForeground">Rank points</span><br /><span className="text-foreground">{Number(staffStats.rank_points ?? 0).toLocaleString()}</span></div>
-                      <div><span className="text-mutedForeground">Bullets</span><br /><span className="text-foreground">{Number(staffStats.bullets ?? 0).toLocaleString()}</span></div>
-                      <div><span className="text-mutedForeground">Armour</span><br /><span className="text-foreground">{staffStats.armour_level ?? 0}</span></div>
-                      <div><span className="text-mutedForeground">State</span><br /><span className="text-foreground">{staffStats.current_state ?? '—'}</span></div>
-                      <div><span className="text-mutedForeground">Kills</span><br /><span className="text-foreground">{Number(staffStats.total_kills ?? 0).toLocaleString()}</span></div>
-                      <div><span className="text-mutedForeground">Deaths</span><br /><span className="text-foreground">{Number(staffStats.total_deaths ?? 0).toLocaleString()}</span></div>
-                      <div><span className="text-mutedForeground">Crimes</span><br /><span className="text-foreground">{Number(staffStats.total_crimes ?? 0).toLocaleString()}</span></div>
-                      <div><span className="text-mutedForeground">GTA</span><br /><span className="text-foreground">{Number(staffStats.total_gta ?? 0).toLocaleString()}</span></div>
-                      <div><span className="text-mutedForeground">Jail busts</span><br /><span className="text-foreground">{Number(staffStats.jail_busts ?? 0).toLocaleString()}</span></div>
-                      <div><span className="text-mutedForeground">In jail</span><br /><span className={staffStats.in_jail ? 'text-primary' : 'text-foreground'}>{staffStats.in_jail ? 'Yes' : 'No'}</span></div>
-                      <div><span className="text-mutedForeground">Dead</span><br /><span className={staffStats.is_dead ? 'text-red-400' : 'text-foreground'}>{staffStats.is_dead ? 'Yes' : 'No'}</span></div>
-                      <div><span className="text-mutedForeground">Account locked</span><br /><span className={staffStats.account_locked ? 'text-primary' : 'text-foreground'}>{staffStats.account_locked ? 'Yes' : 'No'}</span>{staffStats.account_locked_at && <><br /><span className="text-mutedForeground text-[9px]">{formatDateTime(staffStats.account_locked_at)}</span></>}</div>
-                      <div className="col-span-2 md:col-span-3"><span className="text-mutedForeground">Registration IP</span><br /><span className="text-foreground font-mono text-[9px]">{staffStats.registration_ip ?? '—'}</span></div>
-                      <div className="col-span-2 md:col-span-3"><span className="text-mutedForeground">Last login IP</span><br /><span className="text-foreground font-mono text-[9px]">{staffStats.last_login_ip ?? '—'}</span></div>
-                    </div>
-                  )}
-                </div>
-              </details>
-            )}
           </>
         )}
       </div>
