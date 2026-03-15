@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
+import { containsProfanity } from '../../utils/profanityFilter';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 
@@ -614,11 +615,16 @@ export default function Store() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (!customCarName.trim() || customCarName.trim().length < 2) {
+                      const name = customCarName.trim();
+                      if (!name || name.length < 2) {
                         toast.error('Name 2+ characters');
                         return;
                       }
-                      apiBuy('/store/buy-custom-car', { car_name: customCarName.trim() }, 'Custom car purchased').then(() => setCustomCarName(''));
+                      if (containsProfanity(name)) {
+                        toast.error('Custom car name contains disallowed language.');
+                        return;
+                      }
+                      apiBuy('/store/buy-custom-car', { car_name: name }, 'Custom car purchased').then(() => setCustomCarName(''));
                     }}
                     disabled={!user || ((user.points ?? 0) < 500 && (user.respect_points ?? 0) < 2500) || !customCarName.trim()}
                     className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"

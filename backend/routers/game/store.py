@@ -5,6 +5,8 @@ from pydantic import BaseModel, field_validator
 
 from fastapi import Depends, HTTPException, Query
 
+from utils.profanity import contains_profanity
+
 
 def _store_cost_inc(current_user: dict, points_cost: int):
     """Return (cost_used, $inc dict). Use respect points first (5 respect = 1 point), then points for the remainder. Raises if insufficient."""
@@ -251,6 +253,10 @@ async def buy_custom_car(
 ):
     if not request.car_name or len(request.car_name) < 2 or len(request.car_name) > 30:
         raise HTTPException(status_code=400, detail="Car name must be 2-30 characters")
+    additions = await db.profanity_additions.distinct("word")
+    extra = frozenset(additions) if additions else None
+    if contains_profanity(request.car_name, extra_words=extra):
+        raise HTTPException(status_code=400, detail="Custom car name contains disallowed language.")
     cost_used, inc = _store_cost_inc(current_user, CUSTOM_CAR_COST)
     await db.users.update_one(
         {"id": current_user["id"]},

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { HelpCircle, Send, MessageSquare, X, ChevronRight, VolumeX, Building2 } from 'lucide-react';
+import { HelpCircle, Send, MessageSquare, X, ChevronRight, VolumeX, Building2, ShieldBan } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -51,15 +51,23 @@ export default function HelpDesk() {
   const [newFamilyName, setNewFamilyName] = useState('');
   const [newFamilyTag, setNewFamilyTag] = useState('');
   const [changingFamily, setChangingFamily] = useState(false);
+  const [blacklistWords, setBlacklistWords] = useState([]);
+  const [blacklistCanRemove, setBlacklistCanRemove] = useState(false);
+  const [blacklistLoading, setBlacklistLoading] = useState(false);
+  const [blacklistAddWord, setBlacklistAddWord] = useState('');
+  const [blacklistAdding, setBlacklistAdding] = useState(false);
+  const [blacklistRemoving, setBlacklistRemoving] = useState(null);
 
   const fetchCheck = useCallback(async () => {
     try {
       const r = await api.get('/help-desk/check');
       setCanManage(!!r.data?.can_manage);
       setCanApproveMute(!!r.data?.can_approve_mute);
+      setBlacklistCanRemove(!!r.data?.is_admin);
     } catch (_) {
       setCanManage(false);
       setCanApproveMute(false);
+      setBlacklistCanRemove(false);
     }
   }, []);
 
@@ -90,9 +98,24 @@ export default function HelpDesk() {
     }
   }, [canManage]);
 
+  const fetchBlacklist = useCallback(async () => {
+    if (!canManage) return;
+    setBlacklistLoading(true);
+    try {
+      const r = await api.get('/help-desk/blacklist');
+      setBlacklistWords(r.data?.words || []);
+      setBlacklistCanRemove(!!r.data?.can_remove);
+    } catch (_) {
+      setBlacklistWords([]);
+    } finally {
+      setBlacklistLoading(false);
+    }
+  }, [canManage]);
+
   useEffect(() => { fetchCheck(); }, [fetchCheck]);
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
   useEffect(() => { fetchForumMutes(); }, [fetchForumMutes]);
+  useEffect(() => { fetchBlacklist(); }, [fetchBlacklist]);
 
   const fetchTicketDetail = useCallback(async (id) => {
     if (!id) { setTicketDetail(null); return; }
@@ -267,6 +290,38 @@ export default function HelpDesk() {
       toast.error(e.response?.data?.detail || 'Failed to change crew name');
     } finally {
       setChangingFamily(false);
+    }
+  };
+
+  const handleAddBlacklistWord = async (e) => {
+    e.preventDefault();
+    const w = (blacklistAddWord || '').trim();
+    if (!w) { toast.error('Enter a word to blacklist'); return; }
+    setBlacklistAdding(true);
+    try {
+      await api.post('/help-desk/blacklist', { word: w });
+      toast.success('Word blacklisted');
+      setBlacklistAddWord('');
+      fetchBlacklist();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to add word');
+    } finally {
+      setBlacklistAdding(false);
+    }
+  };
+
+  const handleRemoveBlacklistWord = async (word) => {
+    if (!blacklistCanRemove || !word) return;
+    if (!window.confirm(`Remove "${word}" from the blacklist?`)) return;
+    setBlacklistRemoving(word);
+    try {
+      await api.delete('/help-desk/blacklist', { params: { word } });
+      toast.success('Word removed from blacklist');
+      fetchBlacklist();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to remove');
+    } finally {
+      setBlacklistRemoving(null);
     }
   };
 
@@ -604,6 +659,62 @@ export default function HelpDesk() {
               </button>
             </div>
           </form>
+          <div className="hd-art-line text-primary mx-2.5" />
+        </div>
+      )}
+
+      {canManage && (
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hd-fade-in`}>
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
+            <ShieldBan size={14} className="text-primary" />
+            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Word blacklist</span>
+          </div>
+          <p className="px-2.5 py-1.5 text-[9px] text-mutedForeground font-heading">
+            Blacklisted words are blocked in Help Desk tickets and site-wide (e.g. custom car names). Staff (admin, mod, HDO) can add; only admins can remove.
+          </p>
+          <form onSubmit={handleAddBlacklistWord} className="px-2.5 py-2 space-y-2 border-t border-primary/10">
+            <div className="flex flex-wrap gap-2 items-center">
+              <input
+                type="text"
+                value={blacklistAddWord}
+                onChange={(e) => setBlacklistAddWord(e.target.value)}
+                placeholder="Word to blacklist"
+                maxLength={100}
+                className="w-40 px-2 py-1 bg-secondary border border-primary/20 rounded text-[11px] font-heading"
+              />
+              <button type="submit" disabled={blacklistAdding || !blacklistAddWord.trim()} className="px-2.5 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/50 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50">
+                {blacklistAdding ? 'Adding…' : 'Add word'}
+              </button>
+            </div>
+          </form>
+          <div className="px-2.5 py-2 border-t border-primary/10">
+            <div className="text-[9px] font-heading font-bold text-primary uppercase mb-1.5">Blacklisted words</div>
+            {blacklistLoading ? (
+              <p className="text-[10px] text-mutedForeground">Loading…</p>
+            ) : blacklistWords.length === 0 ? (
+              <p className="text-[10px] text-mutedForeground font-heading">None.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {blacklistWords.map((item) => (
+                  <li key={item.word} className="flex flex-wrap items-center justify-between gap-2 py-1.5 px-2 rounded bg-secondary/50 border border-primary/10 text-[11px] font-heading">
+                    <span className="font-bold text-foreground">{item.word}</span>
+                    <span className="text-mutedForeground text-[10px]">added by {item.added_by_username} · {formatDateTime(item.added_at)}</span>
+                    {blacklistCanRemove && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveBlacklistWord(item.word)}
+                        disabled={blacklistRemoving === item.word}
+                        className="px-2 py-0.5 rounded text-[9px] font-heading uppercase border border-red-500/50 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+                      >
+                        {blacklistRemoving === item.word ? 'Removing…' : 'Remove'}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <div className="hd-art-line text-primary mx-2.5" />
         </div>
       )}

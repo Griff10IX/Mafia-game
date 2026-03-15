@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Car, Flame, DollarSign, CheckSquare, Square, Filter, ChevronDown, ChevronUp, Settings, Image as ImageIcon, Wrench } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
+import { filterProfanity } from '../../utils/profanityFilter';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 
@@ -231,11 +232,12 @@ const ActionsBar = ({
   );
 };
 
-const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repairingCarId, getRarityColor }) => {
+const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repairingCarId, getRarityColor, censorProfanity = false }) => {
   const isCustom = car.car_id === 'car_custom';
   const isListed = car.listed_for_sale;
   const damage = car.damage_percent ?? 0;
   const isRepairing = repairingCarId === car.user_car_id;
+  const displayName = censorProfanity ? filterProfanity(car.name) : car.name;
   const handleClick = () => {
     if (!isListed) onToggle(car.user_car_id);
   };
@@ -253,7 +255,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
         {car.image ? (
           <img
             src={car.image}
-            alt={car.name}
+            alt={displayName}
             className="w-full h-full object-cover"
             loading="lazy"
           />
@@ -287,7 +289,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
         onClick={(e) => e.stopPropagation()}
         className="text-[11px] font-heading font-bold text-foreground hover:text-primary transition-colors truncate block mb-0.5"
       >
-        {car.name}
+        {displayName}
       </Link>
       
       <div className="text-[10px] text-primary font-heading font-bold flex items-center justify-between">
@@ -401,10 +403,11 @@ const CustomCarModal = ({
   setImageUrl, 
   onSave, 
   onClose, 
-  saving 
+  saving,
+  censorProfanity = false
 }) => {
   if (!car) return null;
-  
+  const displayName = censorProfanity ? filterProfanity(car.name) : car.name;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
       <div className={`${styles.panel} border border-primary/20 rounded-lg shadow-2xl max-w-md w-full overflow-hidden`} onClick={e => e.stopPropagation()}>
@@ -421,13 +424,13 @@ const CustomCarModal = ({
         
         <div className="p-4 space-y-3">
           <div>
-            <p className="text-sm font-heading font-bold text-foreground">{car.name}</p>
+            <p className="text-sm font-heading font-bold text-foreground">{displayName}</p>
             <p className="text-[10px] text-mutedForeground font-heading">Update the image URL</p>
           </div>
           
           <div className="aspect-video rounded overflow-hidden bg-secondary border border-border">
             {imageUrl ? (
-              <img src={imageUrl} alt={car.name} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+              <img src={imageUrl} alt={displayName} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <Car size={32} className="text-primary/30" />
@@ -727,6 +730,7 @@ export default function Garage() {
                 onRepair={handleRepair}
                 repairingCarId={repairingCarId}
                 getRarityColor={getRarityColor}
+                censorProfanity={user?.censor_profanity}
               />
             ))}
           </div>
@@ -772,6 +776,7 @@ export default function Garage() {
         onSave={saveCustomCarImage}
         onClose={() => setCustomCarModal(null)}
         saving={savingCustomImage}
+        censorProfanity={user?.censor_profanity}
       />
     </div>
   );

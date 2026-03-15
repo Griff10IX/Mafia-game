@@ -7,7 +7,7 @@ from typing import Optional, List
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
-from server import db, get_current_user, send_notification, ADMIN_EMAILS
+from server import db, get_current_user, send_notification, ADMIN_EMAILS, _is_admin, _is_moderator
 
 logger = logging.getLogger(__name__)
 
@@ -292,3 +292,14 @@ def register(router):
             {"$set": {"game_chat_blocked_user_ids": blocked}},
         )
         return {"message": "User unblocked", "blocked_user_ids": blocked}
+
+    @router.delete("/game-chat/messages")
+    async def clear_game_chat(current_user: dict = Depends(get_current_user)):
+        """Delete all game chat messages. Admin or moderator only."""
+        if not _is_admin(current_user) and not _is_moderator(current_user):
+            raise HTTPException(
+                status_code=403,
+                detail="Only admins and moderators can clear game chat.",
+            )
+        result = await db.game_chat_messages.delete_many({})
+        return {"message": "Game chat cleared", "deleted_count": result.deleted_count}

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 import PrestigeBadge from '../../components/PrestigeBadge';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
+import { filterProfanity } from '../../utils/profanityFilter';
 import styles from '../../styles/noir.module.css';
 import { BadgeShield, BADGE_STYLES as RANKING_BADGE_STYLES } from '../Game/RankingBadges';
 import StaffUserDetailsPanel from '../../components/StaffUserDetailsPanel';
@@ -224,6 +225,7 @@ const ProfileInfoCard = ({
   staffDetailsOpen = false,
   setStaffDetailsOpen,
   achievementBadges = [],
+  censorProfanity = false,
 }) => {
   const isAdminProfile = profile.rank_name === 'Admin';
   const isModeratorProfile = profile.rank_name === 'Moderator';
@@ -577,7 +579,7 @@ const ProfileInfoCard = ({
                       className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border bg-zinc-900/90 hover:bg-zinc-800/90 transition-colors prof-row text-[7px] font-heading leading-tight ${badgeClass}`}
                     >
                       <span className="shrink-0 uppercase">{label}:</span>
-                      <span className="text-foreground truncate max-w-[56px] sm:max-w-[72px]">{car.name}</span>
+                      <span className="text-foreground truncate max-w-[56px] sm:max-w-[72px]">{censorProfanity ? filterProfanity(car.name) : car.name}</span>
                     </Link>
                   );
                 })}
@@ -590,7 +592,7 @@ const ProfileInfoCard = ({
       {/* Profile notepad: same card, joined below stats. Use [img]url[/img] for images. */}
       {(() => {
         const displayText = (bannerText || '').trim() || null;
-        const renderedHtml = displayText ? parseForumContent(displayText) : '';
+        const renderedHtml = displayText ? parseForumContent(displayText, { censorProfanity }) : '';
         return (
           <div className="border-t border-zinc-700/30">
             <div className="relative min-h-[60px] flex flex-col justify-center py-4 px-3 md:px-4">
@@ -1706,6 +1708,7 @@ export default function Profile() {
               staffDetailsOpen={staffDetailsOpen}
               setStaffDetailsOpen={setStaffDetailsOpen}
               achievementBadges={profile.achievement_badges || []}
+              censorProfanity={me?.censor_profanity}
             />
 
             {!isMe && profile.admin_stats && (

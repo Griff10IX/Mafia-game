@@ -1695,7 +1695,7 @@ export default function Layout({ children }) {
               </button>
 
               {/* Game Chat: whole game can talk; family-only toggle and block list in settings */}
-              <GameChat myUserId={user.id} onCloseSidebar={() => isMobileViewport && setRightSidebarOpen(false)} censorProfanity={user.censor_profanity} />
+              <GameChat myUserId={user.id} onCloseSidebar={() => isMobileViewport && setRightSidebarOpen(false)} censorProfanity={user.censor_profanity} canClearChat={isAdmin || isModerator} />
             </div>
 
             {isMobileViewport && (
@@ -1986,7 +1986,7 @@ export default function Layout({ children }) {
                 </div>
                 {/* Game Chat — same as right sidebar, bounded height in touch ball panel */}
                 <div className="pt-2 border-t flex flex-col min-h-0 overflow-hidden" style={{ borderColor: 'var(--noir-border)', maxHeight: '320px' }}>
-                  <GameChat myUserId={user.id} onCloseSidebar={() => setNotificationPanelOpen(false)} censorProfanity={user.censor_profanity} />
+                  <GameChat myUserId={user.id} onCloseSidebar={() => setNotificationPanelOpen(false)} censorProfanity={user.censor_profanity} canClearChat={isAdmin || isModerator} />
                 </div>
                 {/* Notifications */}
                 <div className="pt-1 border-t" style={{ borderColor: 'var(--noir-border)' }}>

@@ -481,7 +481,6 @@ export default function Jail() {
 
       <div className="relative j-fade-in flex items-center gap-2 flex-wrap">
         <p className="text-[9px] text-zinc-500 font-heading italic">Bust out jailed players for RP. Set a reward if you get locked up.</p>
-        {autoRankJailDisabled && <AutoRankIcon />}
       </div>
 
       <JailStatusCard
@@ -559,6 +558,12 @@ export default function Jail() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {autoRankJailDisabled && (
+        <div className="j-fade-in flex items-center justify-start">
+          <AutoRankIcon />
         </div>
       )}
 

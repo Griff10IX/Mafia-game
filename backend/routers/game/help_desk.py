@@ -1,12 +1,15 @@
 # Help Desk: tickets (create, list, get, reply, close). Staff = admin, mod, or HDO.
 # Also handles admin message permission requests.
+# Staff (admin/mod/hdo) can add words to the profanity blacklist; only admin can remove.
 from datetime import datetime, timezone
 import uuid
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 
 from typing import Optional
 from pydantic import BaseModel
+
+from utils.profanity import contains_profanity
 
 
 class TicketCreate(BaseModel):
@@ -16,6 +19,10 @@ class TicketCreate(BaseModel):
 
 class TicketReply(BaseModel):
     body: str
+
+
+class BlacklistAdd(BaseModel):
+    word: str
 
 
 class FamilyChangeNameRequest(BaseModel):
@@ -39,6 +46,11 @@ def register(router):
 
     def _can_manage_tickets(user: dict) -> bool:
         return _is_admin(user) or _is_moderator(user) or _is_hdo(user)
+
+    async def _get_profanity_additions():
+        cursor = db.profanity_additions.find({}, {"_id": 0, "word": 1})
+        docs = await cursor.to_list(2000)
+        return frozenset((d["word"] for d in docs))
 
     def _author_role(user: dict) -> str:
         if _is_admin(user):
@@ -65,6 +77,9 @@ def register(router):
         
         subject = (body.subject or "").strip()[:200] or "No subject"
         body_text = (body.body or "").strip()[: 10_000] or "No message"
+        additions = await _get_profanity_additions()
+        if contains_profanity(subject + " " + body_text, extra_words=additions):
+            raise HTTPException(status_code=400, detail="Your message contains a word that is not allowed.")
         ticket_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
         doc = {
@@ -143,6 +158,9 @@ def register(router):
         if not is_author and not _can_manage_tickets(current_user):
             raise HTTPException(status_code=403, detail="Not allowed to reply to this ticket")
         reply_text = (body.body or "").strip()[: 10_000] or "No message"
+        additions = await _get_profanity_additions()
+        if contains_profanity(reply_text, extra_words=additions):
+            raise HTTPException(status_code=400, detail="Your reply contains a word that is not allowed.")
         now = datetime.now(timezone.utc).isoformat()
         reply = {
             "author_id": current_user["id"],
@@ -178,12 +196,64 @@ def register(router):
 
     @router.get("/help-desk/check")
     async def help_desk_check(current_user: dict = Depends(get_current_user)):
-        """Whether current user can manage tickets (admin, mod, or HDO). can_approve_mute = admin or mod only."""
+        """Whether current user can manage tickets (admin, mod, or HDO). can_approve_mute = admin or mod only. is_admin for blacklist remove."""
         return {
             "can_manage": _can_manage_tickets(current_user),
             "is_hdo": _is_hdo(current_user),
             "can_approve_mute": _is_admin(current_user) or _is_moderator(current_user),
+            "is_admin": _is_admin(current_user),
         }
+
+    # ----- Word blacklist: staff (admin/mod/hdo) can add; only admin can remove. Added words apply site-wide (profanity list). -----
+
+    @router.get("/help-desk/blacklist")
+    async def list_blacklist(current_user: dict = Depends(get_current_user)):
+        """List words added to the blacklist. Staff only. can_remove = True only for admin."""
+        if not _can_manage_tickets(current_user):
+            raise HTTPException(status_code=403, detail="Only staff can view the blacklist")
+        cursor = db.profanity_additions.find({}, {"_id": 0}).sort("added_at", -1).limit(500)
+        docs = await cursor.to_list(500)
+        return {
+            "words": [{"word": d["word"], "added_by_username": d.get("added_by_username", "?"), "added_at": d.get("added_at")} for d in docs],
+            "can_remove": _is_admin(current_user),
+        }
+
+    @router.post("/help-desk/blacklist")
+    async def add_blacklist_word(body: BlacklistAdd, current_user: dict = Depends(get_current_user)):
+        """Add a word to the blacklist (blocked in helpdesk and site-wide). Admin, mod, or HDO only."""
+        if not _can_manage_tickets(current_user):
+            raise HTTPException(status_code=403, detail="Only staff can add blacklist words")
+        raw = (body.word or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="Enter a word to blacklist")
+        word = raw.lower()[:100]
+        existing = await db.profanity_additions.find_one({"word": word})
+        if existing:
+            raise HTTPException(status_code=400, detail="That word is already blacklisted")
+        now = datetime.now(timezone.utc).isoformat()
+        await db.profanity_additions.insert_one({
+            "word": word,
+            "added_by_id": current_user["id"],
+            "added_by_username": current_user.get("username") or "?",
+            "added_at": now,
+        })
+        return {"message": f"Blacklisted: {word}", "word": word}
+
+    @router.delete("/help-desk/blacklist")
+    async def remove_blacklist_word(
+        word: str = Query(..., description="Word to remove from blacklist"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Remove a word from the blacklist. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Only admins can remove blacklist words")
+        w = (word or "").strip().lower()
+        if not w:
+            raise HTTPException(status_code=400, detail="Specify the word to remove")
+        result = await db.profanity_additions.delete_one({"word": w})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Word not found in blacklist")
+        return {"message": f"Removed from blacklist: {w}"}
 
     @router.get("/help-desk/open-count")
     async def help_desk_open_count(current_user: dict = Depends(get_current_user)):

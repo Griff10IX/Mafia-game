@@ -82,12 +82,13 @@ function formatChatTime(iso) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = false }) {
+export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = false, canClearChat = false }) {
   const [messages, setMessages] = useState([]);
   const [prefs, setPrefs] = useState({ family_only: false, blocked_user_ids: [], block_list_with_names: [], in_family: false, muted: false, muted_until: null });
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [clearingChat, setClearingChat] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
@@ -171,6 +172,22 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
       toast.error(getApiErrorMessage(err));
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!canClearChat || clearingChat) return;
+    if (!window.confirm('Clear all game chat messages? This cannot be undone.')) return;
+    setClearingChat(true);
+    try {
+      await api.delete('/game-chat/messages');
+      setMessages([]);
+      toast.success('Game chat cleared');
+      fetchMessages().catch(() => {});
+    } catch (e) {
+      toast.error(getApiErrorMessage(e));
+    } finally {
+      setClearingChat(false);
     }
   };
 
@@ -287,6 +304,18 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
                   className="absolute right-0 top-full mt-0.5 z-20 py-2 px-2 rounded border shadow-lg min-w-[160px] w-full max-w-[200px] sm:w-auto sm:max-w-none"
                   style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
                 >
+                  {canClearChat && (
+                    <div className="pb-2 mb-2 border-b border-zinc-700/50">
+                      <button
+                        type="button"
+                        onClick={() => { setSettingsOpen(false); handleClearChat(); }}
+                        disabled={clearingChat}
+                        className="w-full text-left text-[10px] font-heading py-1.5 px-1 rounded hover:bg-red-500/10 text-red-400 disabled:opacity-50"
+                      >
+                        {clearingChat ? 'Clearing…' : 'Clear game chat'}
+                      </button>
+                    </div>
+                  )}
                   {prefs.in_family && (
                     <label className="flex items-center gap-2 cursor-pointer text-[10px] font-heading py-1 px-1 rounded hover:bg-primary/5">
                       <input
