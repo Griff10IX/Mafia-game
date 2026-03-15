@@ -139,6 +139,8 @@ async def _award_gta_milestones(user_id: str, new_total_gta: int, claimed: list)
             "system",
             category="system",
         )
+        from routers.game.achievements import log_badge_events
+        await log_badge_events(user_id, "gta", new_claimed)
     except Exception as e:
         logger.exception("Award GTA milestones: %s", e)
 

@@ -75,6 +75,8 @@ async def _award_crime_milestones(user_id: str, new_total_crimes: int, claimed: 
             "system",
             category="system",
         )
+        from routers.game.achievements import log_badge_events
+        await log_badge_events(user_id, "crimes", new_claimed)
     except Exception as e:
         logger.exception("Award crime milestones: %s", e)
 

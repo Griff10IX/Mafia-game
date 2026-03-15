@@ -1,5 +1,8 @@
 # Ranking Achievements / Badges - tiered milestones from early game to 5M+ crimes
-# No DB writes; computed from existing user stats at runtime
+# Badge events are written to db.badge_events for flash news ticker
+
+from datetime import datetime, timezone
+from typing import List, Optional
 
 from fastapi import Depends
 
@@ -105,13 +108,46 @@ async def get_badge_bonuses(user_id: str) -> dict:
     return out
 
 
-def _fmt(target: int, key: str) -> str:
+def _fmt(target: int, key: str = "") -> str:
     """Format target for display."""
     if target >= 1_000_000:
         return f"{target // 1_000_000}M"
     if target >= 1000:
         return f"{target // 1000}K"
     return str(target)
+
+
+async def log_badge_events(
+    user_id: str,
+    category_id: str,
+    tier_targets: List[int],
+    username: Optional[str] = None,
+) -> None:
+    """Write one badge_event per tier to db.badge_events for flash news. Call when a user crosses new achievement tiers (e.g. from _award_crime_milestones)."""
+    if not tier_targets:
+        return
+    from server import db
+    if username is None:
+        u = await db.users.find_one({"id": user_id}, {"_id": 0, "username": 1})
+        username = (u or {}).get("username") or "Someone"
+    cat = next((c for c in BADGE_CATEGORIES if c["id"] == category_id), None)
+    category_name = cat.get("name", category_id) if cat else category_id
+    now = datetime.now(timezone.utc)
+    created_at = now.isoformat()
+    for tier in tier_targets:
+        tier_label = _fmt(tier)
+        try:
+            await db.badge_events.insert_one({
+                "user_id": user_id,
+                "username": username,
+                "category_id": category_id,
+                "category_name": category_name,
+                "tier_target": tier,
+                "tier_label": tier_label,
+                "created_at": created_at,
+            })
+        except Exception:
+            pass
 
 
 def _compute_category(cat: dict, user: dict) -> dict:

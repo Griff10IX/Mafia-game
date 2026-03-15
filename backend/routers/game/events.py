@@ -151,6 +151,26 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
     except Exception:
         pass
 
+    # Badge earned (from badge_events; cap 5)
+    try:
+        badge_docs = await db.badge_events.find({}).sort("created_at", -1).limit(10).to_list(10)
+        for i, doc in enumerate(badge_docs):
+            if i >= 5:
+                break
+            username = doc.get("username") or "Someone"
+            category_name = doc.get("category_name") or doc.get("category_id") or "Badge"
+            tier_label = doc.get("tier_label") or str(doc.get("tier_target", ""))
+            created_at = doc.get("created_at") or ""
+            at_str = created_at if isinstance(created_at, str) else (created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at))
+            items.append({
+                "id": f"badge_{str(doc.get('_id', i))}",
+                "type": "badge_earned",
+                "message": f"{username} earned the {category_name} badge ({tier_label}).",
+                "at": at_str,
+            })
+    except Exception:
+        pass
+
     # Add a rotating tip so the ticker always has extra variety
     day_index = now.date().toordinal() % len(FLASH_NEWS_TIPS)
     tip_message = FLASH_NEWS_TIPS[day_index]
