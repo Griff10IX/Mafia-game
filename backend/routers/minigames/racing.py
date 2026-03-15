@@ -1745,6 +1745,7 @@ async def _start_race_internal(race_id: str) -> dict:
         p["pit_level"] = int(prof.get("pit_level") or 0) if prof else 0
         up = upgrades_map.get(p.get("racing_car_instance_id") or p.get("id"))
         p["reliability_level"] = int(up.get("reliability_level") or 0) if up else 0
+        p["overtaking_level"] = int(up.get("overtaking_level") or 0) if up else 0
     # Pre-compute race simulation so live replay matches final results
     with _SeededRandom(f"race:{race_id}"):
         lap_results, result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids, sim_incidents = _run_race_simulation_laps(

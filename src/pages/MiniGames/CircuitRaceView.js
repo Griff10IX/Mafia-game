@@ -29,6 +29,9 @@ const WEATHER_DEFS = {
 // Map weather IDs from backend → our keys
 const WEATHER_MAP = { clear:"clear", rain:"rain", snow:"snow", very_hot:"very_hot" };
 
+/** Scale for drawing cars on track (smaller = more overtaking space). */
+const CAR_DISPLAY_SCALE = 0.72;
+
 /** Pit stop duration in seconds: base minus pit_level * 0.35 (min 1.0 normal, 1.2 emergency). */
 function pitDurationSeconds(pitLevel, emergency = false) {
   const base = emergency ? 3.8 : 3.0;
@@ -923,6 +926,7 @@ export default function CircuitRaceView({
         inPit: r.inPit,
         baseSpeed: r.baseSpeed,
         baseGrip: r.baseGrip,
+        overtakeBoostUntil: r.overtakeBoostUntil,
       })),
       safetyCar: { active: safetyCar?.active, endsAtSec: safetyCar?.endsAtSec },
       fastestLap: { holderId: fastestLap?.holderId, time: fastestLap?.time },
@@ -1463,7 +1467,7 @@ export default function CircuitRaceView({
           const myPos = trackPositions[drawIdx];
           let nearbyCount = 0;
           trackPositions.forEach((op, oi) => {
-            if (oi !== drawIdx && op >= 0 && Math.abs(op - myPos) < 0.015) nearbyCount++;
+            if (oi !== drawIdx && op >= 0 && Math.abs(op - myPos) < 0.02) nearbyCount++;
           });
           if (nearbyCount > 0) {
             lateralOff = ((drawIdx % 3) - 1) * (halfW * 0.6);
@@ -1508,8 +1512,8 @@ export default function CircuitRaceView({
       grd.addColorStop(0, clr+"55"); grd.addColorStop(1, clr+"00");
       ctx.fillStyle=grd; ctx.fillRect(px-22,py-22,44,44);
 
-      // Shadow (car scale 0.88 for smaller cars / overtaking)
-      ctx.save(); ctx.translate(px,py+5); ctx.scale(0.88,0.88); ctx.scale(1.2,0.4);
+      // Shadow (car scale CAR_DISPLAY_SCALE for smaller cars / overtaking)
+      ctx.save(); ctx.translate(px,py+5); ctx.scale(CAR_DISPLAY_SCALE,CAR_DISPLAY_SCALE); ctx.scale(1.2,0.4);
       ctx.fillStyle="rgba(0,0,0,0.5)"; ctx.beginPath(); ctx.arc(0,0,11,0,Math.PI*2); ctx.fill();
       ctx.restore();
 
@@ -1517,7 +1521,7 @@ export default function CircuitRaceView({
       const curv = getCurvature(track, r.inPit ? 0 : ((r.totalLapsDone ?? 0) + r.trackPos) % 1);
       if (curv > 0.06 && !r.inPit && !r.dnf) {
         const brakeIntensity = Math.min(1, (curv - 0.06) / 0.12);
-        ctx.save(); ctx.translate(px,py); ctx.rotate(angle); ctx.scale(0.88,0.88);
+        ctx.save(); ctx.translate(px,py); ctx.rotate(angle); ctx.scale(CAR_DISPLAY_SCALE,CAR_DISPLAY_SCALE);
         ctx.fillStyle = `rgba(255,30,20,${0.3 + brakeIntensity * 0.5})`;
         ctx.beginPath(); ctx.arc(-12, -3, 2.5, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.arc(-12, 3, 2.5, 0, Math.PI * 2); ctx.fill();
@@ -1529,8 +1533,8 @@ export default function CircuitRaceView({
         ctx.restore();
       }
 
-      // Car body — scale 0.88 for overtaking space
-      ctx.save(); ctx.translate(px,py); ctx.rotate(angle); ctx.scale(0.88,0.88);
+      // Car body — scale CAR_DISPLAY_SCALE for overtaking space
+      ctx.save(); ctx.translate(px,py); ctx.rotate(angle); ctx.scale(CAR_DISPLAY_SCALE,CAR_DISPLAY_SCALE);
       ctx.fillStyle = r.color || "#888";
       ctx.beginPath();
       if (ctx.roundRect) { ctx.roundRect(-11,-5,22,10,3); }
@@ -1551,7 +1555,7 @@ export default function CircuitRaceView({
       // Headlights in night conditions
       if (cond === "night" && !r.inPit && !r.dnf) {
         ctx.save();
-        ctx.translate(px, py); ctx.rotate(angle); ctx.scale(0.88,0.88);
+        ctx.translate(px, py); ctx.rotate(angle); ctx.scale(CAR_DISPLAY_SCALE,CAR_DISPLAY_SCALE);
         const hlGrd = ctx.createRadialGradient(13, 0, 0, 25, 0, 30);
         hlGrd.addColorStop(0, "rgba(255,240,180,0.18)");
         hlGrd.addColorStop(1, "rgba(255,240,180,0)");
@@ -1566,7 +1570,7 @@ export default function CircuitRaceView({
       // Car number circle (scaled with car)
       const isPlayer = r.isPlayer;
       const carNumber = r.position != null ? r.position : drawIdx + 1;
-      ctx.save(); ctx.translate(px, py); ctx.scale(0.88, 0.88);
+      ctx.save(); ctx.translate(px, py); ctx.scale(CAR_DISPLAY_SCALE, CAR_DISPLAY_SCALE);
       ctx.fillStyle = isPlayer ? "#e8c870" : r.color;
       ctx.beginPath(); ctx.arc(0,-13,7,0,Math.PI*2); ctx.fill();
       ctx.strokeStyle = isPlayer ? "#0a0c06" : "rgba(0,0,0,0.6)"; ctx.lineWidth=1.2; ctx.stroke();
@@ -1578,7 +1582,7 @@ export default function CircuitRaceView({
 
       // Tyre compound dot with blister flash (scaled with car)
       const td = TYRE_DEFS[r.currentTyre] || TYRE_DEFS.medium;
-      ctx.save(); ctx.translate(px, py); ctx.scale(0.88, 0.88);
+      ctx.save(); ctx.translate(px, py); ctx.scale(CAR_DISPLAY_SCALE, CAR_DISPLAY_SCALE);
       if (r.tyreBlister) {
         const pulse = 0.5 + 0.5 * Math.sin(nowSec * 8);
         ctx.fillStyle = `rgba(231,76,60,${0.5+pulse*0.5})`;
@@ -1703,6 +1707,8 @@ export default function CircuitRaceView({
       sectorTimes:[null,null,null], currentSector:0, lastSectorCross:0, bestSectors:[Infinity,Infinity,Infinity], sectorDelta:null,
       inSlipstream:false, tyreBlister:false,
       strategyType:"normal",
+      overtakingLevel: 0,
+      overtakeBoostUntil: 0,
     });
     for (let i=0;i<7;i++) {
       const carIdx = i % NPC_CARS.length;
@@ -1732,12 +1738,14 @@ export default function CircuitRaceView({
         sectorTimes:[null,null,null], currentSector:0, lastSectorCross:0, bestSectors:[Infinity,Infinity,Infinity], sectorDelta:null,
         inSlipstream:false, tyreBlister:false,
         strategyType: npcStrat,
+        overtakingLevel: 0,
+        overtakeBoostUntil: 0,
       });
     }
     return racers;
   }, [playerCarName, playerPitLevel]);
 
-  // ── RACE LOOP (used for both LIVE and REPLAY: corner speed ~120 mph, brake/accel realism, track width, car scale 0.88, result_order at finish) ──
+  // ── RACE LOOP (used for both LIVE and REPLAY: corner speed ~120 mph, brake/accel realism, track width, car scale CAR_DISPLAY_SCALE, result_order at finish) ──
   const startRaceLoop = useCallback((track, cond, nLaps, racerArr, options = {}) => {
     const { onQualifyingComplete } = options;
     let currentWd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
@@ -1783,6 +1791,12 @@ export default function CircuitRaceView({
       const nowSec = now / 1000;
 
       const { racers } = stateRef.current;
+
+      // Save state on first frame so refresh/navigate away always has something to restore
+      if (lastSaveTimeRef.current === 0) {
+        lastSaveTimeRef.current = now;
+        saveRaceState();
+      }
 
       // Pre-compute sorted by previous frame progress for slipstream
       const prevSorted = [...racers].sort((a, b) => {
@@ -1915,6 +1929,15 @@ export default function CircuitRaceView({
             effSpeed *= 1.04;
             r.inSlipstream = true;
           }
+          // Overtake attempt: when close (side-by-side range), chance per frame to get short speed boost
+          if (slipGap > 0 && slipGap <= 0.035 && !scActive && (r.overtakingLevel || 0) > 0) {
+            if (Math.random() < dt * 0.6 * ((r.overtakingLevel || 0) / 100)) {
+              r.overtakeBoostUntil = nowSec + 0.4;
+            }
+          }
+        }
+        if (nowSec < (r.overtakeBoostUntil || 0)) {
+          effSpeed *= 1.04;
         }
 
         // Safety car speed cap
@@ -1926,7 +1949,7 @@ export default function CircuitRaceView({
         const curvature = getCurvature(track, r.trackPos);
         const cornerMult = getCornerMult(curvature, effectiveGrip);
 
-        // Movement (brake/accel realism: separate factors + max delta; track uses trackWidth, cars drawn at 0.88 scale)
+        // Movement (brake/accel realism: separate factors + max delta; track uses trackWidth, cars drawn at CAR_DISPLAY_SCALE)
         const prevPos = r.trackPos;
         const SPEED_REALISM_SCALE = 0.168;
         const SPEED_CAP_MPH = 150;
@@ -2479,6 +2502,8 @@ export default function CircuitRaceView({
           sectorTimes:[null,null,null], currentSector:0, lastSectorCross:0, bestSectors:[Infinity,Infinity,Infinity], sectorDelta:null,
           inSlipstream:false, tyreBlister:false,
           strategyType: npcStrat,
+          overtakingLevel: p.overtaking_level ?? 0,
+          overtakeBoostUntil: saved?.overtakeBoostUntil ?? 0,
         };
       });
       
@@ -2582,6 +2607,8 @@ export default function CircuitRaceView({
         sectorTimes:[null,null,null], currentSector:0, lastSectorCross:0, bestSectors:[Infinity,Infinity,Infinity], sectorDelta:null,
         inSlipstream:false, tyreBlister:false,
         strategyType: npcStrat,
+        overtakingLevel: p.overtaking_level ?? 0,
+        overtakeBoostUntil: 0,
       };
     });
     stateRef.current = { racers, track, nLaps: totalLaps, wd: WEATHER_DEFS[cond] || WEATHER_DEFS.clear };
@@ -2625,6 +2652,7 @@ export default function CircuitRaceView({
                   fuelLoad:100,
                   sectorTimes:[null,null,null], currentSector:0, lastSectorCross:0, bestSectors:[Infinity,Infinity,Infinity], sectorDelta:null,
                   inSlipstream:false, tyreBlister:false,
+                  overtakeBoostUntil: 0,
                 }));
                 setCommentary("Grid set — race start!");
                 setTimeout(() => {

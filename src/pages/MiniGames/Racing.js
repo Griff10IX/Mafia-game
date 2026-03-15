@@ -347,9 +347,15 @@ export default function Racing() {
 
   useEffect(() => {
     if (activeRace?.state === "running") {
-      try { sessionStorage.setItem(RACING_ACTIVE_RACE_KEY, activeRace.id); } catch (_) {}
+      try {
+        sessionStorage.setItem(RACING_ACTIVE_RACE_KEY, activeRace.id);
+        localStorage.setItem(RACING_ACTIVE_RACE_KEY, activeRace.id);
+      } catch (_) {}
     } else {
-      try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {}
+      try {
+        sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY);
+        localStorage.removeItem(RACING_ACTIVE_RACE_KEY);
+      } catch (_) {}
     }
   }, [activeRace?.state, activeRace?.id]);
 
@@ -373,7 +379,9 @@ export default function Racing() {
       restoreOrFetchByParam(raceIdParam);
       return;
     }
-    const storedId = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(RACING_ACTIVE_RACE_KEY) : null;
+    const fromSession = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(RACING_ACTIVE_RACE_KEY) : null;
+    const fromLocal = typeof localStorage !== "undefined" ? localStorage.getItem(RACING_ACTIVE_RACE_KEY) : null;
+    const storedId = fromSession || fromLocal;
     if (storedId) {
       (async () => {
         try {
@@ -384,7 +392,10 @@ export default function Racing() {
             setTab("races");
             navigate(`/casino/mini-games/racing?race=${storedId}`, { replace: true });
           } else {
-            try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {}
+            try {
+              sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY);
+              localStorage.removeItem(RACING_ACTIVE_RACE_KEY);
+            } catch (_) {}
           }
         } catch (_) {}
       })();
@@ -480,7 +491,7 @@ export default function Racing() {
   const handleCompleteRace = async (raceId) => {
     try {
       const r = await api.post(`/racing/races/${raceId}/complete`, {});
-      try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {}
+      try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); localStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {}
       setActiveRace((prev) => (prev?.id === raceId ? { ...r.data?.race, _resultsShown: true } : prev));
       refreshUser();
       fetchProfile();
@@ -694,7 +705,7 @@ export default function Racing() {
             currentUserId={profile?.user_id}
             rewards={activeRace.rewards || null}
             onComplete={() => handleCompleteRace(activeRace.id)}
-            onReset={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); fetchOpenRaces(); }}
+            onReset={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); localStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); fetchOpenRaces(); }}
           />
         </div>
       )}
@@ -708,7 +719,7 @@ export default function Racing() {
             </p>
             <button
               type="button"
-              onClick={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); }}
+              onClick={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); localStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); }}
               className="text-[10px] font-heading px-2 py-1 rounded border border-[var(--noir-border)] hover:bg-[var(--noir-surface)] touch-manipulation"
             >
               Close
@@ -731,7 +742,7 @@ export default function Racing() {
             playerPitLevel={profile?.pit_level ?? 0}
             currentUserId={profile?.user_id}
             rewards={activeRace.rewards || null}
-            onReset={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); }}
+            onReset={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); localStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); }}
           />
         </div>
       )}
@@ -780,7 +791,7 @@ export default function Racing() {
               </div>
             )}
             <button type="button" className={styles.btnPrimary + " mt-3 w-full min-h-[40px] touch-manipulation text-xs"}
-              onClick={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); fetchProfile(); navigate("/racing", { replace: true }); }}>
+              onClick={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); localStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); fetchProfile(); navigate("/racing", { replace: true }); }}>
               Back to races
             </button>
           </div>
