@@ -644,7 +644,7 @@ const TRACKS = [
 
 const PROFILE_N = 256;
 const _profileCache = new Map();
-const PROFILE_CACHE_KEY = "v7"; // bump to invalidate when profile logic changes (e.g. finish straight zone)
+const PROFILE_CACHE_KEY = "v13"; // bump to invalidate when profile logic changes (e.g. finish straight zone)
 
 // FIX B1: uses geometry discontinuity detection instead of blanket 5% bypass
 function getCurvature(track, t) {
@@ -685,9 +685,9 @@ function buildSpeedProfile(track) {
   const key = `${track.id}:${PROFILE_CACHE_KEY}`;
   if (_profileCache.has(key)) return _profileCache.get(key);
   const N = PROFILE_N, raw = new Float32Array(N);
-  // Pass 1: raw corner speed from curvature; force full speed on S/F straight (last 20%, first 10%) so no track slows before the line
-  const sfRawStart = Math.floor(N * 0.80); // last 20% of lap = full speed (covers corners that run close to the line)
-  const sfRawEndFirst = Math.floor(N * 0.10); // first 10% of lap = full speed
+  // Pass 1: raw corner speed from curvature; force full speed on S/F straight (last 50%, first 15%) so no track slows before the line (Monza, Mountain Pass, Harbor Front, etc.)
+  const sfRawStart = Math.floor(N * 0.50); // last 50% of lap = full speed (entire second half – Monza chicane + straight, all tracks)
+  const sfRawEndFirst = Math.floor(N * 0.15); // first 15% of lap = full speed
   for (let i = 0; i < N; i++) {
     if (i >= sfRawStart || i <= sfRawEndFirst) {
       raw[i] = 1.0;
@@ -725,12 +725,13 @@ function buildSpeedProfile(track) {
   const profile = new Float32Array(N);
   for (let i = 0; i < N; i++) profile[i] = 0.56 + ((raw[i]-mn)/rng)*0.44;
   // Force minimum speed at start/finish so cars never slow before/after the line (braking pass can't pull these below floor)
-  const runStart = 204; // ~0.80 lap – start of "run to the line" zone
-  const runEnd = N - 1; // 255
+  const runStart = Math.floor(N * 0.50); // last 50% – run to the line (Monza, Mountain Pass, Harbor Front, Roosevelt, Chicago, etc.)
+  const runEnd = N - 1;
+  const runEndFirst = Math.floor(N * 0.15); // first 15% after the line
   const trackMax = Math.max(...profile);
   const sfMin = Math.max(0.90, trackMax * 0.95); // at least 90% or 95% of track max – no dip at the line
   for (let i = runStart; i <= runEnd; i++) profile[i] = Math.max(profile[i], Math.min(1.0, sfMin));
-  for (let i = 0; i <= 15; i++) profile[i] = Math.max(profile[i], Math.min(1.0, sfMin));
+  for (let i = 0; i <= runEndFirst; i++) profile[i] = Math.max(profile[i], Math.min(1.0, sfMin));
   const cap = (i, arr) => {
     const prev = arr[(i-1+N)%N], next = arr[(i+1)%N];
     const m = Math.max(prev, next);
@@ -1577,9 +1578,9 @@ export default function CircuitRaceView({
           const cornerSM=Math.max(0.50,Math.min(1.0,profile[pidx]+(effGrip-0.85)*0.6));
           const curvature=getCurvature(track,trackT);
 
-          // Movement — F1 Clash realistic braking/acceleration
+          // Movement — F1 Clash realistic braking/acceleration (smooth ramp, no instant 30→150 jump after the line)
           const prevPos=r.trackPos;
-          const SSCALE=0.170, SCAP=158, ABRAKE=3.0, AACCEL=5.5;
+          const SSCALE=0.170, SCAP=158, ABRAKE=3.0, AACCEL=2.0; // slower accel so speed ramps visibly from corner to straight
           const applyLerp=(cur,tgt)=>{if(tgt==null)return tgt;if(cur==null)return tgt;const brk=tgt<cur;return cur+(tgt-cur)*Math.min(1,dt*(brk?ABRAKE:AACCEL));};
 
           if(r.slideOffUntil>0&&nowSec<r.slideOffUntil){
@@ -1590,7 +1591,9 @@ export default function CircuitRaceView({
             r.trackPos=(r.trackPos+(1/lapTime)*dt+1)%1;
             const rawMph=track.km&&track.lapBase?SSCALE*(3600*track.km*cornerSM*effSpeed)/track.lapBase:null;
             const tMph=rawMph!=null?Math.max(0,Math.min(SCAP,rawMph)):null;
-            r.currentSpeedMph=tMph!=null?(r.currentSpeedMph!=null?applyLerp(r.currentSpeedMph,tMph):tMph):null;
+            // Always lerp toward target so we never snap 30→150; if no previous speed, lerp from 0 (standing start / after line)
+            const curMph=r.currentSpeedMph!=null?r.currentSpeedMph:(tMph!=null?0:null);
+            r.currentSpeedMph=tMph!=null?(curMph!=null?applyLerp(curMph,tMph):tMph):null;
             // Slide off — low grip + sharp corner
             if(curvature>0.24&&effGrip<0.64&&Math.random()<dt*0.5*(0.64-effGrip)*Math.min(1,curvature/0.38)){
               r.slideOffUntil=nowSec+0.5+Math.random()*0.65;addInc(`${r.name} off track!`);
