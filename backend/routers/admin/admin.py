@@ -3029,9 +3029,12 @@ def register(router):
         elif filter_type == "dead":
             query["is_dead"] = True
         elif filter_type == "npc":
-            query["is_bodyguard"] = True
+            query["$or"] = [{"is_npc": True}, {"is_bodyguard": True}]
         elif filter_type == "non_npc":
-            query["$or"] = [{"is_bodyguard": {"$ne": True}}, {"is_bodyguard": {"$exists": False}}]
+            query["$and"] = [
+                {"$or": [{"is_npc": {"$ne": True}}, {"is_npc": {"$exists": False}}]},
+                {"$or": [{"is_bodyguard": {"$ne": True}}, {"is_bodyguard": {"$exists": False}}]},
+            ]
         # else "all" -> no filter
 
         sort_spec = []
@@ -3056,7 +3059,7 @@ def register(router):
 
         cursor = db.users.find(
             query,
-            {"_id": 0, "id": 1, "username": 1, "email": 1, "is_dead": 1, "is_bodyguard": 1, "created_at": 1, "email_verified": 1},
+            {"_id": 0, "id": 1, "username": 1, "email": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1, "created_at": 1, "email_verified": 1},
         ).sort(sort_spec).skip(skip).limit(limit)
         raw = await cursor.to_list(limit)
         total = await db.users.count_documents(query)
@@ -3067,6 +3070,7 @@ def register(router):
                 "email": u.get("email"),
                 "is_dead": bool(u.get("is_dead")),
                 "is_bodyguard": bool(u.get("is_bodyguard")),
+                "is_npc": bool(u.get("is_npc")),
                 "created_at": u.get("created_at"),
                 "email_verified": bool(u.get("email_verified", True)),
             }

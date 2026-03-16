@@ -277,10 +277,14 @@ def register(router):
             {"_id": 0, "id": 1, "winner_family_id": 1, "winner_family_name": 1, "loser_family_id": 1, "loser_family_name": 1, "ended_at": 1}
         ).sort("ended_at", -1).limit(30).to_list(30)
         wiped_families = []
+        seen_loser_ids = set()
         for w in wiped_wars:
+            loser_id = w.get("loser_family_id")
+            if loser_id in seen_loser_ids:
+                continue
+            seen_loser_ids.add(loser_id)
             war_id = w.get("id")
             winner_id = w.get("winner_family_id")
-            loser_id = w.get("loser_family_id")
             winner_name = (w.get("winner_family_name") or "?").strip() or "?"
             loser_name = (w.get("loser_family_name") or "?").strip() or "?"
             # Aggregate winner-side stats for this war (player kills, BG kills; whether winner was in a family)

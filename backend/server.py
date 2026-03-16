@@ -820,16 +820,18 @@ async def _family_war_start(family_a_id: str, family_b_id: str):
     )
 
 
-async def _family_war_check_wipe_and_award(victim_family_id: str):
-    """If victim's family has no living members, end the war and award the winner."""
+async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_id: str = None):
+    """If victim's family has no living members, end the war and award the winner. Winner is the family that landed the killing blow (killer_family_id), not the other side of the first war."""
     if not victim_family_id:
         return
-    war = await db.family_wars.find_one(
+    active_wars = await db.family_wars.find(
         {"$or": [{"family_a_id": victim_family_id}, {"family_b_id": victim_family_id}]},
         {"_id": 0},
-    )
-    if not war or war.get("status") not in ["active", "truce_offered"]:
+    ).to_list(20)
+    active_wars = [w for w in active_wars if w.get("status") in ["active", "truce_offered"]]
+    if not active_wars:
         return
+    war = active_wars[0]
     members = await db.family_members.find({"family_id": victim_family_id}, {"_id": 0, "user_id": 1}).to_list(100)
     alive = 0
     for m in members:
@@ -838,7 +840,15 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
             alive += 1
     if alive > 0:
         return
-    winner_id = war["family_b_id"] if war["family_a_id"] == victim_family_id else war["family_a_id"]
+    # Credit the family that got the killing blow, not the one that started the war
+    killer_is_side = killer_family_id and any(
+        w["family_a_id"] == killer_family_id or w["family_b_id"] == killer_family_id for w in active_wars
+    )
+    if killer_is_side:
+        winner_id = killer_family_id
+        war = next((w for w in active_wars if w["family_a_id"] == killer_family_id or w["family_b_id"] == killer_family_id), war)
+    else:
+        winner_id = war["family_b_id"] if war["family_a_id"] == victim_family_id else war["family_a_id"]
     loser_id = victim_family_id
     now_dt = datetime.now(timezone.utc)
     now = now_dt.isoformat()
@@ -847,10 +857,11 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
     winner_family_name = (winner_family or {}).get("name") or (winner_family or {}).get("tag") or winner_id
     loser_family_name = (loser_family or {}).get("name") or (loser_family or {}).get("tag") or loser_id
     if not winner_family:
-        await db.family_wars.update_one(
-            {"id": war["id"]},
-            {"$set": {"status": "family_a_wins" if winner_id == war["family_a_id"] else "family_b_wins", "ended_at": now, "winner_family_id": winner_id, "loser_family_id": loser_id, "winner_family_name": winner_family_name, "loser_family_name": loser_family_name}},
-        )
+        for w in active_wars:
+            await db.family_wars.update_one(
+                {"id": w["id"]},
+                {"$set": {"status": "family_a_wins" if winner_id == w["family_a_id"] else "family_b_wins", "ended_at": now, "winner_family_id": winner_id, "loser_family_id": loser_id, "winner_family_name": winner_family_name, "loser_family_name": loser_family_name}},
+            )
         return
     winner_boss_id = winner_family.get("boss_id")
     loser_rackets = (loser_family or {}).get("rackets") or {}
@@ -940,26 +951,28 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
             )
     prize_car_count = sum(1 for uc in exclusive_cars if next((c for c in CARS if c.get("id") == uc.get("car_id")), {}).get("rarity") == "exclusive")
 
-    # Record war result
-    await db.family_wars.update_one(
-        {"id": war["id"]},
-        {"$set": {
-            "status": "family_a_wins" if winner_id == war["family_a_id"] else "family_b_wins",
-            "ended_at": now,
-            "winner_family_id": winner_id,
-            "loser_family_id": loser_id,
-            "winner_family_name": winner_family_name,
-            "loser_family_name": loser_family_name,
-            "prize_exclusive_cars": prize_car_count,
-            "prize_rackets_taken": rackets_taken,
-            "prize_racket_bonus_count": rackets_bonus_count,
-            "prize_treasury": loser_treasury,
-            "prize_racket_cash": prize_racket_cash,
-            "prize_compound_cash": loser_compound_cash,
-            "prize_compound_points": loser_compound_points,
-            "prize_compound_loot_pieces": loser_compound_loot_pieces,
-        }},
-    )
+    # Record war result: end ALL wars the victim was in with the same winner (killer's family) so stats show one "wiped by"
+    for w in active_wars:
+        war_status = "family_a_wins" if winner_id == w["family_a_id"] else "family_b_wins"
+        await db.family_wars.update_one(
+            {"id": w["id"]},
+            {"$set": {
+                "status": war_status,
+                "ended_at": now,
+                "winner_family_id": winner_id,
+                "loser_family_id": loser_id,
+                "winner_family_name": winner_family_name,
+                "loser_family_name": loser_family_name,
+                "prize_exclusive_cars": prize_car_count if w["id"] == war["id"] else None,
+                "prize_rackets_taken": rackets_taken if w["id"] == war["id"] else None,
+                "prize_racket_bonus_count": rackets_bonus_count if w["id"] == war["id"] else None,
+                "prize_treasury": loser_treasury if w["id"] == war["id"] else None,
+                "prize_racket_cash": prize_racket_cash if w["id"] == war["id"] else None,
+                "prize_compound_cash": loser_compound_cash if w["id"] == war["id"] else None,
+                "prize_compound_points": loser_compound_points if w["id"] == war["id"] else None,
+                "prize_compound_loot_pieces": loser_compound_loot_pieces if w["id"] == war["id"] else None,
+            }},
+        )
 
     # Build notification message
     msg = f"Your family won the war against {loser_family_name}!"

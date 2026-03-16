@@ -298,6 +298,22 @@ async def cleanup_dead_families():
             total_cash_prize = treasury + prize_racket_cash + compound_cash
             assets_transferred = False
             winner_id = None
+            winner_family_name = None
+            winner_fam_doc = None
+            # If all wars already ended (e.g. by kill path), get winner from most recent ended war
+            if not active_wars:
+                ended = await db.family_wars.find_one(
+                    {"$or": [{"family_a_id": family_id}, {"family_b_id": family_id}], "status": {"$in": ["family_a_wins", "family_b_wins"]}},
+                    {"_id": 0, "winner_family_id": 1, "winner_family_name": 1},
+                    sort=[("ended_at", -1)],
+                )
+                if ended:
+                    winner_id = ended.get("winner_family_id")
+                    winner_family_name = (ended.get("winner_family_name") or "?").strip() or "?"
+                    if winner_id:
+                        winner_fam_doc = await db.families.find_one({"id": winner_id}, {"_id": 0, "name": 1, "tag": 1})
+                        if winner_fam_doc:
+                            winner_family_name = (winner_fam_doc.get("name") or winner_fam_doc.get("tag") or winner_id).strip() or winner_id
             for active_war in active_wars:
                 winner_id = active_war["family_b_id"] if active_war["family_a_id"] == family_id else active_war["family_a_id"]
                 loser_id = family_id

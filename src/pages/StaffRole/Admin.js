@@ -332,7 +332,7 @@ export default function Admin() {
   const [broadcastSending, setBroadcastSending] = useState(false);
   const [allUsersList, setAllUsersList] = useState(null);
   const [allUsersTotal, setAllUsersTotal] = useState(null);
-  const [allUsersFilter, setAllUsersFilter] = useState('all');
+  const [allUsersFilter, setAllUsersFilter] = useState('non_npc');
   const [allUsersSort, setAllUsersSort] = useState('username_asc');
   const [allUsersLoading, setAllUsersLoading] = useState(false);
   const [lockedAccounts, setLockedAccounts] = useState([]);
@@ -2819,13 +2819,13 @@ export default function Admin() {
                         <td className="py-1.5 pr-2 text-mutedForeground truncate max-w-[180px]">{u.email ?? '—'}</td>
                         <td className="py-1.5 pr-2">{u.email_verified === false ? <span className="text-amber-400">No</span> : <span className="text-emerald-400">Yes</span>}</td>
                         <td className="py-1.5 pr-2">{u.is_dead ? <span className="text-red-400">Yes</span> : 'No'}</td>
-                        <td className="py-1.5 pr-2">{u.is_bodyguard ? <span className="text-amber-400">Yes</span> : 'No'}</td>
+                        <td className="py-1.5 pr-2">{(u.is_npc || u.is_bodyguard) ? <span className="text-amber-400">Yes</span> : 'No'}</td>
                         <td className="py-1.5 pr-2 text-mutedForeground">{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
                         <td className="py-1.5 flex flex-wrap gap-1">
                           <button type="button" onClick={() => openUserDetail(u)} disabled={userDetailLoading} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-zinc-500/50 bg-zinc-700/40 text-zinc-200 hover:bg-zinc-600/50 disabled:opacity-50 flex items-center gap-0.5" title="View full user details">
                             <Info size={10} /> Details
                           </button>
-                          {!u.is_bodyguard && (
+                          {!(u.is_npc || u.is_bodyguard) && (
                             <button type="button" onClick={() => setTargetFromSearch(u.username)} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30">Set target</button>
                           )}
                         </td>

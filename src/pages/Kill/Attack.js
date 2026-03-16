@@ -1018,8 +1018,17 @@ export default function Attack() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Clear stored submit when leaving the page so "Kill → go to Crimes → back to Kill" never auto-sends. F5 on Attack page still resends (reload doesn't run this cleanup).
   useEffect(() => {
-    // If F5 with stored submit, trigger resend immediately (don't wait for load) so it's as fast as clicking Kill
+    return () => {
+      try {
+        sessionStorage.removeItem('attack-last-submit');
+      } catch (_) {}
+    };
+  }, []);
+
+  useEffect(() => {
+    // If F5 (full page reload) with stored submit, trigger resend. Never resend when just mounting after client-side nav.
     if (!attackResendCheckDoneThisLoad) {
       attackResendCheckDoneThisLoad = true;
       const navEntry = typeof performance !== 'undefined' && performance.getEntriesByType && performance.getEntriesByType('navigation')[0];

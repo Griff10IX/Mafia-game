@@ -12,6 +12,10 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('ErrorBoundary caught:', error, info);
+    const msg = error?.message || String(error);
+    if (this.isChunkLoadError(msg)) {
+      window.location.reload();
+    }
   }
 
   retry = () => {
@@ -38,10 +42,25 @@ export default class ErrorBoundary extends Component {
     });
   };
 
+  isChunkLoadError(msg) {
+    if (!msg || typeof msg !== 'string') return false;
+    return msg.includes('Loading chunk') || msg.includes('ChunkLoadError') || msg.includes('Loading CSS chunk') || /Failed to fetch dynamically imported module|Importing a module script failed/i.test(msg);
+  }
+
   render() {
     if (this.state.hasError) {
       const err = this.state.error;
       const msg = err?.message || String(err);
+      const isChunkError = this.isChunkLoadError(msg);
+      if (isChunkError) {
+        return (
+          <div className={`${styles.pageContent} min-h-[40vh] flex items-center justify-center p-8`}>
+            <div className={`${styles.panel} rounded-md p-6 max-w-md text-center`}>
+              <p className="text-sm text-mutedForeground font-heading">Loading new version…</p>
+            </div>
+          </div>
+        );
+      }
       const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
       return (
         <div className={`${styles.pageContent} min-h-[40vh] flex items-center justify-center p-8`}>
