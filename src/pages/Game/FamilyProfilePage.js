@@ -228,6 +228,7 @@ export default function FamilyProfilePage() {
   const fallen      = family.fallen  || [];
   const rackets     = family.rackets || [];
   const isMyFamily  = !!family.my_role;
+  const isWiped     = !!family.wiped;
   const crewOCFee   = family.crew_oc_join_fee ?? 0;
   const crewOCCooldown  = family.crew_oc_cooldown_until;
   const crewOCAvailable = !crewOCCooldown || formatTimeLeft(crewOCCooldown) === 'Ready';
@@ -245,7 +246,7 @@ export default function FamilyProfilePage() {
     } finally { setCrewOCApplyLoading(false); }
   };
 
-  const canEditProfile = isMyFamily && ['boss', 'underboss', 'capo'].includes((family.my_role || '').toLowerCase());
+  const canEditProfile = !isWiped && isMyFamily && ['boss', 'underboss', 'capo'].includes((family.my_role || '').toLowerCase());
   const insertFamilyMarkup = (before, after = '') => {
     const ta = profileTextareaRef.current;
     if (!ta) {
@@ -299,6 +300,17 @@ export default function FamilyProfilePage() {
         <div className="h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
 
         <div className="px-5 pt-4 pb-5">
+          {isWiped && (
+            <div className="mb-4 py-2.5 px-3 rounded-lg border border-amber-500/40 bg-amber-500/10 flex items-center gap-2">
+              <Skull size={16} className="text-amber-500 flex-shrink-0" />
+              <div className="text-[10px] font-heading uppercase tracking-wider text-amber-200">
+                <span className="font-bold">Crew wiped</span>
+                {family.wiped_by_family_name && (
+                  <span className="text-amber-400/90 ml-1">— taken out by {family.wiped_by_family_name}</span>
+                )}
+              </div>
+            </div>
+          )}
           <div className="flex items-start justify-between gap-2 mb-3">
             <div className="flex items-center gap-2">
               <div className="w-0.5 h-4 bg-primary/40 rounded-full" />
@@ -682,8 +694,8 @@ export default function FamilyProfilePage() {
           </div>
         )}
 
-        {/* Crew OC — only show to users not in this family (no family or other family); members of this family use their own Family page */}
-        {!isMyFamily && (
+        {/* Crew OC — only show to users not in this family when crew is not wiped */}
+        {!isWiped && !isMyFamily && (
         <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in`} style={{ animationDelay: '0.3s' }}>
           <div className="px-4 py-2.5 flex items-center justify-between border-b border-primary/10">
             <div className="flex items-center gap-2">

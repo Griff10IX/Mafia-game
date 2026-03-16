@@ -271,8 +271,8 @@ def _racket_previous_id(racket_id: str):
 
 
 async def cleanup_dead_families():
-    """Remove families where all members are dead or don't exist. Transfer assets to war winners."""
-    families = await db.families.find({}, {"_id": 0}).to_list(50)
+    """Mark families where all members are dead as wiped (soft-delete); transfer assets to war winners."""
+    families = await db.families.find({"wiped": {"$ne": True}}, {"_id": 0}).to_list(50)
     for fam in families:
         family_id = fam["id"]
         members = await db.family_members.find({"family_id": family_id}, {"_id": 0}).to_list(100)
@@ -371,7 +371,24 @@ async def cleanup_dead_families():
                     # No winner - just clear the state
                     await set_state_head(head_state, None)
             await db.family_members.delete_many({"family_id": family_id})
-            await db.families.delete_one({"id": family_id})
+            # Soft-delete: mark as wiped so crew profile still viewable (e.g. /game/family/:id)
+            winner_name = (winner_fam_doc or {}).get("name") or (winner_fam_doc or {}).get("tag") or (winner_id or "?")
+            await db.families.update_one(
+                {"id": family_id},
+                {"$set": {
+                    "wiped": True,
+                    "wiped_at": now,
+                    "wiped_by_family_id": winner_id,
+                    "wiped_by_family_name": winner_family_name,
+                    "boss_id": None,
+                    "rackets": {},
+                    "treasury": 0,
+                    "compound_cash": 0,
+                    "compound_points": 0,
+                    "compound_loot_pieces": 0,
+                    "compound_deposits_by_user": {},
+                }}
+            )
 
 
 _family_raid_locks: Dict[tuple, asyncio.Lock] = {}
@@ -499,7 +516,7 @@ async def families_list(current_user: dict = Depends(get_current_user)):
     if _list_cache is not None and _list_cache[1] > now_ts:
         return _list_cache[0]
     await cleanup_dead_families()
-    cursor = db.families.find({}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1})
+    cursor = db.families.find({"wiped": {"$ne": True}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1})
     fams = await cursor.to_list(MAX_FAMILIES * 2)
     out = []
     for f in fams:
@@ -704,8 +721,9 @@ async def families_my(current_user: dict = Depends(get_current_user)):
 async def families_lookup(tag: str = None, current_user: dict = Depends(get_current_user)):
     if not tag or not str(tag).strip():
         raise HTTPException(status_code=400, detail="tag required")
-    tag = str(tag).strip().upper()
-    fam = await db.families.find_one({"$or": [{"tag": tag}, {"id": tag}]}, {"_id": 0})
+    tag_clean = str(tag).strip()
+    # id is case-sensitive (UUID); tag we match case-insensitively
+    fam = await db.families.find_one({"$or": [{"tag": tag_clean.upper()}, {"id": tag_clean}]}, {"_id": 0})
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
     members_docs = await db.family_members.find({"family_id": fam["id"]}, {"_id": 0}).to_list(100)
@@ -748,7 +766,7 @@ async def families_lookup(tag: str = None, current_user: dict = Depends(get_curr
     ).to_list(50)
     crew_oc_crew = [{"username": m["username"], "is_family_member": True} for m in members]
     crew_oc_crew += [{"username": a.get("username") or "?", "is_family_member": False} for a in accepted_apps]
-    return {
+    out = {
         "id": fam["id"], "name": fam["name"], "tag": fam["tag"], "treasury": fam.get("treasury", 0),
         "head_of_state": fam.get("head_of_state"),
         "profile_text": (fam.get("profile_text") or "").strip() or None,
@@ -758,6 +776,12 @@ async def families_lookup(tag: str = None, current_user: dict = Depends(get_curr
         "crew_oc_forum_topic_id": crew_oc_forum_topic_id,
         "crew_oc_application": crew_oc_application, "crew_oc_crew": crew_oc_crew,
     }
+    if fam.get("wiped"):
+        out["wiped"] = True
+        out["wiped_at"] = fam.get("wiped_at")
+        out["wiped_by_family_id"] = fam.get("wiped_by_family_id")
+        out["wiped_by_family_name"] = (fam.get("wiped_by_family_name") or "").strip() or None
+    return out
 
 
 async def families_create(request: FamilyCreateRequest, current_user: dict = Depends(get_current_user)):
@@ -1625,7 +1649,7 @@ async def families_racket_attack_targets(debug: bool = False, current_user: dict
     my_family_id = current_user.get("family_id")
     if not my_family_id:
         return {"targets": []}
-    all_other = await db.families.find({"id": {"$ne": my_family_id}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "rackets": 1}).to_list(50)
+    all_other = await db.families.find({"id": {"$ne": my_family_id}, "wiped": {"$ne": True}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "rackets": 1}).to_list(50)
     ev = await get_effective_event()
     targets = []
     for fam in all_other:
