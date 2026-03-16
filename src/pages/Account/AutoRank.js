@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame, CircleDot } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
+import styles from '../../styles/noir.module.css';
 
 const MIN_INTERVAL = 5;
 const MIN_BUST_INTERVAL = 1;
@@ -129,11 +130,11 @@ const ToggleRow = ({ icon: Icon, label, description, checked, disabled, onToggle
    Stat Card Component
    ═══════════════════════════════════════════════════════ */
 const StatCard = ({ label, value, valueColor = "text-foreground", icon: Icon }) => (
-  <div className="rounded bg-zinc-800/50 border border-zinc-700/40 p-2 sm:p-3 text-center">
+  <div className={`rounded border p-2 sm:p-3 text-center ${styles.surface}`}>
     <div className={`text-base sm:text-lg font-heading font-bold ${valueColor}`}>
       {value}
     </div>
-    <div className="text-[9px] sm:text-[10px] font-heading text-zinc-400 uppercase tracking-wider flex items-center justify-center gap-1 mt-0.5">
+    <div className={`text-[9px] sm:text-[10px] font-heading uppercase tracking-wider flex items-center justify-center gap-1 mt-0.5 ${styles.gmStatLabel}`}>
       {Icon && <Icon size={10} className="sm:w-3 sm:h-3" />}
       {label}
     </div>
@@ -144,8 +145,8 @@ const StatCard = ({ label, value, valueColor = "text-foreground", icon: Icon }) 
    Setup & Status Card
    ═══════════════════════════════════════════════════════ */
 const SetupCard = ({ canEnable, hasTelegram }) => (
-  <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in">
-    <div className="relative px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
+  <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`}>
+    <div className={`relative px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
       <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
         <Bot size={14} className="sm:w-4 sm:h-4" />
         Setup & Status
@@ -203,9 +204,9 @@ const SetupCard = ({ canEnable, hasTelegram }) => (
 const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
   const p = prefs || {};
   return (
-  <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.1s' }}>
-    <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
-      <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">
+  <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`} style={{ animationDelay: '0.1s' }}>
+    <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
+      <h2 className={`text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider ${styles.gmTitle}`}>
         Your Settings
       </h2>
     </div>
@@ -341,8 +342,8 @@ const CrimesGtaSettingsCard = ({
   meltDisabled,
   scrapDisabled,
 }) => (
-  <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.2s' }}>
-    <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
+  <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`} style={{ animationDelay: '0.2s' }}>
+    <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
       <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
         <Settings2 size={14} className="sm:w-4 sm:h-4" />
         Crimes, GTA & Melt options
@@ -554,8 +555,8 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
   const nextUp = items.filter((x) => x.sec !== null && x.sec >= 0).sort((a, b) => a.sec - b.sec)[0];
 
   return (
-    <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.15s' }}>
-      <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
+    <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`} style={{ animationDelay: '0.15s' }}>
+      <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader} flex flex-wrap items-center justify-between gap-2`}>
         <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
           <Activity size={14} className="sm:w-4 sm:h-4" />
           What Auto Rank is doing
@@ -708,8 +709,8 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
 const OCOptionsCard = ({ equipment, selectedId, saving, onSelect }) => {
   const list = Array.isArray(equipment) ? equipment : [];
   return (
-    <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.2s' }}>
-      <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
+    <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`} style={{ animationDelay: '0.2s' }}>
+      <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
         <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
           <Briefcase size={14} className="sm:w-4 sm:h-4" />
           OC equipment (Auto Rank heists)
@@ -770,8 +771,8 @@ const StatsCard = ({ stats, liveCountdown }) => {
   const bestCars = (Array.isArray(s.best_cars) ? s.best_cars : []).filter((car) => car && typeof car === 'object');
 
   return (
-    <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.2s' }}>
-      <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
+    <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`} style={{ animationDelay: '0.2s' }}>
+      <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
         <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
           <BarChart3 size={14} className="sm:w-4 sm:h-4" />
           Your Stats
@@ -916,8 +917,8 @@ const AdminGlobalLoopCard = ({
   onStop,
   onSave,
 }) => (
-  <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.3s' }}>
-    <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
+  <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`} style={{ animationDelay: '0.3s' }}>
+    <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
       <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
         <Shield size={14} className="sm:w-4 sm:h-4" />
         Admin — Global Loop
@@ -1626,13 +1627,13 @@ export default function AutoRank() {
   }
 
   return (
-    <div className="min-h-[40vh] px-3 sm:px-4 max-w-4xl mx-auto space-y-3 sm:space-y-4 bg-zinc-900 text-zinc-100">
+    <div className={`min-h-[40vh] px-3 sm:px-4 max-w-4xl mx-auto space-y-3 sm:space-y-4 ${styles.pageContent}`}>
       <style>{AR_STYLES}</style>
       
       {/* Page title - always visible so page is clearly present */}
-      <div className="flex items-center gap-2 border-b border-zinc-700/50 pb-2">
-        <Bot size={20} className="text-amber-500 shrink-0" />
-        <h1 className="text-sm sm:text-base font-heading font-bold text-zinc-100">Auto Rank</h1>
+      <div className="flex items-center gap-2 border-b pb-2" style={{ borderBottomColor: 'var(--gm-border)' }}>
+        <Bot size={20} className="shrink-0" style={{ color: 'var(--gm-gold)' }} />
+        <h1 className={`text-sm sm:text-base font-heading font-bold ${styles.gmTitle}`}>Auto Rank</h1>
       </div>
       
       {/* Page intro */}
@@ -1728,8 +1729,8 @@ export default function AutoRank() {
           />
 
           {/* Admin Users Table */}
-          <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.4s' }}>
-          <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20 flex items-center justify-between gap-2 flex-wrap">
+          <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`} style={{ animationDelay: '0.4s' }}>
+          <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader} flex items-center justify-between gap-2 flex-wrap`}>
             <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
               <Users size={14} className="sm:w-4 sm:h-4" />
               Auto Rank Users (Alive)

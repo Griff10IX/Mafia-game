@@ -12,6 +12,8 @@ from server import ADMIN_EMAILS, db, get_current_user
 
 _lb_cache: dict = {}
 _LB_CACHE_TTL = 30
+_last_reward_winners_cache: dict = {}
+_LAST_WINNERS_CACHE_TTL = 300
 
 # Exclude admin accounts and moderators from leaderboards
 def _leaderboard_user_filter() -> dict:
@@ -252,6 +254,52 @@ async def _top_by_field_for_week(
     return [{"user_id": e["user_id"], "value": e["value"], "rank": i + 1} for i, e in enumerate(filtered)]
 
 
+async def _get_last_reward_winners(database) -> dict:
+    """Last paid-out week's top 10 per category (kills, crimes, gta, jail_busts) with usernames for display."""
+    now = datetime.now(timezone.utc)
+    this_week_start = _week_start(now)
+    last_week_start = this_week_start - timedelta(days=7)
+    kills, crimes, gta, jail_busts = await asyncio.gather(
+        _top_by_field_for_week(
+            database, "attack_attempts", "attacker_id", "created_at", True,
+            last_week_start, this_week_start, 10, {"outcome": "killed"},
+        ),
+        _top_by_field_for_week(
+            database, "crime_events", "user_id", "at", False,
+            last_week_start, this_week_start, 10, None,
+        ),
+        _top_by_field_for_week(
+            database, "gta_events", "user_id", "at", False,
+            last_week_start, this_week_start, 10, None,
+        ),
+        _top_by_field_for_week(
+            database, "bust_events", "user_id", "at", False,
+            last_week_start, this_week_start, 10, {"success": True},
+        ),
+    )
+    all_ids = set()
+    for lst in (kills, crimes, gta, jail_busts):
+        for e in lst:
+            uid = e.get("user_id")
+            if uid:
+                all_ids.add(uid)
+    users_map = {}
+    if all_ids:
+        users = await database.users.find(
+            {"id": {"$in": list(all_ids)}},
+            {"_id": 0, "id": 1, "username": 1},
+        ).to_list(len(all_ids) + 1)
+        users_map = {u["id"]: u.get("username") or "" for u in users}
+    def with_username(lst):
+        return [{"rank": e["rank"], "username": users_map.get(e["user_id"], "")} for e in lst]
+    return {
+        "kills": with_username(kills),
+        "crimes": with_username(crimes),
+        "gta": with_username(gta),
+        "jail_busts": with_username(jail_busts),
+    }
+
+
 LEADERBOARD_PAYOUT_CONFIG_ID = "leaderboard_weekly_payout"
 # Weekly rewards are respect points (tripled from original points: 1000→3000, 500→1500, 250→750, 500→1500)
 DEFAULT_TOP1_POINTS = 3000
@@ -448,13 +496,27 @@ async def get_top_leaderboards(
     username = current_user.get("username") or ""
     cache_key = f"{limit}:{dead}:{(period or 'alltime').lower()}"
     now = time.monotonic()
+    def _add_last_winners(resp: dict) -> dict:
+        lrw = _last_reward_winners_cache.get("data")
+        if lrw is None or (now - _last_reward_winners_cache.get("ts", 0)) >= _LAST_WINNERS_CACHE_TTL:
+            return resp
+        resp["last_reward_winners"] = lrw
+        return resp
+
     cached = _lb_cache.get(cache_key)
     if cached and (now - cached["ts"]) < _LB_CACHE_TTL:
-        return _stamp_current_user(cached["data"], username)
+        return _add_last_winners(_stamp_current_user(cached["data"], username))
 
     boards_raw = await _fetch_top_boards_raw(limit, dead, period)
     _lb_cache[cache_key] = {"ts": now, "data": boards_raw}
-    return _stamp_current_user(boards_raw, username)
+    out = _stamp_current_user(boards_raw, username)
+    lrw = _last_reward_winners_cache.get("data")
+    if lrw is None or (now - _last_reward_winners_cache.get("ts", 0)) >= _LAST_WINNERS_CACHE_TTL:
+        lrw = await _get_last_reward_winners(db)
+        _last_reward_winners_cache["data"] = lrw
+        _last_reward_winners_cache["ts"] = time.monotonic()
+    out["last_reward_winners"] = lrw
+    return out
 
 
 def register(router):

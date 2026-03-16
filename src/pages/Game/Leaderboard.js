@@ -101,27 +101,40 @@ export default function Leaderboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [topLimit, setTopLimit] = useState(10);
   const [viewMode, setViewMode] = useState('alive');
+  const [lastRewardWinners, setLastRewardWinners] = useState(null);
   const intervalRef = useRef(null);
+
+  const hasLoadedOnceRef = useRef(false);
 
   const fetchLeaderboard = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
+    const timeoutId = setTimeout(() => {
+      setLoading(false);
+      setRefreshing(false);
+    }, 15000);
     try {
       const response = await api.get('/leaderboards/top', {
         params: { limit: topLimit, dead: viewMode === 'dead', period },
       });
-      setBoards(response.data || EMPTY_BOARDS);
+      const d = response.data || {};
+      const { last_reward_winners, ...rest } = d;
+      setLastRewardWinners(last_reward_winners ?? null);
+      setBoards(Object.keys(rest).length ? rest : EMPTY_BOARDS);
     } catch (error) {
       if (!silent) toast.error('Failed to load leaderboard');
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
       setRefreshing(false);
     }
   }, [topLimit, viewMode, period]);
 
   useEffect(() => {
-    fetchLeaderboard(boards !== null);
-  }, [fetchLeaderboard, boards]);
+    const silent = hasLoadedOnceRef.current;
+    hasLoadedOnceRef.current = true;
+    fetchLeaderboard(silent);
+  }, [fetchLeaderboard]);
 
   useEffect(() => {
     intervalRef.current = setInterval(() => fetchLeaderboard(true), 60_000);
@@ -346,6 +359,35 @@ export default function Leaderboard() {
         </div>
         <div className="lb-art-line text-primary mx-2" />
       </section>
+      )}
+
+      {lastRewardWinners && (
+        <section className="mt-6 rounded-sm border border-primary/30 bg-primary/5 p-4">
+          <h2 className="text-primary font-heading font-bold uppercase tracking-wider text-sm mb-3 flex items-center gap-2">
+            <Trophy size={16} />
+            Last reward winners
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {(['kills', 'crimes', 'gta', 'jail_busts']).map((key) => {
+              const list = lastRewardWinners[key];
+              const label = key === 'kills' ? 'Kills' : key === 'crimes' ? 'Crimes' : key === 'gta' ? 'GTA' : 'Jail busts';
+              if (!list?.length) return null;
+              return (
+                <div key={key} className="rounded border border-primary/20 bg-black/20 p-3">
+                  <div className="text-primary/80 font-heading text-xs uppercase tracking-wider mb-2">{label}</div>
+                  <ol className="space-y-1 text-sm text-mutedForeground">
+                    {list.slice(0, 10).map(({ rank, username }) => (
+                      <li key={rank} className="flex justify-between gap-2">
+                        <span className="text-mutedForeground">#{rank}</span>
+                        <span className="truncate font-medium text-foreground">{username || '—'}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
     </div>
   );

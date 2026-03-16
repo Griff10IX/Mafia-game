@@ -15,9 +15,9 @@ function formatMoney(n) {
 }
 
 const StatCard = ({ label, value, valueColor = 'text-foreground', icon: Icon }) => (
-  <div className="rounded bg-zinc-800/50 border border-zinc-700/40 p-2 sm:p-3 text-center">
+  <div className={`${styles.surface} rounded border p-2 sm:p-3 text-center`}>
     <div className={`text-base sm:text-lg font-heading font-bold ${valueColor}`}>{value}</div>
-    <div className="text-[9px] sm:text-[10px] font-heading text-zinc-400 uppercase tracking-wider flex items-center justify-center gap-1 mt-0.5">
+    <div className={`${styles.gmStatLabel} text-[9px] sm:text-[10px] font-heading uppercase tracking-wider flex items-center justify-center gap-1 mt-0.5`}>
       {Icon && <Icon size={10} className="sm:w-3 sm:h-3" />}
       {label}
     </div>
@@ -88,17 +88,17 @@ export default function Referral() {
     (earnings.garage_scrap || 0) > 0 ||
     (earnings.booze_profit || 0) > 0;
 
-  const cardClass = 'relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ref-fade-in';
-  const cardHeaderClass = 'px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20';
-  const cardTitleClass = 'text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5';
+  const cardClass = `relative ${styles.panel} rounded-lg overflow-hidden ref-fade-in`;
+  const cardHeaderClass = `${styles.panelHeader} px-2.5 sm:px-3 py-2`;
+  const cardTitleClass = `${styles.gmTitle} text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-1.5`;
 
   return (
     <div className={styles.pageContent}>
       <style>{REF_STYLES}</style>
       <div className="max-w-2xl mx-auto space-y-4 p-4">
-        <div className="flex items-center gap-2 border-b border-zinc-700/50 pb-2">
-          <UserPlus size={20} className="text-amber-500 shrink-0" />
-          <h1 className="text-sm sm:text-base font-heading font-bold text-zinc-100">Referral</h1>
+        <div className={`flex items-center gap-2 border-b ${styles.panelHeader} pb-2`} style={{ borderBottomColor: 'var(--gm-border)' }}>
+          <UserPlus size={20} className="shrink-0" style={{ color: 'var(--gm-gold)' }} />
+          <h1 className={`text-sm sm:text-base font-heading font-bold ${styles.gmTitle}`}>Referral</h1>
         </div>
 
         {/* Your link */}
@@ -110,7 +110,7 @@ export default function Referral() {
             </h2>
           </div>
           <div className="p-2.5 sm:p-3 space-y-2">
-            <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">
+            <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>
               When someone signs up with this link, they&apos;re linked as referred by you. You earn rewards when they play (game-paid, not taken from them).
             </p>
             <div className="flex flex-wrap items-center gap-2">
@@ -118,12 +118,12 @@ export default function Referral() {
                 type="text"
                 readOnly
                 value={referralUrl}
-                className="flex-1 min-w-0 px-2.5 py-2 rounded bg-zinc-800/50 border border-zinc-700/40 text-foreground text-[11px] sm:text-sm font-mono"
+                className={`flex-1 min-w-0 px-2.5 py-2 rounded ${styles.input} text-foreground text-[11px] sm:text-sm font-mono`}
               />
               <button
                 type="button"
                 onClick={copyLink}
-                className="px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-[10px] sm:text-xs hover:bg-primary/30 flex items-center gap-1.5"
+                className={`px-3 py-2 rounded-md ${styles.btnGoldDarkText} font-heading font-bold text-[10px] sm:text-xs flex items-center gap-1.5`}
               >
                 <Copy size={12} className="sm:w-3.5 sm:h-3.5" /> Copy link
               </button>
@@ -142,12 +142,12 @@ export default function Referral() {
             </div>
             <div className="p-2.5 sm:p-3 space-y-1">
               {data.referred_by_username && (
-                <p className="text-[10px] sm:text-xs font-heading text-zinc-300">
+                <p className={`text-[10px] sm:text-xs font-heading ${styles.gmMuted}`}>
                   Referred by: <span className="font-semibold text-foreground">{data.referred_by_username}</span>
                 </p>
               )}
               {data.signup_bonus && (
-                <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">{data.signup_bonus}</p>
+                <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>{data.signup_bonus}</p>
               )}
             </div>
           </div>
@@ -162,7 +162,7 @@ export default function Referral() {
             </h2>
           </div>
           <div className="p-2.5 sm:p-3">
-            <ul className="text-[9px] sm:text-[10px] text-zinc-400 font-heading space-y-1 list-disc list-inside">
+            <ul className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading space-y-1 list-disc list-inside`}>
               <li>10% of their bullets from melting cars</li>
               <li>5% of their crime profit (cash)</li>
               <li>5% of their OC heist profit (cash)</li>
@@ -181,7 +181,7 @@ export default function Referral() {
             </h2>
           </div>
           <div className="p-2.5 sm:p-3">
-            <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">
+            <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>
               People who sign up with your link get: free premium rank bar, 500 respect, 18 tokens (non-tradeable), 2% higher crime payouts, and a slight GTA rare car boost.
             </p>
           </div>
@@ -197,10 +197,10 @@ export default function Referral() {
           </div>
           <div className="p-2.5 sm:p-3 space-y-3">
             {!hasAnyEarnings ? (
-              <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">No referral earnings yet. Share your link to start earning.</p>
+              <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>No referral earnings yet. Share your link to start earning.</p>
             ) : (
               <>
-                <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">Lifetime totals from referred users</p>
+                <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>Lifetime totals from referred users</p>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                   <StatCard
                     label="Melt bullets"
@@ -218,7 +218,7 @@ export default function Referral() {
           </div>
         </div>
 
-        <p className="text-[9px] sm:text-[10px] text-zinc-500 font-heading">
+        <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>
           <Link to="/account/profile" className="text-primary underline hover:no-underline">Edit Profile</Link> also has a short referral section.
         </p>
       </div>

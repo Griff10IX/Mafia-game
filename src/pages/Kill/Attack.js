@@ -32,19 +32,20 @@ function formatDateTime(iso) {
   });
 }
 
-/** Countdown from expiry time to 00:00 (e.g. "23h 45m" → "00:00" when expired). Updates with parent tick. */
+/** Live countdown to expiry: "23h 59m 45s" → "0:00" when expired. Include seconds for live tick. */
 function formatCountdown(expiresAtIso) {
   if (!expiresAtIso) return '—';
   const end = new Date(expiresAtIso).getTime();
   if (Number.isNaN(end)) return '—';
   const now = Date.now();
   const secs = Math.max(0, Math.floor((end - now) / 1000));
-  if (secs === 0) return '00:00';
+  if (secs === 0) return '0:00';
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
   const s = secs % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 // Shown in toast when caught during booze run (prohibition bust)
@@ -369,6 +370,14 @@ const SearchesCard = ({
   onAttack,
   onFillKillTarget
 }) => {
+  // Live countdown: re-render every second so EXPIRES shows h/m/s ticking
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (attacks.length === 0) return;
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [attacks.length]);
+
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in`} style={{ animationDelay: '0.1s' }}>
       <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atk-glow" />
