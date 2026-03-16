@@ -121,6 +121,20 @@ class FamilyJoinRequest(BaseModel):
     family_id: str
 
 
+class FamilyApplyRequest(BaseModel):
+    family_id: str
+
+
+class FamilyJoinSettingsRequest(BaseModel):
+    join_mode: Optional[str] = None   # "open" | "approval"
+    join_auto_accept: Optional[str] = None   # "none" | "all" | "rank_min"
+    join_auto_accept_rank_min: Optional[int] = None   # rank id; used when join_auto_accept == "rank_min"
+
+
+class FamilyJoinApplicationActionRequest(BaseModel):
+    pass  # path param application_id
+
+
 class FamilyKickRequest(BaseModel):
     user_id: str
 
@@ -532,7 +546,7 @@ async def families_list(current_user: dict = Depends(get_current_user)):
     if _list_cache is not None and _list_cache[1] > now_ts:
         return _list_cache[0]
     await cleanup_dead_families()
-    cursor = db.families.find({"wiped": {"$ne": True}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1})
+    cursor = db.families.find({"wiped": {"$ne": True}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "join_mode": 1})
     fams = await cursor.to_list(MAX_FAMILIES * 2)
     out = []
     for f in fams:
@@ -547,6 +561,7 @@ async def families_list(current_user: dict = Depends(get_current_user)):
                 "id": f["id"], "name": f["name"], "tag": f["tag"],
                 "member_count": living_count, "treasury": f.get("treasury", 0),
                 "at_war": False,
+                "join_mode": f.get("join_mode") or "open",
             })
     # Tag families that are currently in an active war
     active_wars = await db.family_wars.find(
@@ -572,6 +587,7 @@ async def families_config(current_user: dict = Depends(get_current_user)):
         "max_families": MAX_FAMILIES,
         "family_create_cost": FAMILY_CREATE_COST,
         "roles": FAMILY_ROLES,
+        "ranks": RANKS,
         "racket_max_level": RACKET_MAX_LEVEL,
         "rackets": FAMILY_RACKETS,
         "racket_upgrade_cost": RACKET_UPGRADE_COST,
@@ -703,6 +719,19 @@ async def families_my(current_user: dict = Depends(get_current_user)):
                         "compound_cash": ac, "compound_points": ap, "compound_loot_pieces": al,
                         "compound_cars": cars_count,
                     })
+    join_applications = []
+    if my_role and my_role in ("boss", "underboss"):
+        join_apps = await db.family_join_applications.find(
+            {"family_id": family_id, "status": "pending"},
+            {"_id": 0, "id": 1, "user_id": 1, "username": 1, "rank": 1, "applied_at": 1},
+        ).sort("applied_at", 1).to_list(100)
+        for a in join_apps:
+            u = await db.users.find_one({"id": a["user_id"]}, {"_id": 0, "username": 1, "rank": 1})
+            if u:
+                a["username"] = u.get("username") or a.get("username") or "?"
+                a["rank"] = u.get("rank", 1)
+            a["rank_name"] = next((x["name"] for x in RANKS if x.get("id") == a.get("rank", 1)), str(a.get("rank", 1)))
+            join_applications.append(a)
     payload = {
         "family": {
             "id": fam["id"], "name": fam["name"], "tag": fam["tag"],
@@ -717,12 +746,16 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "pending_state_takeover": fam.get("pending_state_takeover"),
             "pending_state_takeover_at": fam.get("pending_state_takeover_at"),
             "compound_cash": compound_cash, "compound_points": compound_points, "compound_loot_pieces": compound_loot_pieces,
+            "join_mode": fam.get("join_mode") or "open",
+            "join_auto_accept": fam.get("join_auto_accept") or "none",
+            "join_auto_accept_rank_min": fam.get("join_auto_accept_rank_min"),
         },
         "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "vault_and_rackets_locked": vault_and_rackets_locked,
         "qualifies_for_state_head": qualifies_for_state_head,
         "crew_oc_committer_has_timer": bool(current_user.get("crew_oc_timer_reduced", False)),
         "crew_oc_applications": crew_oc_applications,
+        "join_applications": join_applications,
         "compound_cars": compound_cars,
         "my_compound_cash": my_compound_cash, "my_compound_points": my_compound_points,
         "my_compound_loot_pieces": my_compound_loot_pieces, "my_compound_cars": my_compound_cars,
@@ -734,12 +767,15 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     return payload
 
 
-async def families_lookup(tag: str = None, current_user: dict = Depends(get_current_user)):
-    if not tag or not str(tag).strip():
-        raise HTTPException(status_code=400, detail="tag required")
-    tag_clean = str(tag).strip()
-    # id is case-sensitive (UUID); tag we match case-insensitively
-    fam = await db.families.find_one({"$or": [{"tag": tag_clean.upper()}, {"id": tag_clean}]}, {"_id": 0})
+async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    lookup_id = (id and str(id).strip()) or None
+    tag_clean = (tag and str(tag).strip()) or None
+    if not lookup_id and not tag_clean:
+        raise HTTPException(status_code=400, detail="tag or id required")
+    if lookup_id:
+        fam = await db.families.find_one({"id": lookup_id}, {"_id": 0})
+    else:
+        fam = await db.families.find_one({"$or": [{"tag": tag_clean.upper()}, {"id": tag_clean}]}, {"_id": 0})
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
     members_docs = await db.family_members.find({"family_id": fam["id"]}, {"_id": 0}).to_list(100)
@@ -791,6 +827,7 @@ async def families_lookup(tag: str = None, current_user: dict = Depends(get_curr
         "crew_oc_join_fee": crew_oc_join_fee, "crew_oc_cooldown_until": crew_oc_cooldown_until,
         "crew_oc_forum_topic_id": crew_oc_forum_topic_id,
         "crew_oc_application": crew_oc_application, "crew_oc_crew": crew_oc_crew,
+        "join_mode": fam.get("join_mode") or "open",
     }
     if fam.get("wiped"):
         out["wiped"] = True
@@ -827,6 +864,9 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         "rackets": {first_racket_id: {"level": 1, "last_collected_at": None}},
         "compound_cash": 0, "compound_points": 0, "compound_loot_pieces": 0,
         "compound_deposits_by_user": {},
+        "join_mode": "open",
+        "join_auto_accept": "none",
+        "join_auto_accept_rank_min": None,
     })
     await db.family_members.insert_one({
         "id": str(uuid.uuid4()), "family_id": family_id, "user_id": current_user["id"],
@@ -841,12 +881,23 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
     return {"message": "Family created", "family_id": family_id}
 
 
+async def _add_member_to_family(family_id: str, user_id: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    await db.family_members.insert_one({
+        "id": str(uuid.uuid4()), "family_id": family_id, "user_id": user_id,
+        "role": "associate", "joined_at": now,
+    })
+    await db.users.update_one({"id": user_id}, {"$set": {"family_id": family_id, "family_role": "associate"}})
+
+
 async def families_join(request: FamilyJoinRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_id"):
         raise HTTPException(status_code=400, detail="Already in a family")
-    fam = await db.families.find_one({"id": request.family_id}, {"_id": 0})
+    fam = await db.families.find_one({"id": request.family_id}, {"_id": 0, "join_mode": 1})
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
+    if fam.get("join_mode") == "approval":
+        raise HTTPException(status_code=400, detail="This family requires approval. Apply to join instead.")
     count = await db.family_members.count_documents({"family_id": request.family_id})
     if count >= sum(FAMILY_ROLE_LIMITS.values()):
         raise HTTPException(status_code=400, detail="Family is full")
@@ -859,6 +910,135 @@ async def families_join(request: FamilyJoinRequest, current_user: dict = Depends
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
     return {"message": "Joined family"}
+
+
+async def families_apply(request: FamilyApplyRequest, current_user: dict = Depends(get_current_user)):
+    """Apply to join a family when join_mode is approval. May auto-accept if family settings allow."""
+    if current_user.get("family_id"):
+        raise HTTPException(status_code=400, detail="Already in a family")
+    fam = await db.families.find_one({"id": request.family_id}, {"_id": 0, "join_mode": 1, "join_auto_accept": 1, "join_auto_accept_rank_min": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    if fam.get("join_mode") != "approval":
+        raise HTTPException(status_code=400, detail="This family accepts direct join. Use Join instead.")
+    count = await db.family_members.count_documents({"family_id": request.family_id})
+    if count >= sum(FAMILY_ROLE_LIMITS.values()):
+        raise HTTPException(status_code=400, detail="Family is full")
+    existing = await db.family_join_applications.find_one(
+        {"family_id": request.family_id, "user_id": current_user["id"], "status": "pending"},
+        {"_id": 0, "id": 1},
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="You already have a pending application")
+    auto = (fam.get("join_auto_accept") or "none").strip().lower()
+    rank_min = fam.get("join_auto_accept_rank_min")
+    applicant_rank = int(current_user.get("rank") or 1)
+    auto_accept = False
+    if auto == "all":
+        auto_accept = True
+    elif auto == "rank_min" and rank_min is not None and applicant_rank >= int(rank_min):
+        auto_accept = True
+    if auto_accept:
+        await _add_member_to_family(request.family_id, current_user["id"])
+        _invalidate_list_cache()
+        _invalidate_my_cache(current_user["id"])
+        return {"message": "Joined family", "auto_accepted": True}
+    now = datetime.now(timezone.utc).isoformat()
+    app_id = str(uuid.uuid4())
+    await db.family_join_applications.insert_one({
+        "id": app_id, "family_id": request.family_id, "user_id": current_user["id"],
+        "username": current_user.get("username") or "?",
+        "rank": applicant_rank,
+        "applied_at": now, "status": "pending",
+    })
+    return {"message": "Application submitted", "application_id": app_id}
+
+
+async def families_join_applications_list(current_user: dict = Depends(get_current_user)):
+    """List pending join applications for the current user's family. Boss/Underboss only."""
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    if current_user.get("family_role") not in ("boss", "underboss"):
+        raise HTTPException(status_code=403, detail="Only Don or Underboss can view applications")
+    cursor = db.family_join_applications.find(
+        {"family_id": family_id, "status": "pending"},
+        {"_id": 0, "id": 1, "user_id": 1, "username": 1, "rank": 1, "applied_at": 1},
+    ).sort("applied_at", 1)
+    apps = await cursor.to_list(100)
+    for a in apps:
+        u = await db.users.find_one({"id": a["user_id"]}, {"_id": 0, "username": 1, "rank": 1})
+        if u:
+            a["username"] = u.get("username") or a.get("username") or "?"
+            a["rank"] = u.get("rank", 1)
+        a["rank_name"] = next((x["name"] for x in RANKS if x.get("id") == a.get("rank", 1)), str(a.get("rank", 1)))
+    return {"applications": apps}
+
+
+async def families_join_application_accept(application_id: str, current_user: dict = Depends(get_current_user)):
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    if current_user.get("family_role") not in ("boss", "underboss"):
+        raise HTTPException(status_code=403, detail="Only Don or Underboss can accept applications")
+    app = await db.family_join_applications.find_one({"id": application_id, "family_id": family_id, "status": "pending"}, {"_id": 0})
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found or already processed")
+    count = await db.family_members.count_documents({"family_id": family_id})
+    if count >= sum(FAMILY_ROLE_LIMITS.values()):
+        await db.family_join_applications.update_one({"id": application_id}, {"$set": {"status": "denied"}})
+        raise HTTPException(status_code=400, detail="Family is full")
+    user_id = app["user_id"]
+    if await db.family_members.find_one({"family_id": family_id, "user_id": user_id}):
+        await db.family_join_applications.update_one({"id": application_id}, {"$set": {"status": "denied"}})
+        raise HTTPException(status_code=400, detail="User is already a member")
+    await _add_member_to_family(family_id, user_id)
+    await db.family_join_applications.update_one({"id": application_id}, {"$set": {"status": "accepted"}})
+    _invalidate_list_cache()
+    _invalidate_my_cache(current_user["id"])
+    _invalidate_my_cache(user_id)
+    return {"message": "Application accepted"}
+
+
+async def families_join_application_deny(application_id: str, current_user: dict = Depends(get_current_user)):
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    if current_user.get("family_role") not in ("boss", "underboss"):
+        raise HTTPException(status_code=403, detail="Only Don or Underboss can deny applications")
+    res = await db.family_join_applications.update_one(
+        {"id": application_id, "family_id": family_id, "status": "pending"},
+        {"$set": {"status": "denied"}},
+    )
+    if res.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Application not found or already processed")
+    return {"message": "Application denied"}
+
+
+async def families_join_settings(request: FamilyJoinSettingsRequest, current_user: dict = Depends(get_current_user)):
+    """Update family join mode and auto-accept settings. Boss only."""
+    if current_user.get("family_role") != "boss":
+        raise HTTPException(status_code=403, detail="Only Don can change join settings")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    updates = {}
+    if request.join_mode is not None:
+        if request.join_mode not in ("open", "approval"):
+            raise HTTPException(status_code=400, detail="join_mode must be 'open' or 'approval'")
+        updates["join_mode"] = request.join_mode
+    if request.join_auto_accept is not None:
+        if request.join_auto_accept not in ("none", "all", "rank_min"):
+            raise HTTPException(status_code=400, detail="join_auto_accept must be 'none', 'all', or 'rank_min'")
+        updates["join_auto_accept"] = request.join_auto_accept
+    if request.join_auto_accept_rank_min is not None:
+        updates["join_auto_accept_rank_min"] = request.join_auto_accept_rank_min
+    if not updates:
+        return {"message": "No changes"}
+    await db.families.update_one({"id": family_id}, {"$set": updates})
+    _invalidate_list_cache()
+    _invalidate_my_cache(current_user["id"])
+    return {"message": "Join settings updated"}
 
 
 RETRIBUTION_CHANCE = 0.5  # 50% chance family sends a hitman when you leave
@@ -923,8 +1103,11 @@ async def families_assign_role(request: FamilyRoleRequest, current_user: dict = 
     family_id = current_user.get("family_id")
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
-    if request.role not in FAMILY_ROLES or request.role == "boss":
+    if request.role not in FAMILY_ROLES:
         raise HTTPException(status_code=400, detail="Invalid role")
+    # Only the current boss can assign the boss role (transfer leadership)
+    if request.role == "boss" and current_user.get("family_role") != "boss":
+        raise HTTPException(status_code=400, detail="Only the Don can transfer leadership")
     member = await db.family_members.find_one({"family_id": family_id, "user_id": request.user_id}, {"_id": 0})
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -2195,6 +2378,11 @@ def register(router):
     router.add_api_route("/families/lookup", families_lookup, methods=["GET"])
     router.add_api_route("/families", families_create, methods=["POST"])
     router.add_api_route("/families/join", families_join, methods=["POST"])
+    router.add_api_route("/families/apply", families_apply, methods=["POST"])
+    router.add_api_route("/families/join-applications", families_join_applications_list, methods=["GET"])
+    router.add_api_route("/families/join-applications/{application_id}/accept", families_join_application_accept, methods=["POST"])
+    router.add_api_route("/families/join-applications/{application_id}/deny", families_join_application_deny, methods=["POST"])
+    router.add_api_route("/families/join-settings", families_join_settings, methods=["PATCH"])
     router.add_api_route("/families/leave", families_leave, methods=["POST"])
     router.add_api_route("/families/kick", families_kick, methods=["POST"])
     router.add_api_route("/families/assign-role", families_assign_role, methods=["POST"])

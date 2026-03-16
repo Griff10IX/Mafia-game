@@ -6482,7 +6482,7 @@ export default function Admin() {
         />
         {!collapsed.quick && (
           <div className="p-2 space-y-1">
-            <ActionRow icon={Building2} label="Seed Families" description="Create 3 families with 5 users each">
+            <ActionRow icon={Building2} label="Seed Families" description="Add seed families up to max (10), 10–15 members each; skips if name/tag exists">
               <BtnPrimary onClick={handleSeedFamilies}>Seed</BtnPrimary>
             </ActionRow>
             <ActionRow icon={Gift} label="Give All Points" description="Give points to all alive accounts">

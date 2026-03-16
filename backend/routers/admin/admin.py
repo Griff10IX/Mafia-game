@@ -125,12 +125,20 @@ class PageLockUpdate(BaseModel):
     unlock_at: Optional[str] = None  # ISO datetime; lock auto-expires when past
 
 
+# Up to MAX_FAMILIES seed configs; each created only if no family with that name/tag exists.
 SEED_FAMILIES_CONFIG = [
-    {"name": "Corleone", "tag": "CORL", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
-    {"name": "Baranco", "tag": "BARN", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
-    {"name": "Stracci", "tag": "STRC", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
+    {"name": "Corleone", "tag": "CORL"},
+    {"name": "Baranco", "tag": "BARN"},
+    {"name": "Stracci", "tag": "STRC"},
+    {"name": "Tattaglia", "tag": "TATT"},
+    {"name": "Cuneo", "tag": "CUNO"},
+    {"name": "Bruno", "tag": "BRUN"},
+    {"name": "Molinaro", "tag": "MOLI"},
+    {"name": "Zaluchi", "tag": "ZALU"},
+    {"name": "Falcone", "tag": "FALC"},
+    {"name": "Mariposa", "tag": "MARI"},
 ]
-SEED_RANK_POINTS_BY_ROLE = {"boss": 24000, "underboss": 12000, "consigliere": 6000, "capo": 3000, "soldier": 1000}
+SEED_RANK_POINTS_BY_ROLE = {"boss": 24000, "underboss": 12000, "consigliere": 6000, "capo": 3000, "soldier": 1000, "associate": 500}
 SEED_RACKETS_BY_FAMILY = {
     "Corleone": {"protection": 2, "gambling": 1, "loansharking": 1, "labour": 1},
     "Baranco": {"protection": 1, "gambling": 2, "loansharking": 1, "labour": 1},
@@ -144,7 +152,7 @@ def register(router):
     """Register admin routes. Dependencies from server to avoid circular imports."""
     import server as srv
     import middleware.security as security_module
-    from routers.game.families import FAMILY_RACKETS
+    from routers.game.families import FAMILY_RACKETS, MAX_FAMILIES
     from routers.kill.bodyguards import _create_robot_bodyguard_user
 
     db = srv.db
@@ -3520,31 +3528,35 @@ def register(router):
         )
         return {"message": "Beta signup " + ("enabled" if enabled else "disabled"), "beta_signup_enabled": bool(enabled)}
 
+    def _seed_family_roles(size: int):
+        """Return role list for 10-15 members: boss, underboss, consigliere, 2 capos, rest soldiers."""
+        roles = ["boss", "underboss", "consigliere", "capo", "capo"]
+        n = max(0, min(10, (size - 5)))
+        roles.extend(["soldier"] * n)
+        return roles
+
     @router.post("/admin/seed-families")
     async def admin_seed_families(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        import random
         password_hash = get_password_hash(SEED_TEST_PASSWORD)
         now = datetime.now(timezone.utc).isoformat()
         created_users = []
         created_families = []
+        current_count = await db.families.count_documents({})
         for fam_cfg in SEED_FAMILIES_CONFIG:
+            if current_count >= MAX_FAMILIES:
+                break
             name, tag = fam_cfg["name"], fam_cfg["tag"]
             existing = await db.families.find_one({"$or": [{"name": name}, {"tag": tag}]})
             if existing:
-                family_id_old = existing["id"]
-                members = await db.family_members.find({"family_id": family_id_old}, {"_id": 0, "user_id": 1}).to_list(100)
-                user_ids_old = [m["user_id"] for m in members]
-                if user_ids_old:
-                    await db.bodyguards.delete_many({"user_id": {"$in": user_ids_old}})
-                    await db.users.delete_many({"is_bodyguard": True, "bodyguard_owner_id": {"$in": user_ids_old}})
-                await db.family_members.delete_many({"family_id": family_id_old})
-                if user_ids_old:
-                    await db.users.delete_many({"id": {"$in": user_ids_old}})
-                await db.families.delete_one({"id": family_id_old})
+                continue
+            member_count = random.randint(10, 15)
+            roles = _seed_family_roles(member_count)
             family_id = str(uuid.uuid4())
             user_ids = []
-            for i, role in enumerate(fam_cfg["members"]):
+            for i, role in enumerate(roles):
                 user_id = str(uuid.uuid4())
                 base = f"{tag.lower()}_{role}"
                 username = f"{base}_{i}"
@@ -3615,27 +3627,28 @@ def register(router):
                 "created_at": now,
                 "rackets": rackets,
             })
-            created_families.append({"name": name, "tag": tag})
-            for user_id, role, _ in user_ids:
+            current_count += 1
+            created_families.append({"name": name, "tag": tag, "member_count": len(user_ids)})
+            for uid, role, _ in user_ids:
                 await db.family_members.insert_one({
                     "id": str(uuid.uuid4()),
                     "family_id": family_id,
-                    "user_id": user_id,
+                    "user_id": uid,
                     "role": role,
                     "joined_at": now,
                 })
                 await db.users.update_one(
-                    {"id": user_id},
+                    {"id": uid},
                     {"$set": {"family_id": family_id, "family_role": role}},
                 )
-            for user_id, role, owner_username in user_ids:
-                owner = {"id": user_id, "current_state": "Chicago"}
+            for uid, role, owner_username in user_ids:
+                owner = {"id": uid, "current_state": "Chicago"}
                 for slot in range(1, 3):
                     try:
                         robot_user_id, robot_username = await _create_robot_bodyguard_user(owner)
                         await db.bodyguards.insert_one({
                             "id": str(uuid.uuid4()),
-                            "user_id": user_id,
+                            "user_id": uid,
                             "owner_username": owner_username,
                             "slot_number": slot,
                             "is_robot": True,
@@ -3646,7 +3659,7 @@ def register(router):
                             "hired_at": now,
                         })
                     except Exception as e:
-                        logging.exception("Seed bodyguard for %s slot %s: %s", user_id, slot, e)
+                        logging.exception("Seed bodyguard for %s slot %s: %s", uid, slot, e)
         return {
             "message": f"Seeded {len(created_families)} families with {len(created_users)} users (each with 2 robot bodyguards). Password for all: test1234",
             "families": created_families,

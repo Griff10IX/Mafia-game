@@ -504,9 +504,18 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
 // ROSTER TAB — hierarchy layout with role badges
 // ============================================================================
 
-const RosterTab = ({ members, fallen, canManage, myRole, config, onKick, onAssignRole }) => {
+const RosterTab = ({ members, fallen, canManage, myRole, config, onKick, onAssignRole, joinApplications, joinMode, joinAutoAccept, joinAutoAcceptRankMin, onAcceptJoinApplication, onDenyJoinApplication, onJoinSettingsUpdate }) => {
   const [assignUserId, setAssignUserId] = useState('');
   const [assignRole, setAssignRole] = useState('associate');
+  const [joinModeSetting, setJoinModeSetting] = useState(joinMode ?? 'open');
+  const [joinAutoAcceptSetting, setJoinAutoAcceptSetting] = useState(joinAutoAccept ?? 'none');
+  const [joinRankMinSetting, setJoinRankMinSetting] = useState(joinAutoAcceptRankMin ?? '');
+
+  useEffect(() => {
+    setJoinModeSetting(joinMode ?? 'open');
+    setJoinAutoAcceptSetting(joinAutoAccept ?? 'none');
+    setJoinRankMinSetting(joinAutoAcceptRankMin ?? '');
+  }, [joinMode, joinAutoAccept, joinAutoAcceptRankMin]);
 
   const handleAssign = (e) => {
     e.preventDefault();
@@ -558,7 +567,11 @@ const RosterTab = ({ members, fallen, canManage, myRole, config, onKick, onAssig
           <form onSubmit={handleAssign} className="flex flex-wrap gap-2">
             <select value={assignRole} onChange={(e) => setAssignRole(e.target.value)}
               className="bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] text-foreground font-heading focus:border-primary/50 focus:outline-none">
-              {(config?.roles || []).filter((r) => r !== 'boss').map((role) => <option key={role} value={role}>{getRoleConfig(role).label}</option>)}
+              {(config?.roles || []).map((role) => (
+                <option key={role} value={role}>
+                  {role === 'boss' ? 'Don (transfer family)' : getRoleConfig(role).label}
+                </option>
+              ))}
             </select>
             <select value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)}
               className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] text-foreground font-heading focus:border-primary/50 focus:outline-none min-w-[80px]">
@@ -569,6 +582,87 @@ const RosterTab = ({ members, fallen, canManage, myRole, config, onKick, onAssig
               Assign
             </button>
           </form>
+        </div>
+      )}
+
+      {/* ── Join applications (Don/Underboss) ── */}
+      {joinApplications?.length > 0 && (myRole === 'boss' || myRole === 'underboss') && (
+        <div className="pt-3 border-t border-zinc-700/30">
+          <p className="text-[9px] text-zinc-500 font-heading uppercase tracking-[0.2em] mb-2">Join applications</p>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {joinApplications.map((app) => (
+              <div key={app.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-zinc-800/40 border border-zinc-700/40">
+                <div className="min-w-0">
+                  <Link to={`/profile/${encodeURIComponent(app.username)}`} className="font-heading font-bold text-xs text-foreground hover:text-primary block truncate">
+                    {app.username}
+                  </Link>
+                  <span className="text-[9px] text-zinc-500 font-heading">{app.rank_name ?? '—'}</span>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button type="button" onClick={() => onAcceptJoinApplication(app.id)} className="px-2 py-1 rounded text-[10px] font-heading font-bold uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30">
+                    Accept
+                  </button>
+                  <button type="button" onClick={() => onDenyJoinApplication(app.id)} className="px-2 py-1 rounded text-[10px] font-heading font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30">
+                    Deny
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Join settings (Don only) ── */}
+      {myRole === 'boss' && onJoinSettingsUpdate && (
+        <div className="pt-3 border-t border-zinc-700/30">
+          <p className="text-[9px] text-zinc-500 font-heading uppercase tracking-[0.2em] mb-2">Who can join</p>
+          <div className="flex flex-wrap gap-2 items-end">
+            <div>
+              <label className="block text-[9px] text-zinc-500 font-heading mb-0.5">Join</label>
+              <select
+                value={joinModeSetting}
+                onChange={(e) => { const v = e.target.value; setJoinModeSetting(v); onJoinSettingsUpdate({ join_mode: v }); }}
+                className="bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] font-heading focus:border-primary/50 focus:outline-none"
+              >
+                <option value="open">Open (anyone can join)</option>
+                <option value="approval">Approval (apply to join)</option>
+              </select>
+            </div>
+            {joinModeSetting === 'approval' && (
+              <>
+                <div>
+                  <label className="block text-[9px] text-zinc-500 font-heading mb-0.5">Auto-accept</label>
+                  <select
+                    value={joinAutoAcceptSetting}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setJoinAutoAcceptSetting(v);
+                      onJoinSettingsUpdate({ join_auto_accept: v, join_auto_accept_rank_min: v === 'rank_min' ? (parseInt(joinRankMinSetting, 10) || undefined) : undefined });
+                    }}
+                    className="bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] font-heading focus:border-primary/50 focus:outline-none"
+                  >
+                    <option value="none">Manual only</option>
+                    <option value="all">Auto accept all</option>
+                    <option value="rank_min">Auto accept rank above</option>
+                  </select>
+                </div>
+                {joinAutoAcceptSetting === 'rank_min' && (
+                  <div>
+                    <label className="block text-[9px] text-zinc-500 font-heading mb-0.5">Rank</label>
+                    <select
+                      value={joinRankMinSetting}
+                      onChange={(e) => { const v = e.target.value; setJoinRankMinSetting(v); onJoinSettingsUpdate({ join_auto_accept_rank_min: parseInt(v, 10) || undefined }); }}
+                      className="bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] font-heading focus:border-primary/50 focus:outline-none"
+                    >
+                      {(config?.ranks || []).map((r) => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -1490,7 +1584,7 @@ const StateHeadTab = ({ headOfState, stateHeadIncome }) => {
 // NO FAMILY VIEW — recruitment board
 // ============================================================================
 
-const NoFamilyView = ({ families, config, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin, warHistory, onDetails }) => (
+const NoFamilyView = ({ families, config, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin, joinModeForSelected, warHistory, onDetails }) => (
   <div className="space-y-2">
     <p className="text-center text-[10px] text-zinc-500 font-heading italic py-0.5 fam-fade-in">"In this world, a man without a family is nothing."</p>
 
@@ -1529,10 +1623,10 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
           <select value={joinId} onChange={(e) => setJoinId(e.target.value)}
             className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors">
             <option value="">Select family...</option>
-            {families.map((f) => <option key={f.id} value={f.id}>{f.name} [{f.tag}]</option>)}
+            {families.map((f) => <option key={f.id} value={f.id}>{f.name} [{f.tag}]{f.join_mode === 'approval' ? ' (approval)' : ''}</option>)}
           </select>
           <button type="submit" className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-xs font-heading font-bold uppercase border bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary transition-all touch-manipulation shrink-0">
-            Join
+            {joinModeForSelected === 'approval' ? 'Apply to join' : 'Join'}
           </button>
         </div>
       </form>
@@ -1647,10 +1741,33 @@ export default function FamilyPage() {
 
   // Handlers — all preserved exactly
   const handleCreate = async (e) => { e.preventDefault(); const name = createName.trim(), tag = createTag.trim().toUpperCase(); if (!name || !tag) { toast.error('Name and tag required'); return; } try { await api.post('/families', { name, tag }); toast.success('Family created!'); setCreateName(''); setCreateTag(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
-  const handleJoin = async (e) => { e.preventDefault(); if (!joinId) { toast.error('Select a family'); return; } try { await api.post('/families/join', { family_id: joinId }); toast.success('Joined!'); setJoinId(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleJoin = async (e) => {
+    e.preventDefault();
+    if (!joinId) { toast.error('Select a family'); return; }
+    const fam = families.find((f) => f.id === joinId);
+    const isApproval = fam?.join_mode === 'approval';
+    try {
+      if (isApproval) {
+        const res = await api.post('/families/apply', { family_id: joinId });
+        toast.success(res.data?.auto_accepted ? 'Joined!' : 'Application submitted.');
+      } else {
+        await api.post('/families/join', { family_id: joinId });
+        toast.success('Joined!');
+      }
+      setJoinId('');
+      refreshUser();
+      fetchData();
+    } catch (e) { toast.error(apiDetail(e)); }
+  };
   const handleLeave = async () => { if (!window.confirm('Leave family?')) return; try { const res = await api.post('/families/leave'); if (res.data?.retribution) { toast.warning(`Left family. The family sent a hitman — you were shot and lost ${res.data.health_lost_pct ?? '?'}% health. You survived.`); } else { toast.success('Left'); } refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleKick = async (userId) => { if (!window.confirm('Kick?')) return; try { await api.post('/families/kick', { user_id: userId }); toast.success('Kicked'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
-  const handleAssignRole = async (userId, role) => { try { await api.post('/families/assign-role', { user_id: userId, role }); toast.success(`Assigned ${getRoleConfig(role).label}`); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleAcceptJoinApplication = async (applicationId) => { try { await api.post(`/families/join-applications/${applicationId}/accept`); toast.success('Application accepted'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleDenyJoinApplication = async (applicationId) => { try { await api.post(`/families/join-applications/${applicationId}/deny`); toast.success('Application denied'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleJoinSettingsUpdate = async (payload) => { try { await api.patch('/families/join-settings', payload); toast.success('Join settings updated'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleAssignRole = async (userId, role) => {
+    if (role === 'boss' && !window.confirm('Transfer family leadership to this member? You will become Underboss.')) return;
+    try { await api.post('/families/assign-role', { user_id: userId, role }); toast.success(role === 'boss' ? 'Leadership transferred.' : `Assigned ${getRoleConfig(role).label}`); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); }
+  };
   const handleDeposit = async (e) => { e.preventDefault(); const amount = parseInt(depositAmount.replace(/\D/g, ''), 10); if (!amount) return; try { await api.post('/families/deposit', { amount }); toast.success('Deposited'); setDepositAmount(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleWithdraw = async (e) => { e.preventDefault(); const amount = parseInt(withdrawAmount.replace(/\D/g, ''), 10); if (!amount) return; try { await api.post('/families/withdraw', { amount }); toast.success('Withdrew'); setWithdrawAmount(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleCompoundDeposit = async (e) => {
@@ -2019,14 +2136,31 @@ export default function FamilyPage() {
               {activeTab === 'statehead' && family?.head_of_state && (
                 <StateHeadTab headOfState={family.head_of_state} stateHeadIncome={family.state_head_income} />
               )}
-              {activeTab === 'roster' && <RosterTab members={members} fallen={fallen} canManage={canManage} myRole={myRole} config={config} onKick={handleKick} onAssignRole={handleAssignRole} />}
+              {activeTab === 'roster' && (
+                <RosterTab
+                  members={members}
+                  fallen={fallen}
+                  canManage={canManage}
+                  myRole={myRole}
+                  config={config}
+                  onKick={handleKick}
+                  onAssignRole={handleAssignRole}
+                  joinApplications={myFamily?.join_applications ?? []}
+                  joinMode={family?.join_mode}
+                  joinAutoAccept={family?.join_auto_accept}
+                  joinAutoAcceptRankMin={family?.join_auto_accept_rank_min}
+                  onAcceptJoinApplication={handleAcceptJoinApplication}
+                  onDenyJoinApplication={handleDenyJoinApplication}
+                  onJoinSettingsUpdate={handleJoinSettingsUpdate}
+                />
+              )}
               {activeTab === 'families' && <FamiliesTab families={families} myFamilyId={family?.id} />}
               {activeTab === 'history' && <WarHistoryTab wars={warHistory} onDetails={setDetailsWarId} />}
             </div>
           </div>
         </>
       ) : (
-        <NoFamilyView families={families} config={config} createName={createName} setCreateName={setCreateName} createTag={createTag} setCreateTag={setCreateTag} onCreate={handleCreate} joinId={joinId} setJoinId={setJoinId} onJoin={handleJoin} warHistory={warHistory} onDetails={setDetailsWarId} />
+        <NoFamilyView families={families} config={config} createName={createName} setCreateName={setCreateName} createTag={createTag} setCreateTag={setCreateTag} onCreate={handleCreate} joinId={joinId} setJoinId={setJoinId} onJoin={handleJoin} joinModeForSelected={families.find((f) => f.id === joinId)?.join_mode} warHistory={warHistory} onDetails={setDetailsWarId} />
       )}
 
       {/* War Details Modal — public, opened from history */}

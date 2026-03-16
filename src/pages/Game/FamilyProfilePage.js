@@ -186,7 +186,9 @@ export default function FamilyProfilePage() {
     const run = async () => {
       setLoading(true);
       try {
-        const res = await api.get('/families/lookup', { params: { tag: id } });
+        const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
+        const params = isUuid ? { id } : { tag: id };
+        const res = await api.get('/families/lookup', { params });
         setFamily(res.data);
         setProfileTextEdit((res.data?.profile_text || '').trim() || '');
       } catch (e) {

@@ -257,7 +257,28 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
   };
 
   return (
-    <div className="flex flex-col min-h-0 border-t mt-2 w-full" data-chat-surface="game" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}>
+    <div className="game-chat-panel flex flex-col min-h-0 border-t mt-2 w-full" data-chat-surface="game" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}>
+      <style>{`
+        .game-chat-panel .game-chat-message-content .inline-smiley {
+          width: 1.75em !important;
+          height: 1.75em !important;
+          min-width: 22px;
+          min-height: 22px;
+          vertical-align: middle;
+        }
+        .game-chat-panel .game-chat-message-content .forum-content-media,
+        .game-chat-panel .game-chat-message-content .forum-content-img,
+        .game-chat-panel .game-chat-message-content .forum-content-gif {
+          max-width: min(280px, 100%) !important;
+          max-height: 200px !important;
+          min-width: 64px;
+          min-height: 48px;
+          width: auto;
+          height: auto;
+          object-fit: contain;
+          vertical-align: middle;
+        }
+      `}</style>
 
       {/* ── Header (always visible; when minimized this is the only row) ── */}
       <div
