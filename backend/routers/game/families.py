@@ -386,7 +386,7 @@ async def cleanup_dead_families():
                 else:
                     # No winner - just clear the state
                     await set_state_head(head_state, None)
-            await db.family_members.delete_many({"family_id": family_id})
+            # Keep family_members so wiped crew profile can show "In Memoriam" (all dead members)
             # Soft-delete: mark as wiped so crew profile still viewable (e.g. /game/family/:id)
             winner_name = (winner_fam_doc or {}).get("name") or (winner_fam_doc or {}).get("tag") or (winner_id or "?")
             await db.families.update_one(

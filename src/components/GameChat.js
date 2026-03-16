@@ -5,7 +5,7 @@ import api from '../utils/api';
 import { getApiErrorMessage } from '../utils/api';
 import { toast } from 'sonner';
 import GifPicker from './GifPicker';
-import { filterProfanity } from '../utils/profanityFilter';
+import { parseForumContent } from '../utils/forumContent';
 
 const POLL_INTERVAL_MS = 10000;
 const MAX_MESSAGE_LEN = 500;
@@ -427,7 +427,14 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
                     </span>
                   )}
                   {m.message && m.message !== '(GIF)' && (
-                    <span data-chat-part="message-text" style={{ color: 'rgba(255,255,255,0.68)' }}>{censorProfanity ? filterProfanity(m.message) : m.message}</span>
+                    <span
+                      data-chat-part="message-text"
+                      className="game-chat-message-content inline break-words"
+                      style={{ color: 'rgba(255,255,255,0.68)' }}
+                      dangerouslySetInnerHTML={{
+                        __html: parseForumContent(m.message, { censorProfanity }),
+                      }}
+                    />
                   )}
                 </div>
 

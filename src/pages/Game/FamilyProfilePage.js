@@ -383,7 +383,9 @@ export default function FamilyProfilePage() {
         <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/10 relative z-10">
           <Users size={11} className="text-primary/60" />
           <span className="text-[10px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em]">Chain of Command</span>
-          <span className="text-[9px] text-zinc-700 font-heading ml-auto">{members.length} active</span>
+          <span className="text-[9px] text-zinc-700 font-heading ml-auto">
+            {members.length} active{fallen.length > 0 ? ` · ${fallen.length} fallen` : ''}
+          </span>
         </div>
 
         {/* ── Spine tree ── */}
@@ -554,7 +556,9 @@ export default function FamilyProfilePage() {
           {members.length === 0 && (
             <div className="text-center py-10 relative z-10">
               <Users size={24} className="mx-auto text-zinc-700 mb-2" />
-              <p className="text-[10px] text-zinc-600 font-heading italic">No made men — family is ghost</p>
+              <p className="text-[10px] text-zinc-600 font-heading italic">
+                {fallen.length > 0 ? 'All members fallen — see In Memoriam below' : 'No made men — family is ghost'}
+              </p>
             </div>
           )}
         </div>
