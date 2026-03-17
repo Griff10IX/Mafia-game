@@ -20,8 +20,14 @@ function formatMoney(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
-const CASINO_NAMES = { dice: 'Dice', roulette: 'Roulette', blackjack: 'Blackjack', horseracing: 'Horse Racing' };
-const CASINO_PATHS = { dice: '/casino/dice', roulette: '/casino/roulette', blackjack: '/casino/blackjack', horseracing: '/casino/horseracing' };
+const CASINO_NAMES = { dice: 'Dice', roulette: 'Roulette', blackjack: 'Blackjack', horseracing: 'Horse Racing', videopoker: 'Video Poker', slots: 'Slots' };
+const CASINO_PATHS = { dice: '/casino/dice', roulette: '/casino/roulette', blackjack: '/casino/blackjack', horseracing: '/casino/horseracing', videopoker: '/casino/videopoker', slots: '/casino/slots' };
+
+function casinoResetProfitPayload(casino) {
+  if (!casino) return null;
+  if (casino.type === 'slots') return { state: casino.city };
+  return { city: casino.city };
+}
 
 export default function MyProperties() {
   const [data, setData] = useState({ casino: null, property: null });
@@ -158,6 +164,25 @@ export default function MyProperties() {
       fetchMyProperties();
       setCasinoMaxBet('');
       setCasinoBuyBack('');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCasinoResetProfit = async () => {
+    const c = data.casino;
+    if (!c || saving) return;
+    if (!window.confirm('Reset casino profit to zero?')) return;
+    const payload = casinoResetProfitPayload(c);
+    if (!payload) return;
+    setSaving(true);
+    try {
+      await api.post(`/casino/${c.type}/reset-profit`, payload);
+      toast.success('Profit reset to zero');
+      fetchMyProperties();
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
@@ -388,6 +413,9 @@ export default function MyProperties() {
                   <Link to={CASINO_PATHS[data.casino.type] || '/casino'} className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/50 text-primary text-xs font-heading hover:bg-primary/10">
                     <LinkIcon size={12} /> Open table
                   </Link>
+                  <button type="button" onClick={handleCasinoResetProfit} disabled={saving} className="px-2 py-1 rounded bg-zinc-800/60 border border-zinc-600/60 text-zinc-200 text-xs font-heading hover:bg-zinc-800 disabled:opacity-50">
+                    Reset profit
+                  </button>
                   <button type="button" onClick={handleCasinoRelinquish} disabled={saving} className="px-2 py-1 rounded bg-red-500/20 border border-red-500/50 text-red-400 text-xs font-heading hover:bg-red-500/30 disabled:opacity-50">
                     Relinquish
                   </button>
