@@ -284,18 +284,13 @@ function ShieldBody({ tier, gradId, unlocked, bStroke, innerS }) {
 
 // ─── BadgeShield ───────────────────────────────────────────────────────────────
 export function BadgeShield({ label, unlocked, categoryId, target, size: sizeProp }) {
-  const catMeta  = CATEGORY_COLORS[categoryId] || CATEGORY_COLORS.crimes;
   const tierId   = getTierForTarget(categoryId, target);
   const tier     = TIER_DEFS[tierId];
 
-  const isHigh   = ['galaxy', 'obsidian', 'void'].includes(tierId);
-  const isMid    = ['diamond', 'platinum'].includes(tierId);
-  const useOwn   = isHigh || isMid;
-
-  const bStroke  = useOwn ? tier.bodyStroke  : (unlocked ? catMeta.color  : '#3a3a3a');
-  const cc       = useOwn ? tier.crownColor  : (unlocked ? catMeta.color  : '#3a3a3a');
-  const innerS   = useOwn ? tier.innerStroke : (unlocked ? catMeta.stroke : '#222222');
-  const tf       = useOwn ? tier.textFill    : (unlocked ? catMeta.color  : '#444444');
+  const bStroke  = unlocked ? tier.bodyStroke  : '#3a3a3a';
+  const cc       = unlocked ? tier.crownColor   : '#3a3a3a';
+  const innerS   = unlocked ? tier.innerStroke  : '#222222';
+  const tf       = unlocked ? tier.textFill     : '#444444';
 
   const displaySize = sizeProp || (unlocked ? tier.size : Math.round(tier.size * 0.9));
   const h           = (displaySize * 1.22).toFixed(1);

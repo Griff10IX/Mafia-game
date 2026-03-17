@@ -418,6 +418,17 @@ export default function Stats() {
     return () => { cancelled = true; };
   }, [usersOnlyKills]);
 
+  // Auto-refresh every 60 seconds in the background (no loading state)
+  useEffect(() => {
+    if (!data) return;
+    const interval = setInterval(() => {
+      api.get(`/stats/overview?users_only_kills=${usersOnlyKills ? 'true' : 'false'}`)
+        .then((res) => setData(res.data))
+        .catch(() => {});
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [usersOnlyKills, data]);
+
   if (loading && !data) {
     return showSpinner ? <LoadingSpinner /> : (
       <div className={`space-y-2 ${styles.pageContent}`}>
