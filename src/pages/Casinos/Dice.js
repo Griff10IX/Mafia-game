@@ -720,8 +720,7 @@ export default function Dice() {
                 <button
                   type="button"
                   onClick={placeDiceBet}
-                  disabled={!canBet || diceLoading || playing}
-                  className="w-full rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
+                  className="w-full rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 active:scale-[0.98] transition-all"
                   style={{
                     background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
                     borderColor: 'var(--noir-primary-bright)',

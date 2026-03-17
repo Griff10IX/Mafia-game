@@ -831,7 +831,7 @@ export default function CircuitRaceView({
   const [pitNotif,   setPitNotif]   = useState(null);
   const [overtakeNotif, setOvertakeNotif] = useState(null);
   const setOvertakeNotifRef = useRef(setOvertakeNotif);
-  useEffect(() => { setOvertakeNotifRef.current = setOvertakeNotif; });
+  useEffect(() => { setOvertakeNotifRef.current = setOvertakeNotif; }, []);
   const [lapDisp,    setLapDisp]    = useState("—");
   const [results,    setResults]    = useState(null);
   const [spMult,     setSpMult]     = useState(1);
