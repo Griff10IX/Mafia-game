@@ -24,6 +24,26 @@ const GTA_STYLES = `
   .gta-fade-in { animation: gta-fade-in 0.4s ease-out both; }
   .gta-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
   .gta-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+
+  /* Mobile: make GTA panels use more of the screen and fit more rows (mirror Crimes layout) */
+  @media (max-width: 640px) {
+    .gta-page-root {
+      padding-left: 4px;
+      padding-right: 4px;
+      row-gap: 2px;
+    }
+    .gta-main-panel,
+    .gta-recent-panel,
+    .gta-stats-panel {
+      /* Counteract Layout <main> padding (p-4) so panels hug screen edges on iPhone */
+      margin-left: -16px;
+      margin-right: -16px;
+    }
+    .gta-row {
+      padding-top: 3px !important;
+      padding-bottom: 3px !important;
+    }
+  }
 `;
 
 // Constants
@@ -529,7 +549,7 @@ export default function GTA() {
 
   if (loading) {
     return (
-      <div className={`space-y-2 ${styles.pageContent}`}>
+      <div className={`space-y-2 ${styles.pageContent} gta-page-root`}>
         <style>{GTA_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -537,7 +557,7 @@ export default function GTA() {
   }
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} data-testid="gta-page">
+    <div className={`space-y-2 ${styles.pageContent} gta-page-root`} data-testid="gta-page">
       <style>{GTA_STYLES}</style>
 
       <div className="relative gta-fade-in flex items-center gap-2 flex-wrap">
@@ -577,7 +597,7 @@ export default function GTA() {
       )}
 
       {/* GTA options list */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.05s' }}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in gta-main-panel`} style={{ animationDelay: '0.05s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
@@ -601,14 +621,14 @@ export default function GTA() {
         <div className="gta-art-line text-primary mx-2.5" />
       </div>
 
-      <RecentStolenSection 
-        recentStolen={recentStolen} 
-        isCollapsed={recentStolenCollapsed} 
-        onToggle={toggleRecentStolen} 
+      <RecentStolenSection
+        recentStolen={recentStolen}
+        isCollapsed={recentStolenCollapsed}
+        onToggle={toggleRecentStolen}
       />
 
       {/* GTA stats */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.03s' }}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in gta-stats-panel`} style={{ animationDelay: '0.03s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">GTA stats</span>
