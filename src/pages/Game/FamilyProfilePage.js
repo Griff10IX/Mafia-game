@@ -191,13 +191,16 @@ export default function FamilyProfilePage() {
         const res = await api.get('/families/lookup', { params });
         setFamily(res.data);
         setProfileTextEdit((res.data?.profile_text || '').trim() || '');
+        if (isUuid && res.data?.tag) {
+          navigate(`/game/family/${encodeURIComponent(res.data.tag)}`, { replace: true });
+        }
       } catch (e) {
         toast.error(e.response?.data?.detail ?? e.message ?? 'Family not found');
         setFamily(null);
       } finally { setLoading(false); }
     };
     run();
-  }, [familyId]);
+  }, [familyId, navigate]);
 
   // Don card tilt (stronger effect for the feature card)
   const donTilt = useTilt(7);

@@ -92,10 +92,10 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
             else:
                 items.append({"id": w.get("id") + "_end", "type": "war_ended", "message": f"War ended: {a_name} vs {b_name}", "at": ended_at})
 
-    # Hitlist additions (recent, non-hidden; cap 3)
+    # Hitlist additions (recent, non-hidden, user/bodyguard only — no NPCs; cap 3)
     cutoff_24h = (now - timedelta(hours=24)).isoformat()
     try:
-        hitlist_docs = await db.hitlist.find({"hidden": {"$ne": True}}).sort("created_at", -1).limit(10).to_list(10)
+        hitlist_docs = await db.hitlist.find({"hidden": {"$ne": True}, "target_type": {"$ne": "npc"}}).sort("created_at", -1).limit(10).to_list(10)
         for i, doc in enumerate(hitlist_docs):
             if i >= 3:
                 break

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { TrendingUp } from 'lucide-react';
@@ -369,9 +369,11 @@ function buildVehicleRows(data) {
 // Main component
 export default function Stats() {
   const [loading, setLoading] = useState(true);
+  const [showSpinner, setShowSpinner] = useState(false);
   const [data, setData] = useState(null);
   const [usersOnlyKills, setUsersOnlyKills] = useState(false);
   const [statsListTab, setStatsListTab] = useState('kills'); // 'kills' | 'wiped'
+  const hasFetchedOnce = useRef(false);
 
   const rankStats = Array.isArray(data?.rank_stats) ? data.rank_stats : [];
   const recentKills = Array.isArray(data?.recent_kills) ? data.recent_kills : [];
@@ -382,21 +384,49 @@ export default function Stats() {
     try {
       const res = await api.get(`/stats/overview?users_only_kills=${usersOnlyKills ? 'true' : 'false'}`);
       setData(res.data);
+      hasFetchedOnce.current = true;
     } catch (e) {
       toast.error('Failed to load stats');
       console.error('Error fetching stats:', e);
       setData(null);
     } finally {
       setLoading(false);
+      setShowSpinner(false);
     }
   }, [usersOnlyKills]);
 
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+    let cancelled = false;
+    const isInitialLoad = !hasFetchedOnce.current;
+    setLoading(true);
+    if (isInitialLoad) {
+      const t = setTimeout(() => { if (!cancelled) setShowSpinner(true); }, 200);
+      api.get(`/stats/overview?users_only_kills=${usersOnlyKills ? 'true' : 'false'}`)
+        .then((res) => { if (!cancelled) { setData(res.data); hasFetchedOnce.current = true; } })
+        .catch((e) => {
+          if (!cancelled) { toast.error('Failed to load stats'); setData(null); }
+        })
+        .finally(() => {
+          if (!cancelled) { clearTimeout(t); setShowSpinner(false); setLoading(false); }
+        });
+      return () => { cancelled = true; clearTimeout(t); };
+    }
+    api.get(`/stats/overview?users_only_kills=${usersOnlyKills ? 'true' : 'false'}`)
+      .then((res) => { if (!cancelled) setData(res.data); })
+      .catch((e) => { if (!cancelled) { toast.error('Failed to load stats'); setData(null); } })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [usersOnlyKills]);
 
-  if (loading) {
-    return <LoadingSpinner />;
+  if (loading && !data) {
+    return showSpinner ? <LoadingSpinner /> : (
+      <div className={`space-y-2 ${styles.pageContent}`}>
+        <style>{STATS_STYLES}</style>
+        <div className="flex flex-col items-center justify-center min-h-[30vh] gap-2">
+          <span className="text-primary/60 text-[9px] font-heading uppercase tracking-wider">Loading stats...</span>
+        </div>
+      </div>
+    );
   }
 
   const gameCapitalRows = buildGameCapitalRows(data);
