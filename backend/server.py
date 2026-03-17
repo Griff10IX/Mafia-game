@@ -67,6 +67,9 @@ ALGORITHM = "HS256"
 # Session length: default 24h so stepping away doesn't log you out. Override with JWT_EXPIRE_MINUTES in .env (e.g. 10080 = 7 days).
 _access_expire = os.environ.get("JWT_EXPIRE_MINUTES", "").strip()
 ACCESS_TOKEN_EXPIRE_MINUTES = int(_access_expire) if _access_expire.isdigit() else 60 * 24
+# Inactivity timeout: session ends after this many minutes with no requests. 0 = disabled (only JWT expiry applies). Override with SESSION_INACTIVITY_MINUTES in .env.
+_inactivity = os.environ.get("SESSION_INACTIVITY_MINUTES", "").strip()
+SESSION_INACTIVITY_MINUTES = int(_inactivity) if _inactivity.isdigit() else 30
 
 security = HTTPBearer()
 
@@ -686,7 +689,6 @@ async def get_current_user(
             _log_auth_failure(user_id, 401, "Session revoked or invalid")
             raise HTTPException(status_code=401, detail="Session invalidated. Please log in again.")
         user["_session_id"] = session_id
-        # Update last_used_at every 5 minutes to avoid write storm
         now = datetime.now(timezone.utc)
         for s in sessions:
             if s.get("id") == session_id:
@@ -696,12 +698,24 @@ async def get_current_user(
                         lu_dt = datetime.fromisoformat(lu.replace("Z", "+00:00")) if isinstance(lu, str) else lu
                         if lu_dt.tzinfo is None:
                             lu_dt = lu_dt.replace(tzinfo=timezone.utc)
-                        if (now - lu_dt).total_seconds() >= 300:
+                        inactive_seconds = (now - lu_dt).total_seconds()
+                        # Inactivity timeout: end session if no requests for SESSION_INACTIVITY_MINUTES (0 = disabled)
+                        if SESSION_INACTIVITY_MINUTES > 0 and inactive_seconds >= SESSION_INACTIVITY_MINUTES * 60:
+                            await db.users.update_one({"id": user_id}, {"$pull": {"sessions": {"id": session_id}}})
+                            _log_auth_failure(user_id, 401, "Session expired due to inactivity")
+                            raise HTTPException(
+                                status_code=401,
+                                detail="Session expired due to inactivity. Please log in again.",
+                            )
+                        # Update last_used_at every 5 minutes to avoid write storm
+                        if inactive_seconds >= 300:
                             await db.users.update_one(
                                 {"id": user_id},
                                 {"$set": {"sessions.$[s].last_used_at": now.isoformat()}},
                                 array_filters=[{"s.id": session_id}],
                             )
+                except HTTPException:
+                    raise
                 except Exception:
                     pass
                 break
