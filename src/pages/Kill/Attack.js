@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText, Users } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
@@ -992,6 +992,39 @@ export default function Attack() {
       return [];
     }
   }, []);
+
+  const searchCompleteTimeoutRef = useRef(null);
+
+  // Refetch list exactly when the soonest "searching" attack is due to complete, so the UI shows "found" at the set time (e.g. 1 min on the dot)
+  useEffect(() => {
+    if (searchCompleteTimeoutRef.current) {
+      clearTimeout(searchCompleteTimeoutRef.current);
+      searchCompleteTimeoutRef.current = null;
+    }
+    const searching = attacks.filter((a) => a.status === 'searching' && a.found_at);
+    if (searching.length === 0) return;
+    let soonest = null;
+    for (const a of searching) {
+      const ts = new Date(a.found_at).getTime();
+      if (Number.isNaN(ts)) continue;
+      if (soonest === null || ts < soonest) soonest = ts;
+    }
+    if (soonest == null) return;
+    const now = Date.now();
+    const delayMs = Math.max(0, soonest - now);
+    const maxDelay = 24 * 60 * 60 * 1000;
+    if (delayMs > maxDelay) return;
+    searchCompleteTimeoutRef.current = setTimeout(() => {
+      searchCompleteTimeoutRef.current = null;
+      refreshAttacks();
+    }, delayMs);
+    return () => {
+      if (searchCompleteTimeoutRef.current) {
+        clearTimeout(searchCompleteTimeoutRef.current);
+        searchCompleteTimeoutRef.current = null;
+      }
+    };
+  }, [attacks, refreshAttacks]);
 
   // Tick every second so expiry countdowns update (24h → 00:00)
   useEffect(() => {
