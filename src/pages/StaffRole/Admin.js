@@ -6715,7 +6715,7 @@ export default function Admin() {
         />
         {!collapsed.redeemCodes && (
           <div className="p-3 space-y-3">
-            <p className="text-[10px] text-mutedForeground">Create a code that players can redeem once per user on the Referral and redeem page. Set total redeem limit (optional).</p>
+            <p className="text-[10px] text-mutedForeground">Create a code that players can redeem once per user on the Referral % Redeem page. Set total redeem limit (optional).</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
                 <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-0.5">Code</label>

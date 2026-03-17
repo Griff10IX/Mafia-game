@@ -28,6 +28,8 @@ export default function Referral() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [redeemCodeInput, setRedeemCodeInput] = useState('');
+  const [redeemLoading, setRedeemLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,7 +119,7 @@ export default function Referral() {
       <div className="max-w-2xl mx-auto space-y-4 p-4">
         <div className={`flex items-center gap-2 border-b ${styles.panelHeader} pb-2`} style={{ borderBottomColor: 'var(--gm-border)' }}>
           <UserPlus size={20} className="shrink-0" style={{ color: 'var(--gm-gold)' }} />
-          <h1 className={`text-sm sm:text-base font-heading font-bold ${styles.gmTitle}`}>Referral and redeem page</h1>
+          <h1 className={`text-sm sm:text-base font-heading font-bold ${styles.gmTitle}`}>Referral % Redeem</h1>
         </div>
 
         {/* Your link */}
