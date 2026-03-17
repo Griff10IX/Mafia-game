@@ -23,7 +23,7 @@ const WEATHER_DEFS = {
   clear:    { label:"Clear",    icon:"☀️",  bg1:"#0d1a07", bg2:"#091204", speedMult:1.00, wearMult:1.00, gripMult:1.00, tyreRec:["soft","medium","hard"] },
   night:    { label:"Night",    icon:"🌙",  bg1:"#050810", bg2:"#080c14", speedMult:0.97, wearMult:1.05, gripMult:0.98, tyreRec:["medium","hard"] },
   rain:     { label:"Rain",     icon:"🌧️", bg1:"#0a1020", bg2:"#060c18", speedMult:0.90, wearMult:1.55, gripMult:0.88, tyreRec:["inter","full_wet"] },
-  snow:     { label:"Snow",     icon:"❄️",  bg1:"#18182a", bg2:"#10101e", speedMult:0.82, wearMult:2.00, gripMult:0.82, tyreRec:["full_wet"] },
+  snow:     { label:"Snow",     icon:"❄️",  bg1:"#1a1e2e", bg2:"#0d1020", speedMult:0.78, wearMult:2.10, gripMult:0.78, tyreRec:["inter","full_wet"], fog:0.18 },
   very_hot: { label:"Very Hot", icon:"🔥", bg1:"#1e0e04", bg2:"#120a02", speedMult:0.95, wearMult:1.45, gripMult:0.95, tyreRec:["medium","hard"] },
 };
 
@@ -52,10 +52,12 @@ const COMMENTARY = {
 
 // ─── TYRE PHYSICS ──────────────────────────────────────────────────────────
 
-// Full performance until wear hits 0; only then does grip drop
 function tyreGripFromWear(wear, tyreId) {
-  if (wear > 0) return 1.0;
-  return 0.28; // at 0% wear, minimum grip (e.g. crawl to pits)
+  const td = TYRE_DEFS[tyreId] || TYRE_DEFS.medium;
+  const w  = wear / 100;
+  if (w >= td.cliffStart) return 1.0;
+  const below = (td.cliffStart - w) / td.cliffStart;
+  return Math.max(0.28, 1.0 - below * td.cliffRate * 0.35);
 }
 
 function tyreColor(wear) {
@@ -623,7 +625,7 @@ const TRACKS = [
   {
     id:"targa", name:"Targa Florio", km:14.5, corners:32, lapBase:82, rewardMult:1.6, trackWidth:34,
     desc:"Madonie mountains — Sicily 1906", getPoint:GP_TARGA,
-    pitEntry:0.70, pitExit:0.77, sfLine:0.0, pitSide:-1, pitOffset:20,
+    pitEntry:0.73, pitExit:0.80, sfLine:0.865, pitSide:-1, pitOffset:20,
     drawExtra:(ctx,sx,sy) => {
       drawTreeCluster(ctx,sx,sy,398,187,14,63);
       drawTreeCluster(ctx,sx,sy,195,174,8,30);
@@ -644,7 +646,6 @@ const TRACKS = [
 
 const PROFILE_N = 256;
 const _profileCache = new Map();
-const PROFILE_CACHE_KEY = "v13"; // bump to invalidate when profile logic changes (e.g. finish straight zone)
 
 // FIX B1: uses geometry discontinuity detection instead of blanket 5% bypass
 function getCurvature(track, t) {
@@ -662,84 +663,74 @@ function getCurvature(track, t) {
   return Math.abs(delta) / ((l1+l2)/2);
 }
 
-// Signed corner direction: -1 = left turn, 0 = straight, 1 = right turn (for inside/outside overtake choice)
-const CORNER_THRESH = 0.005;
-function getCornerDirection(track, t) {
-  const eps = 0.006;
-  const p0 = track.getPoint(((t - eps) % 1 + 1) % 1);
-  const p1 = track.getPoint(t);
-  const p2 = track.getPoint((t + eps) % 1);
-  const dx1 = p1.x - p0.x, dy1 = p1.y - p0.y;
-  const dx2 = p2.x - p1.x, dy2 = p2.y - p1.y;
-  const l1 = Math.hypot(dx1, dy1) || 1e-6, l2 = Math.hypot(dx2, dy2) || 1e-6;
-  if ((l1 + l2) / 2 > 40) return 0;
-  let delta = Math.atan2(dy2, dx2) - Math.atan2(dy1, dx1);
-  if (delta > Math.PI) delta -= 2 * Math.PI;
-  if (delta < -Math.PI) delta += 2 * Math.PI;
-  const curvature = Math.abs(delta) / ((l1 + l2) / 2);
-  if (curvature < CORNER_THRESH) return 0;
-  return delta > 0 ? 1 : -1;
-}
-
 function buildSpeedProfile(track) {
-  const key = `${track.id}:${PROFILE_CACHE_KEY}`;
-  if (_profileCache.has(key)) return _profileCache.get(key);
+  const cacheKey = track.id + (track.sfLine || 0);
+  if (_profileCache.has(cacheKey)) return _profileCache.get(cacheKey);
   const N = PROFILE_N, raw = new Float32Array(N);
-  // Pass 1: raw corner speed from curvature; force full speed on S/F straight (last 50%, first 15%) so no track slows before the line (Monza, Mountain Pass, Harbor Front, etc.)
-  const sfRawStart = Math.floor(N * 0.50); // last 50% of lap = full speed (entire second half – Monza chicane + straight, all tracks)
-  const sfRawEndFirst = Math.floor(N * 0.15); // first 15% of lap = full speed
+
+  const sfL = track.sfLine != null ? track.sfLine : 0;
+  // SF zone: 14% pre-line run-up + 10% post-line acceleration zone
+  const preZone  = 0.14;
+  const postZone = 0.10;
+  const inSFZone = f => {
+    const dBehind = ((sfL - f + 1) % 1);
+    const dAhead  = ((f - sfL + 1) % 1);
+    return dBehind <= preZone || dAhead <= postZone;
+  };
+  // Pre-compute a boolean array for speed in the hot loop
+  const sfZone = new Uint8Array(N);
+  for (let i = 0; i < N; i++) sfZone[i] = inSFZone(i/N) ? 1 : 0;
+
+  // ── Pass 1: raw corner speed from curvature ──
   for (let i = 0; i < N; i++) {
-    if (i >= sfRawStart || i <= sfRawEndFirst) {
-      raw[i] = 1.0;
+    if (sfZone[i]) {
+      raw[i] = 1.0; // forced full speed on SF straight — immune to later passes
     } else {
       const c = getCurvature(track, i/N);
-      raw[i] = c < 0.005 ? 1.0 : Math.max(0.55, 1/(1 + c*18));
+      raw[i] = c < 0.005 ? 1.0 : Math.max(0.52, 1/(1 + c*22));
     }
   }
-  // Pass 2: braking (3 iterations, scan backwards). Skip wrap at lap boundary so we don't brake into the finish line every lap.
-  for (let iter = 0; iter < 3; iter++) {
+
+  // ── Pass 2: braking (scan backwards, 5 iterations) ──
+  // CRITICAL: if cell i is in the SF zone, SKIP it — don't let braking reduce it.
+  // Also: if cell (i+1) is in the SF zone, don't propagate from it backward
+  // (cars don't brake because of a fast straight ahead of them).
+  for (let iter = 0; iter < 5; iter++) {
     for (let i = N-1; i >= 0; i--) {
-      const next = (i+1) % N;
-      if (next === 0) continue; // don't limit end-of-lap by start-of-lap (avoids artificial slowdown before finish)
-      const lim = raw[next] / 0.960;
-      if (raw[i] > lim) raw[i] = lim;
-    }
-    for (let i = N-1; i >= 0; i--) {
-      const next = (i+1) % N;
-      if (next === 0) continue;
-      const lim = raw[next] / 0.960;
+      if (sfZone[i]) continue;           // SF zone cells are immune — never brake here
+      const ni = (i+1) % N;
+      if (sfZone[ni]) continue;          // don't propagate FROM a fast SF zone cell backward
+      const lim = raw[ni] / 0.956;
       if (raw[i] > lim) raw[i] = lim;
     }
   }
-  // Pass 3: acceleration (scan forward). Skip wrap so start of lap isn't limited by end of previous lap.
+
+  // ── Pass 3: acceleration (scan forward, 3 iterations) ──
+  // If prev cell is in SF zone, don't limit current cell — straight-exit acceleration is free.
   for (let iter = 0; iter < 3; iter++) {
     for (let i = 0; i < N; i++) {
-      const prev = (i-1+N) % N;
-      if (prev === N-1) continue;
-      const lim = raw[prev] / 0.974;
+      if (sfZone[i]) continue;           // SF zone cells already at max — skip
+      const pi = (i-1+N) % N;
+      if (sfZone[pi]) continue;          // coming off SF straight — no limit from it
+      const lim = raw[pi] / 0.974;
       if (raw[i] > lim) raw[i] = lim;
     }
   }
-  // Normalise to 0.56–1.0 range
-  const mn = Math.min(...raw), mx = Math.max(...raw), rng = mx-mn||1;
+
+  // ── Normalise to 0.54–1.0 ──
+  let mn = raw[0], mx = raw[0];
+  for (let i = 1; i < N; i++) { if (raw[i] < mn) mn = raw[i]; if (raw[i] > mx) mx = raw[i]; }
+  const rng = mx - mn || 1;
   const profile = new Float32Array(N);
-  for (let i = 0; i < N; i++) profile[i] = 0.56 + ((raw[i]-mn)/rng)*0.44;
-  // Force minimum speed at start/finish so cars never slow before/after the line (braking pass can't pull these below floor)
-  const runStart = Math.floor(N * 0.50); // last 50% – run to the line (Monza, Mountain Pass, Harbor Front, Roosevelt, Chicago, etc.)
-  const runEnd = N - 1;
-  const runEndFirst = Math.floor(N * 0.15); // first 15% after the line
-  const trackMax = Math.max(...profile);
-  const sfMin = Math.max(0.90, trackMax * 0.95); // at least 90% or 95% of track max – no dip at the line
-  for (let i = runStart; i <= runEnd; i++) profile[i] = Math.max(profile[i], Math.min(1.0, sfMin));
-  for (let i = 0; i <= runEndFirst; i++) profile[i] = Math.max(profile[i], Math.min(1.0, sfMin));
-  const cap = (i, arr) => {
-    const prev = arr[(i-1+N)%N], next = arr[(i+1)%N];
-    const m = Math.max(prev, next);
-    if (arr[i] < m) arr[i] = Math.min(1.0, m);
-  };
-  for (let i = 0; i <= 2; i++) cap(i, profile);
-  for (let i = N - 3; i <= N - 1; i++) cap(i, profile);
-  _profileCache.set(key, profile);
+  for (let i = 0; i < N; i++) profile[i] = 0.54 + ((raw[i]-mn)/rng)*0.46;
+
+  // ── Enforce SF zone floor AFTER normalisation ──
+  // SF cells must read at least 0.97 so cars are visibly fast through the finish straight.
+  for (let i = 0; i < N; i++) {
+    if (sfZone[i]) profile[i] = Math.max(profile[i], 0.97);
+  }
+
+  _profileCache.set(cacheKey, profile);
   return profile;
 }
 
@@ -749,10 +740,11 @@ function getSpeedMult(track, t, grip = 0.85) {
   return Math.max(0.50, Math.min(1.0, profile[idx] + (grip-0.85)*0.6));
 }
 
-// FIX B4: single shared corner mult used by both live and replay
+// Shared corner grip multiplier — used by both race loop and draw code.
+// k=22 matches the buildSpeedProfile corner formula for physical consistency.
 function cornerGripMult(curvature, grip = 0.85) {
-  const k = 18 * (1.2 - grip*0.5);
-  return Math.max(0.58 + grip*0.18, Math.min(1, 1/(1 + curvature*k)));
+  const k = 22 * (1.2 - grip*0.5);
+  return Math.max(0.54 + grip*0.16, Math.min(1, 1/(1 + curvature*k)));
 }
 
 // ─── PIT LANE GEOMETRY ─────────────────────────────────────────────────────
@@ -829,9 +821,6 @@ export default function CircuitRaceView({
   const [commentary, setCommentary] = useState("Select track & tyres, then start");
   const [standings,  setStandings]  = useState([]);
   const [pitNotif,   setPitNotif]   = useState(null);
-  const [overtakeNotif, setOvertakeNotif] = useState(null);
-  const setOvertakeNotifRef = useRef(setOvertakeNotif);
-  useEffect(() => { setOvertakeNotifRef.current = setOvertakeNotif; }, []);
   const [lapDisp,    setLapDisp]    = useState("—");
   const [results,    setResults]    = useState(null);
   const [spMult,     setSpMult]     = useState(1);
@@ -848,13 +837,6 @@ export default function CircuitRaceView({
   useEffect(() => { spMultRef.current = spMult; },  [spMult]);
   useEffect(() => { pausedRef.current = paused; },  [paused]);
   useEffect(() => { manPitRef.current = manPit; },  [manPit]);
-
-  useEffect(() => {
-    if (!overtakeNotif || !overtakeNotif.until) return;
-    const ms = Math.max(0, overtakeNotif.until - Date.now());
-    const t = setTimeout(() => setOvertakeNotif(null), ms);
-    return () => clearTimeout(t);
-  }, [overtakeNotif]);
 
   const SKEY = raceId ? `rcv3_${raceId}` : null;
   const lastSave = useRef(0);
@@ -895,7 +877,7 @@ export default function CircuitRaceView({
 
   // ─── DRAW CANVAS ─────────────────────────────────────────────────────────
   const drawCanvas = useCallback((track, cond, racerArr, nowSec = 0) => {
-    const canvas = canvasRef.current; if (!canvas || !track || typeof track.getPoint !== "function") return;
+    const canvas = canvasRef.current; if (!canvas) return;
     const ctx = canvas.getContext("2d");
     const { sx, sy, W, H } = getScale();
     const wd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
@@ -924,15 +906,117 @@ export default function CircuitRaceView({
     }
     if (cond === "snow") {
       const t=Date.now();
-      for (let l=0; l<3; l++) {
-        const cnt=[50,35,20][l], a=[0.12,0.2,0.32][l], sz=[1,1.5,2.2][l], sp=[0.015,0.025,0.04][l];
-        ctx.fillStyle=`rgba(210,225,255,${a})`;
-        for (let i=0; i<cnt; i++) {
-          const d=Math.sin(t*0.001+i*0.5)*15, x=((i*53+l*89+t*sp+d)%(W+40))-20, y=((i*71+l*97+t*(sp*1.2))%H);
-          ctx.beginPath(); ctx.arc(x,y,sz,0,Math.PI*2); ctx.fill();
+
+      // ── Atmospheric fog overlay ──
+      const fogG=ctx.createLinearGradient(0,0,0,H);
+      fogG.addColorStop(0,"rgba(180,195,225,0.12)");
+      fogG.addColorStop(0.5,"rgba(160,180,215,0.06)");
+      fogG.addColorStop(1,"rgba(140,165,210,0.14)");
+      ctx.fillStyle=fogG; ctx.fillRect(0,0,W,H);
+
+      // ── Snow accumulation on ground (bottom edge) ──
+      ctx.save();
+      const snowG=ctx.createLinearGradient(0,H-18,0,H);
+      snowG.addColorStop(0,"rgba(220,230,248,0)");
+      snowG.addColorStop(1,"rgba(220,230,248,0.18)");
+      ctx.fillStyle=snowG; ctx.fillRect(0,H-18,W,18);
+      ctx.restore();
+
+      // ── Snowflake shapes (6-pointed star) for large flakes ──
+      const drawFlake=(cx,cy,radius,alpha)=>{
+        ctx.save(); ctx.globalAlpha=alpha; ctx.strokeStyle="rgba(220,235,255,1)";
+        ctx.lineWidth=0.8; ctx.translate(cx,cy);
+        for(let arm=0;arm<6;arm++){
+          ctx.save(); ctx.rotate((arm/6)*Math.PI*2);
+          ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-radius);
+          // side branches at 1/3 and 2/3
+          const b1=radius*0.35, b2=radius*0.62;
+          ctx.moveTo(0,-b1); ctx.lineTo(radius*0.22,-b1-radius*0.18);
+          ctx.moveTo(0,-b1); ctx.lineTo(-radius*0.22,-b1-radius*0.18);
+          ctx.moveTo(0,-b2); ctx.lineTo(radius*0.16,-b2-radius*0.12);
+          ctx.moveTo(0,-b2); ctx.lineTo(-radius*0.16,-b2-radius*0.12);
+          ctx.stroke(); ctx.restore();
         }
+        ctx.restore();
+      };
+
+      // ── Layer 1: distant fine snow (circular, fast) ──
+      ctx.fillStyle="rgba(210,225,250,0.18)";
+      for(let i=0;i<80;i++){
+        const drift=Math.sin(t*0.0008+i*0.7)*20;
+        const x=((i*53+t*0.028+drift)%(W+40))-20;
+        const y=((i*71+t*0.038)%H);
+        ctx.beginPath(); ctx.arc(x,y,0.8,0,Math.PI*2); ctx.fill();
+      }
+
+      // ── Layer 2: mid-range flakes (circular, medium speed) ──
+      ctx.fillStyle="rgba(215,228,252,0.28)";
+      for(let i=0;i<50;i++){
+        const drift=Math.sin(t*0.001+i*0.5)*18;
+        const x=((i*67+t*0.018+drift)%(W+50))-25;
+        const y=((i*83+t*0.026)%H);
+        ctx.beginPath(); ctx.arc(x,y,1.4,0,Math.PI*2); ctx.fill();
+      }
+
+      // ── Layer 3: large foreground flakes (star shapes, slow drift) ──
+      for(let i=0;i<22;i++){
+        const drift=Math.sin(t*0.0007+i*1.1)*28+Math.sin(t*0.0015+i)*8;
+        const x=((i*113+t*0.010+drift)%(W+60))-30;
+        const y=((i*97+t*0.014)%H);
+        const sway=Math.sin(t*0.0012+i*0.8)*3;
+        drawFlake(x+sway,y,3.5,0.28+Math.sin(i*2.3)*0.08);
+      }
+
+      // ── Layer 4: extra-large slow flakes tumbling ──
+      for(let i=0;i<8;i++){
+        const drift=Math.sin(t*0.0005+i*1.8)*40;
+        const x=((i*178+t*0.007+drift)%(W+80))-40;
+        const y=((i*133+t*0.009)%H);
+        const sway=Math.sin(t*0.001+i*1.2)*5;
+        drawFlake(x+sway,y,5.5,0.20+Math.sin(i*1.5)*0.06);
       }
     }
+    // ── Snow pass 2: track-surface accumulation (needs STEPS/halfW, drawn after tarmac) ──
+    // defined as a closure called after STEPS is in scope
+    const _drawSnowTrackAccum = () => {
+      if (cond !== "snow") return;
+      const t=Date.now();
+      // Snow on track surface: white shimmer dots
+      ctx.save(); ctx.globalAlpha=0.07; ctx.fillStyle="rgba(225,235,255,1)";
+      for(let i=0;i<=STEPS;i++){
+        const f=i/STEPS, p=track.getPoint(f), p2=track.getPoint((f+0.003)%1);
+        const ang=Math.atan2(sy(p2.y)-sy(p.y),sx(p2.x)-sx(p.x))+Math.PI/2;
+        const kx=sx(p.x)+Math.cos(ang)*(halfW*0.9), ky=sy(p.y)+Math.sin(ang)*(halfW*0.9);
+        ctx.beginPath(); ctx.arc(kx,ky,2.5,0,Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+      // Snow build-up on track edges
+      ctx.save();
+      for(let edge=-1;edge<=1;edge+=2){
+        ctx.globalAlpha=0.24; ctx.fillStyle="rgba(215,228,250,1)";
+        for(let i=0;i<84;i++){
+          const f=i/84, p=track.getPoint(f), pn=track.getPoint((f+0.003)%1);
+          const ang=Math.atan2(pn.y-p.y,pn.x-p.x)+Math.PI/2;
+          const bump=1.6+Math.sin(i*3.7+t*0.0002)*0.7;
+          const kx=sx(p.x)+Math.cos(ang)*(halfW+1)*edge;
+          const ky=sy(p.y)+Math.sin(ang)*(halfW+1)*edge;
+          ctx.beginPath(); ctx.arc(kx,ky,bump,0,Math.PI*2); ctx.fill();
+        }
+      }
+      ctx.restore();
+      // Icy surface sheen patches
+      ctx.save(); ctx.globalAlpha=0.05;
+      for(let i=0;i<8;i++){
+        const f=(i/8+t*0.000003)%1, p=track.getPoint(f);
+        const iceG=ctx.createRadialGradient(sx(p.x),sy(p.y),0,sx(p.x),sy(p.y),halfW*0.8);
+        iceG.addColorStop(0,"rgba(200,220,255,0.7)");
+        iceG.addColorStop(1,"rgba(200,220,255,0)");
+        ctx.fillStyle=iceG;
+        ctx.beginPath(); ctx.ellipse(sx(p.x),sy(p.y),halfW*0.8,halfW*0.5,0,0,Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+    };
+
     if (cond === "night") {
       [0.08,0.22,0.38,0.52,0.66,0.80].forEach((f,li) => {
         const lp=track.getPoint(f), lp2=track.getPoint((f+0.01)%1);
@@ -979,10 +1063,10 @@ export default function CircuitRaceView({
     ctx.fillStyle = "rgba(76,125,48,0.20)"; ctx.fill();
     // Tarmac outer edge
     buildBand(ctx,2);
-    ctx.fillStyle = cond==="rain"?"#222018":cond==="snow"?"#2a2a3a":cond==="night"?"#151210":"#282620"; ctx.fill();
+    ctx.fillStyle = cond==="rain"?"#222018":cond==="snow"?"#2e303e":cond==="night"?"#151210":"#282620"; ctx.fill();
     // Tarmac inner (slightly lighter)
     buildBand(ctx,0);
-    ctx.fillStyle = cond==="rain"?"#2c2a24":cond==="snow"?"#38384e":cond==="night"?"#1e1c18":"#352e28"; ctx.fill();
+    ctx.fillStyle = cond==="rain"?"#2c2a24":cond==="snow"?"#3e4055":cond==="night"?"#1e1c18":"#352e28"; ctx.fill();
 
     // Centre dashes
     ctx.setLineDash([8,16]); ctx.beginPath();
@@ -1013,6 +1097,9 @@ export default function CircuitRaceView({
         ctx.beginPath(); ctx.arc(kx,ky,2.3,0,Math.PI*2); ctx.fill();
       }
     }
+
+    // ── Snow track accumulation pass (needs STEPS/halfW — called here after tarmac) ──
+    _drawSnowTrackAccum();
 
     // ── SKID MARKS on tarmac ──
     SKIDS.draw(ctx);
@@ -1086,8 +1173,7 @@ export default function CircuitRaceView({
     }
 
     // ── S/F Line ──
-    const sfT = (track.sfLine != null ? track.sfLine : 0);
-    const sfP = track.getPoint(sfT), sfP2 = track.getPoint((sfT+0.005)%1);
+    const sfP = track.getPoint(track.sfLine), sfP2 = track.getPoint(track.sfLine+0.005);
     const sfA = Math.atan2(sy(sfP2.y)-sy(sfP.y), sx(sfP2.x)-sx(sfP.x)) + Math.PI/2;
     ctx.save(); ctx.translate(sx(sfP.x),sy(sfP.y)); ctx.rotate(sfA);
     for (let i=0; i<5; i++) { ctx.fillStyle=i%2===0?"#fff":"#111"; ctx.fillRect(-13+i*5.2,-6,5.2,12); }
@@ -1133,14 +1219,9 @@ export default function CircuitRaceView({
     // ── Track decorations ──
     if (track.drawExtra) track.drawExtra(ctx, sx, sy);
 
-    // ── Cars ── (back to front by progress; when close, player drawn last so our car is never covered)
+    // ── Cars ──
     if (!racerArr?.length) return;
-    const drawOrder = [...racerArr].sort((a, b) => {
-      const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0);
-      const pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
-      if (Math.abs(pa - pb) > 0.02) return pa - pb;
-      return (a.isPlayer ? 1 : 0) - (b.isPlayer ? 1 : 0);
-    });
+    const drawOrder = [...racerArr].reverse();
     const trkPos = drawOrder.map(r => r.inPit ? -1 : ((((r.totalLapsDone??0)+r.trackPos)%1)+1)%1);
 
     drawOrder.forEach((r, di) => {
@@ -1158,18 +1239,12 @@ export default function CircuitRaceView({
         const tRaw=((prog%1)+1)%1, t=(tRaw+0.006*di)%1;
         const p=track.getPoint(t), p2=track.getPoint((t+0.006)%1);
         angle=Math.atan2(sy(p2.y)-sy(p.y), sx(p2.x)-sx(p.x));
-        const laneOff = (r.lane ?? 0) * (halfW * 0.35);
-        let overlapOff = 0;
+        let latOff = 0;
         const myPos = trkPos[di];
         if (!(r.slideOffUntil>0&&nowSec<r.slideOffUntil)) {
-          drawOrder.forEach((or,oi) => {
-            if (oi !== di && trkPos[oi] >= 0 && Math.abs(trkPos[oi] - myPos) < 0.02) {
-              const otherLane = or.lane ?? 0;
-              if (Math.abs((r.lane ?? 0) - otherLane) < 0.5) overlapOff = ((di % 3) - 1) * (halfW * 0.25);
-            }
-          });
+          trkPos.forEach((op,oi) => { if (oi!==di&&op>=0&&Math.abs(op-myPos)<0.02) latOff=((di%3)-1)*(halfW*0.60); });
         }
-        const offs = (r.slideOffUntil>0&&nowSec<r.slideOffUntil) ? (halfW+9) : laneOff + overlapOff;
+        const offs = (r.slideOffUntil>0&&nowSec<r.slideOffUntil) ? (halfW+9) : latOff;
         px = sx(p.x)+Math.cos(angle+Math.PI/2)*offs;
         py = sy(p.y)+Math.sin(angle+Math.PI/2)*offs;
       }
@@ -1203,6 +1278,21 @@ export default function CircuitRaceView({
           const et=((tt-0.004*ei)%1+1)%1, ep=track.getPoint(et);
           const a=0.25-ei*0.035;
           if (a>0) { ctx.fillStyle=td2.color; ctx.globalAlpha=a; ctx.beginPath(); ctx.arc(sx(ep.x),sy(ep.y),2.5-ei*0.3,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
+        }
+        // ── Snow/cold weather: exhaust steam puffs ──
+        if (cond==="snow"||cond==="rain") {
+          for (let ei=1; ei<=5; ei++) {
+            const et=((tt-0.006*ei)%1+1)%1, ep=track.getPoint(et);
+            const age=ei/5, steamA=cond==="snow"?0.18*(1-age*0.6):0.10*(1-age*0.6);
+            const steamR=2.5+ei*1.8;
+            const drift=Math.sin(nowSec*2+ei*1.3)*2*age;
+            ctx.fillStyle=cond==="snow"?"rgba(220,230,248,1)":"rgba(180,200,230,1)";
+            ctx.globalAlpha=steamA;
+            ctx.beginPath();
+            ctx.arc(sx(ep.x)+drift,sy(ep.y)-steamR*0.6,steamR,0,Math.PI*2);
+            ctx.fill();
+            ctx.globalAlpha=1;
+          }
         }
       }
 
@@ -1340,6 +1430,39 @@ export default function CircuitRaceView({
       ctx.restore();
     }
 
+    // ── Snow foreground pass — large close flakes on top of everything ──
+    if (cond === "snow") {
+      const t2=Date.now();
+      // Very large slow close-up flakes for depth parallax
+      ctx.save();
+      for(let i=0;i<6;i++){
+        const drift=Math.sin(t2*0.0004+i*2.1)*55+Math.cos(t2*0.0006+i)*20;
+        const x=((i*201+t2*0.005+drift)%(W+120))-60;
+        const y=((i*157+t2*0.007)%H);
+        const sway=Math.sin(t2*0.0009+i*1.7)*8;
+        const r2=7+Math.sin(i*1.3)*1.5;
+        ctx.globalAlpha=0.14+Math.sin(i*2.2)*0.04;
+        ctx.strokeStyle="rgba(230,240,255,1)"; ctx.lineWidth=1.0;
+        ctx.save(); ctx.translate(x+sway,y);
+        for(let arm=0;arm<6;arm++){
+          ctx.save(); ctx.rotate((arm/6)*Math.PI*2);
+          ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-r2);
+          const b1=r2*0.38, b2=r2*0.65;
+          ctx.moveTo(0,-b1); ctx.lineTo(r2*0.24,-b1-r2*0.18); ctx.moveTo(0,-b1); ctx.lineTo(-r2*0.24,-b1-r2*0.18);
+          ctx.moveTo(0,-b2); ctx.lineTo(r2*0.18,-b2-r2*0.13); ctx.moveTo(0,-b2); ctx.lineTo(-r2*0.18,-b2-r2*0.13);
+          ctx.stroke(); ctx.restore();
+        }
+        ctx.restore();
+      }
+      ctx.restore();
+
+      // Cold atmosphere vignette
+      const vig=ctx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.9);
+      vig.addColorStop(0,"rgba(160,185,230,0)");
+      vig.addColorStop(1,"rgba(130,155,210,0.14)");
+      ctx.fillStyle=vig; ctx.fillRect(0,0,W,H);
+    }
+
   }, [getScale]);
 
   // ─── BUILD LIVE RACERS ──────────────────────────────────────────────────
@@ -1358,7 +1481,6 @@ export default function CircuitRaceView({
       slideOffUntil:0,pitExitUntil:null,engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],
       fuelLoad:100,currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
       inSlipstream:false,tyreBlister:false,strategyType:"normal",overtakingLevel:0,overtakeBoostUntil:0,currentSpeedMph:null,
-      lane:0,targetLane:null,overtakeAttempt:null,defendingUntil:0,lastOvertakeAttemptAt:0,
     }];
     for (let i=0; i<7; i++) {
       const st=NPC_STATS[i%NPC_STATS.length], t=NPC_TYRES[i] in TYRE_DEFS?NPC_TYRES[i]:"medium";
@@ -1377,7 +1499,6 @@ export default function CircuitRaceView({
         // FIX B5: overtaking scales with car speed tier
         overtakingLevel:Math.max(0,Math.round((st.bs-0.88)*200)),
         overtakeBoostUntil:0,currentSpeedMph:null,
-        lane:0,targetLane:null,overtakeAttempt:null,defendingUntil:0,lastOvertakeAttemptAt:0,
       });
     }
     return racers;
@@ -1385,8 +1506,7 @@ export default function CircuitRaceView({
 
   // ─── RACE LOOP ──────────────────────────────────────────────────────────
   const startRaceLoop = useCallback((track, cond, nLaps, racerArr, options = {}) => {
-    const { onQualifyingComplete, mode: loopMode = "live" } = options;
-    const isReplay = loopMode === "replay";
+    const { onQualifyingComplete } = options;
     buildSpeedProfile(track); // warm cache
 
     let curWd=WEATHER_DEFS[cond]||WEATHER_DEFS.clear, curCond=cond;
@@ -1422,21 +1542,6 @@ export default function CircuitRaceView({
 
         if(weatherChg){const lL=Math.max(0,...racers.map(r=>r.totalLapsDone??0));if(lL>=weatherChg.lap){curWd=WEATHER_DEFS[weatherChg.to]||WEATHER_DEFS.clear;curCond=weatherChg.to;stateRef.current.wd=curWd;addInc(`Weather → ${curWd.label}`);setCommentary(rnd(COMMENTARY.weatherChange));weatherChg=null;}}
         const wd=curWd;
-
-        // Lane lerp and defending expiry (live only)
-        if (!isReplay) {
-          racers.forEach(r => {
-            if (r.targetLane != null && r.lane !== r.targetLane) {
-              const step = dt * 2;
-              r.lane = r.lane < r.targetLane ? Math.min(r.targetLane, r.lane + step) : Math.max(r.targetLane, r.lane - step);
-              if (Math.abs(r.lane - r.targetLane) < 0.05) r.lane = r.targetLane;
-            }
-            if (r.defendingUntil > 0 && nowSec >= r.defendingUntil) {
-              r.defendingUntil = 0;
-              r.targetLane = 0;
-            }
-          });
-        }
 
         racers.forEach(r => {
           if(r.finished&&!r.dnf)return;
@@ -1484,105 +1589,53 @@ export default function CircuitRaceView({
           const gapLdr=lP-((myP?.prog)??0);
           if(gapLdr>0.15&&!scActive)effSpeed*=1+Math.min(0.08,gapLdr*0.25);
 
-          const trackT=((r.trackPos%1)+1)%1;
-
-          // Slipstream + realistic overtake (lane, attempt, resolve, defending) — live only
-          r.inSlipstream = false;
-          if (myP && myP.idx > 0) {
-            const carAhead = prevSorted[myP.idx - 1];
-            const ahP = (carAhead.totalLapsDone ?? 0) + (carAhead.trackPos ?? 0);
-            const gap1 = ahP - (myP.prog ?? 0);
-            const gap2 = myP.idx > 1 ? (prevSorted[myP.idx - 2].totalLapsDone ?? 0) + (prevSorted[myP.idx - 2].trackPos ?? 0) - (myP.prog ?? 0) : 0;
-            if (gap1 > 0 && gap1 < 0.025 && !scActive) { effSpeed *= 1.04; r.inSlipstream = true; }
-
-            if (!isReplay) {
-              const OVERTAKE_DURATION = 0.6;
-              const OVERTAKE_COOLDOWN = 2;
-
-              if (r.overtakeAttempt) {
-                const elapsed = nowSec - (r.overtakeAttempt.startedAt || 0);
-                if (elapsed >= OVERTAKE_DURATION) {
-                  const resolveOne = (targetId, targetCarNum) => {
-                    const def = racers.find(x => x.id === targetId);
-                    const defending = def && (def.defendingUntil || 0) > nowSec - 0.3;
-                    const baseChance = 0.35 + (r.overtakingLevel || 0) / 150;
-                    const tyrePenalty = (r.tyreWear < 50) ? 0.15 : (r.tyreWear < 70) ? 0.08 : 0;
-                    const defPenalty = defending ? 0.25 : 0;
-                    const success = Math.random() < Math.max(0.12, Math.min(0.88, baseChance - tyrePenalty - defPenalty));
-                    if (success) r.overtakeBoostUntil = nowSec + 0.4;
-                    if (r.isPlayer && setOvertakeNotifRef.current) setOvertakeNotifRef.current({ text: success ? `Overtake on #${targetCarNum} successful!` : `Overtake on #${targetCarNum} failed!`, success, until: Date.now() + 1800 });
-                    addInc(success ? `${r.name} overtook #${targetCarNum}` : `${r.name} failed to overtake #${targetCarNum}`);
-                  };
-                  const secondId = r.overtakeAttempt.secondTargetId;
-                  const secondNum = r.overtakeAttempt.secondTargetCarNumber;
-                  resolveOne(r.overtakeAttempt.targetId, r.overtakeAttempt.targetCarNumber);
-                  if (secondId != null && secondNum != null) {
-                    const def2 = racers.find(x => x.id === secondId);
-                    const defending2 = def2 && (def2.defendingUntil || 0) > nowSec - 0.3;
-                    const baseChance2 = 0.28 + (r.overtakingLevel || 0) / 180;
-                    const success2 = Math.random() < Math.max(0.1, Math.min(0.82, baseChance2 - (defending2 ? 0.22 : 0)));
-                    if (success2) r.overtakeBoostUntil = nowSec + 0.35;
-                    const text2 = success2 ? `Overtake on #${secondNum} successful!` : `Overtake on #${secondNum} failed!`;
-                    if (r.isPlayer) setTimeout(() => { if (setOvertakeNotifRef.current) setOvertakeNotifRef.current({ text: text2, success: success2, until: Date.now() + 1800 }); }, 400);
-                  }
-                  r.overtakeAttempt = null;
-                  r.targetLane = 0;
-                }
-              } else if (gap1 > 0 && gap1 <= 0.04 && !scActive && (nowSec - (r.lastOvertakeAttemptAt || 0)) >= OVERTAKE_COOLDOWN) {
-                const curvature = getCurvature(track, trackT);
-                const cornerDir = getCornerDirection(track, trackT);
-                const aheadLane = carAhead.lane ?? 0;
-                let chosenLane = 0;
-                if (cornerDir !== 0) {
-                  const preferInside = Math.random() < 0.55;
-                  chosenLane = preferInside ? cornerDir : -cornerDir;
-                } else {
-                  chosenLane = aheadLane > 0 ? -1 : aheadLane < 0 ? 1 : (Math.random() < 0.5 ? -1 : 1);
-                }
-                const doDouble = gap2 > 0 && gap2 <= 0.045 && curvature < 0.08 && (r.overtakingLevel || 0) > 50 && Math.random() < 0.5;
-                r.overtakeAttempt = {
-                  targetId: carAhead.id,
-                  targetCarNumber: carAhead.carNumber ?? prevMap[carAhead.id]?.idx + 1,
-                  startedAt: nowSec,
-                  side: chosenLane === (cornerDir || 1) ? "inside" : "outside",
-                  secondTargetId: doDouble ? prevSorted[myP.idx - 2]?.id : undefined,
-                  secondTargetCarNumber: doDouble ? (prevSorted[myP.idx - 2]?.carNumber ?? myP.idx - 1) : undefined,
-                };
-                r.targetLane = chosenLane;
-                r.lastOvertakeAttemptAt = nowSec;
-                carAhead.defendingUntil = nowSec + 0.4;
-                carAhead.targetLane = chosenLane;
-                if (r.isPlayer) {
-                  const notifText = doDouble ? `Attempting take over on number ${r.overtakeAttempt.targetCarNumber} and ${r.overtakeAttempt.secondTargetCarNumber}` : `Attempting take over on number ${r.overtakeAttempt.targetCarNumber}`;
-                  if (setOvertakeNotifRef.current) setOvertakeNotifRef.current({ text: notifText, success: null, until: Date.now() + 2000 });
-                }
-                if (carAhead.isPlayer && setOvertakeNotifRef.current) setOvertakeNotifRef.current({ text: `Defending from car #${r.carNumber ?? ""}`, success: null, until: Date.now() + 2000 });
-              } else if (gap1 > 0 && gap1 <= 0.035 && !scActive && Math.random() < dt * 0.6 * ((r.overtakingLevel || 0) / 100) + dt * 0.04) {
-                r.overtakeBoostUntil = nowSec + 0.4;
-              }
-            } else {
-              if (gap1 > 0 && gap1 <= 0.035 && !scActive && Math.random() < dt * 0.6 * ((r.overtakingLevel || 0) / 100) + dt * 0.04) r.overtakeBoostUntil = nowSec + 0.4;
-            }
+          // Slipstream + overtake
+          // Slipstream: within 0.016 lap-fraction (~1.6%) of car ahead = drafting range
+          // Overtake boost: within 0.022 lap-fraction (~2.2%) = very close, fighting for position
+          r.inSlipstream=false;
+          if(myP&&myP.idx>0){
+            const ahP=(prevSorted[myP.idx-1].totalLapsDone??0)+(prevSorted[myP.idx-1].trackPos??0);
+            const sl=ahP-((myP.prog)??0);
+            if(sl>0&&sl<0.016&&!scActive){effSpeed*=1.045;r.inSlipstream=true;}
+            if(sl>0&&sl<=0.022&&!scActive&&Math.random()<dt*0.7*((r.overtakingLevel||0)/100)+dt*0.05)r.overtakeBoostUntil=nowSec+0.4;
           }
-          if (nowSec < (r.overtakeBoostUntil || 0)) effSpeed *= 1.04;
-          if (scActive) effSpeed = Math.min(effSpeed, 0.35 * r.baseSpeed);
+          if(nowSec<(r.overtakeBoostUntil||0))effSpeed*=1.04;
+          if(scActive)effSpeed=Math.min(effSpeed,0.35*r.baseSpeed);
 
           // Engine push/save modes
           const isLast2=r.totalLapsDone>=nLaps-2;
           if(isLast2)effSpeed*=1.03;
           else if(myP&&myP.idx===0){const s2P=prevSorted[1]?(prevSorted[1].totalLapsDone??0)+(prevSorted[1].trackPos??0):0;if((myP.prog??0)-s2P>0.08)effSpeed*=0.98;}
 
-          // Physics corner profile (pre-computed)
+          // Physics corner profile (pre-computed, sfLine-aware)
+          const trackT=((r.trackPos%1)+1)%1;
           const profile=buildSpeedProfile(track);
           const pidx=Math.round(trackT*(PROFILE_N-1));
-          const cornerSM=Math.max(0.50,Math.min(1.0,profile[pidx]+(effGrip-0.85)*0.6));
           const curvature=getCurvature(track,trackT);
 
-          // Movement — F1 Clash realistic braking/acceleration (smooth ramp, no instant 30→150 jump after the line)
-          const prevPos=r.trackPos;
-          const SSCALE=0.170, SCAP=158, ABRAKE=3.0, AACCEL=2.0; // slower accel so speed ramps visibly from corner to straight
+          // Corner speed multiplier: profile drives the base, then grip modulates it.
+          // High curvature = must slow down; grip determines how slow.
+          // cornerGripMult gives the grip-based limit; profile gives the geometry limit.
+          // Take the more conservative (minimum) of the two so physics are consistent.
+          const gripBasedMult = cornerGripMult(curvature, effGrip);
+          const profileMult   = Math.max(0.50, Math.min(1.0, profile[pidx] + (effGrip-0.85)*0.55));
+          const cornerSM      = Math.min(profileMult, gripBasedMult);
+
+          // Curvature-aware brake/accel rates — sharper on straights, gentler in tight corners
+          // In real cars: brake distance is short (0.2-0.4s), accel ramp is longer (0.5-1.2s)
+          const isTightCorner = curvature > 0.12;
+          const isMedCorner   = curvature > 0.055;
+          // ABRAKE: how fast we reach the corner speed target. Higher = more instant.
+          // At 60fps dt≈0.016: ABRAKE=5 → ~50% correction per frame = sharp, realistic braking
+          const ABRAKE = isTightCorner ? 6.5 : isMedCorner ? 5.0 : 4.0;
+          // AACCEL: how fast we reach full speed again exiting a corner.
+          // Real cars: 0-100 takes ~3-4s. At the track scale this means 2-3s ramp.
+          const AACCEL = isTightCorner ? 2.2 : isMedCorner ? 2.8 : 3.6;
+          const SSCALE=0.170, SCAP=160;
           const applyLerp=(cur,tgt)=>{if(tgt==null)return tgt;if(cur==null)return tgt;const brk=tgt<cur;return cur+(tgt-cur)*Math.min(1,dt*(brk?ABRAKE:AACCEL));};
 
+          // Movement
+          const prevPos=r.trackPos;
           if(r.slideOffUntil>0&&nowSec<r.slideOffUntil){
             r.trackPos=(r.trackPos+(1/(track.lapBase/effSpeed))*dt*0.18+1)%1;r.currentSpeedMph=20;
           } else {
@@ -1591,37 +1644,53 @@ export default function CircuitRaceView({
             r.trackPos=(r.trackPos+(1/lapTime)*dt+1)%1;
             const rawMph=track.km&&track.lapBase?SSCALE*(3600*track.km*cornerSM*effSpeed)/track.lapBase:null;
             const tMph=rawMph!=null?Math.max(0,Math.min(SCAP,rawMph)):null;
-            // Always lerp toward target so we never snap 30→150; if no previous speed, lerp from 0 (standing start / after line)
-            const curMph=r.currentSpeedMph!=null?r.currentSpeedMph:(tMph!=null?0:null);
-            r.currentSpeedMph=tMph!=null?(curMph!=null?applyLerp(curMph,tMph):tMph):null;
+            r.currentSpeedMph=tMph!=null?(r.currentSpeedMph!=null?applyLerp(r.currentSpeedMph,tMph):tMph):null;
             // Slide off — low grip + sharp corner
-            if(curvature>0.24&&effGrip<0.64&&Math.random()<dt*0.5*(0.64-effGrip)*Math.min(1,curvature/0.38)){
+            if(curvature>0.22&&effGrip<0.66&&Math.random()<dt*0.5*(0.66-effGrip)*Math.min(1,curvature/0.36)){
               r.slideOffUntil=nowSec+0.5+Math.random()*0.65;addInc(`${r.name} off track!`);
               if(!scActive&&nowSec>sc.cooldownUntil&&Math.random()<0.15&&nLaps>1){sc.active=true;sc.endsAtSec=nowSec+6+Math.random()*4;sc.cooldownUntil=sc.endsAtSec+10;addInc("Safety car deployed!");setCommentary(rnd(COMMENTARY.safetyCar));}
             }
           }
 
-          // Sector crossings
-          const ns2=r.trackPos<0.333?0:r.trackPos<0.666?1:2;
+          // Sector crossings (use sfLine-relative sectors so they divide the lap evenly from sfLine)
+          const sfL = track.sfLine ?? 0;
+          const relT = ((trackT - sfL + 1) % 1);
+          const ns2 = relT < 0.333 ? 0 : relT < 0.666 ? 1 : 2;
           if(ns2!==r.currentSector){
             const el=nowSec-(r.lastSectorCross||nowSec);
             if(r.lastSectorCross>0&&el>0.5&&r.isPlayer){const delta=el-r.bestSectors[r.currentSector];r.sectorDelta=delta;r.bestSectors[r.currentSector]=Math.min(r.bestSectors[r.currentSector],el);}
             r.currentSector=ns2;r.lastSectorCross=nowSec;
           }
 
-          // Lap crossing
-          if(prevPos>0.93&&r.trackPos<0.07){
+          // Lap crossing: detect when car passes through sfLine
+          // Use wrap-aware check: prevPos was before sfLine, trackPos is after (or vice versa wrapping)
+          const sfL2 = track.sfLine ?? 0;
+          const crossedSF = (() => {
+            if (sfL2 === 0) return prevPos > 0.93 && r.trackPos < 0.07;
+            // General: did we cross sfLine this frame?
+            const p0 = prevPos, p1 = r.trackPos;
+            if (p0 < sfL2 && p1 >= sfL2) return true;
+            // Wrap case: p0 near 1.0, p1 near 0.0 and sfLine near 0.0
+            if (p0 > p1 && sfL2 <= p1) return true;
+            if (p0 > p1 && sfL2 >= p0) return true;
+            return false;
+          })();
+          if(crossedSF && !r._justCrossed){
+            r._justCrossed = true;
+            setTimeout(() => { if(r) r._justCrossed = false; }, 100);
             r.totalLapsDone++;r.lapCount=Math.min(nLaps,r.totalLapsDone+1);
             const lt=track.lapBase/(effSpeed*0.97)+(Math.random()-0.5)*0.8;
             r.lapTimes.push(lt);
             if(lt<fl.time){fl.time=lt;fl.holderId=r.id;stateRef.current.fastestLap=fl;addInc(`${r.name} — fastest lap! (${lt.toFixed(2)}s)`);}
-            // FIX B2: sync tyre wear from replay data ONLY at lap boundary
+            // Sync tyre wear from replay data at lap boundary
             if(r.tireWearByLap&&r.tireWearByLap.length){
               const idx=Math.min(r.totalLapsDone,r.tireWearByLap.length-1);
               const tw=r.tireWearByLap[idx];
               if(!r.inPit&&!(r.tyreWear>92&&tw<20))r.tyreWear=tw;
             }
             if(r.totalLapsDone>=nLaps){r.finished=true;r.finishOrder=nextFO++;r.finishVisibleUntil=nowSec+9999;if(r.finishOrder===1){finishFlash=nowSec+2.0;stateRef.current.finishFlash=finishFlash;}}
+          } else if (!crossedSF) {
+            r._justCrossed = false;
           }
 
           // Tyre wear (per-frame, only when no replay data)
@@ -1763,7 +1832,6 @@ export default function CircuitRaceView({
         inSlipstream:false, tyreBlister:false, strategyType:"normal",
         reliabilityWearMult:Math.max(0.7,1-pitLvl*0.05),
         overtakingLevel:0, overtakeBoostUntil:0, currentSpeedMph:null,
-        lane:0, targetLane:null, overtakeAttempt:null, defendingUntil:0, lastOvertakeAttemptAt:0,
       };
     });
 
@@ -1776,30 +1844,9 @@ export default function CircuitRaceView({
         const next = prev-1;
         if (next <= 0) {
           clearInterval(cdRef.current); cdRef.current=null;
+          setUiPhase("racing");
           const pr = stateRef.current?.pendingReplay;
-          if (pr?.racers?.length) {
-            setTimeout(() => {
-              setUiPhase("qualifying"); setLapDisp("Qualifying"); setCommentary("Qualifying lap — grid set by this lap");
-              startRaceLoop(pr.track, pr.cond, 1, pr.racers, { mode: "replay", onQualifyingComplete: (sortedRacers) => {
-                const qWd = WEATHER_DEFS[pr.cond] || WEATHER_DEFS.clear;
-                const gridRacers = sortedRacers.map((r, gi) => ({
-                  ...r, trackPos: (sortedRacers.length - gi) * 0.012, totalLapsDone: 0, lapCount: 1,
-                  finished: false, finishOrder: 0, visible: true, tyreWear: r.tyreWear ?? 100, lapTimes: [], pitStops: r.pitStops ?? 0,
-                  inPit: false, pitEndAt: 0, slideOffUntil: 0, pitExitUntil: null, position: gi + 1, carNumber: gi + 1,
-                  pitStrategy: r.pitStrategy ?? [], engineHealth: 100, dnf: false, dnfAtSec: 0, dnfSparks: [],
-                  fuelLoad: 100, currentSector: 0, lastSectorCross: 0, bestSectors: [Infinity, Infinity, Infinity], sectorDelta: null,
-                  inSlipstream: false, tyreBlister: false, overtakeBoostUntil: 0, currentSpeedMph: null,
-                }));
-                setCommentary("Grid set — race!");
-                setTimeout(() => {
-                  setUiPhase("racing"); setLapDisp(`1 / ${pr.totalLaps}`); setCommentary(rnd(COMMENTARY.start));
-                  rpStarted.current = true;
-                  startRaceLoop(pr.track, pr.cond, pr.totalLaps, gridRacers);
-                }, 2200);
-              },
-            });
-            }, 600);
-          }
+          if (pr?.racers?.length) { rpStarted.current=true; startRaceLoop(pr.track,pr.cond,pr.totalLaps,pr.racers); }
           return 0;
         }
         return next;
@@ -1814,17 +1861,15 @@ export default function CircuitRaceView({
     if (rpStarted.current) return;
     const pr = stateRef.current?.pendingReplay;
     if (!pr?.racers?.length) return;
-    rpStarted.current=true; startRaceLoop(pr.track,pr.cond,pr.totalLaps,pr.racers,{ mode: "replay" });
+    rpStarted.current=true; startRaceLoop(pr.track,pr.cond,pr.totalLaps,pr.racers);
   }, [mode, uiPhase, startRaceLoop]);
 
   // ─── LIVE MODE ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (mode !== "live") return;
-    if (!participants.length) return;
-    // Use qualifying_order from backend when present; otherwise derive grid order so qualifying lap still runs
-    const rawOrder = (qualifying_order?.length ? qualifying_order : (resultOrder?.length ? resultOrder : null)) || participants.slice().sort((a, b) => ((b.effective_speed ?? 15) - (a.effective_speed ?? 15))).map(p => p.user_id || p.id);
-    const seen = new Set();
-    const order = rawOrder.filter(id => { if (seen.has(id)) return false; seen.add(id); return true; });
+    if (!participants.length || !qualifying_order?.length) return;
+    const seen=new Set();
+    const order=qualifying_order.filter(id=>{if(seen.has(id))return false;seen.add(id);return true;});
     resizeCanvas();
     const track=TRACKS.find(t=>t.id===initialTrackId)||TRACKS[0];
     const cond=WEATHER_MAP[weatherIdProp]||"clear";
@@ -1855,7 +1900,6 @@ export default function CircuitRaceView({
         fuelLoad:100,currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
         inSlipstream:false,tyreBlister:false,strategyType:ns,
         overtakingLevel:ovt,overtakeBoostUntil:0,currentSpeedMph:null,
-        lane:0,targetLane:null,overtakeAttempt:null,defendingUntil:0,lastOvertakeAttemptAt:0,
       };
     });
     stateRef.current={racers,track,nLaps:totalLaps,wd};
@@ -1868,25 +1912,23 @@ export default function CircuitRaceView({
           clearInterval(cdRef.current);cdRef.current=null;
           const pr=stateRef.current?.pendingReplay;
           if(pr){
-            setTimeout(()=>{
-              setUiPhase("qualifying");setLapDisp("Qualifying");setCommentary("Qualifying lap — grid set by this lap");
-              startRaceLoop(pr.track,pr.cond,1,pr.racers,{ mode: "replay", onQualifyingComplete:(sortedRacers)=>{
-                  const qWd=WEATHER_DEFS[pr.cond]||WEATHER_DEFS.clear;
-                  const gridRacers=sortedRacers.map((r,gi)=>({
-                    ...r,trackPos:(sortedRacers.length-gi)*0.012,totalLapsDone:0,lapCount:1,
-                    finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
-                    inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:gi+1,carNumber:gi+1,
-                    pitStrategy:buildStrategy(r.currentTyre,pr.totalLaps,qWd.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
-                    engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
-                    currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
-                    inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,
-                    lane:0,targetLane:null,overtakeAttempt:null,defendingUntil:0,lastOvertakeAttemptAt:0,
-                  }));
-                  setCommentary("Grid set — race start!");
-                  setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${pr.totalLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(pr.track,pr.cond,pr.totalLaps,gridRacers,{ mode: "replay" });},2200);
-                },
-              });
-            }, 600);
+            setUiPhase("qualifying");setLapDisp("Qualifying");setCommentary("Qualifying lap — grid set by this lap");
+            startRaceLoop(pr.track,pr.cond,1,pr.racers,{
+              onQualifyingComplete:(sortedRacers)=>{
+                const qWd=WEATHER_DEFS[pr.cond]||WEATHER_DEFS.clear;
+                const gridRacers=sortedRacers.map((r,gi)=>({
+                  ...r,trackPos:(sortedRacers.length-gi)*0.012,totalLapsDone:0,lapCount:1,
+                  finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
+                  inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:gi+1,carNumber:gi+1,
+                  pitStrategy:buildStrategy(r.currentTyre,pr.totalLaps,qWd.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
+                  engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
+                  currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
+                  inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,
+                }));
+                setCommentary("Grid set — race start!");
+                setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${pr.totalLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(pr.track,pr.cond,pr.totalLaps,gridRacers);},2200);
+              },
+            });
           }
           return 0;
         }
@@ -1917,26 +1959,23 @@ export default function CircuitRaceView({
       c--;setCountdown(c);
       if(c<=0){
         clearInterval(cdI);
-        setTimeout(()=>{
-          setUiPhase("qualifying");setLapDisp("Qualifying");setCommentary("Qualifying lap — grid order set");
-          startRaceLoop(track,cond,1,racers,{
-            onQualifyingComplete:(sorted)=>{
-              const wd2=WEATHER_DEFS[cond]||WEATHER_DEFS.clear;
-              const grid=sorted.map((r,i)=>({
-                ...r,trackPos:(sorted.length-i)*0.012,totalLapsDone:0,lapCount:1,
-                finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
-                inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:i+1,carNumber:i+1,
-                pitStrategy:buildStrategy(r.currentTyre,numLaps,wd2.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
-                engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
-                currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
-                inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,
-                lane:0,targetLane:null,overtakeAttempt:null,defendingUntil:0,lastOvertakeAttemptAt:0,
-              }));
-              setCommentary("Grid set — race start!");
-              setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${numLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(track,cond,numLaps,grid,{ mode: "live" });},2200);
-            },
-          });
-        }, 600);
+        setUiPhase("qualifying");setLapDisp("Qualifying");setCommentary("Qualifying lap — grid order set");
+        startRaceLoop(track,cond,1,racers,{
+          onQualifyingComplete:(sorted)=>{
+            const wd2=WEATHER_DEFS[cond]||WEATHER_DEFS.clear;
+            const grid=sorted.map((r,i)=>({
+              ...r,trackPos:(sorted.length-i)*0.012,totalLapsDone:0,lapCount:1,
+              finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
+              inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:i+1,carNumber:i+1,
+              pitStrategy:buildStrategy(r.currentTyre,numLaps,wd2.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
+              engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
+              currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
+              inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,
+            }));
+            setCommentary("Grid set — race start!");
+            setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${numLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(track,cond,numLaps,grid);},2200);
+          },
+        });
       }
     },1000);
   },[uiPhase,selTrack,effCond,numLaps,chosenTyre,buildRacers,resizeCanvas,startRaceLoop]);
@@ -2086,18 +2125,6 @@ export default function CircuitRaceView({
         {pitNotif&&(
           <div style={{ position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(0,0,0,.90)",border:"1px solid var(--noir-primary)",padding:"6px 14px",fontFamily:"'Cinzel',serif",fontSize:"clamp(9px,2.5vw,12px)",letterSpacing:".18em",color:"var(--noir-primary)",whiteSpace:"nowrap",pointerEvents:"none" }}>{pitNotif}</div>
         )}
-
-        {/* Overtake attempt / result notification */}
-        {overtakeNotif && (
-          <div style={{
-            position:"absolute",top:"42%",left:"50%",transform:"translate(-50%,-50%)",
-            background:overtakeNotif.success === true ? "rgba(0,40,0,.92)" : overtakeNotif.success === false ? "rgba(40,0,0,.92)" : "rgba(0,0,0,.90)",
-            border:overtakeNotif.success === true ? "1px solid rgba(80,200,80,.6)" : overtakeNotif.success === false ? "1px solid rgba(220,80,80,.6)" : "1px solid var(--noir-primary)",
-            padding:"6px 14px",fontFamily:"'Cinzel',serif",fontSize:"clamp(9px,2.5vw,12px)",letterSpacing:".12em",
-            color:overtakeNotif.success === true ? "#90e090" : overtakeNotif.success === false ? "#f0a0a0" : "var(--noir-primary)",
-            whiteSpace:"nowrap",pointerEvents:"none",
-          }}>{overtakeNotif.text}</div>
-        )}
       </div>
 
       {/* Leaderboard */}
@@ -2213,7 +2240,7 @@ export default function CircuitRaceView({
 function TrackThumb({ track, active }) {
   const ref = useRef(null);
   useEffect(() => {
-    const c = ref.current; if (!c || !track || typeof track.getPoint !== "function") return;
+    const c = ref.current; if (!c) return;
     const ctx = c.getContext("2d");
     const W=200, H=72;
     ctx.fillStyle="#0d1208"; ctx.fillRect(0,0,W,H);

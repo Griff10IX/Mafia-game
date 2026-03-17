@@ -2,6 +2,7 @@
 # security (summary, flags, rate-limits, telegram, clear), hitlist reset,
 # force-online, lock/kill player, search time, clear searches, check, activity/gambling log,
 # find-duplicates, cheat-detection, user-details, wipe, delete-user, events, seed-families, create-test-users.
+import asyncio
 import logging
 import os
 import random
@@ -14,6 +15,7 @@ import httpx
 from fastapi import Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from middleware.security import is_proxy_or_vpn
 from utils.disposable_email import is_disposable_email
 from routers.kill.armoury import TOKEN_CONFIG
 
@@ -3071,6 +3073,214 @@ def register(router):
             "by_similar_username": name_groups[:limit_username],
             "by_similar_email": similar_email_groups[:limit_domain],
             "by_same_day_same_ip": same_day_ip_groups[:30],
+        }
+
+    @router.get("/admin/cheat-detection/dupe-check-intelligent")
+    async def admin_cheat_dupe_check_intelligent(
+        username: str = Query(None, description="Optional: filter by username contains"),
+        check_vpn: bool = Query(True, description="Check shared IPs for VPN/proxy (rate-limited)"),
+        max_vpn_checks: int = Query(50, ge=0, le=100),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Single report: same IP (with full IP history per account), same user-agent,
+        domain/similar-username/similar-email/same-day-same-IP, and optional VPN/proxy flags on IPs.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        query = {"is_dead": {"$ne": True}}
+        if username and username.strip():
+            query["username"] = re.compile(re.escape(username.strip()), re.IGNORECASE)
+        users = await db.users.find(
+            query,
+            {
+                "_id": 0,
+                "id": 1,
+                "username": 1,
+                "email": 1,
+                "registration_ip": 1,
+                "login_ips": 1,
+                "last_login_ip": 1,
+                "last_request_ip": 1,
+                "last_user_agent": 1,
+                "created_at": 1,
+            },
+        ).to_list(5000)
+
+        def _all_ips(u: dict) -> tuple:
+            reg = (u.get("registration_ip") or "").strip()
+            last_login = (u.get("last_login_ip") or "").strip()
+            last_req = (u.get("last_request_ip") or "").strip()
+            logins = [ (x or "").strip() for x in (u.get("login_ips") or []) if (x or "").strip() ]
+            ips = set()
+            if reg:
+                ips.add(reg)
+            if last_login:
+                ips.add(last_login)
+            if last_req:
+                ips.add(last_req)
+            ips.update(logins)
+            sources = []
+            if reg:
+                sources.append("registration")
+            for _ in logins:
+                sources.append("login")
+            if last_req and last_req not in (logins + [reg]):
+                sources.append("request")
+            if last_login and last_login != reg and last_login not in logins:
+                if "login" not in sources:
+                    sources.append("login")
+            return sorted(ips), {"registration": reg or None, "login_ips": logins, "last_login_ip": last_login or None, "last_request_ip": last_req or None}
+
+        ip_to_accounts = {}
+        for u in users:
+            ips, sources = _all_ips(u)
+            if not ips:
+                continue
+            summary = {
+                "id": u["id"],
+                "username": u.get("username"),
+                "email": u.get("email"),
+                "created_at": u.get("created_at"),
+                "all_ips": ips,
+                "sources": sources,
+            }
+            for ip in ips:
+                role = "registration" if sources["registration"] == ip else ("login" if ip in (sources.get("login_ips") or []) else "request")
+                ip_to_accounts.setdefault(ip, []).append({**summary, "role_at_this_ip": role})
+        same_ip_groups = []
+        seen_ip = set()
+        for ip, accs in ip_to_accounts.items():
+            if len(accs) < 2 or ip in seen_ip:
+                continue
+            seen_ip.add(ip)
+            by_user = {}
+            for a in accs:
+                uid = a.get("id")
+                if uid not in by_user:
+                    by_user[uid] = {
+                        "id": a["id"],
+                        "username": a["username"],
+                        "email": a["email"],
+                        "created_at": a["created_at"],
+                        "all_ips": a["all_ips"],
+                        "sources": a["sources"],
+                        "role_at_this_ip": a.get("role_at_this_ip"),
+                    }
+            same_ip_groups.append({
+                "ip": ip,
+                "count": len(by_user),
+                "accounts": list(by_user.values()),
+                "risk": "high" if any(a.get("sources", {}).get("registration") == ip for a in accs) and len(by_user) >= 2 else "medium",
+            })
+        same_ip_groups.sort(key=lambda g: (0 if g["risk"] == "high" else 1, -g["count"]))
+
+        ua_to_users = {}
+        ua_raw_sample = {}
+        for u in users:
+            ua_raw = (u.get("last_user_agent") or "").strip()
+            if not ua_raw:
+                continue
+            ua_norm = re.sub(r"/\d+[\d.]*", "", ua_raw) or ua_raw
+            if ua_norm not in ua_raw_sample:
+                ua_raw_sample[ua_norm] = ua_raw
+            ips, _ = _all_ips(u)
+            ua_to_users.setdefault(ua_norm, []).append({
+                "id": u["id"],
+                "username": u.get("username"),
+                "email": u.get("email"),
+                "created_at": u.get("created_at"),
+                "all_ips": ips,
+            })
+        same_ua_groups = []
+        for ua_norm, accs in ua_to_users.items():
+            if len(accs) < 2:
+                continue
+            all_ips = set()
+            for a in accs:
+                all_ips.update(a.get("all_ips") or [])
+            if len(all_ips) < 2:
+                continue
+            sample_raw = ua_raw_sample.get(ua_norm, ua_norm)
+            same_ua_groups.append({
+                "user_agent": ua_norm[:120] + ("..." if len(ua_norm) > 120 else ""),
+                "user_agent_full": sample_raw[:200] + ("..." if len(sample_raw) > 200 else ""),
+                "account_count": len(accs),
+                "distinct_ip_count": len(all_ips),
+                "accounts": accs,
+            })
+        same_ua_groups.sort(key=lambda g: -g["account_count"])
+
+        domain_to_users = {}
+        for u in users:
+            email = (u.get("email") or "").strip()
+            if "@" in email:
+                domain = email.split("@")[-1].lower()
+                domain_to_users.setdefault(domain, []).append(u)
+        domain_groups = [{"domain": d, "count": len(accs), "accounts": accs} for d, accs in domain_to_users.items() if len(accs) >= 2]
+        domain_groups.sort(key=lambda g: -g["count"])
+        base_to_users = {}
+        for u in users:
+            uname = (u.get("username") or "").strip()
+            base = re.sub(r"\d+", "", uname).lower() or uname.lower()
+            if len(base) >= 2:
+                base_to_users.setdefault(base, []).append(u)
+        name_groups = [{"base": b, "count": len(accs), "accounts": accs} for b, accs in base_to_users.items() if len(accs) >= 2]
+        name_groups.sort(key=lambda g: -g["count"])
+        similar_email_to_users = {}
+        for u in users:
+            email = (u.get("email") or "").strip()
+            if "@" in email:
+                local, domain = email.rsplit("@", 1)
+                domain = domain.lower()
+                key = (_email_local_base(local), domain)
+                similar_email_to_users.setdefault(key, []).append(u)
+        similar_email_groups = [
+            {"local_base": k[0], "domain": k[1], "count": len(accs), "accounts": accs}
+            for k, accs in similar_email_to_users.items()
+            if len(accs) >= 2
+        ]
+        similar_email_groups.sort(key=lambda g: -g["count"])
+        same_day_ip_to_users = {}
+        for u in users:
+            reg_ip = (u.get("registration_ip") or "").strip()
+            created = u.get("created_at") or ""
+            if reg_ip and created:
+                day = created[:10] if isinstance(created, str) else (created.isoformat()[:10] if hasattr(created, "isoformat") else "")
+                if day:
+                    same_day_ip_to_users.setdefault((reg_ip, day), []).append(u)
+        same_day_ip_groups = [
+            {"registration_ip": k[0], "created_day": k[1], "count": len(accs), "accounts": accs}
+            for k, accs in same_day_ip_to_users.items()
+            if len(accs) >= 2
+        ]
+        same_day_ip_groups.sort(key=lambda g: -g["count"])
+
+        ip_vpn: Dict[str, bool] = {}
+        if check_vpn and same_ip_groups:
+            unique_ips = set()
+            for g in same_ip_groups:
+                unique_ips.add(g["ip"])
+            to_check = list(unique_ips)[:max_vpn_checks]
+            for ip in to_check:
+                try:
+                    ip_vpn[ip] = await is_proxy_or_vpn(ip)
+                except Exception:
+                    ip_vpn[ip] = False
+                await asyncio.sleep(0.15)
+        for g in same_ip_groups:
+            g["ip_vpn"] = ip_vpn.get(g["ip"], False)
+
+        return {
+            "same_ip_groups": same_ip_groups[:80],
+            "total_same_ip_groups": len(same_ip_groups),
+            "same_user_agent_groups": same_ua_groups[:50],
+            "total_same_ua_groups": len(same_ua_groups),
+            "by_domain": domain_groups[:50],
+            "by_similar_username": name_groups[:50],
+            "by_similar_email": similar_email_groups[:50],
+            "by_same_day_same_ip": same_day_ip_groups[:30],
+            "ip_vpn": ip_vpn,
         }
 
     def _normalize_user_agent(ua: str) -> str:

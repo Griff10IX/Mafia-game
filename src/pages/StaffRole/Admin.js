@@ -471,6 +471,7 @@ export default function Admin() {
   const [cheatSameDeviceIps, setCheatSameDeviceIps] = useState(null);
   const [cheatLoginEvents, setCheatLoginEvents] = useState(null);
   const [cheatDuplicates, setCheatDuplicates] = useState(null);
+  const [cheatDupeIntelligent, setCheatDupeIntelligent] = useState(null);
   const [cheatLoading, setCheatLoading] = useState(false);
   const [duplicateSuspectsUsername, setDuplicateSuspectsUsername] = useState('');
 
@@ -1928,6 +1929,25 @@ export default function Admin() {
       setCheatSameDeviceIps(res.data);
       const n = res.data?.total_groups ?? 0;
       toast.success(n ? `${n} group(s): same device, different IPs` : 'No same-device / different-IP groups found');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setCheatLoading(false);
+    }
+  };
+
+  const handleFetchDupeIntelligent = async () => {
+    setCheatLoading(true);
+    setCheatDupeIntelligent(null);
+    try {
+      const params = new URLSearchParams();
+      if (duplicateSuspectsUsername.trim()) params.set('username', duplicateSuspectsUsername.trim());
+      params.set('check_vpn', 'true');
+      const res = await api.get('/admin/cheat-detection/dupe-check-intelligent?' + params.toString());
+      setCheatDupeIntelligent(res.data);
+      const ipGroups = res.data?.total_same_ip_groups ?? 0;
+      const uaGroups = res.data?.total_same_ua_groups ?? 0;
+      toast.success(`Loaded: ${ipGroups} same-IP group(s), ${uaGroups} same-device group(s)` + (Object.keys(res.data?.ip_vpn || {}).length ? ', VPN flags checked' : ''));
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
@@ -5036,7 +5056,8 @@ export default function Admin() {
           icon={AlertTriangle}
           title="Cheat Detection"
           badge={
-            ((cheatSameIp?.total_groups ?? 0) > 0 || (cheatSameDeviceIps?.total_groups ?? 0) > 0 ||
+            ((cheatDupeIntelligent?.total_same_ip_groups ?? 0) > 0 || (cheatDupeIntelligent?.total_same_ua_groups ?? 0) > 0 ||
+             (cheatSameIp?.total_groups ?? 0) > 0 || (cheatSameDeviceIps?.total_groups ?? 0) > 0 ||
              ((cheatDuplicates?.by_domain?.length ?? 0) + (cheatDuplicates?.by_similar_username?.length ?? 0) + (cheatDuplicates?.by_similar_email?.length ?? 0) + (cheatDuplicates?.by_same_day_same_ip?.length ?? 0)) > 0) && (
               <span className="text-[10px] font-heading text-amber-400">Review below</span>
             )
@@ -5046,6 +5067,124 @@ export default function Admin() {
         />
         {!collapsed.cheat && (
           <div className="p-3 space-y-4">
+            <div>
+              <div className="text-[10px] font-heading text-primary uppercase mb-2">Intelligent dupe check</div>
+              <p className="text-xs text-mutedForeground mb-2">One report: shared IPs (with full IP history + VPN/proxy check), same user-agent, email domain, similar usernames, same-day same-IP.</p>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <input
+                  type="text"
+                  value={duplicateSuspectsUsername}
+                  onChange={(e) => setDuplicateSuspectsUsername(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs w-40"
+                  placeholder="Filter by username"
+                />
+                <BtnPrimary onClick={handleFetchDupeIntelligent} disabled={cheatLoading}>Run intelligent dupe check</BtnPrimary>
+              </div>
+              {cheatDupeIntelligent && (
+                <div className="mt-3 space-y-4">
+                  {(cheatDupeIntelligent.same_ip_groups?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-amber-400 uppercase mb-2">Same IP ({cheatDupeIntelligent.total_same_ip_groups} group(s)) — full IP history per account</div>
+                      <div className="max-h-80 overflow-y-auto space-y-2">
+                        {cheatDupeIntelligent.same_ip_groups.slice(0, 40).map((g, i) => (
+                          <div key={i} className="p-2 rounded bg-zinc-900/50 border border-amber-500/20">
+                            <div className="text-[10px] font-heading text-amber-400 mb-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              <span>IP: {g.ip}</span>
+                              <span>— {g.count} account(s)</span>
+                              {g.risk && <span className={`px-1 rounded text-[9px] ${g.risk === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>{g.risk}</span>}
+                              {g.ip_vpn && <span className="px-1 rounded text-[9px] bg-purple-500/20 text-purple-400" title="IP detected as VPN/proxy">VPN</span>}
+                            </div>
+                            <div className="space-y-1">
+                              {(g.accounts || []).map((a, j) => (
+                                <div key={j} className="text-[10px] pl-1 border-l border-zinc-600/50">
+                                  <span className="text-foreground font-bold">{a.username}</span>
+                                  <span className="text-mutedForeground"> · {a.email}</span>
+                                  {a.role_at_this_ip && <span className="text-zinc-500 text-[9px] ml-1">({a.role_at_this_ip})</span>}
+                                  <div className="text-[9px] font-mono text-mutedForeground mt-0.5">IPs: {(a.all_ips || []).join(', ') || '—'}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(cheatDupeIntelligent.same_user_agent_groups?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-primary uppercase mb-2">Same device (user-agent), different IPs ({cheatDupeIntelligent.total_same_ua_groups} group(s))</div>
+                      <div className="max-h-64 overflow-y-auto space-y-2">
+                        {cheatDupeIntelligent.same_user_agent_groups.slice(0, 25).map((g, i) => (
+                          <div key={i} className="p-2 rounded bg-zinc-900/50 border border-zinc-700/30">
+                            <div className="text-[10px] text-amber-400 font-heading mb-0.5">{g.account_count} account(s) · {g.distinct_ip_count} IP(s)</div>
+                            <div className="text-[9px] font-mono text-mutedForeground mb-1 truncate" title={g.user_agent_full}>{g.user_agent}</div>
+                            {(g.accounts || []).slice(0, 8).map((a, j) => (
+                              <div key={j} className="text-[10px] pl-1"><span className="font-bold">{a.username}</span> <span className="text-mutedForeground font-mono">{(a.all_ips || []).join(', ') || '—'}</span></div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {(cheatDupeIntelligent.by_domain?.length ?? 0) > 0 && (
+                      <div>
+                        <div className="text-[10px] font-heading text-primary uppercase mb-1">Same email domain</div>
+                        <div className="max-h-40 overflow-y-auto space-y-1">
+                          {(cheatDupeIntelligent.by_domain || []).slice(0, 15).map((g, i) => (
+                            <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
+                              <div className="text-[10px] text-amber-400 font-heading">{g.domain} — {g.count}</div>
+                              {g.accounts?.slice(0, 4).map((a, j) => <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(cheatDupeIntelligent.by_similar_username?.length ?? 0) > 0 && (
+                      <div>
+                        <div className="text-[10px] font-heading text-primary uppercase mb-1">Similar usernames</div>
+                        <div className="max-h-40 overflow-y-auto space-y-1">
+                          {(cheatDupeIntelligent.by_similar_username || []).slice(0, 15).map((g, i) => (
+                            <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
+                              <div className="text-[10px] text-amber-400 font-heading">&quot;{g.base}&quot; — {g.count}</div>
+                              {g.accounts?.slice(0, 4).map((a, j) => <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(cheatDupeIntelligent.by_similar_email?.length ?? 0) > 0 && (
+                      <div>
+                        <div className="text-[10px] font-heading text-primary uppercase mb-1">Similar email</div>
+                        <div className="max-h-40 overflow-y-auto space-y-1">
+                          {(cheatDupeIntelligent.by_similar_email || []).slice(0, 10).map((g, i) => (
+                            <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
+                              <div className="text-[10px] text-amber-400 font-heading">{g.local_base}@{g.domain} — {g.count}</div>
+                              {g.accounts?.slice(0, 4).map((a, j) => <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(cheatDupeIntelligent.by_same_day_same_ip?.length ?? 0) > 0 && (
+                      <div>
+                        <div className="text-[10px] font-heading text-primary uppercase mb-1">Same day + same reg IP</div>
+                        <div className="max-h-40 overflow-y-auto space-y-1">
+                          {(cheatDupeIntelligent.by_same_day_same_ip || []).slice(0, 10).map((g, i) => (
+                            <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
+                              <div className="text-[10px] text-amber-400 font-heading">{g.registration_ip} · {g.created_day} — {g.count}</div>
+                              {g.accounts?.slice(0, 4).map((a, j) => <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {!(cheatDupeIntelligent.same_ip_groups?.length || cheatDupeIntelligent.same_user_agent_groups?.length || cheatDupeIntelligent.by_domain?.length || cheatDupeIntelligent.by_similar_username?.length || cheatDupeIntelligent.by_similar_email?.length || cheatDupeIntelligent.by_same_day_same_ip?.length) && (
+                    <p className="text-xs text-mutedForeground">No duplicate suspects in this report (try without username filter).</p>
+                  )}
+                </div>
+              )}
+            </div>
             <div>
               <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Accounts on same IP</div>
               <p className="text-xs text-mutedForeground mb-2">Find users who registered or logged in from the same IP (possible multi-accounts).</p>
@@ -7228,7 +7367,7 @@ export default function Admin() {
           />
           {!collapsed.dupeCheckMod && (
             <div className="p-3 space-y-2">
-              <p className="text-[10px] text-mutedForeground font-heading">Exact duplicate usernames (case-insensitive) or search by username.</p>
+              <p className="text-[10px] text-mutedForeground font-heading">Exact duplicate usernames (case-insensitive) or search by username. For IPs, user-agents, VPN and full dupe signals use Cheat Detection → Intelligent dupe check.</p>
               <div className="flex flex-wrap gap-2 items-center">
                 <input
                   type="text"
