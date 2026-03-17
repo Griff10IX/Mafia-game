@@ -1,4 +1,4 @@
-# Dead-alive: 5% tax — you receive 95% of dead account's money and points (one-time)
+# Dead-alive: 0.05% tax to state head — you receive 99.95% of dead account's money and points (one-time)
 # 50% of tokens are also restored
 # Revive: pay 50k points to bring back a dead account (same email, once per email)
 from datetime import datetime, timezone
@@ -56,7 +56,7 @@ def register(router):
 
     @router.post("/dead-alive/retrieve")
     async def dead_alive_retrieve(request: DeadAliveRetrieveRequest, current_user: dict = Depends(get_current_user_verified)):
-        """Transfer 95% of a dead account's money and points into your current account (5% tax). One-time per dead account."""
+        """Transfer 99.95% of a dead account's money and points into your current account (0.05% tax to state head). One-time per dead account."""
         username_pattern = _username_pattern(request.dead_username)
         dead_user = await db.users.find_one({"username": username_pattern}, {"_id": 0})
         if not dead_user:
@@ -118,7 +118,7 @@ def register(router):
                 {"id": current_user["id"]},
                 {"$inc": user_inc}
             )
-        msg = f"Transferred 95% from your dead account ({dead_user['username']}, 5% tax): "
+        msg = f"Transferred 99.95% from your dead account ({dead_user['username']}, 0.05% tax): "
         parts = []
         if add_money > 0:
             parts.append(f"${add_money:,} cash")

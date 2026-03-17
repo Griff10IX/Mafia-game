@@ -29,7 +29,7 @@ from server import (
 # ----- Constants -----
 DICE_SIDES_MIN = 2
 DICE_SIDES_MAX = 5000
-DICE_HOUSE_EDGE = 0.005  # 0.5% house edge
+DICE_HOUSE_EDGE = 0.0005  # 0.05% house edge
 DICE_MAX_BET = 5_000_000          # default max bet for new tables
 DICE_ABSOLUTE_MAX_BET = 500_000_000  # hard ceiling owners can set up to
 DICE_CLAIM_COST_POINTS = 0  # cost in points to claim a dice table (0 = free)

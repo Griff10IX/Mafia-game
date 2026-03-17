@@ -25,7 +25,7 @@ from server import (
 
 # ----- Constants -----
 SLOTS_MAX_BET = 5_000_000
-SLOTS_HOUSE_EDGE = 0.005  # 0.5% house edge on wins
+SLOTS_HOUSE_EDGE = 0.0005  # 0.05% house edge on wins
 SLOTS_OWNERSHIP_HOURS = 3
 # Draw every 3 hours on the hour (00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00 UTC)
 SLOTS_DRAW_HOURS_UTC = (0, 3, 6, 9, 12, 15, 18, 21)

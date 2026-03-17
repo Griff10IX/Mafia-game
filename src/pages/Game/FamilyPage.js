@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Building2, DollarSign, TrendingUp, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame, MapPin } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, TrendingDown, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame, MapPin } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import { getRacketAccent } from '../../constants';
@@ -1545,33 +1545,53 @@ const STATE_HEAD_INCOME_KEYS = [
   { key: 'horseracing', label: 'Horse Racing (house edge)' },
   { key: 'slots', label: 'Slots (house edge)' },
   { key: 'videopoker', label: 'Video Poker (house edge)' },
-  { key: 'dead_alive_tax', label: 'Dead > Alive (5% tax)', themeLabel: true },
+  { key: 'dead_alive_tax', label: 'Dead > Alive (0.05% tax)', themeLabel: true },
 ];
 
-const StateHeadTab = ({ headOfState, stateHeadIncome }) => {
+const StateHeadTab = ({ headOfState, stateHeadIncome, stateHeadCasinoWeekStats = {} }) => {
   const income = stateHeadIncome || {};
+  const weekStats = stateHeadCasinoWeekStats || {};
   const total = STATE_HEAD_INCOME_KEYS.reduce((sum, { key }) => sum + (Number(income[key]) || 0), 0);
   return (
     <div className="space-y-3">
       <p className="text-[10px] text-zinc-500 font-heading leading-relaxed">
-        Your family is <span className="text-primary font-bold">Head of {headOfState}</span>. All house fees from casinos in that state and 5% of Dead &gt; Alive retrievals there go to the family vault. Breakdown below.
+        Your family is <span className="text-primary font-bold">Head of {headOfState}</span>. All house fees (0.05% edge) from casinos in that state and 0.05% of Dead &gt; Alive retrievals there go to the family vault. Breakdown below.
       </p>
-      <div className="rounded-lg border border-primary/20 bg-zinc-800/30 overflow-hidden">
-        <div className="px-3 py-2 border-b border-zinc-700/40 bg-primary/8">
+      <div className="rounded-lg border border-primary/20 bg-zinc-800/30 overflow-hidden shadow-lg shadow-primary/5 transition-shadow hover:shadow-primary/10">
+        <div className="px-3 py-2.5 border-b border-zinc-700/40 bg-primary/8 flex items-center justify-between">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Profit by source</span>
+          <span className="text-[9px] font-heading text-zinc-500 uppercase">This week: wins / losses</span>
         </div>
         <ul className="divide-y divide-zinc-700/40">
           {STATE_HEAD_INCOME_KEYS.map(({ key, label, themeLabel }) => {
             const amount = Number(income[key]) || 0;
+            const stats = key !== 'dead_alive_tax' ? (weekStats[key] || { wins: 0, losses: 0 }) : null;
+            const hasWeekStats = stats && (stats.wins > 0 || stats.losses > 0);
             return (
-              <li key={key} className="flex items-center justify-between px-3 py-2.5">
-                <span className={`text-xs font-heading ${themeLabel ? 'text-primary' : 'text-foreground'}`}>{label}</span>
-                <span className="text-xs font-heading font-bold text-primary tabular-nums">{formatMoneyFull(amount)}</span>
+              <li
+                key={key}
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 px-3 py-2.5 transition-colors hover:bg-zinc-700/20 active:bg-zinc-700/30"
+              >
+                <div className="flex items-center justify-between sm:justify-start gap-2 min-w-0">
+                  <span className={`text-xs font-heading shrink-0 ${themeLabel ? 'text-primary' : 'text-foreground'}`}>{label}</span>
+                  {hasWeekStats && (
+                    <span className="flex items-center gap-2 text-[10px] font-heading text-zinc-400 shrink-0">
+                      <span className="flex items-center gap-0.5 text-emerald-400/90">
+                        <TrendingUp size={10} /> {stats.wins}
+                      </span>
+                      <span className="text-zinc-600">/</span>
+                      <span className="flex items-center gap-0.5 text-red-400/90">
+                        <TrendingDown size={10} /> {stats.losses}
+                      </span>
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs font-heading font-bold text-primary tabular-nums sm:ml-2">{formatMoneyFull(amount)}</span>
               </li>
             );
           })}
         </ul>
-        <div className="flex items-center justify-between px-3 py-2.5 border-t border-zinc-700/40 bg-primary/8">
+        <div className="flex items-center justify-between px-3 py-2.5 border-t-2 border-primary/30 bg-primary/10">
           <span className="text-xs font-heading font-bold text-primary">Total to vault</span>
           <span className="text-sm font-heading font-bold text-primary tabular-nums">{formatMoneyFull(total)}</span>
         </div>
@@ -2134,7 +2154,7 @@ export default function FamilyPage() {
                 onCompoundClaimForFamily={handleCompoundClaimForFamily}
               />}
               {activeTab === 'statehead' && family?.head_of_state && (
-                <StateHeadTab headOfState={family.head_of_state} stateHeadIncome={family.state_head_income} />
+                <StateHeadTab headOfState={family.head_of_state} stateHeadIncome={family.state_head_income} stateHeadCasinoWeekStats={myFamily?.state_head_casino_week_stats} />
               )}
               {activeTab === 'roster' && (
                 <RosterTab

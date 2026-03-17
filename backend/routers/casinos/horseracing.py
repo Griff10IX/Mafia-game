@@ -30,7 +30,7 @@ from routers.casinos.dice import DiceSellOnTradeRequest
 HORSERACING_MAX_BET = 10_000_000
 HORSERACING_CLAIM_COST = 500_000_000  # $500M to claim track (per city)
 HORSERACING_ABSOLUTE_MAX_BET = 50_000_000  # owner can set max_bet up to this
-HORSERACING_HOUSE_EDGE = 0.005  # 0.5%
+HORSERACING_HOUSE_EDGE = 0.0005  # 0.05%
 HORSERACING_HORSES = [
     {"id": 1, "name": "Thunder Bolt", "odds": 1},
     {"id": 2, "name": "Midnight Runner", "odds": 2},

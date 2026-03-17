@@ -71,6 +71,59 @@ FAMILY_RACKET_ATTACK_MAX_PER_CREW = 2
 FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS = 3
 
 CREW_OC_COOLDOWN_HOURS = 8
+
+# Casino game types that contribute to state head income (and have gambling_log entries with city/state)
+STATE_HEAD_CASINO_GAMES = ["dice", "roulette", "blackjack", "horseracing", "slots", "videopoker"]
+
+
+async def _state_head_casino_week_stats(state_name: str):
+    """Aggregate gambling_log for the current week (Monday 00:00 UTC) in the given state. Returns { game_type: { wins, losses } }."""
+    if not state_name or not state_name.strip():
+        return {}
+    state = (state_name or "").strip()
+    now = datetime.now(timezone.utc)
+    days_since_monday = (now.isoweekday() - 1) % 7
+    week_start = (now - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start_iso = week_start.isoformat()
+    result = {gt: {"wins": 0, "losses": 0} for gt in STATE_HEAD_CASINO_GAMES}
+
+    def _is_win(game_type: str, details: dict) -> bool:
+        if game_type == "dice":
+            return bool(details.get("win"))
+        if game_type == "roulette":
+            return bool(details.get("win"))
+        if game_type == "blackjack":
+            return details.get("result") in ("win", "dealer_bust")
+        if game_type == "horseracing":
+            return bool(details.get("won"))
+        if game_type == "slots":
+            return bool(details.get("won")) or (int(details.get("payout") or 0) > 0)
+        if game_type == "videopoker":
+            return (int(details.get("payout") or 0) > int(details.get("bet") or 0))
+        return False
+
+    def _in_state(game_type: str, details: dict) -> bool:
+        city = (details.get("city") or "").strip()
+        st = (details.get("state") or "").strip()
+        return city.lower() == state.lower() or st.lower() == state.lower()
+
+    try:
+        cursor = db.gambling_log.find(
+            {"created_at": {"$gte": week_start_iso}, "game_type": {"$in": STATE_HEAD_CASINO_GAMES}},
+            {"_id": 0, "game_type": 1, "details": 1},
+        )
+        async for entry in cursor:
+            gt = (entry.get("game_type") or "").strip()
+            details = entry.get("details") or {}
+            if gt not in result or not _in_state(gt, details):
+                continue
+            if _is_win(gt, details):
+                result[gt]["wins"] += 1
+            else:
+                result[gt]["losses"] += 1
+    except Exception:
+        pass
+    return result
 CREW_OC_COOLDOWN_HOURS_REDUCED = 6
 CREW_OC_REWARD_RP = 80
 CREW_OC_REWARD_CASH = 10_000  # 75% reduction
@@ -732,6 +785,11 @@ async def families_my(current_user: dict = Depends(get_current_user)):
                 a["rank"] = u.get("rank", 1)
             a["rank_name"] = next((x["name"] for x in RANKS if x.get("id") == a.get("rank", 1)), str(a.get("rank", 1)))
             join_applications.append(a)
+    state_head_casino_week_stats = {}
+    head_of_state = fam.get("head_of_state")
+    if head_of_state:
+        state_head_casino_week_stats = await _state_head_casino_week_stats(head_of_state)
+
     payload = {
         "family": {
             "id": fam["id"], "name": fam["name"], "tag": fam["tag"],
@@ -741,7 +799,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "crew_oc_forum_topic_id": fam.get("crew_oc_forum_topic_id"),
             "profile_text": (fam.get("profile_text") or "").strip() or None,
             "racket_income_bonus_percent": float((fam.get("racket_income_bonus_percent") or 0) or 0),
-            "head_of_state": fam.get("head_of_state"),
+            "head_of_state": head_of_state,
             "state_head_income": fam.get("state_head_income") or {},
             "pending_state_takeover": fam.get("pending_state_takeover"),
             "pending_state_takeover_at": fam.get("pending_state_takeover_at"),
@@ -760,6 +818,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         "my_compound_cash": my_compound_cash, "my_compound_points": my_compound_points,
         "my_compound_loot_pieces": my_compound_loot_pieces, "my_compound_cars": my_compound_cars,
         "returning_members_with_balance": returning_members_with_balance,
+        "state_head_casino_week_stats": state_head_casino_week_stats,
     }
     if len(_my_cache) >= _my_cache_max_entries:
         _my_cache.clear()

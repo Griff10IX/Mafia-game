@@ -11,7 +11,7 @@ const CG_STYLES = `
   .cg-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
-const DICE_HOUSE_EDGE = 0.005;
+const DICE_HOUSE_EDGE = 0.0005;
 const ROLL_DURATION_MS = 2500;
 
 function formatMoney(n) {
@@ -754,7 +754,7 @@ export default function Dice() {
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Pick 1–{sidesNum}, match the roll to win</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Payout = sides × stake × 0.95</li>
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>0.5% house edge on winnings</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>0.05% house edge on winnings</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Max bet: {formatMoney(maxBet)}</li>
           </ul>
         </div>

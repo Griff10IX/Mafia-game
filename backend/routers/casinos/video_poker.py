@@ -34,7 +34,7 @@ VIDEO_POKER_DEFAULT_MAX_BET = 50_000_000
 VIDEO_POKER_ABSOLUTE_MAX_BET = 500_000_000
 VIDEO_POKER_CLAIM_COST = 500_000_000
 VIDEO_POKER_HISTORY_MAX = 10
-VIDEO_POKER_HOUSE_EDGE = 0.005  # 0.5% of profit to house (state head when no owner), like dice
+VIDEO_POKER_HOUSE_EDGE = 0.0005  # 0.05% of profit to house (state head when no owner), like dice
 
 SUITS = ["H", "D", "C", "S"]
 VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
