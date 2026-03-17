@@ -248,12 +248,36 @@ export default function Blackjack() {
   const fetchCurrentGame = () => {
     api.get('/casino/blackjack/current-game').then((r) => {
       if (r.data?.hasGame) setGame(r.data);
+      else setGame(null);
     }).catch(() => {
       setGame(null);
     });
   };
 
   useEffect(() => { fetchConfigAndOwnership(); fetchHistory(); fetchCurrentGame(); }, []);
+
+  const BLACKJACK_TIMEOUT_SECONDS = 600;
+  const [actTimerSeconds, setActTimerSeconds] = useState(null);
+  useEffect(() => {
+    if (!game?.created_at || game?.status !== 'playing') {
+      setActTimerSeconds(null);
+      return;
+    }
+    const timeoutSec = game.timeout_seconds ?? BLACKJACK_TIMEOUT_SECONDS;
+    const update = () => {
+      const created = new Date(game.created_at).getTime();
+      const deadline = created + timeoutSec * 1000;
+      const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setActTimerSeconds(left);
+      if (left <= 0) {
+        fetchCurrentGame();
+        fetchHistory();
+      }
+    };
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [game?.created_at, game?.status, game?.timeout_seconds]);
 
   const handleClaim = async () => {
     const city = ownership?.current_city;
@@ -630,6 +654,15 @@ export default function Blackjack() {
                   </div>
                 </div>
 
+                {/* Timer — time to act before auto-stand */}
+                {game.status === 'playing' && actTimerSeconds != null && (
+                  <div className="flex justify-center py-1.5">
+                    <span className="text-[11px] font-heading text-amber-200/90 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30">
+                      Auto-stand in {Math.floor(actTimerSeconds / 60)}:{(actTimerSeconds % 60).toString().padStart(2, '0')} — hit or stand
+                    </span>
+                  </div>
+                )}
+
                 {/* Actions */}
                 <div className="flex justify-center gap-3 pt-2">
                   {game.status === 'playing' ? (
@@ -703,6 +736,7 @@ export default function Blackjack() {
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Blackjack pays 3:2</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Dealer stands on 17</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Going over 21 = bust</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>10 min to act — then auto-stand</li>
           </ul>
         </div>
       </div>

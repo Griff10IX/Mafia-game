@@ -8,7 +8,7 @@ import random
 import re
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import List, Optional
 
 import httpx
 from fastapi import Body, Depends, HTTPException, Query
@@ -36,6 +36,16 @@ class EventsToggleRequest(BaseModel):
 
 class AllEventsForTestingRequest(BaseModel):
     enabled: bool
+
+
+class ToggleEventRequest(BaseModel):
+    event_id: str
+    enabled: bool
+
+
+class RandomEventRequest(BaseModel):
+    """If event_ids is omitted or empty, pick from all events. Otherwise pick from the given ids only."""
+    event_ids: Optional[List[str]] = None
 
 
 class BetaSignupToggleRequest(BaseModel):
@@ -187,6 +197,10 @@ def register(router):
     get_all_events_for_testing = srv.get_all_events_for_testing
     get_combined_event = srv.get_combined_event
     get_active_game_event = srv.get_active_game_event
+    get_disabled_event_ids = srv.get_disabled_event_ids
+    get_active_game_event_async = srv.get_active_game_event_async
+    get_override_event_id = srv.get_override_event_id
+    GAME_EVENTS = srv.GAME_EVENTS
 
     @router.post("/admin/ghost-mode")
     async def admin_toggle_ghost_mode(current_user: dict = Depends(get_current_user)):
@@ -3480,8 +3494,14 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         enabled = await get_events_enabled()
         all_for_testing = await get_all_events_for_testing()
-        today_event = get_combined_event() if all_for_testing else (get_active_game_event() if enabled else None)
-        return {"events_enabled": enabled, "all_events_for_testing": all_for_testing, "today_event": today_event}
+        today_event = get_combined_event() if all_for_testing else (await get_active_game_event_async() if enabled else None)
+        disabled_ids = await get_disabled_event_ids()
+        override_event_id = await get_override_event_id()
+        events = [
+            {"id": ev["id"], "name": ev["name"], "message": ev.get("message", ""), "enabled": ev["id"] not in disabled_ids}
+            for ev in GAME_EVENTS
+        ]
+        return {"events_enabled": enabled, "all_events_for_testing": all_for_testing, "today_event": today_event, "events": events, "override_event_id": override_event_id}
 
     @router.post("/admin/events/toggle")
     async def admin_toggle_events(request: EventsToggleRequest, current_user: dict = Depends(get_current_user)):
@@ -3506,6 +3526,63 @@ def register(router):
             upsert=True,
         )
         return {"message": "All events for testing " + ("enabled" if enabled else "disabled"), "all_events_for_testing": bool(enabled)}
+
+    @router.post("/admin/events/toggle-event")
+    async def admin_toggle_event(request: ToggleEventRequest, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        event_id = (request.event_id or "").strip()
+        if not event_id:
+            raise HTTPException(status_code=400, detail="event_id required")
+        valid_ids = {ev["id"] for ev in GAME_EVENTS}
+        if event_id not in valid_ids:
+            raise HTTPException(status_code=400, detail="Unknown event_id")
+        enabled = request.enabled
+        if enabled:
+            await db.game_config.update_one(
+                {"id": "main"},
+                {"$pull": {"disabled_event_ids": event_id}},
+                upsert=True,
+            )
+        else:
+            await db.game_config.update_one(
+                {"id": "main"},
+                {"$addToSet": {"disabled_event_ids": event_id}},
+                upsert=True,
+            )
+        disabled_ids = await get_disabled_event_ids()
+        return {"message": f"Event '{event_id}' " + ("enabled" if enabled else "disabled"), "disabled_event_ids": disabled_ids}
+
+    @router.post("/admin/events/random-event")
+    async def admin_random_event(request: RandomEventRequest, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        valid_ids = {ev["id"] for ev in GAME_EVENTS}
+        pool = request.event_ids if request.event_ids else []
+        if not pool:
+            pool = list(valid_ids)
+        else:
+            pool = [str(x).strip() for x in pool if str(x).strip() in valid_ids]
+        if not pool:
+            raise HTTPException(status_code=400, detail="No valid events to choose from")
+        chosen_id = random.choice(pool)
+        await db.game_config.update_one(
+            {"id": "main"},
+            {"$set": {"override_event_id": chosen_id}},
+            upsert=True,
+        )
+        chosen = next((ev for ev in GAME_EVENTS if ev["id"] == chosen_id), None)
+        return {"message": f"Random event set: {chosen['name'] if chosen else chosen_id}", "event": chosen.copy() if chosen else {"id": chosen_id}, "override_event_id": chosen_id}
+
+    @router.post("/admin/events/clear-override")
+    async def admin_clear_event_override(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        await db.game_config.update_one(
+            {"id": "main"},
+            {"$unset": {"override_event_id": ""}},
+        )
+        return {"message": "Event override cleared; daily rotation applies again", "override_event_id": None}
 
     @router.get("/admin/beta-signup")
     async def admin_get_beta_signup(current_user: dict = Depends(get_current_user)):

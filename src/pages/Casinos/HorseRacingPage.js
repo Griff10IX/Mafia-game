@@ -327,7 +327,6 @@ export default function HorseRacingPage() {
   const [gatesOpen, setGatesOpen] = useState(false);
   const [liveCommentary, setLiveCommentary] = useState('');
   const [livePositions, setLivePositions] = useState(null);
-  const [photoFinishRevealed, setPhotoFinishRevealed] = useState(false);
   const [buyBackOffer, setBuyBackOffer] = useState(null);
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
@@ -548,7 +547,6 @@ export default function HorseRacingPage() {
       const photoFinish = !!data.photo_finish;
 
       setGatesOpen(false);
-      setPhotoFinishRevealed(false);
       setLivePositions(null);
       setLiveCommentary(COMMENTARY_LINES[0]);
 
@@ -614,16 +612,7 @@ export default function HorseRacingPage() {
           horses: horsesList,
           photoFinish,
         };
-        if (photoFinish) {
-          setResult({ ...resultPayload, photoFinishPending: true });
-          setPhotoFinishRevealed(false);
-          setTimeout(() => {
-            setPhotoFinishRevealed(true);
-            setResult((prev) => prev ? { ...prev, photoFinishPending: false } : prev);
-          }, 1400);
-        } else {
-          setResult(resultPayload);
-        }
+        setResult(resultPayload);
         setRaceProgress(null);
         if (data.won) {
           toast.success(`${data.winner_name} wins! +${formatMoney(data.payout - betNum)}`);
@@ -845,15 +834,7 @@ export default function HorseRacingPage() {
             >
               {result ? (
                 <div className="space-y-1.5">
-                  {result.photoFinishPending && !photoFinishRevealed && (
-                    <div className="flex items-center justify-center gap-2 py-1.5 animate-pulse">
-                      <span className="text-lg">📷</span>
-                      <span className="text-sm font-heading font-bold text-primary">Photo finish! Reviewing...</span>
-                    </div>
-                  )}
-                  {(photoFinishRevealed || !result.photoFinishPending) && (
-                    <>
-                      <div className="flex items-center justify-center gap-3 animate-result-pop">
+                  <div className="flex items-center justify-center gap-3 animate-result-pop">
                         <span className={`text-2xl ${result.won ? 'animate-trophy-glow' : ''}`}>
                           {result.won ? '🏆' : '💀'}
                         </span>
@@ -888,12 +869,10 @@ export default function HorseRacingPage() {
                           </div>
                         </div>
                       )}
-                    </>
-                  )}
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-2 text-[10px] text-mutedForeground font-heading">
-                  <span>0.5% house edge</span>
+                  <span>0.05% house edge</span>
                   <span className="text-primary/30">|</span>
                   <span>Max: {formatMoney(maxBet)}</span>
                 </div>

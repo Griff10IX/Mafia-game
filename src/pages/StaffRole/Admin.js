@@ -268,6 +268,12 @@ export default function Admin() {
   const [eventsEnabled, setEventsEnabled] = useState(true);
   const [allEventsForTesting, setAllEventsForTesting] = useState(false);
   const [todayEvent, setTodayEvent] = useState(null);
+  const [eventList, setEventList] = useState([]);
+  const [eventToggleLoadingId, setEventToggleLoadingId] = useState(null);
+  const [overrideEventId, setOverrideEventId] = useState(null);
+  const [eventRandomLoading, setEventRandomLoading] = useState(false);
+  const [eventClearOverrideLoading, setEventClearOverrideLoading] = useState(false);
+  const [selectedForRandomPool, setSelectedForRandomPool] = useState({});
   const [betaSignupEnabled, setBetaSignupEnabled] = useState(false);
   
   const [cfBotBlockEnabled, setCfBotBlockEnabled] = useState(null);
@@ -693,10 +699,14 @@ export default function Admin() {
       setEventsEnabled(!!res.data?.events_enabled);
       setAllEventsForTesting(!!res.data?.all_events_for_testing);
       setTodayEvent(res.data?.today_event ?? null);
+      setEventList(res.data?.events ?? []);
+      setOverrideEventId(res.data?.override_event_id ?? null);
     } catch {
       setEventsEnabled(true);
       setAllEventsForTesting(false);
       setTodayEvent(null);
+      setEventList([]);
+      setOverrideEventId(null);
     }
   };
 
@@ -1014,6 +1024,56 @@ export default function Admin() {
       toast.success(res.data?.message || 'Toggled');
       fetchEventsStatus();
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleToggleEvent = async (eventId, enabled) => {
+    setEventToggleLoadingId(eventId);
+    try {
+      await api.post('/admin/events/toggle-event', { event_id: eventId, enabled });
+      toast.success(`Event ${enabled ? 'enabled' : 'disabled'}`);
+      await fetchEventsStatus();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to toggle event');
+    } finally {
+      setEventToggleLoadingId(null);
+    }
+  };
+
+  const handleRandomEvent = async (fromSelected) => {
+    setEventRandomLoading(true);
+    try {
+      const body = fromSelected
+        ? { event_ids: eventList.filter((ev) => selectedForRandomPool[ev.id]).map((ev) => ev.id) }
+        : {};
+      if (fromSelected && (!body.event_ids || body.event_ids.length === 0)) {
+        toast.error('Select at least one event for the random pool');
+        return;
+      }
+      const res = await api.post('/admin/events/random-event', body.event_ids?.length ? body : {});
+      toast.success(res.data?.message || 'Random event set');
+      await fetchEventsStatus();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to set random event');
+    } finally {
+      setEventRandomLoading(false);
+    }
+  };
+
+  const handleClearEventOverride = async () => {
+    setEventClearOverrideLoading(true);
+    try {
+      await api.post('/admin/events/clear-override');
+      toast.success('Override cleared; daily rotation applies');
+      await fetchEventsStatus();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to clear override');
+    } finally {
+      setEventClearOverrideLoading(false);
+    }
+  };
+
+  const toggleRandomPoolSelection = (eventId) => {
+    setSelectedForRandomPool((prev) => ({ ...prev, [eventId]: !prev[eventId] }));
   };
 
   const handleToggleBetaSignup = async () => {
@@ -3597,6 +3657,49 @@ export default function Admin() {
               </BtnSecondary>
             </div>
             <p className="text-[10px] text-mutedForeground">All events (testing): applies every multiplier at once.</p>
+            <div className="pt-2 border-t border-primary/20 space-y-2">
+              <p className="text-xs font-medium text-foreground">Choose random event</p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <BtnSecondary onClick={() => handleRandomEvent(false)} disabled={eventRandomLoading}>
+                  {eventRandomLoading ? '...' : 'Random (from all)'}
+                </BtnSecondary>
+                <BtnSecondary onClick={() => handleRandomEvent(true)} disabled={eventRandomLoading}>
+                  {eventRandomLoading ? '...' : 'Random (from selected)'}
+                </BtnSecondary>
+                <span className="text-[10px] text-mutedForeground">Tick &quot;In pool&quot; below to choose from specific events only.</span>
+              </div>
+              {overrideEventId && (
+                <div className="flex flex-wrap gap-2 items-center py-1.5 px-2 rounded bg-primary/10 border border-primary/30">
+                  <span className="text-xs text-foreground">Overridden: {eventList.find((e) => e.id === overrideEventId)?.name ?? overrideEventId}</span>
+                  <BtnSecondary onClick={handleClearEventOverride} disabled={eventClearOverrideLoading}>
+                    {eventClearOverrideLoading ? '...' : 'Clear override'}
+                  </BtnSecondary>
+                </div>
+              )}
+            </div>
+            <div className="pt-2 border-t border-primary/20">
+              <p className="text-xs font-medium text-foreground mb-1">Global events</p>
+              <p className="text-[10px] text-mutedForeground mb-2">Enable or disable each event type. Disabled events are skipped on their day (no event that day). Event types are defined in code (GAME_EVENTS).</p>
+              <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                {eventList.map((ev) => (
+                  <div key={ev.id} className="flex flex-wrap items-center gap-2 py-1.5 px-2 rounded bg-black/20">
+                    <label className="flex items-center gap-1 shrink-0 cursor-pointer" title="Include in random pool (when using Random from selected)">
+                      <input type="checkbox" checked={!!selectedForRandomPool[ev.id]} onChange={() => toggleRandomPoolSelection(ev.id)} className="rounded border-primary/50" />
+                      <span className="text-[10px] text-mutedForeground">In pool</span>
+                    </label>
+                    <span className="text-xs font-medium text-foreground min-w-0 truncate flex-1">{ev.name}</span>
+                    {todayEvent?.id === ev.id && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/30 text-primary font-medium shrink-0">Today</span>}
+                    <span className="text-[10px] text-mutedForeground truncate max-w-[200px]" title={ev.message}>{ev.message || ev.id}</span>
+                    <BtnSecondary
+                      onClick={() => handleToggleEvent(ev.id, !ev.enabled)}
+                      disabled={eventToggleLoadingId !== null}
+                    >
+                      {eventToggleLoadingId === ev.id ? '...' : ev.enabled ? 'Disable' : 'Enable'}
+                    </BtnSecondary>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
         </div>

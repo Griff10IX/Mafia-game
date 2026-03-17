@@ -269,6 +269,22 @@ GAME_EVENTS = [
     {"id": "racket_bonus_day", "name": "Racket Bonus Day", "message": "Rackets: +10% payouts and 25% faster cooldowns.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 0.75, "racket_payout": 1.1, "armour_weapon_cost": 1.0},
     {"id": "armour_weapon_half_price", "name": "Armour & Weapons 50% Off", "message": "Armour and weapons 50% off today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 0.5},
     {"id": "armour_weapon_premium", "name": "Armour & Weapons 10% More", "message": "Armour and weapons 10% more expensive today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.1},
+    {"id": "oc_payout_boost", "name": "OC Payout +15%", "message": "Organised crime payouts 15% higher today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.15, "armour_weapon_cost": 1.0},
+    {"id": "racket_cooldown_faster", "name": "Crime Cooldown -20%", "message": "Racket cooldowns 20% shorter today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 0.8, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "gta_cash_boost", "name": "GTA Cash +50%", "message": "Kill loot and heist cash 50% higher today.", "rank_points": 1.0, "kill_cash": 1.5, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "no_event_day", "name": "No Event Day", "message": "No bonuses or penalties today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "rank_points_boost", "name": "Rank Points +50%", "message": "Kills and GTA reward 50% more rank points today.", "rank_points": 1.5, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "bodyguard_quarter_off", "name": "Bodyguards 25% Off", "message": "Bodyguard services 25% off today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 0.75, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "racket_payout_boost", "name": "Rackets +20% Payouts", "message": "Family rackets pay 20% more today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.2, "armour_weapon_cost": 1.0},
+    {"id": "armour_weapon_quarter_off", "name": "Armour & Weapons 25% Off", "message": "Armour and weapons 25% off today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 0.75},
+    {"id": "gta_success_boost", "name": "GTA Success +25%", "message": "GTA success chance 25% higher today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.25, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "rank_points_penalty", "name": "Rank Points -25%", "message": "Kills and GTA reward 25% less rank points today.", "rank_points": 0.75, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "bodyguard_premium_day", "name": "Bodyguards 25% More", "message": "Bodyguard services 25% more expensive today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.25, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "racket_payout_penalty", "name": "Rackets -20% Payouts", "message": "Family rackets pay 20% less today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 0.8, "armour_weapon_cost": 1.0},
+    {"id": "armour_weapon_premium_day", "name": "Armour & Weapons 25% More", "message": "Armour and weapons 25% more expensive today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.25},
+    {"id": "gta_success_penalty", "name": "GTA Success -25%", "message": "GTA success chance 25% lower today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 0.75, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "bullets_store_25_off", "name": "Bullets in Store 25% Off", "message": "Bullets in the store 25% cheaper today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 0.75},
+    {"id": "bullets_store_25_more", "name": "Bullets in Store +25%", "message": "Bullets in the store 25% more expensive today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.25},
 ]
 NO_EVENT = {"id": "none", "name": "No event", "message": "", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0}
 
@@ -304,6 +320,36 @@ async def get_all_events_for_testing() -> bool:
     doc = await db.game_config.find_one({"id": "main"}, {"_id": 0, "all_events_for_testing": 1})
     return bool(doc.get("all_events_for_testing", False))
 
+async def get_disabled_event_ids() -> list:
+    """Event ids that are disabled by admin. When today's rotated event is in this list, effective event is NO_EVENT."""
+    doc = await db.game_config.find_one({"id": "main"}, {"_id": 0, "disabled_event_ids": 1})
+    raw = doc.get("disabled_event_ids") if doc else None
+    if not isinstance(raw, list):
+        return []
+    return [str(x).strip() for x in raw if x]
+
+async def get_override_event_id() -> Optional[str]:
+    """Admin-set override: when set, this event is used instead of the day's rotation. None = use rotation."""
+    doc = await db.game_config.find_one({"id": "main"}, {"_id": 0, "override_event_id": 1})
+    raw = doc.get("override_event_id") if doc else None
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    return s if s else None
+
+async def get_active_game_event_async():
+    """Today's game event (rotation or admin override); returns NO_EVENT if that event is disabled by admin."""
+    override_id = await get_override_event_id()
+    if override_id:
+        for ev in GAME_EVENTS:
+            if ev.get("id") == override_id:
+                return ev.copy()
+    event = get_active_game_event()
+    disabled = await get_disabled_event_ids()
+    if event.get("id") in disabled:
+        return NO_EVENT.copy()
+    return event
+
 async def get_effective_event():
     """Current event multipliers if events enabled, else NO_EVENT. When all_events_for_testing, returns combined event. Never raises."""
     try:
@@ -311,7 +357,7 @@ async def get_effective_event():
             return NO_EVENT.copy()
         if await get_all_events_for_testing():
             return get_combined_event()
-        return get_active_game_event()
+        return await get_active_game_event_async()
     except Exception:
         return NO_EVENT.copy()
 

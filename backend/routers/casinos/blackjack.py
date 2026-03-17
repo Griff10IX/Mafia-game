@@ -295,6 +295,8 @@ def register(router):
             "dealer_hidden_count": dealer_hidden_count,
             "can_hit": can_hit,
             "can_stand": True,
+            "created_at": game.get("created_at"),
+            "timeout_seconds": BLACKJACK_GAME_TIMEOUT_SECONDS,
         }
 
     @router.get("/casino/blackjack/ownership")
