@@ -645,8 +645,13 @@ export default function Layout({ children }) {
 
   const fetchData = async () => {
     try {
-      const [userRes, progressRes] = await Promise.all([api.get('/auth/me'), api.get('/user/rank-progress')]);
-      if (userRes.data?.account_locked) { navigate('/locked', { replace: true }); return; }
+      const userRes = await api.get('/auth/me');
+      if (userRes.data?.account_locked) {
+        setUser((prev) => ({ ...userRes.data, ...prev }));
+        navigate('/locked', { replace: true });
+        return;
+      }
+      const progressRes = await api.get('/user/rank-progress');
       setUser((prev) => ({
         ...userRes.data,
         casino_profit: prev?.casino_profit ?? userRes.data.casino_profit,

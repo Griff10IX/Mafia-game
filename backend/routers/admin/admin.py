@@ -1046,11 +1046,11 @@ def register(router):
 
     @router.post("/admin/unlock-account")
     async def admin_unlock_account(target_username: str, current_user: dict = Depends(get_current_user)):
-        """Unlock an account that was locked for investigation. Admin or moderator."""
+        """Unlock an account that was locked for investigation. Admin or moderator. Also clears login lockout (failed attempts) so they can log in again."""
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         username_pattern = _username_pattern(target_username)
-        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "email": 1})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
         await db.users.update_one(
@@ -1060,6 +1060,9 @@ def register(router):
                 "$unset": {"account_locked_at": "", "account_locked_comment": "", "account_locked_comment_at": "", "account_locked_until": "", "account_locked_admin_message": "", "account_locked_admin_message_at": "", "account_locked_user_reply": "", "account_locked_user_reply_at": ""},
             },
         )
+        email_clean = (target.get("email") or "").strip().lower()
+        if email_clean:
+            await db.login_lockouts.delete_one({"email": email_clean})
         return {"message": f"Unlocked {target_username}. They can access the app again."}
 
     @router.get("/admin/locked-accounts")
