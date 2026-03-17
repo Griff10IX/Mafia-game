@@ -6360,7 +6360,9 @@ export default function Admin() {
           )}
         </div>
 
-        {/* Donations / Payments (Stripe point purchases) */}
+        {isAdmin && (
+        <>
+        {/* Donations / Payments (Stripe point purchases) — admin only */}
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <SectionHeader
@@ -6451,6 +6453,8 @@ export default function Admin() {
             </div>
           )}
         </div>
+        </>
+        )}
 
         {/* Stock Logs (Post Data) */}
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
