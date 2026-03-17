@@ -11,6 +11,25 @@ const CRIMES_STYLES = `
   .cr-fade-in { animation: cr-fade-in 0.4s ease-out both; }
   .cr-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
   .cr-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+
+  /* Mobile: make crimes panels use more of the screen and fit more rows */
+  @media (max-width: 640px) {
+    .cr-page-root {
+      padding-left: 8px;
+      padding-right: 8px;
+      row-gap: 4px;
+    }
+    .cr-main-panel,
+    .cr-prestige-panel,
+    .cr-stats-panel {
+      margin-left: -4px;
+      margin-right: -4px;
+    }
+    .cr-row {
+      padding-top: 3px !important;
+      padding-bottom: 3px !important;
+    }
+  }
 `;
 
 // Constants
@@ -92,7 +111,7 @@ const LoadingSpinner = () => (
 );
 
 const CrimesPageSkeleton = () => (
-  <div className={`space-y-2 ${styles.pageContent}`}>
+  <div className={`space-y-2 ${styles.pageContent} cr-page-root`}>
     <style>{CRIMES_STYLES}</style>
     <div className="relative">
       <div className="h-3 w-3/4 rounded bg-zinc-700/60 animate-pulse" />
@@ -655,7 +674,7 @@ export default function Crimes() {
   }
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} data-testid="crimes-page">
+    <div className={`space-y-2 ${styles.pageContent} cr-page-root`} data-testid="crimes-page">
       <style>{CRIMES_STYLES}</style>
 
       <div className="relative cr-fade-in flex items-center gap-2 flex-wrap">
@@ -690,7 +709,7 @@ export default function Crimes() {
       )}
 
       {/* Crimes list */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 cr-fade-in`} style={{ animationDelay: '0.05s' }}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 cr-fade-in cr-main-panel`} style={{ animationDelay: '0.05s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
@@ -718,7 +737,7 @@ export default function Crimes() {
 
       {/* Prestige Crimes */}
       {prestigeCrimeRows.length > 0 && (
-        <div className={`relative ${styles.panel} rounded-md overflow-hidden cr-fade-in`} style={{ animationDelay: '0.08s', border: '1px solid rgba(184,145,68,0.2)' }}>
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden cr-fade-in cr-prestige-panel`} style={{ animationDelay: '0.08s', border: '1px solid rgba(184,145,68,0.2)' }}>
           <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(184,145,68,0.5), transparent)' }} />
           <div className="px-2.5 py-1.5 border-b flex items-center gap-2" style={{ background: 'rgba(184,145,68,0.06)', borderColor: 'rgba(184,145,68,0.15)' }}>
             <Star size={10} style={{ color: 'var(--noir-primary-bright)' }} />
@@ -737,7 +756,7 @@ export default function Crimes() {
       )}
 
       {/* Stats — below prestige crimes */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 cr-fade-in`} style={{ animationDelay: '0.03s' }}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 cr-fade-in cr-stats-panel`} style={{ animationDelay: '0.03s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Crime stats</span>
