@@ -1226,6 +1226,11 @@ async def maybe_process_rank_up(user_id: str, rank_points_before: int, rank_poin
     """If rank increased after adding rank_points_added to rank_points_before, grant rewards and send notification."""
     if rank_points_added <= 0:
         return
+    # Use caller-provided prestige_mult when given; otherwise load from user so prestiged users get correct rank (and notification text)
+    if prestige_mult == 1.0:
+        user = await db.users.find_one({"id": user_id}, {"prestige_rank_multiplier": 1})
+        if user and (user.get("prestige_rank_multiplier") or 0) > 0:
+            prestige_mult = float(user["prestige_rank_multiplier"])
     new_total = rank_points_before + rank_points_added
     old_rank_id, _ = get_rank_info(rank_points_before, prestige_mult)
     new_rank_id, _ = get_rank_info(new_total, prestige_mult)
