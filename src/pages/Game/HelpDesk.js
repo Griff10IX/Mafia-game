@@ -81,7 +81,11 @@ export default function HelpDesk() {
     try {
       const params = statusFilter ? { status_filter: statusFilter } : {};
       const r = await api.get('/help-desk/tickets', { params });
-      setTickets(r.data?.tickets || []);
+      const list = Array.isArray(r.data?.tickets) ? r.data.tickets : [];
+      // Open tickets first; closed at bottom. Newest first within each group.
+      const open = list.filter((t) => (t?.status || 'open') === 'open').sort((a, b) => new Date(b?.updated_at || 0) - new Date(a?.updated_at || 0));
+      const closed = list.filter((t) => (t?.status || 'open') !== 'open').sort((a, b) => new Date(b?.updated_at || 0) - new Date(a?.updated_at || 0));
+      setTickets([...open, ...closed]);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load tickets');
       setTickets([]);

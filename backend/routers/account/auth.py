@@ -475,7 +475,7 @@ def register(router):
                 }
                 await db.users.update_one(
                     {"id": user_id},
-                    {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 30}}},
+                    {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 10}}},
                 )
                 token = create_access_token({
                     "sub": user_id,
@@ -535,7 +535,7 @@ def register(router):
             }
             await db.users.update_one(
                 {"id": user_id},
-                {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 30}}},
+                {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 10}}},
             )
             token = create_access_token({
                 "sub": user_id,
@@ -803,7 +803,7 @@ def register(router):
         }
         await db.users.update_one(
             {"id": user["id"]},
-            {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 30}}},
+            {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 10}}},
         )
         token = create_access_token({
             "sub": user["id"],
@@ -972,7 +972,7 @@ def register(router):
         }
         await db.users.update_one(
             {"id": user["id"]},
-            {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 30}}},
+            {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 10}}},
         )
         token = create_access_token({
             "sub": user["id"],

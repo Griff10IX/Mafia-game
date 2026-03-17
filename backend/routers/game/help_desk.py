@@ -1,7 +1,7 @@
 # Help Desk: tickets (create, list, get, reply, close). Staff = admin, mod, or HDO.
 # Also handles admin message permission requests.
 # Staff (admin/mod/hdo) can add words to the profanity blacklist; only admin can remove.
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
 
 from fastapi import Depends, HTTPException, Query
@@ -148,6 +148,8 @@ def register(router):
         current_user: dict = Depends(get_current_user),
     ):
         """List tickets: own tickets for users; all tickets for admin; mods/HDOs see all except error_report."""
+        # Auto-expire closed tickets after 48 hours
+        cutoff_iso = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
         if _is_admin(current_user):
             query = {}
         elif _can_manage_tickets(current_user):
@@ -156,8 +158,32 @@ def register(router):
             query = {"user_id": current_user["id"]}
         if status_filter in ("open", "closed"):
             query["status"] = status_filter
+        # Hide (and prune) closed tickets older than 48h unless the caller explicitly filters to "closed"
+        if status_filter != "closed":
+            # Remove stale closed tickets so they disappear automatically
+            try:
+                await db.help_desk_tickets.delete_many({"status": "closed", "closed_at": {"$lt": cutoff_iso}})
+            except Exception:
+                pass
+            query = {
+                **query,
+                "$or": [
+                    {"status": {"$ne": "closed"}},
+                    {"closed_at": {"$gte": cutoff_iso}},
+                ],
+            }
         cursor = db.help_desk_tickets.find(query, {"_id": 0}).sort("updated_at", -1).limit(200)
         tickets = await cursor.to_list(200)
+        # Ensure open tickets are always at the top
+        def _ts(val: str) -> str:
+            return str(val or "")
+        tickets.sort(key=lambda t: (0 if (t.get("status") or "open") == "open" else 1, _ts(t.get("updated_at"))), reverse=False)
+        # Within each group, newest first by updated_at
+        open_t = [t for t in tickets if (t.get("status") or "open") == "open"]
+        closed_t = [t for t in tickets if (t.get("status") or "open") != "open"]
+        open_t.sort(key=lambda t: _ts(t.get("updated_at")), reverse=True)
+        closed_t.sort(key=lambda t: _ts(t.get("updated_at")), reverse=True)
+        tickets = open_t + closed_t
         return {"tickets": [_ticket_to_response(t) for t in tickets]}
 
     def _ticket_to_response(t: dict) -> dict:

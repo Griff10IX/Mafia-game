@@ -204,6 +204,7 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
         elif owner_id:
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
             await db.blackjack_ownership.update_one({"city": bj_city}, {"$inc": {"total_earnings": bet, "profit": bet}})
+            _invalidate_ownership_cache(owner_id)
     else:
         result = "push"
         payout = bet
@@ -244,6 +245,7 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
                     await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -actual_owner_pay}})
             else:
                 await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -bet}})
+            _invalidate_ownership_cache(owner_id)
         else:
             if not owner_id and result in ("win", "dealer_bust"):
                 head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
@@ -776,6 +778,7 @@ def register(router):
                     {"city": bj_city},
                     {"$inc": {"total_earnings": bet, "profit": bet}}
                 )
+                _invalidate_ownership_cache(owner_id)
             await _blackjack_settle_and_save_history(
                 current_user.get("id") or "", current_user.get("username"), game.get("city"), bet, "bust", 0, player_hand, game.get("dealer_hand", []), player_total, _blackjack_hand_total(game.get("dealer_hand", []))
             )
