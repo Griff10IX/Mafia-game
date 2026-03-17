@@ -34,7 +34,7 @@ BLACKJACK_ABSOLUTE_MAX_BET = 500_000_000
 BLACKJACK_CLAIM_COST = 500_000_000  # $500M to claim table
 BLACKJACK_HOUSE_EDGE = 0.02  # 2% of bet to owner when player loses
 BLACKJACK_HISTORY_MAX = 10
-BLACKJACK_GAME_TIMEOUT_MINUTES = 5  # Unfinished game auto-stands and finishes after this
+BLACKJACK_GAME_TIMEOUT_SECONDS = 600  # Unfinished game auto-stands and finishes after this
 
 BLACKJACK_SUITS = ["H", "D", "C", "S"]
 BLACKJACK_VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
@@ -157,7 +157,7 @@ async def _blackjack_settle_and_save_history(user_id: str, username: str, city: 
 
 
 def _blackjack_game_is_stale(game: dict) -> bool:
-    """True if game was created more than BLACKJACK_GAME_TIMEOUT_MINUTES ago."""
+    """True if game was created more than BLACKJACK_GAME_TIMEOUT_SECONDS ago."""
     created = game.get("created_at")
     if not created:
         return True
@@ -168,7 +168,7 @@ def _blackjack_game_is_stale(game: dict) -> bool:
             dt = created
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        return (datetime.now(timezone.utc) - dt).total_seconds() >= BLACKJACK_GAME_TIMEOUT_MINUTES * 60
+        return (datetime.now(timezone.utc) - dt).total_seconds() >= BLACKJACK_GAME_TIMEOUT_SECONDS
     except Exception:
         return True
 
@@ -741,6 +741,9 @@ def register(router):
         game = await db.blackjack_games.find_one({"user_id": current_user.get("id") or ""})
         if not game:
             raise HTTPException(status_code=400, detail="No active game")
+        if _blackjack_game_is_stale(game):
+            await _blackjack_auto_finish_game(game, current_user)
+            raise HTTPException(status_code=400, detail="Game timed out and was auto-completed.")
         deck = game.get("deck") or []
         player_hand = list(game.get("player_hand") or [])
         if not deck:
@@ -803,6 +806,9 @@ def register(router):
         game = await db.blackjack_games.find_one({"user_id": current_user.get("id") or ""})
         if not game:
             raise HTTPException(status_code=400, detail="No active game")
+        if _blackjack_game_is_stale(game):
+            await _blackjack_auto_finish_game(game, current_user)
+            raise HTTPException(status_code=400, detail="Game timed out and was auto-completed.")
         bj_city = game.get("city")
         deck = list(game.get("deck") or [])
         player_hand = list(game.get("player_hand") or [])

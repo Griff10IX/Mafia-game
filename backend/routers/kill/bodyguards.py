@@ -46,6 +46,8 @@ from server import (
 
 # Constants (moved from server)
 BODYGUARD_SLOT_COSTS = [75, 150, 300, 450]
+# Robot bodyguards are always Made Man or above (rank id 5 = Made Man in server.RANKS)
+ROBOT_BODYGUARD_MIN_RANK_ID = 5
 BODYGUARD_ARMOUR_UPGRADE_COSTS = {0: 50, 1: 100, 2: 200, 3: 400, 4: 800}
 
 # Human bodyguard one-time hire cost is 25% cheaper than robot (deducted from inviter when invite is accepted)
@@ -162,7 +164,8 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
         "Nicola Gentile", "Louis Buchalter", "Abe Reles", "Harry Greenberg",
     ]
     base = _camelize(random.choice(robot_names))
-    rank = random.choice(RANKS)
+    ranks_made_man_plus = [r for r in RANKS if r["id"] >= ROBOT_BODYGUARD_MIN_RANK_ID]
+    rank = random.choice(ranks_made_man_plus) if ranks_made_man_plus else RANKS[-1]
     rank_points = random.randint(int(rank["required_points"]), int(rank["required_points"]) + 500)
     username = None
     for _ in range(80):

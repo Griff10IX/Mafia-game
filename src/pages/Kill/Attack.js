@@ -282,10 +282,6 @@ const KillUserCard = ({
       >
         💀 Kill User
       </button>
-      
-      <p className="text-[9px] text-mutedForeground font-heading italic">
-        💡 Tip: Starts a search if target not found. Travel to target location before killing.
-      </p>
     </div>
     <div className="atk-art-line text-primary mx-2" />
   </div>
