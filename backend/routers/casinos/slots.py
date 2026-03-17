@@ -25,7 +25,7 @@ from server import (
 
 # ----- Constants -----
 SLOTS_MAX_BET = 5_000_000
-SLOTS_HOUSE_EDGE = 0.05  # 5% house edge on wins
+SLOTS_HOUSE_EDGE = 0.005  # 0.5% house edge on wins
 SLOTS_OWNERSHIP_HOURS = 3
 # Draw every 3 hours on the hour (00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00 UTC)
 SLOTS_DRAW_HOURS_UTC = (0, 3, 6, 9, 12, 15, 18, 21)
@@ -554,7 +554,9 @@ def register(router):
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout_full}})
             else:
                 if head_family_id:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.slots": bet}})
+                    edge_lose = int(bet * SLOTS_HOUSE_EDGE)
+                    if edge_lose > 0:
+                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.slots": edge_lose}})
             new_money = (user_money - bet) + (payout_full if win else 0)
             history_entry = {
                 "bet": bet,
@@ -588,7 +590,9 @@ def register(router):
         head_family_id = await get_head_family_id_for_state(stored_state or state) if (stored_state or state) else None
         if not win:
             if head_family_id:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.slots": bet}})
+                edge_lose = int(bet * SLOTS_HOUSE_EDGE)
+                if edge_lose > 0:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.slots": edge_lose}})
             else:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                 await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet}})
@@ -643,8 +647,10 @@ def register(router):
                 spin_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
             if points_offered <= 0:
                 if head_family_id:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.slots": bet}})
-                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": -bet}})
+                    edge_lose = int(bet * SLOTS_HOUSE_EDGE)
+                    if edge_lose > 0:
+                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.slots": edge_lose}})
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge_lose}})
                 else:
                     await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet - actual_payout}})
                 # End owner's 3h: clear ownership and set cooldown

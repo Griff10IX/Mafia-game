@@ -34,7 +34,7 @@ VIDEO_POKER_DEFAULT_MAX_BET = 50_000_000
 VIDEO_POKER_ABSOLUTE_MAX_BET = 500_000_000
 VIDEO_POKER_CLAIM_COST = 500_000_000
 VIDEO_POKER_HISTORY_MAX = 10
-VIDEO_POKER_HOUSE_EDGE = 0.05  # 5% of profit to house (state head when no owner), like dice
+VIDEO_POKER_HOUSE_EDGE = 0.005  # 0.5% of profit to house (state head when no owner), like dice
 
 SUITS = ["H", "D", "C", "S"]
 VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
@@ -209,6 +209,7 @@ def register(router):
         return {
             "max_bet": max_bet,
             "claim_cost": VIDEO_POKER_CLAIM_COST,
+            "house_edge": VIDEO_POKER_HOUSE_EDGE,
             "pay_table": PAY_TABLE,
             "hand_names": HAND_NAMES,
         }
@@ -551,12 +552,17 @@ def register(router):
             head_family_id = await get_head_family_id_for_state(city) if city else None
             if owner_id:
                 if head_family_id:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.videopoker": bet}})
-                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": -bet}})
+                    edge_lose = int(bet * VIDEO_POKER_HOUSE_EDGE)
+                    if edge_lose > 0:
+                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.videopoker": edge_lose}})
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge_lose}})
+                    await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"total_earnings": bet, "profit": bet}})
                 else:
                     await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"total_earnings": bet, "profit": bet}})
             elif head_family_id:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.videopoker": bet}})
+                edge_lose = int(bet * VIDEO_POKER_HOUSE_EDGE)
+                if edge_lose > 0:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.videopoker": edge_lose}})
         elif payout == bet:
             if owner_id:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": -bet}})
@@ -591,10 +597,9 @@ def register(router):
                     if points_offered <= 0:
                         head_family_id = await get_head_family_id_for_state(city) if city else None
                         if head_family_id:
-                            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.videopoker": bet}})
-                        else:
-                            await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-                            await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"profit": bet - actual_payout}})
+                            edge_lose = int(bet * VIDEO_POKER_HOUSE_EDGE)
+                            if edge_lose > 0:
+                                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.videopoker": edge_lose}})
                     else:
                         # Create buyback offer
                         expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()

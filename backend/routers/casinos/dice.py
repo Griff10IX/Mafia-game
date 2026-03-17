@@ -29,7 +29,7 @@ from server import (
 # ----- Constants -----
 DICE_SIDES_MIN = 2
 DICE_SIDES_MAX = 5000
-DICE_HOUSE_EDGE = 0.05  # 5% house edge
+DICE_HOUSE_EDGE = 0.005  # 0.5% house edge
 DICE_MAX_BET = 5_000_000          # default max bet for new tables
 DICE_ABSOLUTE_MAX_BET = 500_000_000  # hard ceiling owners can set up to
 DICE_CLAIM_COST_POINTS = 0  # cost in points to claim a dice table (0 = free)
@@ -113,11 +113,12 @@ async def _get_dice_ownership_doc(city: str):
 def register(router):
     @router.get("/casino/dice/config")
     async def casino_dice_config(current_user: dict = Depends(get_current_user_verified)):
-        """Dice game config: sides range and default max bet."""
+        """Dice game config: sides range, default max bet, house edge (state head tax)."""
         return {
             "sides_min": DICE_SIDES_MIN,
             "sides_max": DICE_SIDES_MAX,
             "max_bet": DICE_MAX_BET,
+            "house_edge": DICE_HOUSE_EDGE,
         }
 
     @router.get("/casino/dice/ownership")
@@ -233,8 +234,9 @@ def register(router):
         win = roll == chosen
         head_family_id = await get_head_family_id_for_state(db_city)
         if not win:
-            if head_family_id:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": stake, "state_head_income.dice": stake}})
+            edge_lose = int(stake * DICE_HOUSE_EDGE)
+            if head_family_id and edge_lose > 0:
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.dice": edge_lose}})
             elif owner_id:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
                 await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake}})
@@ -268,7 +270,9 @@ def register(router):
             await db.users.update_one({"id": owner_id}, {"$inc": {"casinos_lost": 1}})
             if points_offered <= 0:
                 if head_family_id:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": stake, "state_head_income.dice": stake}})
+                    edge_lose = int(stake * DICE_HOUSE_EDGE)
+                    if edge_lose > 0:
+                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.dice": edge_lose}})
                 else:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
                     await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
@@ -290,12 +294,14 @@ def register(router):
                 }
                 await db.dice_buy_back_offers.insert_one(buy_back_doc)
                 buy_back_offer = {"offer_id": offer_id, "points_offered": points_offered, "amount_shortfall": shortfall, "owner_paid": actual_payout, "expires_at": expires_at}
+            await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
         else:
             if head_family_id:
                 await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.dice": edge}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake - edge}})
             else:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
-                await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
+            await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
         await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "shortfall": shortfall})
         return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "owner_paid": actual_payout, "shortfall": shortfall, "ownership_transferred": ownership_transferred, "buy_back_offer": buy_back_offer}
 

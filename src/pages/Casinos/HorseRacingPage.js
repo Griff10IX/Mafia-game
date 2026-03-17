@@ -351,7 +351,7 @@ export default function HorseRacingPage() {
       setConfig({
         horses: horsesList,
         max_bet: data.max_bet || 10_000_000,
-        house_edge: data.house_edge ?? 0.05,
+        house_edge: data.house_edge ?? 0.005,
         claim_cost: data.claim_cost ?? 500_000_000,
       });
       setSelectedHorseId((prev) => {
@@ -359,7 +359,7 @@ export default function HorseRacingPage() {
         return horsesList.length && horsesList[0] ? horsesList[0].id : null;
       });
     }).catch(() => {
-      setConfig({ horses: [], max_bet: 10_000_000, house_edge: 0.05, claim_cost: 500_000_000 });
+      setConfig({ horses: [], max_bet: 10_000_000, house_edge: 0.005, claim_cost: 500_000_000 });
     });
     api.get('/casino/horseracing/ownership').then((r) => {
       const data = r.data ?? null;
@@ -516,7 +516,7 @@ export default function HorseRacingPage() {
   const betNum = parseInt(String(bet || '').replace(/\D/g, ''), 10) || 0;
   const maxBet = ownership?.max_bet ?? config.max_bet ?? 10_000_000;
   const returnsAmount = selectedHorse && betNum > 0 && typeof selectedHorse.odds === 'number'
-    ? Math.floor(betNum * (1 + selectedHorse.odds) * (1 - (config.house_edge || 0.05)))
+    ? Math.floor(betNum * (1 + selectedHorse.odds) * (1 - (config.house_edge || 0.005)))
     : 0;
   const isOwner = !!ownership?.is_owner;
   const canClaim = ownership?.is_unclaimed && !ownership?.owner_id;
@@ -893,7 +893,7 @@ export default function HorseRacingPage() {
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-2 text-[10px] text-mutedForeground font-heading">
-                  <span>5% house edge</span>
+                  <span>0.5% house edge</span>
                   <span className="text-primary/30">|</span>
                   <span>Max: {formatMoney(maxBet)}</span>
                 </div>
@@ -1093,7 +1093,7 @@ export default function HorseRacingPage() {
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Pick a horse and place your bet</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Lower odds = more likely to win</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Higher odds = bigger payout</li>
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>5% house edge on winnings</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>0.5% house edge on winnings</li>
           </ul>
         </div>
       </div>

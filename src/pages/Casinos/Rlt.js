@@ -929,7 +929,7 @@ export default function Rlt() {
         </div>
         <div className="p-3">
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>European single zero (2.7% edge)</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>European single zero (0.5% edge)</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Straight up pays 35:1</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Dozens/Columns pay 2:1</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Red/Black/Odd/Even pay 1:1</li>

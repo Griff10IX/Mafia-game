@@ -30,7 +30,7 @@ from routers.casinos.dice import DiceSellOnTradeRequest
 ROULETTE_RED = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
 ROULETTE_MAX_BET = 50_000_000
 ROULETTE_CLAIM_COST = 500_000_000  # 500M to claim
-ROULETTE_HOUSE_EDGE = 0.027  # 2.7% house edge goes to owner
+ROULETTE_HOUSE_EDGE = 0.005  # 0.5% house edge goes to owner
 ROULETTE_DEFAULT_MAX_BET = 50_000_000
 ROULETTE_ABSOLUTE_MAX_BET = 500_000_000
 
@@ -479,13 +479,13 @@ def register(router):
         head_family_id = await get_head_family_id_for_state(stored_city or city)
         edge = int(total_stake * ROULETTE_HOUSE_EDGE)
         if not win:
-            if head_family_id:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": total_stake, "state_head_income.roulette": total_stake}})
+            if head_family_id and edge > 0:
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.roulette": edge}})
             elif owner_id:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": total_stake}})
                 await db.roulette_ownership.update_one(
                     {"city": stored_city or city},
-                    {"$inc": {"total_earnings": total_stake}}
+                    {"$inc": {"total_earnings": total_stake, "profit": total_stake}}
                 )
         elif not owner_id:
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": total_payout}})
@@ -509,7 +509,7 @@ def register(router):
                 await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": actual_net_cost}}, {"$set": {"biggest_casino_payout": actual_net_cost}})
             await db.roulette_ownership.update_one(
                 {"city": stored_city or city},
-                {"$inc": {"total_earnings": -actual_net_cost}}
+                {"$inc": {"total_earnings": -actual_net_cost, "profit": -actual_net_cost}}
             )
             ownership_transferred = False
             buy_back_offer = None
@@ -524,7 +524,7 @@ def register(router):
                 # Track casino won/lost stats
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"casinos_seized": 1}})
                 await db.users.update_one({"id": owner_id}, {"$inc": {"casinos_lost": 1}})
-                # Create buy-back offer if owner has set a reward
+                # Create buy-back offer if owner has set a reward; otherwise state head gets the stake (same as dice/horseracing)
                 if buy_back_reward > 0:
                     expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
                     offer_id = str(uuid.uuid4())
@@ -542,6 +542,8 @@ def register(router):
                         "created_at": datetime.now(timezone.utc).isoformat(),
                     })
                     buy_back_offer = {"offer_id": offer_id, "points_offered": buy_back_reward, "amount_shortfall": shortfall, "owner_paid": actual_payout, "expires_at": expires_at}
+                elif head_family_id and edge > 0:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.roulette": edge}})
         await log_gambling(
             current_user.get("id") or "",
             current_user.get("username") or "?",

@@ -32,7 +32,7 @@ BLACKJACK_MAX_BET = 50_000_000
 BLACKJACK_DEFAULT_MAX_BET = 50_000_000
 BLACKJACK_ABSOLUTE_MAX_BET = 500_000_000
 BLACKJACK_CLAIM_COST = 500_000_000  # $500M to claim table
-BLACKJACK_HOUSE_EDGE = 0.02  # 2% of bet to owner when player loses
+BLACKJACK_HOUSE_EDGE = 0.005  # 0.5% of bet to owner when player loses
 BLACKJACK_HISTORY_MAX = 10
 BLACKJACK_GAME_TIMEOUT_SECONDS = 600  # Unfinished game auto-stands and finishes after this
 
@@ -198,7 +198,9 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
         payout = 0
         head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
         if head_family_id:
-            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.blackjack": bet}})
+            edge_lose = int(bet * BLACKJACK_HOUSE_EDGE)
+            if edge_lose > 0:
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.blackjack": edge_lose}})
         elif owner_id:
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
             await db.blackjack_ownership.update_one({"city": bj_city}, {"$inc": {"total_earnings": bet, "profit": bet}})
@@ -237,6 +239,7 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
                         "expires_at": expires_at,
                         "created_at": datetime.now(timezone.utc).isoformat(),
                     })
+                    await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -actual_owner_pay}})
                 else:
                     await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -actual_owner_pay}})
             else:
@@ -263,7 +266,7 @@ def register(router):
         city = _normalize_city_for_blackjack(raw) if raw else (STATES[0] if STATES else "")
         _, doc = await _get_blackjack_ownership_doc(city) if city else (None, None)
         max_bet = doc.get("max_bet", BLACKJACK_DEFAULT_MAX_BET) if doc else BLACKJACK_DEFAULT_MAX_BET
-        return {"max_bet": max_bet, "claim_cost": BLACKJACK_CLAIM_COST}
+        return {"max_bet": max_bet, "claim_cost": BLACKJACK_CLAIM_COST, "house_edge": BLACKJACK_HOUSE_EDGE}
 
     @router.get("/casino/blackjack/current-game")
     async def casino_blackjack_current_game(current_user: dict = Depends(get_current_user_verified)):
@@ -649,6 +652,7 @@ def register(router):
                             "created_at": datetime.now(timezone.utc).isoformat(),
                         })
                         buy_back_offer = {"offer_id": offer_id, "points_offered": buy_back_reward, "amount_shortfall": shortfall, "owner_paid": actual_owner_pay, "expires_at": expires_at}
+                        await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"profit": -actual_owner_pay}})
                 else:
                     await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"profit": -owner_pay}})
             else:
@@ -691,7 +695,9 @@ def register(router):
                 raise HTTPException(status_code=400, detail="Not enough money")
             head_family_id = await get_head_family_id_for_state(stored_city or city)
             if head_family_id:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.blackjack": bet}})
+                edge_lose = int(bet * BLACKJACK_HOUSE_EDGE)
+                if edge_lose > 0:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.blackjack": edge_lose}})
             elif owner_id:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                 await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"total_earnings": bet, "profit": bet}})
@@ -759,7 +765,9 @@ def register(router):
             bj_city = game.get("city")
             head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
             if head_family_id:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.blackjack": bet}})
+                edge_lose = int(bet * BLACKJACK_HOUSE_EDGE)
+                if edge_lose > 0:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.blackjack": edge_lose}})
             elif owner_id:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                 await db.blackjack_ownership.update_one(
@@ -832,7 +840,9 @@ def register(router):
             payout = 0
             head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
             if head_family_id:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.blackjack": bet}})
+                edge_lose = int(bet * BLACKJACK_HOUSE_EDGE)
+                if edge_lose > 0:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.blackjack": edge_lose}})
             elif owner_id:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                 await db.blackjack_ownership.update_one({"city": bj_city}, {"$inc": {"total_earnings": bet, "profit": bet}})
@@ -880,6 +890,7 @@ def register(router):
                             "created_at": datetime.now(timezone.utc).isoformat(),
                         })
                         buy_back_offer = {"offer_id": offer_id, "points_offered": buy_back_reward, "amount_shortfall": shortfall, "owner_paid": actual_owner_pay, "expires_at": expires_at}
+                        await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -actual_owner_pay}})
                 else:
                     await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -bet}})
                 payout = bet + actual_owner_pay

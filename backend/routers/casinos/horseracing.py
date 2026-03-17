@@ -30,7 +30,7 @@ from routers.casinos.dice import DiceSellOnTradeRequest
 HORSERACING_MAX_BET = 10_000_000
 HORSERACING_CLAIM_COST = 500_000_000  # $500M to claim track (per city)
 HORSERACING_ABSOLUTE_MAX_BET = 50_000_000  # owner can set max_bet up to this
-HORSERACING_HOUSE_EDGE = 0.05
+HORSERACING_HOUSE_EDGE = 0.005  # 0.5%
 HORSERACING_HORSES = [
     {"id": 1, "name": "Thunder Bolt", "odds": 1},
     {"id": 2, "name": "Midnight Runner", "odds": 2},
@@ -465,7 +465,9 @@ def register(router):
                         await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.horseracing": edge}})
             else:
                 if head_family_id:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.horseracing": bet}})
+                    edge_lose = int(bet * HORSERACING_HOUSE_EDGE)
+                    if edge_lose > 0:
+                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.horseracing": edge_lose}})
             if won:
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
         else:
@@ -499,12 +501,11 @@ def register(router):
                     await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"casinos_seized": 1}})
                     await db.users.update_one({"id": owner_id}, {"$inc": {"casinos_lost": 1}})
                     if points_offered <= 0:
-                        # No buyback offer - ownership transferred with no offer
+                        # No buyback offer - ownership transferred with no offer. Profit already updated above; only route tax to family if state head.
                         if head_family_id:
-                            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.horseracing": bet}})
-                        else:
-                            await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-                            await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$inc": {"profit": bet - actual_payout}})
+                            edge_lose = int(bet * HORSERACING_HOUSE_EDGE)
+                            if edge_lose > 0:
+                                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.horseracing": edge_lose}})
                     else:
                         # Create buyback offer
                         expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
@@ -531,7 +532,9 @@ def register(router):
                         await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}})
             else:
                 if head_family_id:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.horseracing": bet}})
+                    edge_lose = int(bet * HORSERACING_HOUSE_EDGE)
+                    if edge_lose > 0:
+                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.horseracing": edge_lose}})
                 else:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                     await db.horseracing_ownership.update_one(

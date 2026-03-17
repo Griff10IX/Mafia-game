@@ -878,7 +878,7 @@ export default function SlotsPage() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-mutedForeground mt-2">5% house edge on wins. One machine per state.</p>
+          <p className="text-[10px] text-mutedForeground mt-2">0.5% house edge on wins. One machine per state.</p>
           <div className="mt-3 pt-3 border-t border-primary/20">
             {ownership?.is_owner ? (
               <p className="text-[10px] text-primary font-heading">You own this machine for {config.ownership_hours}h. Set max bet and buy-back above.</p>
