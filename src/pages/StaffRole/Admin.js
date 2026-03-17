@@ -126,6 +126,10 @@ const SEARCHABLE_TOOLS = [
   // Mod Tools
   { label: 'Mod Online Colour', categoryId: 'admin-mod-tools', collapseKey: 'modColour', keywords: ['mod', 'colour', 'color', 'online'] },
   { label: 'Admin Credentials', categoryId: 'admin-mod-tools', collapseKey: 'adminCreds', keywords: ['admin', 'credentials', 'email', 'password'] },
+  { label: 'Dupe check', categoryId: 'admin-mod-tools', collapseKey: 'dupeCheckMod', keywords: ['dupe', 'duplicate', 'multi', 'account'] },
+  { label: 'Lock player', categoryId: 'admin-mod-tools', collapseKey: 'lockPlayerModTools', keywords: ['lock', 'player', 'investigation'] },
+  { label: 'Modkill', categoryId: 'admin-mod-tools', collapseKey: 'lockPlayerModTools', keywords: ['modkill', 'kill', 'player'] },
+  { label: 'Lock page', categoryId: 'admin-mod-tools', collapseKey: 'pageLocksMod', keywords: ['lock', 'page', 'maintenance'] },
 ];
 
 const SECTIONS_KEY = 'admin_sections_collapsed';
@@ -572,6 +576,9 @@ export default function Admin() {
       }
       if (admin || mod) {
         fetchHdos();
+      }
+      if (mod && !admin) {
+        fetchPageLocks();  // Mods need page locks for Mod Tools Lock page
       }
     } catch {
       setIsAdmin(false);
@@ -5029,7 +5036,8 @@ export default function Admin() {
           icon={AlertTriangle}
           title="Cheat Detection"
           badge={
-            ((cheatSameIp?.total_groups ?? 0) > 0 || (cheatSameDeviceIps?.total_groups ?? 0) > 0 || ((cheatDuplicates?.by_domain?.length ?? 0) + (cheatDuplicates?.by_similar_username?.length ?? 0)) > 0) && (
+            ((cheatSameIp?.total_groups ?? 0) > 0 || (cheatSameDeviceIps?.total_groups ?? 0) > 0 ||
+             ((cheatDuplicates?.by_domain?.length ?? 0) + (cheatDuplicates?.by_similar_username?.length ?? 0) + (cheatDuplicates?.by_similar_email?.length ?? 0) + (cheatDuplicates?.by_same_day_same_ip?.length ?? 0)) > 0) && (
               <span className="text-[10px] font-heading text-amber-400">Review below</span>
             )
           }
@@ -5049,7 +5057,11 @@ export default function Admin() {
                   ) : (
                     cheatSameIp.groups?.slice(0, 30).map((g, i) => (
                       <div key={i} className="p-2 rounded bg-zinc-900/50 border border-amber-500/20">
-                        <div className="text-[10px] font-heading text-amber-400 mb-1">IP: {g.ip} — {g.count} account(s)</div>
+                        <div className="text-[10px] font-heading text-amber-400 mb-1">
+                          IP: {g.ip} — {g.count} account(s)
+                          {g.risk && <span className={`ml-1 px-1 rounded text-[9px] ${g.risk === 'high' ? 'bg-red-500/20 text-red-400' : g.risk === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-500/20 text-zinc-400'}`}>{g.risk}</span>}
+                          {g.label && <span className="ml-1 text-mutedForeground text-[9px]">({g.label})</span>}
+                        </div>
                         <div className="space-y-0.5">
                           {g.accounts.map((a, j) => (
                             <div key={j} className="flex justify-between text-[10px]">
@@ -5181,6 +5193,40 @@ export default function Admin() {
                       )}
                     </div>
                   </div>
+                  {(cheatDuplicates.by_similar_email?.length > 0 || cheatDuplicates.by_same_day_same_ip?.length > 0) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                      {cheatDuplicates.by_similar_email?.length > 0 && (
+                        <div>
+                          <div className="text-[10px] font-heading text-primary uppercase mb-1">Similar email (local+domain)</div>
+                          <div className="max-h-48 overflow-y-auto space-y-1">
+                            {(cheatDuplicates.by_similar_email || []).map((g, i) => (
+                              <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
+                                <div className="text-[10px] text-amber-400 font-heading">{g.local_base}@{g.domain} — {g.count}</div>
+                                {g.accounts?.slice(0, 5).map((a, j) => (
+                                  <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {cheatDuplicates.by_same_day_same_ip?.length > 0 && (
+                        <div>
+                          <div className="text-[10px] font-heading text-primary uppercase mb-1">Same day + same reg IP</div>
+                          <div className="max-h-48 overflow-y-auto space-y-1">
+                            {(cheatDuplicates.by_same_day_same_ip || []).map((g, i) => (
+                              <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
+                                <div className="text-[10px] text-amber-400 font-heading">{g.registration_ip} · {g.created_day} — {g.count}</div>
+                                {g.accounts?.slice(0, 5).map((a, j) => (
+                                  <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -7165,6 +7211,220 @@ export default function Admin() {
               </div>
               <BtnPrimary onClick={handleSaveModOnlineColor} disabled={modColorSaving}>
                 {modColorSaving ? 'Saving...' : 'Save mod colour'}
+              </BtnPrimary>
+            </div>
+          )}
+        </div>
+
+        {/* Dupe check (Find Duplicates) */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Users}
+            title="Dupe check"
+            badge={searchResults?.duplicates?.length > 0 || searchResults?.users?.length > 0 ? <span className="text-[10px] font-heading text-amber-400">Found</span> : null}
+            isCollapsed={collapsed.dupeCheckMod}
+            onToggle={() => toggleSection('dupeCheckMod')}
+          />
+          {!collapsed.dupeCheckMod && (
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">Exact duplicate usernames (case-insensitive) or search by username.</p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <input
+                  type="text"
+                  value={searchUsername}
+                  onChange={(e) => setSearchUsername(e.target.value)}
+                  placeholder="Optional username filter"
+                  className="flex-1 min-w-[140px] px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                />
+                <BtnPrimary onClick={handleFindDuplicates} disabled={dbLoading}>
+                  {dbLoading ? 'Loading…' : 'Search'}
+                </BtnPrimary>
+              </div>
+              {searchResults && (
+                <div className="max-h-48 overflow-y-auto">
+                  {searchResults.duplicates?.length > 0 ? (
+                    <div className="space-y-1.5 text-[10px] font-heading">
+                      <p className="text-amber-400 font-bold">{searchResults.duplicates.length} duplicate group(s)</p>
+                      {searchResults.duplicates.slice(0, 10).map((g, i) => (
+                        <div key={i} className="p-2 rounded bg-zinc-800/50 border border-amber-500/20">
+                          {g.users?.map((u, j) => (
+                            <div key={j}>{u.username} · {u.email}</div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ) : searchResults.users?.length > 0 ? (
+                    <pre className="text-[10px] p-2 rounded bg-zinc-900/50 border border-zinc-700/50 text-mutedForeground overflow-x-auto">
+                      {JSON.stringify(searchResults.users.slice(0, 20), null, 2)}
+                    </pre>
+                  ) : (
+                    <p className="text-[10px] text-mutedForeground">No duplicates found.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Lock player (investigation) – Mod Tools */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Lock}
+            title="Lock player (investigation)"
+            badge={lockedAccounts.length > 0 ? <span className="text-[10px] font-heading text-amber-400">{lockedAccounts.length} locked</span> : null}
+            isCollapsed={collapsed.lockPlayerModTools}
+            onToggle={() => toggleSection('lockPlayerModTools')}
+          />
+          {!collapsed.lockPlayerModTools && (
+            <div className="p-2 space-y-1">
+              <ActionRow icon={User} label="Target username" description="User to lock or unlock">
+                <input
+                  type="text"
+                  value={formData.targetUsername}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, targetUsername: e.target.value }))}
+                  placeholder="Username"
+                  className="flex-1 min-w-0 max-w-[180px] px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                />
+              </ActionRow>
+              <ActionRow icon={Lock} label="Lock Player (investigation)" description="User can only access /locked page and submit one comment until unlocked" color="text-red-400">
+                <BtnDanger onClick={handleLockPlayer}>Lock</BtnDanger>
+              </ActionRow>
+              <ActionRow icon={Lock} label="Unlock Account" description="Restore access after investigation">
+                <BtnPrimary onClick={() => handleUnlockAccount()}>Unlock</BtnPrimary>
+              </ActionRow>
+              <ActionRow icon={Skull} label="Modkill" description="Permanently kill the target account. They become dead and cannot log in until revived." color="text-red-400">
+                <BtnDanger onClick={handleKillPlayer}>Kill</BtnDanger>
+              </ActionRow>
+              <ActionRow icon={Zap} label="Revive" description="Restore a dead or modkilled account so they can log in again">
+                <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
+              </ActionRow>
+              <ActionRow icon={Lock} label="Locked accounts" description="Users under investigation and their comment">
+                <button type="button" onClick={fetchLockedAccounts} disabled={lockedAccountsLoading} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600 disabled:opacity-50">
+                  {lockedAccountsLoading ? '...' : 'Refresh'}
+                </button>
+              </ActionRow>
+              {lockedAccounts.length > 0 && (
+                <div className="mt-1 pl-6 space-y-2 border-l-2 border-amber-500/30">
+                  {lockedAccounts.map((u) => (
+                    <div key={u.username} className="text-[10px] font-heading rounded border border-zinc-600/50 bg-zinc-800/30 p-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-bold text-amber-400">{u.username}</span>
+                        <button type="button" onClick={() => handleUnlockAccount(u.username)} className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30">Unlock</button>
+                      </div>
+                      {u.account_locked_at && <div className="text-zinc-500 mt-0.5">Locked: {new Date(u.account_locked_at).toLocaleString()}</div>}
+                      {u.account_locked_comment ? <div className="mt-1 text-foreground whitespace-pre-wrap">{u.account_locked_comment}</div> : <div className="mt-1 text-zinc-500 italic">No comment yet.</div>}
+                      {u.account_locked_admin_message && (
+                        <div className="mt-2 pt-2 border-t border-zinc-600/50">
+                          <span className="text-primary font-bold">Staff message:</span>
+                          <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_admin_message}</div>
+                        </div>
+                      )}
+                      {u.account_locked_user_reply && (
+                        <div className="mt-1">
+                          <span className="text-emerald-400 font-bold">Their reply:</span>
+                          <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_user_reply}</div>
+                        </div>
+                      )}
+                      <div className="mt-2 pt-2 border-t border-zinc-600/50">
+                        <textarea
+                          value={lockedMessageByUser[u.username] ?? ''}
+                          onChange={(e) => setLockedMessageByUser((prev) => ({ ...prev, [u.username]: e.target.value }))}
+                          placeholder="Leave message for user (they can reply once)"
+                          rows={2}
+                          className="w-full px-2 py-1 rounded border border-zinc-600 bg-zinc-800/50 text-[10px] font-heading placeholder:text-zinc-500 focus:border-primary/50 focus:outline-none resize-y"
+                          maxLength={2000}
+                          disabled={sendingMessageTo === u.username}
+                        />
+                        <button type="button" onClick={() => handleSendLockedMessage(u.username)} disabled={sendingMessageTo === u.username || !(lockedMessageByUser[u.username] || '').trim()} className="mt-1 px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed">
+                          {sendingMessageTo === u.username ? 'Sending...' : 'Send message'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Lock page – Mod Tools */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Lock}
+            title="Lock page"
+            badge={Object.keys(pageLocks).length > 0 ? <span className="text-[10px] font-heading text-amber-400">{Object.keys(pageLocks).length} locked</span> : null}
+            isCollapsed={collapsed.pageLocksMod}
+            onToggle={() => { toggleSection('pageLocksMod'); if (collapsed.pageLocksMod) fetchPageLocks(); }}
+          />
+          {!collapsed.pageLocksMod && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground">When a page is locked, users see &quot;Down for maintenance&quot; (or your message) and cannot access it. Admins can still access.</p>
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2.5 space-y-2">
+                <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">Lock buying points (Points tab only) until</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input type="datetime-local" value={pageLockUnlockAt} onChange={(e) => setPageLockUnlockAt(e.target.value)} className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono" />
+                  <BtnPrimary onClick={() => handlePageLockToggle('/store/points', true, pageLockUnlockAt ? `Points purchase closed until ${new Date(pageLockUnlockAt).toLocaleString()}` : 'Points purchase temporarily unavailable', pageLockUnlockAt ? new Date(pageLockUnlockAt).toISOString() : null)} disabled={pageLockSaving || !pageLockUnlockAt}>Lock until date</BtnPrimary>
+                  {pageLocks['/store/points'] && (
+                    <BtnSecondary onClick={() => handlePageLockToggle('/store/points', false)} disabled={pageLockSaving}>Unlock now</BtnSecondary>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {['/dashboard', '/game/users-online', '/bank', '/stock-market', '/stats', '/jail', '/organised-crime', '/crimes', '/gta', '/attack', '/hitlist', '/families', '/casino', '/store', '/store/points', '/forum', '/inbox', '/help-desk', '/profile'].map((path) => {
+                  const entry = pageLocks[path];
+                  const isLocked = !!entry;
+                  const msg = typeof entry === 'object' ? (entry?.message ?? '') : (entry || '');
+                  return (
+                    <div key={path} className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded bg-zinc-800/30 border border-transparent hover:border-primary/20">
+                      <span className="text-[11px] font-heading font-mono min-w-[120px]">{path}</span>
+                      {isLocked && <span className="text-[10px] text-mutedForeground truncate max-w-[180px]" title={msg}>{msg || 'Down for maintenance'}</span>}
+                      <div className="flex gap-1 ml-auto">
+                        {isLocked ? (
+                          <BtnSecondary onClick={() => handlePageLockToggle(path, false)} disabled={pageLockSaving}>Unlock</BtnSecondary>
+                        ) : (
+                          <BtnPrimary onClick={() => handlePageLockToggle(path, true, pageLockMessage)} disabled={pageLockSaving}>Lock</BtnPrimary>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="pt-2 border-t border-white/10">
+                <p className="text-[10px] font-heading font-bold text-primary mb-2">Custom path</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input type="text" value={pageLockPath} onChange={(e) => setPageLockPath(e.target.value)} placeholder="/any/path" className="w-40 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono" />
+                  <input type="text" value={pageLockMessage} onChange={(e) => setPageLockMessage(e.target.value)} placeholder="Down for maintenance" className="w-48 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs" />
+                  <BtnPrimary onClick={() => handlePageLockToggle((pageLockPath || '').trim() || '/', true, pageLockMessage)} disabled={pageLockSaving || !(pageLockPath || '').trim()}>Lock</BtnPrimary>
+                  <BtnSecondary onClick={() => handlePageLockToggle((pageLockPath || '').trim() || '/', false)} disabled={pageLockSaving || !(pageLockPath || '').trim()}>Unlock</BtnSecondary>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Cheat detection – shortcut to admin-cheat */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={AlertTriangle}
+            title="Cheat detection"
+            isCollapsed={collapsed.cheatDetectionMod}
+            onToggle={() => toggleSection('cheatDetectionMod')}
+          />
+          {!collapsed.cheatDetectionMod && (
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">Same-IP report, same-device report, login attempts, duplicate suspects.</p>
+              <BtnPrimary
+                onClick={() => {
+                  setActiveCategoryId('admin-cheat');
+                  setCollapsed(prev => ({ ...prev, cheat: false }));
+                  if (typeof window !== 'undefined') window.location.hash = 'admin-cheat';
+                }}
+              >
+                Open Cheat Detection
               </BtnPrimary>
             </div>
           )}

@@ -2088,8 +2088,8 @@ def register(router):
 
     @router.get("/admin/page-locks")
     async def admin_get_page_locks(current_user: dict = Depends(get_current_user)):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
         doc = await db.game_settings.find_one({"key": PAGE_LOCKS_KEY}, {"_id": 0, "value": 1})
         raw = (doc.get("value") or {}).get("paths") if doc else {}
         if not isinstance(raw, dict):
@@ -2104,8 +2104,8 @@ def register(router):
 
     @router.patch("/admin/page-locks")
     async def admin_patch_page_locks(body: PageLockUpdate, current_user: dict = Depends(get_current_user)):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
         path = (body.path or "").strip().rstrip("/") or "/"
         if not path.startswith("/"):
             path = "/" + path
@@ -2907,8 +2907,8 @@ def register(router):
 
     @router.get("/admin/find-duplicates")
     async def admin_find_duplicates(username: str = None, current_user: dict = Depends(get_current_user)):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
         if username:
             pattern = re.compile(f".*{re.escape(username)}.*", re.IGNORECASE)
             users = await db.users.find(
@@ -2931,7 +2931,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         users = await db.users.find(
             {"is_dead": {"$ne": True}},
-            {"_id": 0, "id": 1, "username": 1, "email": 1, "registration_ip": 1, "login_ips": 1, "last_login_ip": 1, "created_at": 1},
+            {"_id": 0, "id": 1, "username": 1, "email": 1, "registration_ip": 1, "login_ips": 1, "last_login_ip": 1, "last_request_ip": 1, "created_at": 1},
         ).to_list(5000)
         ip_to_users = {}
         for u in users:
@@ -2943,13 +2943,33 @@ def register(router):
                 lip = (lip or "").strip()
                 if lip and lip != reg_ip:
                     ip_to_users.setdefault(lip, []).append({**summary, "source": "login"})
-        groups = [{"ip": ip, "count": len(accs), "accounts": accs} for ip, accs in ip_to_users.items() if len(accs) >= 2]
-        groups.sort(key=lambda g: -g["count"])
+            req_ip = (u.get("last_request_ip") or "").strip()
+            if req_ip and req_ip != reg_ip and req_ip not in (u.get("login_ips") or []):
+                ip_to_users.setdefault(req_ip, []).append({**summary, "source": "request"})
+        groups = []
+        for ip, accs in ip_to_users.items():
+            if len(accs) < 2:
+                continue
+            sources = set(a.get("source") for a in accs)
+            if "registration" in sources and ("login" in sources or "request" in sources):
+                label = "registration_and_activity"
+                risk = "high"
+            elif "registration" in sources:
+                label = "registration_only"
+                risk = "medium"
+            else:
+                label = "activity_only"
+                risk = "low"
+            groups.append({"ip": ip, "count": len(accs), "accounts": accs, "label": label, "risk": risk})
+        groups.sort(key=lambda g: (0 if g["risk"] == "high" else 1 if g["risk"] == "medium" else 2, -g["count"]))
         return {"groups": groups[:100], "total_groups": len(groups)}
 
     @router.get("/admin/cheat-detection/login-attempts")
     async def admin_cheat_login_attempts(
         limit: int = Query(200, ge=1, le=1000),
+        since: Optional[str] = Query(None, description="ISO date or datetime; only events at or after this time"),
+        ip: Optional[str] = Query(None, description="Filter by attempt IP"),
+        username: Optional[str] = Query(None, description="Filter by username or login_input contains"),
         current_user: dict = Depends(get_current_user),
     ):
         """
@@ -2959,17 +2979,35 @@ def register(router):
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        q = {}
+        if since and since.strip():
+            q["at"] = {"$gte": since.strip()}
+        if ip and ip.strip():
+            q["ip"] = ip.strip()
+        if username and username.strip():
+            pattern = re.compile(re.escape(username.strip()), re.IGNORECASE)
+            q["$or"] = [
+                {"username": pattern},
+                {"login_input": pattern},
+            ]
         cursor = (
-            db.suspicious_logins.find({}, {"_id": 0})
+            db.suspicious_logins.find(q, {"_id": 0})
             .sort("at", -1)
             .limit(limit)
         )
         events = await cursor.to_list(limit)
         return {"events": events}
 
+    def _email_local_base(local: str) -> str:
+        """Normalize email local part: lowercase, strip +suffix, remove digits for grouping."""
+        s = (local or "").split("+")[0].strip().lower()
+        return re.sub(r"\d+", "", s) or s
+
     @router.get("/admin/cheat-detection/duplicate-suspects")
     async def admin_cheat_duplicate_suspects(
         username: str = Query(None, description="Optional: filter by username contains"),
+        limit_domain: int = Query(50, ge=1, le=200),
+        limit_username: int = Query(50, ge=1, le=200),
         current_user: dict = Depends(get_current_user),
     ):
         if not _admin_or_mod(current_user):
@@ -2997,16 +3035,52 @@ def register(router):
                 base_to_users.setdefault(base, []).append(u)
         name_groups = [{"base": b, "count": len(accs), "accounts": accs} for b, accs in base_to_users.items() if len(accs) >= 2]
         name_groups.sort(key=lambda g: -g["count"])
+        similar_email_to_users = {}
+        for u in users:
+            email = (u.get("email") or "").strip()
+            if "@" in email:
+                local, domain = email.rsplit("@", 1)
+                domain = domain.lower()
+                key = (_email_local_base(local), domain)
+                similar_email_to_users.setdefault(key, []).append(u)
+        similar_email_groups = [
+            {"local_base": k[0], "domain": k[1], "count": len(accs), "accounts": accs}
+            for k, accs in similar_email_to_users.items()
+            if len(accs) >= 2
+        ]
+        similar_email_groups.sort(key=lambda g: -g["count"])
+        same_day_ip_to_users = {}
+        for u in users:
+            reg_ip = (u.get("registration_ip") or "").strip()
+            created = u.get("created_at") or ""
+            if reg_ip and created:
+                day = created[:10] if isinstance(created, str) else (created.isoformat()[:10] if hasattr(created, "isoformat") else "")
+                if day:
+                    same_day_ip_to_users.setdefault((reg_ip, day), []).append(u)
+        same_day_ip_groups = [
+            {"registration_ip": k[0], "created_day": k[1], "count": len(accs), "accounts": accs}
+            for k, accs in same_day_ip_to_users.items()
+            if len(accs) >= 2
+        ]
+        same_day_ip_groups.sort(key=lambda g: -g["count"])
         return {
-            "by_domain": domain_groups[:50],
-            "by_similar_username": name_groups[:50],
+            "by_domain": domain_groups[:limit_domain],
+            "by_similar_username": name_groups[:limit_username],
+            "by_similar_email": similar_email_groups[:limit_domain],
+            "by_same_day_same_ip": same_day_ip_groups[:30],
         }
+
+    def _normalize_user_agent(ua: str) -> str:
+        """Strip version numbers (e.g. /121.0.0.0) so same browser different version groups together."""
+        if not ua or not ua.strip():
+            return ua or ""
+        return re.sub(r"/\d+[\d.]*", "", ua.strip())
 
     @router.get("/admin/cheat-detection/same-device-different-ips")
     async def admin_cheat_same_device_different_ips(current_user: dict = Depends(get_current_user)):
         """
         Find users who share the same browser/device (last_user_agent) but use different IPs.
-        Possible same device / multi-account with VPN or different networks.
+        UA is normalized (version numbers stripped) so same browser different version count as same device.
         Admin or moderator only.
         """
         if not _admin_or_mod(current_user):
@@ -3015,12 +3089,17 @@ def register(router):
             {"is_dead": {"$ne": True}, "last_user_agent": {"$exists": True, "$ne": None, "$ne": ""}},
             {"_id": 0, "id": 1, "username": 1, "email": 1, "registration_ip": 1, "login_ips": 1, "last_login_ip": 1, "last_request_ip": 1, "last_user_agent": 1},
         ).to_list(10000)
-        # Group by exact last_user_agent
         ua_to_users = {}
+        ua_raw_sample = {}
         for u in users:
-            ua = (u.get("last_user_agent") or "").strip()
-            if not ua:
+            ua_raw = (u.get("last_user_agent") or "").strip()
+            if not ua_raw:
                 continue
+            ua_norm = _normalize_user_agent(ua_raw)
+            if not ua_norm:
+                continue
+            if ua_norm not in ua_raw_sample:
+                ua_raw_sample[ua_norm] = ua_raw
             ips = set()
             for key in ("registration_ip", "last_login_ip", "last_request_ip"):
                 v = (u.get(key) or "").strip()
@@ -3036,10 +3115,9 @@ def register(router):
                 "email": u.get("email"),
                 "ips": sorted(ips),
             }
-            ua_to_users.setdefault(ua, []).append(summary)
-        # Only groups with 2+ users and at least 2 distinct IPs across the group
+            ua_to_users.setdefault(ua_norm, []).append(summary)
         groups = []
-        for ua, accs in ua_to_users.items():
+        for ua_norm, accs in ua_to_users.items():
             if len(accs) < 2:
                 continue
             all_ips = set()
@@ -3047,9 +3125,10 @@ def register(router):
                 all_ips.update(a["ips"])
             if len(all_ips) < 2:
                 continue
+            sample_raw = ua_raw_sample.get(ua_norm, ua_norm)
             groups.append({
-                "user_agent": ua[:120] + ("..." if len(ua) > 120 else ""),
-                "user_agent_full": ua,
+                "user_agent": ua_norm[:120] + ("..." if len(ua_norm) > 120 else ""),
+                "user_agent_full": sample_raw[:200] + ("..." if len(sample_raw) > 200 else ""),
                 "users": accs,
                 "account_count": len(accs),
                 "distinct_ip_count": len(all_ips),
