@@ -663,6 +663,7 @@ def register(router):
                         await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"profit": -actual_owner_pay}})
                 else:
                     await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"profit": -owner_pay}})
+                _invalidate_ownership_cache(owner_id)
             else:
                 # No owner: house edge to state head (like dice)
                 head_family_id = await get_head_family_id_for_state(stored_city or city)
@@ -907,7 +908,8 @@ def register(router):
                         buy_back_offer = {"offer_id": offer_id, "points_offered": buy_back_reward, "amount_shortfall": shortfall, "owner_paid": actual_owner_pay, "expires_at": expires_at}
                         await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -actual_owner_pay}})
                 else:
-                    await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -bet}})
+                    await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -actual_owner_pay}})
+                _invalidate_ownership_cache(owner_id)
                 payout = bet + actual_owner_pay
             else:
                 # No owner or push: state head gets house edge on win (like dice)

@@ -659,6 +659,11 @@ def register(router):
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge_lose}})
                 else:
                     await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet - actual_payout}})
+                # Profit should match owner's net after state-head tax
+                await db.slots_ownership.update_one(
+                    {"state": stored_state or state},
+                    {"$inc": {"profit": -(edge_lose if head_family_id else 0)}},
+                )
                 _invalidate_slots_ownership_cache(owner_id)
                 # End owner's 3h: clear ownership and set cooldown
                 cooldown_until = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
@@ -704,7 +709,10 @@ def register(router):
             if head_family_id and edge > 0:
                 await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.slots": edge}})
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}})
-            await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet - actual_payout}})
+            await db.slots_ownership.update_one(
+                {"state": stored_state or state},
+                {"$inc": {"profit": (bet - actual_payout) - (edge if head_family_id else 0)}},
+            )
             _invalidate_slots_ownership_cache(owner_id)
 
         history_entry = {
