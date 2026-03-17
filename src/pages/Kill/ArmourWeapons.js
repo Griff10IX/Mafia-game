@@ -543,7 +543,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
   const weaponStock = Object.values(data?.weapon_stock || {}).reduce((a, b) => a + Number(b || 0), 0);
 
   return (
-    <div className="space-y-3 sm:space-y-4 relative">
+    <div className="space-y-3 sm:space-y-4 relative" data-page="armoury">
       <style>{`
         @keyframes belt-bullets {
           0% { transform: translateX(0); }
@@ -567,10 +567,10 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
       `}</style>
 
       {/* Factory Header */}
-      <div className="relative rounded-lg sm:rounded-xl overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-900/95 to-zinc-900/90 border border-zinc-700/40 shadow-lg">
+      <div className="armoury-main-card relative rounded-lg sm:rounded-xl overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-900/95 to-zinc-900/90 border border-zinc-700/40 shadow-lg">
         {/* Corner rivets */}
         {[{ top: 6, left: 6 }, { top: 6, right: 6 }, { bottom: 6, left: 6 }, { bottom: 6, right: 6 }].map((pos, i) => (
-          <div key={i} className="absolute w-2 h-2 sm:w-3 sm:h-3 rounded-full z-10" style={{
+          <div key={i} className="armoury-rivet absolute w-2 h-2 sm:w-3 sm:h-3 rounded-full z-10" style={{
             ...pos,
             background: 'radial-gradient(circle at 40% 30%, #666, #333)',
             boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.1)',
@@ -578,7 +578,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
         ))}
 
         {/* Warning stripe */}
-        <div className="h-1.5 sm:h-2" style={{
+        <div className="armoury-stripe h-1.5 sm:h-2" style={{
           background: 'repeating-linear-gradient(135deg, var(--noir-primary) 0px, var(--noir-primary) 6px, #1a1a1a 6px, #1a1a1a 12px)',
           opacity: 0.6,
         }} />
@@ -1228,7 +1228,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
         </div>
 
         {/* Bottom warning stripe */}
-        <div className="h-1.5 sm:h-2" style={{
+        <div className="armoury-stripe h-1.5 sm:h-2" style={{
           background: 'repeating-linear-gradient(135deg, var(--noir-primary) 0px, var(--noir-primary) 6px, #1a1a1a 6px, #1a1a1a 12px)',
           opacity: 0.6,
         }} />

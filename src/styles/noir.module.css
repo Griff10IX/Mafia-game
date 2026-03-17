@@ -738,3 +738,26 @@ body[data-theme-variant="modern"] [data-layout="touch-ball-panel"] {
     0 0 30px rgba(var(--noir-primary-rgb), 0.06),
     0 24px 60px rgba(0, 0, 0, 0.6) !important;
 }
+
+/* Armoury: modern theme – no caution tape, modern panel look */
+body[data-theme-variant="modern"] [data-page="armoury"] .armoury-stripe {
+  background: linear-gradient(90deg, transparent 0%, rgba(var(--noir-primary-rgb), 0.25) 50%, transparent 100%) !important;
+  opacity: 1;
+  height: 1px !important;
+}
+body[data-theme-variant="modern"] [data-page="armoury"] .armoury-main-card {
+  background: linear-gradient(180deg, rgba(45, 45, 50, 0.95) 0%, rgba(36, 36, 40, 0.95) 100%) !important;
+  border: 1px solid rgba(var(--noir-primary-rgb), 0.18) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03) inset, 0 18px 48px rgba(12, 12, 14, 0.4) !important;
+}
+body[data-theme-variant="modern"] [data-page="armoury"] .armoury-rivet {
+  background: rgba(80, 80, 85, 0.6) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Store: modern theme – subtle dividers instead of art line */
+body[data-theme-variant="modern"] [data-page="store"] .store-art-line {
+  background: linear-gradient(90deg, transparent 0%, rgba(var(--noir-primary-rgb), 0.2) 50%, transparent 100%) !important;
+  height: 1px;
+  opacity: 1;
+}

@@ -297,7 +297,7 @@ export default function Store() {
   }
 
   return (
-    <div className={`space-y-4 sm:space-y-6 ${styles.pageContent} px-3 sm:px-4 pb-6`} data-testid="store-page">
+    <div className={`space-y-4 sm:space-y-6 ${styles.pageContent} px-3 sm:px-4 pb-6`} data-testid="store-page" data-page="store">
       <style>{STORE_STYLES}</style>
       <div className="relative store-fade-in flex flex-wrap items-end justify-between gap-3">
         <div>
