@@ -9,7 +9,7 @@ import PrestigeBadge from '../../components/PrestigeBadge';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import { filterProfanity } from '../../utils/profanityFilter';
 import styles from '../../styles/noir.module.css';
-import { BadgeShield, BADGE_STYLES as RANKING_BADGE_STYLES } from '../Game/RankingBadges';
+import { BadgeShield, BADGE_STYLES as RANKING_BADGE_STYLES, CATEGORY_LABELS } from '../Game/RankingBadges';
 import StaffUserDetailsPanel from '../../components/StaffUserDetailsPanel';
 
 const PROFILE_STYLES = `
@@ -532,19 +532,23 @@ const ProfileInfoCard = ({
                 </span>
               </div>
               <style>{RANKING_BADGE_STYLES}</style>
-              <div className="flex flex-wrap gap-0.5 items-end">
+              <div className="flex flex-wrap gap-1.5 items-end">
                 {achievementBadges.map((cat) => {
                   const t = cat.current_target;
                   const lbl = t >= 1_000_000 ? `${Math.floor(t / 1_000_000)}M` : t >= 1000 ? `${Math.floor(t / 1000)}K` : String(t);
                   return (
-                    <BadgeShield
-                      key={cat.id}
-                      label={lbl}
-                      unlocked={true}
-                      categoryId={cat.id}
-                      target={t}
-                      size={24}
-                    />
+                    <div key={cat.id} className="flex flex-col items-center gap-0.5">
+                      <BadgeShield
+                        label={lbl}
+                        unlocked={true}
+                        categoryId={cat.id}
+                        target={t}
+                        size={24}
+                      />
+                      <span className="text-[7px] text-mutedForeground font-heading uppercase tracking-wider whitespace-nowrap" title={cat.id}>
+                        {CATEGORY_LABELS[cat.id] || cat.id.replace(/_/g, ' ')}
+                      </span>
+                    </div>
                   );
                 })}
               </div>
@@ -1449,7 +1453,7 @@ export default function Profile() {
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
                 <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">
-                  Referral % Redeem
+                  Referral & Redeem
                 </h2>
               </div>
               <div className="p-3 space-y-2">

@@ -106,6 +106,18 @@ export const CATEGORY_DESCRIPTIONS = {
   hitlist_npc:    'Hitlist NPC kills',
 };
 
+// Short labels for compact display (e.g. on profile)
+export const CATEGORY_LABELS = {
+  crimes:         'Crimes',
+  gta:            'GTA',
+  jail_busts:     'Jail busts',
+  kills:          'Kills',
+  oc_heists:      'OC heists',
+  bullets_melted: 'Melt',
+  booze_runs:     'Booze',
+  hitlist_npc:    'Hitlist',
+};
+
 // ─── CSS animations (injected once via <style>) ───────────────────────────────
 export const BADGE_STYLES = `
   @keyframes badge-bronze   { 0%,100%{ filter:drop-shadow(0 0 2px rgba(180,100,30,.4)); }  50%{ filter:drop-shadow(0 0 5px rgba(220,140,60,.7)); } }
@@ -298,9 +310,15 @@ export function BadgeShield({ label, unlocked, categoryId, target, size: sizePro
   const nlFs        = nl.length > 4 ? 2.5 : nl.length > 3 ? 2.9 : nl.length > 2 ? 3.3 : 3.7;
   const gradId      = `grad-${tierId}-${target}-${categoryId}`;
 
+  const categoryDesc = categoryId && CATEGORY_DESCRIPTIONS[categoryId];
+  const titleParts = [categoryDesc, tier.label].filter(Boolean);
+  if (nl) titleParts.push(nl);
+  if (!unlocked) titleParts.push('(Locked)');
+  const title = titleParts.join(' · ');
+
   return (
     <span
-      title={`${tier.label}${nl ? ' · ' + nl : ''}${unlocked ? '' : ' (Locked)'}`}
+      title={title}
       style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'default' }}
     >
       <svg

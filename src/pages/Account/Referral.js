@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { UserPlus, Copy, Crosshair, DollarSign, Car, Building2, BarChart3, Link2, Wine, KeyRound } from 'lucide-react';
+import { UserPlus, Copy, Crosshair, DollarSign, Car, Building2, BarChart3, Link2, Wine, KeyRound, Gift } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -119,7 +119,7 @@ export default function Referral() {
       <div className="max-w-2xl mx-auto space-y-4 p-4">
         <div className={`flex items-center gap-2 border-b ${styles.panelHeader} pb-2`} style={{ borderBottomColor: 'var(--gm-border)' }}>
           <UserPlus size={20} className="shrink-0" style={{ color: 'var(--gm-gold)' }} />
-          <h1 className={`text-sm sm:text-base font-heading font-bold ${styles.gmTitle}`}>Referral % Redeem</h1>
+          <h1 className={`text-sm sm:text-base font-heading font-bold ${styles.gmTitle}`}>Referral & Redeem</h1>
         </div>
 
         {/* Your link */}
@@ -268,6 +268,27 @@ export default function Referral() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+
+        {/* From redeemed codes — lifetime totals */}
+        <div className={cardClass} style={{ animationDelay: '0.22s' }}>
+          <div className={cardHeaderClass}>
+            <h2 className={cardTitleClass}>
+              <KeyRound size={14} className="sm:w-4 sm:h-4" />
+              From redeemed codes
+            </h2>
+          </div>
+          <div className="p-2.5 sm:p-3 space-y-3">
+            <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>Lifetime totals from codes you have redeemed</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              <StatCard label="Cash" value={formatMoney(data?.redeem_stats?.total_money || 0)} valueColor="text-emerald-400" icon={DollarSign} />
+              <StatCard label="Points" value={Number(data?.redeem_stats?.total_points || 0).toLocaleString()} valueColor="text-primary" icon={BarChart3} />
+              <StatCard label="Respect" value={Number(data?.redeem_stats?.total_respect_points || 0).toLocaleString()} valueColor="text-amber-400" icon={UserPlus} />
+              <StatCard label="Loot pieces" value={Number(data?.redeem_stats?.total_loot_box_pieces || 0).toLocaleString()} valueColor="text-foreground" icon={Gift} />
+              <StatCard label="Cars" value={Number(data?.redeem_stats?.total_cars || 0).toLocaleString()} valueColor="text-foreground" icon={Car} />
+              <StatCard label="Tokens" value={Number(data?.redeem_stats?.total_tokens || 0).toLocaleString()} valueColor="text-foreground" icon={KeyRound} />
+            </div>
           </div>
         </div>
 

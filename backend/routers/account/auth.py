@@ -1323,11 +1323,20 @@ def register(router):
         signup_bonus = None
         if referred_by_username:
             signup_bonus = "Premium rank bar, 500 respect points, and 18 tokens (use them; they can't be sold on Quick Trade). Plus 2% higher crime payouts and a slight GTA rare car boost."
+        redeem_stats = {
+            "total_money": int(current_user.get("redeem_stats_total_money") or 0),
+            "total_points": int(current_user.get("redeem_stats_total_points") or 0),
+            "total_respect_points": int(current_user.get("redeem_stats_total_respect_points") or 0),
+            "total_loot_box_pieces": int(current_user.get("redeem_stats_total_loot_box_pieces") or 0),
+            "total_cars": int(current_user.get("redeem_stats_total_cars") or 0),
+            "total_tokens": int(current_user.get("redeem_stats_total_tokens") or 0),
+        }
         return {
             "username": username,
             "referred_by_username": referred_by_username,
             "signup_bonus": signup_bonus,
             "earnings": earnings,
+            "redeem_stats": redeem_stats,
         }
 
     class RedeemRequestBody(BaseModel):
@@ -1367,6 +1376,13 @@ def register(router):
             cfg = TOKEN_CONFIG.get(token_type)
             if cfg and amount:
                 inc[cfg["count_field"]] = int(amount)
+        # Lifetime stats for "amount received from redeems"
+        inc["redeem_stats_total_money"] = int(rewards.get("money") or 0)
+        inc["redeem_stats_total_points"] = int(rewards.get("points") or 0)
+        inc["redeem_stats_total_respect_points"] = int(rewards.get("respect_points") or 0)
+        inc["redeem_stats_total_loot_box_pieces"] = int(rewards.get("loot_box_pieces") or 0)
+        inc["redeem_stats_total_cars"] = len(rewards.get("cars") or [])
+        inc["redeem_stats_total_tokens"] = sum(int(a) for a in (rewards.get("tokens") or {}).values())
         if inc:
             await db.users.update_one({"id": user_id}, {"$inc": inc})
         for car_id in (rewards.get("cars") or []):

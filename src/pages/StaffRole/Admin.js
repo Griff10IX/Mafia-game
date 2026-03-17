@@ -128,11 +128,6 @@ const SEARCHABLE_TOOLS = [
   { label: 'Admin Credentials', categoryId: 'admin-mod-tools', collapseKey: 'adminCreds', keywords: ['admin', 'credentials', 'email', 'password'] },
 ];
 
-function scrollToCategory(id) {
-  const el = document.getElementById(id);
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
 const SECTIONS_KEY = 'admin_sections_collapsed';
 
 function loadCollapsed() {
@@ -304,6 +299,18 @@ export default function Admin() {
   const [toolSearchFocused, setToolSearchFocused] = useState(false);
   const searchInputRef = useRef(null);
 
+  const [activeCategoryId, setActiveCategoryId] = useState('admin-players');
+  const visibleCategories = isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => MOD_ONLY_CATEGORY_IDS.includes(c.id));
+  useEffect(() => {
+    const h = (typeof window !== 'undefined' && window.location.hash) ? window.location.hash.slice(1) : '';
+    const visible = isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => MOD_ONLY_CATEGORY_IDS.includes(c.id));
+    if (h && ADMIN_CATEGORIES.some((c) => c.id === h) && visible.some((c) => c.id === h)) {
+      setActiveCategoryId(h);
+      return;
+    }
+    if (!isAdmin && visible.length > 0) setActiveCategoryId(visible[0].id);
+  }, [isAdmin]);
+
   const filteredTools = useMemo(() => {
     if (!toolSearch.trim()) return [];
     const q = toolSearch.toLowerCase().trim();
@@ -314,13 +321,14 @@ export default function Admin() {
   }, [toolSearch]);
 
   const handleToolSelect = (tool) => {
-    scrollToCategory(tool.categoryId);
+    setActiveCategoryId(tool.categoryId);
     if (tool.collapseKey) {
       setCollapsed(prev => ({ ...prev, [tool.collapseKey]: false }));
     }
     setToolSearch('');
     setToolSearchFocused(false);
     searchInputRef.current?.blur();
+    if (typeof window !== 'undefined') window.location.hash = tool.categoryId;
   };
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
   const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
@@ -2727,7 +2735,7 @@ export default function Admin() {
               </p>
             ))}
             <button
-              onClick={() => { scrollToCategory('admin-gameworld'); setCollapsed((prev) => ({ ...prev, stateHeads: false })); }}
+              onClick={() => { setActiveCategoryId('admin-gameworld'); setCollapsed((prev) => ({ ...prev, stateHeads: false })); if (typeof window !== 'undefined') window.location.hash = 'admin-gameworld'; }}
               className="mt-2 text-[10px] font-heading font-bold text-red-400 underline hover:text-red-300"
             >
               → Go to State Heads section to fix
@@ -2736,34 +2744,31 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Sticky category navigation */}
-      <nav className="sticky top-0 z-20 -mx-2 px-2 py-2 bg-background/95 border-b border-primary/20 rounded-b-md admin-category-nav admin-command-bar backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="flex flex-col gap-2">
-          {/* Search bar */}
+      {/* Sidebar + main layout: one category at a time */}
+      <div className="flex gap-4 flex-1 min-h-0">
+        {/* Sidebar: search + category list */}
+        <aside className="w-[220px] shrink-0 flex flex-col gap-3 border-r border-primary/20 pr-4">
           <div className="relative">
-            <div className="relative">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-mutedForeground" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={toolSearch}
-                onChange={(e) => setToolSearch(e.target.value)}
-                onFocus={() => setToolSearchFocused(true)}
-                onBlur={() => setTimeout(() => setToolSearchFocused(false), 150)}
-                placeholder="Search tools... (e.g. lock, casino, bodyguard)"
-                className="w-full pl-8 pr-3 py-1.5 rounded-md border border-primary/30 bg-zinc-900/80 text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:border-primary/60 focus:outline-none"
-              />
-              {toolSearch && (
-                <button
-                  type="button"
-                  onClick={() => { setToolSearch(''); searchInputRef.current?.focus(); }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-mutedForeground hover:text-foreground"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-            {/* Search suggestions dropdown */}
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-mutedForeground" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={toolSearch}
+              onChange={(e) => setToolSearch(e.target.value)}
+              onFocus={() => setToolSearchFocused(true)}
+              onBlur={() => setTimeout(() => setToolSearchFocused(false), 150)}
+              placeholder="Search tools..."
+              className="w-full pl-8 pr-3 py-1.5 rounded-md border border-primary/30 bg-zinc-900/80 text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:border-primary/60 focus:outline-none"
+            />
+            {toolSearch && (
+              <button
+                type="button"
+                onClick={() => { setToolSearch(''); searchInputRef.current?.focus(); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-mutedForeground hover:text-foreground"
+              >
+                <X size={12} />
+              </button>
+            )}
             {toolSearchFocused && filteredTools.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-primary/30 rounded-md shadow-lg max-h-64 overflow-y-auto z-30">
                 {filteredTools.map((tool, idx) => {
@@ -2791,26 +2796,29 @@ export default function Admin() {
               </div>
             )}
           </div>
-          {/* Category buttons */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {(isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => MOD_ONLY_CATEGORY_IDS.includes(c.id))).map(({ id, label, icon: Icon }) => (
+          <nav className="flex flex-col gap-1">
+            {visibleCategories.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 type="button"
-                onClick={() => scrollToCategory(id)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-heading font-bold uppercase tracking-wide border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                onClick={() => { setActiveCategoryId(id); if (typeof window !== 'undefined') window.location.hash = id; }}
+                className={`flex items-center gap-2 px-2.5 py-2 rounded-md text-[11px] font-heading font-bold uppercase tracking-wide border transition-colors text-left ${
+                  activeCategoryId === id
+                    ? 'border-primary bg-primary/20 text-primary'
+                    : 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/20'
+                }`}
               >
-                <Icon size={12} />
-                {label}
+                <Icon size={14} className="shrink-0" />
+                <span className="truncate">{label}</span>
               </button>
             ))}
-          </div>
-        </div>
-      </nav>
-      <div className="admin-scan-line" />
+          </nav>
+        </aside>
 
-      {/* Target Username */}
-      <div className={`relative admin-module admin-focus-block ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        {/* Main: Target Username (sticky) + active category content only */}
+        <main className="flex-1 min-w-0 space-y-4 overflow-y-auto">
+          {/* Target Username - sticky so it stays visible when scrolling */}
+          <div className={`sticky top-0 z-10 relative admin-module admin-focus-block ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-background/95 backdrop-blur`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎯 Target Username</span>
@@ -2825,8 +2833,10 @@ export default function Admin() {
           />
         </div>
         <div className="admin-art-line text-primary mx-3" />
-      </div>
+          </div>
 
+          {activeCategoryId === 'admin-players' && (
+          <>
       {/* Search users (username or email) */}
       <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -3544,10 +3554,10 @@ export default function Admin() {
         </div>
       </section>
       )}
+          </>
+          )}
 
-
-      {/* ─── Game World (admin only) ─── */}
-      {isAdmin && (
+      {activeCategoryId === 'admin-gameworld' && isAdmin && (
       <section id="admin-gameworld" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <LayoutGrid size={12} />
@@ -3750,6 +3760,15 @@ export default function Admin() {
             <div className="pt-2 border-t border-primary/20">
               <p className="text-xs font-medium text-foreground mb-1">Global events</p>
               <p className="text-[10px] text-mutedForeground mb-2">Enable or disable each event type. Disabled events are skipped on their day (no event that day). Event types are defined in code (GAME_EVENTS).</p>
+              <div className="flex flex-wrap gap-2 items-center mb-2">
+                <span className="text-[10px] text-mutedForeground">In pool for Random (from selected):</span>
+                <BtnSecondary onClick={() => setSelectedForRandomPool(Object.fromEntries((eventList || []).map((ev) => [ev.id, true])))}>
+                  Select all
+                </BtnSecondary>
+                <BtnSecondary onClick={() => setSelectedForRandomPool({})}>
+                  Deselect all
+                </BtnSecondary>
+              </div>
               <div className="space-y-1.5 max-h-64 overflow-y-auto">
                 {eventList.map((ev) => (
                   <div key={ev.id} className="flex flex-wrap items-center gap-2 py-1.5 px-2 rounded bg-black/20">
@@ -4341,8 +4360,7 @@ export default function Admin() {
       </section>
       )}
 
-      {/* ─── Security & Cloudflare (admin only) ─── */}
-      {isAdmin && (
+      {activeCategoryId === 'admin-security' && isAdmin && (
       <section id="admin-security" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Globe size={12} />
@@ -4932,7 +4950,7 @@ export default function Admin() {
       </section>
       )}
 
-      {/* ─── Cheat Detection ─── */}
+      {activeCategoryId === 'admin-cheat' && (
       <section id="admin-cheat" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <AlertTriangle size={12} />
@@ -5151,9 +5169,9 @@ export default function Admin() {
         </div>
 
       </section>
+      )}
 
-      {/* ─── Analytics (admin only) ─── */}
-      {isAdmin && (
+      {activeCategoryId === 'admin-analytics' && isAdmin && (
       <section id="admin-analytics" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <BarChart3 size={12} />
@@ -5791,7 +5809,7 @@ export default function Admin() {
       </section>
       )}
 
-      {/* ─── Logs ─── */}
+      {activeCategoryId === 'admin-logs' && (
       <section id="admin-logs" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <ScrollText size={12} />
@@ -6475,9 +6493,9 @@ export default function Admin() {
           )}
         </div>
       </section>
+      )}
 
-      {/* ─── Testing Tools (admin only) ─── */}
-      {isAdmin && (
+      {activeCategoryId === 'admin-testing' && isAdmin && (
       <section id="admin-testing" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Wrench size={12} />
@@ -6638,8 +6656,7 @@ export default function Admin() {
       </section>
       )}
 
-      {/* ─── Quick & Bulk (admin only) ─── */}
-      {isAdmin && (
+      {activeCategoryId === 'admin-quick' && isAdmin && (
       <section id="admin-quick" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Gift size={12} />
@@ -6788,8 +6805,7 @@ export default function Admin() {
       </section>
       )}
 
-      {/* ─── Database (admin only) ─── */}
-      {isAdmin && (
+      {activeCategoryId === 'admin-database' && isAdmin && (
       <section id="admin-database" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Skull size={12} />
@@ -6913,8 +6929,7 @@ export default function Admin() {
       )}
 
 
-      {/* ─── Staff Management ─── */}
-      {(isAdmin || isModerator) && (
+      {activeCategoryId === 'admin-staff' && (isAdmin || isModerator) && (
       <section id="admin-staff" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Shield size={12} />
@@ -7048,8 +7063,7 @@ export default function Admin() {
       </section>
       )}
 
-      {/* ─── Mod Tools ─── */}
-      {isModerator && (
+      {activeCategoryId === 'admin-mod-tools' && isModerator && (
       <section id="admin-mod-tools" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Palette size={12} />
@@ -7099,6 +7113,8 @@ export default function Admin() {
         </div>
       </section>
       )}
+        </main>
+      </div>
     </div>
   );
 }
