@@ -348,9 +348,12 @@ export default function Prestige() {
         </div>
 
         {level === 0 ? (
-          <div className="p-4">
+          <div className="p-4 space-y-2">
             <p className="text-[10px] text-zinc-500 font-heading italic">
               Reach Godfather rank and prestige to unlock passive bonuses on all activities.
+            </p>
+            <p className="text-[10px] text-zinc-500 font-heading">
+              Badge effects (crime, GTA, jail, OC, booze, melt, hitlist, kills) gain a 0.5% boost per prestige level.
             </p>
           </div>
         ) : (
@@ -379,6 +382,9 @@ export default function Prestige() {
                 </div>
               );
             })}
+            <p className="col-span-2 md:col-span-1 text-[9px] font-heading text-zinc-500 px-3 pt-1">
+              Badge effects (crime, GTA, jail, OC, booze, melt, hitlist, kills) gain a 0.5% boost per prestige level.
+            </p>
           </div>
         )}
       </div>

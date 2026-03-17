@@ -89,7 +89,7 @@ def compute_profile_badges(user: dict) -> list:
 
 
 async def get_badge_bonuses(user_id: str) -> dict:
-    """Return unlocked tier count per bonus category (excludes rank). Keys: crimes, gta, jail_busts, kills, oc_heists, bullets_melted, booze_runs, hitlist_npc."""
+    """Return unlocked tier count per bonus category (excludes rank). Keys: crimes, gta, jail_busts, kills, oc_heists, bullets_melted, booze_runs, hitlist_npc. Also includes prestige_badge_mult (1 + 0.5% per prestige level) to scale badge effects."""
     from server import db
     u = await db.users.find_one(
         {"id": user_id},
@@ -105,6 +105,8 @@ async def get_badge_bonuses(user_id: str) -> dict:
     for cat in BADGE_CATEGORIES:
         computed = _compute_category(cat, user)
         out[cat["id"]] = computed["unlocked_count"]
+    prestige_level = int(user.get("prestige_level") or 0)
+    out["prestige_badge_mult"] = 1 + prestige_level * 0.005
     return out
 
 

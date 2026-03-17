@@ -290,14 +290,14 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
     total_cost_stored = int(carrying_cost.get(booze_id, 0))
     cost_of_sold = (total_cost_stored * amount // have) if have else 0
     profit = revenue - cost_of_sold
-    # Badge bonus: 0.1% per booze runs badge (applied when is_run)
+    # Badge bonus: 0.1% per booze runs badge (applied when is_run); prestige: 0.5% boost per level
     buy_location = (user.get("booze_buy_location") or {}).get(booze_id)
     is_run = buy_location is not None and buy_location != current_state
     if is_run:
         try:
             from routers.game.achievements import get_badge_bonuses
             bb = await get_badge_bonuses(user.get("id") or "")
-            profit = int(profit * (1 + bb.get("booze_runs", 0) * 0.001))
+            profit = int(profit * (1 + bb.get("booze_runs", 0) * 0.001) * bb.get("prestige_badge_mult", 1))
             revenue = cost_of_sold + profit
         except Exception:
             pass

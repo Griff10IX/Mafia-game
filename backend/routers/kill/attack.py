@@ -714,8 +714,8 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
         from routers.game.achievements import get_badge_bonuses
         bb_a = await get_badge_bonuses(current_user.get("id") or "")
         bb_v = await get_badge_bonuses(target.get("id") or "") if not target.get("is_npc") else {}
-        attacker_kill_badges = bb_a.get("kills", 0)
-        victim_kill_badges = bb_v.get("kills", 0)
+        attacker_kill_badges = bb_a.get("kills", 0) * bb_a.get("prestige_badge_mult", 1)
+        victim_kill_badges = bb_v.get("kills", 0) * bb_v.get("prestige_badge_mult", 1)
     except Exception:
         pass
     breakdown = _bullets_to_kill_breakdown(target_armour, target_rank_id, best_damage, attacker_rank_id, attacker_kill_badges, victim_kill_badges)
@@ -833,8 +833,8 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         from routers.game.achievements import get_badge_bonuses
         bb_a = await get_badge_bonuses(current_user.get("id") or "")
         bb_v = await get_badge_bonuses(target.get("id") or "") if not target.get("is_npc") else {}
-        attacker_kill_badges = bb_a.get("kills", 0)
-        victim_kill_badges = bb_v.get("kills", 0)
+        attacker_kill_badges = bb_a.get("kills", 0) * bb_a.get("prestige_badge_mult", 1)
+        victim_kill_badges = bb_v.get("kills", 0) * bb_v.get("prestige_badge_mult", 1)
     except Exception:
         pass
     bullets_base = _bullets_to_kill(target_armour, target_rank_id, best_damage, attacker_rank_id, attacker_kill_badges, victim_kill_badges)
@@ -1005,7 +1005,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 try:
                     from routers.game.achievements import get_badge_bonuses
                     bb = await get_badge_bonuses(current_user.get("id") or "")
-                    hitlist_mult = 1 + bb.get("hitlist_npc", 0) * 0.001
+                    hitlist_mult = (1 + bb.get("hitlist_npc", 0) * 0.001) * bb.get("prestige_badge_mult", 1)
                 except Exception:
                     pass
                 rp_added = int((rewards.get("rank_points", 0) or 0) * hitlist_mult)
