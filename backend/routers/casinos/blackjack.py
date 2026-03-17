@@ -197,13 +197,17 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
         result = "lose"
         payout = 0
         head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
-        if head_family_id:
-            edge_lose = int(bet * BLACKJACK_HOUSE_EDGE)
-            if edge_lose > 0:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.blackjack": edge_lose}})
-        elif owner_id:
-            await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-            await db.blackjack_ownership.update_one({"city": bj_city}, {"$inc": {"total_earnings": bet, "profit": bet}})
+        edge_lose = int(bet * BLACKJACK_HOUSE_EDGE) if head_family_id else 0
+        if head_family_id and edge_lose > 0:
+            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.blackjack": edge_lose}})
+        if owner_id:
+            owner_take = max(0, bet - edge_lose)
+            if owner_take > 0:
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_take}})
+            await db.blackjack_ownership.update_one(
+                {"city": bj_city},
+                {"$inc": {"total_earnings": bet, "profit": owner_take}},
+            )
             _invalidate_ownership_cache(owner_id)
     else:
         result = "push"
@@ -698,13 +702,18 @@ def register(router):
             if not debit_res:
                 raise HTTPException(status_code=400, detail="Not enough money")
             head_family_id = await get_head_family_id_for_state(stored_city or city)
-            if head_family_id:
-                edge_lose = int(bet * BLACKJACK_HOUSE_EDGE)
-                if edge_lose > 0:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.blackjack": edge_lose}})
-            elif owner_id:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-                await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"total_earnings": bet, "profit": bet}})
+            edge_lose = int(bet * BLACKJACK_HOUSE_EDGE) if head_family_id else 0
+            if head_family_id and edge_lose > 0:
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.blackjack": edge_lose}})
+            if owner_id:
+                owner_take = max(0, bet - edge_lose)
+                if owner_take > 0:
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_take}})
+                await db.blackjack_ownership.update_one(
+                    {"city": stored_city or city},
+                    {"$inc": {"total_earnings": bet, "profit": owner_take}},
+                )
+                _invalidate_ownership_cache(owner_id)
             await _blackjack_settle_and_save_history(
                 current_user.get("id") or "", current_user.get("username"), city, bet, "lose", 0, player_hand, dealer_hand, player_total, dealer_total
             )
@@ -768,15 +777,16 @@ def register(router):
             new_balance = (user.get("money", 0) or 0)
             bj_city = game.get("city")
             head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
-            if head_family_id:
-                edge_lose = int(bet * BLACKJACK_HOUSE_EDGE)
-                if edge_lose > 0:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.blackjack": edge_lose}})
-            elif owner_id:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+            edge_lose = int(bet * BLACKJACK_HOUSE_EDGE) if head_family_id else 0
+            if head_family_id and edge_lose > 0:
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.blackjack": edge_lose}})
+            if owner_id:
+                owner_take = max(0, bet - edge_lose)
+                if owner_take > 0:
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_take}})
                 await db.blackjack_ownership.update_one(
                     {"city": bj_city},
-                    {"$inc": {"total_earnings": bet, "profit": bet}}
+                    {"$inc": {"total_earnings": bet, "profit": owner_take}},
                 )
                 _invalidate_ownership_cache(owner_id)
             await _blackjack_settle_and_save_history(

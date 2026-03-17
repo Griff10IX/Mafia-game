@@ -481,12 +481,15 @@ def register(router):
         if not win:
             if head_family_id and edge > 0:
                 await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.roulette": edge}})
-            elif owner_id:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": total_stake}})
+            if owner_id:
+                owner_take = max(0, total_stake - (edge if head_family_id else 0))
+                if owner_take > 0:
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_take}})
                 await db.roulette_ownership.update_one(
                     {"city": stored_city or city},
-                    {"$inc": {"total_earnings": total_stake, "profit": total_stake}}
+                    {"$inc": {"total_earnings": total_stake, "profit": owner_take}},
                 )
+                _invalidate_ownership_cache(owner_id)
         elif not owner_id:
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": total_payout}})
             ownership_transferred = False
@@ -511,6 +514,7 @@ def register(router):
                 {"city": stored_city or city},
                 {"$inc": {"total_earnings": -actual_net_cost, "profit": -actual_net_cost}}
             )
+            _invalidate_ownership_cache(owner_id)
             ownership_transferred = False
             buy_back_offer = None
             buy_back_reward = int((ownership_doc or {}).get("buy_back_reward") or 0)

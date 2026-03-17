@@ -489,6 +489,7 @@ def register(router):
                     {"city": stored_city or city},
                     {"$inc": {"profit": bet - actual_payout}}
                 )
+                _invalidate_ownership_cache(owner_id)
                 new_money = user_money - bet + actual_payout
                 points_offered = int((doc or {}).get("buy_back_reward") or 0)
                 if shortfall > 0:
@@ -541,6 +542,16 @@ def register(router):
                         {"city": stored_city or city},
                         {"$inc": {"total_earnings": bet, "profit": bet}}
                     )
+                    _invalidate_ownership_cache(owner_id)
+                if head_family_id and owner_id:
+                    owner_take = max(0, bet - edge_lose)
+                    if owner_take > 0:
+                        await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_take}})
+                    await db.horseracing_ownership.update_one(
+                        {"city": stored_city or city},
+                        {"$inc": {"total_earnings": bet, "profit": owner_take}}
+                    )
+                    _invalidate_ownership_cache(owner_id)
         history_entry = {
             "bet": bet,
             "horse_id": horse_id,

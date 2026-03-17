@@ -237,9 +237,12 @@ def register(router):
             edge_lose = int(stake * DICE_HOUSE_EDGE)
             if head_family_id and edge_lose > 0:
                 await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.dice": edge_lose}})
-            elif owner_id:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
-                await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake}})
+            if owner_id:
+                owner_take = max(0, stake - (edge_lose if head_family_id else 0))
+                if owner_take > 0:
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_take}})
+                await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": owner_take}})
+                _invalidate_ownership_cache(owner_id)
             await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "chosen": chosen, "roll": roll, "win": False, "payout": 0})
             return {"roll": roll, "win": False, "payout": 0, "actual_payout": 0, "owner_paid": 0, "shortfall": 0, "ownership_transferred": False, "buy_back_offer": None}
         if not owner_id:
@@ -276,6 +279,7 @@ def register(router):
                 else:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
                     await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
+                    _invalidate_ownership_cache(owner_id)
             else:
                 expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
                 offer_id = str(uuid.uuid4())
@@ -295,6 +299,7 @@ def register(router):
                 await db.dice_buy_back_offers.insert_one(buy_back_doc)
                 buy_back_offer = {"offer_id": offer_id, "points_offered": points_offered, "amount_shortfall": shortfall, "owner_paid": actual_payout, "expires_at": expires_at}
             await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
+            _invalidate_ownership_cache(owner_id)
         else:
             if head_family_id:
                 await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.dice": edge}})
@@ -302,6 +307,7 @@ def register(router):
             else:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
             await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
+            _invalidate_ownership_cache(owner_id)
         await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "shortfall": shortfall})
         return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "owner_paid": actual_payout, "shortfall": shortfall, "ownership_transferred": ownership_transferred, "buy_back_offer": buy_back_offer}
 

@@ -593,9 +593,15 @@ def register(router):
                 edge_lose = int(bet * SLOTS_HOUSE_EDGE)
                 if edge_lose > 0:
                     await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.slots": edge_lose}})
+                owner_take = max(0, bet - edge_lose)
+                if owner_take > 0:
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_take}})
+                await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": owner_take}})
+                _invalidate_slots_ownership_cache(owner_id)
             else:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                 await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet}})
+                _invalidate_slots_ownership_cache(owner_id)
             await log_gambling(
                 current_user.get("id") or "",
                 current_user.get("username") or "?",
@@ -653,6 +659,7 @@ def register(router):
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge_lose}})
                 else:
                     await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet - actual_payout}})
+                _invalidate_slots_ownership_cache(owner_id)
                 # End owner's 3h: clear ownership and set cooldown
                 cooldown_until = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
                 await db.users.update_one({"id": owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
@@ -698,6 +705,7 @@ def register(router):
                 await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.slots": edge}})
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}})
             await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet - actual_payout}})
+            _invalidate_slots_ownership_cache(owner_id)
 
         history_entry = {
             "bet": bet,

@@ -556,9 +556,11 @@ def register(router):
                     if edge_lose > 0:
                         await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.videopoker": edge_lose}})
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge_lose}})
-                    await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"total_earnings": bet, "profit": bet}})
+                    await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"total_earnings": bet, "profit": max(0, bet - edge_lose)}})
+                    _invalidate_ownership_cache(owner_id)
                 else:
                     await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"total_earnings": bet, "profit": bet}})
+                    _invalidate_ownership_cache(owner_id)
             elif head_family_id:
                 edge_lose = int(bet * VIDEO_POKER_HOUSE_EDGE)
                 if edge_lose > 0:
@@ -584,6 +586,7 @@ def register(router):
                 # Track biggest payout for owner
                 await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": actual_payout}}, {"$set": {"biggest_casino_payout": actual_payout}})
                 await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"profit": bet - actual_payout}})
+                _invalidate_ownership_cache(owner_id)
                 payout = actual_payout
                 if shortfall > 0:
                     ownership_transferred = True
