@@ -90,6 +90,19 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // ── 403 Account under investigation → redirect to lock page immediately (no delay until next /auth/me) ──
+    if (error.response?.status === 403 && !hasRedirectedOnAuthFailure && !isPublicPath() && typeof window !== 'undefined') {
+      const detail = error.response?.data?.detail;
+      const isAccountLocked = typeof detail === 'string' && (
+        detail.toLowerCase().includes('under investigation') || detail.toLowerCase().includes('account status page')
+      );
+      if (isAccountLocked) {
+        hasRedirectedOnAuthFailure = true;
+        window.location.replace('/locked');
+        return Promise.reject(error);
+      }
+    }
+
     if ((error.response?.status === 401 || error.response?.status === 403) && !hasRedirectedOnAuthFailure && !isPublicPath()) {
       const isAuthMe = error.config?.url?.includes('/auth/me');
       if (error.response?.status === 401 || (error.response?.status === 403 && isAuthMe)) {
