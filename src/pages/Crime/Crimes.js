@@ -15,15 +15,16 @@ const CRIMES_STYLES = `
   /* Mobile: make crimes panels use more of the screen and fit more rows */
   @media (max-width: 640px) {
     .cr-page-root {
-      padding-left: 8px;
-      padding-right: 8px;
-      row-gap: 4px;
+      padding-left: 4px;
+      padding-right: 4px;
+      row-gap: 2px;
     }
     .cr-main-panel,
     .cr-prestige-panel,
     .cr-stats-panel {
-      margin-left: -4px;
-      margin-right: -4px;
+      /* Counteract Layout <main> padding (p-4) so panels hug screen edges on iPhone */
+      margin-left: -16px;
+      margin-right: -16px;
     }
     .cr-row {
       padding-top: 3px !important;
