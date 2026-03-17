@@ -85,6 +85,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Login Lock', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['login', 'lock', 'maintenance'] },
   // Security
   { label: 'Security Summary', categoryId: 'admin-security', collapseKey: 'securitySummary', keywords: ['security', 'summary', 'flags'] },
+  { label: 'Session stats', categoryId: 'admin-security', collapseKey: 'sessionStats', keywords: ['session', 'sessions', 'active', 'log out', 'revoke', '24h'] },
   { label: 'IP Bans', categoryId: 'admin-security', collapseKey: 'ipBans', keywords: ['ip', 'ban', 'block'] },
   { label: 'Rate Limits', categoryId: 'admin-security', collapseKey: 'rateLimits', keywords: ['rate', 'limit', 'throttle'] },
   { label: 'Cloudflare Bot Block', categoryId: 'admin-security', collapseKey: 'cfBotBlock', keywords: ['cloudflare', 'bot', 'block', 'cf'] },
@@ -341,6 +342,10 @@ export default function Admin() {
   const [viewRegistrationInfo, setViewRegistrationInfo] = useState(null);
   const [adminUserSessions, setAdminUserSessions] = useState(null);
   const [adminUserSessionsLoading, setAdminUserSessionsLoading] = useState(false);
+  const [sessionStats, setSessionStats] = useState(null);
+  const [sessionStatsLoading, setSessionStatsLoading] = useState(false);
+  const [revokeOldSessionsLoading, setRevokeOldSessionsLoading] = useState(false);
+  const [revokeOldUserSessionsLoading, setRevokeOldUserSessionsLoading] = useState(false);
   const [viewRegistrationLoading, setViewRegistrationLoading] = useState(false);
   const [userInspectEmail, setUserInspectEmail] = useState('');
   const [userInspectResult, setUserInspectResult] = useState(null);
@@ -1468,6 +1473,48 @@ export default function Admin() {
       handleLoadUserSessions();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
+    }
+  };
+
+  const handleLoadSessionStats = async () => {
+    setSessionStatsLoading(true);
+    try {
+      const res = await api.get('/admin/sessions/stats');
+      setSessionStats(res.data ?? null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load session stats');
+      setSessionStats(null);
+    } finally {
+      setSessionStatsLoading(false);
+    }
+  };
+
+  const handleRevokeOldSessions = async () => {
+    if (!window.confirm('Log out all sessions older than 24 hours (site-wide)?')) return;
+    setRevokeOldSessionsLoading(true);
+    try {
+      const res = await api.post('/admin/sessions/revoke-old', {});
+      toast.success(res.data?.message ?? 'Done');
+      handleLoadSessionStats();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setRevokeOldSessionsLoading(false);
+    }
+  };
+
+  const handleRevokeOldUserSessions = async () => {
+    if (!(formData.targetUsername || '').trim()) { toast.error('Enter target username'); return; }
+    if (!window.confirm(`Log out sessions older than 24h for ${formData.targetUsername}?`)) return;
+    setRevokeOldUserSessionsLoading(true);
+    try {
+      const res = await api.post('/admin/sessions/revoke-old', { target_username: formData.targetUsername });
+      toast.success(res.data?.message ?? 'Done');
+      if (adminUserSessions) handleLoadUserSessions();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setRevokeOldUserSessionsLoading(false);
     }
   };
 
@@ -3558,6 +3605,14 @@ export default function Admin() {
               <BtnPrimary onClick={handleLoadUserSessions} disabled={adminUserSessionsLoading}>
                 {adminUserSessionsLoading ? '...' : 'View sessions'}
               </BtnPrimary>
+              <button
+                type="button"
+                onClick={handleRevokeOldUserSessions}
+                disabled={revokeOldUserSessionsLoading || !(formData.targetUsername || '').trim()}
+                className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-amber-500/20 border-amber-500/40 text-amber-400 hover:bg-amber-500/30 disabled:opacity-50"
+              >
+                {revokeOldUserSessionsLoading ? '...' : 'Log out >24h'}
+              </button>
             </ActionRow>
             {adminUserSessions && (
               <div className="pl-6 pr-2 py-2 space-y-1 border-l-2 border-primary/20 ml-1">
@@ -4414,6 +4469,53 @@ export default function Admin() {
           <Globe size={12} />
           Security & Cloudflare
         </h2>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Users}
+          title="Session stats"
+          badge={
+            <span className="text-[10px] font-heading">
+              {sessionStatsLoading ? (
+                <span className="text-mutedForeground">Loading...</span>
+              ) : sessionStats != null ? (
+                <span className="text-foreground">{sessionStats.total_sessions ?? 0} active session(s)</span>
+              ) : (
+                <span className="text-mutedForeground">—</span>
+              )}
+            </span>
+          }
+          isCollapsed={collapsed.sessionStats}
+          onToggle={() => toggleSection('sessionStats')}
+        />
+        {!collapsed.sessionStats && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground">
+              Total active sessions across all users. Revoke all sessions that have had no activity for 24+ hours.
+            </p>
+            <div className="flex flex-wrap gap-2 items-center">
+              <BtnPrimary onClick={handleLoadSessionStats} disabled={sessionStatsLoading}>
+                {sessionStatsLoading ? '...' : 'Refresh'}
+              </BtnPrimary>
+              {sessionStats != null && (
+                <span className="text-[10px] text-mutedForeground">
+                  {sessionStats.users_with_sessions ?? 0} user(s) with sessions
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleRevokeOldSessions}
+                disabled={revokeOldSessionsLoading}
+                className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-amber-500/20 border-amber-500/40 text-amber-400 hover:bg-amber-500/30 disabled:opacity-50"
+              >
+                {revokeOldSessionsLoading ? '...' : 'Log out sessions older than 24h'}
+              </button>
+            </div>
+          </div>
+        )}
+        </div>
+
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader

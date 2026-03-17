@@ -119,6 +119,11 @@ class AdminRevokeSessionRequest(BaseModel):
     session_id: str
 
 
+class AdminRevokeOldSessionsRequest(BaseModel):
+    """Optional target_username: if set, only revoke old sessions for that user; otherwise all users."""
+    target_username: Optional[str] = None
+
+
 class DropUserCasinoRequest(BaseModel):
     user_id: str
     game_type: str  # dice, roulette, blackjack, horseracing, videopoker, slots
@@ -1392,6 +1397,93 @@ def register(router):
         if result.modified_count == 0:
             raise HTTPException(status_code=404, detail="Session not found or already revoked")
         return {"message": f"Session revoked for {target.get('username', body.target_username)}."}
+
+    def _session_datetime(session: dict) -> Optional[datetime]:
+        """Parse last_used_at or created_at from a session entry; return None if unparseable."""
+        for key in ("last_used_at", "created_at"):
+            val = session.get(key)
+            if not val:
+                continue
+            try:
+                if isinstance(val, str):
+                    dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+                else:
+                    dt = val
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt
+            except (ValueError, TypeError):
+                continue
+        return None
+
+    @router.get("/admin/sessions/stats")
+    async def admin_sessions_stats(current_user: dict = Depends(get_current_user)):
+        """Return total active sessions and number of users with at least one session. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        pipeline = [
+            {"$match": {"sessions": {"$exists": True, "$ne": []}}},
+            {"$project": {"count": {"$size": "$sessions"}}},
+            {"$group": {"_id": None, "total_sessions": {"$sum": "$count"}, "users_with_sessions": {"$sum": 1}}},
+        ]
+        cursor = db.users.aggregate(pipeline)
+        row = await cursor.to_list(length=1)
+        if not row:
+            return {"total_sessions": 0, "users_with_sessions": 0}
+        return {"total_sessions": row[0]["total_sessions"], "users_with_sessions": row[0]["users_with_sessions"]}
+
+    @router.post("/admin/sessions/revoke-old")
+    async def admin_revoke_old_sessions(
+        body: AdminRevokeOldSessionsRequest = Body(default=None),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Revoke all sessions older than 24 hours. Optionally limit to target_username. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        body = body or AdminRevokeOldSessionsRequest()
+        target_username = (body.target_username or "").strip() or None
+
+        if target_username:
+            username_pattern = _username_pattern(target_username)
+            target = await db.users.find_one(
+                {"username": username_pattern},
+                {"_id": 0, "id": 1, "username": 1, "sessions": 1},
+            )
+            if not target:
+                raise HTTPException(status_code=404, detail="User not found")
+            sessions_raw = target.get("sessions") or []
+            keep = [
+                s for s in sessions_raw
+                if s.get("id") and (_session_datetime(s) is not None and _session_datetime(s) >= cutoff)
+            ]
+            removed = len(sessions_raw) - len(keep)
+            if removed > 0:
+                await db.users.update_one({"id": target["id"]}, {"$set": {"sessions": keep}})
+            return {
+                "message": f"Revoked {removed} session(s) older than 24h for {target.get('username', target_username)}.",
+                "revoked_count": removed,
+                "users_affected": 1 if removed > 0 else 0,
+            }
+
+        revoked_total = 0
+        users_affected = 0
+        async for user in db.users.find({"sessions": {"$exists": True, "$ne": []}}, {"_id": 0, "id": 1, "sessions": 1}):
+            sessions_raw = user.get("sessions") or []
+            keep = [
+                s for s in sessions_raw
+                if s.get("id") and (_session_datetime(s) is not None and _session_datetime(s) >= cutoff)
+            ]
+            removed = len(sessions_raw) - len(keep)
+            if removed > 0:
+                await db.users.update_one({"id": user["id"]}, {"$set": {"sessions": keep}})
+                revoked_total += removed
+                users_affected += 1
+        return {
+            "message": f"Revoked {revoked_total} session(s) older than 24h across {users_affected} user(s).",
+            "revoked_count": revoked_total,
+            "users_affected": users_affected,
+        }
 
     @router.post("/admin/set-password")
     async def admin_set_password(
