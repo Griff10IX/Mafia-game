@@ -1181,7 +1181,8 @@ async def families_assign_role(request: FamilyRoleRequest, current_user: dict = 
     ]).to_list(20)
     by_role = {x["_id"]: x["c"] for x in counts}
     limit = FAMILY_ROLE_LIMITS.get(request.role, 0)
-    if limit and (by_role.get(request.role) or 0) >= limit and member.get("role") != request.role:
+    # Allow leadership transfer even though boss limit is 1 (the boss role is moved, not added).
+    if request.role != "boss" and limit and (by_role.get(request.role) or 0) >= limit and member.get("role") != request.role:
         raise HTTPException(status_code=400, detail=f"Role {request.role} limit reached")
     await db.family_members.update_one({"family_id": family_id, "user_id": request.user_id}, {"$set": {"role": request.role}})
     await db.users.update_one({"id": request.user_id}, {"$set": {"family_role": request.role}})

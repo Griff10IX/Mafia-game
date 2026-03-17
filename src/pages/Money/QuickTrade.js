@@ -475,7 +475,9 @@ export default function QuickTrade() {
                 className="w-full bg-zinc-900 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none cursor-pointer capitalize"
               >
                 {TOKEN_TYPES.map((t) => (
-                  <option key={t} value={t} className="bg-zinc-900 text-foreground py-2">{formatTokenName(t)}</option>
+                  <option key={t} value={t} className="bg-zinc-900 text-foreground py-2">
+                    {formatTokenName(t)}{tokenBalances?.[t]?.sellable != null ? ` (${tokenBalances[t].sellable})` : ''}
+                  </option>
                 ))}
               </select>
             </div>

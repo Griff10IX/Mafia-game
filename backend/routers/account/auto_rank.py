@@ -670,7 +670,27 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     # --- Crimes: only those off cooldown (same rules as manual play; _commit_crime_impl also enforces) ---
     if run_crimes:
         if crimes is None or (isinstance(crimes, list) and len(crimes) == 0):
-            crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
+            # Include prestige crimes as well (those are not guaranteed to exist in db.crimes).
+            crimes = await db.crimes.find(
+                {},
+                {"_id": 0, "id": 1, "name": 1, "min_rank": 1, "prestige_required": 1, "crime_type": 1},
+            ).to_list(100)
+            try:
+                from routers.crime.crimes import PRESTIGE_CRIMES
+                existing_ids = {c.get("id") for c in crimes if c.get("id")}
+                for pc in (PRESTIGE_CRIMES or []):
+                    if pc.get("id") and pc.get("id") not in existing_ids:
+                        crimes.append(
+                            {
+                                "id": pc.get("id"),
+                                "name": pc.get("name"),
+                                "min_rank": pc.get("min_rank", 1),
+                                "prestige_required": pc.get("prestige_required"),
+                                "crime_type": pc.get("crime_type", "prestige"),
+                            }
+                        )
+            except Exception:
+                pass
         allowed_crime_ids = user.get("auto_rank_crime_ids")
         if isinstance(allowed_crime_ids, list) and len(allowed_crime_ids) > 0:
             allowed_set = set(allowed_crime_ids)
@@ -686,6 +706,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             user_crimes = await db.user_crimes.find({"user_id": user_id}, {"_id": 0, "crime_id": 1, "cooldown_until": 1}).to_list(100)
             cooldown_by_crime = {uc["crime_id"]: _parse_iso(uc.get("cooldown_until")) for uc in user_crimes}
             rank_id, _ = get_rank_info(int(user.get("rank_points") or 0))
+            user_prestige = int(user.get("prestige_level") or 0)
             # Only crimes whose cooldown_until has passed (or never set); _commit_crime_impl will re-check and set next cooldown
             available = []
             for c in crimes:
@@ -695,6 +716,13 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     min_rank = 1
                 cid = c.get("id")
                 if not cid:
+                    continue
+                prestige_required = c.get("prestige_required")
+                try:
+                    prestige_required = int(prestige_required) if prestige_required is not None else None
+                except (TypeError, ValueError):
+                    prestige_required = None
+                if prestige_required is not None and user_prestige < prestige_required:
                     continue
                 if min_rank > rank_id:
                     continue
@@ -890,7 +918,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                         logger.exception("Auto rank melt for %s: %s", user_id, e)
 
     # --- Scrap (separate from melt: runs every 2 min, uses scrap rarities) ---
-    user = await db.users.find_one({"id": user_id}, {"_id": 0, "auto_rank_next_scrap_at": 1})
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "auto_rank_next_scrap_at": 1, "auto_rank_scrap_rarity_ids": 1, "in_jail": 1},
+    )
     if not user:
         return
     if user.get("in_jail"):
@@ -1556,7 +1587,28 @@ def register(router):
         """Return crimes, GTA options, and melt options for the settings tab, plus current selection."""
         try:
             from routers.cars.gta import GTA_OPTIONS
-            crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).sort("min_rank", 1).to_list(50)
+            crimes = await db.crimes.find(
+                {},
+                {"_id": 0, "id": 1, "name": 1, "min_rank": 1, "prestige_required": 1, "crime_type": 1},
+            ).sort("min_rank", 1).to_list(100)
+            # Ensure prestige crimes appear as selectable options even if they aren't stored in db.crimes
+            try:
+                from routers.crime.crimes import PRESTIGE_CRIMES
+                existing_ids = {c.get("id") for c in crimes if c.get("id")}
+                for pc in (PRESTIGE_CRIMES or []):
+                    if pc.get("id") and pc.get("id") not in existing_ids:
+                        crimes.append(
+                            {
+                                "id": pc.get("id"),
+                                "name": pc.get("name"),
+                                "min_rank": pc.get("min_rank", 1),
+                                "prestige_required": pc.get("prestige_required"),
+                                "crime_type": pc.get("crime_type", "prestige"),
+                            }
+                        )
+                crimes.sort(key=lambda x: (int(x.get("prestige_required") or 0) > 0, int(x.get("prestige_required") or 0), int(x.get("min_rank") or 1), x.get("id") or ""))
+            except Exception:
+                pass
             gta_options = [{"id": o.get("id", ""), "name": o.get("name", ""), "min_rank": o.get("min_rank", 0)} for o in (GTA_OPTIONS or [])]
             melt_options = {"actions": MELT_OPTIONS, "rarities": [{"id": r, "name": r.replace("_", " ").title()} for r in MELT_RARITIES], "scrap_rarities": [{"id": r, "name": r.replace("_", " ").title()} for r in SCRAP_RARITIES]}
             u = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1, "auto_rank_melt_action_ids": 1, "auto_rank_melt_rarity_ids": 1, "auto_rank_scrap_rarity_ids": 1})
