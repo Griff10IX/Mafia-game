@@ -1032,16 +1032,21 @@ export default function Attack() {
     return () => clearInterval(id);
   }, []);
 
+  const hitlistNpcAutoFillRef = useRef(false);
+
   // Pre-fill search and kill form from hitlist link
   useEffect(() => {
     const t = searchParams.get('target');
+    const isHitlistNpc = searchParams.get('hitlist_npc') === '1' || searchParams.get('hitlist_npc') === 'true';
     if (t && typeof t === 'string' && t.trim()) {
       const trimmed = t.trim();
       setTargetUsername(trimmed);
       setKillUsername(trimmed);
+      if (isHitlistNpc) hitlistNpcAutoFillRef.current = true;
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
         next.delete('target');
+        next.delete('hitlist_npc');
         return next;
       }, { replace: true });
     }
@@ -1435,10 +1440,16 @@ export default function Attack() {
     const timer = setTimeout(async () => {
       try {
         const res = await api.post('/attack/bullets/calc', { target_username: trimmed });
-        setKillBulletsResult({
+        const result = {
           username: res.data.target_username ?? trimmed,
           bullets: res.data.bullets_required ?? 0,
-        });
+        };
+        setKillBulletsResult(result);
+        // Hitlist NPC link: auto-fill bullets needed into the form (only once per NPC link)
+        if (hitlistNpcAutoFillRef.current && result.bullets > 0) {
+          hitlistNpcAutoFillRef.current = false;
+          setBulletsToUse(String(result.bullets));
+        }
       } catch {
         setKillBulletsResult(null);
       } finally {

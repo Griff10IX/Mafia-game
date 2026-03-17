@@ -494,7 +494,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                             <Link to={`/profile/${encodeURIComponent(item.target_username ?? '')}`} className="text-primary hover:underline font-bold text-xs">{item.target_username ?? ''}</Link>
                           )}
                           <Link
-                            to={`/attack?target=${encodeURIComponent(item.target_username ?? '')}`}
+                            to={`/attack?target=${encodeURIComponent(item.target_username ?? '')}${item.target_type === 'npc' ? '&hitlist_npc=1' : ''}`}
                             className="shrink-0 p-1 rounded hover:bg-primary/20 text-primary transition-colors"
                             title="Attack"
                           >
@@ -579,7 +579,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                           <Link to={`/profile/${encodeURIComponent(item.target_username ?? '')}`} className="text-primary hover:underline font-heading font-bold text-xs">{item.target_username ?? ''}</Link>
                         )}
                         <Link
-                          to={`/attack?target=${encodeURIComponent(item.target_username ?? '')}`}
+                          to={`/attack?target=${encodeURIComponent(item.target_username ?? '')}${item.target_type === 'npc' ? '&hitlist_npc=1' : ''}`}
                           className="shrink-0 p-1 rounded hover:bg-primary/20 text-primary transition-colors"
                           title="Attack"
                         >
