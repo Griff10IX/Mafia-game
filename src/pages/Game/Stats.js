@@ -490,8 +490,6 @@ export default function Stats() {
         </div>
       )}
 
-      <p className="text-[9px] text-zinc-500 font-heading italic">Game capital, users, vehicles, ranks — and the body count.</p>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 items-start">
         <StatCard title="Game Capital" rows={gameCapitalRows} delay={0} />
         <StatCard title="User Stats" rows={userStatsRows} delay={0.04} />
