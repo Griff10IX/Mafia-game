@@ -1449,7 +1449,7 @@ export default function Profile() {
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
                 <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">
-                  Referral
+                  Referral and redeem page
                 </h2>
               </div>
               <div className="p-3 space-y-2">

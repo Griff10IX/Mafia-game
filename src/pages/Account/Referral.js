@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { UserPlus, Copy, Crosshair, DollarSign, Car, Building2, BarChart3, Link2, Wine } from 'lucide-react';
+import { UserPlus, Copy, Crosshair, DollarSign, Car, Building2, BarChart3, Link2, Wine, KeyRound } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -56,6 +56,25 @@ export default function Referral() {
     }
   };
 
+  const handleRedeem = async () => {
+    const code = (redeemCodeInput || '').trim();
+    if (!code) {
+      toast.error('Enter a code');
+      return;
+    }
+    setRedeemLoading(true);
+    try {
+      const res = await api.post('/account/redeem', { code });
+      const granted = res.data?.granted?.length ? res.data.granted.join(', ') : 'Rewards granted';
+      toast.success(`Redeemed: ${granted}`);
+      setRedeemCodeInput('');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Invalid or already used code');
+    } finally {
+      setRedeemLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className={styles.pageContent}>
@@ -98,7 +117,7 @@ export default function Referral() {
       <div className="max-w-2xl mx-auto space-y-4 p-4">
         <div className={`flex items-center gap-2 border-b ${styles.panelHeader} pb-2`} style={{ borderBottomColor: 'var(--gm-border)' }}>
           <UserPlus size={20} className="shrink-0" style={{ color: 'var(--gm-gold)' }} />
-          <h1 className={`text-sm sm:text-base font-heading font-bold ${styles.gmTitle}`}>Referral</h1>
+          <h1 className={`text-sm sm:text-base font-heading font-bold ${styles.gmTitle}`}>Referral and redeem page</h1>
         </div>
 
         {/* Your link */}
@@ -126,6 +145,38 @@ export default function Referral() {
                 className={`px-3 py-2 rounded-md ${styles.btnGoldDarkText} font-heading font-bold text-[10px] sm:text-xs flex items-center gap-1.5`}
               >
                 <Copy size={12} className="sm:w-3.5 sm:h-3.5" /> Copy link
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Redeem a code */}
+        <div className={cardClass} style={{ animationDelay: '0.06s' }}>
+          <div className={cardHeaderClass}>
+            <h2 className={cardTitleClass}>
+              <KeyRound size={14} className="sm:w-4 sm:h-4" />
+              Redeem a code
+            </h2>
+          </div>
+          <div className="p-2.5 sm:p-3 space-y-2">
+            <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>
+              Enter a reward code to claim cash, points, cars, tokens, or loot pieces. Each code can only be used once per account.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={redeemCodeInput}
+                onChange={(e) => setRedeemCodeInput(e.target.value)}
+                placeholder="Enter code"
+                className={`flex-1 min-w-0 px-2.5 py-2 rounded ${styles.input} text-foreground text-[11px] sm:text-sm font-mono`}
+              />
+              <button
+                type="button"
+                onClick={handleRedeem}
+                disabled={redeemLoading}
+                className={`px-3 py-2 rounded-md ${styles.btnGoldDarkText} font-heading font-bold text-[10px] sm:text-xs flex items-center gap-1.5 disabled:opacity-50`}
+              >
+                {redeemLoading ? '...' : 'Redeem'}
               </button>
             </div>
           </div>

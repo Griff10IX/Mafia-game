@@ -1330,6 +1330,77 @@ def register(router):
             "earnings": earnings,
         }
 
+    class RedeemRequestBody(BaseModel):
+        code: str
+
+    @router.post("/account/redeem")
+    async def redeem_code(body: RedeemRequestBody, current_user: dict = Depends(get_current_user)):
+        """Redeem a code. One redemption per user per code; respects max_uses."""
+        from routers.kill.armoury import TOKEN_CONFIG
+        code_normalized = (body.code or "").strip().upper()
+        if not code_normalized:
+            raise HTTPException(status_code=400, detail="Code is required")
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        doc = await db.redeem_codes.find_one({"code": code_normalized, "active": True})
+        if not doc:
+            raise HTTPException(status_code=400, detail="Invalid or inactive code")
+        used_by = doc.get("used_by") or []
+        if user_id in used_by:
+            raise HTTPException(status_code=400, detail="You have already used this code.")
+        max_uses = doc.get("max_uses")
+        used_count = int(doc.get("used_count", 0))
+        if max_uses is not None and used_count >= max_uses:
+            raise HTTPException(status_code=400, detail="This code has reached its redemption limit.")
+        rewards = doc.get("rewards") or {}
+        inc = {}
+        if rewards.get("money"):
+            inc["money"] = int(rewards["money"])
+        if rewards.get("points"):
+            inc["points"] = int(rewards["points"])
+        if rewards.get("respect_points"):
+            inc["respect_points"] = int(rewards["respect_points"])
+        if rewards.get("loot_box_pieces"):
+            inc["loot_box_pieces"] = int(rewards["loot_box_pieces"])
+        for token_type, amount in (rewards.get("tokens") or {}).items():
+            cfg = TOKEN_CONFIG.get(token_type)
+            if cfg and amount:
+                inc[cfg["count_field"]] = int(amount)
+        if inc:
+            await db.users.update_one({"id": user_id}, {"$inc": inc})
+        for car_id in (rewards.get("cars") or []):
+            car_info = next((c for c in CARS if c.get("id") == car_id), None)
+            if car_info:
+                await db.user_cars.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "car_id": car_id,
+                    "car_name": car_info.get("name", car_id),
+                    "acquired_at": datetime.now(timezone.utc).isoformat(),
+                })
+        await db.redeem_codes.update_one(
+            {"code": code_normalized},
+            {"$inc": {"used_count": 1}, "$push": {"used_by": user_id}},
+        )
+        granted = []
+        if inc.get("money"):
+            granted.append(f"${inc['money']:,} cash")
+        if inc.get("points"):
+            granted.append(f"{inc['points']:,} points")
+        if inc.get("respect_points"):
+            granted.append(f"{inc['respect_points']:,} respect")
+        if inc.get("loot_box_pieces"):
+            granted.append(f"{inc['loot_box_pieces']} loot pieces")
+        for token_type, amount in (rewards.get("tokens") or {}).items():
+            if amount:
+                granted.append(f"{amount} {token_type.replace('_', ' ')} token(s)")
+        for car_id in (rewards.get("cars") or []):
+            car_info = next((c for c in CARS if c.get("id") == car_id), None)
+            if car_info:
+                granted.append(car_info.get("name", car_id))
+        return {"message": "Code redeemed successfully", "granted": granted}
+
     @router.get("/user/casino-property")
     async def get_casino_property(current_user: dict = Depends(get_current_user)):
         """Lightweight endpoint for casino/property profit and menu flag. Called after first paint so auth/me stays fast."""

@@ -8,7 +8,7 @@ import random
 import re
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import httpx
 from fastapi import Body, Depends, HTTPException, Query
@@ -46,6 +46,21 @@ class ToggleEventRequest(BaseModel):
 class RandomEventRequest(BaseModel):
     """If event_ids is omitted or empty, pick from all events. Otherwise pick from the given ids only."""
     event_ids: Optional[List[str]] = None
+
+
+class RedeemCodeRewards(BaseModel):
+    money: Optional[int] = None
+    points: Optional[int] = None
+    respect_points: Optional[int] = None
+    loot_box_pieces: Optional[int] = None
+    cars: Optional[List[str]] = None
+    tokens: Optional[Dict[str, int]] = None  # token_type -> amount
+
+
+class RedeemCodeCreateRequest(BaseModel):
+    code: str
+    max_uses: Optional[int] = None  # null = unlimited
+    rewards: RedeemCodeRewards
 
 
 class BetaSignupToggleRequest(BaseModel):
@@ -3583,6 +3598,72 @@ def register(router):
             {"$unset": {"override_event_id": ""}},
         )
         return {"message": "Event override cleared; daily rotation applies again", "override_event_id": None}
+
+    @router.get("/admin/redeem-codes")
+    async def admin_get_redeem_codes(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        cursor = db.redeem_codes.find({}, {"_id": 0, "used_by": 0})
+        codes = []
+        async for doc in cursor:
+            codes.append({
+                "code": doc.get("code", ""),
+                "rewards": doc.get("rewards", {}),
+                "max_uses": doc.get("max_uses"),
+                "used_count": int(doc.get("used_count", 0)),
+                "active": bool(doc.get("active", True)),
+            })
+        return {"codes": codes}
+
+    @router.post("/admin/redeem-codes")
+    async def admin_create_redeem_code(request: RedeemCodeCreateRequest, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw_code = (request.code or "").strip()
+        if not raw_code:
+            raise HTTPException(status_code=400, detail="Code is required")
+        code_normalized = raw_code.upper()
+        existing = await db.redeem_codes.find_one({"code": code_normalized}, {"_id": 1})
+        if existing:
+            raise HTTPException(status_code=400, detail="A redeem code with this value already exists")
+        rewards = request.rewards or RedeemCodeRewards()
+        reward_dict = {}
+        if (rewards.money or 0) > 0:
+            reward_dict["money"] = int(rewards.money)
+        if (rewards.points or 0) > 0:
+            reward_dict["points"] = int(rewards.points)
+        if (rewards.respect_points or 0) > 0:
+            reward_dict["respect_points"] = int(rewards.respect_points)
+        if (rewards.loot_box_pieces or 0) > 0:
+            reward_dict["loot_box_pieces"] = int(rewards.loot_box_pieces)
+        if rewards.cars:
+            valid_car_ids = {c["id"] for c in CARS}
+            car_list = [str(cid).strip() for cid in rewards.cars if str(cid).strip() in valid_car_ids]
+            if car_list:
+                reward_dict["cars"] = car_list
+        if rewards.tokens:
+            token_dict = {}
+            for tt, amt in rewards.tokens.items():
+                if tt not in ADMIN_TOKEN_TYPES or not (amt and int(amt) > 0):
+                    continue
+                token_dict[str(tt)] = int(amt)
+            if token_dict:
+                reward_dict["tokens"] = token_dict
+        if not reward_dict:
+            raise HTTPException(status_code=400, detail="At least one reward is required")
+        max_uses = None
+        if request.max_uses is not None and request.max_uses > 0:
+            max_uses = int(request.max_uses)
+        doc = {
+            "code": code_normalized,
+            "rewards": reward_dict,
+            "max_uses": max_uses,
+            "used_count": 0,
+            "used_by": [],
+            "active": True,
+        }
+        await db.redeem_codes.insert_one(doc)
+        return {"message": "Redeem code created", "code": code_normalized}
 
     @router.get("/admin/beta-signup")
     async def admin_get_beta_signup(current_user: dict = Depends(get_current_user)):
