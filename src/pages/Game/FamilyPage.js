@@ -232,7 +232,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect
 // ============================================================================
 
 const TreasuryTab = ({
-  treasury, canWithdraw, vaultAndRacketsLocked,
+  treasury, treasuryPoints, treasuryLootPieces, canWithdraw, vaultAndRacketsLocked,
   depositAmount, setDepositAmount, withdrawAmount, setWithdrawAmount, onDeposit, onWithdraw,
   compoundCash, compoundPoints, compoundLootPieces, myCompoundCash, myCompoundPoints, myCompoundLootPieces, myCompoundCars,
   compoundDepositCash, setCompoundDepositCash, compoundDepositPoints, setCompoundDepositPoints, compoundDepositLootPieces, setCompoundDepositLootPieces,
@@ -257,6 +257,13 @@ const TreasuryTab = ({
         <AnimatedCounter target={Number(treasury ?? 0)} prefix="$" />
       </p>
       <p className="text-[9px] text-zinc-600 font-heading mt-2 italic">Every dollar earned in blood and sweat</p>
+      {((treasuryPoints ?? 0) > 0 || (treasuryLootPieces ?? 0) > 0) && (
+        <p className="text-[10px] font-heading text-zinc-500 mt-2">
+          {(treasuryPoints ?? 0) > 0 && <span>{(treasuryPoints ?? 0).toLocaleString()} pts</span>}
+          {(treasuryPoints ?? 0) > 0 && (treasuryLootPieces ?? 0) > 0 && ' · '}
+          {(treasuryLootPieces ?? 0) > 0 && <span>{(treasuryLootPieces ?? 0).toLocaleString()} loot pieces</span>}
+        </p>
+      )}
     </div>
 
     {/* Deposit */}
@@ -2120,6 +2127,8 @@ export default function FamilyPage() {
               )}
               {activeTab === 'treasury' && <TreasuryTab
                 treasury={family.treasury}
+                treasuryPoints={family.treasury_points}
+                treasuryLootPieces={family.treasury_loot_pieces}
                 canWithdraw={canWithdraw}
                 vaultAndRacketsLocked={vaultAndRacketsLocked}
                 depositAmount={depositAmount}

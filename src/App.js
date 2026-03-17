@@ -543,18 +543,7 @@ function App() {
               )
             }
           />
-          <Route
-            path="/staffrole/mod"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Admin />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+          <Route path="/staffrole/mod" element={<Navigate to="/staffrole/admin" replace />} />
           <Route
             path="/staffrole/locked"
             element={

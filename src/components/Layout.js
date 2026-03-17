@@ -110,7 +110,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/account/inventory', label: 'My Inventory' },
         { path: '/money/loot-box', label: 'Loot Box' },
         { path: '/account/profile', label: 'Edit Profile' },
-        { path: '/account/referral', label: 'Referral % Redeem' },
+        { path: '/account/referral', label: 'Referral & Redeem' },
         { path: '/account/settings', label: 'IP & Devices' },
         { path: '/game/stats', label: 'Stats' },
         { path: '/account/stats', label: 'My Stats' },
@@ -121,7 +121,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { action: 'logout', label: 'Logout' },
         { path: '/account/autorank', label: 'Auto Rank' },
         ...(isAdmin ? [{ path: '/staffrole/admin', label: 'Admin Tools' }, { path: '/staffrole/locked', label: 'Locked accounts' }] : []),
-        ...(isModerator && !isAdmin ? [{ path: '/staffrole/mod', label: 'Moderator tools' }] : []),
+        ...(isModerator && !isAdmin ? [{ path: '/staffrole/admin', label: 'Moderator tools' }] : []),
       ],
     },
     {
@@ -819,7 +819,7 @@ export default function Layout({ children }) {
     { path: '/account/inventory', icon: Package, label: 'My Inventory' },
     { path: '/money/loot-box', icon: Gift, label: 'Loot Box' },
     { path: '/account/profile', icon: User, label: 'Edit Profile' },
-    { path: '/account/referral', icon: UserPlus, label: 'Referral % Redeem' },
+    { path: '/account/referral', icon: UserPlus, label: 'Referral & Redeem' },
     { path: '/account/settings', icon: Globe, label: 'IP & Devices' },
     { path: '__combat__', icon: Sword, label: 'Combat' },
     { path: '/game/stats', icon: TrendingUp, label: 'Stats' },
@@ -858,7 +858,7 @@ export default function Layout({ children }) {
     { path: '/staffrole/users-online', icon: Users, label: 'Users online (live)' },
   ] : [];
   const moderatorNavItems = isModerator && !isAdmin ? [
-    { path: '/staffrole/mod', icon: Shield, label: 'Moderator tools' },
+    { path: '/staffrole/admin', icon: Shield, label: 'Moderator tools' },
     { path: '/staffrole/users-online', icon: Users, label: 'Users online (live)' },
   ] : [];
 

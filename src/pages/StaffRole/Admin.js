@@ -300,25 +300,27 @@ export default function Admin() {
   const searchInputRef = useRef(null);
 
   const [activeCategoryId, setActiveCategoryId] = useState('admin-players');
-  const visibleCategories = isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => MOD_ONLY_CATEGORY_IDS.includes(c.id));
+  const [modVisibleCategoryIds, setModVisibleCategoryIds] = useState(() => [...MOD_ONLY_CATEGORY_IDS]);
+  const visibleCategories = isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => modVisibleCategoryIds.includes(c.id));
   useEffect(() => {
     const h = (typeof window !== 'undefined' && window.location.hash) ? window.location.hash.slice(1) : '';
-    const visible = isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => MOD_ONLY_CATEGORY_IDS.includes(c.id));
+    const visible = isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => modVisibleCategoryIds.includes(c.id));
     if (h && ADMIN_CATEGORIES.some((c) => c.id === h) && visible.some((c) => c.id === h)) {
       setActiveCategoryId(h);
       return;
     }
     if (!isAdmin && visible.length > 0) setActiveCategoryId(visible[0].id);
-  }, [isAdmin]);
+  }, [isAdmin, modVisibleCategoryIds]);
 
   const filteredTools = useMemo(() => {
     if (!toolSearch.trim()) return [];
     const q = toolSearch.toLowerCase().trim();
-    return SEARCHABLE_TOOLS.filter(tool => 
-      tool.label.toLowerCase().includes(q) || 
-      tool.keywords.some(kw => kw.toLowerCase().includes(q))
-    ).slice(0, 8);
-  }, [toolSearch]);
+    const visibleIds = isAdmin ? null : new Set(modVisibleCategoryIds);
+    return SEARCHABLE_TOOLS.filter(tool => {
+      if (visibleIds && !visibleIds.has(tool.categoryId)) return false;
+      return tool.label.toLowerCase().includes(q) || tool.keywords.some(kw => kw.toLowerCase().includes(q));
+    }).slice(0, 8);
+  }, [toolSearch, isAdmin, modVisibleCategoryIds]);
 
   const handleToolSelect = (tool) => {
     setActiveCategoryId(tool.categoryId);
@@ -503,6 +505,7 @@ export default function Admin() {
   const [hdosLoading, setHdosLoading] = useState(false);
   const [promoteHdoUsername, setPromoteHdoUsername] = useState('');
   const [promoteHdoLoading, setPromoteHdoLoading] = useState(false);
+  const [modVisibleCategoriesSaving, setModVisibleCategoriesSaving] = useState(false);
 
   const [economyOverview, setEconomyOverview] = useState(null);
   const [economyOverviewLoading, setEconomyOverviewLoading] = useState(false);
@@ -552,6 +555,9 @@ export default function Admin() {
       const mod = !!response.data.is_moderator;
       setIsAdmin(admin);
       setIsModerator(mod);
+      if (mod && Array.isArray(response.data.mod_visible_category_ids) && response.data.mod_visible_category_ids.length > 0) {
+        setModVisibleCategoryIds(response.data.mod_visible_category_ids);
+      }
       if (admin) {
         fetchMeta();
         fetchEventsStatus();
@@ -623,6 +629,18 @@ export default function Admin() {
       fetchModerators();
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed');
+    }
+  };
+
+  const handleSaveModVisibleCategories = async () => {
+    setModVisibleCategoriesSaving(true);
+    try {
+      await api.patch('/admin/settings', { mod_visible_category_ids: modVisibleCategoryIds });
+      toast.success('Mod visible categories saved');
+    } catch (e) {
+      toast.error(e?.response?.data?.detail ?? 'Failed to save');
+    } finally {
+      setModVisibleCategoriesSaving(false);
     }
   };
 
@@ -767,6 +785,9 @@ export default function Admin() {
       setPreorderReleaseDate(res.data?.preorder_points_release_date || '');
       setCasinoGlobalMaxBet(res.data?.casino_global_max_bet || 1000000000);
       setCasinoBuybackMaxPoints(res.data?.casino_buyback_max_points || 15000);
+      if (Array.isArray(res.data?.mod_visible_category_ids)) {
+        setModVisibleCategoryIds(res.data.mod_visible_category_ids.length ? res.data.mod_visible_category_ids : [...MOD_ONLY_CATEGORY_IDS]);
+      }
     } catch {
       setAdminOnlineColor('#a78bfa');
       setModDefaultOnlineColor('#1e3a5f');
@@ -7014,6 +7035,39 @@ export default function Admin() {
                 </ul>
               )}
             </div>
+          </div>
+          <div className="admin-art-line text-primary mx-3" />
+        </div>
+        )}
+
+        {isAdmin && (
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Categories visible to moderators</span>
+          </div>
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground font-heading">Choose which Admin Tool categories moderators can see in the sidebar. Mods only see categories you tick below.</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {ADMIN_CATEGORIES.map(({ id, label }) => (
+                <label key={id} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={modVisibleCategoryIds.includes(id)}
+                    onChange={() => {
+                      setModVisibleCategoryIds((prev) =>
+                        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+                      );
+                    }}
+                    className="rounded border-primary/50 bg-zinc-900/50 text-primary focus:ring-primary/50"
+                  />
+                  <span className="text-[11px] font-heading text-foreground">{label}</span>
+                </label>
+              ))}
+            </div>
+            <BtnPrimary onClick={handleSaveModVisibleCategories} disabled={modVisibleCategoriesSaving}>
+              {modVisibleCategoriesSaving ? 'Saving...' : 'Save mod visible categories'}
+            </BtnPrimary>
           </div>
           <div className="admin-art-line text-primary mx-3" />
         </div>

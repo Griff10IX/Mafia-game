@@ -466,6 +466,8 @@ async def cleanup_dead_families():
                     "boss_id": None,
                     "rackets": {},
                     "treasury": 0,
+                    "treasury_points": 0,
+                    "treasury_loot_pieces": 0,
                     "compound_cash": 0,
                     "compound_points": 0,
                     "compound_loot_pieces": 0,
@@ -793,7 +795,10 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     payload = {
         "family": {
             "id": fam["id"], "name": fam["name"], "tag": fam["tag"],
-            "treasury": fam.get("treasury", 0), "crew_oc_cooldown_until": fam.get("crew_oc_cooldown_until"),
+            "treasury": fam.get("treasury", 0),
+            "treasury_points": int(fam.get("treasury_points") or 0),
+            "treasury_loot_pieces": int(fam.get("treasury_loot_pieces") or 0),
+            "crew_oc_cooldown_until": fam.get("crew_oc_cooldown_until"),
             "crew_oc_join_fee": int(fam.get("crew_oc_join_fee") or 0),
             "crew_oc_auto_accept": bool(fam.get("crew_oc_auto_accept")),
             "crew_oc_forum_topic_id": fam.get("crew_oc_forum_topic_id"),
@@ -919,7 +924,7 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
     first_racket_id = FAMILY_RACKETS[0]["id"]
     await db.families.insert_one({
         "id": family_id, "name": name, "tag": tag, "boss_id": current_user["id"],
-        "treasury": 0, "created_at": now,
+        "treasury": 0, "treasury_points": 0, "treasury_loot_pieces": 0, "created_at": now,
         "rackets": {first_racket_id: {"level": 1, "last_collected_at": None}},
         "compound_cash": 0, "compound_points": 0, "compound_loot_pieces": 0,
         "compound_deposits_by_user": {},
@@ -1364,6 +1369,22 @@ async def families_compound_return_to_member(request: CompoundReturnToMemberRequ
         {"id": target_id},
         {"$inc": {"money": ac, "points": ap, "loot_box_pieces": al}},
     )
+    fam_name = fam.get("name") or fam.get("tag") or "Your family"
+    officer = current_user.get("username") or "An officer"
+    parts = []
+    if ac > 0:
+        parts.append(f"${ac:,}")
+    if ap > 0:
+        parts.append(f"{ap:,} pts")
+    if al > 0:
+        parts.append(f"{al:,} loot pieces")
+    summary = ", ".join(parts) if parts else "your share"
+    await send_notification(
+        target_id,
+        "Family Compound – Share returned",
+        f"Your compound share has been returned to you by {officer}: {summary}.",
+        "reward",
+    )
     _invalidate_my_cache(current_user["id"])
     _invalidate_my_cache(target_id)
     return {"message": "Returned compound share to member"}
@@ -1400,10 +1421,33 @@ async def families_compound_claim_for_family(request: CompoundClaimForFamilyRequ
     if ac > total_cash or ap > total_points or al > total_loot:
         raise HTTPException(status_code=400, detail="Compound totals inconsistent")
     updates = {
-        "$inc": {"compound_cash": -ac, "treasury": ac},
+        "$inc": {
+            "compound_cash": -ac,
+            "compound_points": -ap,
+            "compound_loot_pieces": -al,
+            "treasury": ac,
+            "treasury_points": ap,
+            "treasury_loot_pieces": al,
+        },
         "$unset": {f"compound_deposits_by_user.{target_id}": ""},
     }
     await db.families.update_one({"id": family_id}, updates)
+    fam_name = fam.get("name") or fam.get("tag") or "The family"
+    officer = current_user.get("username") or "An officer"
+    parts = []
+    if ac > 0:
+        parts.append(f"${ac:,}")
+    if ap > 0:
+        parts.append(f"{ap:,} pts")
+    if al > 0:
+        parts.append(f"{al:,} loot pieces")
+    summary = ", ".join(parts) if parts else "your share"
+    await send_notification(
+        target_id,
+        "Family Compound – Share claimed for vault",
+        f"Your compound share was claimed for the family vault by {officer}: {summary}. It is now in {fam_name}'s vault.",
+        "system",
+    )
     _invalidate_my_cache(current_user["id"])
     _invalidate_my_cache(target_id)
     return {"message": "Claimed compound share for the family"}

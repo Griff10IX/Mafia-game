@@ -21,6 +21,13 @@ from routers.kill.armoury import TOKEN_CONFIG
 CF_ZONE_ID = os.environ.get("CF_ZONE_ID", "")
 CF_API_TOKEN = os.environ.get("CF_API_TOKEN", "")
 
+# Mod-visible admin categories: which Admin Tool categories moderators can see (configurable by admin)
+MOD_VISIBLE_CATEGORY_IDS_DEFAULT = ["admin-cheat", "admin-logs", "admin-staff", "admin-mod-tools"]
+ADMIN_CATEGORY_IDS = {
+    "admin-players", "admin-gameworld", "admin-security", "admin-cheat", "admin-analytics",
+    "admin-logs", "admin-testing", "admin-quick", "admin-database", "admin-staff", "admin-mod-tools",
+}
+
 
 class WipeConfirmation(BaseModel):
     confirmation_text: str  # Must be exactly "WIPE ALL DATA"
@@ -79,6 +86,7 @@ class AdminSettingsUpdate(BaseModel):
     preorder_points_release_date: Optional[str] = None  # ISO datetime - points held until this date
     casino_global_max_bet: Optional[int] = None  # Max bet cap for all casinos (default 1B)
     casino_buyback_max_points: Optional[int] = None  # Max points for buy-back reward (default 15000)
+    mod_visible_category_ids: Optional[List[str]] = None  # Admin Tool category ids visible to moderators
 
 
 class TestUsersAutoRankRequest(BaseModel):
@@ -1560,7 +1568,15 @@ def register(router):
         is_moderator = _is_moderator(current_user)
         is_help_desk_operator = _is_hdo(current_user)
         has_admin_email = (current_user.get("email") or "") in ADMIN_EMAILS
-        return {"is_admin": is_admin, "is_moderator": is_moderator, "is_help_desk_operator": is_help_desk_operator, "has_admin_email": has_admin_email}
+        out = {"is_admin": is_admin, "is_moderator": is_moderator, "is_help_desk_operator": is_help_desk_operator, "has_admin_email": has_admin_email}
+        if is_moderator:
+            doc = await db.game_settings.find_one({"key": "mod_visible_category_ids"}, {"_id": 0, "value": 1})
+            raw = doc.get("value") if doc else None
+            if isinstance(raw, list) and raw and all(isinstance(x, str) and x in ADMIN_CATEGORY_IDS for x in raw):
+                out["mod_visible_category_ids"] = raw
+            else:
+                out["mod_visible_category_ids"] = MOD_VISIBLE_CATEGORY_IDS_DEFAULT
+        return out
 
     @router.get("/admin/moderators")
     async def admin_list_moderators(current_user: dict = Depends(get_current_user)):
@@ -1879,6 +1895,12 @@ def register(router):
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         casino_global_max_bet = int(main_doc.get("casino_global_max_bet") or 1_000_000_000) if main_doc else 1_000_000_000
         casino_buyback_max_points = int(main_doc.get("casino_buyback_max_points") or 15_000) if main_doc else 15_000
+        mod_cat_doc = await db.game_settings.find_one({"key": "mod_visible_category_ids"}, {"_id": 0, "value": 1})
+        raw_mod_cats = mod_cat_doc.get("value") if mod_cat_doc else None
+        if isinstance(raw_mod_cats, list) and raw_mod_cats and all(isinstance(x, str) and x in ADMIN_CATEGORY_IDS for x in raw_mod_cats):
+            mod_visible_category_ids = raw_mod_cats
+        else:
+            mod_visible_category_ids = MOD_VISIBLE_CATEGORY_IDS_DEFAULT
         return {
             "admin_online_color": admin_online_color.strip(),
             "mod_default_online_color": mod_default_online_color.strip(),
@@ -1891,6 +1913,7 @@ def register(router):
             "preorder_points_release_date": preorder_points_release_date,
             "casino_global_max_bet": casino_global_max_bet,
             "casino_buyback_max_points": casino_buyback_max_points,
+            "mod_visible_category_ids": mod_visible_category_ids,
         }
 
     @router.patch("/admin/settings")
@@ -1971,6 +1994,15 @@ def register(router):
             await db.game_settings.update_one(
                 {"_id": "main"},
                 {"$set": {"casino_buyback_max_points": max(0, int(body.casino_buyback_max_points))}},
+                upsert=True,
+            )
+        if body.mod_visible_category_ids is not None:
+            ids = list(body.mod_visible_category_ids) if isinstance(body.mod_visible_category_ids, list) else []
+            if not all(isinstance(x, str) and x in ADMIN_CATEGORY_IDS for x in ids):
+                raise HTTPException(status_code=400, detail="mod_visible_category_ids must be a list of valid admin category ids")
+            await db.game_settings.update_one(
+                {"key": "mod_visible_category_ids"},
+                {"$set": {"value": ids}},
                 upsert=True,
             )
         MOD_DEFAULT = "#1e3a5f"
