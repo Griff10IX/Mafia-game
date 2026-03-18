@@ -25,7 +25,7 @@ const GTA_STYLES = `
   .gta-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
   .gta-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 
-  /* Mobile: make GTA panels use more of the screen and fit more rows (mirror Crimes layout) */
+  /* Mobile: match Crimes layout exactly — same padding, margins, row spacing */
   @media (max-width: 640px) {
     .gta-page-root {
       padding-left: 4px;
@@ -35,7 +35,6 @@ const GTA_STYLES = `
     .gta-main-panel,
     .gta-recent-panel,
     .gta-stats-panel {
-      /* Counteract Layout <main> padding (p-4) so panels hug screen edges on iPhone */
       margin-left: -16px;
       margin-right: -16px;
     }
@@ -43,15 +42,6 @@ const GTA_STYLES = `
       padding-top: 3px !important;
       padding-bottom: 3px !important;
     }
-    /* Consistent minimum font sizes on mobile - prevent tiny text */
-    .gta-row .gta-row-text { font-size: 10px !important; }
-    .gta-row .gta-row-text-sm { font-size: 10px !important; }
-    .gta-recent-card-rarity,
-    .gta-recent-card-damage { font-size: 9px !important; }
-    .gta-recent-card-name { font-size: 11px !important; }
-    .gta-recent-card-value { font-size: 10px !important; }
-    .gta-panel-header { font-size: 10px !important; }
-    .gta-stats-text { font-size: 11px !important; }
   }
 `;
 
@@ -165,13 +155,13 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
           <Lock className="text-mutedForeground/50 w-3.5 h-3.5 shrink-0" />
         )}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-[11px] font-heading font-bold text-foreground truncate block gta-row-text">
+          <div className="flex items-center gap-1 flex-wrap gap-y-0.5">
+            <span className="text-[11px] font-heading font-bold text-foreground truncate">
               {option.name}
             </span>
             {!unlocked && option.min_rank_name && (
               <span
-                className="shrink-0 inline-flex items-center gap-0.5 bg-zinc-800/50 text-mutedForeground rounded px-1 py-0.5 text-[9px] font-bold uppercase border border-zinc-700/50 gta-row-text-sm"
+                className="shrink-0 inline-flex items-center gap-0.5 bg-zinc-800/50 text-mutedForeground rounded px-1 py-0.5 text-[9px] font-bold uppercase border border-zinc-700/50"
                 title={`Unlocked at rank ${option.min_rank_name}`}
               >
                 <Lock size={8} />
@@ -179,7 +169,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
               </span>
             )}
           </div>
-          <div className="text-[9px] text-mutedForeground truncate gta-row-text-sm">
+          <div className="text-[9px] text-mutedForeground truncate hidden sm:block mt-0.5">
             {!unlocked && option.min_rank_name
               ? 'Unavailable'
               : `Difficulty ${option.difficulty}/5`}
@@ -187,34 +177,39 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
         </div>
       </div>
 
-      {/* Progress bar (only when unlocked) */}
-      {unlocked && <GTAProgressBar progress={option.progress} />}
+      {/* Progress bar + % inline on mobile (matches Crimes layout) */}
+      {unlocked && (
+        <div className="flex items-center gap-1 shrink-0">
+          <GTAProgressBar progress={option.progress} />
+          <span className="text-[9px] text-primary font-heading w-6 sm:hidden">{successRateDisplay}%</span>
+        </div>
+      )}
 
-      {/* Success rate */}
-      <div className="shrink-0 w-8 min-w-[28px] text-center">
-        <span className={`text-[10px] font-bold gta-row-text ${unlocked ? 'text-primary' : 'text-mutedForeground'}`}>
+      {/* Success rate — desktop only */}
+      <div className="shrink-0 w-8 text-center hidden sm:block">
+        <span className={`text-[10px] font-bold tabular-nums ${unlocked ? 'text-primary' : 'text-mutedForeground'}`}>
           {successRateDisplay}%
         </span>
       </div>
 
-      {/* Jail time */}
-      <div className="shrink-0 w-8 min-w-[28px] text-center">
-        <span className="text-[10px] font-bold text-red-400 gta-row-text">{option.jail_time ?? 0}s</span>
+      {/* Jail time (like Crimes "risk" column) */}
+      <div className="shrink-0 w-8 text-center">
+        <span className="text-[10px] font-bold text-red-400 tabular-nums">{option.jail_time ?? 0}s</span>
       </div>
 
       {/* Cooldown */}
-      <div className="shrink-0 w-10 min-w-[36px] text-center">
+      <div className="shrink-0 w-10 text-center">
         {onCooldown ? (
-          <span className="text-[10px] text-mutedForeground font-heading gta-row-text">{onCooldown}</span>
+          <span className="text-[10px] text-mutedForeground font-heading whitespace-nowrap">{onCooldown}</span>
         ) : unlocked ? (
-          <span className="text-[9px] text-mutedForeground/60 gta-row-text-sm">{defaultCooldown}</span>
+          <span className="text-[9px] text-mutedForeground/60 whitespace-nowrap truncate block">{defaultCooldown}</span>
         ) : (
-          <span className="text-[9px] text-mutedForeground gta-row-text-sm">—</span>
+          <span className="text-[9px] text-mutedForeground">—</span>
         )}
       </div>
 
-      {/* Action */}
-      <div className="shrink-0">
+      {/* Action — same width as Crimes */}
+      <div className="shrink-0 w-[60px] flex justify-end">
         {manualPlayDisabled && unlocked && !onCooldown ? (
           <button
             type="button"
@@ -255,7 +250,7 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
   if (recentStolen.length === 0) return null;
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in gta-recent-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <button
         type="button"
