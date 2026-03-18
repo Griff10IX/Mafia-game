@@ -474,18 +474,39 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
     prestige_required = crime.get("prestige_required")
     if prestige_required and int(current_user.get("prestige_level") or 0) < prestige_required:
         raise HTTPException(status_code=403, detail=f"Requires Prestige {prestige_required}")
-    user_crime = await db.user_crimes.find_one(
-        {"user_id": current_user["id"], "crime_id": crime_id},
-        {"_id": 0},
-    )
     now = datetime.now(timezone.utc)
-    if user_crime and "cooldown_until" in user_crime:
-        cooldown_time = _parse_iso_datetime(user_crime["cooldown_until"])
-        if cooldown_time and cooldown_time > now:
+    cooldown_min = crime.get("cooldown_minutes", 5)
+    _cd_seconds = crime.get("cooldown_seconds")
+    if _cd_seconds is None:
+        _cd_seconds = int(float(cooldown_min) * 60) if cooldown_min else 300
+    else:
+        _cd_seconds = int(float(_cd_seconds))
+    cooldown_until = (now + timedelta(seconds=_cd_seconds)).isoformat()
+    user_crime = await db.user_crimes.find_one_and_update(
+        {"user_id": current_user["id"], "crime_id": crime_id,
+         "$or": [
+             {"cooldown_until": {"$exists": False}},
+             {"cooldown_until": None},
+             {"cooldown_until": {"$lte": now.isoformat()}},
+         ]},
+        {"$set": {"cooldown_until": cooldown_until}},
+        projection={"_id": 0},
+    )
+    if user_crime is None:
+        existing = await db.user_crimes.find_one(
+            {"user_id": current_user["id"], "crime_id": crime_id},
+            {"_id": 1},
+        )
+        if existing:
             raise HTTPException(
                 status_code=400,
-                detail=f"Crime on cooldown until {user_crime['cooldown_until']}",
+                detail="Crime on cooldown",
             )
+        await db.user_crimes.update_one(
+            {"user_id": current_user["id"], "crime_id": crime_id},
+            {"$setOnInsert": {"cooldown_until": cooldown_until, "attempts": 0, "successes": 0}},
+            upsert=True,
+        )
     
     # PROGRESS BAR: 10-92%. Success +6-8%. Fail -1-3%; once hit 92%, floor is 77%
     stored = (user_crime or {}).get("progress")
@@ -700,13 +721,6 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         prestige_bonus_earned = None
         message = _rng.choice(CRIME_FAIL_MESSAGES)
         respect_earned = 0
-    cooldown_min = crime.get("cooldown_minutes", 5)
-    cooldown_seconds = crime.get("cooldown_seconds")
-    if cooldown_seconds is None:
-        cooldown_seconds = int(float(cooldown_min) * 60) if cooldown_min else 300
-    else:
-        cooldown_seconds = int(float(cooldown_seconds))
-    cooldown_until = (now + timedelta(seconds=cooldown_seconds)).isoformat()
     # Track attempts, successes, progress (success +6-8%; fail -1-3%; once at 92% floor is 77%)
     set_fields = {
         "last_committed": now.isoformat(),

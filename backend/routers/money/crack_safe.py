@@ -186,12 +186,27 @@ def register(router):
         )
 
         if cracked:
-            fresh = await db.safe_game.find_one({})
-            jackpot_amount = fresh.get("jackpot", SAFE_JACKPOT_SEED)
             uid = user.get("id") or ""
+            new_combo = [_rng.randint(SAFE_MIN, SAFE_MAX) for _ in range(SAFE_DIGITS)]
+            won_safe = await db.safe_game.find_one_and_update(
+                {"combination": combo},
+                {"$set": {
+                    "combination": new_combo,
+                    "jackpot": SAFE_JACKPOT_SEED,
+                    "total_attempts": 0,
+                    "last_winner_username": user.get("username", "?"),
+                    "last_won_at": now,
+                }},
+            )
+            if not won_safe:
+                return {
+                    "cracked": False,
+                    "correct_positions": SAFE_DIGITS,
+                    "message": "Safe was cracked by someone else just before you!",
+                }
+            jackpot_amount = won_safe.get("jackpot", SAFE_JACKPOT_SEED)
             await db.users.update_one({"id": uid}, {"$inc": {"money": jackpot_amount}})
 
-            # 25% chance for 1–3 different token types, each 1–2 amount
             bonus_tokens = []
             if _rng.random() < SAFE_TOKEN_REWARD_CHANCE:
                 try:
@@ -211,18 +226,6 @@ def register(router):
                         await db.users.update_one({"id": uid}, {"$inc": incs})
                 except Exception:
                     pass
-
-            new_combo = [_rng.randint(SAFE_MIN, SAFE_MAX) for _ in range(SAFE_DIGITS)]
-            await db.safe_game.update_one(
-                {},
-                {"$set": {
-                    "combination": new_combo,
-                    "jackpot": SAFE_JACKPOT_SEED,
-                    "total_attempts": 0,
-                    "last_winner_username": user.get("username", "?"),
-                    "last_won_at": now,
-                }},
-            )
             await db.safe_winners.insert_one({
                 "username": user.get("username", "?"),
                 "user_id": uid,

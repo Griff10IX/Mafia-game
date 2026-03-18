@@ -41,13 +41,28 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
     prop = await db.properties.find_one({"id": request.property_id}, {"_id": 0})
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    last_extortion = await db.extortions.find_one(
-        {"extorter_id": current_user["id"], "target_id": target["id"], "property_id": request.property_id},
-        {"_id": 0}
+    now = datetime.now(timezone.utc)
+    cooldown_threshold = (now - timedelta(hours=2)).isoformat()
+    extortion_filter = {"extorter_id": current_user["id"], "target_id": target["id"], "property_id": request.property_id}
+    claim = await db.extortions.find_one_and_update(
+        {**extortion_filter,
+         "$or": [
+             {"timestamp": {"$exists": False}},
+             {"timestamp": None},
+             {"timestamp": {"$lte": cooldown_threshold}},
+         ]},
+        {"$set": {"timestamp": now.isoformat()}},
     )
-    if last_extortion:
-        cooldown_time = datetime.fromisoformat(last_extortion["timestamp"]) + timedelta(hours=2)
-        if cooldown_time > datetime.now(timezone.utc):
+    if claim is None:
+        existing = await db.extortions.find_one(extortion_filter, {"_id": 1})
+        if existing:
+            raise HTTPException(status_code=400, detail="Must wait 2 hours between attacks on the same property")
+        ins = await db.extortions.update_one(
+            extortion_filter,
+            {"$setOnInsert": {"timestamp": now.isoformat()}},
+            upsert=True,
+        )
+        if ins.upserted_id is None:
             raise HTTPException(status_code=400, detail="Must wait 2 hours between attacks on the same property")
     defender_level = target_property.get("level", 1)
     success_chance = max(PROPERTY_ATTACK_MIN_SUCCESS, PROPERTY_ATTACK_BASE_SUCCESS - defender_level * PROPERTY_ATTACK_LEVEL_PENALTY)
@@ -77,9 +92,8 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
             except Exception:
                 pass
         await db.extortions.update_one(
-            {"extorter_id": current_user["id"], "target_id": target["id"], "property_id": request.property_id},
-            {"$set": {"timestamp": datetime.now(timezone.utc).isoformat(), "amount": extortion_amount}},
-            upsert=True
+            extortion_filter,
+            {"$set": {"amount": extortion_amount}},
         )
         return {
             "success": True,
@@ -87,6 +101,10 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
             "amount": extortion_amount,
             "rank_points_earned": rank_points,
         }
+    await db.extortions.update_one(
+        extortion_filter,
+        {"$unset": {"timestamp": ""}},
+    )
     return {
         "success": False,
         "message": f"Raid failed. {prop['name']} is well defended (level {defender_level}). Try again later.",

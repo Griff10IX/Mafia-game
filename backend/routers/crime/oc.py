@@ -492,23 +492,31 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     has_timer_upgrade = bool(current_user.get("oc_timer_reduced", False))
     oc_reduced = _oc_reduced_active(current_user)
     cooldown_hours = OC_COOLDOWN_HOURS_REDUCED if (has_timer_upgrade or oc_reduced) else OC_COOLDOWN_HOURS
-    cooldown_until = current_user.get("oc_cooldown_until")
-    if cooldown_until:
-        until = _parse_iso_datetime(cooldown_until)
-        if until and until > now:
-            secs = int((until - now).total_seconds())
-            return {"success": False, "message": f"OC cooldown: try again in {secs}s", "cooldown_until": cooldown_until}
     user_oc = await db.user_organised_crime.find_one({"user_id": uid}, {"_id": 0, "selected_equipment": 1})
     selected_id = (user_oc or {}).get("selected_equipment", "basic")
     equip = OC_EQUIPMENT_BY_ID.get(selected_id, OC_EQUIPMENT_BY_ID["basic"])
     total_cost = OC_SETUP_COST + equip["cost"]
     if oc_reduced:
         total_cost = int(total_cost * 0.8)
+    new_cooldown_until = now + timedelta(hours=cooldown_hours)
     result = await db.users.update_one(
-        {"id": uid, "money": {"$gte": total_cost}},
-        {"$inc": {"money": -total_cost}},
+        {"id": uid, "money": {"$gte": total_cost},
+         "$or": [
+             {"oc_cooldown_until": {"$exists": False}},
+             {"oc_cooldown_until": None},
+             {"oc_cooldown_until": {"$lte": now.isoformat()}},
+         ]},
+        {"$inc": {"money": -total_cost}, "$set": {"oc_cooldown_until": new_cooldown_until.isoformat()}},
     )
     if result.modified_count == 0:
+        fresh = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1, "oc_cooldown_until": 1})
+        if fresh:
+            cd = fresh.get("oc_cooldown_until")
+            if cd:
+                until = _parse_iso_datetime(cd)
+                if until and until > now:
+                    secs = int((until - now).total_seconds())
+                    return {"success": False, "message": f"OC cooldown: try again in {secs}s", "cooldown_until": cd}
         return {
             "success": False,
             "message": f"Not enough money. Need ${total_cost:,}",
@@ -519,11 +527,6 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     rank_mult = float(ev.get("rank_points", 1.0))
     cash_mult = float(ev.get("kill_cash", 1.0))
     success = _rng.random() < OC_SUCCESS_RATE
-    new_cooldown_until = now + timedelta(hours=cooldown_hours)
-    await db.users.update_one(
-        {"id": uid},
-        {"$set": {"oc_cooldown_until": new_cooldown_until.isoformat()}},
-    )
     if not success:
         goes_to_jail = _rng.random() < OC_JAIL_CHANCE_ON_FAIL
         if goes_to_jail:

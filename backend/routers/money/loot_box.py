@@ -583,29 +583,27 @@ SPEAKEASY_COOLDOWN_HOURS = 24
 async def collect_speakeasy(current_user: dict = Depends(get_current_user)):
     """Collect daily Speakeasy perk if user owns an exclusive property (Speakeasy). Once per 24h."""
     user_id = current_user["id"]
-    ep = await db.exclusive_properties.find_one({"owner_id": user_id, "type": "speakeasy"}, {"_id": 0, "last_speakeasy_collected_at": 1})
-    if not ep:
-        raise HTTPException(status_code=400, detail="You do not own a Speakeasy")
     now = datetime.now(timezone.utc)
-    last = ep.get("last_speakeasy_collected_at")
-    if last:
-        try:
-            last_dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
-            if last_dt.tzinfo is None:
-                last_dt = last_dt.replace(tzinfo=timezone.utc)
-            if (now - last_dt).total_seconds() < SPEAKEASY_COOLDOWN_HOURS * 3600:
-                raise HTTPException(status_code=400, detail="Speakeasy daily collection is on cooldown (once per 24 hours)")
-        except HTTPException:
-            raise
-        except Exception:
-            pass
+    cooldown_threshold = (now - timedelta(hours=SPEAKEASY_COOLDOWN_HOURS)).isoformat()
+    ep = await db.exclusive_properties.find_one_and_update(
+        {"owner_id": user_id, "type": "speakeasy",
+         "$or": [
+             {"last_speakeasy_collected_at": {"$exists": False}},
+             {"last_speakeasy_collected_at": None},
+             {"last_speakeasy_collected_at": {"$lte": cooldown_threshold}},
+         ]},
+        {"$set": {"last_speakeasy_collected_at": now.isoformat()}},
+    )
+    if not ep:
+        owns = await db.exclusive_properties.find_one(
+            {"owner_id": user_id, "type": "speakeasy"}, {"_id": 1}
+        )
+        if not owns:
+            raise HTTPException(status_code=400, detail="You do not own a Speakeasy")
+        raise HTTPException(status_code=400, detail="Speakeasy daily collection is on cooldown (once per 24 hours)")
     await db.users.update_one(
         {"id": user_id},
         {"$inc": {"money": SPEAKEASY_DAILY_CASH, "bullets": SPEAKEASY_DAILY_BULLETS}},
-    )
-    await db.exclusive_properties.update_one(
-        {"owner_id": user_id, "type": "speakeasy"},
-        {"$set": {"last_speakeasy_collected_at": now.isoformat()}},
     )
     return {
         "message": f"Collected ${SPEAKEASY_DAILY_CASH:,} and {SPEAKEASY_DAILY_BULLETS} bullets from your Speakeasy.",
