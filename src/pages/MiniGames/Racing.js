@@ -597,7 +597,7 @@ export default function Racing() {
           <p className="text-xs text-[var(--noir-muted)] mt-0.5">Create a racing team to enter races.</p>
         </div>
         <div className="p-4 max-w-md">
-          <div className={styles.panel + " mobile-panel " overflow-hidden"}>
+          <div className={styles.panel + " mobile-panel overflow-hidden"}>
             <CardHead title="Create Your Racing Team" />
             <div className="p-4 space-y-3">
               <p className="text-xs text-[var(--noir-muted)]">
@@ -752,7 +752,7 @@ export default function Racing() {
 
       {/* ─── POST-RACE RESULTS ─── */}
       {activeRace?.state === "completed" && (
-        <div className={styles.panel + " mobile-panel " m-3 overflow-hidden"}>
+        <div className={styles.panel + " mobile-panel m-3 overflow-hidden"}>
           <CardHead title="Race Results" />
           <div className="p-3">
             {activeRace.weather_name && (
@@ -819,7 +819,7 @@ export default function Racing() {
         {tab === "races" && (
           <>
             {/* Automated race card */}
-            <div className={styles.panel + " mobile-panel " overflow-hidden mb-3"}>
+            <div className={styles.panel + " mobile-panel overflow-hidden mb-3"}>
               <CardHead title="Daily Automated Races" right={
                 nextAutoRaceUtc && (() => {
                   const d = new Date(nextAutoRaceUtc);
@@ -876,7 +876,7 @@ export default function Racing() {
             </div>
 
             {/* Create race */}
-            <div className={styles.panel + " mobile-panel " overflow-hidden mb-3"}>
+            <div className={styles.panel + " mobile-panel overflow-hidden mb-3"}>
               <CardHead title="Create Race" right={
                 <span className="text-[9px] text-[var(--noir-muted)]">Grid by qualifying lap</span>
               } />
@@ -978,7 +978,7 @@ export default function Racing() {
 
             {/* Active open race */}
             {activeRace?.state === "open" && (
-              <div className={styles.panel + " mobile-panel " p-3 mb-3"}>
+              <div className={styles.panel + " mobile-panel p-3 mb-3"}>
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="font-heading text-xs" style={{ color: "var(--noir-primary)" }}>{activeRace.track_name}</span>
@@ -995,7 +995,7 @@ export default function Racing() {
             )}
 
             {/* Open races */}
-            <div className={styles.panel + " mobile-panel " overflow-hidden"}>
+            <div className={styles.panel + " mobile-panel overflow-hidden"}>
               <CardHead title="Open Races" right={
                 <select className={styles.input + " text-[10px] py-0.5 w-24"} value={trackFilter} onChange={(e) => setTrackFilter(e.target.value)}>
                   <option value="all">All</option>
@@ -1056,7 +1056,7 @@ export default function Racing() {
         {tab === "myride" && (
           <>
             {/* Tyre stock — inline badges */}
-            <div className={styles.panel + " mobile-panel " overflow-hidden mb-3"}>
+            <div className={styles.panel + " mobile-panel overflow-hidden mb-3"}>
               <CardHead title="Tyre Stock" right={<span className="text-[9px] text-[var(--noir-muted)]">1 set / race · crew bank</span>} />
               <div className="p-3 flex flex-wrap gap-2">
                 {["soft", "medium", "hard", "inter"].map((compound) => {
@@ -1081,7 +1081,7 @@ export default function Racing() {
 
             {/* Car cards */}
             {cars.length === 0 ? (
-              <div className={styles.panel + " mobile-panel " p-3 mb-3"}>
+              <div className={styles.panel + " mobile-panel p-3 mb-3"}>
                 <p className="text-xs text-[var(--noir-muted)]">Choose a car below.</p>
               </div>
             ) : (
@@ -1132,7 +1132,7 @@ export default function Racing() {
                 };
 
                 return (
-                  <div key={c.id} className={styles.panel + " mobile-panel " overflow-hidden mb-3"}>
+                  <div key={c.id} className={styles.panel + " mobile-panel overflow-hidden mb-3"}>
                     <CardHead title={c.car_name || c.racing_car_id} right={
                       <button type="button" className={styles.btnPrimary + " text-[9px] px-2 py-0.5"} disabled={selectedInstanceId === c.id} onClick={() => handleSelectCar(c.id)}>
                         {selectedInstanceId === c.id ? "Active" : "Select"}
@@ -1245,7 +1245,7 @@ export default function Racing() {
             )}
 
             {/* Car selection — compact */}
-            <div className={styles.panel + " mobile-panel " overflow-hidden"}>
+            <div className={styles.panel + " mobile-panel overflow-hidden"}>
               <CardHead title="Choose Car" />
               <div className="p-3 space-y-1">
                 {availableCars.map((car) => {
@@ -1272,7 +1272,7 @@ export default function Racing() {
 
         {/* ─── CREW TAB ─── */}
         {tab === "crew" && (
-          <div className={styles.panel + " mobile-panel " overflow-hidden"}>
+          <div className={styles.panel + " mobile-panel overflow-hidden"}>
             <CardHead title="Crew Upgrades" right={
               <span className="text-[10px] tabular-nums" style={{ color: "var(--noir-primary)" }}>
                 Bank: {formatMoney(profile?.crew_bank ?? 0)} · Levels: {profile?.crew_levels_used ?? 0}/{profile?.crew_global_cap ?? 24}
@@ -1319,7 +1319,7 @@ export default function Racing() {
             </div>
 
             {/* Sponsor Deal */}
-            <div className={styles.panel + " mobile-panel " overflow-hidden mt-3"}>
+            <div className={styles.panel + " mobile-panel overflow-hidden mt-3"}>
               <CardHead title="Sponsor Deal" right={
                 <span className="text-[10px] text-[var(--noir-primary)]">{profile?.sponsor?.name || "None"}</span>
               } />
@@ -1347,7 +1347,7 @@ export default function Racing() {
 
         {/* ─── LEADERBOARD TAB ─── */}
         {tab === "leaderboard" && (
-          <div className={styles.panel + " mobile-panel " overflow-hidden"}>
+          <div className={styles.panel + " mobile-panel overflow-hidden"}>
             <CardHead title="Racing Leaderboard" />
             <div className="p-3">
               {leaderboard.length === 0 ? (
@@ -1391,7 +1391,7 @@ export default function Racing() {
 
         {/* ─── COMPS TAB ─── */}
         {tab === "comps" && (
-          <div className={styles.panel + " mobile-panel " overflow-hidden"}>
+          <div className={styles.panel + " mobile-panel overflow-hidden"}>
             <CardHead title="Race Competitions" />
             <div className="p-3">
               {comps.length === 0 ? (
@@ -1419,7 +1419,7 @@ export default function Racing() {
         {/* ─── CHALLENGES (H2H) TAB ─── */}
         {tab === "challenges" && (
           <div>
-            <div className={styles.panel + " mobile-panel " p-3 mb-3"}>
+            <div className={styles.panel + " mobile-panel p-3 mb-3"}>
               <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Challenge a Player</div>
               <div className="space-y-2">
                 <input type="text" value={challengeForm.target_username} onChange={e => setChallengeForm(f => ({ ...f, target_username: e.target.value }))}
@@ -1448,11 +1448,11 @@ export default function Racing() {
 
             {/* Incoming challenges */}
             {challenges.incoming.length > 0 && (
-              <div className={styles.panel + " mobile-panel " p-3 mb-3"}>
+              <div className={styles.panel + " mobile-panel p-3 mb-3"}>
                 <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Incoming Challenges</div>
                 <div className="space-y-2">
                   {challenges.incoming.map(ch => (
-                    <div key={ch.id} className={styles.panel + " mobile-panel " p-2"}>
+                    <div key={ch.id} className={styles.panel + " mobile-panel p-2"}>
                       <div className="text-[11px] font-semibold">{ch.challenger_username} <span className="text-[var(--noir-muted)]">wants to race</span></div>
                       <div className="text-[10px] text-[var(--noir-muted)]">{ch.track_name} · {ch.laps} laps · {ch.weather_name} · ${(ch.stake || 0).toLocaleString()} stake</div>
                       <div className="flex gap-2 mt-1">
@@ -1467,7 +1467,7 @@ export default function Racing() {
 
             {/* Outgoing challenges */}
             {challenges.outgoing.length > 0 && (
-              <div className={styles.panel + " mobile-panel " p-3 mb-3"}>
+              <div className={styles.panel + " mobile-panel p-3 mb-3"}>
                 <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Outgoing Challenges</div>
                 <div className="space-y-1">
                   {challenges.outgoing.map(ch => (
@@ -1482,7 +1482,7 @@ export default function Racing() {
 
             {/* Recent H2H Results */}
             {challenges.completed.length > 0 && (
-              <div className={styles.panel + " mobile-panel " p-3"}>
+              <div className={styles.panel + " mobile-panel p-3"}>
                 <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Recent Results</div>
                 <div className="space-y-1">
                   {challenges.completed.map(ch => {
@@ -1507,7 +1507,7 @@ export default function Racing() {
         {/* ─── BETS TAB ─── */}
         {tab === "bets" && (
           <div>
-            <div className={styles.panel + " mobile-panel " p-3 mb-3"}>
+            <div className={styles.panel + " mobile-panel p-3 mb-3"}>
               <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Place a Bet</div>
               <p className="text-[10px] text-[var(--noir-muted)] mb-3">Bet on who will win an open race. Odds based on car stats and racing rep.</p>
               {openRaces.filter(r => r.state === "open").length === 0 ? (
@@ -1515,7 +1515,7 @@ export default function Racing() {
               ) : (
                 <div className="space-y-2">
                   {openRaces.filter(r => r.state === "open").map(race => (
-                    <div key={race.id} className={styles.panel + " mobile-panel " p-2"}>
+                    <div key={race.id} className={styles.panel + " mobile-panel p-2"}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-[11px] font-semibold">{race.track_name || race.track_id}</span>
                         <span className="text-[9px] text-[var(--noir-muted)]">{race.participants?.length || 0} entrants · ${(race.entry_fee || 0).toLocaleString()} fee</span>
@@ -1552,7 +1552,7 @@ export default function Racing() {
               )}
             </div>
 
-            <div className={styles.panel + " mobile-panel " p-3 mb-3"}>
+            <div className={styles.panel + " mobile-panel p-3 mb-3"}>
               <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">My Bets</div>
               {!raceBets.open.length && !raceBets.settled.length ? (
                 <p className="text-[10px] text-[var(--noir-muted)]">No bets yet. Place one on an open race above!</p>
@@ -1595,7 +1595,7 @@ export default function Racing() {
         {tab === "history" && (
           <div>
             {/* Season Stats Card */}
-            <div className={styles.panel + " mobile-panel " p-3 mb-3"}>
+            <div className={styles.panel + " mobile-panel p-3 mb-3"}>
               <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Season Stats</div>
               {!seasonStats ? (
                 <p className="text-[10px] text-[var(--noir-muted)]">Loading...</p>
@@ -1609,7 +1609,7 @@ export default function Racing() {
                     { label: "Earnings", val: `$${(seasonStats.total_earnings || 0).toLocaleString()}` },
                     { label: "Rep", val: seasonStats.racing_rep },
                   ].map(s => (
-                    <div key={s.label} className={styles.panel + " mobile-panel " p-2"}>
+                    <div key={s.label} className={styles.panel + " mobile-panel p-2"}>
                       <div className="text-[14px] font-semibold text-[var(--noir-primary)]">{s.val}</div>
                       <div className="text-[9px] text-[var(--noir-muted)] uppercase tracking-wider">{s.label}</div>
                     </div>
@@ -1619,7 +1619,7 @@ export default function Racing() {
             </div>
 
             {/* Track Records Card */}
-            <div className={styles.panel + " mobile-panel " p-3 mb-3"}>
+            <div className={styles.panel + " mobile-panel p-3 mb-3"}>
               <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Track Records</div>
               {Object.keys(trackRecords).length === 0 ? (
                 <p className="text-[10px] text-[var(--noir-muted)]">No records set yet.</p>
@@ -1643,7 +1643,7 @@ export default function Racing() {
             </div>
 
             {/* Race History List */}
-            <div className={styles.panel + " mobile-panel " p-3"}>
+            <div className={styles.panel + " mobile-panel p-3"}>
               <div className="font-heading text-[11px] tracking-[.22em] uppercase text-[var(--noir-primary)] mb-2">Recent Races</div>
               {raceHistory.length === 0 ? (
                 <p className="text-[10px] text-[var(--noir-muted)]">No completed races yet.</p>

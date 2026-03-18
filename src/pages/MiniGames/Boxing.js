@@ -643,7 +643,7 @@ export default function Boxing() {
       </div>
 
       {/* Tab bar */}
-      <div className={styles.pageContent} style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--noir-border-light)" }}>
+      <div className={`${styles.pageContent} mobile-page-root`} style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--noir-border-light)" }}>
         {TABS.map((t, i) => (
           <button key={t} onClick={() => setTab(i)} className="touch-manipulation active:scale-95 transition-transform" style={{
             flex: 1, padding: "12px 0", fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase",
@@ -655,7 +655,7 @@ export default function Boxing() {
         ))}
       </div>
 
-      <div className={styles.pageContent} style={{ padding: "14px 12px" }}>
+      <div className={`${styles.pageContent} mobile-page-root`} style={{ padding: "14px 12px" }}>
         {error && <div style={{ fontSize: 11, color: "#ff6666", marginBottom: 10, padding: "8px 12px", background: "rgba(255,60,60,0.08)", borderRadius: 4 }}>{error}</div>}
 
         {loading && !profile && <div style={{ textAlign: "center", padding: 30, color: "var(--noir-muted)", fontSize: 12 }}>Loading fighter profile...</div>}

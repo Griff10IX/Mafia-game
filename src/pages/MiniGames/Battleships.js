@@ -1142,7 +1142,7 @@ function SettingsScreen({settings,onSave}) {
     if (sel.length>=2) setS(p=>({...p,ships:sel}));
   };
   return (
-    <div style={{width:"100%",maxWidth:520,margin:"0 auto",padding:"0 0 1rem"}}>
+    <div className="mobile-page-root" style={{width:"100%",maxWidth:520,margin:"0 auto",padding:"0 0 1rem"}}>
       <div style={{fontSize:10,letterSpacing:"0.3em",color:"rgba(212,175,55,0.4)",textTransform:"uppercase",marginBottom:4,textAlign:"center"}}>Pre-Game</div>
       <h2 style={{fontSize:20,fontWeight:700,color:"var(--noir-primary)",margin:"0 0 16px",textAlign:"center",letterSpacing:"0.1em"}}>BRIEFING ROOM</h2>
 
