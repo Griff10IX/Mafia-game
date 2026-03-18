@@ -844,7 +844,7 @@ export default function TheGetaway() {
   }, [handleStart, moveLeft, moveRight, jump, slide]);
 
   return (
-    <div className={`${styles.pageContent} space-y-4`}>
+    <div className={`${styles.pageContent} mobile-page-root space-y-4`}>
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-lg font-heading font-bold text-primary uppercase tracking-wider">The Getaway</h1>
@@ -859,7 +859,7 @@ export default function TheGetaway() {
       </div>
 
       {showRules && (
-        <div className={`${styles.panel} rounded-lg p-3 space-y-2`}>
+        <div className={`${styles.panel} mobile-panel rounded-lg p-3 space-y-2`}>
           <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-wider">How to Play</h3>
           <ul className="text-[11px] text-foreground space-y-1">
             {RULES.map((rule, i) => (
@@ -872,7 +872,7 @@ export default function TheGetaway() {
         </div>
       )}
 
-      <div className={`${styles.panel} rounded-lg p-2`}>
+      <div className={`${styles.panel} mobile-panel rounded-lg p-2`}>
         <div className="flex justify-between items-center px-2 py-1 text-xs font-heading text-foreground">
           <span>Score: <span className="text-primary">{displayScore}</span></span>
           <span>Cash: <span className="text-emerald-400">${(displayCoins * 100).toLocaleString()}</span></span>

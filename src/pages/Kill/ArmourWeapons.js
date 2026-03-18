@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Factory, Package, User, ShoppingCart, Flame, Gauge, Shield, Crosshair, Swords, DollarSign } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
+import styles from '../../styles/noir.module.css';
 
 const formatMoney = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 const QUICK_BUYS = [100, 500, 1000, 2000, 3000];
@@ -543,7 +544,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
   const weaponStock = Object.values(data?.weapon_stock || {}).reduce((a, b) => a + Number(b || 0), 0);
 
   return (
-    <div className="space-y-3 sm:space-y-4 relative" data-page="armoury">
+    <div className={`space-y-3 sm:space-y-4 relative ${styles.pageContent} mobile-page-root`} data-page="armoury">
       <style>{`
         @keyframes belt-bullets {
           0% { transform: translateX(0); }

@@ -92,8 +92,8 @@ export default function AdminLocked() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-4 pb-24">
-      <div className={`rounded-lg overflow-hidden border ${styles.panel} border-primary/20`}>
+    <div className={`max-w-2xl mx-auto p-4 pb-24 ${styles.pageContent} mobile-page-root`}>
+      <div className={`rounded-lg overflow-hidden border ${styles.panel} border-primary/20 mobile-panel`}>
         <div className="px-4 py-3 border-b border-primary/20 flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <Lock size={18} className="text-amber-400" />

@@ -507,7 +507,7 @@ export default function LootBox() {
 
   if (loading) {
     return (
-      <div className={`space-y-2 ${styles.pageContent}`}>
+      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{LOOT_BOX_STYLES}</style>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
           <Gift size={24} className="text-primary/50 animate-pulse" />
@@ -524,7 +524,7 @@ export default function LootBox() {
       <style>{globalStyles}</style>
       <style>{LOOT_BOX_STYLES}</style>
 
-      <div className={`space-y-1.5 ${styles.pageContent}`} data-testid="lootbox-page">
+      <div className={`space-y-1.5 ${styles.pageContent} mobile-page-root`} data-testid="lootbox-page">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-3">
           {/* ── Main column ── */}
           <div className="space-y-1.5 min-w-0">
@@ -534,7 +534,7 @@ export default function LootBox() {
             </div>
 
             {/* Chest card */}
-            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in ${canOpen ? 'ring-1 ring-primary/30' : ''}`} style={{ animationDelay: '0.03s' }}>
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in mobile-panel ${canOpen ? 'ring-1 ring-primary/30' : ''}`} style={{ animationDelay: '0.03s' }}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
                 <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">The Vault</span>
@@ -568,7 +568,7 @@ export default function LootBox() {
             </div>
 
             {/* Scarcity card */}
-            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in`} style={{ animationDelay: '0.05s' }}>
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
                 <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Exclusive Scarcity</span>
@@ -587,7 +587,7 @@ export default function LootBox() {
 
             {/* Admin: Loot box rarity */}
             {isAdmin && (
-              <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/30 border-dashed lb-fade-in`} style={{ animationDelay: '0.06s' }}>
+              <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/30 border-dashed lb-fade-in mobile-panel`} style={{ animationDelay: '0.06s' }}>
                 <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
                 <div className="px-2 py-1 bg-primary/10 border-b border-primary/20 flex items-center gap-1.5">
                   <Shield size={12} className="text-primary shrink-0" />
@@ -665,7 +665,7 @@ export default function LootBox() {
 
             {/* Active rewards */}
             {(status?.active_rewards?.length > 0) && (
-              <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in`} style={{ animationDelay: '0.07s' }}>
+              <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in mobile-panel`} style={{ animationDelay: '0.07s' }}>
                 <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
                 <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
                   <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Active rewards</span>
@@ -697,7 +697,7 @@ export default function LootBox() {
           </div>
 
           {/* ── Side: Last 10 wins (compact) ── */}
-          <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in h-fit`} style={{ animationDelay: '0.05s' }}>
+          <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in h-fit mobile-panel`} style={{ animationDelay: '0.05s' }}>
             <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
               <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Last 10 wins</span>

@@ -161,7 +161,7 @@ const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onRevea
   const costLabel = [needCash > 0 && `$${Number(needCash).toLocaleString()}`, needPoints > 0 && `${Number(needPoints).toLocaleString()}p`].filter(Boolean).join(' + ');
   
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border-2 ${onHitlist ? 'border-red-900/40 bg-gradient-to-br from-zinc-900 via-zinc-900/95 to-red-950/20' : 'border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90'} hit-fade-in`}>
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border-2 mobile-panel ${onHitlist ? 'border-red-900/40 bg-gradient-to-br from-zinc-900 via-zinc-900/95 to-red-950/20' : 'border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90'} hit-fade-in`}>
       {/* Decorative elements */}
       <SmokeWisp delay={0} className="top-2 left-2" />
       <SmokeWisp delay={1.5} className="top-2 right-2" />
@@ -306,7 +306,7 @@ const PlaceBountyCard = ({
   onSubmit,
   hasReward,
 }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 hit-fade-in`} style={{ animationDelay: '0.1s' }}>
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 hit-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
     {/* Decorations */}
     <InkSplatter className="absolute top-4 right-6" />
     
@@ -440,7 +440,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
     (cash === 0 || haveCash >= cash) && (points === 0 || havePoints >= points);
 
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 hit-fade-in`} style={{ animationDelay: '0.2s' }}>
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 hit-fade-in mobile-panel`} style={{ animationDelay: '0.2s' }}>
       {/* Decorations */}
       {/* Header */}
       <div className="relative px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
@@ -648,7 +648,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
    Info Card
    ═══════════════════════════════════════════════════════ */
 const InfoCard = () => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-zinc-700/40 bg-zinc-900/60 hit-fade-in`} style={{ animationDelay: '0.3s' }}>
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-zinc-700/40 bg-zinc-900/60 hit-fade-in mobile-panel`} style={{ animationDelay: '0.3s' }}>
     <div className="px-2.5 sm:px-3 py-2 bg-zinc-800/40 border-b border-zinc-700/40">
       <h3 className="text-[10px] sm:text-xs font-heading font-bold text-zinc-400 uppercase tracking-wider">
         ℹ️ How It Works
@@ -838,7 +838,7 @@ export default function HitlistPage() {
   const who = me?.who ?? [];
 
   return (
-    <div className={`space-y-3 px-3 sm:px-4 ${styles.pageContent}`} data-testid="hitlist-page">
+    <div className={`space-y-3 px-3 sm:px-4 ${styles.pageContent} mobile-page-root`} data-testid="hitlist-page">
       <style>{HITLIST_STYLES}</style>
 
       {/* Page intro */}

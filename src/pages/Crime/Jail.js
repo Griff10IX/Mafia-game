@@ -249,7 +249,7 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPla
 };
 
 const InfoSection = () => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 j-fade-in`} style={{ animationDelay: '0.08s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 j-fade-in mobile-panel`} style={{ animationDelay: '0.08s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
       <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
@@ -462,7 +462,7 @@ export default function Jail() {
 
   if (initialLoading) {
     return (
-      <div className={`space-y-2 ${styles.pageContent}`}>
+      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{JAIL_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -470,7 +470,7 @@ export default function Jail() {
   }
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} data-testid="jail-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="jail-page">
       <style>{JAIL_STYLES}</style>
 
       {user?.jailbust_bonus_until && (
@@ -568,7 +568,7 @@ export default function Jail() {
       )}
 
       {/* Jailed Players */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 j-fade-in`} style={{ animationDelay: '0.05s' }}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 j-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
@@ -605,7 +605,7 @@ export default function Jail() {
       <InfoSection />
 
       {/* Bust stats */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 j-fade-in`} style={{ animationDelay: '0.03s' }}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 j-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Bust stats</span>

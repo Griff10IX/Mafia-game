@@ -470,14 +470,14 @@ export default function MPBlackjackGamePage() {
   // ── Early returns ──
   if (loading && !game) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <p className="text-[10px] text-mutedForeground font-heading animate-pulse">Loading table…</p>
       </div>
     );
   }
   if (!game) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <p className="text-[10px] text-mutedForeground font-heading">Game not found.</p>
         <Link to="/casino/mp-blackjack" className="text-primary font-heading text-sm hover:underline">← Back to Multiplayer Blackjack</Link>
       </div>
@@ -485,7 +485,7 @@ export default function MPBlackjackGamePage() {
   }
   if (status === 'cancelled') {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <div className="rounded-xl border p-6 text-center space-y-3" style={{ borderColor: 'rgba(248,113,113,0.25)', background: 'rgba(248,113,113,0.05)' }}>
           <p className="text-sm font-heading font-bold text-red-400 uppercase tracking-wider">Game Cancelled</p>
           <p className="text-[10px] text-mutedForeground font-heading">All bets have been refunded.</p>
@@ -505,7 +505,7 @@ export default function MPBlackjackGamePage() {
   const goldBar = { height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' };
 
   return (
-    <div className={`space-y-3 ${styles.pageContent}`} data-testid="mp-blackjack-game-page">
+    <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="mp-blackjack-game-page">
       <style>{`
         @keyframes card-deal {
           0%   { transform: translateY(-28px) rotate(-5deg) scale(0.8); opacity: 0; }
@@ -864,7 +864,7 @@ export default function MPBlackjackGamePage() {
 
       {/* ══ ELIMINATION HISTORY ══ */}
       {eliminationRounds && (game?.eliminated || []).length > 0 && (
-        <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20`}>
+        <div className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20`}>
           <div className="px-3 py-2 border-b border-primary/20 flex items-center gap-1.5"
             style={{ background: 'rgba(251,113,133,0.05)' }}>
             <Skull size={11} style={{ color: '#fb7185' }} />
@@ -885,7 +885,7 @@ export default function MPBlackjackGamePage() {
 
       {/* ══ CHAT ══ */}
       {(status === 'open' || status === 'playing' || status === 'completed') && amIPlayer && (
-        <div data-chat-surface="table" data-chat-game="blackjack" className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20`}>
+        <div data-chat-surface="table" data-chat-game="blackjack" className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20`}>
           <div data-chat-part="header" className="px-3 py-2 border-b border-primary/20 flex items-center gap-1.5"
             style={{ background: 'rgba(234,179,8,0.06)' }}>
             <MessageSquare size={11} className="text-primary" />
@@ -923,7 +923,7 @@ export default function MPBlackjackGamePage() {
         const results = game.results || [];
         const noWinner = results.length > 0 && results.every((r) => r.result === 'refund');
         return (
-          <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20`}>
+          <div className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20`}>
             <div className="px-3 py-2 border-b border-primary/20" style={{ background: 'rgba(234,179,8,0.06)' }}>
               <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest">Results</span>
               {noWinner && (

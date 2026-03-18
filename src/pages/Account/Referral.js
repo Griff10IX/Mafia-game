@@ -79,7 +79,7 @@ export default function Referral() {
 
   if (loading) {
     return (
-      <div className={styles.pageContent}>
+      <div className={`${styles.pageContent} mobile-page-root`}>
         <style>{REF_STYLES}</style>
         <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3 text-zinc-300">
           <UserPlus size={28} className="text-primary/60 animate-pulse" />
@@ -92,7 +92,7 @@ export default function Referral() {
 
   if (error) {
     return (
-      <div className={styles.pageContent}>
+      <div className={`${styles.pageContent} mobile-page-root`}>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
           <p className="text-destructive font-heading">{error}</p>
           <Link to="/account/dashboard" className="text-primary font-heading underline">Back to Dashboard</Link>
@@ -109,12 +109,12 @@ export default function Referral() {
     (earnings.garage_scrap || 0) > 0 ||
     (earnings.booze_profit || 0) > 0;
 
-  const cardClass = `relative ${styles.panel} rounded-lg overflow-hidden ref-fade-in`;
+  const cardClass = `relative ${styles.panel} rounded-lg overflow-hidden ref-fade-in mobile-panel`;
   const cardHeaderClass = `${styles.panelHeader} px-2.5 sm:px-3 py-2`;
   const cardTitleClass = `${styles.gmTitle} text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-1.5`;
 
   return (
-    <div className={styles.pageContent}>
+    <div className={`${styles.pageContent} mobile-page-root`}>
       <style>{REF_STYLES}</style>
       <div className="max-w-2xl mx-auto space-y-4 p-4">
         <div className={`flex items-center gap-2 border-b ${styles.panelHeader} pb-2`} style={{ borderBottomColor: 'var(--gm-border)' }}>

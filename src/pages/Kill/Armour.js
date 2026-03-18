@@ -90,7 +90,7 @@ export default function Armour() {
   }
 
   return (
-    <div className="space-y-6" data-testid="armour-page">
+    <div className={`space-y-6 ${styles.pageContent} mobile-page-root`} data-testid="armour-page">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs uppercase tracking-[0.3em] text-mutedForeground">Armour</div>
@@ -108,7 +108,7 @@ export default function Armour() {
       </div>
 
       <div className="flex justify-center">
-        <div className={`w-full max-w-3xl ${styles.panel} border border-border rounded-sm overflow-hidden`}>
+        <div className={`w-full max-w-3xl ${styles.panel} border border-border rounded-sm overflow-hidden mobile-panel`}>
           <div className="grid grid-cols-12 bg-secondary/40 text-xs uppercase tracking-wider text-mutedForeground px-4 py-3">
             <div className="col-span-6">Set</div>
             <div className="col-span-2 text-right">Level</div>
@@ -190,7 +190,7 @@ export default function Armour() {
       </div>
 
       <div className="flex justify-center">
-        <div className={`w-full max-w-3xl ${styles.panel} border border-border rounded-sm p-6`}>
+        <div className={`w-full max-w-3xl ${styles.panel} border border-border rounded-sm p-6 mobile-panel`}>
           <h3 className="text-xl font-heading font-semibold text-primary mb-3">Armour System</h3>
           <ul className="space-y-2 text-sm text-mutedForeground">
             <li>• Armour has 5 tiers (Lv.1 → Lv.5)</li>

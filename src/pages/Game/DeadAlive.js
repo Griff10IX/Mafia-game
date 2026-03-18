@@ -91,7 +91,7 @@ export default function DeadAlive() {
   };
 
   return (
-    <div className={`space-y-6 max-w-4xl mx-auto ${styles.pageContent}`} data-testid="dead-alive-page">
+    <div className={`space-y-6 max-w-4xl mx-auto ${styles.pageContent} mobile-page-root`} data-testid="dead-alive-page">
       <style>{DA_STYLES}</style>
 
       {/* ── Header ── */}
@@ -121,7 +121,7 @@ export default function DeadAlive() {
       <div className="grid gap-5 lg:grid-cols-2 max-w-3xl">
 
         {/* ── Transfer Form ── */}
-        <div className={`da-fade-in2 relative ${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className={`da-fade-in2 relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-5 py-3 border-b border-primary/20 bg-primary/8">
             <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
@@ -182,7 +182,7 @@ export default function DeadAlive() {
         </div>
 
         {/* ── How it works ── */}
-        <div className={`da-fade-in3 relative ${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className={`da-fade-in3 relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-5 py-3 border-b border-primary/20 bg-primary/8">
             <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
@@ -229,7 +229,7 @@ export default function DeadAlive() {
       {/* ── Revive a fallen account (50k points, same email, once per email) ── */}
       {reviveEligibility != null && (
         <div className="da-fade-in space-y-3 max-w-3xl">
-          <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+          <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
             <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-5 py-3 border-b border-primary/20 bg-primary/8">
               <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">

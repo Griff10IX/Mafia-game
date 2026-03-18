@@ -272,7 +272,7 @@ function AreaSection({ areaName, missions, onMissionClick, delay = 0, isBossArea
   const sorted = [...missions].sort((a, b) => a.order - b.order);
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 m-fade-in mb-2`} style={{ animationDelay: `${delay}s` }}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 m-fade-in mb-2 mobile-panel`} style={{ animationDelay: `${delay}s` }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className={`px-2.5 py-1.5 border-b border-primary/20 flex items-center gap-2 ${isBossArea ? 'bg-primary/10' : 'bg-primary/8'}`}>
         {isBossArea ? <Skull size={12} className="text-primary shrink-0" /> : <MapPin size={11} className={allDone ? 'text-green-400' : 'text-primary/80'} />}
@@ -698,7 +698,7 @@ function TributeBanner({
   ].filter((m) => !m.has && (m.cash > 0 || m.bullets > 0 || m.respect > 0 || (m.loot || 0) > 0));
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border m-fade-in ${hasAny ? 'border-green-500/30' : 'border-primary/20'}`} style={{ animationDelay: '0.05s' }}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border m-fade-in mobile-panel ${hasAny ? 'border-green-500/30' : 'border-primary/20'}`} style={{ animationDelay: '0.05s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       
       {/* Header */}
@@ -955,7 +955,7 @@ export default function Missions() {
 
   if (loading || !data) {
     return (
-      <div className={`flex flex-col items-center justify-center min-h-[40vh] gap-2 ${styles.pageContent}`}>
+      <div className={`flex flex-col items-center justify-center min-h-[40vh] gap-2 ${styles.pageContent} mobile-page-root`}>
         <style>{MISSIONS_STYLES}</style>
         <BookOpen size={22} className="text-primary/40 animate-pulse" />
         <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -1008,7 +1008,7 @@ export default function Missions() {
   // Completed missions view (separate screen to keep main list short)
   if (showCompleted) {
     return (
-      <div className={`space-y-3 ${styles.pageContent}`} style={{ padding: '12px 14px', maxWidth: 900, margin: '0 auto' }}>
+      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} style={{ padding: '12px 14px', maxWidth: 900, margin: '0 auto' }}>
         <style>{MISSIONS_STYLES}</style>
         <button
           type="button"
@@ -1018,7 +1018,7 @@ export default function Missions() {
           <ChevronUp size={14} className="rotate-90" />
           Back to missions
         </button>
-        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-green-500/20`}>
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-green-500/20 mobile-panel`}>
           <div className="h-px bg-gradient-to-r from-transparent via-green-500/40 to-transparent" />
           <div className="px-2.5 py-1.5 border-b border-green-500/20 flex items-center gap-2 bg-green-500/8">
             <CheckCircle size={12} className="text-green-400" />
@@ -1056,14 +1056,14 @@ export default function Missions() {
   }
 
   return (
-    <div className={`space-y-3 ${styles.pageContent}`} style={{ padding: '12px 14px', maxWidth: 900, margin: '0 auto' }}>
+    <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} style={{ padding: '12px 14px', maxWidth: 900, margin: '0 auto' }}>
       <style>{MISSIONS_STYLES}</style>
 
       <p className="text-[10px] text-mutedForeground italic">Prove yourself: commit 15 crimes and bust 1 NPC from jail. Earn tribute and claim your reward.</p>
 
       {/* Current mission strip – Mission X of Y */}
       {orderedCityMissions.length > 0 && (
-        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 m-fade-in`}>
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 m-fade-in mobile-panel`}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 flex-wrap">
             <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
@@ -1130,7 +1130,7 @@ export default function Missions() {
       )}
 
       {/* Stats panel */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Progress</span>
@@ -1165,7 +1165,7 @@ export default function Missions() {
 
       {/* Boss progress hint */}
       {bossM && !bossM.completed && bossReqCount !== null && (
-        <div className={`relative p-2 ${styles.panel} border rounded-md m-fade-in ${bossM.requirements_met ? 'border-primary/40 bg-primary/8' : 'border-primary/20'}`}>
+        <div className={`relative p-2 ${styles.panel} border rounded-md m-fade-in mobile-panel ${bossM.requirements_met ? 'border-primary/40 bg-primary/8' : 'border-primary/20'}`}>
           <div className="flex items-center gap-2">
             <Skull size={11} className={bossM.requirements_met ? 'text-primary' : 'text-mutedForeground'} />
             <span className="text-[10px] text-mutedForeground italic">
@@ -1191,7 +1191,7 @@ export default function Missions() {
 
       {/* Boss section (only incomplete) */}
       {activeBoss.length > 0 && (
-        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 m-fade-in`}>
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 m-fade-in mobile-panel`}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2.5 py-1.5 bg-primary/10 border-b border-primary/20 flex items-center gap-2">
             <Skull size={12} className="text-primary" />

@@ -392,7 +392,7 @@ export default function VideoPoker() {
   const playAgain = () => { setGame(null); setHolds([false, false, false, false, false]); setShowWin(false); };
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="videopoker-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="videopoker-page">
       <style>{CG_STYLES}</style>
       <style>{`
         @keyframes card-deal-vp {
@@ -438,7 +438,7 @@ export default function VideoPoker() {
 
       {/* Owner Controls */}
       {isOwner && (
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cg-fade-in`}>
+        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 cg-fade-in`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Owner Controls</span>
@@ -693,7 +693,7 @@ export default function VideoPoker() {
 
       {/* History */}
       {!isOwner && (
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className={`${styles.panel} mobile-panel rounded-md overflow-hidden border border-primary/20`}>
           <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
             <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">History</span>
             <span className="text-[10px] text-mutedForeground">{history.length} games</span>
@@ -721,7 +721,7 @@ export default function VideoPoker() {
       )}
 
       {/* Rules */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`${styles.panel} mobile-panel rounded-md overflow-hidden border border-primary/20`}>
         <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Rules</span>
         </div>

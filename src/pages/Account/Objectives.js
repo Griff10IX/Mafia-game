@@ -118,7 +118,7 @@ export default function Objectives() {
 
   if (loading && !data) {
     return (
-      <div className={`space-y-2 ${styles.pageContent}`}>
+      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{OBJ_STYLES}</style>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
           <ListChecks size={22} className="text-primary/40 animate-pulse" />
@@ -163,13 +163,13 @@ export default function Objectives() {
   };
 
   return (
-    <div className={`space-y-3 ${styles.pageContent} min-w-0 overflow-x-hidden`} data-testid="objectives-page">
+    <div className={`space-y-3 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden`} data-testid="objectives-page">
       <style>{OBJ_STYLES}</style>
 
       <p className="text-[11px] text-zinc-500 font-heading italic break-words">Complete daily, weekly, and monthly goals for extra rewards. New objectives each period.</p>
 
       {adminStats && (
-        <div className={`${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+        <div className={`${styles.panel} rounded-lg border border-primary/20 overflow-hidden mobile-panel`}>
           <button
             type="button"
             onClick={() => setShowAdminStats(!showAdminStats)}
@@ -212,7 +212,7 @@ export default function Objectives() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
         {/* Today */}
-        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0 obj-card obj-fade-in`} style={{ animationDelay: '0s' }}>
+        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0 obj-card obj-fade-in mobile-panel`} style={{ animationDelay: '0s' }}>
           <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none obj-glow" />
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 shrink-0 min-w-0">
@@ -255,7 +255,7 @@ export default function Objectives() {
         </section>
 
         {/* This week */}
-        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0 obj-card obj-fade-in`} style={{ animationDelay: '0.05s' }}>
+        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0 obj-card obj-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
           <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none obj-glow" />
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 shrink-0 min-w-0">
@@ -298,7 +298,7 @@ export default function Objectives() {
         </section>
 
         {/* This month - full width below Today & Week */}
-        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0 md:col-span-2 obj-card obj-fade-in`} style={{ animationDelay: '0.1s' }}>
+        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0 md:col-span-2 obj-card obj-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
           <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none obj-glow" />
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 shrink-0 min-w-0">
@@ -341,7 +341,7 @@ export default function Objectives() {
         </section>
 
         {/* Lifetime: "Completed it" - one-time end-game achievement */}
-        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-amber-500/30 flex flex-col min-w-0 md:col-span-2 obj-card obj-fade-in`} style={{ animationDelay: '0.15s' }}>
+        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-amber-500/30 flex flex-col min-w-0 md:col-span-2 obj-card obj-fade-in mobile-panel`} style={{ animationDelay: '0.15s' }}>
           <div className="absolute top-0 left-0 w-24 h-24 bg-amber-500/10 rounded-full blur-3xl pointer-events-none obj-glow" />
           <div className="h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
           <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/20 shrink-0 min-w-0">

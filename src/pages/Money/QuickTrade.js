@@ -285,7 +285,7 @@ export default function QuickTrade() {
 
   if (loading) {
     return (
-      <div className={`space-y-6 ${styles.pageContent}`}>
+      <div className={`space-y-6 ${styles.pageContent} mobile-page-root`}>
         <style>{QT_STYLES}</style>
         <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
           <ArrowLeftRight size={28} className="text-primary/40 animate-pulse" />
@@ -297,7 +297,7 @@ export default function QuickTrade() {
   }
 
   return (
-    <div className={`space-y-6 ${styles.pageContent}`} data-testid="quicktrade-page">
+    <div className={`space-y-6 ${styles.pageContent} mobile-page-root`} data-testid="quicktrade-page">
       <style>{QT_STYLES}</style>
       <div className="relative qt-fade-in">
         <p className="text-[10px] text-zinc-500 font-heading italic">Trade points, money, and properties</p>
@@ -306,7 +306,7 @@ export default function QuickTrade() {
       {/* Create Offers Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Sell Points */}
-        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
             <div className="flex items-center gap-2">
@@ -381,7 +381,7 @@ export default function QuickTrade() {
         </section>
 
         {/* Buy Points */}
-        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
             <div className="flex items-center gap-2">
@@ -458,7 +458,7 @@ export default function QuickTrade() {
 
       {/* Token offers: sell tokens for points only */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
             <div className="flex items-center gap-2">
@@ -516,7 +516,7 @@ export default function QuickTrade() {
           </div>
           <div className="qt-art-line text-primary mx-3" />
         </section>
-        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
             <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Token offers</h3>
@@ -568,7 +568,7 @@ export default function QuickTrade() {
       {/* Offers Lists */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Sell Points Offers */}
-        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
             <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell Offers</h3>
@@ -666,7 +666,7 @@ export default function QuickTrade() {
         </section>
 
         {/* Buy Points Offers */}
-        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
             <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Buy Offers</h3>
@@ -765,7 +765,7 @@ export default function QuickTrade() {
       </div>
 
       {/* Properties for Sale */}
-      <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+      <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
           <div className="flex items-center gap-2">

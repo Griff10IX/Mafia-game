@@ -38,7 +38,7 @@ function money(n) {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className={`space-y-2 ${styles.pageContent}`}>
+  <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
     <style>{ATTEMPTS_STYLES}</style>
     <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
       <Crosshair size={22} className="text-primary/40 animate-pulse" />
@@ -151,7 +151,7 @@ const AttemptRow = ({ attempt }) => {
 };
 
 const AttemptsCard = ({ title, attempts, icon: Icon, emptyMessage, delay = 0 }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atmp-card atmp-fade-in`} style={{ animationDelay: `${delay}s` }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atmp-card atmp-fade-in mobile-panel`} style={{ animationDelay: `${delay}s` }}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atmp-glow" />
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
@@ -215,7 +215,7 @@ export default function Attempts() {
   }
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} data-testid="attempts-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="attempts-page">
       <style>{ATTEMPTS_STYLES}</style>
 
       {/* Page header */}

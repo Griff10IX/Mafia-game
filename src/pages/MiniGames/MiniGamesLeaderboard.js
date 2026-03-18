@@ -128,7 +128,7 @@ export default function MiniGamesLeaderboard() {
   const { top5 = [], my_rank, my_points = 0, my_games_played = 0, next_payout, rewards = {} } = data || {};
 
   return (
-    <div className={`space-y-3 ${styles.pageContent}`} data-testid="minigames-leaderboard-page">
+    <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="minigames-leaderboard-page">
       <style>{LB_STYLES}</style>
 
       {/* Header */}
@@ -156,7 +156,7 @@ export default function MiniGamesLeaderboard() {
       {/* Countdown & My Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mg-fade-in" style={{ animationDelay: '0.1s' }}>
         {/* Next Payout */}
-        <section className={`${styles.panel} rounded-lg p-3`}>
+        <section className={`${styles.panel} mobile-panel rounded-lg p-3`}>
           <div className="flex items-center gap-2 mb-2">
             <Clock size={14} className="text-primary" />
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Next Payout</h2>
@@ -168,7 +168,7 @@ export default function MiniGamesLeaderboard() {
         </section>
 
         {/* My Stats */}
-        <section className={`${styles.panel} rounded-lg p-3`}>
+        <section className={`${styles.panel} mobile-panel rounded-lg p-3`}>
           <div className="flex items-center gap-2 mb-2">
             <Trophy size={14} className="text-primary" />
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Your Stats</h2>
@@ -191,7 +191,7 @@ export default function MiniGamesLeaderboard() {
       </div>
 
       {/* Top 5 Leaderboard */}
-      <section className={`${styles.panel} rounded-lg overflow-hidden mg-fade-in`} style={{ animationDelay: '0.2s' }}>
+      <section className={`${styles.panel} mobile-panel rounded-lg overflow-hidden mg-fade-in`} style={{ animationDelay: '0.2s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
           <Trophy size={14} className="text-primary" />
@@ -267,7 +267,7 @@ export default function MiniGamesLeaderboard() {
 
       {/* My Game Breakdown */}
       {myStats && myStats.by_game && Object.keys(myStats.by_game).length > 0 && (
-        <section className={`${styles.panel} rounded-lg overflow-hidden mg-fade-in`} style={{ animationDelay: '0.3s' }}>
+        <section className={`${styles.panel} mobile-panel rounded-lg overflow-hidden mg-fade-in`} style={{ animationDelay: '0.3s' }}>
           <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
             <Gamepad2 size={14} className="text-primary" />
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Your Breakdown</h2>
@@ -299,7 +299,7 @@ export default function MiniGamesLeaderboard() {
       )}
 
       {/* Rewards Info */}
-      <section className={`${styles.panel} rounded-lg overflow-hidden mg-fade-in`} style={{ animationDelay: '0.4s' }}>
+      <section className={`${styles.panel} mobile-panel rounded-lg overflow-hidden mg-fade-in`} style={{ animationDelay: '0.4s' }}>
         <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
           <Gift size={14} className="text-primary" />
           <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Weekly Rewards</h2>
@@ -351,7 +351,7 @@ export default function MiniGamesLeaderboard() {
       </section>
 
       {/* Quick Links */}
-      <section className={`${styles.panel} rounded-lg p-3 mg-fade-in`} style={{ animationDelay: '0.5s' }}>
+      <section className={`${styles.panel} mobile-panel rounded-lg p-3 mg-fade-in`} style={{ animationDelay: '0.5s' }}>
         <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-2">Play Now</h2>
         <div className="flex flex-wrap gap-2">
           <Link

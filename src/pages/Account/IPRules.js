@@ -60,7 +60,7 @@ export default function IPRules() {
 
   if (loading && !data) {
     return (
-      <div className={`${styles.pageContent} space-y-2`}>
+      <div className={`${styles.pageContent} space-y-2 mobile-page-root`}>
         <div className="flex flex-col items-center justify-center min-h-[30vh] gap-2">
           <Globe size={18} className="text-primary opacity-40 animate-pulse" />
           <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -93,7 +93,7 @@ export default function IPRules() {
   };
 
   return (
-    <div className={`${styles.pageContent} space-y-2`}>
+    <div className={`${styles.pageContent} space-y-2 mobile-page-root`}>
       <div className="flex items-center justify-end gap-2">
         <button
           type="button"
@@ -107,7 +107,7 @@ export default function IPRules() {
         </button>
       </div>
 
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Rules</span>
@@ -117,7 +117,7 @@ export default function IPRules() {
         </p>
       </div>
 
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 flex-wrap">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Accounts from this address</span>
@@ -155,7 +155,7 @@ export default function IPRules() {
         </div>
       </div>
 
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">

@@ -47,7 +47,7 @@ const LoadingSpinner = () => (
 );
 
 const OnlineCountCard = ({ totalOnline }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-card uo-fade-in`}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-card uo-fade-in mobile-panel`}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
@@ -81,7 +81,7 @@ const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor }) =>
   const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
   const hdoColor = (hdoOnlineColor && hdoOnlineColor.trim()) || DEFAULT_HDO_COLOR;
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
         <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Key</h3>
@@ -273,7 +273,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
 };
 
 const InfoCard = () => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in`} style={{ animationDelay: '0.08s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in mobile-panel`} style={{ animationDelay: '0.08s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
       <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
@@ -377,7 +377,7 @@ export default function UsersOnline() {
 
   if (loading) {
     return (
-      <div className={`space-y-2 ${styles.pageContent}`}>
+      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{UO_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -385,7 +385,7 @@ export default function UsersOnline() {
   }
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} data-testid="users-online-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="users-online-page">
       <style>{UO_STYLES}</style>
 
       <div className="relative uo-fade-in">
@@ -395,7 +395,7 @@ export default function UsersOnline() {
       <OnlineCountCard totalOnline={totalOnline} />
 
       {users.length === 0 ? (
-        <div className={`relative ${styles.panel} rounded-md border border-primary/20 py-8 text-center uo-fade-in`} style={{ animationDelay: '0.03s' }} data-testid="no-users">
+        <div className={`relative ${styles.panel} rounded-md border border-primary/20 py-8 text-center uo-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }} data-testid="no-users">
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <Users size={36} className="mx-auto text-primary/30 mb-2" />
           <p className="text-[12px] text-foreground font-heading font-bold mb-0.5">
@@ -406,7 +406,7 @@ export default function UsersOnline() {
           </p>
         </div>
       ) : (
-        <div className={`relative z-10 ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className={`relative z-10 ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
             <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">

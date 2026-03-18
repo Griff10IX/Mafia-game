@@ -356,9 +356,9 @@ export default function HelpDesk() {
   };
 
   return (
-    <div className="space-y-4 max-w-4xl mx-auto">
+    <div className={`space-y-4 max-w-4xl mx-auto ${styles.pageContent} mobile-page-root`}>
       <style>{HD_STYLES}</style>
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 flex-wrap">
           <h1 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1.5">
@@ -393,7 +393,7 @@ export default function HelpDesk() {
       </div>
 
       {createOpen && (
-        <div className={`relative ${styles.panel} rounded-md border border-primary/20 hd-fade-in`}>
+        <div className={`relative ${styles.panel} rounded-md border border-primary/20 hd-fade-in mobile-panel`}>
           <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
             <span className="text-[9px] font-heading font-bold text-primary uppercase">New ticket</span>
             <button type="button" onClick={() => setCreateOpen(false)} className="p-1 rounded hover:bg-primary/20 text-primary">
@@ -429,7 +429,7 @@ export default function HelpDesk() {
         </div>
       )}
 
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Tickets</span>
@@ -465,7 +465,7 @@ export default function HelpDesk() {
       </div>
 
       {selectedId && (
-        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hd-fade-in`}>
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hd-fade-in mobile-panel`}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 flex-wrap">
             <span className="text-[9px] font-heading font-bold text-primary uppercase">Ticket</span>
@@ -550,7 +550,7 @@ export default function HelpDesk() {
       )}
 
       {canManage && (
-        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hd-fade-in`}>
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hd-fade-in mobile-panel`}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
             <VolumeX size={14} className="text-primary" />
@@ -672,7 +672,7 @@ export default function HelpDesk() {
       )}
 
       {canManage && (
-        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hd-fade-in`}>
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hd-fade-in mobile-panel`}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
             <Building2 size={14} className="text-primary" />
@@ -717,7 +717,7 @@ export default function HelpDesk() {
       )}
 
       {canManage && (
-        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hd-fade-in`}>
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hd-fade-in mobile-panel`}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
             <ShieldBan size={14} className="text-primary" />

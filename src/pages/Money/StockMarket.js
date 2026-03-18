@@ -146,7 +146,7 @@ export default function StockMarket() {
   const selectedStock = stocks.find((s) => s.id === selectedId);
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="stock-market-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="stock-market-page">
       <style>{STOCK_STYLES}</style>
 
       <div className="relative stock-fade-in">
@@ -155,7 +155,7 @@ export default function StockMarket() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left: Stock list */}
-        <div className={`lg:col-span-2 relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stock-fade-in`}>
+        <div className={`lg:col-span-2 relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stock-fade-in mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Stocks</h2>
@@ -223,7 +223,7 @@ export default function StockMarket() {
 
         {/* Right: Sell + Summary + Purchase */}
         <div className="space-y-4">
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stock-fade-in`}>
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stock-fade-in mobile-panel`}>
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell / Cover</h2>
               <button
@@ -299,7 +299,7 @@ export default function StockMarket() {
             </div>
           </div>
 
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 p-3 stock-fade-in`}>
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 p-3 stock-fade-in mobile-panel`}>
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10px] font-heading text-mutedForeground">Points in market</span>
               <span className="text-[10px] font-heading font-bold text-foreground">
@@ -318,7 +318,7 @@ export default function StockMarket() {
             </div>
           </div>
 
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stock-fade-in`}>
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stock-fade-in mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Purchase stocks</h2>

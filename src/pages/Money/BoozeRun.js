@@ -84,7 +84,7 @@ const StatsCard = ({ config, timer }) => {
   const pctFull = capacity > 0 ? (carryingTotal / capacity) * 100 : 0;
   
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-scale-in`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-scale-in mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="p-2 grid grid-cols-3 md:grid-cols-6 gap-2">
         <div className="space-y-0.5">
@@ -180,7 +180,7 @@ const RouteItem = ({ r, delay = 0 }) => (
 );
 
 const BestRoutesCard = ({ routes, title }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in`}>
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in mobile-panel`}>
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         {title}
@@ -204,7 +204,7 @@ const BestRoutesCard = ({ routes, title }) => (
 );
 
 const RoundTripCard = ({ cityA, cityB, buyASellBRoutes, buyBSellARoutes }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in`} style={{ animationDelay: '0.05s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         Smuggling Route: {cityA} ↔ {cityB}
@@ -246,7 +246,7 @@ const RoundTripCard = ({ cityA, cityB, buyASellBRoutes, buyBSellARoutes }) => (
 );
 
 const CityPricesCard = ({ citySummary }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in`} style={{ animationDelay: '0.1s' }}>
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         Black Market Prices
@@ -319,7 +319,7 @@ const SuppliesCard = ({
 }) => {
   const maxBuy = Math.max(0, capacity - carryingTotal);
   return (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in`} style={{ animationDelay: '0.15s' }}>
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in mobile-panel`} style={{ animationDelay: '0.15s' }}>
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         The Warehouse — {location}
@@ -470,7 +470,7 @@ const SuppliesCard = ({
 };
 
 const HistoryCard = ({ history }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in`} style={{ animationDelay: '0.2s' }}>
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in mobile-panel`} style={{ animationDelay: '0.2s' }}>
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         The Ledger
@@ -577,7 +577,7 @@ const HistoryCard = ({ history }) => (
 );
 
 const InfoCard = ({ rotationHours, rotationSeconds, dailyEstimateRough }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-zinc-700/30 bz-fade-in`} style={{ animationDelay: '0.25s' }}>
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-zinc-700/30 bz-fade-in mobile-panel`} style={{ animationDelay: '0.25s' }}>
     <div className="px-2.5 py-1.5 border-b border-zinc-700/30">
       <h3 className="text-[9px] font-heading font-bold text-zinc-400 uppercase tracking-[0.12em]">
         Bootlegger's Guide
@@ -788,7 +788,7 @@ export default function BoozeRun() {
   });
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} data-testid="booze-run-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="booze-run-page">
       <style>{BOOZE_STYLES}</style>
 
       {/* ── Page Header ── */}

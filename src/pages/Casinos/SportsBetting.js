@@ -318,7 +318,7 @@ export default function SportsBetting() {
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="sports-betting-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="sports-betting-page">
       <style>{SB_STYLES}</style>
       <style>{`
         @keyframes sb-slide-up { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
@@ -386,7 +386,7 @@ export default function SportsBetting() {
             <Shield size={12} /> Show admin panel <ChevronDown size={12} />
           </button>
         ) : (
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 sb-fade-in`}>
+          <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 sb-fade-in`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -489,7 +489,7 @@ export default function SportsBetting() {
       {activeTab === 'bets' && (
         <div className="space-y-4">
           {/* Open bets */}
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
               <div>
@@ -528,7 +528,7 @@ export default function SportsBetting() {
           </div>
 
           {/* Settled bets */}
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
               <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Settled Bets</span>
@@ -565,7 +565,7 @@ export default function SportsBetting() {
       {activeTab === 'stats' && (
         <div className="space-y-4">
           {/* Stats */}
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
               <TrendingUp size={14} className="text-primary" />
@@ -588,7 +588,7 @@ export default function SportsBetting() {
           </div>
 
           {/* Recent results */}
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
               <div className="flex items-center gap-2">

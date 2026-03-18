@@ -137,7 +137,7 @@ export default function MPBlackjackPage() {
   const selectStyle = { ...inputStyle, background: '#27272a', color: '#e4e4e7', colorScheme: 'dark' };
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="mp-blackjack-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mp-blackjack-page">
       <style>{`
         @keyframes mpbj-fade { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
         .mpbj-fade { animation: mpbj-fade 0.35s ease-out both; }
@@ -158,7 +158,7 @@ export default function MPBlackjackPage() {
       {/* ── Deal New Game options (above Open Tables when opened) ── */}
       {createOpen && (
         <div
-          className={`relative ${styles.panel} rounded-xl overflow-hidden border-2 mpbj-fade`}
+          className={`relative ${styles.panel} mobile-panel rounded-xl overflow-hidden border-2 mpbj-fade`}
           style={{ borderColor: '#5a3e1b', animationDelay: '0.02s' }}
         >
           <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' }} />
@@ -275,7 +275,7 @@ export default function MPBlackjackPage() {
       )}
 
       {/* ── Open games panel ── */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mpbj-fade`} style={{ animationDelay: '0.05s' }}>
+      <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 mpbj-fade`} style={{ animationDelay: '0.05s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
 
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-2">
@@ -442,7 +442,7 @@ export default function MPBlackjackPage() {
       </div>
 
       {/* ── Last 5 games ── */}
-      <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 mpbj-fade`} style={{ animationDelay: '0.04s' }}>
+      <div className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20 mpbj-fade`} style={{ animationDelay: '0.04s' }}>
         <div className="px-3 py-2 border-b border-primary/20" style={{ background: 'rgba(234,179,8,0.06)' }}>
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest">Last 5 Games</span>
         </div>
@@ -471,7 +471,7 @@ export default function MPBlackjackPage() {
       </div>
 
       {/* ── Rules ── */}
-      <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 mpbj-fade`} style={{ animationDelay: '0.1s' }}>
+      <div className={`${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 mpbj-fade`} style={{ animationDelay: '0.1s' }}>
         <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest">How It Works</span>
         </div>

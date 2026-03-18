@@ -167,7 +167,7 @@ export default function Prestige() {
   const effectiveRp = info.effective_rank_points;
 
   return (
-    <div className={`space-y-3 md:space-y-4 ${styles.pageContent}`}>
+    <div className={`space-y-3 md:space-y-4 ${styles.pageContent} mobile-page-root`}>
       <style>{`
         @keyframes prestige-glow { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.85; } }
         .prestige-glow { animation: prestige-glow 3s ease-in-out infinite; }
@@ -179,7 +179,7 @@ export default function Prestige() {
 
       {/* ── HERO CARD ──────────────────────────────────────────────────── */}
       <div
-        className={`relative ${styles.panel} rounded-xl overflow-hidden prestige-fade`}
+        className={`relative ${styles.panel} rounded-xl overflow-hidden prestige-fade mobile-panel`}
         style={{ borderColor: `${color}30`, borderWidth: 1, borderStyle: 'solid' }}
       >
         <div className="h-0.5" style={{ background: `linear-gradient(90deg, transparent, ${color}80, transparent)` }} />
@@ -272,7 +272,7 @@ export default function Prestige() {
       {/* ── PROGRESS — full-width on mobile ────────────────────────────── */}
       {!info.at_max_prestige && (
         <div
-          className={`${styles.panel} rounded-xl overflow-hidden prestige-fade`}
+          className={`${styles.panel} rounded-xl overflow-hidden prestige-fade mobile-panel`}
           style={{ animationDelay: '0.05s' }}
         >
           <div className="px-4 py-3 border-b border-zinc-800/40 flex items-center gap-2">
@@ -320,7 +320,7 @@ export default function Prestige() {
       {/* MAX PRESTIGE reached */}
       {info.at_max_prestige && (
         <div
-          className={`${styles.panel} rounded-xl overflow-hidden prestige-fade`}
+          className={`${styles.panel} rounded-xl overflow-hidden prestige-fade mobile-panel`}
           style={{ animationDelay: '0.05s' }}
         >
           <div className="px-4 py-3 border-b border-zinc-800/40 flex items-center gap-2">
@@ -337,7 +337,7 @@ export default function Prestige() {
 
       {/* ── BENEFITS — 2×2 grid on mobile, list on desktop ─────────────── */}
       <div
-        className={`${styles.panel} rounded-xl overflow-hidden prestige-fade`}
+        className={`${styles.panel} rounded-xl overflow-hidden prestige-fade mobile-panel`}
         style={{ animationDelay: '0.1s' }}
       >
         <div className="px-4 py-3 border-b border-zinc-800/40 flex items-center gap-2">
@@ -391,7 +391,7 @@ export default function Prestige() {
 
       {/* ── PRESTIGE CRIMES ────────────────────────────────────────────── */}
       <div
-        className={`${styles.panel} rounded-xl overflow-hidden prestige-fade`}
+        className={`${styles.panel} rounded-xl overflow-hidden prestige-fade mobile-panel`}
         style={{ animationDelay: '0.12s', border: '1px solid rgba(184,145,68,0.18)' }}
       >
         <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: 'rgba(184,145,68,0.15)', background: 'rgba(184,145,68,0.05)' }}>
@@ -472,7 +472,7 @@ export default function Prestige() {
            Desktop: traditional table
       ─────────────────────────────────────────────────────────────────── */}
       <div
-        className={`${styles.panel} rounded-xl overflow-hidden prestige-fade`}
+        className={`${styles.panel} rounded-xl overflow-hidden prestige-fade mobile-panel`}
         style={{ animationDelay: '0.15s' }}
       >
         <div className="px-4 py-3 border-b border-zinc-800/40 flex items-center gap-2">

@@ -379,7 +379,7 @@ export default function Gauntlet() {
 
   return (
     <div
-      className={styles.panel}
+      className={`${styles.panel} mobile-panel`}
       style={{
         display: "flex",
         flexDirection: "column",

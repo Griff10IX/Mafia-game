@@ -105,7 +105,7 @@ const EquipmentSection = ({ equipmentData, onSelect, selecting }) => {
   if (list.length === 0) return null;
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
         <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
@@ -268,7 +268,7 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
   if (!status?.pending_heist) return null;
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-amber-500/30 oc-fade-in`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-amber-500/30 oc-fade-in mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
       <div className="px-2 py-1 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between">
         <span className="text-[9px] font-heading font-bold text-amber-400 uppercase tracking-[0.12em] flex items-center gap-1">
@@ -369,7 +369,7 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
 };
 
 const InfoSection = ({ cooldownHours, isCollapsed, onToggle }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.06s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in mobile-panel`} style={{ animationDelay: '0.06s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <button
       type="button"
@@ -727,7 +727,7 @@ export default function OrganisedCrime() {
 
   if (loading) {
     return (
-      <div className={`space-y-1.5 ${styles.pageContent}`}>
+      <div className={`space-y-1.5 ${styles.pageContent} mobile-page-root`}>
         <style>{OC_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -735,7 +735,7 @@ export default function OrganisedCrime() {
   }
 
   return (
-    <div className={`space-y-1.5 ${styles.pageContent}`} data-testid="organised-crime-page">
+    <div className={`space-y-1.5 ${styles.pageContent} mobile-page-root`} data-testid="organised-crime-page">
       <style>{OC_STYLES}</style>
 
       <div className="relative oc-fade-in flex items-center gap-2 flex-wrap">
@@ -772,7 +772,7 @@ export default function OrganisedCrime() {
       )}
 
       {/* Job Selection */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.03s' }}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
@@ -793,7 +793,7 @@ export default function OrganisedCrime() {
       </div>
 
       {/* Team Slots */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.04s' }}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in mobile-panel`} style={{ animationDelay: '0.04s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
@@ -855,7 +855,7 @@ export default function OrganisedCrime() {
       <InfoSection cooldownHours={status?.cooldown_hours} isCollapsed={rulesCollapsed} onToggle={toggleRules} />
 
       {/* OC stats */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.05s' }}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">OC stats</span>

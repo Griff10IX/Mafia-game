@@ -311,7 +311,7 @@ export default function MyProperties() {
 
   if (loading) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{MP_STYLES}</style>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
           <Building2 size={28} className="text-primary/40 animate-pulse" />
@@ -323,7 +323,7 @@ export default function MyProperties() {
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="my-properties-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="my-properties-page">
       <style>{MP_STYLES}</style>
 
       <div className="relative mp-fade-in">
@@ -333,7 +333,7 @@ export default function MyProperties() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Casino slot */}
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mp-card mp-fade-in`}>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mp-card mp-fade-in mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎰 Casino</span>
@@ -431,7 +431,7 @@ export default function MyProperties() {
         </div>
 
         {/* Property slot */}
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mp-card mp-fade-in`} style={{ animationDelay: '0.05s' }}>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mp-card mp-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🏭 Property</span>
@@ -594,7 +594,7 @@ export default function MyProperties() {
         </div>
       </div>
 
-      <div className={`relative ${styles.panel} rounded-lg border border-primary/20 mp-fade-in`} style={{ animationDelay: '0.08s' }}>
+      <div className={`relative ${styles.panel} rounded-lg border border-primary/20 mp-fade-in mobile-panel`} style={{ animationDelay: '0.08s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Rule</span>

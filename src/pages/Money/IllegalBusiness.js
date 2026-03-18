@@ -111,7 +111,7 @@ function StartScreen({ types, saving, onStart }) {
           Only a Capo or higher can run an operation. Choose your trade and stake your claim.
         </p>
       </div>
-      <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
+      <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden mobile-panel`}>
         <CardHead icon={TrendingUp} title="Choose Your Operation" />
         <div className="p-4 space-y-4">
           <div>
@@ -273,7 +273,7 @@ export default function IllegalBusiness() {
 
   if (loading && !data) {
     return (
-      <div className={styles.pageContent}>
+      <div className={`${styles.pageContent} mobile-page-root`}>
         <div className="flex items-center justify-center min-h-[200px]">
           <div className="flex flex-col items-center gap-3">
             <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -286,7 +286,7 @@ export default function IllegalBusiness() {
 
   if (data?.noBusiness) {
     return (
-      <div className={styles.pageContent}>
+      <div className={`${styles.pageContent} mobile-page-root`}>
         <style>{RACKET_STYLES}</style>
         <StartScreen types={types} saving={saving} onStart={handleStart} />
       </div>
@@ -315,7 +315,7 @@ export default function IllegalBusiness() {
   const heatLabel = heatLevel > 6 ? 'High Heat' : heatLevel > 3 ? 'Moderate' : 'Running Cold';
 
   return (
-    <div className={`${styles.pageContent} racket-page`}>
+    <div className={`${styles.pageContent} racket-page mobile-page-root`}>
       <style>{RACKET_STYLES}</style>
       <div className="space-y-3">
 
@@ -358,7 +358,7 @@ export default function IllegalBusiness() {
 
         {/* ── Kill rewards ── */}
         {pendingRewards.length > 0 && (
-          <div className={`${styles.panel} r-card border border-primary/25 rounded-md overflow-hidden`}>
+          <div className={`${styles.panel} r-card border border-primary/25 rounded-md overflow-hidden mobile-panel`}>
             <CardHead icon={Star} title="Claim Your Reward" />
             <div className="p-3 space-y-2">
               {pendingRewards.map((p) => (
@@ -386,7 +386,7 @@ export default function IllegalBusiness() {
         )}
 
         {/* ── Collect ── */}
-        <div className={`${styles.panel} r-card border border-primary/25 rounded-md overflow-hidden`}>
+        <div className={`${styles.panel} r-card border border-primary/25 rounded-md overflow-hidden mobile-panel`}>
           <CardHead icon={TrendingUp} title="Cash on the Table" />
           <div className="p-4 flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -410,7 +410,7 @@ export default function IllegalBusiness() {
           const { mission, current, target } = activeMission;
           const requirementsMet = target && Object.keys(target).every((k) => (Number(current?.[k]) ?? 0) >= (Number(target[k]) ?? 0));
           return (
-            <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
+            <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden mobile-panel`}>
               <CardHead icon={ListChecks} title={`Mission ${mission.order ?? ''}/${missions.length}`}
                 right={completedMissions.length > 0 && (
                   <span className="text-[9px] font-heading text-zinc-500">{completedMissions.length} completed</span>
@@ -469,7 +469,7 @@ export default function IllegalBusiness() {
         })()}
 
         {/* ── Security & Guards ── */}
-        <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
+        <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden mobile-panel`}>
           <CardHead icon={Lock} title="Defences" />
           <div className="p-4 space-y-4">
 
@@ -537,7 +537,7 @@ export default function IllegalBusiness() {
         </div>
 
         {/* ── Raid ── */}
-        <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden`}>
+        <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden mobile-panel`}>
           <CardHead icon={Crosshair} title="Hit a Joint" />
           <div className="p-4">
             <p className="text-[11px] text-mutedForeground font-body italic mb-3">

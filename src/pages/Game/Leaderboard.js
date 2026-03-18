@@ -21,7 +21,7 @@ const EMPTY_BOARDS = {
 function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
   const list = entries || [];
   return (
-    <section className={`relative ${styles.panel} rounded-lg overflow-hidden shadow-lg shadow-primary/5`}>
+    <section className={`relative ${styles.panel} rounded-lg overflow-hidden shadow-lg shadow-primary/5 mobile-panel`}>
       <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-3 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
         <Icon className="text-primary shrink-0" size={14} />
@@ -152,7 +152,7 @@ export default function Leaderboard() {
   }
 
   return (
-    <div className={`space-y-3 ${styles.pageContent}`} data-testid="leaderboard-page">
+    <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="leaderboard-page">
       <style>{LB_STYLES}</style>
       <header className="relative lb-fade-in">
         <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
@@ -315,7 +315,7 @@ export default function Leaderboard() {
 
       {/* Weekly Rewards (alive only) */}
       {viewMode === 'alive' && (
-      <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+      <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-1.5 bg-primary/8 border-b border-primary/20">
           <div className="flex items-center gap-1.5">

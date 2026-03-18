@@ -191,7 +191,7 @@ export default function SellCars() {
 
   if (loading) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{SELL_STYLES}</style>
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
           <DollarSign size={28} className="text-primary/40 animate-pulse" />
@@ -203,7 +203,7 @@ export default function SellCars() {
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`}>
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
       <style>{SELL_STYLES}</style>
 
       <div className="relative sc-fade-in flex flex-wrap items-end justify-between gap-2">
@@ -219,7 +219,7 @@ export default function SellCars() {
         </Link>
       </div>
 
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 sc-fade-in`} style={{ animationDelay: '0.03s' }}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 sc-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         {/* By rarity: pill buttons (same as Buy Cars) */}
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center gap-x-3 gap-y-1">

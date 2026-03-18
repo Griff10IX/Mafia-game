@@ -680,7 +680,7 @@ export default function Inbox() {
 
   if (loading) {
     return (
-      <div className={`space-y-2 ${styles.pageContent}`}>
+      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{INBOX_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -698,7 +698,7 @@ export default function Inbox() {
   ];
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} data-testid="inbox-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="inbox-page">
       <style>{INBOX_STYLES}</style>
 
       <div className="relative ib-fade-in">
@@ -724,7 +724,7 @@ export default function Inbox() {
       />
 
       {/* Inbox Layout */}
-      <div className={`relative ${styles.panel} border border-primary/20 rounded-md overflow-hidden ib-fade-in`} style={{ animationDelay: '0.03s' }}>
+      <div className={`relative ${styles.panel} border border-primary/20 rounded-md overflow-hidden ib-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         {/* Toolbar */}
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">

@@ -50,12 +50,12 @@ const STAT_CARD_BODY_MIN_H = 140;
 
 // Skeleton: same grid and card structure as real content for stable LCP/CLS
 const StatsSkeleton = () => (
-  <div className={`space-y-2 ${styles.pageContent}`} data-testid="stats-loading">
+  <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="stats-loading">
     <style>{STATS_STYLES}</style>
     <div className="h-3 w-3/4 max-w-[280px] rounded bg-primary/10 animate-pulse" aria-hidden />
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 items-start">
       {['Game Capital', 'User Stats'].map((title) => (
-        <div key={title} className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div key={title} className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
             <div className="h-3 w-24 rounded bg-primary/20 animate-pulse" />
@@ -70,7 +70,7 @@ const StatsSkeleton = () => (
     </div>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 items-start">
       {['Vehicle Stats', 'Rank Stats'].map((title) => (
-        <div key={title} className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div key={title} className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
             <div className="h-3 w-24 rounded bg-primary/20 animate-pulse" />
@@ -90,7 +90,7 @@ const StatCard = ({ title, rows, delay = 0 }) => {
   const safeRows = Array.isArray(rows) ? rows : [];
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-fade-in`} style={{ animationDelay: `${delay}s` }}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-fade-in mobile-panel`} style={{ animationDelay: `${delay}s` }}>
       <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none stat-glow" />
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
@@ -121,7 +121,7 @@ const StatCard = ({ title, rows, delay = 0 }) => {
 };
 
 const RankStatsCard = ({ rankStats }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-fade-in`} style={{ animationDelay: '0.05s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none stat-glow" />
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
@@ -156,7 +156,7 @@ const RankStatsCard = ({ rankStats }) => (
 );
 
 const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-fade-in`} style={{ animationDelay: '0.1s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none stat-glow" />
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-1">
@@ -251,7 +251,7 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
 );
 
 const WipedFamiliesListView = ({ families }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-fade-in`} style={{ animationDelay: '0.1s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none stat-glow" />
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
@@ -478,7 +478,7 @@ export default function Stats() {
   const vehicleRows = buildVehicleRows(data);
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} data-testid="stats-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="stats-page">
       <style>{STATS_STYLES}</style>
 
       {!data && (

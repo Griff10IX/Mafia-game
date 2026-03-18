@@ -58,7 +58,7 @@ const RARITY_COLORS = {
 };
 
 const EmptyGarageCard = () => (
-  <div className={`relative ${styles.panel} rounded-lg border border-primary/20 py-12 text-center gar-fade-in overflow-hidden`}>
+  <div className={`relative ${styles.panel} rounded-lg border border-primary/20 py-12 text-center gar-fade-in overflow-hidden mobile-panel`}>
     <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <Car size={48} className="mx-auto text-primary/30 mb-3" />
     <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] mb-1">
@@ -71,7 +71,7 @@ const EmptyGarageCard = () => (
 );
 
 const FiltersSortCard = ({ sortBy, setSortBy, filterRarity, setFilterRarity }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 gar-fade-in`}>
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 gar-fade-in mobile-panel`}>
     <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
       <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-1.5">
@@ -141,7 +141,7 @@ const ActionsBar = ({
 }) => {
   const meltOnCooldown = meltBulletsSecondsRemaining != null && meltBulletsSecondsRemaining > 0;
   return (
-    <div className={`relative ${styles.panel} rounded-lg border border-primary/20 p-3 gar-fade-in overflow-hidden`}>
+    <div className={`relative ${styles.panel} rounded-lg border border-primary/20 p-3 gar-fade-in overflow-hidden mobile-panel`}>
       <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -687,7 +687,7 @@ export default function Garage() {
 
   if (loading) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{GARAGE_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -695,7 +695,7 @@ export default function Garage() {
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`}>
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
       <style>{GARAGE_STYLES}</style>
 
       <div className="relative gar-fade-in">

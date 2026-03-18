@@ -522,7 +522,7 @@ export default function Bodyguards() {
 
   if (loading) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{BG_STYLES}</style>
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
           <Shield size={28} className="text-primary/40 animate-pulse" />
@@ -536,7 +536,7 @@ export default function Bodyguards() {
   const activeCount = bodyguards.filter(bg => bg.bodyguard_username).length + hiringSlots.size;
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="bodyguards-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="bodyguards-page">
       <style>{BG_STYLES}</style>
 
       {/* Page header */}
@@ -606,7 +606,7 @@ export default function Bodyguards() {
       )}
 
       {/* Bodyguard Slots */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-card bg-fade-in`} style={{ animationDelay: '0.05s' }}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-card bg-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
@@ -777,7 +777,7 @@ export default function Bodyguards() {
 
       {/* Bodyguard stats */}
       {bgStats && (
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-fade-in`} style={{ animationDelay: '0.08s' }}>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-fade-in mobile-panel`} style={{ animationDelay: '0.08s' }}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
             <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
@@ -818,7 +818,7 @@ export default function Bodyguards() {
       )}
 
       {/* Info */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-fade-in`} style={{ animationDelay: '0.1s' }}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">

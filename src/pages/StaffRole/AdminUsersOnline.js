@@ -76,7 +76,7 @@ export default function AdminUsersOnline() {
 
   if (!accessChecked || (loading && users.length === 0)) {
     return (
-      <div className={`space-y-3 ${styles.pageContent}`}>
+      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
           <Users size={22} className="text-primary/40 animate-pulse" />
           <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -88,8 +88,8 @@ export default function AdminUsersOnline() {
 
   if (error && users.length === 0) {
     return (
-      <div className={`space-y-3 ${styles.pageContent}`}>
-        <div className={`${styles.panel} rounded-lg border border-amber-500/30 p-4`}>
+      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
+        <div className={`${styles.panel} rounded-lg border border-amber-500/30 p-4 mobile-panel`}>
           <p className="text-amber-400 font-heading">{error}</p>
           <Link to="/admin" className="text-primary text-sm font-heading hover:underline mt-2 inline-block">← Back to Admin</Link>
         </div>
@@ -98,7 +98,7 @@ export default function AdminUsersOnline() {
   }
 
   return (
-    <div className={`space-y-3 ${styles.pageContent}`} data-testid="admin-users-online-page">
+    <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="admin-users-online-page">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
@@ -120,7 +120,7 @@ export default function AdminUsersOnline() {
         </button>
       </div>
 
-      <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+      <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs font-heading">
             <thead>

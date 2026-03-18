@@ -231,7 +231,7 @@ export default function BuyCars() {
 
   if (loading) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{BUY_STYLES}</style>
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
           <Car size={28} className="text-primary/40 animate-pulse" />
@@ -243,7 +243,7 @@ export default function BuyCars() {
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`}>
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
       <style>{BUY_STYLES}</style>
 
       <div className="relative bc-fade-in flex flex-wrap items-end justify-between gap-2">
@@ -259,7 +259,7 @@ export default function BuyCars() {
         </Link>
       </div>
 
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bc-fade-in`} style={{ animationDelay: '0.03s' }}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bc-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         {/* Compact rarity row: click to filter */}
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center gap-x-3 gap-y-1">

@@ -189,7 +189,7 @@ export default function Minesweeper() {
   const cellSize = difficulty === "godfather" ? 28 : difficulty === "capo" ? 32 : 38;
 
   return (
-    <div className={styles.pageContent}>
+    <div className={`${styles.pageContent} mobile-page-root`}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
         .ms-cell {
@@ -390,7 +390,7 @@ export default function Minesweeper() {
       </div>
 
       {/* Leaderboard */}
-      <section className={`${styles.panel} rounded-lg overflow-hidden mt-6`}>
+      <section className={`${styles.panel} mobile-panel rounded-lg overflow-hidden mt-6`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
           <Trophy size={14} className="text-primary" />

@@ -40,7 +40,7 @@ export default function CarProfile() {
 
   if (loading) {
     return (
-      <div className={`${styles.pageContent}`}>
+      <div className={`${styles.pageContent} mobile-page-root`}>
         <div className="flex items-center justify-center min-h-[40vh]">
           <span className="text-primary font-heading font-bold">Loading...</span>
         </div>
@@ -50,7 +50,7 @@ export default function CarProfile() {
 
   if (!car) {
     return (
-      <div className={`${styles.pageContent}`}>
+      <div className={`${styles.pageContent} mobile-page-root`}>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
           <Car className="text-primary/40" size={48} />
           <p className="text-mutedForeground font-heading">Car not found</p>
@@ -66,7 +66,7 @@ export default function CarProfile() {
   const rarityColor = RARITY_COLORS[car.rarity] || 'text-mutedForeground';
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`}>
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -97,7 +97,7 @@ export default function CarProfile() {
       </div>
 
       {/* Main content */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
             🚗 Vehicle Details

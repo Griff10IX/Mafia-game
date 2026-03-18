@@ -171,7 +171,7 @@ export default function MDGPage() {
   };
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="mdg-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mdg-page">
       <style>{MDG_STYLES}</style>
 
       <div className="relative mdg-fade-in">
@@ -180,7 +180,7 @@ export default function MDGPage() {
         <p className="text-[10px] text-mutedForeground font-heading italic mt-1">Set a fee, fill spots, one winner takes the pot. Points or money — or both.</p>
       </div>
 
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mdg-fade-in`} style={{ animationDelay: '0.03s' }}>
+      <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 mdg-fade-in`} style={{ animationDelay: '0.03s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-2">
           <div>
@@ -258,7 +258,7 @@ export default function MDGPage() {
       </div>
 
       {createOpen && (
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mdg-fade-in`}>
+        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 mdg-fade-in`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Game options</h2>

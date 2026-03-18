@@ -518,7 +518,7 @@ export default function SlotsPage() {
   const isWin = !!result?.won;
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="slots-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="slots-page">
       <style>{CG_STYLES}</style>
       <style>{`
         @keyframes reel-spin {
@@ -577,7 +577,7 @@ export default function SlotsPage() {
 
         {/* Enter draw */}
         {ownership?.can_enter && !ownership?.is_owner && (
-          <div className={`${styles.panel} rounded-lg border border-primary/20 p-2 flex flex-wrap items-center gap-2`}>
+          <div className={`${styles.panel} mobile-panel rounded-lg border border-primary/20 p-2 flex flex-wrap items-center gap-2`}>
             <LogIn size={14} className="text-primary" />
             <span className="text-xs font-heading text-mutedForeground">
               {ownership.has_entered ? `You're in the draw (${ownership.entries_count ?? 0} entered). Winner chosen at random when current owner's ${config.ownership_hours}h ends.` : 'Enter the draw for a chance to own the slots here for 3 hours.'}
@@ -597,7 +597,7 @@ export default function SlotsPage() {
 
         {/* Owner panel */}
         {ownership?.is_owner && (
-          <div className={`${styles.panel} rounded-lg border border-primary/30 overflow-hidden`}>
+          <div className={`${styles.panel} mobile-panel rounded-lg border border-primary/30 overflow-hidden`}>
             <div className="px-3 py-2 bg-primary/10 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
               <span className="text-[10px] font-heading font-bold text-primary uppercase flex items-center gap-1.5">
                 <User size={12} /> Owner · {config.ownership_hours}h only
@@ -640,7 +640,7 @@ export default function SlotsPage() {
 
         {/* Buy-back offer */}
         {buyBackOffer?.offer_id && (
-          <div className={`${styles.panel} rounded-lg border border-amber-500/40 overflow-hidden`}>
+          <div className={`${styles.panel} mobile-panel rounded-lg border border-amber-500/40 overflow-hidden`}>
             <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/20 text-[10px] font-heading font-bold text-amber-400 uppercase">
               Buy-back offer: {buyBackOffer.points_offered ?? 0} points for the shortfall
             </div>
@@ -863,7 +863,7 @@ export default function SlotsPage() {
       </div>
 
       {/* ══════════ PAYTABLE ══════════ */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`${styles.panel} mobile-panel rounded-md overflow-hidden border border-primary/20`}>
         <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
           <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Paytable (3 of a kind)</h2>
         </div>
@@ -907,7 +907,7 @@ export default function SlotsPage() {
       </div>
 
       {/* ══════════ HISTORY ══════════ */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`${styles.panel} mobile-panel rounded-md overflow-hidden border border-primary/20`}>
         <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
           <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Recent spins</h2>
         </div>

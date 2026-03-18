@@ -13,7 +13,7 @@ const INV_STYLES = `
 `;
 
 const LoadingSpinner = () => (
-  <div className={`${styles.pageContent} p-4`}>
+  <div className={`${styles.pageContent} p-4 mobile-page-root`}>
     <style>{INV_STYLES}</style>
     <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
       <Package size={24} className="text-primary/50 animate-pulse" />
@@ -146,7 +146,7 @@ export default function MyInventory() {
   if (loading) return <LoadingSpinner />;
   if (!data) {
     return (
-      <div className={`${styles.pageContent} p-4`}>
+      <div className={`${styles.pageContent} p-4 mobile-page-root`}>
         <p className="text-mutedForeground">Failed to load inventory.</p>
       </div>
     );
@@ -189,7 +189,7 @@ export default function MyInventory() {
   };
 
   return (
-    <div className={`${styles.pageContent} p-3 sm:p-4`}>
+    <div className={`${styles.pageContent} p-3 sm:p-4 mobile-page-root`}>
       <style>{INV_STYLES}</style>
       <div className="max-w-4xl mx-auto space-y-4">
         <p className="text-[10px] sm:text-xs text-mutedForeground font-heading inv-fade-in" style={{ animationDelay: '0.05s' }}>
@@ -199,7 +199,7 @@ export default function MyInventory() {
         {/* Weapons & Armour side by side — always 2 columns */}
         <div className="grid grid-cols-2 gap-3 inv-fade-in" style={{ animationDelay: '0.1s' }}>
           {/* Weapons */}
-          <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 min-w-0`}>
+          <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 min-w-0 mobile-panel`}>
             <div className="px-2 py-1.5 sm:px-2.5 sm:py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
               <Swords size={12} className="text-primary shrink-0" />
               <h2 className="text-[9px] sm:text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Weapons</h2>
@@ -232,7 +232,7 @@ export default function MyInventory() {
           </div>
 
           {/* Armour */}
-          <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 min-w-0`}>
+          <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 min-w-0 mobile-panel`}>
             <div className="px-2 py-1.5 sm:px-2.5 sm:py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
               <Shield size={12} className="text-primary shrink-0" />
               <h2 className="text-[9px] sm:text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Armour</h2>
@@ -267,7 +267,7 @@ export default function MyInventory() {
 
         {/* Consumables / Tokens */}
         {TOKEN_TYPES.some((k) => (tokens[k]?.count ?? 0) > 0 || tokens[k]?.active_until) && (
-          <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 inv-fade-in`} style={{ animationDelay: '0.18s' }}>
+          <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 inv-fade-in mobile-panel`} style={{ animationDelay: '0.18s' }}>
             <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
               <Zap size={14} className="text-primary" />
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Consumables</h2>
@@ -307,7 +307,7 @@ export default function MyInventory() {
 
         {/* Loot Exclusives */}
         {(exclusiveCars.length > 0 || hasSpeakeasy) && (
-          <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 inv-fade-in`} style={{ animationDelay: '0.2s' }}>
+          <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 inv-fade-in mobile-panel`} style={{ animationDelay: '0.2s' }}>
             <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
               <Gift size={14} className="text-primary" />
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Loot Exclusives</h2>

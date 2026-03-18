@@ -685,7 +685,7 @@ export default function FamilyRun() {
   };
 
   return (
-    <div className={`${styles.pageContent} space-y-3`}>
+    <div className={`${styles.pageContent} mobile-page-root space-y-3`}>
       <header className="flex items-center gap-2 mb-2">
         <Link to="/casino/mini-games/leaderboard" className="p-1 rounded hover:bg-primary/10 transition-colors">
           <ArrowLeft size={16} className="text-primary" />
@@ -713,7 +713,7 @@ export default function FamilyRun() {
         </div>
 
         <div className="space-y-3">
-          <section className={`${styles.panel} rounded-lg overflow-hidden`}>
+          <section className={`${styles.panel} mobile-panel rounded-lg overflow-hidden`}>
             <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Trophy size={14} className="text-primary" />
@@ -756,7 +756,7 @@ export default function FamilyRun() {
             </div>
           </section>
 
-          <section className={`${styles.panel} rounded-lg p-3`}>
+          <section className={`${styles.panel} mobile-panel rounded-lg p-3`}>
             <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-2">Rewards</h3>
             <ul className="text-[10px] text-mutedForeground font-heading space-y-1">
               <li>• Cash: <span className="text-green-400">$10 per 100m</span></li>

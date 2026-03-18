@@ -131,7 +131,7 @@ export default function Properties() {
 
   if (loading) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{PROP_STYLES}</style>
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
           <Building size={28} className="text-primary/40 animate-pulse" />
@@ -143,7 +143,7 @@ export default function Properties() {
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="properties-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="properties-page">
       <style>{PROP_STYLES}</style>
 
       <div className="relative prop-fade-in flex flex-wrap items-end justify-between gap-3">
@@ -189,7 +189,7 @@ export default function Properties() {
           <div
             key={property.id}
             data-testid={`property-card-${property.id}`}
-            className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prop-card prop-fade-in`}
+            className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prop-card prop-fade-in mobile-panel`}
             style={{ animationDelay: `${0.02 + idx * 0.04}s` }}
           >
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -314,7 +314,7 @@ export default function Properties() {
         ))}
       </div>
 
-      <details className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prop-fade-in`} style={{ animationDelay: `${0.02 + properties.length * 0.04}s` }}>
+      <details className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prop-fade-in mobile-panel`} style={{ animationDelay: `${0.02 + properties.length * 0.04}s` }}>
         <summary className="list-none cursor-pointer">
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2 bg-primary/8 border-b border-primary/15 flex items-center justify-between">

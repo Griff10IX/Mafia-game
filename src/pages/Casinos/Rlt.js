@@ -539,7 +539,7 @@ export default function Rlt() {
   };
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="roulette-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="roulette-page">
       <style>{CG_STYLES}</style>
       <style>{`
         @keyframes result-glow {
@@ -620,7 +620,7 @@ export default function Rlt() {
 
       {/* ═══ Owner Controls ═══ */}
       {isOwner && (
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cg-fade-in`}>
+        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 cg-fade-in`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Owner Controls</span>
@@ -924,7 +924,7 @@ export default function Rlt() {
       )}
 
       {/* Rules */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`${styles.panel} mobile-panel rounded-md overflow-hidden border border-primary/20`}>
         <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Rules</span>
         </div>

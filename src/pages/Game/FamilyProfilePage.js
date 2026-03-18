@@ -216,7 +216,7 @@ export default function FamilyProfilePage() {
 
   if (!family) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <button type="button" onClick={() => navigate('/families')} className="flex items-center gap-2 text-zinc-500 hover:text-primary text-xs font-heading uppercase tracking-wider transition-colors">
           <ArrowLeft size={13} /> Back to families
         </button>
@@ -287,7 +287,7 @@ export default function FamilyProfilePage() {
   const rankAndFile = sorted.filter(m => ['soldier', 'associate'].includes(m.role));
 
   return (
-    <div className={`space-y-3 ${styles.pageContent}`}>
+    <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
       <style>{fpStyles}</style>
       {/* Film grain overlay */}
       <div className="fp-grain" aria-hidden />
@@ -300,7 +300,7 @@ export default function FamilyProfilePage() {
       {/* ══════════════════════════════════════════
           DOSSIER HEADER
       ══════════════════════════════════════════ */}
-      <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/20 fp-scale`}>
+      <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/20 fp-scale mobile-panel`}>
         {/* Top accent line */}
         <div className="h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
 
@@ -367,7 +367,7 @@ export default function FamilyProfilePage() {
       {/* ══════════════════════════════════════════
           HIERARCHY ORG CHART
       ══════════════════════════════════════════ */}
-      <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in`} style={{ animationDelay: '0.1s' }}>
+      <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
         {/* Floating ember particles */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {EMBERS.map(e => (
@@ -619,7 +619,7 @@ export default function FamilyProfilePage() {
       {/* ══════════════════════════════════════════
           FAMILY PROFILE (picture & text)
       ══════════════════════════════════════════ */}
-      <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in`} style={{ animationDelay: '0.2s' }}>
+      <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in mobile-panel`} style={{ animationDelay: '0.2s' }}>
         <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/10">
           <Building2 size={11} className="text-primary/60" />
           <span className="text-[10px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em]">Family profile</span>
@@ -675,7 +675,7 @@ export default function FamilyProfilePage() {
 
         {/* Rackets */}
         {rackets.length > 0 && (
-          <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in`} style={{ animationDelay: '0.25s' }}>
+          <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in mobile-panel`} style={{ animationDelay: '0.25s' }}>
             <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/10">
               <TrendingUp size={11} className="text-primary/60" />
               <span className="text-[10px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em]">Rackets</span>
@@ -705,7 +705,7 @@ export default function FamilyProfilePage() {
 
         {/* Crew OC — only show to users not in this family when crew is not wiped */}
         {!isWiped && !isMyFamily && (
-        <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in`} style={{ animationDelay: '0.3s' }}>
+        <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in mobile-panel`} style={{ animationDelay: '0.3s' }}>
           <div className="px-4 py-2.5 flex items-center justify-between border-b border-primary/10">
             <div className="flex items-center gap-2">
               <Crosshair size={11} className="text-primary/60" />

@@ -145,7 +145,7 @@ const StatCard = ({ label, value, valueColor = "text-foreground", icon: Icon }) 
    Setup & Status Card
    ═══════════════════════════════════════════════════════ */
 const SetupCard = ({ canEnable, hasTelegram }) => (
-  <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`}>
+  <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`}>
     <div className={`relative px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
       <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
         <Bot size={14} className="sm:w-4 sm:h-4" />
@@ -204,7 +204,7 @@ const SetupCard = ({ canEnable, hasTelegram }) => (
 const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
   const p = prefs || {};
   return (
-  <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`} style={{ animationDelay: '0.1s' }}>
+  <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.1s' }}>
     <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
       <h2 className={`text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider ${styles.gmTitle}`}>
         Your Settings
@@ -342,7 +342,7 @@ const CrimesGtaSettingsCard = ({
   meltDisabled,
   scrapDisabled,
 }) => (
-  <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`} style={{ animationDelay: '0.2s' }}>
+  <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.2s' }}>
     <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
       <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
         <Settings2 size={14} className="sm:w-4 sm:h-4" />
@@ -555,7 +555,7 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
   const nextUp = items.filter((x) => x.sec !== null && x.sec >= 0).sort((a, b) => a.sec - b.sec)[0];
 
   return (
-    <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`} style={{ animationDelay: '0.15s' }}>
+    <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.15s' }}>
       <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader} flex flex-wrap items-center justify-between gap-2`}>
         <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
           <Activity size={14} className="sm:w-4 sm:h-4" />
@@ -709,7 +709,7 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
 const OCOptionsCard = ({ equipment, selectedId, saving, onSelect }) => {
   const list = Array.isArray(equipment) ? equipment : [];
   return (
-    <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`} style={{ animationDelay: '0.2s' }}>
+    <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.2s' }}>
       <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
         <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
           <Briefcase size={14} className="sm:w-4 sm:h-4" />
@@ -771,7 +771,7 @@ const StatsCard = ({ stats, liveCountdown }) => {
   const bestCars = (Array.isArray(s.best_cars) ? s.best_cars : []).filter((car) => car && typeof car === 'object');
 
   return (
-    <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`} style={{ animationDelay: '0.2s' }}>
+    <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.2s' }}>
       <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
         <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
           <BarChart3 size={14} className="sm:w-4 sm:h-4" />
@@ -917,7 +917,7 @@ const AdminGlobalLoopCard = ({
   onStop,
   onSave,
 }) => (
-  <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`} style={{ animationDelay: '0.3s' }}>
+  <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.3s' }}>
     <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
       <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
         <Shield size={14} className="sm:w-4 sm:h-4" />
@@ -1627,7 +1627,7 @@ export default function AutoRank() {
   }
 
   return (
-    <div className={`min-h-[40vh] px-3 sm:px-4 max-w-4xl mx-auto space-y-3 sm:space-y-4 ${styles.pageContent}`}>
+    <div className={`min-h-[40vh] px-3 sm:px-4 max-w-4xl mx-auto space-y-3 sm:space-y-4 ${styles.pageContent} mobile-page-root`}>
       <style>{AR_STYLES}</style>
       
       {/* Page title - always visible so page is clearly present */}
@@ -1729,7 +1729,7 @@ export default function AutoRank() {
           />
 
           {/* Admin Users Table */}
-          <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel}`} style={{ animationDelay: '0.4s' }}>
+          <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.4s' }}>
           <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader} flex items-center justify-between gap-2 flex-wrap`}>
             <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
               <Users size={14} className="sm:w-4 sm:h-4" />

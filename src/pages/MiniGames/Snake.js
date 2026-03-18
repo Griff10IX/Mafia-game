@@ -872,7 +872,7 @@ export default function Snake() {
         </div>
       </div>
 
-      <div className={styles.panel} style={{ margin: "clamp(8px,2vw,12px) clamp(12px,4vw,16px)", padding: "clamp(10px,2.5vw,14px)" }}>
+      <div className={`${styles.panel} mobile-panel`} style={{ margin: "clamp(8px,2vw,12px) clamp(12px,4vw,16px)", padding: "clamp(10px,2.5vw,14px)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <div style={{ fontFamily: "'Cinzel',serif", fontSize: 10, letterSpacing: ".25em", textTransform: "uppercase", color: "var(--noir-primary)" }}>
             Top Runners
@@ -913,7 +913,7 @@ export default function Snake() {
         )}
       </div>
 
-      <div className={styles.panel} style={{ margin: "0 clamp(12px,4vw,16px) 20px", padding: "clamp(10px,2.5vw,14px)" }}>
+      <div className={`${styles.panel} mobile-panel`} style={{ margin: "0 clamp(12px,4vw,16px) 20px", padding: "clamp(10px,2.5vw,14px)" }}>
         <div style={{ fontFamily: "'Cinzel',serif", fontSize: "clamp(9px,2.2vw,10px)", letterSpacing: ".25em", textTransform: "uppercase", color: "var(--noir-muted)", marginBottom: 8 }}>
           Contraband
         </div>
@@ -934,7 +934,7 @@ export default function Snake() {
         </div>
       </div>
 
-      <div className={styles.panel} style={{ margin: "0 clamp(12px,4vw,16px) 20px", padding: "clamp(10px,2.5vw,14px)" }}>
+      <div className={`${styles.panel} mobile-panel`} style={{ margin: "0 clamp(12px,4vw,16px) 20px", padding: "clamp(10px,2.5vw,14px)" }}>
         <div style={{ fontFamily: "'Cinzel',serif", fontSize: "clamp(9px,2.2vw,10px)", letterSpacing: ".25em", textTransform: "uppercase", color: "var(--noir-muted)", marginBottom: 10 }}>
           Rewards & rules
         </div>

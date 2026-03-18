@@ -632,12 +632,12 @@ export default function Boxing() {
     return <FightReplay fight={replayFight} onClose={closeReplay} />;
   }
 
-  const panelCls = `${styles.panel} rounded-lg overflow-hidden border border-primary/20`;
+  const panelCls = `${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20`;
   const headerCls = "px-3 py-2 bg-primary/5 border-b border-primary/20";
 
   return (
     <div className={styles.page} style={{ minHeight: "100vh", fontFamily: "'Cinzel', serif" }}>
-      <div className={styles.pageContent} style={{ padding: "14px 16px", borderBottom: "1px solid var(--noir-border-light)" }}>
+      <div className={`${styles.pageContent} mobile-page-root`} style={{ padding: "14px 16px", borderBottom: "1px solid var(--noir-border-light)" }}>
         <div className="text-sm sm:text-base" style={{ letterSpacing: "0.2em", color: gold }}>THE UNDERGROUND RING</div>
         <div style={{ fontSize: 10, color: "var(--noir-muted)", letterSpacing: "0.12em", marginTop: 2 }}>TRAIN &bull; FIGHT &bull; BET &bull; DOMINATE</div>
       </div>

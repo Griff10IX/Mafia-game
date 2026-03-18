@@ -910,7 +910,7 @@ export default function Forum() {
   };
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="forum-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="forum-page">
       <style>{FORUM_STYLES}</style>
 
       {/* Page header */}
@@ -973,7 +973,7 @@ export default function Forum() {
             </div>
           )}
           {activeDesignerComp ? (
-            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in`}>
+            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in mobile-panel`}>
               <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
                 <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎨 Designer competition</span>
@@ -1060,7 +1060,7 @@ export default function Forum() {
               <div className="f-art-line text-primary mx-3" />
             </div>
           ) : (
-            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in`}>
+            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in mobile-panel`}>
               <div className="p-4 text-center text-xs text-mutedForeground">
                 No active designer competition. When one is running, a pinned topic will appear here — post your picture there and submit that post as your entry. Voters get 100 points.
               </div>
@@ -1074,7 +1074,7 @@ export default function Forum() {
         <>
           {/* Admin tools */}
           {isAdmin && (
-            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-500/30 f-fade-in`}>
+            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-500/30 f-fade-in mobile-panel`}>
               <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
               <div className="px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/20">
                 <span className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">🛠️ E-Games Admin</span>
@@ -1113,7 +1113,7 @@ export default function Forum() {
           )}
 
           {/* What you can win */}
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-card f-fade-in`}>
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-card f-fade-in mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
               <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎁 What you can win</span>
@@ -1162,7 +1162,7 @@ export default function Forum() {
             <div className="f-art-line text-primary mx-3" />
           </div>
 
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in`}>
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-1">
               <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎲 Auto games</span>
@@ -1230,7 +1230,7 @@ export default function Forum() {
           </div>
 
           {/* Last 10 Games */}
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in`}>
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
               <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">📜 Last 10 games</span>
@@ -1285,7 +1285,7 @@ export default function Forum() {
       </div>
 
       {/* Topics List */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in`}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         {/* Desktop Header */}
         <div className={`hidden sm:grid grid-cols-12 gap-2 px-3 py-2.5 bg-primary/8 border-b border-primary/20 text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]`}>
@@ -1399,7 +1399,7 @@ export default function Forum() {
       </div>
 
       {/* Rules */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in`} style={{ animationDelay: '0.05s' }}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">ℹ️ Rules</span>

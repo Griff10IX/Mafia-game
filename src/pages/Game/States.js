@@ -102,7 +102,7 @@ const CityCard = ({
   const highestBuyBack = buyBacks.length ? Math.max(...buyBacks.map(Number)) : null;
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 st-card st-fade-in`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 st-card st-fade-in mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       {/* Header - Always visible */}
       <button
@@ -476,7 +476,7 @@ export default function States() {
 
   if (loading) {
     return (
-      <div className={`space-y-2 ${styles.pageContent}`}>
+      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{STATES_STYLES}</style>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
           <MapPin size={22} className="text-primary/40 animate-pulse" />
@@ -489,7 +489,7 @@ export default function States() {
 
   if (cities.length === 0) {
     return (
-      <div className={`space-y-2 ${styles.pageContent}`} data-testid="states-page">
+      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="states-page">
         <style>{STATES_STYLES}</style>
         <div className="relative st-fade-in">
           <p className="text-[9px] text-zinc-500 font-heading italic">Travel · Casinos · Properties. Who owns what where.</p>
@@ -506,7 +506,7 @@ export default function States() {
   }
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} data-testid="states-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="states-page">
       <style>{STATES_STYLES}</style>
 
       {/* Page header */}
@@ -563,7 +563,7 @@ export default function States() {
       </div>
 
       {/* Info */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 st-fade-in`} style={{ animationDelay: '0.1s' }}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 st-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">ℹ️ Info</span>

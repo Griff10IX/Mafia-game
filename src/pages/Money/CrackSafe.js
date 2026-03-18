@@ -482,7 +482,7 @@ export default function CrackSafe() {
 
   if (loading) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <div className="text-center text-zinc-500 py-20 font-heading text-sm tracking-widest">
           Accessing the vault...
         </div>
@@ -491,7 +491,7 @@ export default function CrackSafe() {
   }
 
   return (
-    <div className={`space-y-3 max-w-4xl mx-auto ${styles.pageContent}`}>
+    <div className={`space-y-3 max-w-4xl mx-auto ${styles.pageContent} mobile-page-root`}>
       <style>{CS_STYLES}</style>
 
       {/* Page header */}
@@ -503,7 +503,7 @@ export default function CrackSafe() {
 
       {/* Jackpot banner */}
       <div
-        className={`relative ${styles.panel} rounded-lg overflow-hidden border border-yellow-600/30 cs-fade-in`}
+        className={`relative ${styles.panel} rounded-lg overflow-hidden border border-yellow-600/30 cs-fade-in mobile-panel`}
         style={{ animationDelay: '0.05s' }}
       >
         <div className="h-0.5 bg-gradient-to-r from-transparent via-yellow-500/60 to-transparent" />
@@ -524,7 +524,7 @@ export default function CrackSafe() {
 
         {/* Left: Safe visual + inputs — self-start so card height ends at content (guess button), no stretch */}
         <div
-          className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cs-fade-in min-w-0 max-w-md lg:max-w-sm self-start`}
+          className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cs-fade-in min-w-0 max-w-md lg:max-w-sm self-start mobile-panel`}
           style={{ animationDelay: '0.1s' }}
         >
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -614,7 +614,7 @@ export default function CrackSafe() {
 
           {/* Rules / info */}
           <div
-            className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cs-fade-in`}
+            className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cs-fade-in mobile-panel`}
             style={{ animationDelay: '0.12s' }}
           >
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -633,7 +633,7 @@ export default function CrackSafe() {
 
           {/* Possible Rewards */}
           <div
-            className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-600/25 cs-fade-in`}
+            className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-600/25 cs-fade-in mobile-panel`}
             style={{ animationDelay: '0.14s' }}
           >
             <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
@@ -664,7 +664,7 @@ export default function CrackSafe() {
 
           {/* Clues */}
           <div
-            className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cs-fade-in`}
+            className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cs-fade-in mobile-panel`}
             style={{ animationDelay: '0.16s' }}
           >
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -700,7 +700,7 @@ export default function CrackSafe() {
           {/* Admin: current combination reveal */}
           {info?.admin_combination && (
             <div
-              className={`relative ${styles.panel} rounded-lg overflow-hidden border border-red-700/40 cs-fade-in`}
+              className={`relative ${styles.panel} rounded-lg overflow-hidden border border-red-700/40 cs-fade-in mobile-panel`}
               style={{ animationDelay: '0.22s' }}
             >
               <div className="h-0.5 bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
@@ -728,7 +728,7 @@ export default function CrackSafe() {
 
           {(info?.last_winners?.length > 0) && (
             <div
-              className={`relative ${styles.panel} rounded-lg overflow-hidden border border-yellow-600/20 cs-fade-in`}
+              className={`relative ${styles.panel} rounded-lg overflow-hidden border border-yellow-600/20 cs-fade-in mobile-panel`}
               style={{ animationDelay: '0.2s' }}
             >
               <div className="h-0.5 bg-gradient-to-r from-transparent via-yellow-500/30 to-transparent" />

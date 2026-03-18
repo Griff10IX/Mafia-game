@@ -312,7 +312,7 @@ export default function DailyRewards() {
   /* ── Loading ─────────────────────────────────────────────── */
   if (loading) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{RPS_STYLES}</style>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
           <div
@@ -336,7 +336,7 @@ export default function DailyRewards() {
 
   /* ── Main render ─────────────────────────────────────────── */
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="daily-rewards-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="daily-rewards-page">
       <style>{RPS_STYLES}</style>
 
       {/* Header tagline */}
@@ -348,7 +348,7 @@ export default function DailyRewards() {
 
       {/* Info card */}
       <div
-        className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 anim-fadeUp ${canPlay ? 'anim-goldGlow' : ''}`}
+        className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 anim-fadeUp mobile-panel ${canPlay ? 'anim-goldGlow' : ''}`}
         style={{ animationDelay: '0.04s' }}
       >
         <div className="px-4 py-3 flex items-center gap-2 bg-primary/10 border-b border-primary/20">
@@ -386,7 +386,7 @@ export default function DailyRewards() {
 
       {/* Mode selector */}
       <div
-        className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 anim-fadeUp`}
+        className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 anim-fadeUp mobile-panel`}
         style={{ animationDelay: '0.08s' }}
       >
         <div className="p-2 grid grid-cols-2 gap-2">
@@ -526,7 +526,7 @@ export default function DailyRewards() {
 
           {/* Choice buttons */}
           <div
-            className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 anim-fadeUp`}
+            className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 anim-fadeUp mobile-panel`}
             style={{ animationDelay: '0.12s' }}
           >
             <div className="px-4 py-3 border-b border-primary/20 flex items-center justify-between">
@@ -591,7 +591,7 @@ export default function DailyRewards() {
       {/* ── Noughts & Crosses ────────────────────────────────── */}
       {gameMode === 'ttt' && (
         <div
-          className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 anim-fadeUp`}
+          className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 anim-fadeUp mobile-panel`}
           style={{ animationDelay: '0.08s' }}
         >
           <div className="px-4 py-3 border-b border-primary/20 flex items-center justify-between">

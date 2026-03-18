@@ -629,7 +629,7 @@ export default function MPPokerGamePage() {
 
   if (loading && !game) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <div className="flex items-center gap-2">
           <Link to="/casino/mp-poker" className="p-1.5 rounded border border-primary/20 text-primary hover:bg-primary/10 transition-colors">
             <ArrowLeft size={16} />
@@ -641,7 +641,7 @@ export default function MPPokerGamePage() {
   }
   if (fetchError || (!loading && !game)) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <div className="rounded-xl border p-6 text-center space-y-3" style={{ borderColor: 'rgba(248,113,113,0.25)', background: 'rgba(248,113,113,0.05)' }}>
           <p className="text-sm font-heading font-bold text-red-400 uppercase tracking-wider">Table Not Found</p>
           <p className="text-[10px] text-mutedForeground font-heading">This game may have ended or the link is invalid.</p>
@@ -659,7 +659,7 @@ export default function MPPokerGamePage() {
   }
   if (status === 'cancelled') {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <div className="rounded-xl border p-6 text-center space-y-3" style={{ borderColor: 'rgba(248,113,113,0.25)', background: 'rgba(248,113,113,0.05)' }}>
           <p className="text-sm font-heading font-bold text-red-400 uppercase tracking-wider">Table Cancelled</p>
           <p className="text-[10px] text-mutedForeground font-heading">All buy-ins have been refunded.</p>
@@ -679,7 +679,7 @@ export default function MPPokerGamePage() {
   };
 
   return (
-    <div className={`space-y-3 ${styles.pageContent}`} data-testid="mp-poker-game-page">
+    <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="mp-poker-game-page">
       <style>{`
         @keyframes pkr-deal {
           0%   { transform: translateY(-20px) scale(0.85); opacity: 0; }
@@ -1223,7 +1223,7 @@ export default function MPPokerGamePage() {
       {(() => {
         const [helpOpen, setHelpOpen] = [helpPanelOpen, setHelpPanelOpen];
         return (
-          <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 animate-pkr-fade`}>
+          <div className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20 animate-pkr-fade`}>
             <button type="button" onClick={() => setHelpOpen((o) => !o)}
               className="w-full px-3 py-2.5 border-b border-primary/20 flex items-center justify-between hover:bg-primary/5 transition-colors"
               style={{ background: 'rgba(234,179,8,0.04)' }}>
@@ -1323,7 +1323,7 @@ export default function MPPokerGamePage() {
 
       {/* ══ CHAT ══ */}
       {!isVsDealer && amIPlayer && (
-        <div data-chat-surface="table" data-chat-game="poker" className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 animate-pkr-fade`}>
+        <div data-chat-surface="table" data-chat-game="poker" className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20 animate-pkr-fade`}>
           <div data-chat-part="header" className="px-3 py-2 border-b border-primary/20 flex items-center gap-1.5" style={{ background: 'rgba(234,179,8,0.06)' }}>
             <MessageSquare size={11} className="text-primary" />
             <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">Table Chat</span>

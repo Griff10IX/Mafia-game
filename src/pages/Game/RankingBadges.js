@@ -441,7 +441,7 @@ export default function RankingBadges() {
   const toggle = id => setOpen(prev => ({ ...prev, [id]: !prev[id] }));
 
   if (loading) return (
-    <div className={`space-y-8 ${styles.pageContent}`} data-testid="ranking-badges-page">
+    <div className={`space-y-8 ${styles.pageContent} mobile-page-root`} data-testid="ranking-badges-page">
       <div className="flex flex-col items-center justify-center min-h-[30vh] gap-2">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         <span className="text-mutedForeground text-xs font-heading uppercase tracking-wider">Loading badges...</span>
@@ -455,11 +455,11 @@ export default function RankingBadges() {
   const bonusByCategory = (data?.bonuses ?? []).reduce((acc, b) => { acc[b.id] = b; return acc; }, {});
 
   return (
-    <div className={`space-y-6 ${styles.pageContent}`} data-testid="ranking-badges-page">
+    <div className={`space-y-6 ${styles.pageContent} mobile-page-root`} data-testid="ranking-badges-page">
       <style>{BADGE_STYLES}</style>
 
       {/* Tier legend */}
-      <div className={`${styles.panel} rounded-md p-4 border border-primary/20`}>
+      <div className={`${styles.panel} rounded-md p-4 border border-primary/20 mobile-panel`}>
         <div className="flex items-center gap-2 mb-3">
           <Award size={16} className="text-primary" />
           <span className="font-heading text-sm font-bold text-foreground tracking-wider uppercase">
@@ -485,7 +485,7 @@ export default function RankingBadges() {
             .pop();
 
           return (
-            <div key={cat.id} className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+            <div key={cat.id} className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
               <button
                 type="button"
                 onClick={() => toggle(cat.id)}

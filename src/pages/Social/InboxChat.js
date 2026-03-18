@@ -155,7 +155,7 @@ export default function InboxChat() {
 
   if (loading) {
     return (
-      <div className={`${styles.pageContent} ${styles.page}`}>
+      <div className={`${styles.pageContent} ${styles.page} mobile-page-root`}>
         <div className="flex items-center justify-center min-h-[50vh]">
           <span className="text-primary font-heading">Loading chat...</span>
         </div>
@@ -164,7 +164,7 @@ export default function InboxChat() {
   }
 
   return (
-    <div data-chat-surface="inbox" className={`${styles.pageContent} flex flex-col h-[calc(100vh-10rem)] max-h-[700px] min-h-[320px]`}>
+    <div data-chat-surface="inbox" className={`${styles.pageContent} flex flex-col h-[calc(100vh-10rem)] max-h-[700px] min-h-[320px] mobile-page-root`}>
       {/* Header */}
       <div data-chat-part="header" className="flex items-center gap-3 py-3 border-b border-primary/20 shrink-0">
         <button

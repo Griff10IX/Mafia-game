@@ -488,7 +488,7 @@ export default function ForumTopic() {
 
   if (loading && !topic) {
     return (
-      <div className={`${styles.pageContent} flex items-center justify-center min-h-[40vh]`}>
+      <div className={`${styles.pageContent} flex items-center justify-center min-h-[40vh] mobile-page-root`}>
         <div className="text-primary font-heading text-sm">Loading...</div>
       </div>
     );
@@ -507,7 +507,7 @@ export default function ForumTopic() {
   const topicContent = topicContentRaw;
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="forum-topic-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="forum-topic-page">
       <style>{FORUM_CONTENT_STYLES}</style>
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -690,7 +690,7 @@ export default function ForumTopic() {
       )}
 
       {/* Topic Content */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">📝 Original Post</span>
         </div>
@@ -719,7 +719,7 @@ export default function ForumTopic() {
 
       {/* Crew OC: Apply to join */}
       {topic.crew_oc_family_id && (
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2">
             <UserPlus size={14} className="text-primary" />
             <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Apply to Crew OC</span>
@@ -769,7 +769,7 @@ export default function ForumTopic() {
 
       {/* Entertainer: Create dice / gbox game (manual roll when ready) */}
       {topic.category === 'entertainer' && !topic.is_locked && (
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
             <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎲 Create Game</span>
           </div>
@@ -814,7 +814,7 @@ export default function ForumTopic() {
       )}
 
       {/* Comments */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">💬 Comments</span>
           <span className="text-[10px] text-mutedForeground">{commentCount} {commentCount === 1 ? 'reply' : 'replies'}</span>
@@ -974,7 +974,7 @@ export default function ForumTopic() {
           </p>
         </div>
       ) : (
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
             <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">✍️ Add Comment</span>
           </div>

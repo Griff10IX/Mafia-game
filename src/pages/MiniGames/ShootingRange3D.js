@@ -961,7 +961,7 @@ export default function ShootingRange3D() {
   const isMobileView = typeof window !== "undefined" && window.innerWidth < 700;
 
   return (
-    <div className={`space-y-4 ${styles.pageContent} mx-auto`} style={{ maxWidth: 900 }}>
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root mx-auto`} style={{ maxWidth: 900 }}>
       <style>{`
         .sr-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
       `}</style>
@@ -991,7 +991,7 @@ export default function ShootingRange3D() {
 
       {/* Weapon select — panel like Casino */}
       {(!weaponId || !canPlay) ? (
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Weapon</h2>
@@ -1012,7 +1012,7 @@ export default function ShootingRange3D() {
           <div className="sr-art-line text-primary mx-3" />
         </div>
       ) : sceneError ? (
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="p-4">
             <p className="text-sm font-heading text-foreground mb-2">Something went wrong loading the 3D range.</p>
@@ -1306,7 +1306,7 @@ export default function ShootingRange3D() {
 
       {/* Scoring guide — theme panel */}
       {canPlay && (
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Scoring</h2>
@@ -1327,7 +1327,7 @@ export default function ShootingRange3D() {
 
       {/* Leaderboard — top 10 */}
       {canPlay && (
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Top 10 — Shooting Range</h2>

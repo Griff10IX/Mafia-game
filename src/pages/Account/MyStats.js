@@ -58,7 +58,7 @@ const GAME_LABELS = {
 const ALL_CASINO_GAMES = ['dice', 'roulette', 'blackjack', 'horseracing', 'videopoker', 'slots', 'mdg', 'mp_blackjack', 'mp_poker'];
 
 const LoadingSpinner = () => (
-  <div className={`space-y-2 ${styles.pageContent}`}>
+  <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
     <style>{STATS_STYLES}</style>
     <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
       <BarChart3 size={20} className="text-primary/40 animate-pulse" />
@@ -71,7 +71,7 @@ const LoadingSpinner = () => (
 const StatCard = ({ title, icon: Icon, rows, delay = 0 }) => {
   const safeRows = Array.isArray(rows) ? rows : [];
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-fade-in`} style={{ animationDelay: `${delay}s` }}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-fade-in mobile-panel`} style={{ animationDelay: `${delay}s` }}>
       <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
         {Icon && <Icon size={12} className="text-primary" />}
         <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">{title}</h2>
@@ -132,7 +132,7 @@ export default function MyStats() {
   if (loading && !stats) return <LoadingSpinner />;
   if (!stats) {
     return (
-      <div className={`${styles.pageContent} p-4`}>
+      <div className={`${styles.pageContent} p-4 mobile-page-root`}>
         <p className="text-mutedForeground mb-2">Failed to load stats.</p>
         <button
           type="button"
@@ -275,7 +275,7 @@ export default function MyStats() {
   ];
 
   return (
-    <div className={`${styles.pageContent} p-3 sm:p-4`}>
+    <div className={`${styles.pageContent} p-3 sm:p-4 mobile-page-root`}>
       <style>{STATS_STYLES}</style>
       <div className="max-w-4xl mx-auto space-y-4">
         <div className="flex items-center justify-between gap-2">

@@ -110,7 +110,7 @@ export default function MPPokerPage() {
   const selectStyle = { ...inputStyle, background: '#27272a', color: '#e4e4e7', colorScheme: 'dark' };
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="mp-poker-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mp-poker-page">
       <style>{`
         @keyframes pkr-lobby-fade { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
         .pkr-lobby-fade { animation: pkr-lobby-fade 0.4s ease-out both; }
@@ -132,7 +132,7 @@ export default function MPPokerPage() {
       {/* ── Mode cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pkr-lobby-fade" style={{ animationDelay: '0.04s' }}>
         {/* Vs Dealer */}
-        <div className={`relative ${styles.panel} rounded-xl overflow-hidden border-2`} style={{ borderColor: '#5a3e1b' }}>
+        <div className={`relative ${styles.panel} mobile-panel rounded-xl overflow-hidden border-2`} style={{ borderColor: '#5a3e1b' }}>
           <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' }} />
           <div className="p-4">
             <div className="flex items-center gap-2 mb-1.5">
@@ -172,7 +172,7 @@ export default function MPPokerPage() {
         </div>
 
         {/* Multiplayer */}
-        <div className={`relative ${styles.panel} rounded-xl overflow-hidden border-2`} style={{ borderColor: '#5a3e1b' }}>
+        <div className={`relative ${styles.panel} mobile-panel rounded-xl overflow-hidden border-2`} style={{ borderColor: '#5a3e1b' }}>
           <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' }} />
           <div className="p-4">
             <div className="flex items-center gap-2 mb-1.5">
@@ -233,7 +233,7 @@ export default function MPPokerPage() {
       </div>
 
       {/* ── Open tables ── */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 pkr-lobby-fade`} style={{ animationDelay: '0.08s' }}>
+      <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 pkr-lobby-fade`} style={{ animationDelay: '0.08s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Open Tables</h2>
@@ -325,7 +325,7 @@ export default function MPPokerPage() {
 
       {/* ── Recent games ── */}
       {recentGames.length > 0 && (
-        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 pkr-lobby-fade`} style={{ animationDelay: '0.12s' }}>
+        <div className={`${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 pkr-lobby-fade`} style={{ animationDelay: '0.12s' }}>
           <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
             <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest">Recent Games</span>
           </div>
@@ -342,7 +342,7 @@ export default function MPPokerPage() {
       )}
 
       {/* ── Rules ── */}
-      <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 pkr-lobby-fade`} style={{ animationDelay: '0.14s' }}>
+      <div className={`${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 pkr-lobby-fade`} style={{ animationDelay: '0.14s' }}>
         <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest">House Rules</span>
         </div>
