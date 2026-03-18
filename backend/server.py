@@ -1040,7 +1040,7 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
     if solo_killer and killer_id:
         # Solo killer gets vault: cash to user, compound as points/loot
         if total_cash_prize > 0:
-            await db.users.update_one({"id": killer_id}, {"$inc": {"money": total_cash_prize}, "$max": {"money": 0}})
+            await db.users.update_one({"id": killer_id}, {"$inc": {"money": total_cash_prize}})
         if loser_compound_points > 0 or loser_compound_loot_pieces > 0:
             inc = {}
             if loser_compound_points > 0:
