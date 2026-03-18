@@ -262,21 +262,21 @@ export default function Racing() {
 
   const fetchDriverMarket = useCallback(async () => {
     try {
-      const { data } = await api.get("/api/racing/drivers/market");
+      const { data } = await api.get("/racing/drivers/market");
       setDriverMarket(data.drivers || []);
     } catch {}
   }, []);
 
   const fetchMyDriver = useCallback(async () => {
     try {
-      const { data } = await api.get("/api/racing/drivers/mine");
+      const { data } = await api.get("/racing/drivers/mine");
       setMyDriver(data.driver || null);
     } catch {}
   }, []);
 
   const fetchRndTree = useCallback(async () => {
     try {
-      const { data } = await api.get("/api/racing/rnd/tree");
+      const { data } = await api.get("/racing/rnd/tree");
       setRndTree(data.paths || null);
       setRndActive(data.active_research || null);
     } catch {}
@@ -284,14 +284,14 @@ export default function Racing() {
 
   const fetchChampionship = useCallback(async () => {
     try {
-      const { data } = await api.get("/api/racing/championship");
+      const { data } = await api.get("/racing/championship");
       setChampionship(data);
     } catch {}
   }, []);
 
   const fetchChampStandings = useCallback(async () => {
     try {
-      const { data } = await api.get("/api/racing/championship/standings");
+      const { data } = await api.get("/racing/championship/standings");
       setChampStandings(data);
     } catch {}
   }, []);
@@ -438,7 +438,7 @@ export default function Racing() {
   const handleHireDriver = async (driverId) => {
     setDriverLoading(true);
     try {
-      await api.post("/api/racing/drivers/hire", { driver_id: driverId });
+      await api.post("/racing/drivers/hire", { driver_id: driverId });
       toast.success("Driver hired!");
       fetchDriverMarket();
       fetchMyDriver();
@@ -450,7 +450,7 @@ export default function Racing() {
   const handleFireDriver = async () => {
     setDriverLoading(true);
     try {
-      await api.post("/api/racing/drivers/fire", {});
+      await api.post("/racing/drivers/fire", {});
       toast.success("Driver released");
       fetchDriverMarket();
       fetchMyDriver();
@@ -543,7 +543,7 @@ export default function Racing() {
 
     const poll = async () => {
       try {
-        const { data } = await api.get(`/api/racing/races/${activeRace.id}/live`);
+        const { data } = await api.get(`/racing/races/${activeRace.id}/live`);
         setLiveRace(data);
         if (data.status === "completed" || data.status === "finished") {
           clearInterval(liveRacePoll.current);
@@ -656,7 +656,7 @@ export default function Racing() {
   const handleSubmitDecision = async () => {
     if (!activeRace?.id) return;
     try {
-      await api.post(`/api/racing/races/${activeRace.id}/decision`, myDecision);
+      await api.post(`/racing/races/${activeRace.id}/decision`, myDecision);
       setDecisionSubmitted(true);
       toast.success("Strategy submitted");
     } catch (e) { toast.error(apiDetail(e)); }
@@ -699,7 +699,7 @@ export default function Racing() {
   const handleStartResearch = async (pathId, nodeId) => {
     setRndResearching(true);
     try {
-      await api.post("/api/racing/rnd/research", { path_id: pathId, node_id: nodeId });
+      await api.post("/racing/rnd/research", { path_id: pathId, node_id: nodeId });
       toast.success("Research started!");
       fetchRndTree();
       fetchAll();
