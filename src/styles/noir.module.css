@@ -642,6 +642,24 @@ body[data-theme-variant="modern"] [data-layout="sidebar"] .sidebarNavLink:hover 
   }
 }
 
+/* Modern mobile: match Classic layout (edge-to-edge panels, same spacing) */
+@media (max-width: 767px) {
+  body[data-theme-variant="modern"] [data-layout="topbar"] {
+    min-height: 40px !important;
+  }
+  body[data-theme-variant="modern"] [data-layout="main"] {
+    padding: 1rem !important;
+    margin-top: 3rem !important;
+  }
+}
+
+/* Modern tablet: match Classic p-6 for mobile-panel -24px */
+@media (min-width: 768px) and (max-width: 1024px) {
+  body[data-theme-variant="modern"] [data-layout="main"] {
+    padding: 1.5rem !important;
+  }
+}
+
 /* Unified modern chat visuals – neutral gray base, accent from theme */
 body[data-theme-variant="modern"] [data-chat-surface] {
   border: 1px solid var(--modern-border-soft, rgba(161, 161, 170, 0.18));

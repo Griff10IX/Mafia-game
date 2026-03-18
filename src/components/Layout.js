@@ -328,6 +328,7 @@ export default function Layout({ children }) {
   const location = useLocation();
   const {
     mobileNavStyle,
+    themeVariant,
     setColour,
     setTexture,
     setButtonColour,
@@ -1628,7 +1629,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
-      <main data-layout="main" className={`md:ml-48 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-24 md:pb-6' : ''} ${mobileStatsDisplay === 'right_sidebar' ? 'md:mr-52' : ''}`}>
+      <main data-layout="main" className={`md:ml-48 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-24 md:pb-6' : ''} ${mobileStatsDisplay === 'right_sidebar' ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
         {needsEmailVerification && (
           <div className="mb-3 px-3 py-2 rounded-sm flex items-center gap-2 flex-wrap" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', border: '1px solid rgba(var(--noir-primary-rgb), 0.4)' }}>
             <Mail size={16} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
