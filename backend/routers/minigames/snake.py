@@ -150,53 +150,31 @@ def register(router):
         if score > MAX_SCORE_ACCEPTED:
             raise HTTPException(status_code=400, detail="Score too high.")
 
-        # Rate limit: N plays per hour (UTC)
+        # Rate limit: N plays per hour (UTC) — atomic to prevent concurrent bypass
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now_dt.isoformat().replace("+00:00", "Z")
         hour_start = now_dt.replace(minute=0, second=0)
         hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
         reset_dt = hour_start + timedelta(hours=1)
         reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
+        uid = current_user["id"]
 
-        meta = await db.user_meta.find_one(
-            {"user_id": current_user["id"]},
-            {"_id": 0, "snake_hour_start": 1, "snake_hour_count": 1},
+        result = await db.user_meta.update_one(
+            {"user_id": uid, "snake_hour_start": hour_start_iso, "snake_hour_count": {"$lt": MAX_PLAYS_PER_HOUR}},
+            {"$inc": {"snake_hour_count": 1}},
         )
-        meta_start = (meta or {}).get("snake_hour_start")
-        meta_count = int((meta or {}).get("snake_hour_count") or 0)
-        if meta_start == hour_start_iso:
-            if meta_count >= MAX_PLAYS_PER_HOUR:
+        if result.modified_count == 0:
+            result = await db.user_meta.update_one(
+                {"user_id": uid, "snake_hour_start": {"$ne": hour_start_iso}},
+                {"$set": {"snake_hour_start": hour_start_iso, "snake_hour_reset_at": reset_iso, "snake_hour_count": 1}},
+                upsert=True,
+            )
+            if result.modified_count == 0 and result.upserted_id is None:
                 remaining = max(0, int((reset_dt - now_dt).total_seconds()))
                 raise HTTPException(
-                    status_code=400,
+                    status_code=429,
                     detail=f"Hourly limit reached ({MAX_PLAYS_PER_HOUR} plays). Try again in {remaining}s.",
                 )
-            new_count = meta_count + 1
-            await db.user_meta.update_one(
-                {"user_id": current_user["id"]},
-                {
-                    "$setOnInsert": {"user_id": current_user["id"]},
-                    "$set": {
-                        "snake_hour_start": hour_start_iso,
-                        "snake_hour_reset_at": reset_iso,
-                        "snake_hour_count": new_count,
-                    },
-                },
-                upsert=True,
-            )
-        else:
-            await db.user_meta.update_one(
-                {"user_id": current_user["id"]},
-                {
-                    "$setOnInsert": {"user_id": current_user["id"]},
-                    "$set": {
-                        "snake_hour_start": hour_start_iso,
-                        "snake_hour_reset_at": reset_iso,
-                        "snake_hour_count": 1,
-                    },
-                },
-                upsert=True,
-            )
 
         rewards = payload.rewards or {}
         rewards_applied = await _apply_rewards(current_user["id"], rewards)

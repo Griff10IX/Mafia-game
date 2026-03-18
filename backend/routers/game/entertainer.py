@@ -148,6 +148,13 @@ async def _settle_game(game: dict):
     """Run payout (random rewards + pot) and mark game completed. Idempotent if already completed."""
     if game.get("status") == "completed":
         return
+    # Atomic status transition to prevent concurrent settle calls from both paying
+    lock = await db.entertainer_games.update_one(
+        {"id": game["id"], "status": {"$ne": "completed"}},
+        {"$set": {"status": "settling"}},
+    )
+    if lock.modified_count == 0:
+        return
     participants = game.get("participants") or []
     now = datetime.now(timezone.utc).isoformat()
     result = None
@@ -415,12 +422,7 @@ async def join_game(game_id: str, current_user: dict = Depends(get_current_user)
         raise HTTPException(status_code=404, detail="Game not found")
     if game.get("status") != "open":
         raise HTTPException(status_code=400, detail="Game is not open to join")
-    participants = game.get("participants") or []
-    if any(p.get("user_id") == current_user["id"] for p in participants):
-        raise HTTPException(status_code=400, detail="Already in this game")
     max_players = game.get("max_players", 10)
-    if len(participants) >= max_players:
-        raise HTTPException(status_code=400, detail="Game is full")
     join_fee = int(game.get("join_fee") or 0)
     if join_fee > 0:
         result = await db.users.update_one(
@@ -429,26 +431,53 @@ async def join_game(game_id: str, current_user: dict = Depends(get_current_user)
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail=f"Entry fee is ${join_fee:,}")
-    new_participants = participants + [{"user_id": current_user["id"], "username": current_user.get("username") or "?"}]
+    participant_doc = {"user_id": current_user["id"], "username": current_user.get("username") or "?"}
+    # Atomic join: only push if game is open, not already joined, and under max_players
+    join_result = await db.entertainer_games.update_one(
+        {
+            "id": game_id,
+            "status": "open",
+            f"participants.{max_players - 1}": {"$exists": False},
+            "participants.user_id": {"$ne": current_user["id"]},
+        },
+        {"$push": {"participants": participant_doc}, "$inc": {"pot": join_fee}},
+    )
+    if join_result.modified_count == 0:
+        if join_fee > 0:
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": join_fee}})
+        raise HTTPException(status_code=400, detail="Game is full or you already joined")
+    # Re-read the game to check if now full
+    game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
+    new_participants = game.get("participants") or []
     is_full = len(new_participants) >= max_players
-    current_pot = int(game.get("pot") or 0) + join_fee
-    updates = {
-        "participants": new_participants,
-        "pot": current_pot,
-        "status": "full" if is_full else "open",
-    }
     if is_full:
         now = datetime.now(timezone.utc).isoformat()
-        updates["completed_at"] = now
-        updated_game = {**game, "participants": new_participants, "pot": current_pot}
+        current_pot = int(game.get("pot") or 0)
+        updated_game = {**game, "pot": current_pot}
         if game.get("game_type") == "dice":
             res = await _run_dice_payout(updated_game)
-            updates["result"] = res
         else:
             res = await _run_gbox_payout(updated_game)
-            updates["result"] = res
-        updates["status"] = "completed"
-    await db.entertainer_games.update_one({"id": game_id}, {"$set": updates})
+        # Atomic transition to completed (prevents double settle)
+        settle_result = await db.entertainer_games.update_one(
+            {"id": game_id, "status": {"$ne": "completed"}},
+            {"$set": {"status": "completed", "completed_at": now, "result": res}},
+        )
+        if settle_result.modified_count > 0:
+            # Distribute pot
+            if current_pot > 0 and new_participants:
+                if game.get("game_type") == "dice" and res and res.get("winner_id"):
+                    await db.users.update_one({"id": res["winner_id"]}, {"$inc": {"money": current_pot}})
+                elif game.get("game_type") == "gbox":
+                    n = len(new_participants)
+                    each = current_pot // n
+                    remainder = current_pot - (each * n)
+                    for i, p in enumerate(new_participants):
+                        uid = p.get("user_id")
+                        if uid:
+                            amt = each + (remainder if i == 0 else 0)
+                            if amt > 0:
+                                await db.users.update_one({"id": uid}, {"$inc": {"money": amt}})
     updated = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     return {"message": "Joined game" + (" — rewards rolled!" if is_full else ""), "game": updated}
 

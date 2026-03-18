@@ -51,28 +51,20 @@ def register(router):
         hour_start = now.replace(minute=0, second=0, microsecond=0)
         hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
 
-        meta = await db.user_meta.find_one(
-            {"user_id": current_user["id"]},
-            {"_id": 0, "getaway_hour_start": 1, "getaway_hour_count": 1},
-        )
-        meta_start = (meta or {}).get("getaway_hour_start")
-        meta_count = int((meta or {}).get("getaway_hour_count") or 0)
+        uid = current_user["id"]
 
-        if meta_start == hour_start_iso:
-            if meta_count >= MAX_RUNS_PER_HOUR:
-                raise HTTPException(status_code=400, detail=f"Hourly run limit reached ({MAX_RUNS_PER_HOUR}). Try again later.")
-            new_count = meta_count + 1
-        else:
-            new_count = 1
-
-        await db.user_meta.update_one(
-            {"user_id": current_user["id"]},
-            {
-                "$setOnInsert": {"user_id": current_user["id"]},
-                "$set": {"getaway_hour_start": hour_start_iso, "getaway_hour_count": new_count},
-            },
-            upsert=True,
+        result = await db.user_meta.update_one(
+            {"user_id": uid, "getaway_hour_start": hour_start_iso, "getaway_hour_count": {"$lt": MAX_RUNS_PER_HOUR}},
+            {"$inc": {"getaway_hour_count": 1}},
         )
+        if result.modified_count == 0:
+            result = await db.user_meta.update_one(
+                {"user_id": uid, "getaway_hour_start": {"$ne": hour_start_iso}},
+                {"$set": {"getaway_hour_start": hour_start_iso, "getaway_hour_count": 1}},
+                upsert=True,
+            )
+            if result.modified_count == 0 and result.upserted_id is None:
+                raise HTTPException(status_code=429, detail=f"Hourly run limit reached ({MAX_RUNS_PER_HOUR}). Try again later.")
 
         distance_bonus = (distance // 100) * BONUS_PER_100M
         coin_bonus = coins_collected * COIN_TO_CASH

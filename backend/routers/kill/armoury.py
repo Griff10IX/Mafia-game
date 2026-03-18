@@ -442,22 +442,29 @@ async def collect_bullet_factory(
 ):
     """Collect accumulated profit from bullet/armour/weapon sales into your cash and points."""
     state = _normalize_state(body.state or current_user.get("current_state"))
-    factory = await _get_or_create_factory(state)
-    if factory.get("owner_id") != current_user["id"]:
-        raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
-    pending_money = int(factory.get("owner_pending_profit") or 0)
-    pending_points = int(factory.get("owner_pending_profit_points") or 0)
-    if pending_money <= 0 and pending_points <= 0:
+    # Atomically zero pending profit and return pre-update values to prevent double-collect
+    old = await db.bullet_factory.find_one_and_update(
+        {
+            "state": state,
+            "owner_id": current_user["id"],
+            "$or": [{"owner_pending_profit": {"$gt": 0}}, {"owner_pending_profit_points": {"$gt": 0}}],
+        },
+        {"$set": {"owner_pending_profit": 0, "owner_pending_profit_points": 0}},
+        projection={"_id": 0, "owner_pending_profit": 1, "owner_pending_profit_points": 1},
+        return_document=False,
+    )
+    if not old:
+        factory = await db.bullet_factory.find_one({"state": state}, {"_id": 0, "owner_id": 1})
+        if not factory or factory.get("owner_id") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
         return {
             "message": "No profit to collect. Sales are added here when players buy bullets, armour, or weapons from your armoury.",
             "state": state,
             "collected_money": 0,
             "collected_points": 0,
         }
-    await db.bullet_factory.update_one(
-        {"state": state},
-        {"$set": {"owner_pending_profit": 0, "owner_pending_profit_points": 0}},
-    )
+    pending_money = int(old.get("owner_pending_profit") or 0)
+    pending_points = int(old.get("owner_pending_profit_points") or 0)
     if pending_money > 0:
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": pending_money}})
     if pending_points > 0:

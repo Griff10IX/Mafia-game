@@ -557,10 +557,17 @@ async def boxing_challenge_accept(payload: AcceptChallengeRequest, current_user:
     if not cid:
         raise HTTPException(status_code=400, detail="challenge_id required")
 
-    ch = await db.boxing_challenges.find_one({"id": cid, "state": "pending"}, {"_id": 0})
+    # Atomic state transition to prevent two concurrent accepts from both running the fight
+    ch = await db.boxing_challenges.find_one_and_update(
+        {"id": cid, "state": "pending"},
+        {"$set": {"state": "in_progress"}},
+        projection={"_id": 0},
+        return_document=False,
+    )
     if not ch:
-        raise HTTPException(status_code=404, detail="Challenge not found or already resolved")
+        raise HTTPException(status_code=404, detail="Challenge not found or already accepted")
     if ch["target_id"] != current_user["id"]:
+        await db.boxing_challenges.update_one({"id": cid, "state": "in_progress"}, {"$set": {"state": "pending"}})
         raise HTTPException(status_code=403, detail="This challenge is not for you")
 
     a_id, b_id = ch["challenger_id"], ch["target_id"]
@@ -643,7 +650,7 @@ async def boxing_challenge_accept(payload: AcceptChallengeRequest, current_user:
     await db.boxing_fights.insert_one(fight_doc)
     fight_doc.pop("_id", None)
 
-    await db.boxing_challenges.update_one({"id": cid}, {"$set": {"state": "completed", "fight_id": fight_id, "winner_id": winner_id}})
+    await db.boxing_challenges.update_one({"id": cid, "state": "in_progress"}, {"$set": {"state": "completed", "fight_id": fight_id, "winner_id": winner_id}})
 
     await _settle_challenge_bets(cid, winner_id, is_draw, ch)
 

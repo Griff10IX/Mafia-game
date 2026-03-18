@@ -105,47 +105,34 @@ def register(router):
         if score > MAX_SCORE_ACCEPTED:
             raise HTTPException(status_code=400, detail="Score too high to claim.")
 
-        # Limit: N plays per hour (UTC). Track in user_meta.
+        # Limit: N plays per hour (UTC) — atomic to prevent concurrent bypass
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now_dt.isoformat().replace("+00:00", "Z")
         hour_start = now_dt.replace(minute=0, second=0)
         hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
         reset_dt = hour_start + timedelta(hours=1)
         reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
-        meta = await db.user_meta.find_one(
-            {"user_id": current_user["id"]},
-            {"_id": 0, "gauntlet_hour_start": 1, "gauntlet_hour_count": 1},
+        uid = current_user["id"]
+
+        result = await db.user_meta.update_one(
+            {"user_id": uid, "gauntlet_hour_start": hour_start_iso, "gauntlet_hour_count": {"$lt": MAX_PLAYS_PER_HOUR}},
+            {"$inc": {"gauntlet_hour_count": 1}},
         )
-        meta_start = (meta or {}).get("gauntlet_hour_start")
-        meta_count = int((meta or {}).get("gauntlet_hour_count") or 0)
-        if meta_start == hour_start_iso:
-            if meta_count >= MAX_PLAYS_PER_HOUR:
+        if result.modified_count == 0:
+            result = await db.user_meta.update_one(
+                {"user_id": uid, "gauntlet_hour_start": {"$ne": hour_start_iso}},
+                {"$set": {"gauntlet_hour_start": hour_start_iso, "gauntlet_hour_reset_at": reset_iso, "gauntlet_hour_count": 1}},
+                upsert=True,
+            )
+            if result.modified_count == 0 and result.upserted_id is None:
                 remaining = max(0, int((reset_dt - now_dt).total_seconds()))
                 raise HTTPException(
-                    status_code=400,
+                    status_code=429,
                     detail=f"Hourly limit reached ({MAX_PLAYS_PER_HOUR} plays). Try again in {remaining}s.",
                 )
-            new_count = meta_count + 1
-            await db.user_meta.update_one(
-                {"user_id": current_user["id"]},
-                {
-                    "$setOnInsert": {"user_id": current_user["id"]},
-                    "$set": {
-                        "gauntlet_hour_start": hour_start_iso,
-                        "gauntlet_hour_reset_at": reset_iso,
-                        "gauntlet_hour_count": new_count,
-                    },
-                },
-                upsert=True,
-            )
-            plays_left = max(0, MAX_PLAYS_PER_HOUR - new_count)
-        else:
-            await db.user_meta.update_one(
-                {"user_id": current_user["id"]},
-                {"$setOnInsert": {"user_id": current_user["id"]}, "$set": {"gauntlet_hour_start": hour_start_iso, "gauntlet_hour_reset_at": reset_iso, "gauntlet_hour_count": 1}},
-                upsert=True,
-            )
-            plays_left = MAX_PLAYS_PER_HOUR - 1
+
+        meta_after = await db.user_meta.find_one({"user_id": uid}, {"_id": 0, "gauntlet_hour_count": 1})
+        plays_left = max(0, MAX_PLAYS_PER_HOUR - int((meta_after or {}).get("gauntlet_hour_count") or 0))
 
         reward = _get_reward(score)
         cash = int(reward["cash"] or 0)

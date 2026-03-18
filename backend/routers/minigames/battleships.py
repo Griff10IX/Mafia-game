@@ -50,28 +50,20 @@ def register(router):
         hour_start = now.replace(minute=0, second=0, microsecond=0)
         hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
 
-        meta = await db.user_meta.find_one(
-            {"user_id": current_user["id"]},
-            {"_id": 0, "battleships_hour_start": 1, "battleships_hour_count": 1},
-        )
-        meta_start = (meta or {}).get("battleships_hour_start")
-        meta_count = int((meta or {}).get("battleships_hour_count") or 0)
+        uid = current_user["id"]
 
-        if meta_start == hour_start_iso:
-            if meta_count >= MAX_WINS_PER_HOUR:
-                raise HTTPException(status_code=400, detail=f"Hourly win limit reached ({MAX_WINS_PER_HOUR}). Try again later.")
-            new_count = meta_count + 1
-        else:
-            new_count = 1
-
-        await db.user_meta.update_one(
-            {"user_id": current_user["id"]},
-            {
-                "$setOnInsert": {"user_id": current_user["id"]},
-                "$set": {"battleships_hour_start": hour_start_iso, "battleships_hour_count": new_count},
-            },
-            upsert=True,
+        result = await db.user_meta.update_one(
+            {"user_id": uid, "battleships_hour_start": hour_start_iso, "battleships_hour_count": {"$lt": MAX_WINS_PER_HOUR}},
+            {"$inc": {"battleships_hour_count": 1}},
         )
+        if result.modified_count == 0:
+            result = await db.user_meta.update_one(
+                {"user_id": uid, "battleships_hour_start": {"$ne": hour_start_iso}},
+                {"$set": {"battleships_hour_start": hour_start_iso, "battleships_hour_count": 1}},
+                upsert=True,
+            )
+            if result.modified_count == 0 and result.upserted_id is None:
+                raise HTTPException(status_code=429, detail=f"Hourly win limit reached ({MAX_WINS_PER_HOUR}). Try again later.")
 
         ships_saved = fleet_size - ships_lost
         diff_mult = {"easy": 0.6, "normal": 1.0, "hard": 1.5}.get(difficulty, 1.0)

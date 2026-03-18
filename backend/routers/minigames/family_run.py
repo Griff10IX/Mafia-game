@@ -90,46 +90,24 @@ def register(router):
         reset_dt = hour_start + timedelta(hours=1)
         reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
 
-        meta = await db.user_meta.find_one(
-            {"user_id": current_user["id"]},
-            {"_id": 0, "family_run_hour_start": 1, "family_run_hour_count": 1},
+        uid = current_user["id"]
+
+        result = await db.user_meta.update_one(
+            {"user_id": uid, "family_run_hour_start": hour_start_iso, "family_run_hour_count": {"$lt": MAX_PLAYS_PER_HOUR}},
+            {"$inc": {"family_run_hour_count": 1}},
         )
-        meta_start = (meta or {}).get("family_run_hour_start")
-        meta_count = int((meta or {}).get("family_run_hour_count") or 0)
-        
-        if meta_start == hour_start_iso:
-            if meta_count >= MAX_PLAYS_PER_HOUR:
+        if result.modified_count == 0:
+            result = await db.user_meta.update_one(
+                {"user_id": uid, "family_run_hour_start": {"$ne": hour_start_iso}},
+                {"$set": {"family_run_hour_start": hour_start_iso, "family_run_hour_reset_at": reset_iso, "family_run_hour_count": 1}},
+                upsert=True,
+            )
+            if result.modified_count == 0 and result.upserted_id is None:
                 remaining = max(0, int((reset_dt - now_dt).total_seconds()))
                 raise HTTPException(
-                    status_code=400,
+                    status_code=429,
                     detail=f"Hourly limit reached ({MAX_PLAYS_PER_HOUR} plays). Try again in {remaining}s.",
                 )
-            new_count = meta_count + 1
-            await db.user_meta.update_one(
-                {"user_id": current_user["id"]},
-                {
-                    "$setOnInsert": {"user_id": current_user["id"]},
-                    "$set": {
-                        "family_run_hour_start": hour_start_iso,
-                        "family_run_hour_reset_at": reset_iso,
-                        "family_run_hour_count": new_count,
-                    },
-                },
-                upsert=True,
-            )
-        else:
-            await db.user_meta.update_one(
-                {"user_id": current_user["id"]},
-                {
-                    "$setOnInsert": {"user_id": current_user["id"]},
-                    "$set": {
-                        "family_run_hour_start": hour_start_iso,
-                        "family_run_hour_reset_at": reset_iso,
-                        "family_run_hour_count": 1,
-                    },
-                },
-                upsert=True,
-            )
 
         rewards_applied = await _apply_rewards(current_user["id"], score, coins)
 

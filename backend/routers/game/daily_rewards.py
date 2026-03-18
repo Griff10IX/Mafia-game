@@ -303,8 +303,15 @@ def register(router):
         """Play a move in Noughts & Crosses. Returns updated board and result (ongoing/win/lose/draw)."""
         cell = max(0, min(8, int(req.cell)))
         uid = current_user.get("id") or ""
-        game = await db.daily_rewards_ttt.find_one({"user_id": uid})
+        # Atomically claim this move to prevent concurrent requests both processing the same board
+        game = await db.daily_rewards_ttt.find_one_and_update(
+            {"user_id": uid, "status": {"$ne": "processing"}},
+            {"$set": {"status": "processing"}},
+        )
         if not game:
+            existing = await db.daily_rewards_ttt.find_one({"user_id": uid})
+            if existing:
+                raise HTTPException(status_code=400, detail="Move already being processed.")
             raise HTTPException(status_code=400, detail="No active game. Start one first.")
         board = list(game.get("board") or [""] * 9)
         if len(board) != 9:
@@ -313,8 +320,10 @@ def register(router):
         computer_side = game.get("computer_side") or "O"
         turn = game.get("turn") or "X"
         if turn != player_side:
+            await db.daily_rewards_ttt.update_one({"user_id": uid}, {"$unset": {"status": ""}})
             raise HTTPException(status_code=400, detail="Not your turn.")
         if board[cell]:
+            await db.daily_rewards_ttt.update_one({"user_id": uid}, {"$unset": {"status": ""}})
             raise HTTPException(status_code=400, detail="Cell already taken.")
         board[cell] = player_side
         winner = _ttt_winner(board)
@@ -369,7 +378,7 @@ def register(router):
                     else:
                         await db.daily_rewards_ttt.update_one(
                             {"user_id": uid},
-                            {"$set": {"board": board, "turn": player_side}},
+                            {"$set": {"board": board, "turn": player_side}, "$unset": {"status": ""}},
                         )
         plays_left, next_play_at = await _get_play_window(uid)
         return {
