@@ -25,20 +25,8 @@ const GTA_STYLES = `
   .gta-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
   .gta-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 
-  /* Mobile: match Crimes layout exactly — same padding, margins, row spacing */
-  @media (max-width: 640px) {
-    .gta-page-root {
-      padding-left: 4px;
-      padding-right: 4px;
-      row-gap: 2px;
-    }
-    .gta-main-panel,
-    .gta-recent-panel,
-    .gta-stats-panel,
-    .gta-info-panel {
-      margin-left: -16px;
-      margin-right: -16px;
-    }
+  /* Mobile row compact padding (shared mobile layout in noir.module.css) */
+  @media (max-width: 767px) {
     .gta-row {
       padding-top: 3px !important;
       padding-bottom: 3px !important;
@@ -251,7 +239,7 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
   if (recentStolen.length === 0) return null;
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in gta-recent-panel`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <button
         type="button"
@@ -271,28 +259,27 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
       
       {!isCollapsed && (
         <div className="p-2">
-          <div className="max-w-[75%] sm:max-w-none mx-auto sm:mx-0">
-            <div className="grid grid-cols-5 gap-1 sm:gap-2">
-              {recentStolen.map((car, index) => {
-                const displayName = car.car_name || car.name || 'Car';
-                const rarity = (car.rarity || 'common').replace(/_/g, ' ');
-                const value = car.value ?? 0;
-                const damage = Math.min(100, Math.max(0, Number(car.damage_percent) ?? 0));
-                return (
-                  <Link
-                    key={car.user_car_id ?? `car-${index}`}
-                    to={`/view-car?id=${encodeURIComponent(car.user_car_id)}`}
-                    data-testid={`recent-stolen-car-${index}`}
-                    className={`${styles.panel} rounded-lg border border-border hover:border-primary/30 p-1 sm:p-1.5 transition-all overflow-hidden block text-left`}
-                  >
-                    <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1 relative">
-                      {car.image ? (
-                        <img
-                          src={car.image}
-                          alt={displayName}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+            {recentStolen.map((car, index) => {
+              const displayName = car.car_name || car.name || 'Car';
+              const rarity = (car.rarity || 'common').replace(/_/g, ' ');
+              const value = car.value ?? 0;
+              const damage = Math.min(100, Math.max(0, Number(car.damage_percent) ?? 0));
+              return (
+                <Link
+                  key={car.user_car_id ?? `car-${index}`}
+                  to={`/view-car?id=${encodeURIComponent(car.user_car_id)}`}
+                  data-testid={`recent-stolen-car-${index}`}
+                  className={`${styles.panel} rounded-lg border border-border hover:border-primary/30 p-1.5 transition-all overflow-hidden block text-left`}
+                >
+                  <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1 relative">
+                    {car.image ? (
+                      <img
+                        src={car.image}
+                        alt={displayName}
+                        className="block w-full h-full object-cover object-center"
+                        loading="lazy"
+                      />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Car size={24} className="text-primary/30" />
@@ -316,7 +303,6 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
                 </Link>
               );
             })}
-            </div>
           </div>
           <p className="text-[9px] text-mutedForeground font-heading mt-2 text-center">
             <Link to="/cars/garage" className="text-primary hover:underline">View full garage →</Link>
@@ -366,7 +352,7 @@ const GTAProgressBar = ({ progress }) => {
 };
 
 const InfoSection = () => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in gta-info-panel`} style={{ animationDelay: '0.08s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in mobile-panel`} style={{ animationDelay: '0.08s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
       <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] gta-panel-header">
@@ -556,7 +542,7 @@ export default function GTA() {
 
   if (loading) {
     return (
-      <div className={`space-y-2 ${styles.pageContent} gta-page-root`}>
+      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{GTA_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -564,7 +550,7 @@ export default function GTA() {
   }
 
   return (
-    <div className={`space-y-2 ${styles.pageContent} gta-page-root`} data-testid="gta-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="gta-page">
       <style>{GTA_STYLES}</style>
 
       <div className="relative gta-fade-in flex items-center gap-2 flex-wrap">
@@ -604,7 +590,7 @@ export default function GTA() {
       )}
 
       {/* GTA options list */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in gta-main-panel`} style={{ animationDelay: '0.05s' }}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] gta-panel-header">
@@ -635,7 +621,7 @@ export default function GTA() {
       />
 
       {/* GTA stats */}
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in gta-stats-panel`} style={{ animationDelay: '0.03s' }}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] gta-panel-header">GTA stats</span>

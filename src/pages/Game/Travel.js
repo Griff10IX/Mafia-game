@@ -40,7 +40,7 @@ const TRAVEL_STYLES = `
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className={`space-y-2 ${styles.pageContent}`}>
+  <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
     <style>{TRAVEL_STYLES}</style>
     <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
       <Plane size={22} className="text-primary/40 animate-pulse" />
@@ -70,7 +70,7 @@ function CurrentLocationCard({ location, travelsUsed, maxTravels, userPoints }) 
   const [imgError, setImgError] = useState(false);
   const showImage = imgSrc && !imgError;
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
         <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
@@ -136,7 +136,7 @@ const DestinationCard = ({
 
   const destImgSrc = locationImageSrc(destination);
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in ${travelDisabled ? 'opacity-70' : ''}`} data-testid={`dest-${destination}`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in mobile-panel ${travelDisabled ? 'opacity-70' : ''}`} data-testid={`dest-${destination}`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
         {destImgSrc && (
@@ -256,7 +256,7 @@ const DestinationCard = ({
 };
 
 const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in`} style={{ animationDelay: '0.1s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none trv-glow" />
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
@@ -418,7 +418,7 @@ export default function Travel() {
 
   if (!travelInfo) {
     return (
-      <div className={`space-y-2 ${styles.pageContent}`} data-testid="travel-page">
+      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="travel-page">
         <style>{TRAVEL_STYLES}</style>
         <div className="p-4 text-center">
           <p className="text-sm text-mutedForeground font-heading">Unable to load travel info.</p>
@@ -429,7 +429,7 @@ export default function Travel() {
   }
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} data-testid="travel-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="travel-page">
       <style>{TRAVEL_STYLES}</style>
 
       {/* Page header */}

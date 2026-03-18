@@ -761,3 +761,28 @@ body[data-theme-variant="modern"] [data-page="store"] .store-art-line {
   height: 1px;
   opacity: 1;
 }
+
+/* Mobile layout – edge-to-edge panels (matches Crimes, GTA, Dashboard) */
+@media (max-width: 767px) {
+  .mobile-page-root {
+    padding-left: 4px;
+    padding-right: 4px;
+    row-gap: 2px;
+  }
+  .mobile-panel {
+    margin-left: -16px;
+    margin-right: -16px;
+  }
+}
+/* Tablet (iPad etc.) – Layout uses p-6 (24px) at md+ */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .mobile-page-root {
+    padding-left: 4px;
+    padding-right: 4px;
+    row-gap: 2px;
+  }
+  .mobile-panel {
+    margin-left: -24px;
+    margin-right: -24px;
+  }
+}

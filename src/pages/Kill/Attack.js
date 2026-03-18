@@ -53,7 +53,7 @@ const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className={`space-y-2 ${styles.pageContent}`}>
+  <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
     <style>{ATTACK_STYLES}</style>
     <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
       <Crosshair size={20} className="text-primary/40 animate-pulse" />
@@ -64,7 +64,7 @@ const LoadingSpinner = () => (
 );
 
 const EventBanner = ({ event }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-fade-in`}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-fade-in mobile-panel`}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
@@ -161,7 +161,7 @@ const KillUserCard = ({
   bulletsNeededForKill,
   bulletsNeededLoading,
 }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in`}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in mobile-panel`}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atk-glow" />
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
@@ -295,7 +295,7 @@ const FindUserCard = ({
   loading,
   onSearch
 }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in`} style={{ animationDelay: '0.05s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1">
@@ -375,7 +375,7 @@ const SearchesCard = ({
   }, [attacks.length]);
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in`} style={{ animationDelay: '0.1s' }}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
       <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atk-glow" />
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
@@ -1480,7 +1480,7 @@ export default function Attack() {
   );
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} data-testid="attack-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="attack-page">
       <style>{ATTACK_STYLES}</style>
 
       <p className="text-[9px] text-zinc-500 font-heading italic">Search, travel, and strike. No witnesses, no mercy.</p>

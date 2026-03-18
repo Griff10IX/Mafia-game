@@ -62,7 +62,7 @@ function timeLeft(iso) {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className={`space-y-2 ${styles.pageContent}`}>
+  <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
     <style>{BANK_STYLES}</style>
     <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2" data-testid="bank-loading">
       <Landmark size={20} className="text-primary/40 animate-pulse" />
@@ -83,7 +83,7 @@ const InterestBankCard = ({
   onDeposit,
   hideHeader = false
 }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in`}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in mobile-panel`}>
     {!hideHeader && (
       <>
         <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none bank-glow" />
@@ -173,7 +173,7 @@ const SwissBankCard = ({
   onWithdraw,
   hideHeader = false
 }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in`} style={{ animationDelay: '0.05s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
     {!hideHeader && (
       <>
         <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none bank-glow" />
@@ -293,7 +293,7 @@ const SendMoneyCard = ({
   onSend,
   hideHeader = false
 }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in`}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in mobile-panel`}>
     {!hideHeader && (
       <>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -543,7 +543,7 @@ export default function Bank() {
   const transfers = Array.isArray(overview?.transfers) ? overview.transfers : [];
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} data-testid="bank-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="bank-page">
       <style>{BANK_STYLES}</style>
 
       <p className="text-[9px] text-zinc-500 font-heading italic">Interest deposits, Swiss account, and transfers.</p>
@@ -607,7 +607,7 @@ export default function Bank() {
         </div>
       </div>
 
-      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-fade-in`} style={{ animationDelay: '0.1s' }}>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <button
           type="button"
@@ -640,7 +640,7 @@ export default function Bank() {
       </div>
 
       <div className="space-y-2">
-        <div className={`relative ${styles.panel} border border-primary/20 rounded-md overflow-hidden bank-fade-in`} style={{ animationDelay: '0.1s' }}>
+        <div className={`relative ${styles.panel} border border-primary/20 rounded-md overflow-hidden bank-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <button
             type="button"
@@ -665,7 +665,7 @@ export default function Bank() {
           )}
         </div>
 
-        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-fade-in`} style={{ animationDelay: '0.15s' }}>
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-fade-in mobile-panel`} style={{ animationDelay: '0.15s' }}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <button
             type="button"

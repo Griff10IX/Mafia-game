@@ -61,7 +61,7 @@ const Tab = ({ active, onClick, children, disabled, className = '' }) => (
 );
 
 const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loading, disabled, user, children }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
     <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
       <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">{title}</span>
@@ -297,7 +297,7 @@ export default function Store() {
   }
 
   return (
-    <div className={`space-y-4 sm:space-y-6 ${styles.pageContent} px-3 sm:px-4 pb-6`} data-testid="store-page" data-page="store">
+    <div className={`space-y-4 sm:space-y-6 ${styles.pageContent} mobile-page-root px-3 sm:px-4 pb-6`} data-testid="store-page" data-page="store">
       <style>{STORE_STYLES}</style>
       <div className="relative store-fade-in flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -379,7 +379,7 @@ export default function Store() {
       {activeTab === 'points' && (
         <div className="space-y-3">
           {pointsTabLocked ? (
-            <div className={`${styles.panel} rounded-lg border border-primary/20 p-6 text-center`}>
+            <div className={`${styles.panel} rounded-lg border border-primary/20 p-6 text-center mobile-panel`}>
               <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">{pointsTabLockMessage}</p>
               <p className="text-[9px] text-mutedForeground mt-1">Points purchase is temporarily unavailable. Upgrades, bullets, and send pts remain available.</p>
             </div>
@@ -429,7 +429,7 @@ export default function Store() {
 
       {activeTab === 'sendpts' && (
         <div className="space-y-4 store-fade-in">
-          <div className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+          <div className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 sm:px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
               <Send size={14} className="text-primary shrink-0" />
@@ -482,7 +482,7 @@ export default function Store() {
             <div className="store-art-line text-primary mx-3" />
           </div>
 
-          <div className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+          <div className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
               <ArrowRightLeft size={14} className="text-primary shrink-0" />
@@ -515,7 +515,7 @@ export default function Store() {
           </div>
 
           {isAdmin && (
-            <div className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+            <div className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden mobile-panel`}>
               <button
                 type="button"
                 onClick={() => {
@@ -594,7 +594,7 @@ export default function Store() {
           })}
           {/* Custom Car — always show (can buy multiple) */}
           {(
-            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
               <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
                 <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Custom Car</span>
@@ -644,7 +644,7 @@ export default function Store() {
             {BULLET_PACKS.map((pack) => {
               const respectCost = pack.cost * 5;
               return (
-                <div key={pack.bullets} className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+                <div key={pack.bullets} className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden mobile-panel`}>
                   <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
                   <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1.5">
                     <Crosshair size={14} className="text-primary shrink-0" />

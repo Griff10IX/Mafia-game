@@ -4,7 +4,7 @@ import styles from '../../styles/noir.module.css';
 
 export default function Ranking() {
   return (
-    <div className={`space-y-8 ${styles.pageContent}`} data-testid="ranking-page">
+    <div className={`space-y-8 ${styles.pageContent} mobile-page-root`} data-testid="ranking-page">
       <div>
         <h1 className="text-4xl md:text-5xl font-heading font-bold text-primary mb-2">Ranking</h1>
         <p className="text-mutedForeground">Choose how you earn rank points</p>
@@ -76,7 +76,7 @@ export default function Ranking() {
         </Link>
       </div>
 
-      <div className={`${styles.panel} rounded-md p-6`}>
+      <div className={`${styles.panel} rounded-md p-6 mobile-panel`}>
         <h3 className="text-xl font-heading font-semibold text-primary mb-3">Rank Points System</h3>
         <ul className="space-y-2 text-sm text-mutedForeground">
           <li>• Earn rank points from crimes, GTA, jail busts, organised crime heists, and killing players</li>

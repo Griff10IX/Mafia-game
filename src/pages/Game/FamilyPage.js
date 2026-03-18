@@ -1616,7 +1616,7 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
     <p className="text-center text-[10px] text-zinc-500 font-heading italic py-0.5 fam-fade-in">"In this world, a man without a family is nothing."</p>
 
     {/* Establish a Crime Family */}
-    <div className={`${styles.panel} rounded-xl overflow-hidden border-2 border-primary/25 fam-fade-in`} style={{ animationDelay: '0.1s' }}>
+    <div className={`${styles.panel} rounded-xl overflow-hidden border-2 border-primary/25 fam-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
       <div className="px-2.5 sm:px-3 py-2 flex items-center gap-2 bg-primary/10 border-b border-primary/20">
         <Building2 size={14} className="text-primary" />
         <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Establish a Crime Family</span>
@@ -1639,7 +1639,7 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
     </div>
 
     {/* Swear Allegiance */}
-    <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in`} style={{ animationDelay: '0.2s' }}>
+    <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in mobile-panel`} style={{ animationDelay: '0.2s' }}>
       <div className="px-2.5 sm:px-3 py-2 flex items-center gap-2 border-b border-zinc-700/30">
         <Users size={14} className="text-primary" />
         <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Swear Allegiance</span>
@@ -1660,7 +1660,7 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
     </div>
 
     {/* Known Families */}
-    <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in`} style={{ animationDelay: '0.3s' }}>
+    <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in mobile-panel`} style={{ animationDelay: '0.3s' }}>
       <div className="px-2.5 sm:px-3 py-2 flex items-center gap-2 border-b border-zinc-700/30">
         <Building2 size={14} className="text-zinc-400" />
         <span className="text-xs font-heading font-bold text-zinc-400 uppercase tracking-widest">Known Families</span>
@@ -1671,7 +1671,7 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
     </div>
 
     {/* Vendettas */}
-    <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in`} style={{ animationDelay: '0.4s' }}>
+    <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in mobile-panel`} style={{ animationDelay: '0.4s' }}>
       <div className="px-2.5 sm:px-3 py-2 flex items-center gap-2 border-b border-zinc-700/30">
         <Swords size={12} className="text-red-400/70" />
         <span className="text-xs font-heading font-bold text-red-400/70 uppercase tracking-widest">Vendettas</span>
@@ -1938,7 +1938,7 @@ export default function FamilyPage() {
   );
 
   return (
-    <div className={`space-y-2 sm:space-y-3 ${styles.pageContent} px-3 sm:px-4 pb-6`} data-testid="families-page">
+    <div className={`space-y-2 sm:space-y-3 ${styles.pageContent} mobile-page-root px-3 sm:px-4 pb-6`} data-testid="families-page">
       <style>{`
         @keyframes ready-pulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(var(--noir-primary-rgb), 0); }
@@ -1980,7 +1980,7 @@ export default function FamilyPage() {
       `}</style>
 
       {/* ── Family HQ Header ── */}
-      <div className={`relative rounded-xl overflow-hidden fam-fade-in ${family ? `${styles.panel} border-2 border-primary/20` : ''}`}>
+      <div className={`relative rounded-xl overflow-hidden fam-fade-in mobile-panel ${family ? `${styles.panel} border-2 border-primary/20` : ''}`}>
         {family && <>
           <div className="h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
         </>}
@@ -2089,7 +2089,7 @@ export default function FamilyPage() {
           )}
 
           {/* ── Tabbed Content ── */}
-          <div className={`${styles.panel} rounded-xl overflow-hidden`}>
+          <div className={`${styles.panel} rounded-xl overflow-hidden mobile-panel`}>
             {/* Tab bar — scrollable on mobile */}
             <div className="flex overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth border-b border-zinc-700/40 bg-zinc-900/70 snap-x snap-mandatory">
               <Tab active={activeTab === 'rackets'} onClick={() => setActiveTab('rackets')} icon={<TrendingUp size={10} />}>Rackets</Tab>

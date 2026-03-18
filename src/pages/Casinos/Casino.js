@@ -25,7 +25,7 @@ const GAMES = [
 
 export default function Casino() {
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="casino-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="casino-page">
       <style>{CASINO_STYLES}</style>
 
       <div className="relative cas-fade-in">
@@ -34,7 +34,7 @@ export default function Casino() {
         <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Roulette, Blackjack, Dice, Horse Racing, Slots, MDG, MP Blackjack, Poker, Sports.</p>
       </div>
 
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cas-fade-in`} style={{ animationDelay: '0.03s' }}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cas-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Games</h2>

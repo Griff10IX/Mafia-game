@@ -35,22 +35,6 @@ const DASH_STYLES = `
   .dash-stat-card { transition: all 0.3s ease; }
   .dash-stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .dash-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
-
-  /* Mobile: match Crimes/GTA — panels hug screen edges */
-  @media (max-width: 640px) {
-    .dash-page-root {
-      padding-left: 4px;
-      padding-right: 4px;
-      row-gap: 2px;
-    }
-    .dash-rank-panel,
-    .dash-stats-section,
-    .dash-actions-section,
-    .dash-systems-panel {
-      margin-left: -16px;
-      margin-right: -16px;
-    }
-  }
 `;
 
 const LoadingSpinner = () => (
@@ -72,7 +56,7 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
   const progressLabel = hasPremiumBar ? progressPct.toFixed(2) : progressPct.toFixed(0);
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 dash-scale-in dash-rank-panel`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 dash-scale-in mobile-panel`}>
       <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none dash-glow" />
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
@@ -203,7 +187,7 @@ const QuickActionCard = ({ action, delay = 0 }) => {
 };
 
 const GameSystemsCard = () => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 dash-fade-in dash-systems-panel`} style={{ animationDelay: '0.1s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 dash-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center gap-1">
       <Zap size={9} className="text-primary" />
@@ -325,7 +309,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className={`space-y-3 ${styles.pageContent} dash-page-root`} data-testid="dashboard-page">
+    <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="dashboard-page">
       <style>{DASH_STYLES}</style>
 
       <p className="text-[9px] text-zinc-500 font-heading italic">At a glance and quick actions — your empire starts here.</p>
@@ -338,7 +322,7 @@ export default function Dashboard() {
       )}
 
       {/* Stats grid */}
-      <section className="dash-stats-section">
+      <section className="mobile-panel">
         <div className="flex items-center gap-1.5 mb-1.5">
           <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
             At a Glance
@@ -353,7 +337,7 @@ export default function Dashboard() {
       </section>
 
       {/* Quick actions */}
-      <section className="dash-actions-section">
+      <section className="mobile-panel">
         <div className="flex items-center gap-1.5 mb-1.5">
           <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
             Quick Actions
