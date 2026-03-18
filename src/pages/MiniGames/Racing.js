@@ -191,7 +191,7 @@ export default function Racing() {
   const [joiningId, setJoiningId] = useState(null);
   const [joinTyre, setJoinTyre] = useState("medium");
   const [trackFilter, setTrackFilter] = useState("all");
-  const [createForm, setCreateForm] = useState({ track_id: "", circuitId: "", entry_fee: 0, max_grid: 6, laps: 3, tyre_compound: "medium", weather_id: "clear", interactive: false });
+  const [createForm, setCreateForm] = useState({ track_id: "", circuitId: "", entry_fee: 0, max_grid: 6, laps: 3, tyre_compound: "medium", weather_id: "clear", interactive: true });
   const [teamCreateName, setTeamCreateName] = useState("");
   const [teamCreateColor, setTeamCreateColor] = useState("#e8d020");
   const [teamCreating, setTeamCreating] = useState(false);
@@ -221,6 +221,7 @@ export default function Racing() {
   const [championship, setChampionship] = useState(null);
   const [champStandings, setChampStandings] = useState(null);
   const [champView, setChampView] = useState("calendar");
+  const [isAdmin, setIsAdmin] = useState(false);
   const liveRacePoll = useRef(null);
   const refreshTimer = useRef(null);
 
@@ -324,6 +325,7 @@ export default function Racing() {
       const nau = autoRes.data?.next_automated_race_utc || null;
       if (nau) setNextAutoRaceUtc(nau);
       fetchMyDriver();
+      api.get("/admin/check").then(r => setIsAdmin(!!r.data?.is_admin)).catch(() => {});
 
       _cached = {
         profile: prof, cars: profileRes.data?.owned_cars || [], availableCars: avCars,
@@ -392,11 +394,26 @@ export default function Racing() {
   const handleAcceptChallenge = useCallback(async (id) => {
     try {
       const r = await api.post(`/racing/challenges/${id}/accept`);
-      toast.success(r.data?.message || "Race complete");
-      if (r.data?.race) setActiveRace(r.data.race);
+      toast.success(r.data?.message || "Race is live!");
+      if (r.data?.race) {
+        setActiveRace(r.data.race);
+        setTab("races");
+        navigate(`/casino/mini-games/racing?race=${r.data.race_id || r.data.race?.id}`, { replace: true });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
       fetchChallenges();
     } catch (e) { toast.error(apiDetail(e)); }
-  }, [fetchChallenges]);
+  }, [fetchChallenges, navigate]);
+
+  const handleAdminWipeTeams = async () => {
+    if (!window.confirm("ADMIN: This will permanently delete ALL racing teams, cars, upgrades, races, championships, and data. Continue?")) return;
+    try {
+      const r = await api.post("/api/racing/admin/wipe-all-teams");
+      const d = r.data?.deleted || {};
+      toast.success(`Wiped: ${d.profiles ?? 0} profiles, ${d.cars ?? 0} cars, ${d.races ?? 0} races, ${d.championships ?? 0} championships`);
+      fetchAll();
+    } catch (e) { toast.error(apiDetail(e)); }
+  };
 
   const handleDeclineChallenge = useCallback(async (id) => {
     try {
@@ -548,7 +565,7 @@ export default function Racing() {
     laps: Number(createForm.laps) || 3,
     tyre_compound: createForm.tyre_compound || "medium",
     weather_id: WEATHER_ID_FOR_API(createForm.weather_id || "clear"),
-    interactive: createForm.interactive || false,
+    interactive: true,
   });
 
   const handleCreateRace = async () => {
@@ -819,6 +836,12 @@ export default function Racing() {
             )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {isAdmin && (
+              <button type="button" onClick={handleAdminWipeTeams}
+                className="text-[8px] font-heading px-1.5 py-0.5 rounded border border-red-500/40 text-red-400 hover:bg-red-900/20 transition-colors">
+                Wipe All
+              </button>
+            )}
             <div className="flex items-center gap-1.5">
               <span className="text-[9px] text-[var(--noir-muted)]">Bank</span>
               <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(201,164,96,.12)", border: "1px solid rgba(201,164,96,.15)" }}>
@@ -1265,12 +1288,6 @@ export default function Racing() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--noir-border)]">
-                  <label className="flex items-center gap-2 text-xs">
-                    <input type="checkbox" checked={createForm.interactive || false}
-                      onChange={e => setCreateForm(f => ({...f, interactive: e.target.checked}))} />
-                    <span style={{color: "var(--noir-primary)"}}>Interactive Race</span>
-                    <span className="text-[8px] text-[var(--noir-muted)]">(make decisions each lap)</span>
-                  </label>
                   <button type="button" className="text-[10px] font-heading px-2 py-1 rounded border border-[var(--noir-border)] hover:bg-[var(--noir-primary)]/10 touch-manipulation"
                     onClick={() => setCreateForm((f) => ({ ...f, weather_id: WEATHER_OPTIONS[Math.floor(Math.random() * WEATHER_OPTIONS.length)].id }))}>
                     Random weather

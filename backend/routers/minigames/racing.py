@@ -453,7 +453,7 @@ class CreateRaceRequest(BaseModel):
     laps: int = 3
     tyre_compound: str = "medium"  # soft, medium, hard
     weather_id: Optional[str] = None  # clear, rain, snow, very_hot; if omitted, random at create
-    interactive: bool = False
+    interactive: bool = True
 
 
 class JoinRaceRequest(BaseModel):
@@ -1997,7 +1997,7 @@ async def create_race(body: CreateRaceRequest, current_user: dict = Depends(get_
         "reward_mult": track.get("reward_mult", 1.0),
         "laps": num_laps,
         "lobby_ends_at": (datetime.now(timezone.utc) + timedelta(seconds=RACE_LOBBY_COUNTDOWN_SEC)).isoformat().replace("+00:00", "Z"),
-        "interactive": bool(getattr(body, "interactive", False)),
+        "interactive": bool(getattr(body, "interactive", True)),
     }
     await db.racing_races.insert_one(doc)
     if entry_fee > 0:
@@ -2406,54 +2406,15 @@ async def _create_automated_race(slot_label: str) -> Optional[str]:
     }
     await db.racing_races.insert_one(doc)
     race = await _start_race_internal(race_id)
-    # Run backend simulation and auto-complete for automated races
+    # _start_race_internal already ran the simulation and stored result_order,
+    # lap_results, pit_stops, dnf_ids, etc. on the race doc. Use those directly.
+    sim_result_order = race.get("result_order") or []
+    sim_dnf_ids = race.get("dnf_ids") or []
     participants_after = list(race.get("participants") or [])
-    weather_id = race.get("weather") or "clear"
-    actual_laps = int(race.get("laps") or num_laps)
-    profile_by_user = {}
-    upgrades_map = {}
-    engine_wear_by_entrant: Dict[str, float] = {}
-    for p in participants_after:
-        eid = p.get("user_id") or p.get("id")
-        if p.get("is_npc"):
-            upgrades_map[eid] = {
-                "engine_level": p.get("engine_level", 0),
-                "tires_level": p.get("tires_level", 0),
-                "aero_level": p.get("aero_level", 0),
-                "reliability_level": p.get("reliability_level", 0),
-                "brakes_level": p.get("brakes_level", 0),
-                "gearbox_level": p.get("gearbox_level", 0),
-                "cooling_level": p.get("cooling_level", 0),
-                "weight_level": p.get("weight_level", 0),
-                "fuel_level": p.get("fuel_level", 0),
-            }
-        else:
-            uid = p.get("user_id")
-            prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0})
-            if prof:
-                profile_by_user[uid] = prof
-            inst_id = p.get("racing_car_instance_id")
-            if inst_id:
-                up = await db.racing_upgrades.find_one({"user_id": uid, "racing_car_instance_id": inst_id}, {"_id": 0})
-                car_d = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0})
-                base = {"engine_level": (car_d or {}).get("engine_level", 0), "tires_level": (car_d or {}).get("tires_level", 0)}
-                if up:
-                    base.update(up)
-                upgrades_map[inst_id] = base
-                engine_wear_by_entrant[uid] = float((car_d or {}).get("engine_wear") or 0)
-    lap_results, sim_result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids, sim_incidents = _run_race_simulation_laps(
-        participants_after, profile_by_user, upgrades_map, actual_laps, weather_id, engine_wear_by_entrant, track=track,
-    )
     body = CompleteRaceRequest(result_order=sim_result_order, dnf_ids=sim_dnf_ids)
-    # Build a minimal mock user for the complete_race call
     creator = next((p for p in participants_after if not p.get("is_npc")), participants_after[0])
     mock_user = {"id": creator.get("user_id") or creator.get("id"), "username": creator.get("username", "?")}
     await complete_race(race_id, body, mock_user)
-    # Store simulation detail for replay
-    await db.racing_races.update_one(
-        {"id": race_id},
-        {"$set": {"lap_results": lap_results, "pit_stops": pit_stops, "tire_wear_after_lap": tire_wear_after_lap, "incidents": sim_incidents}},
-    )
     return race_id
 
 
@@ -2722,6 +2683,29 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
         asyncio.create_task(_refund_race_bets(race_id))
     asyncio.create_task(_update_track_records(race_id, race.get("track_id") or "", lap_results, participants))
     asyncio.create_task(_award_championship_points(race_id, result_order, dnf_ids, participants))
+
+    h2h_stake = int(race.get("h2h_stake") or 0)
+    challenge_id = race.get("challenge_id")
+    if h2h_stake > 0 and challenge_id:
+        total_pot = h2h_stake * 2
+        if winner_id and winner_id not in dnf_ids:
+            await db.users.update_one({"id": winner_id}, {"$inc": {"money": total_pot}})
+            winner_p = next((p for p in participants if (p.get("user_id") or p.get("id")) == winner_id), None)
+            winner_name = (winner_p or {}).get("username", "?")
+        else:
+            p_ids = [p.get("user_id") for p in participants if not p.get("is_npc") and p.get("user_id")]
+            for pid in p_ids:
+                await db.users.update_one({"id": pid}, {"$inc": {"money": h2h_stake}})
+            winner_name = "Draw (stakes returned)"
+        await db.racing_challenges.update_one(
+            {"id": challenge_id},
+            {"$set": {"state": "completed", "winner_id": winner_id, "completed_at": _now_iso()}},
+        )
+        for p in participants:
+            uid = p.get("user_id")
+            if uid and not p.get("is_npc"):
+                await send_notification(uid, f"H2H race finished! {winner_name} wins ${total_pot:,}!", "racing_challenge_result")
+
     return {"message": "Race completed", "race": race}
 
 
@@ -3142,71 +3126,34 @@ async def accept_race_challenge(challenge_id: str, current_user: dict = Depends(
 
     race_doc = {
         "id": race_id, "track_id": ch["track_id"], "track_name": ch.get("track_name", ""),
-        "entry_fee": 0, "max_grid": 2, "state": "completed",
+        "entry_fee": 0, "max_grid": 2, "state": "open",
         "created_by": ch["challenger_id"], "created_at": _now_iso(),
         "weather": weather_id, "weather_name": weather.get("name", "Clear"),
         "participants": participants, "laps": num_laps,
         "challenge_id": challenge_id, "is_h2h": True,
+        "interactive": True,
+        "lobby_ends_at": _now_iso(),
+        "reward_mult": (track or {}).get("reward_mult", 1.0),
+        "h2h_stake": stake,
     }
-
-    # Run deterministic sim
-    profile_by_user = {ch["challenger_id"]: ch_prof, current_user["id"]: tgt_prof}
-    ch_ups = await db.racing_upgrades.find({"user_id": ch["challenger_id"]}, {"_id": 0}).to_list(50)
-    tgt_ups = await db.racing_upgrades.find({"user_id": current_user["id"]}, {"_id": 0}).to_list(50)
-    upgrades_map = {}
-    for u in ch_ups + tgt_ups:
-        uid = u.get("user_id")
-        if uid not in upgrades_map:
-            upgrades_map[uid] = u
-
-    engine_wear_by_entrant = {}
-    for p in participants:
-        uid = p.get("user_id")
-        inst_id = p.get("racing_car_instance_id")
-        if uid and inst_id:
-            car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0, "engine_wear": 1})
-            engine_wear_by_entrant[uid] = float(car_doc.get("engine_wear") or 0) if car_doc else 0.0
-
-    with _SeededRandom(f"race:{race_id}"):
-        lap_results, result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids, sim_incidents = _run_race_simulation_laps(
-            participants, profile_by_user, upgrades_map, num_laps, weather_id=weather_id, engine_wear_by_entrant=engine_wear_by_entrant, track=track
-        )
-
-    winner_id = result_order[0] if result_order else None
-    total_pot = stake * 2
-    rewards = []
-    for i, eid in enumerate(result_order):
-        is_dnf = eid in sim_dnf_ids
-        position = i + 1
-        cash_won = total_pot if position == 1 and not is_dnf else 0
-        rewards.append({"entrant_id": eid, "position": position, "cash": cash_won, "dnf": is_dnf})
-
-    if winner_id and winner_id not in sim_dnf_ids:
-        await db.users.update_one({"id": winner_id}, {"$inc": {"money": total_pot}})
-    else:
-        await db.users.update_one({"id": ch["challenger_id"]}, {"$inc": {"money": stake}})
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": stake}})
-
-    race_doc["result_order"] = result_order
-    race_doc["rewards"] = rewards
-    race_doc["dnf_ids"] = list(sim_dnf_ids or [])
-    race_doc["lap_results"] = lap_results
-    race_doc["pit_stops"] = pit_stops
-    race_doc["tire_wear_after_lap"] = tire_wear_after_lap
-    race_doc["completed_at"] = _now_iso()
 
     await db.racing_races.insert_one(race_doc)
     race_doc.pop("_id", None)
 
+    started_race = await _start_race_internal(race_id)
+
     await db.racing_challenges.update_one(
         {"id": challenge_id},
-        {"$set": {"state": "completed", "race_id": race_id, "winner_id": winner_id, "completed_at": _now_iso()}}
+        {"$set": {"state": "in_progress", "race_id": race_id, "accepted_at": _now_iso()}}
     )
 
-    winner_name = ch.get("challenger_username") if winner_id == ch["challenger_id"] else current_user.get("username", "?")
-    await send_notification(ch["challenger_id"], f"🏁 Race result vs {current_user.get('username','?')}: {winner_name} wins! Stake: ${total_pot:,}", "racing_challenge_result")
+    await send_notification(
+        ch["challenger_id"],
+        f"🏁 {current_user.get('username','?')} accepted your race challenge! Race is live — make your decisions!",
+        "racing_challenge_accepted",
+    )
 
-    return {"message": f"Race complete! {winner_name} wins!", "race": race_doc, "winner_id": winner_id}
+    return {"message": "Challenge accepted — race is live!", "race": started_race or race_doc, "race_id": race_id}
 
 
 async def decline_race_challenge(challenge_id: str, current_user: dict = Depends(get_current_user_verified)):
