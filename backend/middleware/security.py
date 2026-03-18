@@ -31,8 +31,9 @@ BURST_MAX_REQUESTS = 10  # Max requests allowed in burst window (10 clicks in 0.
 
 # Exploit detection (off by default - enable in admin panel or here when ready for production)
 DETECT_NEGATIVE_BALANCE = False
-DETECT_IMPOSSIBLE_GAIN = 1_000_000_000_000  # $1T+ gain in single action = exploit
+DETECT_IMPOSSIBLE_GAIN = 50_000_000  # $50M+ gain in single action = exploit (configurable via admin)
 DETECT_DUPLICATE_REQUESTS = False
+DUPLICATE_REQUEST_WINDOW_MS = 300  # 200-500ms window to reduce false positives from double-clicks
 
 # In-memory rate limiting (per user)
 user_request_counts = defaultdict(list)  # user_id -> [timestamp1, timestamp2, ...]
@@ -316,30 +317,31 @@ async def check_request_spam(user_id: str, username: str, db) -> bool:
 
 
 async def check_duplicate_request(user_id: str, path: str, params_hash: str, db, username: str) -> bool:
-    """Detect duplicate requests within 100ms (exploit attempt)."""
+    """Detect duplicate requests within configurable window (200-500ms) to reduce false positives from double-clicks."""
     if not DETECT_DUPLICATE_REQUESTS:
         return False
-    
+
+    window_sec = DUPLICATE_REQUEST_WINDOW_MS / 1000.0
     now = datetime.now(timezone.utc)
     key = f"{user_id}_{path}_{params_hash}"
-    
-    # Check if same request was made in last 100ms
+
+    # Check if same request was made within the window
     if key in user_action_counts and user_action_counts[key]:
         last_request = user_action_counts[key][-1]
-        if (now - last_request).total_seconds() < 0.1:
+        if (now - last_request).total_seconds() < window_sec:
             await flag_user_suspicious(
                 db, user_id, username,
                 "duplicate_request",
-                f"Duplicate request within 100ms: {path}",
+                f"Duplicate request within {DUPLICATE_REQUEST_WINDOW_MS}ms: {path}",
                 {"path": path, "interval_ms": int((now - last_request).total_seconds() * 1000)}
             )
             return True
-    
+
     # Clean old timestamps (keep only last 2 seconds)
     cutoff = now - timedelta(seconds=2)
     user_action_counts[key] = [ts for ts in user_action_counts.get(key, []) if ts > cutoff]
     user_action_counts[key].append(now)
-    
+
     return False
 
 
@@ -363,13 +365,27 @@ async def check_failed_attack_spam(user_id: str, username: str, db) -> bool:
     return False
 
 
-# Background task to flush alerts periodically
+# Background task to flush alerts and periodic exploit checks
 async def security_monitor_task(db):
-    """Background task that flushes Telegram alerts every 30 seconds."""
+    """Background task: flush Telegram alerts every 30s; periodic negative balance check every 5 min when enabled."""
+    cycle = 0
     while True:
         try:
             await asyncio.sleep(30)
+            cycle += 1
             await flush_telegram_alerts()
+            # Every ~5 min, run periodic negative balance check when enabled
+            if cycle >= 10 and DETECT_NEGATIVE_BALANCE:
+                cycle = 0
+                try:
+                    neg_users = await db.users.find(
+                        {"money": {"$lt": 0}},
+                        {"_id": 0, "id": 1, "username": 1, "money": 1}
+                    ).limit(50).to_list(50)
+                    for u in neg_users:
+                        await check_negative_balance(db, u.get("id", ""), u.get("username", "Unknown"))
+                except Exception as e:
+                    logger.warning("Periodic negative balance check failed: %s", e)
         except Exception as e:
             logger.exception(f"Security monitor task error: {e}")
 

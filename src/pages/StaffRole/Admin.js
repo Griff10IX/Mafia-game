@@ -76,6 +76,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Booze Run Rotation', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices'] },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
   { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
+  { label: 'Reset Racket Cooldown', categoryId: 'admin-gameworld', collapseKey: 'racketReset', keywords: ['racket', 'cooldown', 'reset', 'family'] },
   { label: 'Hitlist NPCs', categoryId: 'admin-gameworld', collapseKey: 'hitlistNpcs', keywords: ['hitlist', 'npc', 'bounty'] },
   { label: 'Jail NPCs', categoryId: 'admin-gameworld', collapseKey: 'jailNpcs', keywords: ['jail', 'npc', 'prisoner'] },
   { label: 'Casino Settings', categoryId: 'admin-gameworld', collapseKey: 'casinoCaps', keywords: ['casino', 'caps', 'max bet', 'buyback'] },
@@ -387,6 +388,8 @@ export default function Admin() {
   const [ipBanIp, setIpBanIp] = useState('');
   const [ipBanReason, setIpBanReason] = useState('');
   const [ipBanHours, setIpBanHours] = useState('');
+  const [cheatDetectionConfig, setCheatDetectionConfig] = useState(null);
+  const [cheatDetectionConfigLoading, setCheatDetectionConfigLoading] = useState(false);
 
   // Crime analytics
   const [crimeAnalyticsDays, setCrimeAnalyticsDays] = useState(7);
@@ -463,6 +466,11 @@ export default function Admin() {
   const [stateHeads, setStateHeads] = useState(null);
   const [stateHeadsLoading, setStateHeadsLoading] = useState(false);
 
+  // Racket cooldown reset
+  const [racketResetFamilyId, setRacketResetFamilyId] = useState('');
+  const [racketResetRacketId, setRacketResetRacketId] = useState('protection');
+  const [racketResetLoading, setRacketResetLoading] = useState(false);
+
   // Casino Max Bets
   const [casinoMaxBets, setCasinoMaxBets] = useState(null);
   const [casinoMaxBetsLoading, setCasinoMaxBetsLoading] = useState(false);
@@ -478,6 +486,8 @@ export default function Admin() {
   const [cheatDuplicates, setCheatDuplicates] = useState(null);
   const [cheatDupeIntelligent, setCheatDupeIntelligent] = useState(null);
   const [cheatLoading, setCheatLoading] = useState(false);
+  const [gamblingAnomalies, setGamblingAnomalies] = useState(null);
+  const [gamblingAnomaliesLoading, setGamblingAnomaliesLoading] = useState(false);
   const [duplicateSuspectsUsername, setDuplicateSuspectsUsername] = useState('');
 
   const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
@@ -1023,6 +1033,23 @@ export default function Admin() {
       fetchStateHeads();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to clear state head');
+    }
+  };
+
+  const handleResetRacketCooldown = async () => {
+    const fid = (racketResetFamilyId || '').trim();
+    if (!fid) {
+      toast.error('Enter family ID');
+      return;
+    }
+    setRacketResetLoading(true);
+    try {
+      const res = await api.post('/admin/rackets/reset-cooldown', null, { params: { family_id: fid, racket_id: racketResetRacketId } });
+      toast.success(res.data?.message || 'Racket cooldown reset');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to reset racket cooldown');
+    } finally {
+      setRacketResetLoading(false);
     }
   };
 
@@ -1684,6 +1711,34 @@ export default function Admin() {
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to unban IP');
     }
+  };
+
+  const handleBanIpQuick = async (ip) => {
+    if (!ip || !window.confirm(`Ban IP ${ip}?`)) return;
+    setIpBansLoading(true);
+    try {
+      await api.post('/admin/security/ban-ip', { ip, reason: 'Ban from cheat detection' });
+      toast.success(`IP ${ip} banned`);
+      fetchIpBans();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to ban IP'); }
+    finally { setIpBansLoading(false); }
+  };
+
+  const handleViewUserFromCheat = (username) => {
+    setFormData((prev) => ({ ...prev, targetUsername: (username || '').trim() }));
+    setActiveCategoryId('admin-players');
+    setCollapsed((prev) => ({ ...prev, searchUsers: false }));
+    if (typeof window !== 'undefined') window.location.hash = 'admin-players';
+  };
+
+  const handleFetchGamblingAnomalies = async () => {
+    setGamblingAnomaliesLoading(true);
+    setGamblingAnomalies(null);
+    try {
+      const res = await api.get('/admin/casinos/gambling-anomalies', { params: { days: 7, min_plays: 20 } });
+      setGamblingAnomalies(res.data);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setGamblingAnomaliesLoading(false); }
   };
 
   const handleTestIpBan = async () => {
@@ -2584,6 +2639,25 @@ export default function Admin() {
       setSecuritySummary(null);
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
     finally { setSecurityLoading(false); }
+  };
+
+  const fetchCheatDetectionConfig = async () => {
+    setCheatDetectionConfigLoading(true);
+    try {
+      const res = await api.get('/admin/security/cheat-detection-config');
+      setCheatDetectionConfig(res.data);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); setCheatDetectionConfig(null); }
+    finally { setCheatDetectionConfigLoading(false); }
+  };
+
+  const updateCheatDetectionConfig = async (updates) => {
+    setCheatDetectionConfigLoading(true);
+    try {
+      const res = await api.post('/admin/security/cheat-detection-config', null, { params: updates });
+      setCheatDetectionConfig((prev) => ({ ...prev, ...res.data }));
+      toast.success(res.data.message || 'Updated');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setCheatDetectionConfigLoading(false); }
   };
 
   const handleViewRateLimits = async () => {
@@ -4028,6 +4102,54 @@ export default function Admin() {
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
+          icon={Clock}
+          title="Reset Racket Cooldown"
+          isCollapsed={collapsed.racketReset}
+          onToggle={() => toggleSection('racketReset')}
+        />
+        {!collapsed.racketReset && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground">Reset a family racket&apos;s cooldown so it can be collected immediately. Enter the family ID and select the racket.</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <div>
+                <label className="text-[9px] text-mutedForeground uppercase font-heading block mb-1">Family ID</label>
+                <input
+                  type="text"
+                  value={racketResetFamilyId}
+                  onChange={(e) => setRacketResetFamilyId(e.target.value)}
+                  placeholder="e.g. fam_abc123"
+                  className="w-40 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-mutedForeground uppercase font-heading block mb-1">Racket</label>
+                <select
+                  value={racketResetRacketId}
+                  onChange={(e) => setRacketResetRacketId(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="protection">Protection Racket</option>
+                  <option value="gambling">Gambling Operation</option>
+                  <option value="loansharking">Loan Sharking</option>
+                  <option value="labour">Labour Racketeering</option>
+                  <option value="distillery">Distillery</option>
+                  <option value="warehouse">Warehouse</option>
+                  <option value="restaurant_bar">Restaurant &amp; Bar</option>
+                  <option value="funeral_home">Funeral Home</option>
+                  <option value="garment_shop">Garment Shop</option>
+                </select>
+              </div>
+              <BtnPrimary onClick={handleResetRacketCooldown} disabled={racketResetLoading || !racketResetFamilyId.trim()}>
+                {racketResetLoading ? '...' : 'Reset Cooldown'}
+              </BtnPrimary>
+            </div>
+          </div>
+        )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
           icon={Dice5}
           title="Casino Max Bets"
           badge={casinoMaxBets ? <span className="text-[10px] font-heading text-mutedForeground">{Object.keys(casinoMaxBets).length} types</span> : null}
@@ -5049,6 +5171,37 @@ export default function Admin() {
               </BtnDanger>
             </ActionRow>
 
+            {/* Cheat Detection Config */}
+            <div className="mt-3 pt-3 border-t border-zinc-700/50">
+              <div className="text-[10px] font-heading text-primary uppercase tracking-wider mb-2">Cheat Detection Toggles</div>
+              <p className="text-[10px] text-mutedForeground mb-2">Enable/disable exploit checks. Duplicate request and negative balance are off by default.</p>
+              <BtnSecondary onClick={fetchCheatDetectionConfig} disabled={cheatDetectionConfigLoading} className="mb-2">
+                {cheatDetectionConfigLoading ? '...' : 'Load config'}
+              </BtnSecondary>
+              {cheatDetectionConfig && (
+                <div className="space-y-2 p-2 rounded bg-zinc-900/50 border border-zinc-700/50">
+                  <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+                    <input type="checkbox" checked={!!cheatDetectionConfig.detect_duplicate_requests} onChange={(e) => updateCheatDetectionConfig({ detect_duplicate_requests: e.target.checked })} className="rounded" />
+                    Detect duplicate requests (200-500ms window)
+                  </label>
+                  <label className="flex items-center gap-2 text-[10px] cursor-pointer">
+                    <input type="checkbox" checked={!!cheatDetectionConfig.detect_negative_balance} onChange={(e) => updateCheatDetectionConfig({ detect_negative_balance: e.target.checked })} className="rounded" />
+                    Detect negative balance
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                    <span>Impossible gain threshold:</span>
+                    <input type="number" defaultValue={cheatDetectionConfig.detect_impossible_gain ? Math.round(cheatDetectionConfig.detect_impossible_gain / 1e6) : 50} onBlur={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v) && v >= 1 && v <= 1000) updateCheatDetectionConfig({ detect_impossible_gain: v * 1e6 }); }} placeholder="50" className="w-16 bg-zinc-800/50 border border-zinc-700/50 rounded px-2 py-1" />
+                    <span className="text-mutedForeground">M (flag gains above this)</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                    <span>Duplicate window:</span>
+                    <input type="number" defaultValue={cheatDetectionConfig.duplicate_request_window_ms ?? 300} onBlur={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v) && v >= 100 && v <= 1000) updateCheatDetectionConfig({ duplicate_request_window_ms: v }); }} min="100" max="1000" className="w-16 bg-zinc-800/50 border border-zinc-700/50 rounded px-2 py-1" />
+                    <span className="text-mutedForeground">ms</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* IP Bans */}
             <div className="mt-3 pt-3 border-t border-zinc-700/50">
               <div className="text-[10px] font-heading text-primary uppercase tracking-wider mb-2">IP Bans</div>
@@ -5159,8 +5312,9 @@ export default function Admin() {
           title="Cheat Detection"
           badge={
             ((cheatDupeIntelligent?.total_same_ip_groups ?? 0) > 0 || (cheatDupeIntelligent?.total_same_ua_groups ?? 0) > 0 ||
+             (cheatDupeIntelligent?.total_same_subnet_groups ?? 0) > 0 || (cheatDupeIntelligent?.total_same_fingerprint_groups ?? 0) > 0 ||
              (cheatSameIp?.total_groups ?? 0) > 0 || (cheatSameDeviceIps?.total_groups ?? 0) > 0 ||
-             ((cheatDuplicates?.by_domain?.length ?? 0) + (cheatDuplicates?.by_similar_username?.length ?? 0) + (cheatDuplicates?.by_similar_email?.length ?? 0) + (cheatDuplicates?.by_same_day_same_ip?.length ?? 0)) > 0) && (
+             ((cheatDuplicates?.by_domain?.length ?? 0) + (cheatDuplicates?.by_similar_username?.length ?? 0) + (cheatDuplicates?.by_similar_email?.length ?? 0) + (cheatDuplicates?.by_same_day_same_ip?.length ?? 0) + (cheatDuplicates?.by_fuzzy_username?.length ?? 0)) > 0) && (
               <span className="text-[10px] font-heading text-amber-400">Review below</span>
             )
           }
@@ -5193,16 +5347,19 @@ export default function Admin() {
                             <div className="text-[10px] font-heading text-amber-400 mb-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                               <span>IP: {g.ip}</span>
                               <span>— {g.count} account(s)</span>
+                              {typeof g.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50" title="Risk score 0-100">Score: {g.risk_score}</span>}
                               {g.risk && <span className={`px-1 rounded text-[9px] ${g.risk === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>{g.risk}</span>}
                               {g.ip_vpn && <span className="px-1 rounded text-[9px] bg-purple-500/20 text-purple-400" title="IP detected as VPN/proxy">VPN</span>}
+                              <button type="button" onClick={() => handleBanIpQuick(g.ip)} className="ml-auto shrink-0 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded px-2 py-0.5 text-[9px] font-bold border border-red-500/40">Ban IP</button>
                             </div>
                             <div className="space-y-1">
                               {(g.accounts || []).map((a, j) => (
-                                <div key={j} className="text-[10px] pl-1 border-l border-zinc-600/50">
+                                <div key={j} className="text-[10px] pl-1 border-l border-zinc-600/50 flex flex-wrap items-center gap-x-2">
                                   <span className="text-foreground font-bold">{a.username}</span>
                                   <span className="text-mutedForeground"> · {a.email}</span>
-                                  {a.role_at_this_ip && <span className="text-zinc-500 text-[9px] ml-1">({a.role_at_this_ip})</span>}
-                                  <div className="text-[9px] font-mono text-mutedForeground mt-0.5">IPs: {(a.all_ips || []).join(', ') || '—'}</div>
+                                  {a.role_at_this_ip && <span className="text-zinc-500 text-[9px]">({a.role_at_this_ip})</span>}
+                                  <button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>
+                                  <div className="w-full text-[9px] font-mono text-mutedForeground mt-0.5">IPs: {(a.all_ips || []).join(', ') || '—'}</div>
                                 </div>
                               ))}
                             </div>
@@ -5217,10 +5374,59 @@ export default function Admin() {
                       <div className="max-h-64 overflow-y-auto space-y-2">
                         {cheatDupeIntelligent.same_user_agent_groups.slice(0, 25).map((g, i) => (
                           <div key={i} className="p-2 rounded bg-zinc-900/50 border border-zinc-700/30">
-                            <div className="text-[10px] text-amber-400 font-heading mb-0.5">{g.account_count} account(s) · {g.distinct_ip_count} IP(s)</div>
+                            <div className="text-[10px] text-amber-400 font-heading mb-0.5 flex flex-wrap items-center gap-x-2">
+                              {g.account_count} account(s) · {g.distinct_ip_count} IP(s)
+                              {typeof g.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50">Score: {g.risk_score}</span>}
+                            </div>
                             <div className="text-[9px] font-mono text-mutedForeground mb-1 truncate" title={g.user_agent_full}>{g.user_agent}</div>
                             {(g.accounts || []).slice(0, 8).map((a, j) => (
-                              <div key={j} className="text-[10px] pl-1"><span className="font-bold">{a.username}</span> <span className="text-mutedForeground font-mono">{(a.all_ips || []).join(', ') || '—'}</span></div>
+                              <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2">
+                                <span className="font-bold">{a.username}</span>
+                                <span className="text-mutedForeground font-mono">{(a.all_ips || []).join(', ') || '—'}</span>
+                                <button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(cheatDupeIntelligent.same_subnet_groups?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-primary uppercase mb-2">Same subnet /24 ({cheatDupeIntelligent.total_same_subnet_groups ?? 0} group(s))</div>
+                      <div className="max-h-48 overflow-y-auto space-y-2">
+                        {(cheatDupeIntelligent.same_subnet_groups || []).slice(0, 20).map((g, i) => (
+                          <div key={i} className="p-2 rounded bg-zinc-900/50 border border-zinc-700/30">
+                            <div className="text-[10px] text-amber-400 font-heading mb-0.5 flex flex-wrap items-center gap-x-2">
+                              {g.subnet} — {g.count} account(s)
+                              {typeof g.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50">Score: {g.risk_score}</span>}
+                            </div>
+                            {(g.accounts || []).slice(0, 5).map((a, j) => (
+                              <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2">
+                                <span className="font-bold">{a.username}</span>
+                                <button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(cheatDupeIntelligent.same_fingerprint_groups?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-primary uppercase mb-2">Same device fingerprint ({cheatDupeIntelligent.total_same_fingerprint_groups ?? 0} group(s))</div>
+                      <div className="max-h-48 overflow-y-auto space-y-2">
+                        {(cheatDupeIntelligent.same_fingerprint_groups || []).slice(0, 20).map((g, i) => (
+                          <div key={i} className="p-2 rounded bg-zinc-900/50 border border-zinc-700/30">
+                            <div className="text-[10px] text-amber-400 font-heading mb-0.5 flex flex-wrap items-center gap-x-2">
+                              {g.account_count} account(s)
+                              {typeof g.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50">Score: {g.risk_score}</span>}
+                            </div>
+                            {(g.accounts || []).slice(0, 5).map((a, j) => (
+                              <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2">
+                                <span className="font-bold">{a.username}</span>
+                                <button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>
+                              </div>
                             ))}
                           </div>
                         ))}
@@ -5234,8 +5440,8 @@ export default function Admin() {
                         <div className="max-h-40 overflow-y-auto space-y-1">
                           {(cheatDupeIntelligent.by_domain || []).slice(0, 15).map((g, i) => (
                             <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
-                              <div className="text-[10px] text-amber-400 font-heading">{g.domain} — {g.count}</div>
-                              {g.accounts?.slice(0, 4).map((a, j) => <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>)}
+                              <div className="text-[10px] text-amber-400 font-heading flex flex-wrap items-center gap-x-2">{g.domain} — {g.count}{typeof g.risk_score === 'number' && <span className="text-[9px] text-zinc-500">Score: {g.risk_score}</span>}</div>
+                              {g.accounts?.slice(0, 4).map((a, j) => <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2"><span>{a.username} · {a.email}</span><button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1 py-0.5 text-[9px] font-bold">View</button></div>)}
                             </div>
                           ))}
                         </div>
@@ -5247,8 +5453,8 @@ export default function Admin() {
                         <div className="max-h-40 overflow-y-auto space-y-1">
                           {(cheatDupeIntelligent.by_similar_username || []).slice(0, 15).map((g, i) => (
                             <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
-                              <div className="text-[10px] text-amber-400 font-heading">&quot;{g.base}&quot; — {g.count}</div>
-                              {g.accounts?.slice(0, 4).map((a, j) => <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>)}
+                              <div className="text-[10px] text-amber-400 font-heading flex flex-wrap items-center gap-x-2">&quot;{g.base}&quot; — {g.count}{typeof g.risk_score === 'number' && <span className="text-[9px] text-zinc-500">Score: {g.risk_score}</span>}</div>
+                              {g.accounts?.slice(0, 4).map((a, j) => <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2"><span>{a.username} · {a.email}</span><button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1 py-0.5 text-[9px] font-bold">View</button></div>)}
                             </div>
                           ))}
                         </div>
@@ -5260,8 +5466,8 @@ export default function Admin() {
                         <div className="max-h-40 overflow-y-auto space-y-1">
                           {(cheatDupeIntelligent.by_similar_email || []).slice(0, 10).map((g, i) => (
                             <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
-                              <div className="text-[10px] text-amber-400 font-heading">{g.local_base}@{g.domain} — {g.count}</div>
-                              {g.accounts?.slice(0, 4).map((a, j) => <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>)}
+                              <div className="text-[10px] text-amber-400 font-heading flex flex-wrap items-center gap-x-2">{g.local_base}@{g.domain} — {g.count}{typeof g.risk_score === 'number' && <span className="text-[9px] text-zinc-500">Score: {g.risk_score}</span>}</div>
+                              {g.accounts?.slice(0, 4).map((a, j) => <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2"><span>{a.username} · {a.email}</span><button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1 py-0.5 text-[9px] font-bold">View</button></div>)}
                             </div>
                           ))}
                         </div>
@@ -5273,15 +5479,28 @@ export default function Admin() {
                         <div className="max-h-40 overflow-y-auto space-y-1">
                           {(cheatDupeIntelligent.by_same_day_same_ip || []).slice(0, 10).map((g, i) => (
                             <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
-                              <div className="text-[10px] text-amber-400 font-heading">{g.registration_ip} · {g.created_day} — {g.count}</div>
-                              {g.accounts?.slice(0, 4).map((a, j) => <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>)}
+                              <div className="text-[10px] text-amber-400 font-heading flex flex-wrap items-center gap-x-2">{g.registration_ip} · {g.created_day} — {g.count}{typeof g.risk_score === 'number' && <span className="text-[9px] text-zinc-500">Score: {g.risk_score}</span>}</div>
+                              {g.accounts?.slice(0, 4).map((a, j) => <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2"><span>{a.username} · {a.email}</span><button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1 py-0.5 text-[9px] font-bold">View</button></div>)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(cheatDupeIntelligent.by_fuzzy_username?.length ?? 0) > 0 && (
+                      <div>
+                        <div className="text-[10px] font-heading text-primary uppercase mb-1">Fuzzy similar usernames</div>
+                        <div className="max-h-40 overflow-y-auto space-y-1">
+                          {(cheatDupeIntelligent.by_fuzzy_username || []).slice(0, 10).map((g, i) => (
+                            <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
+                              <div className="text-[10px] text-amber-400 font-heading flex flex-wrap items-center gap-x-2">&quot;{g.base}&quot; — {g.count}{typeof g.risk_score === 'number' && <span className="text-[9px] text-zinc-500">Score: {g.risk_score}</span>}</div>
+                              {g.accounts?.slice(0, 4).map((a, j) => <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2"><span>{a.username} · {a.email}</span><button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1 py-0.5 text-[9px] font-bold">View</button></div>)}
                             </div>
                           ))}
                         </div>
                       </div>
                     )}
                   </div>
-                  {!(cheatDupeIntelligent.same_ip_groups?.length || cheatDupeIntelligent.same_user_agent_groups?.length || cheatDupeIntelligent.by_domain?.length || cheatDupeIntelligent.by_similar_username?.length || cheatDupeIntelligent.by_similar_email?.length || cheatDupeIntelligent.by_same_day_same_ip?.length) && (
+                  {!(cheatDupeIntelligent.same_ip_groups?.length || cheatDupeIntelligent.same_user_agent_groups?.length || cheatDupeIntelligent.same_subnet_groups?.length || cheatDupeIntelligent.same_fingerprint_groups?.length || cheatDupeIntelligent.by_domain?.length || cheatDupeIntelligent.by_similar_username?.length || cheatDupeIntelligent.by_similar_email?.length || cheatDupeIntelligent.by_same_day_same_ip?.length || cheatDupeIntelligent.by_fuzzy_username?.length) && (
                     <p className="text-xs text-mutedForeground">No duplicate suspects in this report (try without username filter).</p>
                   )}
                 </div>
@@ -5298,17 +5517,20 @@ export default function Admin() {
                   ) : (
                     cheatSameIp.groups?.slice(0, 30).map((g, i) => (
                       <div key={i} className="p-2 rounded bg-zinc-900/50 border border-amber-500/20">
-                        <div className="text-[10px] font-heading text-amber-400 mb-1">
+                        <div className="text-[10px] font-heading text-amber-400 mb-1 flex flex-wrap items-center gap-x-2">
                           IP: {g.ip} — {g.count} account(s)
-                          {g.risk && <span className={`ml-1 px-1 rounded text-[9px] ${g.risk === 'high' ? 'bg-red-500/20 text-red-400' : g.risk === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-500/20 text-zinc-400'}`}>{g.risk}</span>}
-                          {g.label && <span className="ml-1 text-mutedForeground text-[9px]">({g.label})</span>}
+                          {typeof g.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50">Score: {g.risk_score}</span>}
+                          {g.risk && <span className={`px-1 rounded text-[9px] ${g.risk === 'high' ? 'bg-red-500/20 text-red-400' : g.risk === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-500/20 text-zinc-400'}`}>{g.risk}</span>}
+                          {g.label && <span className="text-mutedForeground text-[9px]">({g.label})</span>}
+                          <button type="button" onClick={() => handleBanIpQuick(g.ip)} className="ml-auto shrink-0 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded px-2 py-0.5 text-[9px] font-bold border border-red-500/40">Ban IP</button>
                         </div>
                         <div className="space-y-0.5">
                           {g.accounts.map((a, j) => (
-                            <div key={j} className="flex justify-between text-[10px]">
+                            <div key={j} className="flex flex-wrap items-center gap-x-2 text-[10px]">
                               <span className="text-foreground font-bold">{a.username}</span>
                               <span className="text-mutedForeground">{a.email}</span>
                               <span className="text-mutedForeground">{a.source}</span>
+                              <button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>
                             </div>
                           ))}
                         </div>
@@ -5330,8 +5552,9 @@ export default function Admin() {
                   ) : (
                     (cheatSameDeviceIps.groups || []).map((g, i) => (
                       <div key={i} className="p-2 rounded bg-zinc-900/50 border border-amber-500/20">
-                        <div className="text-[10px] font-heading text-amber-400 mb-1">
+                        <div className="text-[10px] font-heading text-amber-400 mb-1 flex flex-wrap items-center gap-x-2">
                           {g.account_count} account(s) · {g.distinct_ip_count} different IP(s)
+                          {typeof g.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50">Score: {g.risk_score}</span>}
                         </div>
                         <div className="text-[9px] font-mono text-mutedForeground mb-1 truncate" title={g.user_agent_full}>{g.user_agent}</div>
                         <div className="space-y-0.5">
@@ -5340,6 +5563,7 @@ export default function Admin() {
                               <span className="text-foreground font-bold">{a.username}</span>
                               <span className="text-mutedForeground">{a.email}</span>
                               <span className="text-mutedForeground font-mono">IPs: {(a.ips || []).join(', ') || '—'}</span>
+                              <button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>
                             </div>
                           ))}
                         </div>
@@ -5408,10 +5632,8 @@ export default function Admin() {
                       ) : (
                         (cheatDuplicates.by_domain || []).map((g, i) => (
                           <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
-                            <div className="text-[10px] text-amber-400 font-heading">{g.domain} — {g.count}</div>
-                            {g.accounts?.slice(0, 5).map((a, j) => (
-                              <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>
-                            ))}
+                            <div className="text-[10px] text-amber-400 font-heading flex flex-wrap items-center gap-x-2">{g.domain} — {g.count}{typeof g.risk_score === 'number' && <span className="text-[9px] text-zinc-500">Score: {g.risk_score}</span>}</div>
+                            {g.accounts?.slice(0, 5).map((a, j) => <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2"><span>{a.username} · {a.email}</span><button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1 py-0.5 text-[9px] font-bold">View</button></div>)}
                           </div>
                         ))
                       )}
@@ -5425,16 +5647,14 @@ export default function Admin() {
                       ) : (
                         (cheatDuplicates.by_similar_username || []).map((g, i) => (
                           <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
-                            <div className="text-[10px] text-amber-400 font-heading">"{g.base}" — {g.count}</div>
-                            {g.accounts?.slice(0, 5).map((a, j) => (
-                              <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>
-                            ))}
+                            <div className="text-[10px] text-amber-400 font-heading flex flex-wrap items-center gap-x-2">&quot;{g.base}&quot; — {g.count}{typeof g.risk_score === 'number' && <span className="text-[9px] text-zinc-500">Score: {g.risk_score}</span>}</div>
+                            {g.accounts?.slice(0, 5).map((a, j) => <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2"><span>{a.username} · {a.email}</span><button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1 py-0.5 text-[9px] font-bold">View</button></div>)}
                           </div>
                         ))
                       )}
                     </div>
                   </div>
-                  {(cheatDuplicates.by_similar_email?.length > 0 || cheatDuplicates.by_same_day_same_ip?.length > 0) && (
+                  {(cheatDuplicates.by_similar_email?.length > 0 || cheatDuplicates.by_same_day_same_ip?.length > 0 || cheatDuplicates.by_fuzzy_username?.length > 0) && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
                       {cheatDuplicates.by_similar_email?.length > 0 && (
                         <div>
@@ -5442,10 +5662,8 @@ export default function Admin() {
                           <div className="max-h-48 overflow-y-auto space-y-1">
                             {(cheatDuplicates.by_similar_email || []).map((g, i) => (
                               <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
-                                <div className="text-[10px] text-amber-400 font-heading">{g.local_base}@{g.domain} — {g.count}</div>
-                                {g.accounts?.slice(0, 5).map((a, j) => (
-                                  <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>
-                                ))}
+                                <div className="text-[10px] text-amber-400 font-heading flex flex-wrap items-center gap-x-2">{g.local_base}@{g.domain} — {g.count}{typeof g.risk_score === 'number' && <span className="text-[9px] text-zinc-500">Score: {g.risk_score}</span>}</div>
+                                {g.accounts?.slice(0, 5).map((a, j) => <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2"><span>{a.username} · {a.email}</span><button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1 py-0.5 text-[9px] font-bold">View</button></div>)}
                               </div>
                             ))}
                           </div>
@@ -5457,15 +5675,50 @@ export default function Admin() {
                           <div className="max-h-48 overflow-y-auto space-y-1">
                             {(cheatDuplicates.by_same_day_same_ip || []).map((g, i) => (
                               <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
-                                <div className="text-[10px] text-amber-400 font-heading">{g.registration_ip} · {g.created_day} — {g.count}</div>
-                                {g.accounts?.slice(0, 5).map((a, j) => (
-                                  <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>
-                                ))}
+                                <div className="text-[10px] text-amber-400 font-heading flex flex-wrap items-center gap-x-2">{g.registration_ip} · {g.created_day} — {g.count}{typeof g.risk_score === 'number' && <span className="text-[9px] text-zinc-500">Score: {g.risk_score}</span>}</div>
+                                {g.accounts?.slice(0, 5).map((a, j) => <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2"><span>{a.username} · {a.email}</span><button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1 py-0.5 text-[9px] font-bold">View</button></div>)}
                               </div>
                             ))}
                           </div>
                         </div>
                       )}
+                      {cheatDuplicates.by_fuzzy_username?.length > 0 && (
+                        <div>
+                          <div className="text-[10px] font-heading text-primary uppercase mb-1">Fuzzy similar usernames</div>
+                          <div className="max-h-48 overflow-y-auto space-y-1">
+                            {(cheatDuplicates.by_fuzzy_username || []).map((g, i) => (
+                              <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
+                                <div className="text-[10px] text-amber-400 font-heading flex flex-wrap items-center gap-x-2">&quot;{g.base}&quot; — {g.count}{typeof g.risk_score === 'number' && <span className="text-[9px] text-zinc-500">Score: {g.risk_score}</span>}</div>
+                                {g.accounts?.slice(0, 5).map((a, j) => <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2"><span>{a.username} · {a.email}</span><button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1 py-0.5 text-[9px] font-bold">View</button></div>)}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Gambling anomalies</div>
+              <p className="text-xs text-mutedForeground mb-2">Users with profit far above expected (&gt;3 std dev) — possible RNG manipulation.</p>
+              <BtnPrimary onClick={handleFetchGamblingAnomalies} disabled={gamblingAnomaliesLoading}>Load gambling anomalies</BtnPrimary>
+              {gamblingAnomalies && (
+                <div className="mt-3 space-y-2">
+                  {gamblingAnomalies.anomalies?.length === 0 ? (
+                    <p className="text-xs text-mutedForeground">No anomalies in last {gamblingAnomalies.days} days.</p>
+                  ) : (
+                    <div className="max-h-48 overflow-y-auto space-y-1.5">
+                      <div className="text-[10px] text-mutedForeground">Mean: {gamblingAnomalies.mean_profit?.toLocaleString()} · Std: {gamblingAnomalies.std_profit?.toLocaleString()}</div>
+                      {(gamblingAnomalies.anomalies || []).map((u, i) => (
+                        <div key={i} className="p-2 rounded bg-zinc-900/50 border border-amber-500/20 flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-foreground font-bold">{u.username}</span>
+                          <span className="text-amber-400">Profit: {Number(u.total_profit).toLocaleString()} (z-score: {u.z_score})</span>
+                          <button type="button" onClick={() => handleViewUserFromCheat(u.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-2 py-0.5 text-[9px] font-bold">View</button>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>

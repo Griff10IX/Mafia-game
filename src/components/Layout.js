@@ -638,8 +638,8 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     if (flashNews.length <= 1) return;
-    // 18s on mobile so marquee (15s) can fully scroll before next message; 8s on desktop
-    const ms = isMobileViewport ? 18000 : 8000;
+    // 45s on mobile so marquee can fully scroll before next message; 8s on desktop
+    const ms = isMobileViewport ? 45000 : 8000;
     const t = setInterval(() => setFlashIndex((i) => (i + 1) % flashNews.length), ms);
     return () => clearInterval(t);
   }, [flashNews.length, isMobileViewport]);

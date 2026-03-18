@@ -603,6 +603,17 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
             {"id": current_user["id"]},
             {"$inc": inc},
         )
+        # Exploit check: flag impossible single-action gains (e.g. >$50M from one crime)
+        try:
+            import middleware.security as sec
+            if getattr(sec, "DETECT_IMPOSSIBLE_GAIN", 0) > 0:
+                prev = int(current_user.get("money") or 0)
+                await sec.check_impossible_wealth_gain(
+                    db, current_user["id"], current_user.get("username", "?"),
+                    prev, prev + reward, "crime"
+                )
+        except Exception:
+            pass
         # Referral: referrer gets 5% of crime profit (game-paid)
         referred_by = current_user.get("referred_by")
         if referred_by and referred_by != current_user["id"] and reward > 0:

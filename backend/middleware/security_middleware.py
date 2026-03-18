@@ -7,6 +7,7 @@ from fastapi import Request
 import logging
 import hashlib
 import os
+from urllib.parse import urlencode
 import random
 from jose import jwt, JWTError
 
@@ -49,7 +50,17 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         self.check_endpoint_rate_limit = check_endpoint_rate_limit
         self.check_request_spam = check_request_spam
         self.check_duplicate_request = check_duplicate_request
-    
+
+    def _params_hash(self, request: Request) -> str:
+        """Hash query params for duplicate request detection."""
+        q = request.query_params
+        if not q:
+            return ""
+        # Sort for consistent hashing
+        pairs = sorted(q.items())
+        raw = urlencode(pairs)
+        return hashlib.md5(raw.encode()).hexdigest()[:16]
+
     def _client_ip(self, request: Request) -> str:
         # Cloudflare provides real IP in CF-Connecting-IP
         cf_ip = request.headers.get("cf-connecting-ip")
@@ -157,8 +168,23 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                         "cooldown_seconds": cooldown,
                     }
                 )
-            # 2. Check endpoint-specific rate limits (if enabled for this endpoint)
-            # Only for state-changing methods so GETs (e.g. dice config/ownership) can load in parallel.
+            # 2. Check duplicate requests (when enabled - reduces double-click exploits)
+            if request.method not in ("GET", "HEAD", "OPTIONS"):
+                import middleware.security as security_mod
+                if getattr(security_mod, "DETECT_DUPLICATE_REQUESTS", False):
+                    params_hash = self._params_hash(request)
+                    if await self.check_duplicate_request(user_id, path, params_hash, self.db, username):
+                        cooldown = _get_cooldown_seconds(user_id)
+                        logger.warning(f"DUPLICATE REQUEST BLOCKED: {username} - {path} (cooldown {cooldown}s)")
+                        return JSONResponse(
+                            status_code=429,
+                            content={
+                                "detail": f"Duplicate request detected. Please wait {cooldown} seconds.",
+                                "is_cooldown": True,
+                                "cooldown_seconds": cooldown,
+                            }
+                        )
+            # 3. Check endpoint-specific rate limits (if enabled for this endpoint)
             if request.method not in ("GET", "HEAD", "OPTIONS") and await self.check_endpoint_rate_limit(path, user_id, username, self.db):
                 cooldown = _get_cooldown_seconds(user_id)
                 logger.warning(f"RATE LIMIT: {username} - {path} (cooldown {cooldown}s)")
@@ -170,7 +196,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                         "cooldown_seconds": cooldown,
                     }
                 )
-            
+
         except Exception as e:
             logger.exception(f"Security middleware error: {e}")
         

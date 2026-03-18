@@ -17,6 +17,15 @@ from pydantic import BaseModel
 
 from middleware.security import is_proxy_or_vpn
 from utils.disposable_email import is_disposable_email
+from utils.cheat_detection_utils import (
+    group_by_domain,
+    group_by_similar_username_strip_digits,
+    group_by_fuzzy_username,
+    group_by_similar_email,
+    group_by_same_day_same_ip,
+    group_by_same_subnet,
+    compute_dupe_risk_score,
+)
 from routers.kill.armoury import TOKEN_CONFIG
 
 # Cloudflare API config for bot blocking toggle
@@ -840,6 +849,56 @@ def register(router):
             }
         except ImportError:
             raise HTTPException(status_code=500, detail="security_middleware module not found")
+
+    @router.get("/admin/security/cheat-detection-config")
+    async def admin_get_cheat_detection_config(current_user: dict = Depends(get_current_user)):
+        """Get cheat detection toggles and thresholds (duplicate request, negative balance, impossible gain)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return {
+            "detect_duplicate_requests": getattr(security_module, "DETECT_DUPLICATE_REQUESTS", False),
+            "duplicate_request_window_ms": getattr(security_module, "DUPLICATE_REQUEST_WINDOW_MS", 300),
+            "detect_negative_balance": getattr(security_module, "DETECT_NEGATIVE_BALANCE", False),
+            "detect_impossible_gain": getattr(security_module, "DETECT_IMPOSSIBLE_GAIN", 50_000_000),
+        }
+
+    @router.post("/admin/security/cheat-detection-config")
+    async def admin_set_cheat_detection_config(
+        detect_duplicate_requests: Optional[bool] = None,
+        duplicate_request_window_ms: Optional[int] = None,
+        detect_negative_balance: Optional[bool] = None,
+        detect_impossible_gain: Optional[int] = None,
+        current_user: dict = Depends(get_current_user)
+    ):
+        """Configure cheat detection toggles and thresholds."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        changes = []
+        if detect_duplicate_requests is not None:
+            security_module.DETECT_DUPLICATE_REQUESTS = detect_duplicate_requests
+            changes.append(f"detect_duplicate_requests={detect_duplicate_requests}")
+        if duplicate_request_window_ms is not None:
+            if duplicate_request_window_ms < 100 or duplicate_request_window_ms > 1000:
+                raise HTTPException(status_code=400, detail="duplicate_request_window_ms must be between 100 and 1000")
+            security_module.DUPLICATE_REQUEST_WINDOW_MS = duplicate_request_window_ms
+            changes.append(f"duplicate_request_window_ms={duplicate_request_window_ms}")
+        if detect_negative_balance is not None:
+            security_module.DETECT_NEGATIVE_BALANCE = detect_negative_balance
+            changes.append(f"detect_negative_balance={detect_negative_balance}")
+        if detect_impossible_gain is not None:
+            if detect_impossible_gain < 1_000_000 or detect_impossible_gain > 1_000_000_000_000:
+                raise HTTPException(status_code=400, detail="detect_impossible_gain must be between 1M and 1T")
+            security_module.DETECT_IMPOSSIBLE_GAIN = detect_impossible_gain
+            changes.append(f"detect_impossible_gain={detect_impossible_gain}")
+        if not changes:
+            return {"message": "No changes made"}
+        return {
+            "message": f"Cheat detection config updated: {', '.join(changes)}",
+            "detect_duplicate_requests": security_module.DETECT_DUPLICATE_REQUESTS,
+            "duplicate_request_window_ms": security_module.DUPLICATE_REQUEST_WINDOW_MS,
+            "detect_negative_balance": security_module.DETECT_NEGATIVE_BALANCE,
+            "detect_impossible_gain": security_module.DETECT_IMPOSSIBLE_GAIN,
+        }
 
     @router.get("/admin/security/spam-config")
     async def admin_get_spam_config(current_user: dict = Depends(get_current_user)):
@@ -2390,6 +2449,66 @@ def register(router):
             )
         return {"generated_at": now.isoformat(), "days": days, "items": items}
 
+    @router.get("/admin/casinos/gambling-anomalies")
+    async def admin_gambling_anomalies(
+        days: int = Query(7, ge=1, le=90),
+        min_plays: int = Query(20, ge=5, le=500),
+        std_threshold: float = Query(3.0, ge=2.0, le=5.0),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Flag users with gambling profit far above expected (>N std dev).
+        Uses gambling_log; useful for cheat detection (e.g. manipulated RNG).
+        Admin or moderator only.
+        """
+        from routers.game.stats import _gambling_profit_from_details
+
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        since = now - timedelta(days=int(days))
+        since_iso = since.isoformat()
+
+        cursor = db.gambling_log.find(
+            {"created_at": {"$gte": since_iso}},
+            {"_id": 0, "user_id": 1, "username": 1, "game_type": 1, "details": 1},
+        )
+        by_user: dict = {}
+        async for row in cursor:
+            uid = (row.get("user_id") or "").strip()
+            if not uid:
+                continue
+            details = row.get("details") or {}
+            profit = _gambling_profit_from_details((row.get("game_type") or "").strip(), details)
+            if uid not in by_user:
+                by_user[uid] = {"user_id": uid, "username": row.get("username", ""), "plays": 0, "total_profit": 0}
+            by_user[uid]["plays"] += 1
+            by_user[uid]["total_profit"] += profit
+
+        eligible = [u for u in by_user.values() if u["plays"] >= min_plays]
+        if len(eligible) < 3:
+            return {"generated_at": now.isoformat(), "days": days, "anomalies": [], "note": "Not enough users with min_plays"}
+        profits = [u["total_profit"] for u in eligible]
+        mean_p = sum(profits) / len(profits)
+        var = sum((p - mean_p) ** 2 for p in profits) / len(profits)
+        std_p = (var ** 0.5) if var > 0 else 0
+        threshold = mean_p + std_threshold * std_p if std_p > 0 else mean_p
+        anomalies = [
+            {**u, "z_score": round((u["total_profit"] - mean_p) / std_p, 2) if std_p > 0 else 0}
+            for u in eligible
+            if u["total_profit"] > threshold
+        ]
+        anomalies.sort(key=lambda x: -x["total_profit"])
+        return {
+            "generated_at": now.isoformat(),
+            "days": days,
+            "min_plays": min_plays,
+            "std_threshold": std_threshold,
+            "mean_profit": round(mean_p, 2),
+            "std_profit": round(std_p, 2),
+            "anomalies": anomalies[:50],
+        }
+
     @router.get("/admin/trades/analytics/summary")
     async def admin_trades_analytics_summary(
         days: int = Query(7, ge=1, le=90),
@@ -3095,16 +3214,12 @@ def register(router):
         events = await cursor.to_list(limit)
         return {"events": events}
 
-    def _email_local_base(local: str) -> str:
-        """Normalize email local part: lowercase, strip +suffix, remove digits for grouping."""
-        s = (local or "").split("+")[0].strip().lower()
-        return re.sub(r"\d+", "", s) or s
-
     @router.get("/admin/cheat-detection/duplicate-suspects")
     async def admin_cheat_duplicate_suspects(
         username: str = Query(None, description="Optional: filter by username contains"),
         limit_domain: int = Query(50, ge=1, le=200),
         limit_username: int = Query(50, ge=1, le=200),
+        include_fuzzy: bool = Query(True, description="Include fuzzy username matching"),
         current_user: dict = Depends(get_current_user),
     ):
         if not _admin_or_mod(current_user):
@@ -3116,56 +3231,45 @@ def register(router):
             query,
             {"_id": 0, "id": 1, "username": 1, "email": 1, "registration_ip": 1, "created_at": 1},
         ).to_list(2000)
-        domain_to_users = {}
-        for u in users:
-            email = (u.get("email") or "").strip()
-            if "@" in email:
-                domain = email.split("@")[-1].lower()
-                domain_to_users.setdefault(domain, []).append(u)
-        domain_groups = [{"domain": d, "count": len(accs), "accounts": accs} for d, accs in domain_to_users.items() if len(accs) >= 2]
-        domain_groups.sort(key=lambda g: -g["count"])
-        base_to_users = {}
-        for u in users:
-            uname = (u.get("username") or "").strip()
-            base = re.sub(r"\d+", "", uname).lower() or uname.lower()
-            if len(base) >= 2:
-                base_to_users.setdefault(base, []).append(u)
-        name_groups = [{"base": b, "count": len(accs), "accounts": accs} for b, accs in base_to_users.items() if len(accs) >= 2]
-        name_groups.sort(key=lambda g: -g["count"])
-        similar_email_to_users = {}
-        for u in users:
-            email = (u.get("email") or "").strip()
-            if "@" in email:
-                local, domain = email.rsplit("@", 1)
-                domain = domain.lower()
-                key = (_email_local_base(local), domain)
-                similar_email_to_users.setdefault(key, []).append(u)
-        similar_email_groups = [
-            {"local_base": k[0], "domain": k[1], "count": len(accs), "accounts": accs}
-            for k, accs in similar_email_to_users.items()
-            if len(accs) >= 2
-        ]
-        similar_email_groups.sort(key=lambda g: -g["count"])
-        same_day_ip_to_users = {}
-        for u in users:
-            reg_ip = (u.get("registration_ip") or "").strip()
-            created = u.get("created_at") or ""
-            if reg_ip and created:
-                day = created[:10] if isinstance(created, str) else (created.isoformat()[:10] if hasattr(created, "isoformat") else "")
-                if day:
-                    same_day_ip_to_users.setdefault((reg_ip, day), []).append(u)
-        same_day_ip_groups = [
-            {"registration_ip": k[0], "created_day": k[1], "count": len(accs), "accounts": accs}
-            for k, accs in same_day_ip_to_users.items()
-            if len(accs) >= 2
-        ]
-        same_day_ip_groups.sort(key=lambda g: -g["count"])
+        domain_groups = group_by_domain(users)
+        name_groups = group_by_similar_username_strip_digits(users)
+        similar_email_groups = group_by_similar_email(users)
+        same_day_ip_groups = group_by_same_day_same_ip(users)
+        fuzzy_groups = group_by_fuzzy_username(users) if include_fuzzy else []
+        for g in domain_groups:
+            g["risk_score"] = compute_dupe_risk_score("domain", g["count"])
+        for g in name_groups:
+            g["risk_score"] = compute_dupe_risk_score("similar_username", g["count"])
+        for g in similar_email_groups:
+            g["risk_score"] = compute_dupe_risk_score("similar_email", g["count"])
+        for g in same_day_ip_groups:
+            g["risk_score"] = compute_dupe_risk_score("same_day_ip", g["count"])
+        for g in fuzzy_groups:
+            g["risk_score"] = compute_dupe_risk_score("similar_username", g["count"])
         return {
             "by_domain": domain_groups[:limit_domain],
             "by_similar_username": name_groups[:limit_username],
             "by_similar_email": similar_email_groups[:limit_domain],
             "by_same_day_same_ip": same_day_ip_groups[:30],
+            "by_fuzzy_username": fuzzy_groups[:30],
         }
+
+    def _all_ips(u: dict) -> tuple:
+        """Return (sorted_ips, sources_dict) for a user."""
+        reg = (u.get("registration_ip") or "").strip()
+        last_login = (u.get("last_login_ip") or "").strip()
+        last_req = (u.get("last_request_ip") or "").strip()
+        logins = [(x or "").strip() for x in (u.get("login_ips") or []) if (x or "").strip()]
+        ips = set()
+        if reg:
+            ips.add(reg)
+        if last_login:
+            ips.add(last_login)
+        if last_req:
+            ips.add(last_req)
+        ips.update(logins)
+        sources = {"registration": reg or None, "login_ips": logins, "last_login_ip": last_login or None, "last_request_ip": last_req or None}
+        return sorted(ips), sources
 
     @router.get("/admin/cheat-detection/dupe-check-intelligent")
     async def admin_cheat_dupe_check_intelligent(
@@ -3175,8 +3279,9 @@ def register(router):
         current_user: dict = Depends(get_current_user),
     ):
         """
-        Single report: same IP (with full IP history per account), same user-agent,
-        domain/similar-username/similar-email/same-day-same-IP, and optional VPN/proxy flags on IPs.
+        Single report: same IP (full IP history), same user-agent, device fingerprint,
+        same subnet, domain/similar-username/fuzzy-username/similar-email/same-day-same-IP,
+        risk scores, and optional VPN/proxy flags on IPs.
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -3195,34 +3300,10 @@ def register(router):
                 "last_login_ip": 1,
                 "last_request_ip": 1,
                 "last_user_agent": 1,
+                "device_fingerprint": 1,
                 "created_at": 1,
             },
         ).to_list(5000)
-
-        def _all_ips(u: dict) -> tuple:
-            reg = (u.get("registration_ip") or "").strip()
-            last_login = (u.get("last_login_ip") or "").strip()
-            last_req = (u.get("last_request_ip") or "").strip()
-            logins = [ (x or "").strip() for x in (u.get("login_ips") or []) if (x or "").strip() ]
-            ips = set()
-            if reg:
-                ips.add(reg)
-            if last_login:
-                ips.add(last_login)
-            if last_req:
-                ips.add(last_req)
-            ips.update(logins)
-            sources = []
-            if reg:
-                sources.append("registration")
-            for _ in logins:
-                sources.append("login")
-            if last_req and last_req not in (logins + [reg]):
-                sources.append("request")
-            if last_login and last_login != reg and last_login not in logins:
-                if "login" not in sources:
-                    sources.append("login")
-            return sorted(ips), {"registration": reg or None, "login_ips": logins, "last_login_ip": last_login or None, "last_request_ip": last_req or None}
 
         ip_to_accounts = {}
         for u in users:
@@ -3238,7 +3319,7 @@ def register(router):
                 "sources": sources,
             }
             for ip in ips:
-                role = "registration" if sources["registration"] == ip else ("login" if ip in (sources.get("login_ips") or []) else "request")
+                role = "registration" if sources.get("registration") == ip else ("login" if ip in (sources.get("login_ips") or []) else "request")
                 ip_to_accounts.setdefault(ip, []).append({**summary, "role_at_this_ip": role})
         same_ip_groups = []
         seen_ip = set()
@@ -3259,13 +3340,48 @@ def register(router):
                         "sources": a["sources"],
                         "role_at_this_ip": a.get("role_at_this_ip"),
                     }
+            has_reg = any(a.get("sources", {}).get("registration") == ip for a in accs) and len(by_user) >= 2
+            risk = "high" if has_reg else "medium"
+            risk_score = compute_dupe_risk_score("same_ip", len(by_user), has_registration_ip=has_reg)
             same_ip_groups.append({
                 "ip": ip,
                 "count": len(by_user),
                 "accounts": list(by_user.values()),
-                "risk": "high" if any(a.get("sources", {}).get("registration") == ip for a in accs) and len(by_user) >= 2 else "medium",
+                "risk": risk,
+                "risk_score": risk_score,
             })
-        same_ip_groups.sort(key=lambda g: (0 if g["risk"] == "high" else 1, -g["count"]))
+        same_ip_groups.sort(key=lambda g: (-g["risk_score"], -g["count"]))
+
+        same_subnet_groups = group_by_same_subnet(users)
+
+        fp_to_users = {}
+        for u in users:
+            fp = (u.get("device_fingerprint") or "").strip()
+            if not fp:
+                continue
+            ips, _ = _all_ips(u)
+            fp_to_users.setdefault(fp, []).append({
+                "id": u["id"],
+                "username": u.get("username"),
+                "email": u.get("email"),
+                "created_at": u.get("created_at"),
+                "all_ips": ips,
+            })
+        same_fingerprint_groups = []
+        for fp, accs in fp_to_users.items():
+            if len(accs) < 2:
+                continue
+            all_ips = set()
+            for a in accs:
+                all_ips.update(a.get("all_ips") or [])
+            same_fingerprint_groups.append({
+                "device_fingerprint": fp[:32] + ("..." if len(fp) > 32 else ""),
+                "account_count": len(accs),
+                "distinct_ip_count": len(all_ips),
+                "accounts": accs,
+                "risk_score": compute_dupe_risk_score("same_ua", len(accs), has_same_device=True),
+            })
+        same_fingerprint_groups.sort(key=lambda g: (-g["risk_score"], -g["account_count"]))
 
         ua_to_users = {}
         ua_raw_sample = {}
@@ -3294,59 +3410,32 @@ def register(router):
             if len(all_ips) < 2:
                 continue
             sample_raw = ua_raw_sample.get(ua_norm, ua_norm)
+            risk_score = compute_dupe_risk_score("same_ua", len(accs), has_same_device=True)
             same_ua_groups.append({
                 "user_agent": ua_norm[:120] + ("..." if len(ua_norm) > 120 else ""),
                 "user_agent_full": sample_raw[:200] + ("..." if len(sample_raw) > 200 else ""),
                 "account_count": len(accs),
                 "distinct_ip_count": len(all_ips),
                 "accounts": accs,
+                "risk_score": risk_score,
             })
-        same_ua_groups.sort(key=lambda g: -g["account_count"])
+        same_ua_groups.sort(key=lambda g: (-g["risk_score"], -g["account_count"]))
 
-        domain_to_users = {}
-        for u in users:
-            email = (u.get("email") or "").strip()
-            if "@" in email:
-                domain = email.split("@")[-1].lower()
-                domain_to_users.setdefault(domain, []).append(u)
-        domain_groups = [{"domain": d, "count": len(accs), "accounts": accs} for d, accs in domain_to_users.items() if len(accs) >= 2]
-        domain_groups.sort(key=lambda g: -g["count"])
-        base_to_users = {}
-        for u in users:
-            uname = (u.get("username") or "").strip()
-            base = re.sub(r"\d+", "", uname).lower() or uname.lower()
-            if len(base) >= 2:
-                base_to_users.setdefault(base, []).append(u)
-        name_groups = [{"base": b, "count": len(accs), "accounts": accs} for b, accs in base_to_users.items() if len(accs) >= 2]
-        name_groups.sort(key=lambda g: -g["count"])
-        similar_email_to_users = {}
-        for u in users:
-            email = (u.get("email") or "").strip()
-            if "@" in email:
-                local, domain = email.rsplit("@", 1)
-                domain = domain.lower()
-                key = (_email_local_base(local), domain)
-                similar_email_to_users.setdefault(key, []).append(u)
-        similar_email_groups = [
-            {"local_base": k[0], "domain": k[1], "count": len(accs), "accounts": accs}
-            for k, accs in similar_email_to_users.items()
-            if len(accs) >= 2
-        ]
-        similar_email_groups.sort(key=lambda g: -g["count"])
-        same_day_ip_to_users = {}
-        for u in users:
-            reg_ip = (u.get("registration_ip") or "").strip()
-            created = u.get("created_at") or ""
-            if reg_ip and created:
-                day = created[:10] if isinstance(created, str) else (created.isoformat()[:10] if hasattr(created, "isoformat") else "")
-                if day:
-                    same_day_ip_to_users.setdefault((reg_ip, day), []).append(u)
-        same_day_ip_groups = [
-            {"registration_ip": k[0], "created_day": k[1], "count": len(accs), "accounts": accs}
-            for k, accs in same_day_ip_to_users.items()
-            if len(accs) >= 2
-        ]
-        same_day_ip_groups.sort(key=lambda g: -g["count"])
+        domain_groups = group_by_domain(users)
+        name_groups = group_by_similar_username_strip_digits(users)
+        fuzzy_groups = group_by_fuzzy_username(users)
+        similar_email_groups = group_by_similar_email(users)
+        same_day_ip_groups = group_by_same_day_same_ip(users)
+        for g in domain_groups:
+            g["risk_score"] = compute_dupe_risk_score("domain", g["count"])
+        for g in name_groups:
+            g["risk_score"] = compute_dupe_risk_score("similar_username", g["count"])
+        for g in fuzzy_groups:
+            g["risk_score"] = compute_dupe_risk_score("similar_username", g["count"])
+        for g in similar_email_groups:
+            g["risk_score"] = compute_dupe_risk_score("similar_email", g["count"])
+        for g in same_day_ip_groups:
+            g["risk_score"] = compute_dupe_risk_score("same_day_ip", g["count"])
 
         ip_vpn: Dict[str, bool] = {}
         if check_vpn and same_ip_groups:
@@ -3362,14 +3451,21 @@ def register(router):
                 await asyncio.sleep(0.15)
         for g in same_ip_groups:
             g["ip_vpn"] = ip_vpn.get(g["ip"], False)
+            if g.get("ip_vpn"):
+                g["risk_score"] = min(100, g["risk_score"] + 10)
 
         return {
             "same_ip_groups": same_ip_groups[:80],
             "total_same_ip_groups": len(same_ip_groups),
+            "same_subnet_groups": same_subnet_groups[:40],
+            "total_same_subnet_groups": len(same_subnet_groups),
+            "same_fingerprint_groups": same_fingerprint_groups[:30],
+            "total_same_fingerprint_groups": len(same_fingerprint_groups),
             "same_user_agent_groups": same_ua_groups[:50],
             "total_same_ua_groups": len(same_ua_groups),
             "by_domain": domain_groups[:50],
             "by_similar_username": name_groups[:50],
+            "by_fuzzy_username": fuzzy_groups[:30],
             "by_similar_email": similar_email_groups[:50],
             "by_same_day_same_ip": same_day_ip_groups[:30],
             "ip_vpn": ip_vpn,
@@ -3384,16 +3480,29 @@ def register(router):
     @router.get("/admin/cheat-detection/same-device-different-ips")
     async def admin_cheat_same_device_different_ips(current_user: dict = Depends(get_current_user)):
         """
-        Find users who share the same browser/device (last_user_agent) but use different IPs.
-        UA is normalized (version numbers stripped) so same browser different version count as same device.
+        Find users who share the same browser/device (last_user_agent or device_fingerprint) but use different IPs.
+        UA is normalized (version numbers stripped). Also includes device_fingerprint groups.
         Admin or moderator only.
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         users = await db.users.find(
-            {"is_dead": {"$ne": True}, "last_user_agent": {"$exists": True, "$ne": None, "$ne": ""}},
-            {"_id": 0, "id": 1, "username": 1, "email": 1, "registration_ip": 1, "login_ips": 1, "last_login_ip": 1, "last_request_ip": 1, "last_user_agent": 1},
+            {"is_dead": {"$ne": True}},
+            {"_id": 0, "id": 1, "username": 1, "email": 1, "registration_ip": 1, "login_ips": 1, "last_login_ip": 1, "last_request_ip": 1, "last_user_agent": 1, "device_fingerprint": 1},
         ).to_list(10000)
+
+        def _get_ips(u):
+            ips = set()
+            for key in ("registration_ip", "last_login_ip", "last_request_ip"):
+                v = (u.get(key) or "").strip()
+                if v:
+                    ips.add(v)
+            for lip in (u.get("login_ips") or []):
+                lip = (lip or "").strip()
+                if lip:
+                    ips.add(lip)
+            return sorted(ips)
+
         ua_to_users = {}
         ua_raw_sample = {}
         for u in users:
@@ -3405,21 +3514,7 @@ def register(router):
                 continue
             if ua_norm not in ua_raw_sample:
                 ua_raw_sample[ua_norm] = ua_raw
-            ips = set()
-            for key in ("registration_ip", "last_login_ip", "last_request_ip"):
-                v = (u.get(key) or "").strip()
-                if v:
-                    ips.add(v)
-            for lip in (u.get("login_ips") or []):
-                lip = (lip or "").strip()
-                if lip:
-                    ips.add(lip)
-            summary = {
-                "id": u["id"],
-                "username": u.get("username"),
-                "email": u.get("email"),
-                "ips": sorted(ips),
-            }
+            summary = {"id": u["id"], "username": u.get("username"), "email": u.get("email"), "ips": _get_ips(u)}
             ua_to_users.setdefault(ua_norm, []).append(summary)
         groups = []
         for ua_norm, accs in ua_to_users.items():
@@ -3431,14 +3526,42 @@ def register(router):
             if len(all_ips) < 2:
                 continue
             sample_raw = ua_raw_sample.get(ua_norm, ua_norm)
+            risk_score = compute_dupe_risk_score("same_ua", len(accs), has_same_device=True)
             groups.append({
                 "user_agent": ua_norm[:120] + ("..." if len(ua_norm) > 120 else ""),
                 "user_agent_full": sample_raw[:200] + ("..." if len(sample_raw) > 200 else ""),
                 "users": accs,
                 "account_count": len(accs),
                 "distinct_ip_count": len(all_ips),
+                "risk_score": risk_score,
+                "device_type": "user_agent",
             })
-        groups.sort(key=lambda g: -g["account_count"])
+        fp_to_users = {}
+        for u in users:
+            fp = (u.get("device_fingerprint") or "").strip()
+            if not fp:
+                continue
+            summary = {"id": u["id"], "username": u.get("username"), "email": u.get("email"), "ips": _get_ips(u)}
+            fp_to_users.setdefault(fp, []).append(summary)
+        for fp, accs in fp_to_users.items():
+            if len(accs) < 2:
+                continue
+            all_ips = set()
+            for a in accs:
+                all_ips.update(a["ips"])
+            if len(all_ips) < 2:
+                continue
+            risk_score = compute_dupe_risk_score("same_ua", len(accs), has_same_device=True)
+            groups.append({
+                "user_agent": f"Fingerprint:{fp[:24]}...",
+                "user_agent_full": fp[:64] + ("..." if len(fp) > 64 else ""),
+                "users": accs,
+                "account_count": len(accs),
+                "distinct_ip_count": len(all_ips),
+                "risk_score": risk_score,
+                "device_type": "fingerprint",
+            })
+        groups.sort(key=lambda g: (-g["risk_score"], -g["account_count"]))
         return {"groups": groups[:80], "total_groups": len(groups)}
 
     @router.get("/admin/users/search")
@@ -4908,6 +5031,40 @@ def register(router):
             "cleared_family_id": old_fid,
             "cleared_family_name": (old_fam or {}).get("name", "?"),
             "cleared": True,
+        }
+
+    @router.post("/admin/rackets/reset-cooldown")
+    async def admin_reset_racket_cooldown(
+        family_id: str,
+        racket_id: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Reset a family racket's cooldown so it can be collected immediately. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from routers.game.families import FAMILY_RACKETS
+        valid_racket_ids = [r["id"] for r in FAMILY_RACKETS]
+        if racket_id not in valid_racket_ids:
+            raise HTTPException(status_code=400, detail=f"Invalid racket_id. Valid: {', '.join(valid_racket_ids)}")
+        fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "rackets": 1})
+        if not fam:
+            raise HTTPException(status_code=404, detail="Family not found")
+        rackets = (fam.get("rackets") or {}).copy()
+        state = rackets.get(racket_id) or {}
+        if state.get("level", 0) <= 0:
+            raise HTTPException(status_code=400, detail="Racket not active (level 0)")
+        # Set last_collected_at to 48h ago so cooldown has passed for any racket
+        from datetime import datetime, timezone, timedelta
+        past_time = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
+        rackets[racket_id] = {**state, "last_collected_at": past_time}
+        await db.families.update_one({"id": family_id}, {"$set": {"rackets": rackets}})
+        racket_name = next((r["name"] for r in FAMILY_RACKETS if r["id"] == racket_id), racket_id)
+        return {
+            "message": f"Reset {racket_name} cooldown for {(fam.get('name') or family_id)}. Racket can be collected now.",
+            "family_id": family_id,
+            "family_name": fam.get("name"),
+            "racket_id": racket_id,
+            "racket_name": racket_name,
         }
 
     # ─────────────────────────────────────────────────────────────────────────────
