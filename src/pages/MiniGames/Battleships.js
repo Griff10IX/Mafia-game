@@ -1703,10 +1703,10 @@ export default function Battleships() {
   const inGame = screen==="battle"||screen==="won"||screen==="lost";
 
   return (
-    <div style={{minHeight:"100vh",background:"var(--noir-background,#060810)",
+    <div className="mobile-page-root md:px-3" style={{minHeight:"100vh",background:"var(--noir-background,#060810)",
       backgroundImage:"radial-gradient(ellipse at 50% -10%,rgba(15,45,90,0.38) 0%,transparent 65%)",
       display:"flex",flexDirection:"column",alignItems:"center",
-      padding:"1rem 12px 2.5rem",fontFamily:"'Cinzel',serif",
+      paddingTop:"1rem",paddingBottom:"2.5rem",fontFamily:"'Cinzel',serif",
       WebkitTextSizeAdjust:"100%",overflowX:"hidden"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');

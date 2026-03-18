@@ -676,7 +676,7 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
     if already_guard:
         raise HTTPException(
             status_code=400,
-            detail="You can only be a bodyguard for one person at a time. Ask your current client to drop you first.",
+            detail="You can only be a bodyguard for one person at a time.",
         )
     # You cannot accept if you own bodyguards (robots or humans) - must drop them first
     owned_filled = await db.bodyguards.count_documents({
@@ -908,12 +908,19 @@ async def admin_clear_bodyguards(target_username: str, current_user: dict = Depe
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     res_bg = await db.bodyguards.delete_many({"user_id": target["id"]})
-    res_robots = await db.users.delete_many({"is_bodyguard": True, "bodyguard_owner_id": target["id"]})
+    # Only delete robot bodyguard users; human bodyguards are real player accounts
+    res_robots = await db.users.delete_many({"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": target["id"]})
+    # Release human bodyguards (clear flags, do not delete)
+    res_humans = await db.users.update_many(
+        {"is_bodyguard": True, "bodyguard_owner_id": target["id"]},
+        {"$unset": {"is_bodyguard": "", "bodyguard_owner_id": ""}},
+    )
     _invalidate_bodyguards_cache(target["id"])
     return {
-        "message": f"Cleared bodyguards for {target_username} (removed {res_bg.deleted_count} bodyguard record(s), {res_robots.deleted_count} robot user(s))",
+        "message": f"Cleared bodyguards for {target_username} (removed {res_bg.deleted_count} bodyguard record(s), {res_robots.deleted_count} robot user(s), {res_humans.modified_count} human bodyguard(s) released)",
         "deleted_bodyguards": res_bg.deleted_count,
         "deleted_robot_users": res_robots.deleted_count,
+        "released_human_bodyguards": res_humans.modified_count,
     }
 
 
@@ -921,19 +928,35 @@ async def admin_drop_all_human_bodyguards(current_user: dict = Depends(get_curre
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     res = await db.bodyguards.delete_many({"is_robot": {"$ne": True}})
-    return {"message": f"Dropped all human bodyguards ({res.deleted_count} slot(s) cleared)", "deleted_count": res.deleted_count}
+    # Clear bodyguard flags from human bodyguards (real players) so they can use their accounts normally
+    res_humans = await db.users.update_many(
+        {"is_bodyguard": True, "is_npc": {"$ne": True}},
+        {"$unset": {"is_bodyguard": "", "bodyguard_owner_id": ""}},
+    )
+    return {
+        "message": f"Dropped all human bodyguards ({res.deleted_count} slot(s) cleared, {res_humans.modified_count} human(s) released)",
+        "deleted_count": res.deleted_count,
+        "released_human_bodyguards": res_humans.modified_count,
+    }
 
 
 async def admin_drop_all_bodyguards(current_user: dict = Depends(get_current_user)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     res = await db.bodyguards.delete_many({})
-    res_robots = await db.users.delete_many({"is_bodyguard": True})
+    # Only delete robot bodyguard users (is_npc=True); human bodyguards are real player accounts
+    res_robots = await db.users.delete_many({"is_bodyguard": True, "is_npc": True})
+    # Clear bodyguard flags from human bodyguards so they can log in normally again
+    res_humans = await db.users.update_many(
+        {"is_bodyguard": True},
+        {"$unset": {"is_bodyguard": "", "bodyguard_owner_id": ""}},
+    )
     _bodyguards_cache.clear()
     return {
-        "message": f"Dropped ALL bodyguards ({res.deleted_count} slot(s) cleared, {res_robots.deleted_count} robot user(s) deleted)",
+        "message": f"Dropped ALL bodyguards ({res.deleted_count} slot(s) cleared, {res_robots.deleted_count} robot user(s) deleted, {res_humans.modified_count} human bodyguard(s) released)",
         "deleted_bodyguards": res.deleted_count,
-        "deleted_robot_users": res_robots.deleted_count
+        "deleted_robot_users": res_robots.deleted_count,
+        "released_human_bodyguards": res_humans.modified_count,
     }
 
 
@@ -952,7 +975,11 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
         raise HTTPException(status_code=404, detail="User not found")
     if request.replace_existing:
         await db.bodyguards.delete_many({"user_id": target["id"]})
-        await db.users.delete_many({"is_bodyguard": True, "bodyguard_owner_id": target["id"]})
+        await db.users.delete_many({"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": target["id"]})
+        await db.users.update_many(
+            {"is_bodyguard": True, "bodyguard_owner_id": target["id"]},
+            {"$unset": {"is_bodyguard": "", "bodyguard_owner_id": ""}},
+        )
     desired_slots = max(int(target.get("bodyguard_slots", 0) or 0), count)
     desired_slots = min(4, desired_slots)
     if desired_slots != (int(target.get("bodyguard_slots", 0) or 0)):
@@ -1047,7 +1074,11 @@ async def admin_seed_human_bodyguards(current_user: dict = Depends(get_current_u
     
     # Clear all existing bodyguards (robots and humans) for admin
     await db.bodyguards.delete_many({"user_id": admin_id})
-    await db.users.delete_many({"is_bodyguard": True, "bodyguard_owner_id": admin_id})
+    await db.users.delete_many({"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": admin_id})
+    await db.users.update_many(
+        {"is_bodyguard": True, "bodyguard_owner_id": admin_id},
+        {"$unset": {"is_bodyguard": "", "bodyguard_owner_id": ""}},
+    )
     
     # Ensure admin has 4 slots
     await db.users.update_one({"id": admin_id}, {"$set": {"bodyguard_slots": 4}})
@@ -1124,8 +1155,12 @@ async def admin_seed_random_bodyguards(current_user: dict = Depends(get_current_
     
     # Clear all existing bodyguards (robots and humans) for admin
     await db.bodyguards.delete_many({"user_id": admin_id})
-    # Remove robot users and clear human bodyguard flags
-    await db.users.delete_many({"is_bodyguard": True, "bodyguard_owner_id": admin_id})
+    # Remove robot users only; release human bodyguards (clear flags)
+    await db.users.delete_many({"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": admin_id})
+    await db.users.update_many(
+        {"is_bodyguard": True, "bodyguard_owner_id": admin_id},
+        {"$unset": {"is_bodyguard": "", "bodyguard_owner_id": ""}},
+    )
     
     # Ensure admin has 4 slots
     await db.users.update_one({"id": admin_id}, {"$set": {"bodyguard_slots": 4}})
@@ -1394,9 +1429,9 @@ async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_use
     guard_name = guard_user.get("username", "?") if guard_user else "?"
 
     if is_robot:
-        # Robot: delete the bodyguard slot doc and the robot user record entirely
+        # Robot: delete the bodyguard slot doc and the robot user record entirely (is_npc ensures we never delete real players)
         await db.bodyguards.delete_one({"user_id": current_user["id"], "slot_number": slot})
-        await db.users.delete_one({"id": guard_id, "is_bodyguard": True})
+        await db.users.delete_one({"id": guard_id, "is_bodyguard": True, "is_npc": True})
     else:
         # Human: delete the bodyguard slot doc, remove bodyguard flags from user
         await db.bodyguards.delete_one({"user_id": current_user["id"], "slot_number": slot})

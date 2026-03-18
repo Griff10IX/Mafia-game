@@ -591,12 +591,12 @@ export default function Racing() {
 
   if (!hasTeam) {
     return (
-      <div className={styles.page + " overflow-x-hidden"} style={{ minHeight: "100%", WebkitOverflowScrolling: "touch" }}>
-        <div className="px-4 py-3 border-b border-[var(--noir-border)]" style={{ background: "rgba(201,164,96,.03)" }}>
+      <div className={styles.page + " mobile-page-root overflow-x-hidden"} style={{ minHeight: "100%", WebkitOverflowScrolling: "touch" }}>
+        <div className="px-0 md:px-4 py-3 border-b border-[var(--noir-border)]" style={{ background: "rgba(201,164,96,.03)" }}>
           <h1 className="text-lg font-heading" style={{ color: "var(--noir-primary)" }}>Bootleg Runs</h1>
           <p className="text-xs text-[var(--noir-muted)] mt-0.5">Create a racing team to enter races.</p>
         </div>
-        <div className="p-4 max-w-md">
+        <div className="px-0 md:px-4 py-4 max-w-md">
           <div className={styles.panel + " mobile-panel overflow-hidden"}>
             <CardHead title="Create Your Racing Team" />
             <div className="p-4 space-y-3">
@@ -650,9 +650,9 @@ export default function Racing() {
   const crewBankPct = Math.min(100, ((profile?.crew_bank ?? 0) / 10000000) * 100);
 
   return (
-    <div className={styles.page + " overflow-x-hidden"} style={{ minHeight: "100%", WebkitOverflowScrolling: "touch" }}>
+    <div className={styles.page + " mobile-page-root overflow-x-hidden"} style={{ minHeight: "100%", WebkitOverflowScrolling: "touch" }}>
       {/* ─── COMPACT HEADER ─── */}
-      <div className="px-4 py-2.5 border-b border-[var(--noir-border)]" style={{ background: "rgba(201,164,96,.03)" }}>
+      <div className="px-0 md:px-4 py-2.5 border-b border-[var(--noir-border)]" style={{ background: "rgba(201,164,96,.03)" }}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <h1 className="text-base font-heading truncate" style={{ color: "var(--noir-primary)" }}>Bootleg Runs</h1>
@@ -752,7 +752,7 @@ export default function Racing() {
 
       {/* ─── POST-RACE RESULTS ─── */}
       {activeRace?.state === "completed" && (
-        <div className={styles.panel + " mobile-panel m-3 overflow-hidden"}>
+        <div className={styles.panel + " mobile-panel overflow-hidden mb-3"}>
           <CardHead title="Race Results" />
           <div className="p-3">
             {activeRace.weather_name && (
@@ -802,7 +802,7 @@ export default function Racing() {
       )}
 
       {/* ─── TABS ─── */}
-      <div className="flex border-b border-[var(--noir-border)] px-3 gap-1 overflow-x-auto overflow-y-hidden touch-pan-x" style={{ minHeight: 40, WebkitOverflowScrolling: "touch" }}>
+      <div className="flex border-b border-[var(--noir-border)] px-0 md:px-3 gap-1 overflow-x-auto overflow-y-hidden touch-pan-x" style={{ minHeight: 40, WebkitOverflowScrolling: "touch" }}>
         {tabs.map((t) => (
           <button key={t.id} type="button"
             className={"py-2 px-2.5 text-xs font-heading whitespace-nowrap flex-shrink-0 transition-colors " + (tab === t.id ? "border-b-2 text-[var(--noir-primary)]" : "text-[var(--noir-muted)]")}
@@ -813,7 +813,7 @@ export default function Racing() {
         ))}
       </div>
 
-      <div className="p-3">
+      <div className="px-0 md:px-3 py-3">
 
         {/* ─── RACES TAB ─── */}
         {tab === "races" && (

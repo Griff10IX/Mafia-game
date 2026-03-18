@@ -46,7 +46,7 @@ export default function ShootingRange() {
   };
 
   return (
-    <div className={`${styles.pageContent} mobile-page-root mx-auto`} style={{ padding: '1rem', maxWidth: 640 }}>
+    <div className={`${styles.pageContent} mobile-page-root mx-auto px-0 md:px-4`} style={{ paddingTop: '1rem', paddingBottom: '1rem', maxWidth: 640 }}>
       <div className="flex items-center gap-2 mb-4">
         <Link to="/armour-weapons" className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>
           ← Armoury
@@ -70,7 +70,7 @@ export default function ShootingRange() {
           Play 3D range
         </Link>
       </div>
-      <div className="rounded-lg p-3 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40">
+      <div className="rounded-lg p-3 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40 mobile-panel">
         <div className="text-[9px] sm:text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
           <Crosshair size={10} className="sm:w-[11px] sm:h-[11px]" />
           Weapon mastery

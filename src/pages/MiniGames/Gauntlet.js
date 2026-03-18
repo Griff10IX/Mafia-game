@@ -378,6 +378,7 @@ export default function Gauntlet() {
   }, [jump]);
 
   return (
+    <div className="mobile-page-root" style={{width:"100%",maxWidth:520,margin:"0 auto"}}>
     <div
       className={`${styles.panel} mobile-panel`}
       style={{
@@ -751,6 +752,7 @@ export default function Gauntlet() {
       <p style={{ color: "var(--noir-muted)", fontSize: "10px", marginTop: "4px", letterSpacing: "0.1em", textAlign: "center" }}>
         {isTouch ? "TAP TO FLY" : "SPACE / TAP TO FLY"}
       </p>
+    </div>
     </div>
   );
 }

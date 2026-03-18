@@ -559,9 +559,9 @@ export default function Snake() {
   const canvasW = GRID * C;
 
   return (
-    <div className={styles.page} style={{ fontFamily: "'Cinzel', serif", maxWidth: 480, margin: "0 auto", minHeight: "100vh", paddingBottom: 24 }}>
+    <div className={`${styles.page} mobile-page-root`} style={{ fontFamily: "'Cinzel', serif", maxWidth: 480, margin: "0 auto", minHeight: "100vh", paddingBottom: 24 }}>
 
-      <div className={styles.panelHeader} style={{ padding: "clamp(8px,3vw,12px) clamp(12px,4vw,16px)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+      <div className={`${styles.panelHeader} mobile-panel`} style={{ padding: "clamp(8px,3vw,12px) clamp(12px,4vw,16px)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div>
           <h1 className="font-heading" style={{ color: "var(--noir-primary)", fontSize: "clamp(14px,4vw,22px)", letterSpacing: "0.12em", textTransform: "uppercase", lineHeight: 1.2 }}>
             The Package Run
