@@ -34,7 +34,8 @@ const GTA_STYLES = `
     }
     .gta-main-panel,
     .gta-recent-panel,
-    .gta-stats-panel {
+    .gta-stats-panel,
+    .gta-info-panel {
       margin-left: -16px;
       margin-right: -16px;
     }
@@ -283,7 +284,7 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
                   data-testid={`recent-stolen-car-${index}`}
                   className={`${styles.panel} rounded-lg border border-border hover:border-primary/30 p-1.5 transition-all overflow-hidden block text-left`}
                 >
-                  <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1 relative">
+                  <div className="w-full max-w-[75%] sm:max-w-none mx-auto sm:mx-0 aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1 relative">
                     {car.image ? (
                       <img
                         src={car.image}
@@ -363,7 +364,7 @@ const GTAProgressBar = ({ progress }) => {
 };
 
 const InfoSection = () => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.08s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in gta-info-panel`} style={{ animationDelay: '0.08s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
       <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] gta-panel-header">
