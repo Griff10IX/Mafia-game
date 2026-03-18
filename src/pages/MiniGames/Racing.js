@@ -864,33 +864,100 @@ export default function Racing() {
       </div>
 
       {/* ─── INTERACTIVE RACE HUD ─── */}
-      {activeRace?.state === "running" && (activeRace?.mode === "interactive" || activeRace?.interactive) && liveRace && (
+      {activeRace?.state === "running" && (activeRace?.mode === "interactive" || activeRace?.interactive) && liveRace && (() => {
+        const _carEntries = Object.entries(liveRace.car_states || {}).sort((a, b) => (a[1].position ?? 99) - (b[1].position ?? 99));
+        const _totalCars = _carEntries.length || 1;
+        const _tColors = { soft: "#e82020", medium: "#e8d020", hard: "#c0c0b8", inter: "#20a840", full_wet: "#2080e8" };
+        const _cColors = ["#d4af37","#dc2626","#3b82f6","#16a34a","#9333ea","#f97316","#ec4899","#14b8a6"];
+        const _lapProg = (liveRace.current_lap || 1) / (liveRace.total_laps || 3);
+        return (
         <div className="p-3 space-y-3">
-          {/* Race Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-primary)]">
-                LIVE — Lap {liveRace.current_lap}/{liveRace.total_laps}
-              </p>
-              <p className="text-[8px] text-[var(--noir-muted)]">
-                {liveRace.track?.name} · {liveRace.weather || "Clear"}
-              </p>
+          {/* Race Header Bar */}
+          <div className={styles.panel + " mobile-panel overflow-hidden"}>
+            <div className="flex items-center justify-between px-3 py-2" style={{ background: "linear-gradient(90deg, rgba(212,175,55,0.08), transparent)" }}>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-[10px] font-heading uppercase tracking-wider text-red-400">LIVE</span>
+                </div>
+                <span className="text-xs font-heading text-[var(--noir-primary)]">LAP {liveRace.current_lap}/{liveRace.total_laps}</span>
+                <span className="text-[10px] text-[var(--noir-muted)]">{liveRace.track?.name}</span>
+                {liveRace.weather && liveRace.weather !== "clear" && (
+                  <span className="text-[10px] text-blue-400">{liveRace.weather}</span>
+                )}
+              </div>
+              {liveRace.lap_deadline && <LiveCountdown deadline={liveRace.lap_deadline} />}
             </div>
-            {liveRace.lap_deadline && (
-              <LiveCountdown deadline={liveRace.lap_deadline} />
-            )}
+            <div className="h-1 bg-[var(--noir-border)]">
+              <div className="h-full bg-[var(--noir-primary)] transition-all duration-1000" style={{ width: `${Math.min(100, _lapProg * 100)}%` }} />
+            </div>
           </div>
 
-          {/* Timing Tower */}
+          {/* Live Track Map */}
           <div className={styles.panel + " mobile-panel overflow-hidden"}>
-            <CardHead title="Timing Tower" />
-            <div className="divide-y divide-[var(--noir-border)]">
-              {Object.entries(liveRace.car_states || {})
-                .sort((a, b) => (a[1].position ?? 99) - (b[1].position ?? 99))
-                .map(([eid, cs], idx) => {
+            <div style={{ background: "#060a04", padding: "12px 8px 8px" }}>
+              <svg viewBox="0 0 460 200" style={{ width: "100%", height: "auto", display: "block" }}>
+                {/* Track bed */}
+                <ellipse cx="230" cy="100" rx="195" ry="72" fill="none" stroke="#1a2010" strokeWidth="34" />
+                {/* Track surface */}
+                <ellipse cx="230" cy="100" rx="195" ry="72" fill="none" stroke="#141a0c" strokeWidth="30" />
+                {/* Kerbs at corners */}
+                {[0, Math.PI].map((a, ki) => {
+                  const kx = 230 + 195 * Math.cos(a);
+                  const ky = 100 + 72 * Math.sin(a);
+                  return <circle key={ki} cx={kx} cy={ky} r="6" fill="none" stroke="#cc3333" strokeWidth="2" strokeDasharray="2 2" />;
+                })}
+                {/* Racing line */}
+                <ellipse cx="230" cy="100" rx="195" ry="72" fill="none" stroke="#2a3520" strokeWidth="1" strokeDasharray="8 6" />
+                {/* Start/finish line */}
+                <line x1="230" y1="25" x2="230" y2="33" stroke="#ffffff" strokeWidth="3" />
+                <line x1="227" y1="25" x2="233" y2="25" stroke="#ffffff" strokeWidth="1" />
+                {/* Sector markers */}
+                {[Math.PI * 0.66, Math.PI * 1.33].map((a, si) => {
+                  const sx = 230 + 195 * Math.cos(-Math.PI/2 + a);
+                  const sy = 100 + 72 * Math.sin(-Math.PI/2 + a);
+                  return <circle key={si} cx={sx} cy={sy} r="2" fill="#444" />;
+                })}
+                {/* Car markers */}
+                {_carEntries.map(([eid, cs], idx) => {
+                  const spacing = 0.10;
+                  const angle = -Math.PI / 2 + (idx * spacing);
+                  const cx = 230 + 195 * Math.cos(angle);
+                  const cy = 100 + 72 * Math.sin(angle);
+                  const isMe = eid === profile?.user_id;
+                  const color = cs.dnf ? "#555" : _cColors[idx % _cColors.length];
+                  const participant = (liveRace.participants || []).find(p => (p.user_id || p.id) === eid);
+                  const label = participant?.team_name?.slice(0, 3) || participant?.username?.slice(0, 3) || `P${idx+1}`;
+                  return (
+                    <g key={eid}>
+                      {isMe && <circle cx={cx} cy={cy} r="14" fill="none" stroke="rgba(212,175,55,0.25)" strokeWidth="2">
+                        <animate attributeName="r" values="12;16;12" dur="2s" repeatCount="indefinite" />
+                      </circle>}
+                      {/* Car shape */}
+                      <rect x={cx - 6} y={cy - 3} width="12" height="6" rx="2" fill={color} stroke={isMe ? "#fff" : "rgba(0,0,0,0.4)"} strokeWidth={isMe ? 1.2 : 0.5} />
+                      <circle cx={cx - 4} cy={cy + 3.5} r="1.5" fill="#333" />
+                      <circle cx={cx + 4} cy={cy + 3.5} r="1.5" fill="#333" />
+                      {/* Tyre indicator */}
+                      <circle cx={cx + 8} cy={cy - 5} r="2.5" fill={_tColors[cs.compound] || "#888"} />
+                      {/* Name label */}
+                      <text x={cx} y={cy - 8} textAnchor="middle" fill={isMe ? "#d4af37" : "#999"} fontSize="7" fontWeight={isMe ? "bold" : "normal"} style={{ textTransform: "uppercase" }}>{label}</text>
+                      {cs.dnf && <text x={cx} y={cy + 14} textAnchor="middle" fill="#e74c3c" fontSize="6" fontWeight="bold">DNF</text>}
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+          </div>
+
+          {/* Timing Tower + Strategy side by side on desktop */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Timing Tower */}
+            <div className={styles.panel + " mobile-panel overflow-hidden"}>
+              <CardHead title="Timing Tower" />
+              <div className="divide-y divide-[var(--noir-border)]">
+                {_carEntries.map(([eid, cs], idx) => {
                   const participant = (liveRace.participants || activeRace.participants || []).find(p => (p.user_id || p.id) === eid);
                   const isMe = eid === profile?.user_id;
-                  const tyreColors = { soft: "#e82020", medium: "#e8d020", hard: "#c0c0b8", inter: "#20a840", full_wet: "#2080e8" };
                   return (
                     <div key={eid} className={"flex items-center gap-2 px-3 py-1.5 text-xs" + (isMe ? " bg-amber-900/10" : "")}
                       style={isMe ? { borderLeft: "2px solid var(--noir-primary)" } : {}}>
@@ -898,9 +965,9 @@ export default function Racing() {
                         {cs.dnf ? "DNF" : `P${idx + 1}`}
                       </span>
                       <span className="flex-1 truncate" style={{ color: isMe ? "var(--noir-primary)" : "var(--noir-foreground)" }}>
-                        {participant?.team_name || participant?.username || eid.slice(0,8)}
+                        {participant?.team_name || participant?.username || eid.slice(0, 8)}
                       </span>
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: tyreColors[cs.compound] || "#ccc" }} title={cs.compound} />
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: _tColors[cs.compound] || "#ccc" }} title={cs.compound} />
                       <span className="text-[9px] tabular-nums w-10 text-right" style={{ color: (cs.tyre_wear ?? 100) < 30 ? "#e74c3c" : "var(--noir-muted)" }}>
                         {Math.round(cs.tyre_wear ?? 100)}%
                       </span>
@@ -910,102 +977,128 @@ export default function Racing() {
                     </div>
                   );
                 })}
-            </div>
-          </div>
-
-          {/* Strategy Panel */}
-          {liveRace.status === "in_progress" && liveRace.current_lap < liveRace.total_laps && (
-            <div className={styles.panel + " mobile-panel overflow-hidden"}>
-              <CardHead title="Strategy" right={
-                decisionSubmitted ? <span className="text-[9px] text-green-400 font-heading">LOCKED IN</span> :
-                <span className="text-[9px] text-amber-400 font-heading">AWAITING DECISION</span>
-              } />
-              <div className="p-3 space-y-3">
-                {/* Push Level */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[9px] font-heading uppercase text-[var(--noir-muted)]">Push Level</span>
-                    <span className="text-xs font-heading" style={{ color: myDecision.push_level >= 4 ? "#ef4444" : myDecision.push_level <= 2 ? "#22c55e" : "var(--noir-primary)" }}>
-                      {["", "Conserve", "Steady", "Normal", "Push", "Max Attack"][myDecision.push_level]}
-                    </span>
-                  </div>
-                  <div className="flex gap-1">
-                    {[1,2,3,4,5].map(lv => (
-                      <button key={lv} type="button"
-                        className={"flex-1 py-1.5 text-[10px] font-heading rounded border transition-all " +
-                          (myDecision.push_level === lv ? "border-[var(--noir-primary)] bg-amber-900/30 text-[var(--noir-primary)]" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
-                        disabled={decisionSubmitted}
-                        onClick={() => setMyDecision(d => ({...d, push_level: lv}))}>
-                        {lv}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex justify-between text-[7px] text-[var(--noir-muted)] mt-0.5 px-1">
-                    <span>Save tyres</span>
-                    <span>Max speed</span>
-                  </div>
-                </div>
-
-                {/* Pit + Defend Row */}
-                <div className="flex gap-2">
-                  <button type="button"
-                    className={"flex-1 py-2 text-[10px] font-heading rounded border transition-all " +
-                      (myDecision.pit_this_lap ? "border-blue-500 bg-blue-900/30 text-blue-300" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
-                    disabled={decisionSubmitted}
-                    onClick={() => setMyDecision(d => ({...d, pit_this_lap: !d.pit_this_lap}))}>
-                    {myDecision.pit_this_lap ? "PIT THIS LAP" : "No Pit"}
-                  </button>
-                  <button type="button"
-                    className={"flex-1 py-2 text-[10px] font-heading rounded border transition-all " +
-                      (myDecision.defend ? "border-red-500 bg-red-900/30 text-red-300" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
-                    disabled={decisionSubmitted}
-                    onClick={() => setMyDecision(d => ({...d, defend: !d.defend}))}>
-                    {myDecision.defend ? "DEFENDING" : "No Defend"}
-                  </button>
-                </div>
-
-                {/* Tyre Compound Selector */}
-                {myDecision.pit_this_lap && (
-                  <div className="flex gap-1">
-                    {["soft","medium","hard","inter","full_wet"].map(c => {
-                      const colors = { soft: "#e82020", medium: "#e8d020", hard: "#c0c0b8", inter: "#20a840", full_wet: "#2080e8" };
-                      const labels = { soft: "S", medium: "M", hard: "H", inter: "I", full_wet: "W" };
-                      return (
-                        <button key={c} type="button"
-                          className={"flex-1 py-1 text-[10px] font-heading rounded border transition-all " +
-                            (myDecision.pit_compound === c ? "border-[var(--noir-primary)]" : "border-[var(--noir-border)] hover:bg-[var(--noir-surface)]")}
-                          style={{ color: colors[c], borderColor: myDecision.pit_compound === c ? colors[c] : undefined }}
-                          disabled={decisionSubmitted}
-                          onClick={() => setMyDecision(d => ({...d, pit_compound: c}))}>
-                          {labels[c]}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Submit Button */}
-                <button type="button"
-                  className={styles.btnGoldDarkText + " w-full py-2 text-xs font-heading"}
-                  disabled={decisionSubmitted}
-                  onClick={handleSubmitDecision}>
-                  {decisionSubmitted ? "Decision Locked" : "Confirm Strategy"}
-                </button>
               </div>
             </div>
-          )}
+
+            {/* Strategy Panel */}
+            {liveRace.status === "running" && liveRace.current_lap < liveRace.total_laps ? (
+              <div className={styles.panel + " mobile-panel overflow-hidden"}>
+                <CardHead title="Strategy" right={
+                  decisionSubmitted ? <span className="text-[9px] text-green-400 font-heading">LOCKED IN</span> :
+                  <span className="text-[9px] text-amber-400 font-heading animate-pulse">AWAITING DECISION</span>
+                } />
+                <div className="p-3 space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[9px] font-heading uppercase text-[var(--noir-muted)]">Push Level</span>
+                      <span className="text-xs font-heading" style={{ color: myDecision.push_level >= 4 ? "#ef4444" : myDecision.push_level <= 2 ? "#22c55e" : "var(--noir-primary)" }}>
+                        {["", "Conserve", "Steady", "Normal", "Push", "Max Attack"][myDecision.push_level]}
+                      </span>
+                    </div>
+                    <div className="flex gap-1">
+                      {[1,2,3,4,5].map(lv => (
+                        <button key={lv} type="button"
+                          className={"flex-1 py-1.5 text-[10px] font-heading rounded border transition-all " +
+                            (myDecision.push_level === lv ? "border-[var(--noir-primary)] bg-amber-900/30 text-[var(--noir-primary)]" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
+                          disabled={decisionSubmitted}
+                          onClick={() => setMyDecision(d => ({...d, push_level: lv}))}>
+                          {lv}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex justify-between text-[7px] text-[var(--noir-muted)] mt-0.5 px-1">
+                      <span>Save tyres</span><span>Max speed</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button"
+                      className={"flex-1 py-2 text-[10px] font-heading rounded border transition-all " +
+                        (myDecision.pit_this_lap ? "border-blue-500 bg-blue-900/30 text-blue-300" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
+                      disabled={decisionSubmitted}
+                      onClick={() => setMyDecision(d => ({...d, pit_this_lap: !d.pit_this_lap}))}>
+                      {myDecision.pit_this_lap ? "PIT THIS LAP" : "No Pit"}
+                    </button>
+                    <button type="button"
+                      className={"flex-1 py-2 text-[10px] font-heading rounded border transition-all " +
+                        (myDecision.defend ? "border-red-500 bg-red-900/30 text-red-300" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
+                      disabled={decisionSubmitted}
+                      onClick={() => setMyDecision(d => ({...d, defend: !d.defend}))}>
+                      {myDecision.defend ? "DEFENDING" : "No Defend"}
+                    </button>
+                  </div>
+                  {myDecision.pit_this_lap && (
+                    <div className="flex gap-1">
+                      {["soft","medium","hard","inter","full_wet"].map(c => {
+                        const labels = { soft: "S", medium: "M", hard: "H", inter: "I", full_wet: "W" };
+                        return (
+                          <button key={c} type="button"
+                            className={"flex-1 py-1 text-[10px] font-heading rounded border transition-all " +
+                              (myDecision.pit_compound === c ? "border-[var(--noir-primary)]" : "border-[var(--noir-border)] hover:bg-[var(--noir-surface)]")}
+                            style={{ color: _tColors[c], borderColor: myDecision.pit_compound === c ? _tColors[c] : undefined }}
+                            disabled={decisionSubmitted}
+                            onClick={() => setMyDecision(d => ({...d, pit_compound: c}))}>
+                            {labels[c]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <button type="button"
+                    className={styles.btnGoldDarkText + " w-full py-2 text-xs font-heading"}
+                    disabled={decisionSubmitted}
+                    onClick={handleSubmitDecision}>
+                    {decisionSubmitted ? "Decision Locked" : "Confirm Strategy"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className={styles.panel + " mobile-panel overflow-hidden"}>
+                <CardHead title="Telemetry" />
+                <div className="p-3 space-y-2">
+                  {_carEntries.filter(([eid]) => eid === profile?.user_id).map(([eid, cs]) => (
+                    <div key={eid} className="space-y-2">
+                      {[
+                        { label: "Tyre Wear", val: cs.tyre_wear ?? 100, color: (cs.tyre_wear ?? 100) < 30 ? "#e74c3c" : "#22c55e" },
+                        { label: "Engine", val: 100 - (cs.engine_wear ?? 0), color: (cs.engine_wear ?? 0) > 75 ? "#e74c3c" : "#3b82f6" },
+                        { label: "Fuel", val: cs.fuel_pct ?? 100, color: (cs.fuel_pct ?? 100) < 20 ? "#e74c3c" : "#f59e0b" },
+                      ].map(bar => (
+                        <div key={bar.label}>
+                          <div className="flex justify-between text-[9px] mb-0.5">
+                            <span className="text-[var(--noir-muted)] font-heading uppercase">{bar.label}</span>
+                            <span style={{ color: bar.color }}>{Math.round(bar.val)}%</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-[var(--noir-border)] overflow-hidden">
+                            <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${bar.val}%`, background: bar.color }} />
+                          </div>
+                        </div>
+                      ))}
+                      {cs.damage > 0 && (
+                        <div className="text-[9px] text-red-400 font-heading">DAMAGE: {Math.round(cs.damage * 100)}%</div>
+                      )}
+                    </div>
+                  ))}
+                  {_carEntries.filter(([eid]) => eid === profile?.user_id).length === 0 && (
+                    <p className="text-[10px] text-[var(--noir-muted)]">Spectating...</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Incident Feed */}
           {(liveRace.incidents || []).length > 0 && (
             <div className={styles.panel + " mobile-panel overflow-hidden"}>
               <CardHead title="Incidents" />
               <div className="p-2 max-h-32 overflow-y-auto space-y-0.5">
-                {(liveRace.incidents || []).slice(-10).reverse().map((inc, i) => (
-                  <div key={i} className="text-[9px] text-[var(--noir-muted)] flex gap-1.5">
-                    <span className="text-amber-400 font-heading flex-shrink-0">LAP {inc.lap}</span>
-                    <span>Contact: damage {inc.damage_pct}% to {inc.damaged?.slice(0,8) || "car"}</span>
-                  </div>
-                ))}
+                {(liveRace.incidents || []).slice(-10).reverse().map((inc, i) => {
+                  const damagedP = (liveRace.participants || []).find(p => (p.user_id || p.id) === inc.damaged);
+                  return (
+                    <div key={i} className="text-[9px] text-[var(--noir-muted)] flex gap-1.5">
+                      <span className="text-amber-400 font-heading flex-shrink-0">LAP {inc.lap}</span>
+                      <span>Contact: {damagedP?.username || damagedP?.team_name || inc.damaged?.slice(0,8)} took {inc.damage_pct}% damage</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1013,14 +1106,16 @@ export default function Racing() {
           {/* Race Finished */}
           {(liveRace.status === "completed" || liveRace.status === "finished") && (
             <div className={styles.panel + " mobile-panel overflow-hidden"}>
-              <CardHead title="Race Finished!" />
-              <div className="p-3">
-                <p className="text-xs text-[var(--noir-muted)]">Results are being processed...</p>
+              <CardHead title="Checkered Flag!" />
+              <div className="p-3 text-center">
+                <p className="text-lg font-heading text-[var(--noir-primary)] mb-1">Race Complete</p>
+                <p className="text-[10px] text-[var(--noir-muted)]">Final results loading...</p>
               </div>
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ─── LIVE RACE: same CircuitRaceView as replay — uses full realism (getCornerMult ~120 mph in corners, brake/accel smoothing, track width, car scale 0.88, final order from backend result_order) ─── */}
       {activeRace?.state === "running" && !(activeRace?.mode === "interactive" || activeRace?.interactive) && (
