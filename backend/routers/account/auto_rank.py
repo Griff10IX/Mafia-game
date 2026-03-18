@@ -426,7 +426,7 @@ async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_ch
             if not user:
                 break
         except HTTPException as he:
-            logger.debug("Auto rank booze sell %s: %s", user_id, he.detail)
+            logger.info("Auto rank booze sell %s: %s", user_id, he.detail)
             break
         except Exception as e:
             logger.exception("Auto rank booze sell %s: %s", user_id, e)
@@ -444,7 +444,7 @@ async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_
 
     travel_method = await _get_travel_method(db, user_id)
     if not travel_method:
-        logger.debug("Auto rank booze %s: no working car for buy+travel", user_id)
+        logger.info("Auto rank booze %s: no working car for buy+travel", user_id)
         return False
 
     prices_map = _booze_prices_for_rotation()
@@ -463,11 +463,11 @@ async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_
             best_buy_price = p_buy
 
     if not best_booze_id or best_profit <= 0 or best_buy_price <= 0:
-        logger.debug("Auto rank booze %s: no profitable booze route (best_profit=%s)", user_id, best_profit)
+        logger.info("Auto rank booze %s: no profitable booze route (best_profit=%s)", user_id, best_profit)
         return False
     amount = min(capacity, money // best_buy_price)
     if amount <= 0:
-        logger.debug("Auto rank booze %s: insufficient money ($%s) for buy (price=$%s)", user_id, money, best_buy_price)
+        logger.info("Auto rank booze %s: insufficient money ($%s) for buy (price=$%s)", user_id, money, best_buy_price)
         return False
 
     try:
@@ -496,11 +496,11 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
 
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
-        logger.debug("Auto rank booze %s: user not found", user_id)
+        logger.info("Auto rank booze %s: user not found", user_id)
         return False
     user = await _apply_overdue_travel(db, user_id, user, now)
     if not user or user.get("in_jail"):
-        logger.debug("Auto rank booze %s: in jail or missing after travel apply", user_id)
+        logger.info("Auto rank booze %s: in jail or missing after travel apply", user_id)
         return False
     if user.get("travel_arrives_at"):
         adt = _parse_iso(user["travel_arrives_at"])
@@ -525,11 +525,11 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
                 lines.append(f"**Booze** — Traveling to {city_a} to start run.")
                 return True
             except HTTPException as he:
-                logger.debug("Auto rank booze %s: travel to %s failed: %s", user_id, city_a, he.detail)
+                logger.info("Auto rank booze %s: travel to %s failed: %s", user_id, city_a, he.detail)
             except Exception as e:
                 logger.exception("Auto rank booze travel to buy city %s: %s", user_id, e)
         else:
-            logger.debug("Auto rank booze %s: at %s (not in %s/%s), no working car to travel", user_id, current, city_a, city_b)
+            logger.info("Auto rank booze %s: at %s (not in %s/%s), no working car to travel", user_id, current, city_a, city_b)
         return False
 
     carrying_total = _booze_user_carrying_total(dict(user.get("booze_carrying") or {}))
@@ -985,7 +985,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             if await _run_booze_for_user(db, user_id, username, chat_id, bot_token, now, lines):
                 has_success = True
         except HTTPException as he:
-            logger.debug("Auto rank booze for %s: %s", user_id, he.detail)
+            logger.info("Auto rank booze for %s: %s", user_id, he.detail)
         except Exception as e:
             logger.exception("Auto rank booze for %s: %s", user_id, e)
 
