@@ -3,6 +3,8 @@ import logging
 import re
 import traceback
 import uuid
+
+logger = logging.getLogger(__name__)
 from datetime import datetime, timezone, timedelta
 
 from typing import Optional
@@ -566,8 +568,8 @@ def register(router):
         except HTTPException:
             raise
         except Exception as e:
-            logging.error(f"Registration error: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+            logger.exception("Registration error: %s", e)
+            raise HTTPException(status_code=500, detail="Registration failed. Please try again.")
 
     LOGIN_MAX_ATTEMPTS = 3
     LOGIN_LOCKOUT_MINUTES = 5

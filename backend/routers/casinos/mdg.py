@@ -73,13 +73,9 @@ def register(router):
         # Creator is auto-joined: must have enough to pay fee + extra pot
         total_pts = fee_pts + extra_pts
         total_money = fee_money + extra_money
-        user = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1, "money": 1, "username": 1})
+        user = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
         if not user:
             raise HTTPException(status_code=400, detail="User not found")
-        if total_pts > int(user.get("points") or 0):
-            raise HTTPException(status_code=400, detail="Insufficient points to create and join (fee + extra pot)")
-        if total_money > float(user.get("money") or 0):
-            raise HTTPException(status_code=400, detail="Insufficient money to create and join (fee + extra pot)")
 
         game_id = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -103,11 +99,19 @@ def register(router):
             "winner_username": None,
             "rolled_at": None,
         }
-        await db.mdg_games.insert_one(doc)
+        deduct_filter = {"id": uid}
+        deduct_inc = {}
         if total_pts:
-            await db.users.update_one({"id": uid}, {"$inc": {"points": -total_pts}})
+            deduct_filter["points"] = {"$gte": total_pts}
+            deduct_inc["points"] = -total_pts
         if total_money:
-            await db.users.update_one({"id": uid}, {"$inc": {"money": -total_money}})
+            deduct_filter["money"] = {"$gte": total_money}
+            deduct_inc["money"] = -total_money
+        if deduct_inc:
+            result = await db.users.update_one(deduct_filter, {"$inc": deduct_inc})
+            if result.modified_count == 0:
+                raise HTTPException(status_code=400, detail="Insufficient points or money to create and join (fee + extra pot)")
+        await db.mdg_games.insert_one(doc)
         await log_gambling(
             uid,
             current_user.get("username") or "?",
@@ -132,26 +136,27 @@ def register(router):
         if len(entries) >= max_players:
             raise HTTPException(status_code=400, detail="Game is full")
 
-        user = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1, "money": 1, "username": 1})
+        user = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
         if not user:
             raise HTTPException(status_code=400, detail="User not found")
-        points = int(user.get("points") or 0)
-        money = float(user.get("money") or 0)
-        if fee_pts > points:
-            raise HTTPException(status_code=400, detail="Insufficient points")
-        if fee_money > money:
-            raise HTTPException(status_code=400, detail="Insufficient money")
 
         entry = {"user_id": uid, "username": user.get("username") or "?", "paid_points": fee_pts, "paid_money": fee_money}
         new_entries = entries + [entry]
         new_pot_pts = int(game.get("pot_points") or 0) + fee_pts
         new_pot_money = float(game.get("pot_money") or 0) + fee_money
 
-        # Deduct from user
+        deduct_filter = {"id": uid}
+        deduct_inc = {}
         if fee_pts:
-            await db.users.update_one({"id": uid}, {"$inc": {"points": -fee_pts}})
+            deduct_filter["points"] = {"$gte": fee_pts}
+            deduct_inc["points"] = -fee_pts
         if fee_money:
-            await db.users.update_one({"id": uid}, {"$inc": {"money": -fee_money}})
+            deduct_filter["money"] = {"$gte": fee_money}
+            deduct_inc["money"] = -fee_money
+        if deduct_inc:
+            result = await db.users.update_one(deduct_filter, {"$inc": deduct_inc})
+            if result.modified_count == 0:
+                raise HTTPException(status_code=400, detail="Insufficient points or money")
 
         await log_gambling(
             uid,

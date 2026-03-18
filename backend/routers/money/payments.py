@@ -574,7 +574,7 @@ def register(router):
             session = await asyncio.to_thread(_retrieve)
         except Exception as e:
             logger.exception("Admin Stripe session check failed: %s", e)
-            raise HTTPException(status_code=400, detail=f"Failed to retrieve session: {str(e)}")
+            raise HTTPException(status_code=400, detail="Failed to retrieve session. Please try again.")
         
         result = {
             "session_id": body.session_id,

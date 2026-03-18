@@ -1633,7 +1633,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     )
     raise HTTPException(
         status_code=500,
-        detail=f"Attack failed due to a server error. Please report this. (debug: {type(e).__name__}: {e})",
+        detail="Attack failed due to a server error. Please report this.",
     )
 
 async def get_attack_attempts(current_user: dict = Depends(get_current_user)):

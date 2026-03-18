@@ -415,17 +415,16 @@ async def claim_bullet_factory(
     factory = await _get_or_create_factory(state)
     if factory.get("owner_id"):
         raise HTTPException(status_code=400, detail="The armoury in this state already has an owner")
-    user_money = int(current_user.get("money") or 0)
-    if user_money < BULLET_FACTORY_CLAIM_COST:
+    now = datetime.now(timezone.utc).isoformat()
+    result = await db.users.update_one(
+        {"id": current_user["id"], "money": {"$gte": BULLET_FACTORY_CLAIM_COST}},
+        {"$inc": {"money": -BULLET_FACTORY_CLAIM_COST}},
+    )
+    if result.modified_count == 0:
         raise HTTPException(
             status_code=400,
             detail=f"You need ${BULLET_FACTORY_CLAIM_COST:,} to claim the armoury",
         )
-    now = datetime.now(timezone.utc).isoformat()
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"money": -BULLET_FACTORY_CLAIM_COST}},
-    )
     await db.bullet_factory.update_one(
         {"state": state},
         {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "last_collected_at": now}},
@@ -491,14 +490,14 @@ async def start_armour_production(
     cost_points = armour.get("cost_points")
     if cost_money is not None:
         pay = cost_money * ARMOURY_ARMOUR_RATE_PER_HOUR
-        if (current_user.get("money") or 0) < pay:
+        result = await db.users.update_one({"id": current_user["id"], "money": {"$gte": pay}}, {"$inc": {"money": -pay}})
+        if result.modified_count == 0:
             raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${pay:,} for 1 hour of production.")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -pay}})
     elif cost_points is not None:
         pay = cost_points * ARMOURY_ARMOUR_RATE_PER_HOUR
-        if (current_user.get("points") or 0) < pay:
+        result = await db.users.update_one({"id": current_user["id"], "points": {"$gte": pay}}, {"$inc": {"points": -pay}})
+        if result.modified_count == 0:
             raise HTTPException(status_code=400, detail=f"Insufficient points. Need {pay} for 1 hour of production.")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -pay}})
     else:
         raise HTTPException(status_code=400, detail="Armour level has no production cost")
     armour_hours = dict(factory.get("armour_production_hours") or {})
@@ -545,14 +544,14 @@ async def start_weapon_production(
     pp = weapon.get("price_points")
     if pm is not None:
         pay = pm * ARMOURY_WEAPON_RATE_PER_HOUR
-        if (current_user.get("money") or 0) < pay:
+        result = await db.users.update_one({"id": current_user["id"], "money": {"$gte": pay}}, {"$inc": {"money": -pay}})
+        if result.modified_count == 0:
             raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${pay:,} for 1 hour of production.")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -pay}})
     elif pp is not None:
         pay = pp * ARMOURY_WEAPON_RATE_PER_HOUR
-        if (current_user.get("points") or 0) < pay:
+        result = await db.users.update_one({"id": current_user["id"], "points": {"$gte": pay}}, {"$inc": {"points": -pay}})
+        if result.modified_count == 0:
             raise HTTPException(status_code=400, detail=f"Insufficient points. Need {pay} for 1 hour of production.")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -pay}})
     else:
         raise HTTPException(status_code=400, detail="Weapon has no production cost")
     weapon_hours = dict(factory.get("weapon_production_hours") or {})
@@ -592,14 +591,21 @@ async def start_armour_production_all(
         raise HTTPException(status_code=400, detail="Cannot stack. All armour levels are still producing. Wait for them to finish, then use Produce all again (1 hr each).")
     total_money = sum((a.get("cost_money") or 0) for a in levels_to_add) * ARMOURY_ARMOUR_RATE_PER_HOUR
     total_points = sum((a.get("cost_points") or 0) for a in levels_to_add) * ARMOURY_ARMOUR_RATE_PER_HOUR
-    if total_money > 0 and (current_user.get("money") or 0) < total_money:
-        raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${total_money:,} for 1 hr on {len(levels_to_add)} level(s).")
-    if total_points > 0 and (current_user.get("points") or 0) < total_points:
-        raise HTTPException(status_code=400, detail=f"Insufficient points. Need {total_points} pts for 1 hr on {len(levels_to_add)} level(s).")
+    filter_fields = {"id": current_user["id"]}
+    inc_fields = {}
     if total_money > 0:
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -total_money}})
+        filter_fields["money"] = {"$gte": total_money}
+        inc_fields["money"] = -total_money
     if total_points > 0:
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -total_points}})
+        filter_fields["points"] = {"$gte": total_points}
+        inc_fields["points"] = -total_points
+    if inc_fields:
+        result = await db.users.update_one(filter_fields, {"$inc": inc_fields})
+        if result.modified_count == 0:
+            fresh = await db.users.find_one({"id": current_user["id"]}, {"money": 1, "points": 1})
+            if total_money > 0 and (fresh.get("money") or 0) < total_money:
+                raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${total_money:,} for 1 hr on {len(levels_to_add)} level(s).")
+            raise HTTPException(status_code=400, detail=f"Insufficient points. Need {total_points} pts for 1 hr on {len(levels_to_add)} level(s).")
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
     for a in levels_to_add:
@@ -633,14 +639,21 @@ async def start_weapon_production_all(
         raise HTTPException(status_code=400, detail="Cannot stack. All weapons are still producing. Wait for them to finish, then use Produce all again (1 hr each).")
     total_money = sum((w.get("price_money") or 0) for w in weapons_to_add) * ARMOURY_WEAPON_RATE_PER_HOUR
     total_points = sum((w.get("price_points") or 0) for w in weapons_to_add) * ARMOURY_WEAPON_RATE_PER_HOUR
-    if total_money > 0 and (current_user.get("money") or 0) < total_money:
-        raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${total_money:,} for 1 hr on {len(weapons_to_add)} weapon(s).")
-    if total_points > 0 and (current_user.get("points") or 0) < total_points:
-        raise HTTPException(status_code=400, detail=f"Insufficient points. Need {total_points} pts for 1 hr on {len(weapons_to_add)} weapon(s).")
+    filter_fields = {"id": current_user["id"]}
+    inc_fields = {}
     if total_money > 0:
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -total_money}})
+        filter_fields["money"] = {"$gte": total_money}
+        inc_fields["money"] = -total_money
     if total_points > 0:
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -total_points}})
+        filter_fields["points"] = {"$gte": total_points}
+        inc_fields["points"] = -total_points
+    if inc_fields:
+        result = await db.users.update_one(filter_fields, {"$inc": inc_fields})
+        if result.modified_count == 0:
+            fresh = await db.users.find_one({"id": current_user["id"]}, {"money": 1, "points": 1})
+            if total_money > 0 and (fresh.get("money") or 0) < total_money:
+                raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${total_money:,} for 1 hr on {len(weapons_to_add)} weapon(s).")
+            raise HTTPException(status_code=400, detail=f"Insufficient points. Need {total_points} pts for 1 hr on {len(weapons_to_add)} weapon(s).")
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
     for w in weapons_to_add:
@@ -776,12 +789,6 @@ async def buy_bullets(
     else:
         price = factory.get("unowned_price") or random.randint(BULLET_FACTORY_UNOWNED_PRICE_MIN, BULLET_FACTORY_UNOWNED_PRICE_MAX)
     total_cost = amount * price
-    buyer_money = int(current_user.get("money") or 0)
-    if buyer_money < total_cost:
-        raise HTTPException(
-            status_code=400,
-            detail=f"You need ${total_cost:,} (${price:,} × {amount:,})",
-        )
     # Advance last_collected_at so accumulated drops by amount
     last = _parse_utc(factory.get("last_collected_at"))
     if last is None:
@@ -793,10 +800,15 @@ async def buy_bullets(
         {"$set": {"last_collected_at": new_last.isoformat()}},
     )
     now_iso = datetime.now(timezone.utc).isoformat()
-    await db.users.update_one(
-        {"id": current_user["id"]},
+    result = await db.users.update_one(
+        {"id": current_user["id"], "money": {"$gte": total_cost}},
         {"$inc": {"money": -total_cost, "bullets": amount, "bullets_purchased_from_armoury": amount}, "$set": {"last_bullet_factory_bought_at": now_iso}},
     )
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You need ${total_cost:,} (${price:,} × {amount:,})",
+        )
     if owner_id:
         await db.bullet_factory.update_one(
             {"state": state},
@@ -938,12 +950,8 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
     ev = await get_effective_event()
     mult = ev.get("armour_weapon_cost", 1.0)
     price = int(armour["cost_money"] * ARMOUR_WEAPON_MARGIN * mult) if armour.get("cost_money") is not None else int(armour["cost_points"] * ARMOUR_WEAPON_MARGIN * mult)
-    if armour.get("cost_money") is not None:
-        if current_user.get("money", 0) < price:
-            raise HTTPException(status_code=400, detail="Insufficient cash")
-    else:
-        if current_user.get("points", 0) < price:
-            raise HTTPException(status_code=400, detail="Insufficient points")
+    currency_field = "money" if armour.get("cost_money") is not None else "points"
+    insufficient_msg = "Insufficient cash" if currency_field == "money" else "Insufficient points"
 
     # Fulfill from armoury in same state if stock available (stock always decrements; owner gets 35% margin when buyer is not owner)
     state = (request.state or current_user.get("current_state") or "").strip()
@@ -962,11 +970,15 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
             {"$set": {"armour_stock": armour_stock}},
         )
         if owner_id and owner_id != current_user["id"]:
-            if armour.get("cost_money") is not None:
-                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -price}, "$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}})
+            result = await db.users.update_one(
+                {"id": current_user["id"], currency_field: {"$gte": price}},
+                {"$inc": {currency_field: -price}, "$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}},
+            )
+            if result.modified_count == 0:
+                raise HTTPException(status_code=400, detail=insufficient_msg)
+            if currency_field == "money":
                 await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit": price}})
             else:
-                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -price}, "$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}})
                 await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit_points": price}})
         else:
             await db.users.update_one(
@@ -976,11 +988,10 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
         return {"message": f"Purchased {armour['name']} (Armour Lv.{level}) from armoury", "new_level": level}
 
     updates = {"$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}}
-    if armour.get("cost_money") is not None:
-        updates["$inc"] = {"money": -price}
-    else:
-        updates["$inc"] = {"points": -price}
-    await db.users.update_one({"id": current_user["id"]}, updates)
+    updates["$inc"] = {currency_field: -price}
+    result = await db.users.update_one({"id": current_user["id"], currency_field: {"$gte": price}}, updates)
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail=insufficient_msg)
     return {"message": f"Purchased {armour['name']} (Armour Lv.{level})", "new_level": level}
 
 
@@ -1214,14 +1225,12 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
         if weapon.get("price_money") is None:
             raise HTTPException(status_code=400, detail="This weapon can only be bought with points")
         price = int(weapon["price_money"] * ARMOUR_WEAPON_MARGIN * mult)
-        if current_user.get("money", 0) < price:
-            raise HTTPException(status_code=400, detail="Insufficient money")
+        insufficient_msg = "Insufficient money"
     else:
         if weapon.get("price_points") is None:
             raise HTTPException(status_code=400, detail="This weapon can only be bought with money")
         price = int(weapon["price_points"] * ARMOUR_WEAPON_MARGIN * mult)
-        if current_user.get("points", 0) < price:
-            raise HTTPException(status_code=400, detail="Insufficient points")
+        insufficient_msg = "Insufficient points"
 
     # Fulfill from armoury in same state if stock available (stock always decrements; owner gets 35% margin when buyer is not owner)
     state = (request.state or current_user.get("current_state") or "").strip()
@@ -1240,11 +1249,15 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
             {"$set": {"weapon_stock": weapon_stock}},
         )
         if owner_id and owner_id != current_user["id"]:
+            result = await db.users.update_one(
+                {"id": current_user["id"], currency: {"$gte": price}},
+                {"$inc": {currency: -price}},
+            )
+            if result.modified_count == 0:
+                raise HTTPException(status_code=400, detail=insufficient_msg)
             if currency == "money":
-                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -price}})
                 await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit": price}})
             else:
-                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -price}})
                 await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit_points": price}})
         await db.user_weapons.update_one(
             {"user_id": current_user["id"], "weapon_id": weapon_id},
@@ -1258,10 +1271,12 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
         _invalidate_weapons_cache(current_user["id"])
         return {"message": f"Successfully purchased {weapon['name']} from armoury"}
 
-    if currency == "money":
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -price}})
-    else:
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -price}})
+    result = await db.users.update_one(
+        {"id": current_user["id"], currency: {"$gte": price}},
+        {"$inc": {currency: -price}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail=insufficient_msg)
     await db.user_weapons.update_one(
         {"user_id": current_user["id"], "weapon_id": weapon_id},
         {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},

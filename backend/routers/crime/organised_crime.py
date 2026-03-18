@@ -298,13 +298,6 @@ async def run_heist(
     # Calculate total cost (setup + equipment)
     total_cost = job["setup_cost"] + equipment["cost"]
     
-    # Check if user can afford total cost
-    if current_user.get("money", 0) < total_cost:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not enough money. Need ${total_cost:,} (${job['setup_cost']:,} setup + ${equipment['cost']:,} equipment)"
-        )
-    
     # Validate team (must have all 4 roles filled)
     if not all(role in request.team for role in TEAM_ROLES):
         raise HTTPException(
@@ -312,11 +305,15 @@ async def run_heist(
             detail="Team must have all roles: driver, weapons, explosives, hacker"
         )
     
-    # Deduct total cost (setup + equipment consumed)
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"money": -total_cost}}
+    result = await db.users.update_one(
+        {"id": current_user["id"], "money": {"$gte": total_cost}},
+        {"$inc": {"money": -total_cost}},
     )
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough money. Need ${total_cost:,} (${job['setup_cost']:,} setup + ${equipment['cost']:,} equipment)"
+        )
     
     # Success chance from job base + equipment bonus (capped 92%); ensures equipment always helps
     success_rate = min(0.92, job["base_success_rate"] + equipment["success_bonus"])

@@ -639,13 +639,14 @@ async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dic
     opt = next((o for o in (ev.get("options") or []) if o.get("id") == option_id), None)
     if not opt:
         raise HTTPException(status_code=400, detail="Invalid option")
-    user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "money": 1})
-    money = int(user.get("money", 0) or 0)
-    if stake > money:
-        raise HTTPException(status_code=400, detail="Insufficient cash")
     now = datetime.now(timezone.utc).isoformat()
     bet_id = str(uuid.uuid4())
-    await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -stake}})
+    result = await db.users.update_one(
+        {"id": current_user.get("id") or "", "money": {"$gte": stake}},
+        {"$inc": {"money": -stake}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient cash")
     await db.sports_bets.insert_one({
         "id": bet_id,
         "user_id": current_user.get("id") or "",

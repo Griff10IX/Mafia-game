@@ -349,7 +349,7 @@ async def open_loot_box(
             logger.exception("Loot box open (find_one_and_update) user_id=%s: %s", user_id, e)
             raise HTTPException(
                 status_code=400,
-                detail=f"Not enough loot box pieces (need 100) or deduct failed: {type(e).__name__}: {e!s}",
+                detail="Not enough loot box pieces (need 100) or deduct failed.",
             )
         if not res:
             logger.warning("Loot box open: no document updated for user_id=%s (pieces may be < 100 or wrong type)", user_id)
@@ -570,7 +570,7 @@ async def open_loot_box(
         logger.exception("Loot box open (rewards) user_id=%s: %s", user_id, e)
         raise HTTPException(
             status_code=500,
-            detail=f"Loot box open failed: {type(e).__name__}: {e!s}",
+            detail="Loot box open failed. Please try again.",
         )
 
 

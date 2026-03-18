@@ -504,15 +504,17 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     total_cost = OC_SETUP_COST + equip["cost"]
     if oc_reduced:
         total_cost = int(total_cost * 0.8)
-    creator_money = int(current_user.get("money") or 0)
-    if creator_money < total_cost:
+    result = await db.users.update_one(
+        {"id": uid, "money": {"$gte": total_cost}},
+        {"$inc": {"money": -total_cost}},
+    )
+    if result.modified_count == 0:
         return {
             "success": False,
             "message": f"Not enough money. Need ${total_cost:,}",
             "cooldown_until": None,
             "skipped_afford": True,
         }
-    await db.users.update_one({"id": uid}, {"$inc": {"money": -total_cost}})
     ev = await get_effective_event()
     rank_mult = float(ev.get("rank_points", 1.0))
     cash_mult = float(ev.get("kill_cash", 1.0))

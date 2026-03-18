@@ -361,11 +361,12 @@ async def boxing_train(payload: TrainRequest, current_user: dict = Depends(get_c
     if current_val >= MAX_STAT:
         raise HTTPException(status_code=400, detail=f"{stat.title()} is already at max ({MAX_STAT})")
     cost = _train_cost(current_val)
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
-    money = int((user or {}).get("money") or 0)
-    if cost > money:
+    result = await db.users.update_one(
+        {"id": current_user["id"], "money": {"$gte": cost}},
+        {"$inc": {"money": -cost}}
+    )
+    if result.modified_count == 0:
         raise HTTPException(status_code=400, detail=f"Not enough cash. Need ${cost:,}")
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -cost}})
     await db.boxing_profiles.update_one({"user_id": current_user["id"]}, {"$inc": {stat: 1}})
     prof2 = await _ensure_profile(current_user["id"])
     return {
@@ -696,13 +697,13 @@ async def boxing_bet_place(payload: BetRequest, current_user: dict = Depends(get
         raise HTTPException(status_code=404, detail="Challenge not found or already resolved")
 
     odds = float((ch.get("odds") or {}).get(fighter) or 2.0)
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
-    money = int((user or {}).get("money") or 0)
-    if stake > money:
-        raise HTTPException(status_code=400, detail="Insufficient cash")
-
     bet_id = str(uuid.uuid4())
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -stake}})
+    result = await db.users.update_one(
+        {"id": current_user["id"], "money": {"$gte": stake}},
+        {"$inc": {"money": -stake}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient cash")
     await db.boxing_bets.insert_one({
         "id": bet_id, "user_id": current_user["id"],
         "challenge_id": cid, "fighter": fighter,

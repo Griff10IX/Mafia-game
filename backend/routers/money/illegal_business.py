@@ -400,12 +400,6 @@ async def start_illegal_business(req: StartBusinessRequest, current_user: dict =
     type_def = next((t for t in ILLEGAL_BUSINESS_TYPES if t["id"] == type_id), None)
     if not type_def:
         raise HTTPException(status_code=400, detail="Invalid business type.")
-    money = int(current_user.get("money") or 0)
-    points = int(current_user.get("points") or 0)
-    if money < START_COST_CASH:
-        raise HTTPException(status_code=400, detail=f"Need ${START_COST_CASH:,} to start.")
-    if points < START_COST_POINTS:
-        pass  # no points required by default
     state = (current_user.get("current_state") or STATES[0]).strip()
     if state not in STATES:
         state = STATES[0]
@@ -435,10 +429,12 @@ async def start_illegal_business(req: StartBusinessRequest, current_user: dict =
         doc["booze_per_hour"] = BOOZE_PER_HOUR_BASE
         doc["booze_cap_hours"] = BOOZE_CAP_HOURS_BASE
         doc["last_collected_booze_at"] = now.isoformat()
-    await db.users.update_one(
-        {"id": current_user["id"]},
+    result = await db.users.update_one(
+        {"id": current_user["id"], "money": {"$gte": START_COST_CASH}, "points": {"$gte": START_COST_POINTS}},
         {"$inc": {"money": -START_COST_CASH, "points": -START_COST_POINTS}},
     )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail=f"Need ${START_COST_CASH:,} to start.")
     await db.illegal_businesses.insert_one(doc)
     return {"message": f"You've taken over a joint in {state}.", "business_id": business_id}
 

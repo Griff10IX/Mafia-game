@@ -1,6 +1,9 @@
 # Store endpoints: rank bar, silencer, OC timer, garage batch, booze capacity, bullets, custom car, send points
+import logging
 from datetime import datetime, timezone
 import uuid
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel, field_validator
 
 from fastapi import Depends, HTTPException, Query
@@ -205,7 +208,8 @@ async def store_buy_bullets(
         try:
             cost = _bullet_cost(bullets)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            logger.exception("store_buy_bullets validation error: %s", e)
+            raise HTTPException(status_code=400, detail="Invalid bullet quantity.")
     cost_used, inc = _store_cost_inc(current_user, cost)
     inc["bullets"] = bullets
     await db.users.update_one(

@@ -353,7 +353,7 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
         raise
     except Exception as e:
         logger.exception("get_bodyguards error uid=%s: %s", uid, e)
-        raise HTTPException(status_code=500, detail=f"Bodyguards load failed: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Bodyguards load failed. Please try again.")
 
 
 async def get_bodyguards_stats(current_user: dict = Depends(get_current_user)):
@@ -661,7 +661,7 @@ async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
         raise
     except Exception as e:
         logger.exception("accept_bodyguard_invite error: %s", e)
-        raise HTTPException(status_code=400, detail=f"Accept failed: {str(e)}")
+        raise HTTPException(status_code=400, detail="Accept failed. Please try again.")
 
 
 async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):

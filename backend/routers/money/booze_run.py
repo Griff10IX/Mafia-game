@@ -210,8 +210,6 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int) -> dict:
     if booze_until and datetime.now(timezone.utc) < booze_until:
         price = max(1, int(price * 0.9))
     cost = price * amount
-    if user.get("money", 0) < cost:
-        raise HTTPException(status_code=400, detail="Insufficient money")
     carrying = dict(user.get("booze_carrying") or {})
     capacity = _booze_user_capacity(user)
     current_carry = _booze_user_carrying_total(carrying)
@@ -241,14 +239,16 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int) -> dict:
         "total": cost,
         "location": current_state,
     }
-    await db.users.update_one(
-        {"id": user["id"]},
+    result = await db.users.update_one(
+        {"id": user["id"], "money": {"$gte": cost}},
         {
             "$inc": {"money": -cost, f"booze_carrying.{booze_id}": amount, f"booze_carrying_cost.{booze_id}": cost},
             "$set": {f"booze_buy_location.{booze_id}": current_state},
             "$push": {"booze_run_history": {"$each": [history_entry], "$position": 0, "$slice": BOOZE_RUN_HISTORY_MAX}},
         }
     )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient money")
     new_carrying = carrying.get(booze_id, 0) + amount
     _invalidate_config_cache(user["id"])
     return {"message": f"Purchased {amount} {booze_name}", "new_carrying": new_carrying, "spent": cost}

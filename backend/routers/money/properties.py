@@ -233,12 +233,12 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
                     detail=f"Max out {name} (reach max level) to unlock this property.",
                 )
         cost = prop["price"]
-    if int(current_user.get("money") or 0) < cost:
-        raise HTTPException(status_code=400, detail="Insufficient money")
-    await db.users.update_one(
-        {"id": current_user["id"]},
+    result = await db.users.update_one(
+        {"id": current_user["id"], "money": {"$gte": cost}},
         {"$inc": {"money": -cost}}
     )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient money")
     if user_prop:
         await db.user_properties.update_one(
             {"user_id": current_user["id"], "property_id": property_id},

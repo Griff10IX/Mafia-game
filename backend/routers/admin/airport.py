@@ -284,11 +284,14 @@ async def _start_travel_impl(
             if until and now_utc < until:
                 airport_price = max(1, round(airport_price * 0.9))
         owner_id = airport_doc.get("owner_id")
-        if user.get("points", 0) < airport_price:
-            raise HTTPException(status_code=400, detail=f"Insufficient points for airport ({airport_price} pts)")
         travel_time = TRAVEL_TIMES["airport"]
         method_name = f"Airport #{slot}"
-        await db.users.update_one({"id": user["id"]}, {"$inc": {"points": -airport_price}})
+        result = await db.users.update_one(
+            {"id": user["id"], "points": {"$gte": airport_price}},
+            {"$inc": {"points": -airport_price}},
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail=f"Insufficient points for airport ({airport_price} pts)")
         if owner_id:
             await db.users.update_one({"id": owner_id}, {"$inc": {"points": airport_price}})
             await db.airport_ownership.update_one(

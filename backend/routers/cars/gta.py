@@ -964,7 +964,11 @@ async def buy_car(
     if result.deleted_count == 0:
         raise HTTPException(status_code=400, detail="That car is out of stock. Dealer restocks in 1–2 hours.")
     price = int(car_info.get("value", 0) * _dealer_price_multiplier(car_info))
-    if current_user.get("money", 0) < price:
+    result = await db.users.update_one(
+        {"id": current_user.get("id") or "", "money": {"$gte": price}},
+        {"$inc": {"money": -price}},
+    )
+    if result.modified_count == 0:
         raise HTTPException(status_code=400, detail=f"Insufficient money. Need ${price:,}.")
     now = datetime.now(timezone.utc)
     doc = {
@@ -977,10 +981,6 @@ async def buy_car(
     }
     await db.user_cars.insert_one(doc)
     _invalidate_travel_info_cache(current_user.get("id") or "")
-    await db.users.update_one(
-        {"id": current_user.get("id") or ""},
-        {"$inc": {"money": -price}},
-    )
     now_iso = now.isoformat()
     await db.money_transfers.insert_one({
         "id": str(uuid.uuid4()),
@@ -1142,7 +1142,13 @@ async def buy_listed_car(
     if price <= 0:
         raise HTTPException(status_code=400, detail="Invalid listing")
     buyer = await db.users.find_one({"id": buyer_id})
-    if not buyer or buyer.get("money", 0) < price:
+    if not buyer:
+        raise HTTPException(status_code=400, detail=f"Insufficient money. Need ${price:,}.")
+    result = await db.users.update_one(
+        {"id": buyer_id, "money": {"$gte": price}},
+        {"$inc": {"money": -price}},
+    )
+    if result.modified_count == 0:
         raise HTTPException(status_code=400, detail=f"Insufficient money. Need ${price:,}.")
     car_name = (user_car.get("custom_name") or user_car.get("car_name") or (car_info or {}).get("name") or "Car") if (user_car.get("car_id") == "car_custom") else ((car_info or {}).get("name") or user_car.get("car_name") or "Car")
     if user_car.get("_id") is not None:
@@ -1153,7 +1159,6 @@ async def buy_listed_car(
         q,
         {"$set": {"user_id": buyer_id}, "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}},
     )
-    await db.users.update_one({"id": buyer_id}, {"$inc": {"money": -price}})
     await db.users.update_one({"id": seller_id}, {"$inc": {"money": price}})
     seller = await db.users.find_one({"id": seller_id}, {"_id": 0, "username": 1})
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -1227,14 +1232,17 @@ async def repair_car(
         raise HTTPException(status_code=400, detail="Car type not found")
     value = int(car_info.get("value", 0))
     cost = max(1, round((damage / 100) * value * REPAIR_COST_FRACTION))
-    if current_user.get("money", 0) < cost:
+    result = await db.users.update_one(
+        {"id": current_user.get("id") or "", "money": {"$gte": cost}},
+        {"$inc": {"money": -cost}},
+    )
+    if result.modified_count == 0:
         raise HTTPException(status_code=400, detail=f"Insufficient money. Repair costs ${cost:,}.")
     if user_car.get("_id") is not None:
         q = {"_id": user_car["_id"]}
     else:
         q = {"user_id": current_user.get("id") or "", "id": user_car.get("id")}
     await db.user_cars.update_one(q, {"$set": {"damage_percent": 0}})
-    await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -cost}})
     return {
         "message": f"Repaired for ${cost:,}. Damage 0%.",
         "damage_percent": 0,

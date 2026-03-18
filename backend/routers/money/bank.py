@@ -8,6 +8,7 @@ import os
 import sys
 from typing import Optional
 from pydantic import BaseModel
+from pymongo import UpdateOne
 
 from fastapi import Depends, HTTPException, Request
 
@@ -135,11 +136,6 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     rate = float(opt["rate"])
     hours = int(opt["hours"])
 
-    user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "money": 1})
-    money = int(user.get("money", 0) or 0) if user else 0
-    if amount > money:
-        raise HTTPException(status_code=400, detail="Insufficient cash on hand")
-    
     # ECONOMY LIMIT: Max $50M total in unclaimed interest deposits
     MAX_INTEREST_DEPOSITS = 50_000_000
     existing_deposits = await db.bank_deposits.aggregate([
@@ -160,10 +156,12 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     interest = int(round(amount * rate))
 
     deposit_id = str(uuid.uuid4())
-    await db.users.update_one(
-        {"id": current_user.get("id") or ""},
-        {"$inc": {"money": -amount, "total_interest_deposited": int(amount)}, "$max": {"money": 0}},
+    result = await db.users.update_one(
+        {"id": current_user.get("id") or "", "money": {"$gte": amount}},
+        {"$inc": {"money": -amount, "total_interest_deposited": int(amount)}},
     )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient cash on hand")
     await db.bank_deposits.insert_one({
         "id": deposit_id,
         "user_id": current_user.get("id") or "",
@@ -213,19 +211,22 @@ async def bank_swiss_deposit(request: BankSwissMoveRequest, current_user: dict =
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
-    user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "money": 1, "swiss_balance": 1, "swiss_limit": 1})
-    money = int(user.get("money", 0) or 0) if user else 0
+    user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "swiss_balance": 1, "swiss_limit": 1})
     swiss_balance = int(user.get("swiss_balance", 0) or 0) if user else 0
     swiss_limit = int(user.get("swiss_limit", SWISS_BANK_LIMIT_START) or SWISS_BANK_LIMIT_START) if user else SWISS_BANK_LIMIT_START
-    if amount > money:
-        raise HTTPException(status_code=400, detail="Insufficient cash on hand")
     if swiss_balance + amount > swiss_limit:
         raise HTTPException(status_code=400, detail=f"Swiss bank limit is ${swiss_limit:,}")
 
-    await db.users.update_one(
-        {"id": current_user.get("id") or ""},
-        {"$inc": {"money": -amount, "swiss_balance": amount}, "$max": {"money": 0}}
+    result = await db.users.update_one(
+        {
+            "id": current_user.get("id") or "",
+            "money": {"$gte": amount},
+            "$expr": {"$lte": [{"$add": ["$swiss_balance", amount]}, "$swiss_limit"]},
+        },
+        {"$inc": {"money": -amount, "swiss_balance": amount}}
     )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient cash on hand")
     _invalidate_overview_cache(current_user.get("id") or "")
     return {"message": f"Deposited ${amount:,} into Swiss Bank"}
 
@@ -234,14 +235,12 @@ async def bank_swiss_withdraw(request: BankSwissMoveRequest, current_user: dict 
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
-    user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "swiss_balance": 1})
-    swiss_balance = int(user.get("swiss_balance", 0) or 0) if user else 0
-    if amount > swiss_balance:
-        raise HTTPException(status_code=400, detail="Insufficient Swiss balance")
-    await db.users.update_one(
-        {"id": current_user.get("id") or ""},
+    result = await db.users.update_one(
+        {"id": current_user.get("id") or "", "swiss_balance": {"$gte": amount}},
         {"$inc": {"money": amount, "swiss_balance": -amount}}
     )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient Swiss balance")
     _invalidate_overview_cache(current_user.get("id") or "")
     return {"message": f"Withdrew ${amount:,} from Swiss Bank"}
 
@@ -270,15 +269,18 @@ async def bank_transfer(request: MoneyTransferRequest, req: Request, current_use
     if recipient.get("is_dead"):
         raise HTTPException(status_code=400, detail="Recipient is dead")
 
-    sender = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "money": 1})
-    money = int(sender.get("money", 0) or 0) if sender else 0
-    if amount > money:
-        raise HTTPException(status_code=400, detail="Insufficient cash on hand")
-
     now = datetime.now(timezone.utc).isoformat()
     transfer_id = str(uuid.uuid4())
-    await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -amount}, "$max": {"money": 0}})
-    await db.users.update_one({"id": recipient["id"]}, {"$inc": {"money": amount}})
+    sender_id = current_user.get("id") or ""
+    recipient_id = recipient["id"]
+    result = await db.users.bulk_write([
+        UpdateOne({"id": sender_id, "money": {"$gte": amount}}, {"$inc": {"money": -amount}}),
+        UpdateOne({"id": recipient_id}, {"$inc": {"money": amount}}),
+    ], ordered=True)
+    if result.modified_count < 2:
+        if result.modified_count == 1:
+            await db.users.update_one({"id": sender_id}, {"$inc": {"money": amount}})
+        raise HTTPException(status_code=400, detail="Insufficient cash on hand")
     if security_module and getattr(security_module, "check_negative_balance", None):
         try:
             await security_module.check_negative_balance(db, current_user.get("id") or "", current_user.get("username", ""))

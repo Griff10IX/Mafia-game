@@ -400,7 +400,7 @@ async def commit_crime(crime_id: str, current_user: dict = Depends(get_current_u
         raise
     except Exception as e:
         logger.exception("commit_crime failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Server error: {e!s}")
+        raise HTTPException(status_code=500, detail="Something went wrong. Please try again.")
 
 
 def _get_crime_by_id(crime_id: str):

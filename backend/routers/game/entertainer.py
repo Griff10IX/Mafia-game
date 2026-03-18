@@ -377,10 +377,12 @@ async def create_game(
     join_fee = max(0, int(request.join_fee or 0))
     pot = max(0, int(request.pot or 0))
     if pot > 0:
-        user_money = int(current_user.get("money") or 0)
-        if user_money < pot:
-            raise HTTPException(status_code=400, detail=f"You need ${pot:,} to fund the pot (you have ${user_money:,})")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -pot}})
+        result = await db.users.update_one(
+            {"id": current_user["id"], "money": {"$gte": pot}},
+            {"$inc": {"money": -pot}}
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail=f"You need ${pot:,} to fund the pot")
     game_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     participants = []
@@ -421,10 +423,12 @@ async def join_game(game_id: str, current_user: dict = Depends(get_current_user)
         raise HTTPException(status_code=400, detail="Game is full")
     join_fee = int(game.get("join_fee") or 0)
     if join_fee > 0:
-        user_money = int(current_user.get("money") or 0)
-        if user_money < join_fee:
-            raise HTTPException(status_code=400, detail=f"Entry fee is ${join_fee:,} (you have ${user_money:,})")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -join_fee}})
+        result = await db.users.update_one(
+            {"id": current_user["id"], "money": {"$gte": join_fee}},
+            {"$inc": {"money": -join_fee}}
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail=f"Entry fee is ${join_fee:,}")
     new_participants = participants + [{"user_id": current_user["id"], "username": current_user.get("username") or "?"}]
     is_full = len(new_participants) >= max_players
     current_pot = int(game.get("pot") or 0) + join_fee

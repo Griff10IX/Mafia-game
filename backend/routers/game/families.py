@@ -921,12 +921,6 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
 async def families_create(request: FamilyCreateRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_id"):
         raise HTTPException(status_code=400, detail="Already in a family")
-    user_money = int((current_user.get("money") or 0) or 0)
-    if user_money < FAMILY_CREATE_COST:
-        raise HTTPException(
-            status_code=400,
-            detail=f"You need ${FAMILY_CREATE_COST:,} to create a family. You have ${user_money:,}.",
-        )
     name = (request.name or "").strip()[:30]
     tag = (request.tag or "").strip().upper().replace(" ", "")[:4]
     if len(name) < 2 or len(tag) < 2:
@@ -953,10 +947,17 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         "id": str(uuid.uuid4()), "family_id": family_id, "user_id": current_user["id"],
         "role": "boss", "joined_at": now,
     })
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"family_id": family_id, "family_role": "boss"}, "$inc": {"money": -FAMILY_CREATE_COST}, "$max": {"money": 0}},
+    result = await db.users.update_one(
+        {"id": current_user["id"], "money": {"$gte": FAMILY_CREATE_COST}},
+        {"$set": {"family_id": family_id, "family_role": "boss"}, "$inc": {"money": -FAMILY_CREATE_COST}},
     )
+    if result.modified_count == 0:
+        await db.families.delete_one({"id": family_id})
+        await db.family_members.delete_one({"family_id": family_id, "user_id": current_user["id"]})
+        raise HTTPException(
+            status_code=400,
+            detail=f"You need ${FAMILY_CREATE_COST:,} to create a family.",
+        )
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
     return {"message": "Family created", "family_id": family_id}
@@ -1269,16 +1270,20 @@ async def families_compound_deposit(request: CompoundDepositRequest, current_use
         raise HTTPException(status_code=400, detail="Amounts cannot be negative")
     if cash == 0 and points == 0 and loot_pieces == 0:
         raise HTTPException(status_code=400, detail="Specify at least one amount to deposit")
-    user_money = int(current_user.get("money") or 0)
-    user_points = int(current_user.get("points") or 0)
-    user_loot = int(current_user.get("loot_box_pieces") or 0)
-    if user_money < cash:
-        raise HTTPException(status_code=400, detail="Not enough cash")
-    if user_points < points:
-        raise HTTPException(status_code=400, detail="Not enough points")
-    if user_loot < loot_pieces:
-        raise HTTPException(status_code=400, detail="Not enough loot pieces")
     uid = current_user["id"]
+    user_filter = {"id": uid}
+    if cash > 0:
+        user_filter["money"] = {"$gte": cash}
+    if points > 0:
+        user_filter["points"] = {"$gte": points}
+    if loot_pieces > 0:
+        user_filter["loot_box_pieces"] = {"$gte": loot_pieces}
+    result = await db.users.update_one(
+        user_filter,
+        {"$inc": {"money": -cash, "points": -points, "loot_box_pieces": -loot_pieces}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient resources for deposit")
     updates = {"$inc": {"compound_cash": cash, "compound_points": points, "compound_loot_pieces": loot_pieces}}
     by_user = (await db.families.find_one({"id": family_id}, {"_id": 0, "compound_deposits_by_user": 1})) or {}
     deposits = dict((by_user.get("compound_deposits_by_user") or {}).get(uid) or {})
@@ -1287,10 +1292,6 @@ async def families_compound_deposit(request: CompoundDepositRequest, current_use
     deposits["loot_pieces"] = int(deposits.get("loot_pieces") or 0) + loot_pieces
     updates["$set"] = {f"compound_deposits_by_user.{uid}": deposits}
     await db.families.update_one({"id": family_id}, updates)
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"money": -cash, "points": -points, "loot_box_pieces": -loot_pieces}},
-    )
     _invalidate_my_cache(current_user["id"])
     return {"message": "Deposited to compound"}
 

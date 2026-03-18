@@ -2387,13 +2387,13 @@ async def place_race_bet(payload: PlaceRaceBetRequest, current_user: dict = Depe
     odds = _compute_race_odds(participants)
     entrant_odds = odds.get(entrant_id, 2.0)
 
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
-    money = int((user or {}).get("money") or 0)
-    if stake > money:
-        raise HTTPException(status_code=400, detail="Insufficient cash")
-
     bet_id = str(uuid.uuid4())
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -stake}})
+    result = await db.users.update_one(
+        {"id": current_user["id"], "money": {"$gte": stake}},
+        {"$inc": {"money": -stake}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient cash")
 
     entrant_info = next((p for p in participants if (p.get("user_id") or p.get("id")) == entrant_id), {})
     await db.racing_bets.insert_one({

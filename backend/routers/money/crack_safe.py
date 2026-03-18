@@ -158,14 +158,13 @@ def register(router):
                 remaining = int((cd - now).total_seconds()) + 1
                 raise HTTPException(status_code=400, detail=f"Wait {remaining}s before your next guess.")
 
-        if user.get("money", 0) < SAFE_ENTRY_COST:
-            raise HTTPException(status_code=400, detail=f"You need ${SAFE_ENTRY_COST:,} to attempt to crack the safe.")
-
         cooldown_until = now + timedelta(seconds=SAFE_GUESS_COOLDOWN_SECONDS)
-        await db.users.update_one(
-            {"id": user.get("id") or ""},
+        result = await db.users.update_one(
+            {"id": user.get("id") or "", "money": {"$gte": SAFE_ENTRY_COST}},
             {"$inc": {"money": -SAFE_ENTRY_COST}, "$set": {"crack_safe_cooldown_until": cooldown_until}},
         )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail=f"You need ${SAFE_ENTRY_COST:,} to attempt to crack the safe.")
 
         await db.safe_game.update_one({}, {"$inc": {"jackpot": SAFE_JACKPOT_PER_ATTEMPT, "total_attempts": 1}})
 

@@ -654,6 +654,38 @@ DEAD_ACCOUNT_WHITELIST = {
     "/api/user/rank-progress",
 }
 
+JAIL_WHITELIST_EXACT = {
+    "/api/auth/me",
+    "/api/user/rank-progress",
+}
+JAIL_WHITELIST_PREFIXES = (
+    "/api/jail/",
+    "/api/auth/",
+    "/api/account-locked",
+    "/api/death/",
+    "/api/user/",
+    "/api/users/",
+    "/api/forum/",
+    "/api/help-desk/",
+    "/api/auto-rank/",
+    "/api/admin/",
+    "/api/families/",
+    "/api/chat/",
+    "/api/notifications/",
+    "/api/settings/",
+    "/api/telegram/",
+    "/api/webhook/",
+    "/api/casino/",
+    "/api/bodyguards/",
+    "/api/travel/",
+    "/api/airport/",
+    "/api/kill/",
+    "/api/attack/",
+    "/api/hitlist/",
+    "/api/armoury/",
+    "/api/sports-betting/",
+)
+
 
 async def get_current_user(
     request: Request,
@@ -732,6 +764,10 @@ async def get_current_user(
                 status_code=403,
                 detail="This account is dead and cannot be used. Create a new account and use Dead > Alive to receive 95% (5% tax) of this account’s money and points."
             )
+    if user.get("in_jail"):
+        path = request.url.path if request else ""
+        if path not in JAIL_WHITELIST_EXACT and not any(path.startswith(p) for p in JAIL_WHITELIST_PREFIXES):
+            raise HTTPException(status_code=403, detail="You can't do that while in jail.")
     # Auto-expire lock when account_locked_until is in the past
     locked_until = user.get("account_locked_until")
     if user.get("account_locked") and locked_until:
