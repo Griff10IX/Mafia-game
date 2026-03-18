@@ -230,8 +230,7 @@ async def _update_auto_rank_stats_melt(db, user_id: str, melted_count: int = 0, 
     if scrapped_count > 0:
         inc["auto_rank_total_cars_scrapped"] = scrapped_count
         inc["auto_rank_total_cash_from_scrap"] = total_cash
-        if melted_count <= 0:
-            u = await db.users.find_one({"id": user_id}, {"_id": 0, "auto_rank_cash_from_scrap_date": 1, "auto_rank_cars_scrapped_date": 1})
+        u = await db.users.find_one({"id": user_id}, {"_id": 0, "auto_rank_cash_from_scrap_date": 1, "auto_rank_cars_scrapped_date": 1})
         if (u or {}).get("auto_rank_cash_from_scrap_date") != today:
             updates["auto_rank_cash_from_scrap_today"] = total_cash
             updates["auto_rank_cash_from_scrap_date"] = today
@@ -394,7 +393,8 @@ async def _send_jail_notification(telegram_chat_id: str, username: str, reason: 
 # ─── Booze running ────────────────────────────────────────────────
 
 async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_chat_id: str, bot_token, now: datetime, lines: list):
-    """Sell all carried booze that wasn't bought at the current city. Returns (has_success, user). One full sell (this arrival) = 1 run = 1 cycle for auto_rank_total_booze_runs."""
+    """Sell all carried booze that wasn't bought at the current city. Returns (has_success, user).
+    Booze from racket/missions (no buy_location) is sold for cash first so the cycle can proceed to normal runs."""
     from routers.money.booze_run import _booze_sell_impl
 
     carrying = dict(user.get("booze_carrying") or {})
@@ -418,7 +418,10 @@ async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_ch
             if out.get("is_run"):
                 total_profit += profit
                 lines.append(f"**Booze** — Sold {amt} for ${profit:,} profit.")
-                has_success = True
+            else:
+                revenue = out.get("revenue") or 0
+                lines.append(f"**Booze** — Sold {amt} misc booze for ${revenue:,}.")
+            has_success = True
             user = await db.users.find_one({"id": user_id}, {"_id": 0})
             if not user:
                 break
@@ -428,7 +431,7 @@ async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_ch
             logger.exception("Auto rank booze sell %s: %s", user_id, e)
             break
 
-    if has_success:
+    if has_success and total_profit > 0:
         await _update_auto_rank_stats_booze(db, user_id, now, total_profit)
     return has_success, user
 
@@ -657,9 +660,6 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     lines = [f"**Auto Rank** — {username}", ""]
     has_success = False
     respect_before = int(user.get("respect_points") or 0)
-
-    if user.get("in_jail"):
-        return
 
     # When bust-every-5-sec is on, only the separate bust loop runs crimes/GTA are skipped here
     run_crimes = user.get("auto_rank_crimes", True) and not bust_every_5

@@ -888,7 +888,7 @@ async def raid_random_illegal_business(current_user: dict = Depends(get_current_
     # Random business other than current user
     pipeline = [
         {"$match": {"user_id": {"$ne": current_user["id"]}}},
-        {"$sample": 1},
+        {"$sample": {"size": 1}},
     ]
     cursor = db.illegal_businesses.aggregate(pipeline)
     result = await cursor.to_list(1)
