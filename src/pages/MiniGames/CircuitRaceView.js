@@ -29,7 +29,7 @@ const WEATHER_DEFS = {
 
 const WEATHER_MAP = { clear:"clear",rain:"rain",snow:"snow",very_hot:"very_hot",night:"night" };
 
-const CAR_SCALE = 0.70;
+const CAR_SCALE = 0.90;
 
 const NPC_NAMES  = ["Smokey Joe","Ace Johnson","The Phantom","Lucky Lou","Fast Eddie","Duke Malone","Slick Sam","Rusty Wheeler"];
 const NPC_CARS   = ["Ford Model T Racer","Packard 734","Stutz Bearcat","Miller 91","Duesenberg Model J"];
@@ -875,6 +875,8 @@ export default function CircuitRaceView({
   initialCondition = "clear", playerCarName = "Stutz Bearcat",
   playerTyreId = "medium", playerPitLevel = 0, currentUserId = null,
   rewards: rewardsProp = null,
+  liveCarStates = null, liveIncidents = null, livePitStops = null,
+  liveCurrentLap = 0, liveTotalLaps = 3,
 }) {
   const canvasRef  = useRef(null);
   const rafRef     = useRef(null);
@@ -908,6 +910,19 @@ export default function CircuitRaceView({
   useEffect(() => { pausedRef.current = paused; },  [paused]);
   useEffect(() => { manPitRef.current = manPit; },  [manPit]);
 
+  const liveCarStatesRef = useRef(liveCarStates);
+  const liveIncidentsRef = useRef(liveIncidents);
+  const livePitStopsRef = useRef(livePitStops);
+  const liveCurrentLapRef = useRef(liveCurrentLap);
+  const liveTotalLapsRef = useRef(liveTotalLaps);
+  const liveInitDone = useRef(false);
+
+  useEffect(() => { liveCarStatesRef.current = liveCarStates; }, [liveCarStates]);
+  useEffect(() => { liveIncidentsRef.current = liveIncidents; }, [liveIncidents]);
+  useEffect(() => { livePitStopsRef.current = livePitStops; }, [livePitStops]);
+  useEffect(() => { liveCurrentLapRef.current = liveCurrentLap; }, [liveCurrentLap]);
+  useEffect(() => { liveTotalLapsRef.current = liveTotalLaps; }, [liveTotalLaps]);
+
   const SKEY = raceId ? `rcv3_${raceId}` : null;
   const lastSave = useRef(0);
   const raceStart = useRef(null);
@@ -927,7 +942,7 @@ export default function CircuitRaceView({
     } catch {}
   }, [SKEY]);
 
-  const effCond = (mode==="replay"||mode==="live") ? (WEATHER_MAP[weatherIdProp]||"clear") : condition;
+  const effCond = (mode==="replay"||mode==="live"||mode==="interactive-live") ? (WEATHER_MAP[weatherIdProp]||"clear") : condition;
   const wDef    = WEATHER_DEFS[effCond] || WEATHER_DEFS.clear;
 
   const getScale = useCallback(() => {
@@ -940,7 +955,7 @@ export default function CircuitRaceView({
   const resizeCanvas = useCallback(() => {
     const c = canvasRef.current; if (!c) return;
     const dpr = window.devicePixelRatio||1, w = c.parentElement.clientWidth;
-    const h = Math.max(200, Math.min(w*0.48, 320));
+    const h = Math.max(240, Math.min(w*0.56, 420));
     c.width = w*dpr; c.height = h*dpr; c.style.width = w+"px"; c.style.height = h+"px";
     c.getContext("2d").scale(dpr, dpr);
   }, []);
@@ -1125,18 +1140,36 @@ export default function CircuitRaceView({
       ctx.closePath();
     };
 
+    // Outer grass/spectator area
+    buildBand(ctx,18);
+    ctx.fillStyle = cond==="snow" ? "rgba(190,200,210,0.08)" : "rgba(40,65,28,0.25)"; ctx.fill();
     // Grass/runoff
-    buildBand(ctx,10);
+    buildBand(ctx,12);
     ctx.fillStyle = cond==="snow" ? "rgba(200,210,220,0.15)" : "rgba(58,88,38,0.35)"; ctx.fill();
+    // Gravel trap
+    buildBand(ctx,7);
+    ctx.fillStyle = cond==="snow" ? "rgba(180,185,190,0.10)" : "rgba(140,120,80,0.15)"; ctx.fill();
     // Soft shoulder
-    buildBand(ctx,6);
-    ctx.fillStyle = "rgba(76,125,48,0.20)"; ctx.fill();
+    buildBand(ctx,4);
+    ctx.fillStyle = "rgba(76,125,48,0.18)"; ctx.fill();
     // Tarmac outer edge
     buildBand(ctx,2);
     ctx.fillStyle = cond==="rain"?"#222018":cond==="snow"?"#2e303e":cond==="night"?"#151210":"#282620"; ctx.fill();
     // Tarmac inner (slightly lighter)
     buildBand(ctx,0);
     ctx.fillStyle = cond==="rain"?"#2c2a24":cond==="snow"?"#3e4055":cond==="night"?"#1e1c18":"#352e28"; ctx.fill();
+
+    // Rubber-darkened corners (racing line deposits)
+    for (let i = 0; i < STEPS; i++) {
+      const f = i / STEPS;
+      const curv = getCurvature(track, f);
+      if (curv > 0.05) {
+        const p = track.getPoint(f);
+        const darkness = Math.min(0.12, (curv - 0.05) * 0.8);
+        ctx.fillStyle = `rgba(0,0,0,${darkness})`;
+        ctx.beginPath(); ctx.arc(sx(p.x), sy(p.y), halfW * 0.6, 0, Math.PI * 2); ctx.fill();
+      }
+    }
 
     // Centre dashes
     ctx.setLineDash([8,16]); ctx.beginPath();
@@ -1176,6 +1209,45 @@ export default function CircuitRaceView({
           ctx.beginPath(); ctx.arc(kx,ky,1.8,0,Math.PI*2); ctx.fill();
         }
       }
+    }
+
+    // Corner apex markers (inside edge, at tightest points)
+    let prevCurv = 0, inApex = false;
+    for (let i = 0; i < STEPS; i++) {
+      const f = i / STEPS;
+      const curv = getCurvature(track, f);
+      if (curv > 0.08 && curv > prevCurv && !inApex) {
+        inApex = true;
+      } else if (inApex && curv < prevCurv) {
+        inApex = false;
+        const p = track.getPoint(f), pn = track.getPoint((f + 0.003) % 1);
+        const ang = Math.atan2(pn.y - p.y, pn.x - p.x) + Math.PI / 2;
+        const ax = sx(p.x) - Math.cos(ang) * (halfW + 4);
+        const ay = sy(p.y) - Math.sin(ang) * (halfW + 4);
+        ctx.fillStyle = "rgba(255,200,50,0.35)";
+        ctx.beginPath(); ctx.arc(ax, ay, 3, 0, Math.PI * 2); ctx.fill();
+      }
+      prevCurv = curv;
+    }
+
+    // Pit wall (between track and pit lane)
+    {
+      const pitSide = track.pitSide || -1;
+      const wallSteps = 80;
+      const rS = track.pitEntry - 0.02, rE = track.pitExit + 0.02;
+      ctx.beginPath();
+      for (let i = 0; i <= wallSteps; i++) {
+        const frac = i / wallSteps;
+        const f = ((rS + (rE - rS) * frac) % 1 + 1) % 1;
+        const p = track.getPoint(f), pn = track.getPoint((f + 0.004) % 1);
+        const ang = Math.atan2(pn.y - p.y, pn.x - p.x) + Math.PI / 2;
+        const wx = sx(p.x) + Math.cos(ang) * (halfW + 3) * pitSide;
+        const wy = sy(p.y) + Math.sin(ang) * (halfW + 3) * pitSide;
+        i === 0 ? ctx.moveTo(wx, wy) : ctx.lineTo(wx, wy);
+      }
+      ctx.strokeStyle = "rgba(180,180,180,0.25)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
     }
 
     // ── Snow track accumulation pass (needs STEPS/halfW — called here after tarmac) ──
@@ -1421,49 +1493,146 @@ export default function CircuitRaceView({
         ctx.restore();
       }
 
-      // Car body — F1 top-down shape
+      // Car body — detailed F1 top-down
       ctx.save(); ctx.translate(px,py); ctx.rotate(angle); ctx.scale(CAR_SCALE,CAR_SCALE);
       const carClr = r.color||"#888";
+
+      // Rear diffuser
+      ctx.fillStyle = "rgba(30,30,30,0.8)";
+      ctx.fillRect(-14, -5.5, 3, 11);
+
+      // Rear wing endplates
+      ctx.fillStyle = carClr;
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(-13, -6, 2.5, 1.5);
+      ctx.fillRect(-13, 4.5, 2.5, 1.5);
+      ctx.globalAlpha = 1;
+
+      // Rear wing DRS element
+      ctx.fillStyle = carClr;
+      ctx.globalAlpha = 0.65;
+      ctx.fillRect(-13, -5.5, 2, 11);
+      ctx.globalAlpha = 1;
+
+      // Main body
       ctx.beginPath();
-      ctx.moveTo(-11, -4);
-      ctx.lineTo(8, -4);
-      ctx.quadraticCurveTo(12, -4, 12, 0);
-      ctx.quadraticCurveTo(12, 4, 8, 4);
-      ctx.lineTo(-11, 4);
+      ctx.moveTo(-11, -4.5);
+      ctx.lineTo(6, -4.5);
+      ctx.quadraticCurveTo(10, -4.5, 12, -2);
+      ctx.quadraticCurveTo(13, 0, 12, 2);
+      ctx.quadraticCurveTo(10, 4.5, 6, 4.5);
+      ctx.lineTo(-11, 4.5);
       ctx.lineTo(-13, 0);
       ctx.closePath();
       ctx.fillStyle = carClr;
       ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.3)";
+      ctx.strokeStyle = "rgba(255,255,255,0.25)";
       ctx.lineWidth = 0.5;
       ctx.stroke();
-      // Cockpit
-      ctx.fillStyle = "rgba(0,0,0,0.55)";
-      ctx.fillRect(-2, -2.5, 6, 5);
+
+      // Sidepods
+      ctx.fillStyle = "rgba(0,0,0,0.15)";
+      ctx.fillRect(-6, -4.5, 10, 1.8);
+      ctx.fillRect(-6, 2.7, 10, 1.8);
+
+      // Cockpit opening
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.beginPath();
+      ctx.ellipse(1, 0, 3.5, 2.5, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      // Halo device
+      ctx.strokeStyle = "rgba(120,120,120,0.7)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(-1, -2);
+      ctx.quadraticCurveTo(4, -1, 4, 0);
+      ctx.quadraticCurveTo(4, 1, -1, 2);
+      ctx.stroke();
+
+      // Driver helmet
+      ctx.fillStyle = r.isPlayer ? "#e8c870" : "rgba(200,200,200,0.7)";
+      ctx.beginPath(); ctx.arc(0, 0, 1.5, 0, Math.PI*2); ctx.fill();
+
       // Front wing
       ctx.fillStyle = carClr;
-      ctx.globalAlpha = 0.7;
-      ctx.fillRect(10, -5.5, 2, 11);
+      ctx.globalAlpha = 0.75;
+      ctx.fillRect(11, -6, 2.5, 12);
       ctx.globalAlpha = 1;
-      // Rear wing
+
+      // Front wing endplates
       ctx.fillStyle = carClr;
-      ctx.globalAlpha = 0.6;
-      ctx.fillRect(-12, -5, 2, 10);
+      ctx.globalAlpha = 0.5;
+      ctx.fillRect(11.5, -7, 1.5, 1.5);
+      ctx.fillRect(11.5, 5.5, 1.5, 1.5);
       ctx.globalAlpha = 1;
+
+      // Front nose cone
+      ctx.fillStyle = carClr;
+      ctx.beginPath();
+      ctx.moveTo(12, -1.5);
+      ctx.lineTo(15, 0);
+      ctx.lineTo(12, 1.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Side mirrors
+      ctx.fillStyle = "rgba(100,100,100,0.8)";
+      ctx.beginPath(); ctx.arc(4, -5, 1, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(4, 5, 1, 0, Math.PI*2); ctx.fill();
+
       // Team stripe
-      ctx.fillStyle = "rgba(255,255,255,0.18)";
-      ctx.fillRect(-6, -4, 12, 1.5);
-      // Number on car body
+      ctx.fillStyle = "rgba(255,255,255,0.15)";
+      ctx.fillRect(-8, -4.5, 14, 1.2);
+
+      // Front wheel fairings
+      ctx.fillStyle = "rgba(20,20,20,0.6)";
+      ctx.fillRect(7, -6.5, 3, 2);
+      ctx.fillRect(7, 4.5, 3, 2);
+
+      // Rear wheel fairings
+      ctx.fillRect(-9, -6.5, 3, 2);
+      ctx.fillRect(-9, 4.5, 3, 2);
+
+      // Number on sidepod
       ctx.fillStyle = "#fff";
       ctx.font = "bold 5px monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(String(r.carNumber!=null?r.carNumber:(di+1)).slice(0,2), -4, 0);
       ctx.textBaseline = "alphabetic";
+
       // Windshield glint
       ctx.fillStyle = "rgba(180,200,220,0.2)";
-      ctx.beginPath(); ctx.ellipse(3, -1, 2, 1.5, 0.3, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(3, -1, 2, 1.2, 0.3, 0, Math.PI*2); ctx.fill();
       ctx.restore();
+
+      // Exhaust flame (high push level or in slipstream)
+      if (!r.dnf && !r.inPit && (r.pushLevel >= 4 || r.inSlipstream)) {
+        ctx.save(); ctx.translate(px,py); ctx.rotate(angle); ctx.scale(CAR_SCALE,CAR_SCALE);
+        const fl = 0.5 + 0.5 * Math.sin(nowSec * 12);
+        const fLen = r.pushLevel >= 5 ? 8 : 5;
+        const fg = ctx.createRadialGradient(-14, 0, 1, -14 - fLen, 0, fLen);
+        fg.addColorStop(0, `rgba(255,160,30,${0.4 + fl * 0.3})`);
+        fg.addColorStop(0.5, `rgba(255,80,0,${0.2 + fl * 0.15})`);
+        fg.addColorStop(1, "rgba(255,40,0,0)");
+        ctx.fillStyle = fg;
+        ctx.beginPath(); ctx.ellipse(-14 - fLen/2, 0, fLen, 2.5, 0, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+      }
+
+      // Rain spray trail
+      if ((cond==="rain"||cond==="snow") && !r.dnf && !r.inPit && r.currentSpeedMph > 30) {
+        ctx.save(); ctx.translate(px,py); ctx.rotate(angle); ctx.scale(CAR_SCALE,CAR_SCALE);
+        const sprayIntensity = Math.min(1, (r.currentSpeedMph - 30) / 120);
+        for (let si = 0; si < 4; si++) {
+          const sx2 = -16 - si * 4 + (Math.sin(nowSec * 6 + si) * 2);
+          const sy2 = (Math.sin(nowSec * 8 + si * 1.5) * 3);
+          ctx.fillStyle = `rgba(180,200,220,${0.08 + sprayIntensity * 0.12})`;
+          ctx.beginPath(); ctx.arc(sx2, sy2, 2 + si * 1.5, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.restore();
+      }
 
       // Night headlights
       if (cond==="night" && !r.inPit && !r.dnf) {
@@ -2079,6 +2248,226 @@ export default function CircuitRaceView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[uiPhase,mode,effCond,drawCanvas]);
 
+  // ─── INTERACTIVE-LIVE MODE (backend-driven) ────────────────────────────
+  useEffect(() => {
+    if (mode !== "interactive-live") return;
+    if (!participants.length) return;
+    liveInitDone.current = false;
+    resizeCanvas();
+    const track = TRACKS.find(t => t.id === initialTrackId) || TRACKS[0];
+    const cond = WEATHER_MAP[weatherIdProp] || "clear";
+    const wd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
+    buildSpeedProfile(track);
+
+    const cs = liveCarStatesRef.current || {};
+    const ids = Object.keys(cs).length
+      ? Object.entries(cs).sort((a, b) => (a[1].position ?? 99) - (b[1].position ?? 99)).map(([k]) => k)
+      : participants.map(p => p.user_id || p.id);
+    const seen = new Set();
+    const order = ids.filter(id => { if (seen.has(id)) return false; seen.add(id); return true; });
+
+    const racers = order.map((id, i) => {
+      const p = participants.find(x => (x.user_id || x.id) === id) || {};
+      const isPlayer = currentUserId != null && (id === currentUserId || p.user_id === currentUserId);
+      const bs = (p.effective_speed != null ? p.effective_speed : 15) / 15;
+      const carState = cs[id] || {};
+      const tyreId = (carState.compound || p.tyre_compound || "medium").toLowerCase();
+      const resolved = tyreId in TYRE_DEFS ? tyreId : "medium";
+      const startTrackPos = 1.0 - (i * 0.06);
+      return {
+        id, name: p.username || p.car_name || `#${i + 1}`, isPlayer,
+        color: CAR_COLORS[i % CAR_COLORS.length], carName: p.car_name || "",
+        trackPos: startTrackPos, lapCount: 1, totalLapsDone: 0,
+        currentTyre: resolved, tyreWear: carState.tyre_wear ?? 100,
+        pitStops: 0, inPit: false, pitEndAt: 0,
+        pitDurationSeconds: 3, pitDurationEmergencySeconds: 5,
+        baseSpeed: bs, baseGrip: p.effective_grip != null ? p.effective_grip : 0.85,
+        pitStrategy: [], finished: false, finishOrder: 0, visible: true,
+        position: carState.position ?? (i + 1), carNumber: i + 1, lapTimes: [],
+        slideOffUntil: 0, pitExitUntil: null,
+        engineHealth: 100 - (carState.engine_wear ?? 0),
+        dnf: !!carState.dnf, dnfAtSec: 0, dnfSparks: [],
+        fuelLoad: carState.fuel_pct ?? 100,
+        currentSector: 0, lastSectorCross: 0,
+        bestSectors: [Infinity, Infinity, Infinity], sectorDelta: null,
+        inSlipstream: false, tyreBlister: (carState.tyre_wear ?? 100) < 20,
+        strategyType: "normal", reliabilityWearMult: 1,
+        overtakingLevel: 0, overtakeBoostUntil: 0, currentSpeedMph: null,
+        _targetPos: carState.position ?? (i + 1),
+        _prevPitCount: 0,
+      };
+    });
+
+    stateRef.current = { racers, track, nLaps: liveTotalLaps, wd, safetyCar: { active: false }, fastestLap: { holderId: null, time: Infinity }, finishFlash: 0, incidents: [] };
+    setUiPhase("racing");
+    setLapDisp(`${liveCurrentLap} / ${liveTotalLaps}`);
+    setCommentary(rnd(COMMENTARY.start));
+    liveInitDone.current = true;
+
+    let lastFrame = performance.now();
+    let firstFrame = true;
+    let prevPitStopsLen = (livePitStopsRef.current || []).length;
+    let prevIncidentsLen = (liveIncidentsRef.current || []).length;
+
+    const loop = (now) => {
+      let dt = (now - lastFrame) / 1000;
+      if (firstFrame) { firstFrame = false; dt = 0; }
+      dt = Math.min(0.05, dt);
+      lastFrame = now;
+      const nowSec = now / 1000;
+
+      const { racers: r, track: trk } = stateRef.current || {};
+      if (!r || !trk) { rafRef.current = requestAnimationFrame(loop); return; }
+
+      const cs2 = liveCarStatesRef.current || {};
+      const curLap = liveCurrentLapRef.current || 0;
+      const totLaps = liveTotalLapsRef.current || 3;
+      setLapDisp(`${curLap} / ${totLaps}`);
+
+      const pitArr = livePitStopsRef.current || [];
+      if (pitArr.length > prevPitStopsLen) {
+        for (let pi = prevPitStopsLen; pi < pitArr.length; pi++) {
+          const ps = pitArr[pi];
+          const pr = r.find(x => x.id === ps.entrant_id);
+          if (pr && !pr.inPit) {
+            pr.inPit = true;
+            pr.pitEndAt = nowSec + pr.pitDurationSeconds;
+            pr.trackPos = trk.pitEntry;
+            stateRef.current.incidents.push({ text: `${pr.name} pits for ${cs2[ps.entrant_id]?.compound || "tyres"}`, time: now });
+          }
+        }
+        prevPitStopsLen = pitArr.length;
+      }
+
+      const incArr = liveIncidentsRef.current || [];
+      if (incArr.length > prevIncidentsLen) {
+        for (let ii = prevIncidentsLen; ii < incArr.length; ii++) {
+          const inc = incArr[ii];
+          const dmgR = r.find(x => x.id === inc.damaged);
+          if (dmgR) {
+            const pt = trk.getPoint(dmgR.trackPos % 1);
+            addSparks(pt.x, pt.y);
+            stateRef.current.incidents.push({ text: `Contact! ${dmgR.name} takes ${inc.damage_pct}% damage`, time: now });
+          }
+        }
+        prevIncidentsLen = incArr.length;
+      }
+
+      r.forEach(racer => {
+        const carState = cs2[racer.id];
+        if (carState) {
+          racer._targetPos = carState.position ?? racer._targetPos;
+          racer.tyreWear = carState.tyre_wear ?? racer.tyreWear;
+          racer.currentTyre = carState.compound || racer.currentTyre;
+          racer.engineHealth = 100 - (carState.engine_wear ?? 0);
+          racer.fuelLoad = carState.fuel_pct ?? racer.fuelLoad;
+          racer.tyreBlister = racer.tyreWear < 20;
+          const damage = carState.damage ?? 0;
+
+          if (carState.dnf && !racer.dnf) {
+            racer.dnf = true;
+            racer.dnfAtSec = nowSec;
+            racer.dnfSparks = Array.from({ length: 8 }, () => ({ x: 0, y: 0, vx: (Math.random() - 0.5) * 3, vy: (Math.random() - 0.5) * 3, life: 1 }));
+            stateRef.current.incidents.push({ text: `${racer.name} RETIRES (DNF)`, time: now });
+          }
+
+          if (damage > 0.1 && Math.random() < 0.02) {
+            const pt = trk.getPoint(racer.trackPos % 1);
+            addSparks(pt.x, pt.y);
+          }
+        }
+
+        if (racer.dnf) {
+          if (racer.visible && nowSec > racer.dnfAtSec + 20) racer.visible = false;
+          if (racer.visible) { racer.trackPos = (racer.trackPos + 0.0005) % 1; racer.currentSpeedMph = 2; }
+          return;
+        }
+
+        if (racer.inPit) {
+          if (nowSec >= racer.pitEndAt) {
+            racer.inPit = false;
+            racer.pitStops++;
+            racer.trackPos = trk.pitExit;
+            racer.pitExitUntil = nowSec + 2.0;
+            racer.tyreWear = 100;
+            racer.tyreBlister = false;
+            const carState2 = cs2[racer.id];
+            if (carState2?.compound) racer.currentTyre = carState2.compound;
+          }
+          racer.currentSpeedMph = racer.currentSpeedMph != null ? racer.currentSpeedMph + (5 - racer.currentSpeedMph) * Math.min(1, dt * 4) : 5;
+          return;
+        }
+
+        const totalR = r.filter(x => !x.dnf).length || 1;
+        const posRank = racer._targetPos ?? racer.position;
+        const baseOrbitSpeed = trk.lapBase ? (1.0 / trk.lapBase) * 1.8 : 0.04;
+        const posSpeedMult = 1.0 - ((posRank - 1) / totalR) * 0.12;
+        const tyreGrip = tyreGripFromWear(racer.tyreWear, racer.currentTyre);
+        const gripMult = 0.92 + tyreGrip * 0.08;
+        const wearPenalty = racer.engineHealth < 30 ? 0.90 : 1.0;
+        const fuelMult = 0.97 + (racer.fuelLoad / 100) * 0.03;
+        const speed = baseOrbitSpeed * posSpeedMult * gripMult * wearPenalty * fuelMult;
+
+        const prevT = racer.trackPos;
+        racer.trackPos = (racer.trackPos + speed * dt + 1) % 1;
+        racer.totalLapsDone = Math.max(racer.totalLapsDone, curLap);
+
+        if (prevT > 0.9 && racer.trackPos < 0.1) {
+          racer.lapCount++;
+        }
+
+        const effSpeed = speed * trk.lapBase * 280;
+        racer.currentSpeedMph = racer.currentSpeedMph != null
+          ? racer.currentSpeedMph + (effSpeed - racer.currentSpeedMph) * Math.min(1, dt * 5)
+          : effSpeed;
+
+        const curv = getCurvature(trk, racer.trackPos);
+        if (curv > 0.06 && racer.tyreWear < 40) {
+          const pt = trk.getPoint(racer.trackPos);
+          addTireSmoke(pt.x, pt.y, 0.4 + (1 - racer.tyreWear / 100) * 0.6);
+        }
+        if (racer.engineHealth < 25 && Math.random() < 0.08) {
+          const pt = trk.getPoint(racer.trackPos);
+          addTireSmoke(pt.x, pt.y, 0.3);
+        }
+
+        const idx = r.indexOf(racer);
+        if (idx > 0) {
+          const ahead = r[idx - 1];
+          if (ahead && !ahead.dnf && !ahead.inPit) {
+            const gap = Math.abs(ahead.trackPos - racer.trackPos);
+            racer.inSlipstream = gap < 0.08 && gap > 0.01;
+          } else {
+            racer.inSlipstream = false;
+          }
+        }
+      });
+
+      r.sort((a, b) => {
+        if (a.dnf && !b.dnf) return 1;
+        if (!a.dnf && b.dnf) return -1;
+        return ((b.totalLapsDone ?? 0) + (b.trackPos ?? 0)) - ((a.totalLapsDone ?? 0) + (a.trackPos ?? 0));
+      });
+      r.forEach((x, i) => { x.position = i + 1; });
+
+      setStandings(r.map(x => ({
+        id: x.id, name: x.name, isPlayer: x.isPlayer,
+        position: x.position, tyre: x.currentTyre, tyreWear: x.tyreWear,
+        pitStops: x.pitStops, dnf: x.dnf, engineHealth: x.engineHealth,
+        fuelLoad: Math.round(x.fuelLoad), currentSpeedMph: Math.round(x.currentSpeedMph || 0),
+        tyreCliffWarning: x.tyreWear < ((TYRE_DEFS[x.currentTyre]?.cliffStart || 0.66) * 100 + 12),
+      })));
+      setRaceProg(curLap / totLaps);
+
+      drawCanvas(trk, cond, r, nowSec);
+      rafRef.current = requestAnimationFrame(loop);
+    };
+
+    rafRef.current = requestAnimationFrame(loop);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, currentUserId, participants.length, initialTrackId, weatherIdProp]);
+
   // ─── LIVE MODE STANDALONE START ─────────────────────────────────────────
   const handleStart=useCallback(()=>{
     if(uiPhase==="racing")return;
@@ -2134,14 +2523,14 @@ export default function CircuitRaceView({
 
   useEffect(()=>()=>{if(rafRef.current)cancelAnimationFrame(rafRef.current);},[]);
 
-  const isLive = mode === "live";
+  const isLive = mode === "live" || mode === "interactive-live";
 
   // ─── RENDER ─────────────────────────────────────────────────────────────
   return (
     <div style={{ fontFamily:"'Rajdhani',sans-serif", color:"var(--noir-foreground)" }}>
 
-      {/* Track/tyre picker — live mode setup only */}
-      {isLive && uiPhase === "setup" && (
+      {/* Track/tyre picker — live mode setup only (not interactive-live) */}
+      {mode === "live" && uiPhase === "setup" && (
         <>
           <div className={styles.panel} style={{ padding:"0.75rem",marginBottom:"0.75rem" }}>
             <div className="font-heading text-xs mb-2" style={{ color:"var(--noir-primary)",letterSpacing:".2em",textTransform:"uppercase" }}>Select Track</div>
@@ -2305,8 +2694,8 @@ export default function CircuitRaceView({
         </div>
       )}
 
-      {/* Live mode controls */}
-      {isLive&&(
+      {/* Live mode controls (standalone only, not interactive-live) */}
+      {mode==="live"&&(
         <div style={{ display:"flex",gap:"0.5rem",alignItems:"center",flexWrap:"wrap",marginBottom:"0.6rem" }}>
           {uiPhase==="setup"&&(
             <button type="button" onClick={handleStart}

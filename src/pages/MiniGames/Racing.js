@@ -866,9 +866,7 @@ export default function Racing() {
       {/* ─── INTERACTIVE RACE HUD ─── */}
       {activeRace?.state === "running" && (activeRace?.mode === "interactive" || activeRace?.interactive) && liveRace && (() => {
         const _carEntries = Object.entries(liveRace.car_states || {}).sort((a, b) => (a[1].position ?? 99) - (b[1].position ?? 99));
-        const _totalCars = _carEntries.length || 1;
         const _tColors = { soft: "#e82020", medium: "#e8d020", hard: "#c0c0b8", inter: "#20a840", full_wet: "#2080e8" };
-        const _cColors = ["#d4af37","#dc2626","#3b82f6","#16a34a","#9333ea","#f97316","#ec4899","#14b8a6"];
         const _lapProg = (liveRace.current_lap || 1) / (liveRace.total_laps || 3);
         return (
         <div className="p-3 space-y-3">
@@ -893,61 +891,20 @@ export default function Racing() {
             </div>
           </div>
 
-          {/* Live Track Map */}
-          <div className={styles.panel + " mobile-panel overflow-hidden"}>
-            <div style={{ background: "#060a04", padding: "12px 8px 8px" }}>
-              <svg viewBox="0 0 460 200" style={{ width: "100%", height: "auto", display: "block" }}>
-                {/* Track bed */}
-                <ellipse cx="230" cy="100" rx="195" ry="72" fill="none" stroke="#1a2010" strokeWidth="34" />
-                {/* Track surface */}
-                <ellipse cx="230" cy="100" rx="195" ry="72" fill="none" stroke="#141a0c" strokeWidth="30" />
-                {/* Kerbs at corners */}
-                {[0, Math.PI].map((a, ki) => {
-                  const kx = 230 + 195 * Math.cos(a);
-                  const ky = 100 + 72 * Math.sin(a);
-                  return <circle key={ki} cx={kx} cy={ky} r="6" fill="none" stroke="#cc3333" strokeWidth="2" strokeDasharray="2 2" />;
-                })}
-                {/* Racing line */}
-                <ellipse cx="230" cy="100" rx="195" ry="72" fill="none" stroke="#2a3520" strokeWidth="1" strokeDasharray="8 6" />
-                {/* Start/finish line */}
-                <line x1="230" y1="25" x2="230" y2="33" stroke="#ffffff" strokeWidth="3" />
-                <line x1="227" y1="25" x2="233" y2="25" stroke="#ffffff" strokeWidth="1" />
-                {/* Sector markers */}
-                {[Math.PI * 0.66, Math.PI * 1.33].map((a, si) => {
-                  const sx = 230 + 195 * Math.cos(-Math.PI/2 + a);
-                  const sy = 100 + 72 * Math.sin(-Math.PI/2 + a);
-                  return <circle key={si} cx={sx} cy={sy} r="2" fill="#444" />;
-                })}
-                {/* Car markers */}
-                {_carEntries.map(([eid, cs], idx) => {
-                  const spacing = 0.10;
-                  const angle = -Math.PI / 2 + (idx * spacing);
-                  const cx = 230 + 195 * Math.cos(angle);
-                  const cy = 100 + 72 * Math.sin(angle);
-                  const isMe = eid === profile?.user_id;
-                  const color = cs.dnf ? "#555" : _cColors[idx % _cColors.length];
-                  const participant = (liveRace.participants || []).find(p => (p.user_id || p.id) === eid);
-                  const label = participant?.team_name?.slice(0, 3) || participant?.username?.slice(0, 3) || `P${idx+1}`;
-                  return (
-                    <g key={eid}>
-                      {isMe && <circle cx={cx} cy={cy} r="14" fill="none" stroke="rgba(212,175,55,0.25)" strokeWidth="2">
-                        <animate attributeName="r" values="12;16;12" dur="2s" repeatCount="indefinite" />
-                      </circle>}
-                      {/* Car shape */}
-                      <rect x={cx - 6} y={cy - 3} width="12" height="6" rx="2" fill={color} stroke={isMe ? "#fff" : "rgba(0,0,0,0.4)"} strokeWidth={isMe ? 1.2 : 0.5} />
-                      <circle cx={cx - 4} cy={cy + 3.5} r="1.5" fill="#333" />
-                      <circle cx={cx + 4} cy={cy + 3.5} r="1.5" fill="#333" />
-                      {/* Tyre indicator */}
-                      <circle cx={cx + 8} cy={cy - 5} r="2.5" fill={_tColors[cs.compound] || "#888"} />
-                      {/* Name label */}
-                      <text x={cx} y={cy - 8} textAnchor="middle" fill={isMe ? "#d4af37" : "#999"} fontSize="7" fontWeight={isMe ? "bold" : "normal"} style={{ textTransform: "uppercase" }}>{label}</text>
-                      {cs.dnf && <text x={cx} y={cy + 14} textAnchor="middle" fill="#e74c3c" fontSize="6" fontWeight="bold">DNF</text>}
-                    </g>
-                  );
-                })}
-              </svg>
-            </div>
-          </div>
+          {/* Live Race Canvas */}
+          <CircuitRaceView
+            mode="interactive-live"
+            initialTrackId={circuitTrackId}
+            weather={liveRace.weather || activeRace.weather || "clear"}
+            participants={liveRace.participants || activeRace.participants || []}
+            currentUserId={profile?.user_id}
+            laps={liveRace.total_laps || activeRace.laps || 3}
+            liveCarStates={liveRace.car_states}
+            liveIncidents={liveRace.incidents}
+            livePitStops={liveRace.pit_stops}
+            liveCurrentLap={liveRace.current_lap || 0}
+            liveTotalLaps={liveRace.total_laps || activeRace.laps || 3}
+          />
 
           {/* Timing Tower + Strategy side by side on desktop */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
