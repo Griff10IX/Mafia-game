@@ -402,10 +402,12 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                     rank_points = rank_points * 2
             except Exception:
                 pass
-        await db.users.update_one(
-            {"id": target["id"]},
+        released = await db.users.find_one_and_update(
+            {"id": target["id"], "in_jail": True},
             {"$set": {"in_jail": False, "jail_until": None, "unbreakable_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},
         )
+        if not released:
+            return {"success": False, "error": "Target is no longer in jail", "error_code": 400}
         reward_cash = _safe_int(target.get("bust_reward_cash"), 0)
         target_money = _safe_int(target.get("money"), 0)
         base_pay = min(reward_cash, target_money) if reward_cash > 0 else 0

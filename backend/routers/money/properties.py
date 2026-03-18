@@ -272,7 +272,6 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     # Find ALL copies of this property type owned by user (from kills)
     user_props_list = await db.user_properties.find(
         {"user_id": current_user["id"], "property_id": property_id},
-        {"_id": 0}
     ).to_list(100)
     if not user_props_list:
         raise HTTPException(status_code=404, detail="You don't own this property")
@@ -284,8 +283,19 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     total_income = 0.0
     total_base_cap = 0.0
     max_hours_passed = 0.0
-    first_user_prop = user_props_list[0]
-    for user_prop in user_props_list:
+    now_iso = now_utc.isoformat()
+    first_user_prop = None
+    for ref in user_props_list:
+        # Atomically swap last_collected to claim this property's income window;
+        # returns the pre-update document so a concurrent request sees ~0 hours.
+        user_prop = await db.user_properties.find_one_and_update(
+            {"_id": ref["_id"], "user_id": current_user["id"]},
+            {"$set": {"last_collected": now_iso}},
+        )
+        if not user_prop:
+            continue
+        if first_user_prop is None:
+            first_user_prop = user_prop
         last_collected = _parse_iso_datetime(user_prop.get("last_collected"))
         if not last_collected:
             last_collected = now_utc
@@ -296,6 +306,8 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
         total_base_cap += base_income_cap
         up_income = min(hours_passed * prop["income_per_hour"] * level, base_income_cap)
         total_income += up_income
+    if not first_user_prop:
+        raise HTTPException(status_code=404, detail="You don't own this property")
     if total_income < 1:
         raise HTTPException(status_code=400, detail="No income to collect yet")
     # Apply stack bonus
@@ -345,14 +357,9 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
         {"id": current_user["id"]},
         {"$inc": {"money": income}}
     )
-    update_fields = {
-        "last_collected": now_utc.isoformat(),
-        "collection_streak_days": streak_days,
-    }
-    # Update ALL copies of this property type
     await db.user_properties.update_many(
         {"user_id": current_user["id"], "property_id": property_id},
-        {"$set": update_fields}
+        {"$set": {"collection_streak_days": streak_days}}
     )
     message = f"Collected ${income:,.2f}"
     if owned_count > 1:

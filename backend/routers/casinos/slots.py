@@ -461,9 +461,9 @@ def register(router):
     @router.post("/casino/slots/buy-back/accept")
     async def casino_slots_buy_back_accept(request: SlotsBuyBackAcceptRequest, current_user: dict = Depends(get_current_user_verified)):
         """Accept buy-back: receive points and return ownership to previous owner."""
-        offer = await db.slots_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0})
+        offer = await db.slots_buy_back_offers.find_one_and_delete({"id": request.offer_id}, projection={"_id": 0})
         if not offer:
-            raise HTTPException(status_code=404, detail="Offer not found")
+            raise HTTPException(status_code=404, detail="Offer not found or already claimed")
         if offer.get("to_user_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="Not your offer")
         expires = offer.get("expires_at")
@@ -495,7 +495,6 @@ def register(router):
             {"state": stored_state or state},
             {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "expires_at": next_draw_iso, "next_draw_at": next_draw_iso, "max_bet": 0}},
         )
-        await db.slots_buy_back_offers.delete_one({"id": request.offer_id})
         _invalidate_slots_ownership_cache(current_user.get("id") or "")
         _invalidate_slots_ownership_cache(from_owner_id)
         return {"message": "Accepted. You received the points and the slots were returned to the previous owner."}

@@ -441,10 +441,16 @@ async def start_illegal_business(req: StartBusinessRequest, current_user: dict =
 
 
 async def collect_illegal_business(current_user: dict = Depends(get_current_user)):
-    business = await db.illegal_businesses.find_one({"user_id": current_user["id"]}, {"_id": 0})
+    now = datetime.now(timezone.utc)
+    # Atomically swap last_collected_at — returns the pre-update document so
+    # a concurrent request sees the already-advanced timestamp and computes ~0 income.
+    business = await db.illegal_businesses.find_one_and_update(
+        {"user_id": current_user["id"]},
+        {"$set": {"last_collected_at": now.isoformat()}},
+        projection={"_id": 0},
+    )
     if not business:
         raise HTTPException(status_code=404, detail="You don't have an illegal business.")
-    now = datetime.now(timezone.utc)
     last_raw = business.get("last_collected_at")
     try:
         last = datetime.fromisoformat(last_raw.replace("Z", "+00:00")) if last_raw else now
@@ -476,7 +482,7 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
             pass
     if income < 0.01:
         raise HTTPException(status_code=400, detail="No take to collect yet.")
-    updates = {"last_collected_at": now.isoformat()}
+    updates = {}
     security_level = len(business.get("security_upgrades") or []) or int(business.get("security_level") or 0)
     ib_mult = float(prestige.get("illegal_business_mult", 1.0))
     # Extras (bullets, respect, points, loot) only when enough time accumulated and cooldown passed
@@ -622,6 +628,18 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
         raise HTTPException(status_code=400, detail="Requirements not met.")
     rewards = mission.get("rewards") or {}
     now = datetime.now(timezone.utc).isoformat()
+    user_updates = {"$push": {"illegal_business_mission_completions": {"mission_id": mission_id, "completed_at": now}}}
+    for token_type in TOKEN_TYPES:
+        field = TOKEN_CONFIG[token_type]["count_field"]
+        if rewards.get(field):
+            user_updates["$inc"] = user_updates.get("$inc") or {}
+            user_updates["$inc"][field] = int(rewards[field])
+    result = await db.users.update_one(
+        {"id": current_user["id"], "illegal_business_mission_completions.mission_id": {"$ne": mission_id}},
+        user_updates,
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Mission already completed.")
     update_business_set = {}
     update_business_inc = {}
     if "income_mult" in rewards:
@@ -642,13 +660,6 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
         biz_update["$inc"] = update_business_inc
     if biz_update:
         await db.illegal_businesses.update_one({"id": business["id"]}, biz_update)
-    user_updates = {"$push": {"illegal_business_mission_completions": {"mission_id": mission_id, "completed_at": now}}}
-    for token_type in TOKEN_TYPES:
-        field = TOKEN_CONFIG[token_type]["count_field"]
-        if rewards.get(field):
-            user_updates["$inc"] = user_updates.get("$inc") or {}
-            user_updates["$inc"][field] = int(rewards[field])
-    await db.users.update_one({"id": current_user["id"]}, user_updates)
     return {"message": mission.get("story", "Mission complete.")}
 
 
@@ -917,22 +928,26 @@ async def raid_random_illegal_business(current_user: dict = Depends(get_current_
 
 
 async def claim_kill_reward(req: ClaimKillRewardRequest, current_user: dict = Depends(get_current_user)):
+    choice = (req.choice or "").strip().lower()
+    if choice not in ("cash", "income_boost"):
+        raise HTTPException(status_code=400, detail="Choice must be 'cash' or 'income_boost'.")
     pending = current_user.get("pending_illegal_business_rewards") or []
     entry = next((p for p in pending if p.get("victim_id") == req.victim_id), None)
     if not entry:
         raise HTTPException(status_code=404, detail="No pending reward for this victim.")
-    choice = (req.choice or "").strip().lower()
-    if choice not in ("cash", "income_boost"):
-        raise HTTPException(status_code=400, detail="Choice must be 'cash' or 'income_boost'.")
-    total_spent = int(entry.get("total_spent") or 0)
     moderately_upgraded = bool(entry.get("moderately_upgraded"))
     if choice == "income_boost" and not moderately_upgraded:
         raise HTTPException(status_code=400, detail="Victim's business was not moderately upgraded. Take cash instead.")
-    new_pending = [p for p in pending if p.get("victim_id") != req.victim_id]
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"pending_illegal_business_rewards": new_pending}},
+    old_user = await db.users.find_one_and_update(
+        {"id": current_user["id"], "pending_illegal_business_rewards.victim_id": req.victim_id},
+        {"$pull": {"pending_illegal_business_rewards": {"victim_id": req.victim_id}}},
     )
+    if not old_user:
+        raise HTTPException(status_code=404, detail="No pending reward for this victim.")
+    reward_entry = next((p for p in old_user.get("pending_illegal_business_rewards", []) if p.get("victim_id") == req.victim_id), None)
+    if not reward_entry:
+        raise HTTPException(status_code=404, detail="No pending reward for this victim.")
+    total_spent = int(reward_entry.get("total_spent") or 0)
     if choice == "cash":
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": total_spent}})
         return {"message": f"Took ${total_spent:,} from the late owner's operation.", "cash": total_spent, "income_boost": None}

@@ -378,9 +378,9 @@ def register(router):
     @router.post("/casino/videopoker/buy-back/accept")
     async def casino_videopoker_buy_back_accept(request: VideoPokerBuyBackAcceptRequest, current_user: dict = Depends(get_current_user_verified)):
         """Accept a buy-back offer: receive points and transfer ownership back to previous owner."""
-        offer = await db.videopoker_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0})
+        offer = await db.videopoker_buy_back_offers.find_one_and_delete({"id": request.offer_id}, projection={"_id": 0})
         if not offer:
-            raise HTTPException(status_code=404, detail="Offer not found")
+            raise HTTPException(status_code=404, detail="Offer not found or already claimed")
         if offer.get("to_user_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="Not your offer")
         expires = offer.get("expires_at")
@@ -407,7 +407,6 @@ def register(router):
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
         # Reset max_bet to 0 when ownership returns - owner must set it again
         await db.videopoker_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "max_bet": 0}})
-        await db.videopoker_buy_back_offers.delete_one({"id": request.offer_id})
         _invalidate_ownership_cache(current_user.get("id") or "")
         _invalidate_ownership_cache(from_owner_id)
         return {"message": "Accepted. You received the points and the table was returned to the previous owner."}

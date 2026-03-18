@@ -239,11 +239,14 @@ class PokerCreateRequest(BaseModel):
 def register(router):
     # ── Vs Dealer helpers ─────────────────────────────────────────────────────
     async def _vs_dealer_showdown(game_id: str):
+        claim = await db.mp_poker_games.update_one(
+            {"id": game_id, "status": {"$ne": "completed"}},
+            {"$set": {"status": "completed", "phase": "settled"}},
+        )
+        if claim.modified_count == 0:
+            return
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g:
-            return
-        street = g.get("street")
-        if street and street != "showdown":
             return
         players = list(g.get("players") or [])
         board = list(g.get("board") or [])
@@ -280,7 +283,7 @@ def register(router):
             results.append({"user_id": "dealer", "result": "lose" if winner and winner.get("user_id") == uid else "win", "payout": 0 if winner and winner.get("user_id") == uid else pot, "hand": hand_name if winner and winner.get("user_id") == "dealer" else None})
         await db.mp_poker_games.update_one(
             {"id": game_id},
-            {"$set": {"status": "completed", "phase": "settled", "results": results, "completed_at": now_iso}},
+            {"$set": {"results": results, "completed_at": now_iso}},
         )
 
     async def _vs_dealer_advance_street(game_id: str) -> Optional[dict]:

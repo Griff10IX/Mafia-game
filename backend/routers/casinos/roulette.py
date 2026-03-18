@@ -338,9 +338,9 @@ def register(router):
     @router.post("/casino/roulette/buy-back/accept")
     async def casino_roulette_buy_back_accept(request: RouletteBuyBackAcceptRequest, current_user: dict = Depends(get_current_user_verified)):
         """Accept a buy-back offer: receive points and return the roulette table to the previous owner."""
-        offer = await db.roulette_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0})
+        offer = await db.roulette_buy_back_offers.find_one_and_delete({"id": request.offer_id}, projection={"_id": 0})
         if not offer:
-            raise HTTPException(status_code=404, detail="Offer not found")
+            raise HTTPException(status_code=404, detail="Offer not found or already claimed")
         if offer.get("to_user_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="Not your offer")
         expires = offer.get("expires_at")
@@ -348,7 +348,6 @@ def register(router):
             try:
                 exp_dt = datetime.fromisoformat(expires.replace("Z", "+00:00"))
                 if exp_dt < datetime.now(timezone.utc):
-                    await db.roulette_buy_back_offers.delete_one({"id": request.offer_id})
                     raise HTTPException(status_code=400, detail="Offer expired")
             except ValueError:
                 pass
@@ -370,7 +369,6 @@ def register(router):
         from_username = from_user.get("username") if from_user else None
         # Reset max_bet to 0 when ownership returns - owner must set it again
         await db.roulette_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_username, "max_bet": 0}})
-        await db.roulette_buy_back_offers.delete_one({"id": request.offer_id})
         _invalidate_ownership_cache(current_user.get("id") or "")
         _invalidate_ownership_cache(from_owner_id)
         return {"message": "Accepted. You received the points and the table was returned to the previous owner."}

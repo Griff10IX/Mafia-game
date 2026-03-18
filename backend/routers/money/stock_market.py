@@ -154,7 +154,9 @@ async def _process_auto_sell_expired(uid: str, now: datetime, live_list: list, c
             open_price = float(pos.get("open_price") or 0)
             cost_to_cover = round(units * current_price, 0)
             profit_points = round(units * (open_price - current_price), 0)
-            await db.stock_positions.delete_one({"id": pos.get("id"), "user_id": uid})
+            deleted = await db.stock_positions.find_one_and_delete({"id": pos.get("id"), "user_id": uid})
+            if not deleted:
+                continue
             await db.users.update_one({"id": uid}, {"$inc": {"points": profit_points - cost_to_cover, "stock_market_profit_total": profit_points}})
             await db.stock_transactions.insert_one({
                 "id": str(uuid.uuid4()),
@@ -178,7 +180,9 @@ async def _process_auto_sell_expired(uid: str, now: datetime, live_list: list, c
             buy_price = float(pos.get("buy_price") or 0)
             cost_points = round(units * buy_price, 0)
             profit_points = value_points - cost_points
-            await db.stock_positions.delete_one({"id": pos.get("id"), "user_id": uid})
+            deleted = await db.stock_positions.find_one_and_delete({"id": pos.get("id"), "user_id": uid})
+            if not deleted:
+                continue
             await db.users.update_one({"id": uid}, {"$inc": {"points": value_points, "stock_market_profit_total": profit_points}})
             await db.stock_transactions.insert_one({
                 "id": str(uuid.uuid4()),
@@ -491,10 +495,10 @@ def register(router):
     async def stock_market_sell(request: StockSellRequest, current_user: dict = Depends(get_current_user)):
         """Close a position: long = sell (receive value); short = cover (pay to close, profit if price dropped)."""
         uid = current_user.get("id") or ""
-        pos = await db.stock_positions.find_one({"id": request.position_id, "user_id": uid}, {"_id": 0})
-        if not pos:
+        pos_preview = await db.stock_positions.find_one({"id": request.position_id, "user_id": uid}, {"_id": 0, "bought_at": 1})
+        if not pos_preview:
             raise HTTPException(status_code=404, detail="Position not found")
-        bought_at = _parse_bought_at(pos.get("bought_at"))
+        bought_at = _parse_bought_at(pos_preview.get("bought_at"))
         if bought_at:
             elapsed = (datetime.now(timezone.utc) - bought_at).total_seconds()
             if elapsed < SELL_COOLDOWN_SEC:
@@ -503,6 +507,12 @@ def register(router):
                     status_code=400,
                     detail=f"You must wait 3 minutes after opening before closing. You can close in {wait_sec} seconds.",
                 )
+        pos = await db.stock_positions.find_one_and_delete(
+            {"id": request.position_id, "user_id": uid},
+            projection={"_id": 0}
+        )
+        if not pos:
+            raise HTTPException(status_code=404, detail="Position not found or already sold")
         stock = next((s for s in STOCKS if s["id"] == pos.get("stock_id")), None)
         if not stock:
             raise HTTPException(status_code=400, detail="Stock not found")
@@ -523,7 +533,6 @@ def register(router):
             user = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1})
             if int(user.get("points") or 0) < cost_to_cover:
                 raise HTTPException(status_code=400, detail=f"Insufficient points to cover. Need {cost_to_cover} points.")
-            await db.stock_positions.delete_one({"id": request.position_id, "user_id": uid})
             await db.users.update_one({"id": uid}, {"$inc": {"points": profit_points - cost_to_cover, "stock_market_profit_total": profit_points}})
             await db.stock_transactions.insert_one({
                 "id": str(uuid.uuid4()),
@@ -547,7 +556,6 @@ def register(router):
         value_points = round(units * current_price, 0)
         cost_points = round(units * buy_price, 0)
         profit_points = value_points - cost_points
-        await db.stock_positions.delete_one({"id": request.position_id, "user_id": uid})
         await db.users.update_one({"id": uid}, {"$inc": {"points": value_points, "stock_market_profit_total": profit_points}})
         await db.stock_transactions.insert_one({
             "id": str(uuid.uuid4()),

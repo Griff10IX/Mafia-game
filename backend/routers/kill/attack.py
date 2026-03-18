@@ -1003,7 +1003,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         killer_id = current_user["id"]
         victim_id = target["id"]
         if target.get("is_npc"):
-            hitlist_entry = await db.hitlist.find_one({"target_id": victim_id, "target_type": "npc"}, {"_id": 0, "npc_rewards": 1})
+            hitlist_entry = await db.hitlist.find_one_and_delete({"target_id": victim_id, "target_type": "npc"}, projection={"_id": 0, "npc_rewards": 1})
+            if not hitlist_entry:
+                raise HTTPException(status_code=400, detail="Target has already been killed")
             if hitlist_entry:
                 rewards = hitlist_entry.get("npc_rewards") or {}
                 hitlist_mult = 1.0
@@ -1052,7 +1054,6 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 car_id = (rewards.get("car_id") or "").strip()
                 if car_id and next((c for c in CARS if c.get("id") == car_id), None):
                     await db.user_cars.insert_one({"id": str(uuid.uuid4()), "user_id": killer_id, "car_id": car_id, "acquired_at": datetime.now(timezone.utc).isoformat()})
-                await db.hitlist.delete_one({"target_id": victim_id, "target_type": "npc"})
                 try:
                     await update_objectives_progress(killer_id, "hitlist_npc_kills", 1)
                 except Exception:
@@ -1130,7 +1131,25 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                                 update_criteria = {"id": b["id"]} if b.get("id") else {"user_id": owner_id, "slot_number": b["slot_number"]}
                                 await db.bodyguards.update_one(update_criteria, {"$set": {"slot_number": i}})
                 return AttackExecuteResponse(success=True, message=success_message, rewards=rewards)
-        victim_money = int(target.get("money", 0))
+        now_iso = datetime.now(timezone.utc).isoformat()
+        killer_family_doc = None
+        if current_user.get("family_id"):
+            killer_family_doc = await db.families.find_one({"id": current_user["family_id"]}, {"_id": 0, "name": 1})
+        death_claim = await db.users.find_one_and_update(
+            {"id": victim_id, "is_dead": {"$ne": True}},
+            {"$set": {
+                "is_dead": True,
+                "dead_at": now_iso,
+                "money": 0,
+                "health": 0,
+                "killed_by_username": current_user.get("username"),
+                "killed_by_user_id": current_user["id"],
+                "killed_by_family_name": (killer_family_doc or {}).get("name"),
+            }, "$inc": {"total_deaths": 1}},
+        )
+        if not death_claim:
+            raise HTTPException(status_code=400, detail="Target is already dead")
+        victim_money = int(death_claim.get("money", 0))
         cash_loot = int(victim_money * KILL_CASH_PERCENT)
         rank_points = 25
         ev = await get_effective_event()
@@ -1227,30 +1246,18 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         if auto_sell_cash > 0:
             await db.users.update_one({"id": killer_id}, {"$inc": {"money": auto_sell_cash}})
             cash_loot += auto_sell_cash  # For message display
-        now_iso = datetime.now(timezone.utc).isoformat()
-        killer_family_doc = None
-        if current_user.get("family_id"):
-            killer_family_doc = await db.families.find_one({"id": current_user["family_id"]}, {"_id": 0, "name": 1})
         money_after_loot = max(0, victim_money - cash_loot)
-        # Store token counts at death for Dead > Alive restoration
         tokens_at_death = {}
         for token_type, cfg in TOKEN_CONFIG.items():
             count_field = cfg["count_field"]
-            tokens_at_death[count_field] = int(target.get(count_field, 0) or 0)
+            tokens_at_death[count_field] = int(death_claim.get(count_field, 0) or 0)
         await db.users.update_one(
             {"id": victim_id},
             {"$set": {
-                "is_dead": True,
-                "dead_at": now_iso,
-                "points_at_death": target.get("points", 0),
+                "points_at_death": death_claim.get("points", 0),
                 "money_at_death": money_after_loot,
                 "tokens_at_death": tokens_at_death,
-                "money": 0,
-                "health": 0,
-                "killed_by_username": current_user.get("username"),
-                "killed_by_user_id": current_user["id"],
-                "killed_by_family_name": (killer_family_doc or {}).get("name"),
-            }, "$inc": {"total_deaths": 1}}
+            }}
         )
         try:
             from routers.game.families import maybe_promote_after_boss_death

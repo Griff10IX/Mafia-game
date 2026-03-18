@@ -731,7 +731,12 @@ async def complete_mission(
     if unlocks_city:
         update.setdefault("$set", {})["unlocked_maps_up_to"] = unlocks_city
 
-    await db.users.update_one({"id": user_id}, update)
+    result = await db.users.update_one(
+        {"id": user_id, "mission_completions.mission_id": {"$ne": mission_id}},
+        update,
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Mission already completed")
     if reward_respect:
         await log_respect_earned(user_id, reward_respect, "missions")
 
@@ -787,45 +792,48 @@ async def complete_mission(
 async def collect_tribute(current_user: dict = Depends(get_current_user)):
     """Collect accumulated tribute (cash, bullets, loot box pieces, respect, tokens) into balance. All daily rewards stack until collected."""
     user_id = current_user["id"]
-    bank = int(current_user.get("tribute_bank") or 0)
-    bullets = int(current_user.get("tribute_bullets") or 0)
-    loot_pieces = int(current_user.get("tribute_loot_box_pieces") or 0)
-    respect = int(current_user.get("tribute_respect") or 0)
-    tokens = int(current_user.get("tribute_tokens") or 0)
+    empty_response = {
+        "collected": 0, "collected_bullets": 0, "collected_loot_box_pieces": 0, "collected_respect": 0, "collected_tokens": 0,
+        "tribute_bank": 0, "tribute_bullets": 0, "tribute_loot_box_pieces": 0, "tribute_respect": 0, "tribute_tokens": 0,
+        "message": "No tribute to collect",
+    }
+    old_user = await db.users.find_one_and_update(
+        {"id": user_id, "$or": [
+            {"tribute_bank": {"$gt": 0}},
+            {"tribute_bullets": {"$gt": 0}},
+            {"tribute_loot_box_pieces": {"$gt": 0}},
+            {"tribute_respect": {"$gt": 0}},
+            {"tribute_tokens": {"$gt": 0}},
+        ]},
+        {"$set": {"tribute_bank": 0, "tribute_bullets": 0, "tribute_loot_box_pieces": 0, "tribute_respect": 0, "tribute_tokens": 0}},
+    )
+    if not old_user:
+        return empty_response
+    bank = int(old_user.get("tribute_bank") or 0)
+    bullets = int(old_user.get("tribute_bullets") or 0)
+    loot_pieces = int(old_user.get("tribute_loot_box_pieces") or 0)
+    respect = int(old_user.get("tribute_respect") or 0)
+    tokens = int(old_user.get("tribute_tokens") or 0)
     if bank <= 0 and bullets <= 0 and loot_pieces <= 0 and respect <= 0 and tokens <= 0:
-        return {
-            "collected": 0, "collected_bullets": 0, "collected_loot_box_pieces": 0, "collected_respect": 0, "collected_tokens": 0,
-            "tribute_bank": 0, "tribute_bullets": 0, "tribute_loot_box_pieces": 0, "tribute_respect": 0, "tribute_tokens": 0,
-            "message": "No tribute to collect",
-        }
-    update = {"$set": {}}
+        return empty_response
+    inc = {}
     if bank > 0:
-        update["$inc"] = update.get("$inc", {})
-        update["$inc"]["money"] = bank
-        update["$set"]["tribute_bank"] = 0
+        inc["money"] = bank
     if bullets > 0:
-        update["$inc"] = update.get("$inc", {})
-        update["$inc"]["bullets"] = bullets
-        update["$set"]["tribute_bullets"] = 0
+        inc["bullets"] = bullets
     if loot_pieces > 0:
-        update["$inc"] = update.get("$inc", {})
-        update["$inc"]["loot_box_pieces"] = loot_pieces
-        update["$set"]["tribute_loot_box_pieces"] = 0
+        inc["loot_box_pieces"] = loot_pieces
     if respect > 0:
-        update["$inc"] = update.get("$inc", {})
-        update["$inc"]["respect_points"] = respect
-        update["$set"]["tribute_respect"] = 0
-    # For tokens, grant random tokens from the pool
+        inc["respect_points"] = respect
     tokens_awarded = {}
     if tokens > 0:
-        update["$inc"] = update.get("$inc", {})
-        update["$set"]["tribute_tokens"] = 0
         for _ in range(tokens):
             token_type = random.choice(TOKEN_TYPES)
             token_field = TOKEN_CONFIG[token_type]["count_field"]
-            update["$inc"][token_field] = update["$inc"].get(token_field, 0) + 1
+            inc[token_field] = inc.get(token_field, 0) + 1
             tokens_awarded[token_type] = tokens_awarded.get(token_type, 0) + 1
-    await db.users.update_one({"id": user_id}, update)
+    if inc:
+        await db.users.update_one({"id": user_id}, {"$inc": inc})
     if respect > 0:
         await log_respect_earned(user_id, respect, "missions_tribute")
     msg = []

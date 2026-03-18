@@ -176,6 +176,10 @@ def _blackjack_game_is_stale(game: dict) -> bool:
 
 async def _blackjack_auto_finish_game(game: dict, current_user: dict):
     """Settle an in-progress game as if player stood (dealer to 17, result, pay/collect, history, remove game)."""
+    claimed = await db.blackjack_games.find_one_and_delete({"user_id": current_user.get("id") or ""})
+    if not claimed:
+        return
+    game = claimed
     bj_city = game.get("city")
     deck = list(game.get("deck") or [])
     player_hand = list(game.get("player_hand") or [])
@@ -272,7 +276,6 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
     await _blackjack_settle_and_save_history(
         current_user.get("id") or "", current_user.get("username"), bj_city, bet, result, payout, player_hand, dealer_hand, player_total, dealer_total
     )
-    await db.blackjack_games.delete_one({"user_id": current_user.get("id") or ""})
 
 
 def register(router):
@@ -475,9 +478,9 @@ def register(router):
 
     @router.post("/casino/blackjack/buy-back/accept")
     async def casino_blackjack_buy_back_accept(request: BlackjackBuyBackAcceptRequest, current_user: dict = Depends(get_current_user_verified)):
-        offer = await db.blackjack_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0})
+        offer = await db.blackjack_buy_back_offers.find_one_and_delete({"id": request.offer_id}, projection={"_id": 0})
         if not offer:
-            raise HTTPException(status_code=404, detail="Offer not found")
+            raise HTTPException(status_code=404, detail="Offer not found or already claimed")
         if offer.get("to_user_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="Not your offer")
         expires = offer.get("expires_at")
@@ -505,7 +508,6 @@ def register(router):
         from_username = from_user.get("username") if from_user else None
         # Reset max_bet to 0 when ownership returns - owner must set it again
         await db.blackjack_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_username, "max_bet": 0}})
-        await db.blackjack_buy_back_offers.delete_one({"id": request.offer_id})
         _invalidate_ownership_cache(current_user.get("id") or "")
         _invalidate_ownership_cache(from_owner_id)
         return {"message": "Accepted. You received the points and the table was returned to the previous owner."}
@@ -840,7 +842,7 @@ def register(router):
 
     @router.post("/casino/blackjack/stand")
     async def casino_blackjack_stand(current_user: dict = Depends(get_current_user_verified)):
-        game = await db.blackjack_games.find_one({"user_id": current_user.get("id") or ""})
+        game = await db.blackjack_games.find_one_and_delete({"user_id": current_user.get("id") or ""})
         if not game:
             raise HTTPException(status_code=400, detail="No active game")
         if _blackjack_game_is_stale(game):
@@ -953,7 +955,6 @@ def register(router):
         await _blackjack_settle_and_save_history(
             current_user.get("id") or "", current_user.get("username"), bj_city, bet, result, payout, player_hand, dealer_hand, player_total, dealer_total
         )
-        await db.blackjack_games.delete_one({"user_id": current_user.get("id") or ""})
         return {
             "status": "done",
             "bet": bet,

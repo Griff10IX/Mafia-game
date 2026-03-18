@@ -682,12 +682,14 @@ async def sports_betting_cancel_bet(request: SportsBetCancelRequest, current_use
     bet_id = (request.bet_id or "").strip()
     if not bet_id:
         raise HTTPException(status_code=400, detail="bet_id required")
-    bet = await db.sports_bets.find_one({"id": bet_id, "user_id": current_user.get("id") or "", "status": "open"}, {"_id": 0, "stake": 1})
-    if not bet:
-        raise HTTPException(status_code=404, detail="Bet not found or already settled")
-    stake = int(bet.get("stake") or 0)
     now = datetime.now(timezone.utc).isoformat()
-    await db.sports_bets.update_one({"id": bet_id}, {"$set": {"status": "cancelled", "settled_at": now}})
+    bet = await db.sports_bets.find_one_and_update(
+        {"id": bet_id, "user_id": current_user.get("id") or "", "status": "open"},
+        {"$set": {"status": "cancelled", "settled_at": now}},
+    )
+    if not bet:
+        raise HTTPException(status_code=400, detail="Bet not found or already cancelled")
+    stake = int(bet.get("stake") or 0)
     if stake > 0:
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": stake}})
     return {"message": f"Bet cancelled. ${stake:,} refunded.", "refunded": stake}
@@ -699,14 +701,20 @@ async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_curren
     if not bets:
         return {"message": "No open bets to cancel.", "refunded": 0, "cancelled_count": 0}
     total_refund = 0
+    cancelled_count = 0
     now = datetime.now(timezone.utc).isoformat()
     for b in bets:
-        stake = int(b.get("stake") or 0)
-        await db.sports_bets.update_one({"id": b["id"]}, {"$set": {"status": "cancelled", "settled_at": now}})
-        total_refund += stake
+        claimed = await db.sports_bets.find_one_and_update(
+            {"id": b["id"], "status": "open"},
+            {"$set": {"status": "cancelled", "settled_at": now}},
+        )
+        if not claimed:
+            continue
+        total_refund += int(claimed.get("stake") or 0)
+        cancelled_count += 1
     if total_refund > 0:
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": total_refund}})
-    return {"message": f"All {len(bets)} bet(s) cancelled. ${total_refund:,} refunded.", "refunded": total_refund, "cancelled_count": len(bets)}
+    return {"message": f"All {cancelled_count} bet(s) cancelled. ${total_refund:,} refunded.", "refunded": total_refund, "cancelled_count": cancelled_count}
 
 
 async def sports_betting_stats(current_user: dict = Depends(get_current_user_verified)):
@@ -869,14 +877,13 @@ async def admin_sports_settle(request: SportsSettleEventRequest, current_user: d
         raise HTTPException(status_code=403, detail="Admin only")
     event_id = (request.event_id or "").strip()
     winning_option_id = (request.winning_option_id or "").strip()
-    ev = await db.sports_events.find_one({"id": event_id}, {"_id": 0})
-    if not ev:
-        raise HTTPException(status_code=404, detail="Event not found")
     now = datetime.now(timezone.utc).isoformat()
-    await db.sports_events.update_one(
-        {"id": event_id},
-        {"$set": {"status": "settled", "winning_option_id": winning_option_id}},
+    ev = await db.sports_events.find_one_and_update(
+        {"id": event_id, "status": "open"},
+        {"$set": {"status": "settled", "winning_option_id": winning_option_id, "settled_at": now}},
     )
+    if not ev:
+        raise HTTPException(status_code=400, detail="Event not found or already settled")
     cursor = db.sports_bets.find(
         {"event_id": event_id, "status": "open"},
         {"_id": 0, "id": 1, "user_id": 1, "option_id": 1, "stake": 1, "odds": 1, "event_name": 1, "option_name": 1},
@@ -884,22 +891,27 @@ async def admin_sports_settle(request: SportsSettleEventRequest, current_user: d
     for b in await cursor.to_list(1000):
         won = b.get("option_id") == winning_option_id
         new_status = "won" if won else "lost"
-        await db.sports_bets.update_one({"id": b["id"]}, {"$set": {"status": new_status, "settled_at": now}})
-        u = await db.users.find_one({"id": b["user_id"]}, {"_id": 0, "username": 1, "sports_current_win_streak": 1, "sports_best_win_streak": 1})
-        await log_gambling(b["user_id"], u.get("username") if u else "?", "sports_bet", {"bet_id": b["id"], "event_name": b.get("event_name"), "option_name": b.get("option_name"), "stake": b.get("stake"), "odds": b.get("odds"), "status": new_status, "settled_at": now})
+        bet_claim = await db.sports_bets.find_one_and_update(
+            {"id": b["id"], "status": "open"},
+            {"$set": {"status": new_status, "settled_at": now}},
+        )
+        if not bet_claim:
+            continue
+        u = await db.users.find_one({"id": bet_claim["user_id"]}, {"_id": 0, "username": 1, "sports_current_win_streak": 1, "sports_best_win_streak": 1})
+        await log_gambling(bet_claim["user_id"], u.get("username") if u else "?", "sports_bet", {"bet_id": bet_claim["id"], "event_name": bet_claim.get("event_name"), "option_name": bet_claim.get("option_name"), "stake": bet_claim.get("stake"), "odds": bet_claim.get("odds"), "status": new_status, "settled_at": now})
         if won:
-            stake = int(b.get("stake") or 0)
-            odds = float(b.get("odds") or 1)
+            stake = int(bet_claim.get("stake") or 0)
+            odds = float(bet_claim.get("odds") or 1)
             payout = int(stake * odds)
             current_streak = int((u or {}).get("sports_current_win_streak", 0)) + 1
             best_streak = max(current_streak, int((u or {}).get("sports_best_win_streak", 0)))
             update_fields = {"sports_current_win_streak": current_streak, "sports_best_win_streak": best_streak}
             if payout > 0:
-                await db.users.update_one({"id": b["user_id"]}, {"$inc": {"money": payout}, "$set": update_fields})
+                await db.users.update_one({"id": bet_claim["user_id"]}, {"$inc": {"money": payout}, "$set": update_fields})
             else:
-                await db.users.update_one({"id": b["user_id"]}, {"$set": update_fields})
+                await db.users.update_one({"id": bet_claim["user_id"]}, {"$set": update_fields})
         else:
-            await db.users.update_one({"id": b["user_id"]}, {"$set": {"sports_current_win_streak": 0}})
+            await db.users.update_one({"id": bet_claim["user_id"]}, {"$set": {"sports_current_win_streak": 0}})
     return {"message": f"Event {event_id} settled. Winning option: {winning_option_id}. Winners paid out."}
 
 
@@ -907,10 +919,13 @@ async def admin_sports_cancel_event(request: AdminCancelEventRequest, current_us
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     event_id = (request.event_id or "").strip()
-    ev = await db.sports_events.find_one({"id": event_id, "status": "open"}, {"_id": 0, "id": 1})
-    if not ev:
-        raise HTTPException(status_code=404, detail="Event not found or already settled/cancelled")
     now = datetime.now(timezone.utc).isoformat()
+    ev = await db.sports_events.find_one_and_update(
+        {"id": event_id, "status": "open"},
+        {"$set": {"status": "cancelled", "cancelled_at": now}},
+    )
+    if not ev:
+        raise HTTPException(status_code=400, detail="Event not found or already cancelled")
     cursor = db.sports_bets.find(
         {"event_id": event_id, "status": "open"},
         {"_id": 0, "id": 1, "user_id": 1, "stake": 1},
@@ -918,13 +933,17 @@ async def admin_sports_cancel_event(request: AdminCancelEventRequest, current_us
     refunded_count = 0
     total_refunded = 0
     for b in await cursor.to_list(1000):
-        stake = int(b.get("stake") or 0)
-        await db.sports_bets.update_one({"id": b["id"]}, {"$set": {"status": "cancelled", "settled_at": now}})
+        bet_claim = await db.sports_bets.find_one_and_update(
+            {"id": b["id"], "status": "open"},
+            {"$set": {"status": "cancelled", "settled_at": now}},
+        )
+        if not bet_claim:
+            continue
+        stake = int(bet_claim.get("stake") or 0)
         if stake > 0:
-            await db.users.update_one({"id": b["user_id"]}, {"$inc": {"money": stake}})
+            await db.users.update_one({"id": bet_claim["user_id"]}, {"$inc": {"money": stake}})
         refunded_count += 1
         total_refunded += stake
-    await db.sports_events.update_one({"id": event_id}, {"$set": {"status": "cancelled"}})
     return {
         "message": f"Event cancelled. {refunded_count} bet(s) refunded (${total_refunded:,} total).",
         "refunded_count": refunded_count,

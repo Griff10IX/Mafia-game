@@ -655,7 +655,6 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         lifetime_list, lifetime_all_done = _build_lifetime_objective_list(lifetime_progress)
         if not lifetime_all_done:
             raise HTTPException(status_code=400, detail="Lifetime objectives not complete")
-        # Grant rewards: cash, points, bullets + permanent perks
         reward = {
             "money": LIFETIME_COMPLETION_REWARD["money"],
             "points": LIFETIME_COMPLETION_REWARD["points"],
@@ -663,8 +662,8 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
             "perks": LIFETIME_PERKS,
         }
         perk_set = {perk: True for perk in LIFETIME_PERKS}
-        await db.users.update_one(
-            {"id": user_id},
+        result = await db.users.update_one(
+            {"id": user_id, "objectives_lifetime_claimed": {"$ne": True}},
             {
                 "$set": {"objectives_lifetime_claimed": True, **perk_set},
                 "$inc": {
@@ -674,6 +673,8 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
                 }
             }
         )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Lifetime objectives already claimed")
         await send_notification(
             user_id, "Completed it!",
             "You've completed all lifetime objectives! $15B cash, 15K points, 1M bullets, and permanent perks granted.",
@@ -699,7 +700,12 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points", "respect_points")}
         rp_before = int(user.get("rank_points") or 0)
         rp_added = int(inc.get("rank_points") or 0)
-        await db.users.update_one({"id": user_id}, {"$set": {"objectives_daily_claimed": True}, "$inc": inc})
+        result = await db.users.update_one(
+            {"id": user_id, "objectives_daily_date": today_str, "objectives_daily_claimed": {"$ne": True}},
+            {"$set": {"objectives_daily_claimed": True}, "$inc": inc},
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Daily objectives already claimed")
         if inc.get("respect_points"):
             await log_respect_earned(user_id, inc["respect_points"], "objectives_daily")
         if rp_added > 0:
@@ -727,7 +733,12 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points", "respect_points")}
         rp_before = int(user.get("rank_points") or 0)
         rp_added = int(inc.get("rank_points") or 0)
-        await db.users.update_one({"id": user_id}, {"$set": {"objectives_weekly_claimed": True}, "$inc": inc})
+        result = await db.users.update_one(
+            {"id": user_id, "objectives_weekly_start": week_start_str, "objectives_weekly_claimed": {"$ne": True}},
+            {"$set": {"objectives_weekly_claimed": True}, "$inc": inc},
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Weekly objectives already claimed")
         if inc.get("respect_points"):
             await log_respect_earned(user_id, inc["respect_points"], "objectives_weekly")
         if rp_added > 0:
@@ -755,7 +766,12 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points", "respect_points")}
         rp_before = int(user.get("rank_points") or 0)
         rp_added = int(inc.get("rank_points") or 0)
-        await db.users.update_one({"id": user_id}, {"$set": {"objectives_monthly_claimed": True}, "$inc": inc})
+        result = await db.users.update_one(
+            {"id": user_id, "objectives_monthly_start": month_start_str, "objectives_monthly_claimed": {"$ne": True}},
+            {"$set": {"objectives_monthly_claimed": True}, "$inc": inc},
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Monthly objectives already claimed")
         if inc.get("respect_points"):
             await log_respect_earned(user_id, inc["respect_points"], "objectives_monthly")
         if rp_added > 0:
