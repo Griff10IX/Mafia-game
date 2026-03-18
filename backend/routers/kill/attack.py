@@ -1562,7 +1562,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 )
                 if killer_family_id:
                     await _family_war_start(killer_family_id, victim_family_id)
-                await _family_war_check_wipe_and_award(victim_family_id, killer_family_id)
+                await _family_war_check_wipe_and_award(victim_family_id, killer_family_id, killer_id)
             except Exception as e:
                 logging.exception("Family notify/war on kill: %s", e)
         try:

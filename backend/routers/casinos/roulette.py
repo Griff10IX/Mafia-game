@@ -502,14 +502,14 @@ def register(router):
             if head_family_id and edge > 0:
                 net_cost += edge
                 await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.roulette": edge}})
-                # State-head tax comes out of owner's net
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}})
+                # State-head tax comes out of owner's net (floor at 0)
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}, "$max": {"money": 0}})
             actual_payout = min(total_payout, owner_money + total_stake)
             shortfall = total_payout - actual_payout
             actual_net_cost = actual_payout - total_stake
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
             if actual_net_cost > 0:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_net_cost, "total_casino_payouts": actual_net_cost}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_net_cost, "total_casino_payouts": actual_net_cost}, "$max": {"money": 0}})
                 # Track biggest payout for owner
                 await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": actual_net_cost}}, {"$set": {"biggest_casino_payout": actual_net_cost}})
             await db.roulette_ownership.update_one(

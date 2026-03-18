@@ -290,11 +290,13 @@ const WipedFamiliesListView = ({ families }) => (
                   w.wiped_family_name || '—'
                 )}
               </div>
-              <div className="col-span-3 text-primary truncate" title={w.wiped_by_family_name}>
-                {w.wiped_by_family_id ? (
+              <div className="col-span-3 text-primary truncate" title={w.wiped_by_killer_username || w.wiped_by_family_name}>
+                {w.wiped_by_killer_id ? (
+                  <Link to={`/profile/${encodeURIComponent(w.wiped_by_killer_username || '')}`} className="text-primary hover:underline truncate block">{w.wiped_by_killer_username || '—'} (solo)</Link>
+                ) : w.wiped_by_family_id ? (
                   <Link to={`/families/${encodeURIComponent(w.wiped_by_family_id)}`} className="text-primary hover:underline truncate block">{w.wiped_by_family_name || '—'}</Link>
                 ) : (
-                  w.wiped_by_family_name || '—'
+                  w.wiped_by_family_name || w.wiped_by_killer_username || '—'
                 )}
               </div>
               <div className="col-span-2 text-center text-mutedForeground tabular-nums">{formatNumber(w.player_kills)}</div>
@@ -325,10 +327,12 @@ const WipedFamiliesListView = ({ families }) => (
                   )}
                 </div>
                 <div className="text-[9px] text-primary mt-0.5">
-                  Wiped by {w.wiped_by_family_id ? (
+                  Wiped by {w.wiped_by_killer_id ? (
+                    <Link to={`/profile/${encodeURIComponent(w.wiped_by_killer_username || '')}`} className="text-primary hover:underline">{w.wiped_by_killer_username || '—'} (solo)</Link>
+                  ) : w.wiped_by_family_id ? (
                     <Link to={`/families/${encodeURIComponent(w.wiped_by_family_id)}`} className="text-primary hover:underline">{w.wiped_by_family_name || '—'}</Link>
                   ) : (
-                    w.wiped_by_family_name || '—'
+                    w.wiped_by_family_name || w.wiped_by_killer_username || '—'
                   )}
                 </div>
               </div>

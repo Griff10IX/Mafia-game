@@ -388,7 +388,8 @@ async def cleanup_dead_families():
                 prize_treasury = 0
                 prize_racket_cash_record = 0
                 if not assets_transferred:
-                    winner_fam = await db.families.find_one({"id": winner_id}, {"_id": 0, "treasury": 1, "racket_income_bonus_percent": 1})
+                    total_crew_bank = 0
+                    winner_fam = await db.families.find_one({"id": winner_id}, {"_id": 0, "treasury": 1, "racket_income_bonus_percent": 1, "boss_id": 1})
                     if winner_fam is not None:
                         if total_cash_prize > 0:
                             await db.families.update_one({"id": winner_id}, {"$inc": {"treasury": total_cash_prize}})
@@ -405,9 +406,22 @@ async def cleanup_dead_families():
                             {"id": winner_id},
                             {"$set": {"racket_income_bonus_percent": new_bonus}}
                         )
+                        # Transfer crew bank from loser members to winner's boss
+                        loser_member_ids = [m["user_id"] for m in members]
+                        crew_profiles = await db.racing_profiles.find({"user_id": {"$in": loser_member_ids}}, {"_id": 0, "crew_bank": 1}).to_list(100)
+                        total_crew_bank = sum(int((p.get("crew_bank") or 0)) for p in crew_profiles)
+                        winner_boss_id = winner_fam.get("boss_id")
+                        if total_crew_bank > 0 and winner_boss_id:
+                            await db.racing_profiles.update_one(
+                                {"user_id": winner_boss_id},
+                                {"$inc": {"crew_bank": total_crew_bank}},
+                                upsert=True,
+                            )
                     msg = (
                         f"The enemy family {fam['name']} has been destroyed! You received ${total_cash_prize:,} (their treasury + racket cash + compound) and a permanent +{WAR_WIN_RACKET_INCOME_BONUS_PERCENT}% on all your racket income."
                     )
+                    if total_crew_bank > 0:
+                        msg += f" Crew bank seized: ${total_crew_bank:,}."
                     await send_notification_to_family(winner_id, "🏆 WAR VICTORY!", msg, "system")
                     assets_transferred = True
                 winner_fam_doc = await db.families.find_one({"id": winner_id}, {"_id": 0, "name": 1, "tag": 1})
@@ -898,6 +912,8 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
         out["wiped_at"] = fam.get("wiped_at")
         out["wiped_by_family_id"] = fam.get("wiped_by_family_id")
         out["wiped_by_family_name"] = (fam.get("wiped_by_family_name") or "").strip() or None
+        out["wiped_by_killer_id"] = fam.get("wiped_by_killer_id")
+        out["wiped_by_killer_username"] = (fam.get("wiped_by_killer_username") or "").strip() or None
     return out
 
 
@@ -914,10 +930,10 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
     tag = (request.tag or "").strip().upper().replace(" ", "")[:4]
     if len(name) < 2 or len(tag) < 2:
         raise HTTPException(status_code=400, detail="Name and tag must be at least 2 characters")
-    count = await db.families.count_documents({})
+    count = await db.families.count_documents({"wiped": {"$ne": True}})
     if count >= MAX_FAMILIES:
         raise HTTPException(status_code=400, detail="Maximum number of families reached")
-    if await db.families.find_one({"$or": [{"name": name}, {"tag": tag}]}):
+    if await db.families.find_one({"wiped": {"$ne": True}, "$or": [{"name": name}, {"tag": tag}]}):
         raise HTTPException(status_code=400, detail="Name or tag already taken")
     family_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -938,7 +954,7 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
     })
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$set": {"family_id": family_id, "family_role": "boss"}, "$inc": {"money": -FAMILY_CREATE_COST}},
+        {"$set": {"family_id": family_id, "family_role": "boss"}, "$inc": {"money": -FAMILY_CREATE_COST}, "$max": {"money": 0}},
     )
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])

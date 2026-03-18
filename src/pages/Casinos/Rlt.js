@@ -423,6 +423,7 @@ export default function Rlt() {
       if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
       toast.error(e.response?.data?.detail || 'Spin failed');
       setSpinning(false);
+      refreshUser(); // Sync balance in case debit succeeded but response failed
     }
   };
 

@@ -191,7 +191,7 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
     buyer = await db.users.find_one({"id": buyer_id})
     if not buyer or buyer.get("money", 0) < offer["cost"]:
         raise HTTPException(status_code=400, detail="Insufficient cash")
-    await db.users.update_one({"id": buyer_id}, {"$inc": {"money": -offer["cost"], "points": offer["points"]}})
+    await db.users.update_one({"id": buyer_id}, {"$inc": {"money": -offer["cost"], "points": offer["points"]}, "$max": {"money": 0}})
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"money": offer["cost"]}})
     await db.trade_sell_offers.update_one(
         {"_id": ObjectId(offer_id)},
@@ -478,7 +478,7 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(g
         raise HTTPException(status_code=400, detail="Insufficient cash")
     fee = max(1, int(offer.points * 0.005))
     points_after_fee = offer.points - fee
-    await db.users.update_one({"id": user_id}, {"$inc": {"money": -offer.offer}})
+    await db.users.update_one({"id": user_id}, {"$inc": {"money": -offer.offer}, "$max": {"money": 0}})
     new_offer = {
         "user_id": user_id,
         "username": username,

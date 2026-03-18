@@ -310,8 +310,8 @@ export default function FamilyProfilePage() {
               <Skull size={16} className="text-amber-500 flex-shrink-0" />
               <div className="text-[10px] font-heading uppercase tracking-wider text-amber-200">
                 <span className="font-bold">Crew wiped</span>
-                {family.wiped_by_family_name && (
-                  <span className="text-amber-400/90 ml-1">— taken out by {family.wiped_by_family_name}</span>
+                {(family.wiped_by_killer_username || family.wiped_by_family_name) && (
+                  <span className="text-amber-400/90 ml-1">— taken out by {family.wiped_by_killer_username ? `${family.wiped_by_killer_username} (solo)` : family.wiped_by_family_name}</span>
                 )}
               </div>
             </div>

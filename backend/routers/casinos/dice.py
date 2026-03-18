@@ -255,7 +255,7 @@ def register(router):
         actual_payout = min(payout_full, owner_money)
         shortfall = payout_full - actual_payout
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
-        await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout, "total_casino_payouts": actual_payout}})
+        await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout, "total_casino_payouts": actual_payout}, "$max": {"money": 0}})
         # Track biggest payout for owner
         await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": actual_payout}}, {"$set": {"biggest_casino_payout": actual_payout}})
         ownership_transferred = False
@@ -306,7 +306,7 @@ def register(router):
         else:
             if head_family_id:
                 await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.dice": edge}})
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake - edge}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake - edge}, "$max": {"money": 0}})
             else:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
             await db.dice_ownership.update_one(

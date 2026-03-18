@@ -638,7 +638,7 @@ def register(router):
         actual_payout = min(payout_full, owner_money)
         shortfall = payout_full - actual_payout
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
-        await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout, "total_casino_payouts": actual_payout}})
+        await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout, "total_casino_payouts": actual_payout}, "$max": {"money": 0}})
         # Track biggest payout for owner
         await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": actual_payout}}, {"$set": {"biggest_casino_payout": actual_payout}})
         ownership_transferred = False
@@ -656,7 +656,7 @@ def register(router):
                     edge_lose = int(bet * SLOTS_HOUSE_EDGE)
                     if edge_lose > 0:
                         await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.slots": edge_lose}})
-                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge_lose}})
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge_lose}, "$max": {"money": 0}})
                 else:
                     await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet - actual_payout}})
                 # Profit should match owner's net after state-head tax
@@ -708,7 +708,7 @@ def register(router):
             edge = int(bet * SLOTS_HOUSE_EDGE)
             if head_family_id and edge > 0:
                 await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.slots": edge}})
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}, "$max": {"money": 0}})
             await db.slots_ownership.update_one(
                 {"state": stored_state or state},
                 {"$inc": {"profit": (bet - actual_payout) - (edge if head_family_id else 0)}},

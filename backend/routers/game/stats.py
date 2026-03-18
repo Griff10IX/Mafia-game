@@ -274,7 +274,7 @@ def register(router):
         # Wiped families: wars that ended with one family wiped (all dead)
         wiped_wars = await db.family_wars.find(
             {"status": {"$in": ["family_a_wins", "family_b_wins"]}},
-            {"_id": 0, "id": 1, "winner_family_id": 1, "winner_family_name": 1, "loser_family_id": 1, "loser_family_name": 1, "ended_at": 1}
+            {"_id": 0, "id": 1, "winner_family_id": 1, "winner_family_name": 1, "loser_family_id": 1, "loser_family_name": 1, "ended_at": 1, "wiped_by_killer_id": 1, "wiped_by_killer_username": 1}
         ).sort("ended_at", -1).limit(30).to_list(30)
         wiped_families = []
         seen_loser_ids = set()
@@ -287,20 +287,24 @@ def register(router):
             winner_id = w.get("winner_family_id")
             winner_name = (w.get("winner_family_name") or "?").strip() or "?"
             loser_name = (w.get("loser_family_name") or "?").strip() or "?"
+            wiped_by_killer_id = w.get("wiped_by_killer_id")
+            wiped_by_killer_username = (w.get("wiped_by_killer_username") or "?").strip() or "?"
             # Aggregate winner-side stats for this war (player kills, BG kills; whether winner was in a family)
             stats_docs = await db.family_war_stats.find(
                 {"war_id": war_id, "family_id": winner_id},
                 {"_id": 0, "kills": 1, "bodyguard_kills": 1, "deaths": 1}
-            ).to_list(100)
+            ).to_list(100) if winner_id else []
             player_kills = sum(int(s.get("kills") or 0) for s in stats_docs)
             bodyguard_kills = sum(int(s.get("bodyguard_kills") or 0) for s in stats_docs)
             wiped_families.append({
                 "war_id": war_id,
                 "wiped_family_id": loser_id,
-                "wiped_by_family_id": winner_id,
+                "wiped_by_family_id": None if wiped_by_killer_id else winner_id,
                 "wiped_family_name": loser_name,
-                "wiped_by_family_name": winner_name,
-                "wiped_by_in_family": True,
+                "wiped_by_family_name": None if wiped_by_killer_id else winner_name,
+                "wiped_by_killer_id": wiped_by_killer_id,
+                "wiped_by_killer_username": wiped_by_killer_username if wiped_by_killer_id else None,
+                "wiped_by_in_family": not wiped_by_killer_id,
                 "ended_at": w.get("ended_at"),
                 "player_kills": player_kills,
                 "bodyguard_kills": bodyguard_kills,

@@ -162,7 +162,7 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     deposit_id = str(uuid.uuid4())
     await db.users.update_one(
         {"id": current_user.get("id") or ""},
-        {"$inc": {"money": -amount, "total_interest_deposited": int(amount)}},
+        {"$inc": {"money": -amount, "total_interest_deposited": int(amount)}, "$max": {"money": 0}},
     )
     await db.bank_deposits.insert_one({
         "id": deposit_id,
@@ -224,7 +224,7 @@ async def bank_swiss_deposit(request: BankSwissMoveRequest, current_user: dict =
 
     await db.users.update_one(
         {"id": current_user.get("id") or ""},
-        {"$inc": {"money": -amount, "swiss_balance": amount}}
+        {"$inc": {"money": -amount, "swiss_balance": amount}, "$max": {"money": 0}}
     )
     _invalidate_overview_cache(current_user.get("id") or "")
     return {"message": f"Deposited ${amount:,} into Swiss Bank"}
@@ -277,7 +277,7 @@ async def bank_transfer(request: MoneyTransferRequest, req: Request, current_use
 
     now = datetime.now(timezone.utc).isoformat()
     transfer_id = str(uuid.uuid4())
-    await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -amount}})
+    await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -amount}, "$max": {"money": 0}})
     await db.users.update_one({"id": recipient["id"]}, {"$inc": {"money": amount}})
     if security_module and getattr(security_module, "check_negative_balance", None):
         try:

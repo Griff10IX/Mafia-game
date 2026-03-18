@@ -676,6 +676,10 @@ async def get_current_user(
     if user is None:
         _log_auth_failure(user_id, 401, "User not found")
         raise HTTPException(status_code=401, detail="User not found")
+    # Safety: money must never go negative - correct if it did (bug/race)
+    if (user.get("money") or 0) < 0:
+        await db.users.update_one({"id": user_id}, {"$set": {"money": 0}})
+        user["money"] = 0
     # Reject if token was invalidated (e.g. admin "log out user")
     if payload.get("v", 0) != user.get("token_version", 0):
         _log_auth_failure(user_id, 401, "Session invalidated (token_version mismatch)")
@@ -880,8 +884,8 @@ async def _family_war_start(family_a_id: str, family_b_id: str):
     )
 
 
-async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_id: str = None):
-    """If victim's family has no living members, end the war and award the winner. Winner is the family that landed the killing blow (killer_family_id), not the other side of the first war."""
+async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_id: str = None, killer_id: str = None):
+    """If victim's family has no living members, end the war and award the winner. Winner is the family that landed the killing blow (killer_family_id), or the war opponent if killer had no family. When killer has no family, assets go to killer (user) and war logs show solo killer."""
     if not victim_family_id:
         return
     active_wars = await db.family_wars.find(
@@ -900,10 +904,11 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
             alive += 1
     if alive > 0:
         return
-    # Credit the family that got the killing blow, not the one that started the war
+    # Credit the family that got the killing blow, or war opponent if killer had no family
     killer_is_side = killer_family_id and any(
         w["family_a_id"] == killer_family_id or w["family_b_id"] == killer_family_id for w in active_wars
     )
+    solo_killer = not killer_family_id and killer_id  # Killer finished the wipe but wasn't in a family
     if killer_is_side:
         winner_id = killer_family_id
         war = next((w for w in active_wars if w["family_a_id"] == killer_family_id or w["family_b_id"] == killer_family_id), war)
@@ -914,8 +919,10 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
     now = now_dt.isoformat()
     loser_family = await db.families.find_one({"id": loser_id}, {"_id": 0, "name": 1, "tag": 1, "rackets": 1, "treasury": 1, "compound_cash": 1, "compound_points": 1, "compound_loot_pieces": 1})
     winner_family = await db.families.find_one({"id": winner_id}, {"_id": 0, "name": 1, "tag": 1, "boss_id": 1, "racket_income_bonus_percent": 1, "rackets": 1})
-    winner_family_name = (winner_family or {}).get("name") or (winner_family or {}).get("tag") or winner_id
+    winner_family_name = (winner_family or {}).get("name") or (winner_family or {}).get("tag") or winner_id or "?"
     loser_family_name = (loser_family or {}).get("name") or (loser_family or {}).get("tag") or loser_id
+    killer_user = await db.users.find_one({"id": killer_id}, {"_id": 0, "username": 1}) if solo_killer and killer_id else None
+    killer_username = (killer_user or {}).get("username") or "?" if solo_killer else None
     if not winner_family:
         for w in active_wars:
             await db.family_wars.update_one(
@@ -923,7 +930,7 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
                 {"$set": {"status": "family_a_wins" if winner_id == w["family_a_id"] else "family_b_wins", "ended_at": now, "winner_family_id": winner_id, "loser_family_id": loser_id, "winner_family_name": winner_family_name, "loser_family_name": loser_family_name}},
             )
         return
-    winner_boss_id = winner_family.get("boss_id")
+    winner_boss_id = killer_id if solo_killer else winner_family.get("boss_id")
     loser_rackets = (loser_family or {}).get("rackets") or {}
     winner_rackets = (winner_family.get("rackets") or {}).copy()
     loser_treasury = int((loser_family or {}).get("treasury", 0) or 0)
@@ -980,21 +987,30 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
         {"$set": {"racket_income_bonus_percent": new_bonus}}
     )
 
-    # Reset loser's rackets to empty
-    await db.families.update_one(
-        {"id": loser_id},
-        {"$set": {"rackets": {}, "treasury": 0, "compound_cash": 0, "compound_points": 0, "compound_loot_pieces": 0, "compound_deposits_by_user": {}}}
-    )
+    # Reset loser's rackets and assets (wiped set later after transfer)
 
     # Cash prize: treasury + racket cash (income + upgrade costs) + compound
     total_cash_prize = loser_treasury + prize_racket_cash + loser_compound_cash
-    if total_cash_prize > 0:
-        await db.families.update_one({"id": winner_id}, {"$inc": {"treasury": total_cash_prize}})
-    if loser_compound_points > 0 or loser_compound_loot_pieces > 0:
-        await db.families.update_one(
-            {"id": winner_id},
-            {"$inc": {"compound_points": loser_compound_points, "compound_loot_pieces": loser_compound_loot_pieces}},
-        )
+    if solo_killer and killer_id:
+        # Solo killer gets vault: cash to user, compound as points/loot
+        if total_cash_prize > 0:
+            await db.users.update_one({"id": killer_id}, {"$inc": {"money": total_cash_prize}, "$max": {"money": 0}})
+        if loser_compound_points > 0 or loser_compound_loot_pieces > 0:
+            inc = {}
+            if loser_compound_points > 0:
+                inc["points"] = loser_compound_points
+            if loser_compound_loot_pieces > 0:
+                inc["loot_box_pieces"] = loser_compound_loot_pieces
+            if inc:
+                await db.users.update_one({"id": killer_id}, {"$inc": inc})
+    else:
+        if total_cash_prize > 0:
+            await db.families.update_one({"id": winner_id}, {"$inc": {"treasury": total_cash_prize}})
+        if loser_compound_points > 0 or loser_compound_loot_pieces > 0:
+            await db.families.update_one(
+                {"id": winner_id},
+                {"$inc": {"compound_points": loser_compound_points, "compound_loot_pieces": loser_compound_loot_pieces}},
+            )
 
     # Transfer exclusive cars
     loser_member_ids = [m["user_id"] for m in members]
@@ -1011,41 +1027,89 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
             )
     prize_car_count = sum(1 for uc in exclusive_cars if next((c for c in CARS if c.get("id") == uc.get("car_id")), {}).get("rarity") == "exclusive")
 
+    # Transfer crew bank from loser members to winner's boss
+    crew_profiles = await db.racing_profiles.find({"user_id": {"$in": loser_member_ids}}, {"_id": 0, "crew_bank": 1}).to_list(100)
+    total_crew_bank = sum(int((p.get("crew_bank") or 0)) for p in crew_profiles)
+    if total_crew_bank > 0 and winner_boss_id:
+        await db.racing_profiles.update_one(
+            {"user_id": winner_boss_id},
+            {"$inc": {"crew_bank": total_crew_bank}},
+            upsert=True,
+        )
+
     # Record war result: end ALL wars the victim was in with the same winner (killer's family) so stats show one "wiped by"
     for w in active_wars:
         war_status = "family_a_wins" if winner_id == w["family_a_id"] else "family_b_wins"
-        await db.family_wars.update_one(
-            {"id": w["id"]},
-            {"$set": {
-                "status": war_status,
-                "ended_at": now,
-                "winner_family_id": winner_id,
-                "loser_family_id": loser_id,
-                "winner_family_name": winner_family_name,
-                "loser_family_name": loser_family_name,
-                "prize_exclusive_cars": prize_car_count if w["id"] == war["id"] else None,
-                "prize_rackets_taken": rackets_taken if w["id"] == war["id"] else None,
-                "prize_racket_bonus_count": rackets_bonus_count if w["id"] == war["id"] else None,
-                "prize_treasury": loser_treasury if w["id"] == war["id"] else None,
-                "prize_racket_cash": prize_racket_cash if w["id"] == war["id"] else None,
-                "prize_compound_cash": loser_compound_cash if w["id"] == war["id"] else None,
-                "prize_compound_points": loser_compound_points if w["id"] == war["id"] else None,
-                "prize_compound_loot_pieces": loser_compound_loot_pieces if w["id"] == war["id"] else None,
-            }},
-        )
+        w_set = {
+            "status": war_status,
+            "ended_at": now,
+            "winner_family_id": winner_id,
+            "loser_family_id": loser_id,
+            "winner_family_name": winner_family_name,
+            "loser_family_name": loser_family_name,
+            "prize_exclusive_cars": prize_car_count if w["id"] == war["id"] else None,
+            "prize_rackets_taken": rackets_taken if w["id"] == war["id"] else None,
+            "prize_racket_bonus_count": rackets_bonus_count if w["id"] == war["id"] else None,
+            "prize_treasury": loser_treasury if w["id"] == war["id"] else None,
+            "prize_racket_cash": prize_racket_cash if w["id"] == war["id"] else None,
+            "prize_compound_cash": loser_compound_cash if w["id"] == war["id"] else None,
+            "prize_compound_points": loser_compound_points if w["id"] == war["id"] else None,
+            "prize_compound_loot_pieces": loser_compound_loot_pieces if w["id"] == war["id"] else None,
+        }
+        if solo_killer and killer_id:
+            w_set["wiped_by_killer_id"] = killer_id
+            w_set["wiped_by_killer_username"] = killer_username or "?"
+        await db.family_wars.update_one({"id": w["id"]}, {"$set": w_set})
+
+    # Mark victim family as wiped
+    family_wiped_set = {
+        "wiped": True,
+        "wiped_at": now,
+        "boss_id": None,
+        "rackets": {},
+        "treasury": 0,
+        "treasury_points": 0,
+        "treasury_loot_pieces": 0,
+        "compound_cash": 0,
+        "compound_points": 0,
+        "compound_loot_pieces": 0,
+        "compound_deposits_by_user": {},
+    }
+    if solo_killer and killer_id:
+        family_wiped_set["wiped_by_killer_id"] = killer_id
+        family_wiped_set["wiped_by_killer_username"] = killer_username or "?"
+        family_wiped_set["wiped_by_family_id"] = None
+        family_wiped_set["wiped_by_family_name"] = None
+    else:
+        family_wiped_set["wiped_by_family_id"] = winner_id
+        family_wiped_set["wiped_by_family_name"] = winner_family_name
+    await db.families.update_one({"id": loser_id}, {"$set": family_wiped_set})
 
     # Build notification message
-    msg = f"Your family won the war against {loser_family_name}!"
-    msg += f" You received ${total_cash_prize:,} (treasury ${loser_treasury:,} + racket value ${prize_racket_cash:,} + compound ${loser_compound_cash:,})."
-    if rackets_taken:
-        msg += f" Rackets taken: {', '.join(rackets_taken)}."
-    if bonus_actually_added > 0:
-        msg += f" Permanent racket income bonus: +{bonus_actually_added:.1f}% (now {new_bonus:.1f}%)."
-    if prize_car_count:
-        msg += f" {prize_car_count} exclusive car(s) seized."
-    if loser_compound_points > 0 or loser_compound_loot_pieces > 0:
-        msg += f" Compound loot: {loser_compound_points:,} points, {loser_compound_loot_pieces:,} loot pieces."
-    await send_notification_to_family(winner_id, "🏆 War Won", msg, "reward")
+    if solo_killer and killer_id:
+        msg = f"You wiped the family {loser_family_name}!"
+        msg += f" You received ${total_cash_prize:,} (treasury + racket value + compound)."
+        if prize_car_count:
+            msg += f" {prize_car_count} exclusive car(s) seized."
+        if loser_compound_points > 0 or loser_compound_loot_pieces > 0:
+            msg += f" Compound loot: {loser_compound_points:,} points, {loser_compound_loot_pieces:,} loot pieces."
+        if total_crew_bank > 0:
+            msg += f" Crew bank seized: ${total_crew_bank:,}."
+        await send_notification(killer_id, "🏆 Family Wiped", msg, "reward")
+    else:
+        msg = f"Your family won the war against {loser_family_name}!"
+        msg += f" You received ${total_cash_prize:,} (treasury ${loser_treasury:,} + racket value ${prize_racket_cash:,} + compound ${loser_compound_cash:,})."
+        if rackets_taken:
+            msg += f" Rackets taken: {', '.join(rackets_taken)}."
+        if bonus_actually_added > 0:
+            msg += f" Permanent racket income bonus: +{bonus_actually_added:.1f}% (now {new_bonus:.1f}%)."
+        if prize_car_count:
+            msg += f" {prize_car_count} exclusive car(s) seized."
+        if loser_compound_points > 0 or loser_compound_loot_pieces > 0:
+            msg += f" Compound loot: {loser_compound_points:,} points, {loser_compound_loot_pieces:,} loot pieces."
+        if total_crew_bank > 0:
+            msg += f" Crew bank seized: ${total_crew_bank:,}."
+        await send_notification_to_family(winner_id, "🏆 War Won", msg, "reward")
 
 
 async def _family_war_duration_seconds(family_id: str, from_dt: datetime, to_dt: datetime) -> float:
@@ -1432,7 +1496,7 @@ async def _get_casino_property_profit(user_id: str):
             continue
         if game_type == "slots" and _slots_expired(doc):
             continue
-        casino_cash = int(doc.get("total_earnings") or doc.get("profit") or 0)
+        casino_cash = int(doc.get("profit") or doc.get("total_earnings") or 0)
         has_casino = True
         break
 
@@ -1480,7 +1544,7 @@ async def _user_owns_any_casino(user_id: str):
             out = {"type": game_type, "city": doc.get("city") or doc.get("state"), "max_bet": doc.get("max_bet")}
             if doc.get("buy_back_reward") is not None:
                 out["buy_back_reward"] = doc.get("buy_back_reward")
-            profit_val = doc.get("total_earnings") if doc.get("total_earnings") is not None else doc.get("profit")
+            profit_val = doc.get("profit") if doc.get("profit") is not None else doc.get("total_earnings")
             out["profit"] = int(profit_val or 0)
             return out
     return None

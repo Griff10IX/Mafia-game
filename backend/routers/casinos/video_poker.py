@@ -555,7 +555,7 @@ def register(router):
                     edge_lose = int(bet * VIDEO_POKER_HOUSE_EDGE)
                     if edge_lose > 0:
                         await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.videopoker": edge_lose}})
-                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge_lose}})
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge_lose}, "$max": {"money": 0}})
                     await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"total_earnings": bet, "profit": max(0, bet - edge_lose)}})
                     _invalidate_ownership_cache(owner_id)
                 else:
@@ -567,7 +567,7 @@ def register(router):
                     await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.videopoker": edge_lose}})
         elif payout == bet:
             if owner_id:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -bet}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -bet}, "$max": {"money": 0}})
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
         else:
             profit_portion = payout - bet
@@ -582,7 +582,7 @@ def register(router):
                 actual_payout = min(payout, owner_money)
                 shortfall = payout - actual_payout
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout, "total_casino_payouts": actual_payout}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout, "total_casino_payouts": actual_payout}, "$max": {"money": 0}})
                 # Track biggest payout for owner
                 await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": actual_payout}}, {"$set": {"biggest_casino_payout": actual_payout}})
                 await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"profit": bet - actual_payout}})

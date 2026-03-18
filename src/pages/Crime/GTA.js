@@ -43,6 +43,15 @@ const GTA_STYLES = `
       padding-top: 3px !important;
       padding-bottom: 3px !important;
     }
+    /* Consistent minimum font sizes on mobile - prevent tiny text */
+    .gta-row .gta-row-text { font-size: 10px !important; }
+    .gta-row .gta-row-text-sm { font-size: 10px !important; }
+    .gta-recent-card-rarity,
+    .gta-recent-card-damage { font-size: 9px !important; }
+    .gta-recent-card-name { font-size: 11px !important; }
+    .gta-recent-card-value { font-size: 10px !important; }
+    .gta-panel-header { font-size: 10px !important; }
+    .gta-stats-text { font-size: 11px !important; }
   }
 `;
 
@@ -157,12 +166,12 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-[11px] font-heading font-bold text-foreground truncate block">
+            <span className="text-[11px] font-heading font-bold text-foreground truncate block gta-row-text">
               {option.name}
             </span>
             {!unlocked && option.min_rank_name && (
               <span
-                className="shrink-0 inline-flex items-center gap-0.5 bg-zinc-800/50 text-mutedForeground rounded px-1 py-0.5 text-[9px] font-bold uppercase border border-zinc-700/50"
+                className="shrink-0 inline-flex items-center gap-0.5 bg-zinc-800/50 text-mutedForeground rounded px-1 py-0.5 text-[9px] font-bold uppercase border border-zinc-700/50 gta-row-text-sm"
                 title={`Unlocked at rank ${option.min_rank_name}`}
               >
                 <Lock size={8} />
@@ -170,7 +179,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
               </span>
             )}
           </div>
-          <div className="text-[9px] text-mutedForeground truncate">
+          <div className="text-[9px] text-mutedForeground truncate gta-row-text-sm">
             {!unlocked && option.min_rank_name
               ? 'Unavailable'
               : `Difficulty ${option.difficulty}/5`}
@@ -182,25 +191,25 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
       {unlocked && <GTAProgressBar progress={option.progress} />}
 
       {/* Success rate */}
-      <div className="shrink-0 w-8 text-center">
-        <span className={`text-[10px] font-bold ${unlocked ? 'text-primary' : 'text-mutedForeground'}`}>
+      <div className="shrink-0 w-8 min-w-[28px] text-center">
+        <span className={`text-[10px] font-bold gta-row-text ${unlocked ? 'text-primary' : 'text-mutedForeground'}`}>
           {successRateDisplay}%
         </span>
       </div>
 
       {/* Jail time */}
-      <div className="shrink-0 w-8 text-center">
-        <span className="text-[10px] font-bold text-red-400">{option.jail_time ?? 0}s</span>
+      <div className="shrink-0 w-8 min-w-[28px] text-center">
+        <span className="text-[10px] font-bold text-red-400 gta-row-text">{option.jail_time ?? 0}s</span>
       </div>
 
       {/* Cooldown */}
-      <div className="shrink-0 w-10 text-center">
+      <div className="shrink-0 w-10 min-w-[36px] text-center">
         {onCooldown ? (
-          <span className="text-[10px] text-mutedForeground font-heading">{onCooldown}</span>
+          <span className="text-[10px] text-mutedForeground font-heading gta-row-text">{onCooldown}</span>
         ) : unlocked ? (
-          <span className="text-[9px] text-mutedForeground/60">{defaultCooldown}</span>
+          <span className="text-[9px] text-mutedForeground/60 gta-row-text-sm">{defaultCooldown}</span>
         ) : (
-          <span className="text-[9px] text-mutedForeground">—</span>
+          <span className="text-[9px] text-mutedForeground gta-row-text-sm">—</span>
         )}
       </div>
 
@@ -253,7 +262,7 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
         onClick={onToggle}
         className="w-full px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
       >
-        <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em]">
+        <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em] gta-panel-header">
           🚗 Last 10 cars stolen
         </span>
         <div className="flex items-center gap-0.5">
@@ -293,17 +302,17 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
                       </div>
                     )}
                   </div>
-                  <div className={`text-[7px] font-heading font-bold uppercase tracking-wider ${getRarityColor(car.rarity)} mb-0.5`}>
+                  <div className={`text-[9px] sm:text-[7px] font-heading font-bold uppercase tracking-wider gta-recent-card-rarity ${getRarityColor(car.rarity)} mb-0.5`}>
                     {rarity}
                   </div>
-                  <div className="text-[10px] font-heading font-bold text-foreground truncate mb-0.5">
+                  <div className="text-[11px] sm:text-[10px] font-heading font-bold text-foreground truncate mb-0.5 gta-recent-card-name">
                     {displayName}
                   </div>
-                  <div className="text-[9px] text-primary font-heading font-bold">
+                  <div className="text-[10px] sm:text-[9px] text-primary font-heading font-bold gta-recent-card-value">
                     ${Number(value).toLocaleString()}
                   </div>
                   {damage > 0 && (
-                    <p className="text-[8px] font-heading text-mutedForeground mt-0.5">
+                    <p className="text-[9px] sm:text-[8px] font-heading text-mutedForeground mt-0.5 gta-recent-card-damage">
                       {damage}% damage
                     </p>
                   )}
@@ -362,12 +371,12 @@ const InfoSection = () => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.08s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-      <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+      <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] gta-panel-header">
         ℹ️ GTA System
       </h3>
     </div>
     <div className="p-2">
-      <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-mutedForeground font-heading">
+      <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-mutedForeground font-heading gta-stats-text">
         <li className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>Unlock by rank (Goon → Consigliere)</span>
@@ -600,7 +609,7 @@ export default function GTA() {
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in gta-main-panel`} style={{ animationDelay: '0.05s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] gta-panel-header">
             Available Vehicles
           </span>
         </div>
@@ -631,9 +640,9 @@ export default function GTA() {
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in gta-stats-panel`} style={{ animationDelay: '0.03s' }}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">GTA stats</span>
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] gta-panel-header">GTA stats</span>
         </div>
-        <div className="p-2 text-[10px] font-heading text-foreground">
+        <div className="p-2 text-[10px] font-heading text-foreground gta-stats-text">
           GTAs today: {gtaStats.count_today ?? 0}  successful today {gtaStats.success_today ?? 0}  past week {gtaStats.count_week ?? 0} ({gtaStats.success_week ?? 0} successful)
         </div>
         <div className="gta-art-line text-primary mx-2.5" />
