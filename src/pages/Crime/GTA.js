@@ -259,7 +259,7 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
       
       {!isCollapsed && (
         <div className="p-2">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+          <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
             {recentStolen.map((car, index) => {
               const displayName = car.car_name || car.name || 'Car';
               const rarity = (car.rarity || 'common').replace(/_/g, ' ');
@@ -270,34 +270,34 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
                   key={car.user_car_id ?? `car-${index}`}
                   to={`/view-car?id=${encodeURIComponent(car.user_car_id)}`}
                   data-testid={`recent-stolen-car-${index}`}
-                  className={`${styles.panel} rounded-lg border border-border hover:border-primary/30 p-1.5 transition-all overflow-hidden block text-left`}
+                  className={`${styles.panel} rounded-lg border border-border hover:border-primary/30 p-1 sm:p-1.5 transition-all overflow-hidden block text-left min-w-0`}
                 >
-                  <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1 relative">
+                  <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-0.5 sm:mb-1 relative shrink-0">
                     {car.image ? (
                       <img
                         src={car.image}
                         alt={displayName}
-                        className="block w-full h-full object-cover object-center"
+                        className="absolute inset-0 w-full h-full object-cover object-center"
                         loading="lazy"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Car size={24} className="text-primary/30" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Car size={20} className="text-primary/30 shrink-0" />
                       </div>
                     )}
                   </div>
-                  <div className={`text-[9px] sm:text-[7px] font-heading font-bold uppercase tracking-wider gta-recent-card-rarity ${getRarityColor(car.rarity)} mb-0.5`}>
+                  <div className={`text-[8px] sm:text-[9px] font-heading font-bold uppercase tracking-wider truncate ${getRarityColor(car.rarity)} mb-0.5`}>
                     {rarity}
                   </div>
-                  <div className="text-[11px] sm:text-[10px] font-heading font-bold text-foreground truncate mb-0.5 gta-recent-card-name">
+                  <div className="text-[9px] sm:text-[11px] font-heading font-bold text-foreground truncate mb-0.5">
                     {displayName}
                   </div>
-                  <div className="text-[10px] sm:text-[9px] text-primary font-heading font-bold gta-recent-card-value">
+                  <div className="text-[9px] sm:text-[10px] text-primary font-heading font-bold truncate">
                     ${Number(value).toLocaleString()}
                   </div>
                   {damage > 0 && (
-                    <p className="text-[9px] sm:text-[8px] font-heading text-mutedForeground mt-0.5 gta-recent-card-damage">
-                      {damage}% damage
+                    <p className="text-[8px] sm:text-[9px] font-heading text-mutedForeground mt-0.5 truncate">
+                      {damage}% dmg
                     </p>
                   )}
                 </Link>

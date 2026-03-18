@@ -116,8 +116,8 @@ export default function Referral() {
   return (
     <div className={`${styles.pageContent} mobile-page-root`}>
       <style>{REF_STYLES}</style>
-      <div className="max-w-2xl mx-auto space-y-4 p-4">
-        <div className={`flex items-center gap-2 border-b ${styles.panelHeader} pb-2`} style={{ borderBottomColor: 'var(--gm-border)' }}>
+      <div className="max-w-2xl mx-auto space-y-2 sm:space-y-4 px-0 sm:px-4 py-2 sm:py-4">
+        <div className={`flex items-center gap-2 border-b ${styles.panelHeader} pb-2 px-2 sm:px-0`} style={{ borderBottomColor: 'var(--gm-border)' }}>
           <UserPlus size={20} className="shrink-0" style={{ color: 'var(--gm-gold)' }} />
           <h1 className={`text-sm sm:text-base font-heading font-bold ${styles.gmTitle}`}>Referral & Redeem</h1>
         </div>

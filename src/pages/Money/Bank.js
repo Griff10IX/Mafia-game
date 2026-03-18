@@ -83,7 +83,7 @@ const InterestBankCard = ({
   onDeposit,
   hideHeader = false
 }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in mobile-panel`}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in ${!hideHeader ? 'mobile-panel' : ''}`}>
     {!hideHeader && (
       <>
         <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none bank-glow" />
@@ -173,7 +173,7 @@ const SwissBankCard = ({
   onWithdraw,
   hideHeader = false
 }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in ${!hideHeader ? 'mobile-panel' : ''}`} style={{ animationDelay: '0.05s' }}>
     {!hideHeader && (
       <>
         <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none bank-glow" />
@@ -293,7 +293,7 @@ const SendMoneyCard = ({
   onSend,
   hideHeader = false
 }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in mobile-panel`}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in ${!hideHeader ? 'mobile-panel' : ''}`}>
     {!hideHeader && (
       <>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -549,7 +549,7 @@ export default function Bank() {
       <p className="text-[9px] text-zinc-500 font-heading italic">Interest deposits, Swiss account, and transfers.</p>
 
       <div className="space-y-2">
-        <div className="relative rounded-md overflow-hidden border border-primary/20 bank-fade-in">
+        <div className="relative rounded-md overflow-hidden border border-primary/20 bank-fade-in mobile-panel">
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <button
             type="button"
@@ -579,7 +579,7 @@ export default function Bank() {
           )}
         </div>
 
-        <div className="relative rounded-md overflow-hidden border border-primary/20 bank-fade-in" style={{ animationDelay: '0.05s' }}>
+        <div className="relative rounded-md overflow-hidden border border-primary/20 bank-fade-in mobile-panel" style={{ animationDelay: '0.05s' }}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <button
             type="button"
