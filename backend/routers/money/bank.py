@@ -184,26 +184,35 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
 
 async def bank_interest_claim(request: BankDepositClaimRequest, current_user: dict = Depends(get_current_user_verified)):
     """Claim a matured interest deposit. Early withdrawal is not allowed."""
-    dep = await db.bank_deposits.find_one({"id": request.deposit_id, "user_id": current_user.get("id") or ""}, {"_id": 0})
-    if not dep:
-        raise HTTPException(status_code=404, detail="Deposit not found")
-    if dep.get("claimed_at"):
-        raise HTTPException(status_code=400, detail="Deposit already claimed")
-
+    uid = current_user.get("id") or ""
     now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+
+    # Atomically mark claimed to prevent double-claim race condition
+    dep = await db.bank_deposits.find_one_and_update(
+        {"id": request.deposit_id, "user_id": uid, "claimed_at": None},
+        {"$set": {"claimed_at": now_iso}},
+    )
+    if not dep:
+        raise HTTPException(status_code=400, detail="Deposit not found or already claimed")
+
     mat = _parse_matures_at(dep.get("matures_at"))
-    if mat is None:
-        raise HTTPException(status_code=400, detail="Deposit missing or invalid maturity time")
-    if now < mat:
+    if mat is None or now < mat:
+        # Not matured or invalid — undo the atomic claim
+        await db.bank_deposits.update_one(
+            {"id": request.deposit_id, "user_id": uid},
+            {"$set": {"claimed_at": None}},
+        )
+        if mat is None:
+            raise HTTPException(status_code=400, detail="Deposit missing or invalid maturity time")
         raise HTTPException(status_code=400, detail="Cannot withdraw early. Deposit has not matured yet.")
 
     principal = int(dep.get("principal", 0) or 0)
     interest = int(dep.get("interest_amount", 0) or 0)
     total = principal + interest
 
-    await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": total}})
-    await db.bank_deposits.update_one({"id": dep["id"]}, {"$set": {"claimed_at": now.isoformat()}})
-    _invalidate_overview_cache(current_user.get("id") or "")
+    await db.users.update_one({"id": uid}, {"$inc": {"money": total}})
+    _invalidate_overview_cache(uid)
     return {"message": f"Claimed ${total:,} (${principal:,} + ${interest:,} interest)", "total": total}
 
 

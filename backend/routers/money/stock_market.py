@@ -455,12 +455,12 @@ def register(router):
             })
             return {"message": f"Opened short {stock.get('name')} for {points} points notional", "position_id": position_id, "units": round(units, 6), "price": current_price, "side": "short"}
 
-        user = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1})
-        if not user:
-            raise HTTPException(status_code=400, detail="User not found")
-        if points > int(user.get("points") or 0):
+        result = await db.users.update_one(
+            {"id": uid, "points": {"$gte": points}},
+            {"$inc": {"points": -points}},
+        )
+        if result.modified_count == 0:
             raise HTTPException(status_code=400, detail="Insufficient points")
-        await db.users.update_one({"id": uid}, {"$inc": {"points": -points}})
         await db.stock_positions.insert_one({
             "id": position_id,
             "user_id": uid,

@@ -339,7 +339,12 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
     else:
         updates["$inc"][f"booze_carrying.{booze_id}"] = -amount
         updates["$inc"][f"booze_carrying_cost.{booze_id}"] = -cost_of_sold
-    await db.users.update_one({"id": user["id"]}, updates)
+    sell_result = await db.users.update_one(
+        {"id": user["id"], f"booze_carrying.{booze_id}": {"$gte": amount}},
+        updates,
+    )
+    if sell_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail=f"Insufficient booze to sell")
     if is_run:
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.economy_events.insert_one({
@@ -461,10 +466,12 @@ async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
     if current_bonus >= BOOZE_CAPACITY_BONUS_MAX:
         raise HTTPException(status_code=400, detail="Booze capacity bonus is already at the maximum (1000)")
     add_bonus = min(BOOZE_CAPACITY_UPGRADE_AMOUNT, BOOZE_CAPACITY_BONUS_MAX - current_bonus)
-    await db.users.update_one(
-        {"id": current_user["id"]},
+    result = await db.users.update_one(
+        {"id": current_user["id"], "points": {"$gte": BOOZE_CAPACITY_UPGRADE_COST}},
         {"$inc": {"points": -BOOZE_CAPACITY_UPGRADE_COST, "booze_capacity_bonus": add_bonus}}
     )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
     new_capacity = _booze_user_capacity({**current_user, "booze_capacity_bonus": current_bonus + add_bonus})
     _invalidate_config_cache(current_user["id"])
     return {"message": f"+{add_bonus} booze capacity for {BOOZE_CAPACITY_UPGRADE_COST} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}

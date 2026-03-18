@@ -103,15 +103,22 @@ api.interceptors.response.use(
       }
     }
 
-    // ── 403 In jail → redirect to jail page instead of showing broken pages ──
+    // ── 403 In jail → redirect to jail page (only from non-whitelisted pages) ──
     if (error.response?.status === 403 && typeof window !== 'undefined') {
       const detail = error.response?.data?.detail;
       if (typeof detail === 'string' && detail.toLowerCase().includes('while in jail')) {
-        const currentPath = window.location.pathname;
-        if (currentPath !== '/crime/jail' && currentPath !== '/jail') {
+        const p = window.location.pathname;
+        const jailAllowed = [
+          '/crime/jail', '/jail',
+          '/casino', '/kill', '/game/travel', '/game/family',
+          '/game/users-online', '/account/profile', '/account/autorank',
+          '/account/settings', '/social/forum', '/staffrole',
+          '/game/daily-rewards', '/game/leaderboard',
+        ];
+        if (!jailAllowed.some(prefix => p === prefix || p.startsWith(prefix + '/'))) {
           window.location.replace('/crime/jail');
-          return Promise.reject(error);
         }
+        return Promise.reject(error);
       }
     }
 

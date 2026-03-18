@@ -163,12 +163,12 @@ async def buy_oc_timer(current_user: dict = Depends(get_current_user)):
     """Reduce Organised Crime heist cooldown from 6 hours to 4 hours. One-time purchase."""
     if current_user.get("oc_timer_reduced", False):
         raise HTTPException(status_code=400, detail="You already have the reduced OC timer (4h)")
-    if (current_user.get("points") or 0) < OC_TIMER_COST_POINTS:
-        raise HTTPException(status_code=400, detail=f"Insufficient points (need {OC_TIMER_COST_POINTS})")
-    await db.users.update_one(
-        {"id": current_user["id"]},
+    oc_result = await db.users.update_one(
+        {"id": current_user["id"], "points": {"$gte": OC_TIMER_COST_POINTS}},
         {"$inc": {"points": -OC_TIMER_COST_POINTS}, "$set": {"oc_timer_reduced": True}},
     )
+    if oc_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {OC_TIMER_COST_POINTS})")
     return {"message": "OC timer reduced! Heist cooldown is now 4 hours.", "cost": OC_TIMER_COST_POINTS}
 
 

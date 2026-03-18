@@ -675,10 +675,12 @@ async def buy_guard_slot(current_user: dict = Depends(get_current_user)):
     if vault < cost_cash:
         raise HTTPException(status_code=400, detail=f"Need ${cost_cash:,} in vault. You have ${vault:,}.")
     total_spent = int(business.get("total_spent") or 0) + cost_cash
-    await db.illegal_businesses.update_one(
-        {"id": business["id"]},
+    result = await db.illegal_businesses.update_one(
+        {"id": business["id"], "vault": {"$gte": cost_cash}},
         {"$inc": {"guard_slots": 1, "vault": -cost_cash}, "$set": {"total_spent": total_spent}},
     )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient vault funds")
     return {"message": "Another slot on the door.", "guard_slots": slots + 1}
 
 
@@ -715,12 +717,14 @@ async def hire_illegal_business_guard(req: HireGuardRequest, current_user: dict 
         "hired_at": now,
         "hire_cost": cost_cash,
     }
-    await db.illegal_business_guards.insert_one(guard_doc)
     total_spent = int(business.get("total_spent") or 0) + cost_cash
-    await db.illegal_businesses.update_one(
-        {"id": business["id"]},
+    result = await db.illegal_businesses.update_one(
+        {"id": business["id"], "vault": {"$gte": cost_cash}},
         {"$set": {"total_spent": total_spent}, "$inc": {"vault": -cost_cash}},
     )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient vault funds")
+    await db.illegal_business_guards.insert_one(guard_doc)
     return {"message": "Another pair of hands on the door.", "guard_id": guard_id}
 
 
@@ -745,11 +749,13 @@ async def upgrade_security(upgrade_id: str, current_user: dict = Depends(get_cur
         raise HTTPException(status_code=400, detail=f"Need ${cost_cash:,} in vault. You have ${vault:,}.")
     new_list = list(upgrades_done) + [upgrade_id]
     total_spent = int(business.get("total_spent") or 0) + cost_cash
-    await db.illegal_businesses.update_one(
-        {"id": business["id"]},
+    result = await db.illegal_businesses.update_one(
+        {"id": business["id"], "vault": {"$gte": cost_cash}},
         {"$set": {"security_upgrades": new_list, "security_level": len(new_list), "total_spent": total_spent},
          "$inc": {"vault": -cost_cash}},
     )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient vault funds")
     return {"message": f"{up_def['name']} installed.", "security_level": len(new_list)}
 
 
@@ -763,7 +769,12 @@ async def withdraw_illegal_business(req: WithdrawRequest, current_user: dict = D
         raise HTTPException(status_code=400, detail="Amount must be positive.")
     if amount > vault:
         raise HTTPException(status_code=400, detail=f"Not enough in the vault. Available: ${vault:,}")
-    await db.illegal_businesses.update_one({"id": business["id"]}, {"$inc": {"vault": -amount}})
+    result = await db.illegal_businesses.update_one(
+        {"id": business["id"], "vault": {"$gte": amount}},
+        {"$inc": {"vault": -amount}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient vault funds")
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": amount}})
     return {"message": f"Pocketed ${amount:,} from the vault.", "withdrawn": amount, "vault_remaining": vault - amount}
 

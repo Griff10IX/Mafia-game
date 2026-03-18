@@ -608,10 +608,6 @@ def register(router):
             }]
             pot = buy_in + extra_prize
 
-        user = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1})
-        if not user or (user.get("money") or 0) < total_deduct:
-            raise HTTPException(status_code=400, detail="Insufficient money to create game")
-
         game_id = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
         doc = {
@@ -645,8 +641,13 @@ def register(router):
             "round_eliminated": [],
             "round_history": [],
         }
+        deduct_result = await db.users.update_one(
+            {"id": uid, "money": {"$gte": total_deduct}},
+            {"$inc": {"money": -total_deduct}},
+        )
+        if deduct_result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Insufficient money to create game")
         await db.mp_blackjack_games.insert_one(doc)
-        await db.users.update_one({"id": uid}, {"$inc": {"money": -total_deduct}})
         await log_gambling(uid, username, "mp_blackjack", {"action": "create", "game_id": game_id, "buy_in": buy_in, "extra_prize": extra_prize})
         return {"message": "Game created", "game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
 
@@ -754,9 +755,6 @@ def register(router):
         if len(players) >= max_players:
             raise HTTPException(status_code=400, detail="Game is full")
         buy_in = int(game.get("buy_in") or 0)
-        user = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1})
-        if not user or (user.get("money") or 0) < buy_in:
-            raise HTTPException(status_code=400, detail="Insufficient money to join")
 
         seat_index = len(players)
         new_player = {
@@ -769,9 +767,14 @@ def register(router):
             "ready": False,
             "eliminated": False,
         }
+        join_deduct = await db.users.update_one(
+            {"id": uid, "money": {"$gte": buy_in}},
+            {"$inc": {"money": -buy_in}},
+        )
+        if join_deduct.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Insufficient money to join")
         players.append(new_player)
         new_pot = int(game.get("pot") or 0) + buy_in
-        await db.users.update_one({"id": uid}, {"$inc": {"money": -buy_in}})
         now_iso = datetime.now(timezone.utc).isoformat()
 
         if len(players) >= max_players:

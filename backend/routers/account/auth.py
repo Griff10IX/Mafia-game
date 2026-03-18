@@ -887,6 +887,10 @@ def register(router):
         reset_token = str(uuid.uuid4())
         expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
 
+        await db.password_resets.update_many(
+            {"user_id": user["id"], "used": False},
+            {"$set": {"used": True}}
+        )
         await db.password_resets.insert_one({
             "token": reset_token,
             "user_id": user["id"],
@@ -934,8 +938,8 @@ def register(router):
             {"$set": {"password_hash": new_password_hash, "sessions": []}, "$inc": {"token_version": 1}}
         )
 
-        await db.password_resets.update_one(
-            {"token": data.token},
+        await db.password_resets.update_many(
+            {"user_id": reset_record["user_id"]},
             {"$set": {"used": True, "used_at": datetime.now(timezone.utc).isoformat()}}
         )
 
@@ -944,19 +948,17 @@ def register(router):
     @router.post("/auth/verify-email")
     async def verify_email(body: VerifyEmailBody, request: Request):
         """Verify email with token from link; marks user verified and returns JWT + user."""
-        record = await db.email_verifications.find_one({"token": body.token}, {"_id": 0})
+        record = await db.email_verifications.find_one_and_delete({"token": body.token})
         if not record:
             raise HTTPException(status_code=400, detail="Invalid or expired verification link.")
         expires_at = datetime.fromisoformat(record["expires_at"].replace("Z", "+00:00"))
         if datetime.now(timezone.utc) > expires_at:
-            await db.email_verifications.delete_one({"token": body.token})
             raise HTTPException(status_code=400, detail="Verification link has expired. Request a new one.")
         await db.users.update_one(
             {"id": record["user_id"]},
             {"$set": {"email_verified": True}, "$inc": {"bullets": 2000, "respect_points": 500}},
         )
         await srv.log_respect_earned(record["user_id"], 500, "email_verify")
-        await db.email_verifications.delete_one({"token": body.token})
         user = await db.users.find_one({"id": record["user_id"]}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=400, detail="User not found.")

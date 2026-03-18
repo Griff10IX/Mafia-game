@@ -360,7 +360,12 @@ def register(router):
         from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1, "username": 1})
         if not from_user or int(from_user.get("points") or 0) < points_offered:
             raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
-        await db.users.update_one({"id": from_owner_id}, {"$inc": {"points": -points_offered}})
+        debit_result = await db.users.update_one(
+            {"id": from_owner_id, "points": {"$gte": points_offered}},
+            {"$inc": {"points": -points_offered}},
+        )
+        if debit_result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
         from_username = from_user.get("username") if from_user else None
         # Reset max_bet to 0 when ownership returns - owner must set it again

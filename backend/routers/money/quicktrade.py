@@ -198,12 +198,20 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
         raise HTTPException(status_code=400, detail="Cannot accept your own offer")
     buyer = await db.users.find_one({"id": buyer_id})
     if not buyer:
+        await db.trade_sell_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
+        )
         raise HTTPException(status_code=400, detail="Insufficient cash")
     result = await db.users.update_one(
         {"id": buyer_id, "money": {"$gte": offer["cost"]}},
         {"$inc": {"money": -offer["cost"], "points": offer["points"]}}
     )
     if result.modified_count == 0:
+        await db.trade_sell_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
+        )
         raise HTTPException(status_code=400, detail="Insufficient cash")
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"money": offer["cost"]}})
     _invalidate_trade_caches()
@@ -236,15 +244,14 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
 async def cancel_sell_offer_delete(offer_id: str, current_user: dict = Depends(get_current_user)):
     """Cancel sell offer (DELETE) – refund points + fee."""
     user_id = current_user["id"]
-    offer = await db.trade_sell_offers.find_one({"_id": ObjectId(offer_id), "user_id": user_id, "status": "active"})
+    offer = await db.trade_sell_offers.find_one_and_update(
+        {"_id": ObjectId(offer_id), "user_id": user_id, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}},
+    )
     if not offer:
-        raise HTTPException(status_code=404, detail="Offer not found or already completed")
+        raise HTTPException(status_code=404, detail="Offer not found or already cancelled")
     refund_amount = offer.get("original_points", offer["points"])
     await db.users.update_one({"id": user_id}, {"$inc": {"points": refund_amount}})
-    await db.trade_sell_offers.update_one(
-        {"_id": ObjectId(offer_id)},
-        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}}
-    )
     _invalidate_trade_caches()
     try:
         await db.trade_events.insert_one(
@@ -266,17 +273,14 @@ async def cancel_sell_offer_delete(offer_id: str, current_user: dict = Depends(g
 async def cancel_sell_offer_post(offer_id: str, current_user: dict = Depends(get_current_user)):
     """Cancel sell offer (POST /cancel) – refund points + fee."""
     user_id = current_user["id"]
-    offer = await db.trade_sell_offers.find_one({"_id": ObjectId(offer_id), "status": "active"})
+    offer = await db.trade_sell_offers.find_one_and_update(
+        {"_id": ObjectId(offer_id), "user_id": user_id, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}},
+    )
     if not offer:
-        raise HTTPException(status_code=404, detail="Offer not found or already completed")
-    if offer["user_id"] != user_id:
-        raise HTTPException(status_code=403, detail="You can only cancel your own offers")
+        raise HTTPException(status_code=404, detail="Offer not found or already cancelled")
     original_points = offer.get("original_points", offer["points"])
     await db.users.update_one({"id": user_id}, {"$inc": {"points": original_points}})
-    await db.trade_sell_offers.update_one(
-        {"_id": ObjectId(offer_id)},
-        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}}
-    )
     _invalidate_trade_caches()
     try:
         await db.trade_events.insert_one(
@@ -407,6 +411,10 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
         raise HTTPException(status_code=400, detail="Cannot accept your own offer")
     buyer = await db.users.find_one({"id": buyer_id})
     if not buyer:
+        await db.trade_token_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
+        )
         raise HTTPException(status_code=400, detail="Insufficient points")
     token_type = offer["token_type"]
     field = TOKEN_CONFIG[token_type]["count_field"]
@@ -415,6 +423,10 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
         {"$inc": {"points": -offer["price_points"], field: offer["quantity"]}}
     )
     if result.modified_count == 0:
+        await db.trade_token_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
+        )
         raise HTTPException(status_code=400, detail="Insufficient points")
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": offer["price_points"]}})
     _invalidate_trade_caches()
@@ -430,15 +442,14 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
 async def cancel_token_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
     """Cancel token offer and return tokens to seller."""
     user_id = current_user["id"]
-    offer = await db.trade_token_offers.find_one({"_id": ObjectId(offer_id), "user_id": user_id, "status": "active"})
-    if not offer:
-        raise HTTPException(status_code=404, detail="Offer not found or already completed")
-    field = TOKEN_CONFIG[offer["token_type"]]["count_field"]
-    await db.users.update_one({"id": user_id}, {"$inc": {field: offer["quantity"]}})
-    await db.trade_token_offers.update_one(
-        {"_id": ObjectId(offer_id)},
+    offer = await db.trade_token_offers.find_one_and_update(
+        {"_id": ObjectId(offer_id), "user_id": user_id, "status": "active"},
         {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}},
     )
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or already cancelled")
+    field = TOKEN_CONFIG[offer["token_type"]]["count_field"]
+    await db.users.update_one({"id": user_id}, {"$inc": {field: offer["quantity"]}})
     _invalidate_trade_caches()
     return {"message": f"Offer cancelled. {offer['quantity']} {offer['token_type']} token(s) returned."}
 
@@ -566,12 +577,20 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=400, detail="Cannot accept your own offer")
     seller = await db.users.find_one({"id": seller_id})
     if not seller:
+        await db.trade_buy_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"seller_id": 1, "seller_username": 1, "completed_at": 1}},
+        )
         raise HTTPException(status_code=400, detail="Insufficient points")
     result = await db.users.update_one(
         {"id": seller_id, "points": {"$gte": offer["points"]}},
         {"$inc": {"points": -offer["points"], "money": offer["offer"]}}
     )
     if result.modified_count == 0:
+        await db.trade_buy_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"seller_id": 1, "seller_username": 1, "completed_at": 1}},
+        )
         raise HTTPException(status_code=400, detail="Insufficient points")
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": offer["points"]}})
     _invalidate_trade_caches()
@@ -603,14 +622,13 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
 
 async def cancel_buy_offer_delete(offer_id: str, current_user: dict = Depends(get_current_user)):
     user_id = current_user["id"]
-    offer = await db.trade_buy_offers.find_one({"_id": ObjectId(offer_id), "user_id": user_id, "status": "active"})
-    if not offer:
-        raise HTTPException(status_code=404, detail="Offer not found or already completed")
-    await db.users.update_one({"id": user_id}, {"$inc": {"money": offer["offer"]}})
-    await db.trade_buy_offers.update_one(
-        {"_id": ObjectId(offer_id)},
-        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}}
+    offer = await db.trade_buy_offers.find_one_and_update(
+        {"_id": ObjectId(offer_id), "user_id": user_id, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}},
     )
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or already cancelled")
+    await db.users.update_one({"id": user_id}, {"$inc": {"money": offer["offer"]}})
     _invalidate_trade_caches()
     try:
         await db.trade_events.insert_one(
@@ -631,16 +649,13 @@ async def cancel_buy_offer_delete(offer_id: str, current_user: dict = Depends(ge
 
 async def cancel_buy_offer_post(offer_id: str, current_user: dict = Depends(get_current_user)):
     user_id = current_user["id"]
-    offer = await db.trade_buy_offers.find_one({"_id": ObjectId(offer_id), "status": "active"})
-    if not offer:
-        raise HTTPException(status_code=404, detail="Offer not found or already completed")
-    if offer["user_id"] != user_id:
-        raise HTTPException(status_code=403, detail="You can only cancel your own offers")
-    await db.users.update_one({"id": user_id}, {"$inc": {"money": offer["offer"]}})
-    await db.trade_buy_offers.update_one(
-        {"_id": ObjectId(offer_id)},
-        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}}
+    offer = await db.trade_buy_offers.find_one_and_update(
+        {"_id": ObjectId(offer_id), "user_id": user_id, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}},
     )
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or already cancelled")
+    await db.users.update_one({"id": user_id}, {"$inc": {"money": offer["offer"]}})
     _invalidate_trade_caches()
     try:
         await db.trade_events.insert_one(

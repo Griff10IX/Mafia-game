@@ -836,12 +836,15 @@ async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_curre
     if bullets < 1 or bullets > CUSTOM_BULLETS_MAX:
         raise HTTPException(status_code=400, detail=f"Bullet amount must be between 1 and {CUSTOM_BULLETS_MAX:,}")
     cost = _calculate_bullet_cost(bullets)
-    cost_used, inc = _store_cost_inc(current_user, cost)
+    cost_used, inc, gte = _store_cost_inc(current_user, cost)
+    if cost_used is None:
+        raise HTTPException(status_code=400, detail="Insufficient points")
     inc["bullets"] = bullets
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": inc},
-    )
+    gte_filter = {"id": current_user["id"]}
+    gte_filter.update(gte)
+    result = await db.users.update_one(gte_filter, {"$inc": inc})
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
     return {"message": f"Bought {bullets:,} bullets for {cost_used} points", "bullets": bullets, "cost": cost_used}
 
 

@@ -963,7 +963,12 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     inc_shooter = {"bullets": -bullets_used}
     if molotovs_used > 0:
         inc_shooter["molotovs"] = -molotovs_used
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": inc_shooter})
+    ammo_filter = {"id": current_user["id"], "bullets": {"$gte": bullets_used}}
+    if molotovs_used > 0:
+        ammo_filter["molotovs"] = {"$gte": molotovs_used}
+    ammo_result = await db.users.update_one(ammo_filter, {"$inc": inc_shooter})
+    if ammo_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient ammunition")
     attempt_base = {
         "id": str(uuid.uuid4()),
         "attacker_id": current_user["id"],

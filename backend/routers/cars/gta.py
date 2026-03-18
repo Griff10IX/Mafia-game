@@ -959,10 +959,6 @@ async def buy_car(
         raise HTTPException(status_code=400, detail="Car not found")
     if car_info.get("id") in DEALER_EXCLUDED_IDS or car_info.get("rarity") == "loot_exclusive":
         raise HTTPException(status_code=400, detail="That car is not for sale")
-    # Remove one from dealer stock (so it disappears from listing)
-    result = await db.dealer_stock.delete_one({"car_id": request.car_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=400, detail="That car is out of stock. Dealer restocks in 1–2 hours.")
     price = int(car_info.get("value", 0) * _dealer_price_multiplier(car_info))
     result = await db.users.update_one(
         {"id": current_user.get("id") or "", "money": {"$gte": price}},
@@ -970,6 +966,10 @@ async def buy_car(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail=f"Insufficient money. Need ${price:,}.")
+    result = await db.dealer_stock.delete_one({"car_id": request.car_id})
+    if result.deleted_count == 0:
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": price}})
+        raise HTTPException(status_code=400, detail="That car is out of stock. Dealer restocks in 1–2 hours.")
     now = datetime.now(timezone.utc)
     doc = {
         "id": str(uuid.uuid4()),

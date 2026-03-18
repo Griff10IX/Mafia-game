@@ -41,13 +41,12 @@ def register(router):
                 "killer_family": current_user.get("killed_by_family_name"),
                 "already_revealed": True,
             }
-        points = int(current_user.get("points") or 0)
-        if points < REVEAL_KILLER_COST:
-            raise HTTPException(status_code=400, detail=f"You need {REVEAL_KILLER_COST:,} points to reveal your killer")
-        await db.users.update_one(
-            {"id": current_user["id"]},
+        result = await db.users.update_one(
+            {"id": current_user["id"], "points": {"$gte": REVEAL_KILLER_COST}},
             {"$inc": {"points": -REVEAL_KILLER_COST}, "$set": {"killer_revealed": True}}
         )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail=f"You need {REVEAL_KILLER_COST:,} points to reveal your killer")
         return {
             "killer_username": current_user.get("killed_by_username"),
             "killer_family": current_user.get("killed_by_family_name"),

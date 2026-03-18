@@ -715,12 +715,6 @@ def register(router):
                 "ownership_transferred": ownership_transferred,
             }
         if _blackjack_is_blackjack(dealer_hand):
-            debit_res = await db.users.find_one_and_update(
-                {"id": current_user.get("id") or "", "money": {"$gte": bet}},
-                {"$inc": {"money": -bet}},
-            )
-            if not debit_res:
-                raise HTTPException(status_code=400, detail="Not enough money")
             head_family_id = await get_head_family_id_for_state(stored_city or city)
             edge_lose = int(bet * BLACKJACK_HOUSE_EDGE) if head_family_id else 0
             if head_family_id and edge_lose > 0:

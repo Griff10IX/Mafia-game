@@ -401,19 +401,19 @@ async def vote(comp_id: str, body: VoteRequest, current_user: dict = Depends(get
     entry = await db.designer_competition_entries.find_one({"id": body.entry_id, "competition_id": comp_id}, {"_id": 1, "author_username": 1})
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
-    existing = await db.designer_competition_votes.find_one(
-        {"competition_id": comp_id, "user_id": current_user["id"]},
-        {"_id": 1},
-    )
-    if existing:
-        raise HTTPException(status_code=400, detail="You have already voted in this competition")
     now = datetime.now(timezone.utc).isoformat()
-    await db.designer_competition_votes.insert_one({
-        "competition_id": comp_id,
-        "user_id": current_user["id"],
-        "entry_id": body.entry_id,
-        "created_at": now,
-    })
+    vote_result = await db.designer_competition_votes.update_one(
+        {"competition_id": comp_id, "user_id": current_user["id"]},
+        {"$setOnInsert": {
+            "competition_id": comp_id,
+            "user_id": current_user["id"],
+            "entry_id": body.entry_id,
+            "created_at": now,
+        }},
+        upsert=True,
+    )
+    if vote_result.upserted_id is None:
+        raise HTTPException(status_code=400, detail="You have already voted in this competition")
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": VOTER_REWARD_POINTS}})
     await send_notification(
         current_user["id"],
@@ -445,17 +445,18 @@ async def withdraw_vote(comp_id: str, current_user: dict = Depends(get_current_u
     )
     if not later_entry:
         raise HTTPException(status_code=400, detail="No new entries since you voted. Withdraw only allowed when more pictures are added.")
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "points": 1})
-    points = int((user or {}).get("points") or 0)
-    if points < VOTER_REWARD_POINTS:
+    deduct_result = await db.users.update_one(
+        {"id": current_user["id"], "points": {"$gte": VOTER_REWARD_POINTS}},
+        {"$inc": {"points": -VOTER_REWARD_POINTS}},
+    )
+    if deduct_result.modified_count == 0:
         raise HTTPException(
             status_code=400,
-            detail=f"You need {VOTER_REWARD_POINTS} points to withdraw your vote (to return the reward). You have {points:,}.",
+            detail=f"You need {VOTER_REWARD_POINTS} points to withdraw your vote (to return the reward).",
         )
     await db.designer_competition_votes.delete_one(
         {"competition_id": comp_id, "user_id": current_user["id"]},
     )
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -VOTER_REWARD_POINTS}})
     return {"message": "Vote withdrawn. You can vote again (and receive 100 points when you do)."}
 
 

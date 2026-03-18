@@ -651,7 +651,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin or moderator access required")
         query = {"flag_type": "endpoint_rate_limit", "resolved": {"$ne": True}}
         if username:
-            query["username"] = {"$regex": f"^{username}", "$options": "i"}
+            query["username"] = {"$regex": f"^{re.escape(username)}", "$options": "i"}
         flags = await db.security_flags.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
         by_user = {}
         for f in flags:
@@ -1560,8 +1560,10 @@ def register(router):
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
         new_hash = get_password_hash((body.new_password or "").strip())
-        await db.users.update_one({"id": target["id"]}, {"$set": {"password_hash": new_hash}})
-        await db.users.update_one({"id": target["id"]}, {"$inc": {"token_version": 1}})
+        await db.users.update_one(
+            {"id": target["id"]},
+            {"$set": {"password_hash": new_hash, "sessions": []}, "$inc": {"token_version": 1}}
+        )
         return {"message": f"Password set for {target.get('username', target_username)}. They have been logged out and must log in with the new password."}
 
     @router.get("/admin/profile-load-errors")

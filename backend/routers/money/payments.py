@@ -632,11 +632,20 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
         
-        txn = await db.payment_transactions.find_one({"session_id": body.session_id})
+        now_iso = datetime.now(timezone.utc).isoformat()
+        txn = await db.payment_transactions.find_one_and_update(
+            {"session_id": body.session_id, "payment_status": {"$ne": "completed"}},
+            {"$set": {
+                "payment_status": "completed",
+                "points_credited_at": now_iso,
+                "manual_credit_by": current_user.get("username"),
+                "manual_credit_at": now_iso,
+            }},
+        )
         if not txn:
-            raise HTTPException(status_code=404, detail="Transaction not found")
-        
-        if txn.get("payment_status") == "completed":
+            existing = await db.payment_transactions.find_one({"session_id": body.session_id})
+            if not existing:
+                raise HTTPException(status_code=404, detail="Transaction not found")
             return {"message": "Transaction already completed", "credited": False}
         
         user_id = txn.get("user_id")
@@ -649,17 +658,12 @@ def register(router):
         user = await db.users.find_one({"id": user_id}, {"_id": 0, "points": 1, "username": 1})
         points_before = int(user.get("points") or 0) if user else 0
         points_after = points_before + points
-        now_iso = datetime.now(timezone.utc).isoformat()
         
         await db.payment_transactions.update_one(
             {"session_id": body.session_id},
             {"$set": {
-                "payment_status": "completed",
-                "points_credited_at": now_iso,
                 "points_before": points_before,
                 "points_after": points_after,
-                "manual_credit_by": current_user.get("username"),
-                "manual_credit_at": now_iso,
             }},
         )
         await db.users.update_one({"id": user_id}, {"$inc": {"points": points}})

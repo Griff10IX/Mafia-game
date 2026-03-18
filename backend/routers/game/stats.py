@@ -194,24 +194,45 @@ def register(router):
         ]).to_list(1)
         gta_stats_doc = gta_stats_agg[0] if gta_stats_agg else {}
 
-        rank_stats_map: dict = {}
-        rank_meta = [(r["id"], r["name"]) for r in RANKS]
-        for rid, rname in rank_meta:
-            rank_stats_map[int(rid)] = {"rank_id": int(rid), "rank_name": rname, "alive": 0, "dead": 0}
+        rank_thresholds = sorted(
+            [(r["id"], r["required_points"]) for r in RANKS],
+            key=lambda x: x[1], reverse=True,
+        )
 
-        users_for_rank = await db.users.find(
-            real_user_match,
-            {"_id": 0, "rank_points": 1, "is_dead": 1}
-        ).to_list(50000)
-        for u in users_for_rank:
-            rid, _ = get_rank_info(int(u.get("rank_points", 0) or 0))
-            bucket = rank_stats_map.get(int(rid))
+        def _build_rank_branch(is_dead_val):
+            branches = []
+            for rid, req in rank_thresholds:
+                branches.append({
+                    "case": {"$gte": [{"$ifNull": ["$rank_points", 0]}, req]},
+                    "then": rid,
+                })
+            return {"$switch": {"branches": branches, "default": rank_thresholds[-1][0]}}
+
+        rank_agg = await db.users.aggregate([
+            {"$match": real_user_match},
+            {"$project": {
+                "_id": 0,
+                "rank_id": _build_rank_branch(None),
+                "is_dead": {"$ifNull": ["$is_dead", False]},
+            }},
+            {"$group": {
+                "_id": {"rank_id": "$rank_id", "is_dead": "$is_dead"},
+                "count": {"$sum": 1},
+            }},
+        ]).to_list(200)
+
+        rank_stats_map: dict = {}
+        for r in RANKS:
+            rank_stats_map[int(r["id"])] = {"rank_id": int(r["id"]), "rank_name": r["name"], "alive": 0, "dead": 0}
+        for row in rank_agg:
+            rid = int(row["_id"]["rank_id"])
+            bucket = rank_stats_map.get(rid)
             if not bucket:
                 continue
-            if u.get("is_dead"):
-                bucket["dead"] += 1
+            if row["_id"]["is_dead"]:
+                bucket["dead"] += row["count"]
             else:
-                bucket["alive"] += 1
+                bucket["alive"] += row["count"]
 
         rank_stats = [rank_stats_map[r["id"]] for r in RANKS]
 
@@ -219,22 +240,34 @@ def register(router):
             {"outcome": "killed"},
             {"_id": 0}
         ).sort("created_at", -1).to_list(200)
+
+        all_user_ids = set()
+        for a in attempts:
+            aid = a.get("attacker_id")
+            tid = a.get("target_id")
+            if aid:
+                all_user_ids.add(aid)
+            if tid:
+                all_user_ids.add(tid)
+        users_batch = {}
+        if all_user_ids:
+            users_list = await db.users.find(
+                {"id": {"$in": list(all_user_ids)}},
+                {"_id": 0, "id": 1, "is_npc": 1, "rank_points": 1, "username": 1},
+            ).to_list(500)
+            users_batch = {u["id"]: u for u in users_list}
+
         recent_kills = []
         seen_kills = set()
+        staff_can_see = current_user and (_is_admin(current_user) or _is_moderator(current_user))
         for a in attempts:
-            # Deduplicate based on victim + killer + timestamp
             dedup_key = (a.get("target_username"), a.get("attacker_username"), a.get("created_at"))
             if dedup_key in seen_kills:
                 continue
             seen_kills.add(dedup_key)
-            killer = await db.users.find_one(
-                {"id": a.get("attacker_id")},
-                {"_id": 0, "is_npc": 1, "rank_points": 1, "username": 1}
-            )
-            victim = await db.users.find_one(
-                {"id": a.get("target_id")},
-                {"_id": 0, "is_npc": 1, "rank_points": 1}
-            )
+
+            killer = users_batch.get(a.get("attacker_id"))
+            victim = users_batch.get(a.get("target_id"))
 
             killer_is_npc = bool(killer and killer.get("is_npc"))
             victim_is_npc = bool(victim and victim.get("is_npc"))
@@ -253,7 +286,6 @@ def register(router):
                 _, victim_rank_name = get_rank_info(int(victim.get("rank_points", 0) or 0))
 
             is_public = bool(a.get("make_public"))
-            staff_can_see = current_user and (_is_admin(current_user) or _is_moderator(current_user))
             killer_username = a.get("attacker_username") if (is_public or staff_can_see) else None
             victim_username = a.get("target_username")
             if not victim_username:

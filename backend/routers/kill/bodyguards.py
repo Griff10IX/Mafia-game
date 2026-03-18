@@ -416,13 +416,13 @@ async def upgrade_bodyguard_armour(slot: int, current_user: dict = Depends(get_c
     cost = int(BODYGUARD_ARMOUR_UPGRADE_COSTS.get(cur_level, 0) * ev.get("bodyguard_cost", 1.0))
     if cost <= 0:
         raise HTTPException(status_code=400, detail="Invalid armour upgrade cost")
-    if int(current_user.get("points", 0) or 0) < cost:
-        raise HTTPException(status_code=400, detail="Insufficient points")
     new_level = cur_level + 1
-    await db.users.update_one(
-        {"id": current_user["id"]},
+    upgrade_result = await db.users.update_one(
+        {"id": current_user["id"], "points": {"$gte": cost}},
         {"$inc": {"points": -cost, "bodyguard_lifetime_spent_upgrades": cost, "lifetime_points_spent": cost}},
     )
+    if upgrade_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
     await db.bodyguards.update_one(
         {"user_id": current_user["id"], "slot_number": slot},
         {"$set": {"armour_level": new_level}}
@@ -453,12 +453,12 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="All bodyguard slots already purchased")
     ev = await get_effective_event()
     cost = int(BODYGUARD_SLOT_COSTS[slots] * ev.get("bodyguard_cost", 1.0))
-    if int(current_user.get("points") or 0) < cost:
-        raise HTTPException(status_code=400, detail="Insufficient points")
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"points": -cost, "bodyguard_slots": 1, "lifetime_points_spent": cost}}
+    slot_result = await db.users.update_one(
+        {"id": current_user["id"], "points": {"$gte": cost}},
+        {"$inc": {"points": -cost, "bodyguard_slots": 1, "lifetime_points_spent": cost}},
     )
+    if slot_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.hitlist_bodyguard_events.insert_one({
         "at": now_iso,
@@ -508,8 +508,6 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     inflation_level = _bodyguard_inflation_level_now(user_for_inflation)
     inflation_mult = 1.0 + _bodyguard_inflation_percent_for_level(inflation_level)
     total_cost = int(base_cost * event_cost_mult * inflation_mult)
-    if int(current_user.get("points") or 0) < total_cost:
-        raise HTTPException(status_code=400, detail="Insufficient points")
     now = datetime.now(timezone.utc)
     window_end = now + timedelta(hours=BODYGUARD_INFLATION_HOURS)
     update_op = {
@@ -526,7 +524,12 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     }
     if slot > slots:
         update_op["$inc"]["bodyguard_slots"] = slot - slots
-    await db.users.update_one({"id": current_user["id"]}, update_op)
+    hire_result = await db.users.update_one(
+        {"id": current_user["id"], "points": {"$gte": total_cost}},
+        update_op,
+    )
+    if hire_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
     robot_name = None
     robot_user_id = None
     if is_robot:

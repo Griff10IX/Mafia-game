@@ -418,9 +418,6 @@ def register(router):
         uid = current_user.get("id") or ""
         blind = blind or 5000
         blind = max(MP_POKER_VS_DEALER_MIN_BLIND, min(MP_POKER_VS_DEALER_MAX_BLIND, int(blind)))
-        money = int(current_user.get("money") or 0)
-        if money < blind * 4:
-            raise HTTPException(status_code=400, detail="Need at least 4x blind to play")
         game_id = str(uuid.uuid4())
         deck = _make_deck()
         _rng.shuffle(deck)
@@ -455,7 +452,12 @@ def register(router):
         bot["current_bet"] = blind * 2
         bot["total_bet_this_hand"] = blind * 2
         pot = blind * 3
-        await db.users.update_one({"id": uid}, {"$inc": {"money": -human_stack}})
+        deduct_result = await db.users.update_one(
+            {"id": uid, "money": {"$gte": human_stack}},
+            {"$inc": {"money": -human_stack}},
+        )
+        if deduct_result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Need at least 4x blind to play")
         await log_gambling(uid, (current_user.get("username") or "?"), "mp_poker", {"action": "create", "game_id": game_id, "buy_in": human_stack, "mode": "vs_dealer"})
         now_iso = datetime.now(timezone.utc).isoformat()
         doc = {
@@ -671,10 +673,7 @@ def register(router):
         extra_prize = max(0, min(MP_POKER_MAX_EXTRA_PRIZE, request.extra_prize))
         uid = current_user.get("id") or ""
         username = current_user.get("username") or "Player"
-        money = int(current_user.get("money") or 0)
         need = buy_in + extra_prize
-        if money < need:
-            raise HTTPException(status_code=400, detail="Insufficient funds")
         game_id = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
         if request.small_blind > 0:
@@ -718,7 +717,12 @@ def register(router):
             "created_at": now_iso,
             "chat": [],
         }
-        await db.users.update_one({"id": uid}, {"$inc": {"money": -need}})
+        deduct_result = await db.users.update_one(
+            {"id": uid, "money": {"$gte": need}},
+            {"$inc": {"money": -need}},
+        )
+        if deduct_result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Insufficient funds")
         await log_gambling(uid, username, "mp_poker", {"action": "create", "game_id": game_id, "buy_in": need, "mode": "vs_players"})
         await db.mp_poker_games.insert_one(doc)
         return {"game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
@@ -758,8 +762,11 @@ def register(router):
         if len(players) >= g.get("max_players", 6):
             raise HTTPException(status_code=400, detail="Game full")
         buy_in = int(g.get("buy_in") or 0)
-        money = int(current_user.get("money") or 0)
-        if money < buy_in:
+        join_deduct = await db.users.update_one(
+            {"id": uid, "money": {"$gte": buy_in}},
+            {"$inc": {"money": -buy_in}},
+        )
+        if join_deduct.modified_count == 0:
             raise HTTPException(status_code=400, detail="Insufficient funds")
         players.append({
             "user_id": uid,
@@ -773,7 +780,6 @@ def register(router):
             "ready": False,
             "is_bot": False,
         })
-        await db.users.update_one({"id": uid}, {"$inc": {"money": -buy_in}})
         await log_gambling(uid, username, "mp_poker", {"action": "join", "game_id": game_id, "buy_in": buy_in})
         # 2+ players is enough to enter ready phase; creator can start once all current players are ready
         phase = "ready" if len(players) >= 2 else "lobby"

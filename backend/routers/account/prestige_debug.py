@@ -1,4 +1,4 @@
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 
 import server as srv
 
@@ -10,12 +10,13 @@ def register(router):
     RANKS = srv.RANKS
     PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     get_prestige_requirement = srv.get_prestige_requirement
+    _is_admin = srv._is_admin
 
     @router.get("/admin/prestige-debug")
     async def prestige_debug(current_user: dict = Depends(get_current_user)):
-        """Debug view of prestige XP curve (admin-only in practice via UI)."""
-        # This endpoint just returns numbers; auth gating to admins/mods can be
-        # enforced in the caller/router wiring if desired.
+        """Debug view of prestige XP curve (admin-only)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Not authorized")
         out = []
         godfather_req = RANKS[-1]["required_points"]
         for level in range(0, 5):

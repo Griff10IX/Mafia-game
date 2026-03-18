@@ -405,10 +405,12 @@ def register(router):
             )
         now_utc = datetime.now(timezone.utc)
         buff_until = now_utc + timedelta(hours=BUFF_DURATION_HOURS)
-        await db.users.update_one(
-            {"id": current_user["id"]},
+        result = await db.users.update_one(
+            {"id": current_user["id"], "points": {"$gte": BUFF_COST_POINTS}},
             {"$inc": {"points": -BUFF_COST_POINTS}},
         )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Insufficient points")
         await db.user_properties.update_one(
             {"user_id": current_user["id"], "property_id": property_id},
             {"$set": {"income_buff_until": buff_until.isoformat()}},

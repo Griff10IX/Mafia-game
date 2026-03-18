@@ -381,16 +381,15 @@ async def boxing_allocate(payload: AllocateRequest, current_user: dict = Depends
     if stat not in STAT_KEYS:
         raise HTTPException(status_code=400, detail=f"Invalid stat. Choose from: {', '.join(STAT_KEYS)}")
     prof = await _ensure_profile(current_user["id"])
-    points = int(prof.get("stat_points") or 0)
-    if points < 1:
-        raise HTTPException(status_code=400, detail="No stat points available")
     current_val = int(prof.get(stat) or 10)
     if current_val >= MAX_STAT:
         raise HTTPException(status_code=400, detail=f"{stat.title()} is already at max ({MAX_STAT})")
-    await db.boxing_profiles.update_one(
-        {"user_id": current_user["id"]},
+    alloc_result = await db.boxing_profiles.update_one(
+        {"user_id": current_user["id"], "stat_points": {"$gte": 1}},
         {"$inc": {stat: 1, "stat_points": -1}},
     )
+    if alloc_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="No stat points available")
     prof2 = await _ensure_profile(current_user["id"])
     return {"message": f"+1 {stat.title()} (free point)", "profile": prof2}
 
@@ -683,6 +682,8 @@ async def boxing_challenges_list(current_user: dict = Depends(get_current_user_v
     return {"incoming": incoming, "outgoing": outgoing}
 
 
+MAX_BOXING_BET = 1_000_000
+
 async def boxing_bet_place(payload: BetRequest, current_user: dict = Depends(get_current_user_verified)):
     cid = (payload.challenge_id or "").strip()
     fighter = (payload.fighter or "").strip().lower()
@@ -691,6 +692,8 @@ async def boxing_bet_place(payload: BetRequest, current_user: dict = Depends(get
         raise HTTPException(status_code=400, detail="fighter must be 'a' or 'b'")
     if stake <= 0:
         raise HTTPException(status_code=400, detail="Stake must be > 0")
+    if stake > MAX_BOXING_BET:
+        raise HTTPException(status_code=400, detail=f"Maximum bet is ${MAX_BOXING_BET:,}")
 
     ch = await db.boxing_challenges.find_one({"id": cid, "state": "pending"}, {"_id": 0})
     if not ch:

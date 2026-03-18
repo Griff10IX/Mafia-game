@@ -134,14 +134,19 @@ async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(g
 
     now = datetime.now(timezone.utc)
     updates = {}
+    gte_filter = {"id": current_user["id"]}
     if cost_cash > 0:
         updates["$inc"] = updates.get("$inc") or {}
         updates["$inc"]["money"] = -cost_cash
+        gte_filter["money"] = {"$gte": cost_cash}
     if cost_points > 0:
         updates["$inc"] = updates.get("$inc") or {}
         updates["$inc"]["points"] = -cost_points
+        gte_filter["points"] = {"$gte": cost_points}
     if updates:
-        await db.users.update_one({"id": current_user["id"]}, updates)
+        deduct_result = await db.users.update_one(gte_filter, updates)
+        if deduct_result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Insufficient funds")
 
     inserted = []
     if use_dual:
@@ -455,21 +460,22 @@ async def hitlist_buy_off(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="You are not on the hitlist")
     cost_cash = int(sum(int(e.get("reward_amount") or 0) * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "cash"))
     cost_points = int(sum(int(e.get("reward_amount") or 0) * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "points"))
-    user_cash = int((current_user.get("money") or 0) or 0)
-    user_points = int((current_user.get("points") or 0) or 0)
-    if cost_cash > 0 and user_cash < cost_cash:
-        raise HTTPException(status_code=400, detail=f"Insufficient cash (need ${cost_cash:,})")
-    if cost_points > 0 and user_points < cost_points:
-        raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost_points:,})")
     updates = {}
+    gte_filter = {"id": user_id}
     if cost_cash > 0:
         updates["$inc"] = updates.get("$inc") or {}
         updates["$inc"]["money"] = -cost_cash
+        gte_filter["money"] = {"$gte": cost_cash}
     if cost_points > 0:
         updates["$inc"] = updates.get("$inc") or {}
         updates["$inc"]["points"] = -cost_points
+        gte_filter["points"] = {"$gte": cost_points}
     if updates:
-        await db.users.update_one({"id": user_id}, updates)
+        deduct_result = await db.users.update_one(gte_filter, updates)
+        if deduct_result.modified_count == 0:
+            if cost_cash > 0:
+                raise HTTPException(status_code=400, detail=f"Insufficient cash (need ${cost_cash:,})")
+            raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost_points:,})")
     res = await db.hitlist.delete_many({"target_id": user_id})
     cost_parts = []
     if cost_cash > 0:
@@ -528,21 +534,22 @@ async def hitlist_buy_off_user(request: HitlistBuyOffUserRequest, current_user: 
         raise HTTPException(status_code=400, detail="That user is not on the hitlist")
     cost_cash = int(sum(int(e.get("reward_amount") or 0) * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "cash"))
     cost_points = int(sum(int(e.get("reward_amount") or 0) * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "points"))
-    user_cash = int((current_user.get("money") or 0) or 0)
-    user_points = int((current_user.get("points") or 0) or 0)
-    if cost_cash > 0 and user_cash < cost_cash:
-        raise HTTPException(status_code=400, detail=f"Insufficient cash (need ${cost_cash:,})")
-    if cost_points > 0 and user_points < cost_points:
-        raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost_points:,})")
     updates = {}
+    gte_filter = {"id": current_user["id"]}
     if cost_cash > 0:
         updates["$inc"] = updates.get("$inc") or {}
         updates["$inc"]["money"] = -cost_cash
+        gte_filter["money"] = {"$gte": cost_cash}
     if cost_points > 0:
         updates["$inc"] = updates.get("$inc") or {}
         updates["$inc"]["points"] = -cost_points
+        gte_filter["points"] = {"$gte": cost_points}
     if updates:
-        await db.users.update_one({"id": current_user["id"]}, updates)
+        deduct_result = await db.users.update_one(gte_filter, updates)
+        if deduct_result.modified_count == 0:
+            if cost_cash > 0:
+                raise HTTPException(status_code=400, detail=f"Insufficient cash (need ${cost_cash:,})")
+            raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost_points:,})")
     res = await db.hitlist.delete_many({"target_id": target["id"], "target_type": {"$in": ["user", "bodyguards"]}})
     cost_parts = []
     if cost_cash > 0:
@@ -595,9 +602,12 @@ async def hitlist_reveal(current_user: dict = Depends(get_current_user)):
         who = [{"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount", 0), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
         return {"message": "Already revealed.", "who": who}
     cost = HITLIST_REVEAL_COST_POINTS
-    if (current_user.get("points") or 0) < cost:
+    reveal_result = await db.users.update_one(
+        {"id": user_id, "points": {"$gte": cost}},
+        {"$set": {"hitlist_revealed": True}, "$inc": {"points": -cost}},
+    )
+    if reveal_result.modified_count == 0:
         raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost})")
-    await db.users.update_one({"id": user_id}, {"$set": {"hitlist_revealed": True}, "$inc": {"points": -cost}})
     entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
     # Show actual placer names; hidden only affects public list, not the target who paid to reveal.
     who = [{"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount", 0), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]

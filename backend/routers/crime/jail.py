@@ -421,8 +421,15 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             except Exception:
                 pass
         if base_pay > 0:
-            await db.users.update_one({"id": target["id"]}, {"$inc": {"money": -base_pay}})
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": cash_to_pay}})
+            pay_result = await db.users.update_one(
+                {"id": target["id"], "money": {"$gte": base_pay}},
+                {"$inc": {"money": -base_pay}},
+            )
+            if pay_result.modified_count == 0:
+                base_pay = 0
+                cash_to_pay = 0
+            else:
+                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": cash_to_pay}})
         new_consec = _safe_int(current_user.get("current_consecutive_busts"), 0) + 1
         record = max(_safe_int(current_user.get("consecutive_busts_record"), 0), new_consec)
         rp_before = _safe_int(current_user.get("rank_points"), 0)
@@ -580,17 +587,16 @@ async def leave_jail(current_user: dict = Depends(get_current_user_verified)):
     """Pay 3 points to leave jail immediately."""
     if not current_user.get("in_jail"):
         raise HTTPException(status_code=400, detail="You are not in jail")
-    current_pts = int(current_user.get("points", 0) or 0)
-    if current_pts < 3:
-        raise HTTPException(status_code=400, detail="You need at least 3 points to leave jail")
-    await db.users.update_one(
-        {"id": current_user["id"]},
+    result = await db.users.update_one(
+        {"id": current_user["id"], "in_jail": True, "points": {"$gte": 3}},
         {
             "$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False},
             "$inc": {"points": -3},
             "$unset": {"auto_rank_next_run_at": ""},
         },
     )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="You need at least 3 points to leave jail")
     return {
         "success": True,
         "message": "You paid 3 points and left jail!",
