@@ -349,7 +349,7 @@ WEIGHT_COST_BASE = 45000
 FUEL_COST_BASE = 35000
 NUM_LAPS_MIN = 2
 NUM_LAPS_MAX = 20
-INTERACTIVE_LAP_DEADLINE_SEC = 8
+INTERACTIVE_LAP_DEADLINE_SEC = 30
 TIRE_WEAR_PER_LAP = 18
 # Pit a lap before tires are gone: ~18 wear/lap → pit when below 50 so next lap wouldn't kill tires
 TIRE_PIT_THRESHOLD = 50

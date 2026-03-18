@@ -904,6 +904,7 @@ export default function Racing() {
             livePitStops={liveRace.pit_stops}
             liveCurrentLap={liveRace.current_lap || 0}
             liveTotalLaps={liveRace.total_laps || activeRace.laps || 3}
+            lapDeadline={liveRace.lap_deadline}
           />
 
           {/* Timing Tower + Strategy side by side on desktop */}

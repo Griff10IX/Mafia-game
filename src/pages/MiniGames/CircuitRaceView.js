@@ -877,6 +877,7 @@ export default function CircuitRaceView({
   rewards: rewardsProp = null,
   liveCarStates = null, liveIncidents = null, livePitStops = null,
   liveCurrentLap = 0, liveTotalLaps = 3,
+  lapDeadline = null,
 }) {
   const canvasRef  = useRef(null);
   const rafRef     = useRef(null);
@@ -916,12 +917,14 @@ export default function CircuitRaceView({
   const liveCurrentLapRef = useRef(liveCurrentLap);
   const liveTotalLapsRef = useRef(liveTotalLaps);
   const liveInitDone = useRef(false);
+  const lapDeadlineRef = useRef(lapDeadline);
 
   useEffect(() => { liveCarStatesRef.current = liveCarStates; }, [liveCarStates]);
   useEffect(() => { liveIncidentsRef.current = liveIncidents; }, [liveIncidents]);
   useEffect(() => { livePitStopsRef.current = livePitStops; }, [livePitStops]);
   useEffect(() => { liveCurrentLapRef.current = liveCurrentLap; }, [liveCurrentLap]);
   useEffect(() => { liveTotalLapsRef.current = liveTotalLaps; }, [liveTotalLaps]);
+  useEffect(() => { lapDeadlineRef.current = lapDeadline; }, [lapDeadline]);
 
   const SKEY = raceId ? `rcv3_${raceId}` : null;
   const lastSave = useRef(0);
@@ -2248,7 +2251,7 @@ export default function CircuitRaceView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[uiPhase,mode,effCond,drawCanvas]);
 
-  // ─── INTERACTIVE-LIVE MODE (backend-driven) ────────────────────────────
+  // ─── INTERACTIVE-LIVE MODE (backend-driven, full replay physics) ───────
   useEffect(() => {
     if (mode !== "interactive-live") return;
     if (!participants.length) return;
@@ -2257,7 +2260,15 @@ export default function CircuitRaceView({
     const track = TRACKS.find(t => t.id === initialTrackId) || TRACKS[0];
     const cond = WEATHER_MAP[weatherIdProp] || "clear";
     const wd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
-    buildSpeedProfile(track);
+    const profile = buildSpeedProfile(track);
+
+    // Pre-compute average corner speed multiplier so we can calibrate orbit speed
+    let avgCSM = 0;
+    for (let i = 0; i < PROFILE_N; i++) avgCSM += Math.max(0.50, Math.min(1.0, profile[i]));
+    avgCSM /= PROFILE_N;
+    if (avgCSM < 0.4) avgCSM = 0.75;
+
+    const TARGET_LAP_SEC = 28;
 
     const cs = liveCarStatesRef.current || {};
     const ids = Object.keys(cs).length
@@ -2294,11 +2305,14 @@ export default function CircuitRaceView({
         strategyType: "normal", reliabilityWearMult: 1,
         overtakingLevel: 0, overtakeBoostUntil: 0, currentSpeedMph: null,
         _targetPos: carState.position ?? (i + 1),
+        _smoothPos: carState.position ?? (i + 1),
         _prevPitCount: 0,
       };
     });
 
-    stateRef.current = { racers, track, nLaps: liveTotalLaps, wd, safetyCar: { active: false }, fastestLap: { holderId: null, time: Infinity }, finishFlash: 0, incidents: [] };
+    const sc = { active: false, endsAtSec: 0, cooldownUntil: 0 };
+    const fl = { holderId: null, time: Infinity };
+    stateRef.current = { racers, track, nLaps: liveTotalLaps, wd, safetyCar: sc, fastestLap: fl, finishFlash: 0, incidents: [] };
     setUiPhase("racing");
     setLapDisp(`${liveCurrentLap} / ${liveTotalLaps}`);
     setCommentary(rnd(COMMENTARY.start));
@@ -2308,6 +2322,11 @@ export default function CircuitRaceView({
     let firstFrame = true;
     let prevPitStopsLen = (livePitStopsRef.current || []).length;
     let prevIncidentsLen = (liveIncidentsRef.current || []).length;
+    let prevBackendLap = liveCurrentLapRef.current || 0;
+
+    const addInc = (text) => {
+      stateRef.current.incidents.push({ text, time: performance.now() });
+    };
 
     const loop = (now) => {
       let dt = (now - lastFrame) / 1000;
@@ -2316,14 +2335,24 @@ export default function CircuitRaceView({
       lastFrame = now;
       const nowSec = now / 1000;
 
-      const { racers: r, track: trk } = stateRef.current || {};
-      if (!r || !trk) { rafRef.current = requestAnimationFrame(loop); return; }
+      const st = stateRef.current;
+      if (!st || !st.racers || !st.track) { rafRef.current = requestAnimationFrame(loop); return; }
+      const r = st.racers, trk = st.track;
 
       const cs2 = liveCarStatesRef.current || {};
       const curLap = liveCurrentLapRef.current || 0;
       const totLaps = liveTotalLapsRef.current || 3;
       setLapDisp(`${curLap} / ${totLaps}`);
 
+      if (curLap !== prevBackendLap) {
+        prevBackendLap = curLap;
+        r.forEach(x => { x.lastSectorCross = nowSec; x.currentSector = 0; });
+      }
+
+      const scActive = sc.active && nowSec < sc.endsAtSec;
+      if (sc.active && nowSec >= sc.endsAtSec) { sc.active = false; addInc("Safety car in — green flag!"); setCommentary(rnd(COMMENTARY.safetyCarEnd)); }
+
+      // Process new pit stops from backend
       const pitArr = livePitStopsRef.current || [];
       if (pitArr.length > prevPitStopsLen) {
         for (let pi = prevPitStopsLen; pi < pitArr.length; pi++) {
@@ -2333,12 +2362,13 @@ export default function CircuitRaceView({
             pr.inPit = true;
             pr.pitEndAt = nowSec + pr.pitDurationSeconds;
             pr.trackPos = trk.pitEntry;
-            stateRef.current.incidents.push({ text: `${pr.name} pits for ${cs2[ps.entrant_id]?.compound || "tyres"}`, time: now });
+            addInc(`${pr.name} pits for ${cs2[ps.entrant_id]?.compound || "tyres"}`);
           }
         }
         prevPitStopsLen = pitArr.length;
       }
 
+      // Process new incidents from backend
       const incArr = liveIncidentsRef.current || [];
       if (incArr.length > prevIncidentsLen) {
         for (let ii = prevIncidentsLen; ii < incArr.length; ii++) {
@@ -2347,12 +2377,20 @@ export default function CircuitRaceView({
           if (dmgR) {
             const pt = trk.getPoint(dmgR.trackPos % 1);
             addSparks(pt.x, pt.y);
-            stateRef.current.incidents.push({ text: `Contact! ${dmgR.name} takes ${inc.damage_pct}% damage`, time: now });
+            addInc(`Contact! ${dmgR.name} takes ${inc.damage_pct}% damage`);
           }
         }
         prevIncidentsLen = incArr.length;
       }
 
+      // Build sorted standings from previous frame for rubber-banding / slipstream
+      const prevSorted = [...r].filter(x => !x.dnf && !x.inPit).sort((a, b) =>
+        ((b.totalLapsDone ?? 0) + (b.trackPos ?? 0)) - ((a.totalLapsDone ?? 0) + (a.trackPos ?? 0))
+      );
+      const prevMap = {};
+      prevSorted.forEach((x, idx) => { prevMap[x.id] = { idx, prog: (x.totalLapsDone ?? 0) + (x.trackPos ?? 0) }; });
+
+      // --- Per-car physics update ---
       r.forEach(racer => {
         const carState = cs2[racer.id];
         if (carState) {
@@ -2368,7 +2406,7 @@ export default function CircuitRaceView({
             racer.dnf = true;
             racer.dnfAtSec = nowSec;
             racer.dnfSparks = Array.from({ length: 8 }, () => ({ x: 0, y: 0, vx: (Math.random() - 0.5) * 3, vy: (Math.random() - 0.5) * 3, life: 1 }));
-            stateRef.current.incidents.push({ text: `${racer.name} RETIRES (DNF)`, time: now });
+            addInc(`${racer.name} RETIRES (DNF)`);
           }
 
           if (damage > 0.1 && Math.random() < 0.02) {
@@ -2394,55 +2432,164 @@ export default function CircuitRaceView({
             const carState2 = cs2[racer.id];
             if (carState2?.compound) racer.currentTyre = carState2.compound;
           }
-          racer.currentSpeedMph = racer.currentSpeedMph != null ? racer.currentSpeedMph + (5 - racer.currentSpeedMph) * Math.min(1, dt * 4) : 5;
+          racer.currentSpeedMph = racer.currentSpeedMph != null
+            ? racer.currentSpeedMph + (5 - racer.currentSpeedMph) * Math.min(1, dt * 4) : 5;
           return;
         }
 
-        const totalR = r.filter(x => !x.dnf).length || 1;
-        const posRank = racer._targetPos ?? racer.position;
-        const baseOrbitSpeed = trk.lapBase ? (1.0 / trk.lapBase) * 1.8 : 0.04;
-        const posSpeedMult = 1.0 - ((posRank - 1) / totalR) * 0.12;
-        const tyreGrip = tyreGripFromWear(racer.tyreWear, racer.currentTyre);
-        const gripMult = 0.92 + tyreGrip * 0.08;
-        const wearPenalty = racer.engineHealth < 30 ? 0.90 : 1.0;
-        const fuelMult = 0.97 + (racer.fuelLoad / 100) * 0.03;
-        const speed = baseOrbitSpeed * posSpeedMult * gripMult * wearPenalty * fuelMult;
+        // Smooth position interpolation (overtakes transition over ~2s)
+        racer._smoothPos = racer._smoothPos + (racer._targetPos - racer._smoothPos) * Math.min(1, dt * 1.5);
 
-        const prevT = racer.trackPos;
-        racer.trackPos = (racer.trackPos + speed * dt + 1) % 1;
-        racer.totalLapsDone = Math.max(racer.totalLapsDone, curLap);
+        // Tyre grip model (F1 Clash cliff model)
+        const td = TYRE_DEFS[racer.currentTyre] || TYRE_DEFS.medium;
+        const tyreGripFactor = tyreGripFromWear(racer.tyreWear, racer.currentTyre);
+        const effGrip = (racer.baseGrip || 0.85) * tyreGripFactor * (wd.gripMult || 1);
+        const fuelW = 1.0 + 0.03 * ((racer.fuelLoad ?? 100) / 100);
 
-        if (prevT > 0.9 && racer.trackPos < 0.1) {
-          racer.lapCount++;
+        // effSpeed calibrated so leader completes 1 orbit in TARGET_LAP_SEC
+        const totalActive = r.filter(x => !x.dnf && !x.inPit).length || 1;
+        const posSpeedMult = 1.0 + ((totalActive + 1) / 2 - racer._smoothPos) / totalActive * 0.20;
+        const enginePenalty = racer.engineHealth < 30 ? (0.85 + racer.engineHealth / 200) : 1.0;
+
+        let effSpeed = (trk.lapBase / (TARGET_LAP_SEC * avgCSM))
+          * posSpeedMult * td.gripMult * (wd.speedMult || 1) * tyreGripFactor * enginePenalty / fuelW;
+
+        // Rubber-banding: trailing cars get a small boost
+        const myP = prevMap[racer.id];
+        const lP = prevSorted[0] ? (prevSorted[0].totalLapsDone ?? 0) + (prevSorted[0].trackPos ?? 0) : 0;
+        const gapLdr = lP - ((myP?.prog) ?? 0);
+        if (gapLdr > 0.15 && !scActive) effSpeed *= 1 + Math.min(0.08, gapLdr * 0.25);
+
+        // Slipstream + overtake boost
+        racer.inSlipstream = false;
+        if (myP && myP.idx > 0) {
+          const ahP = (prevSorted[myP.idx - 1].totalLapsDone ?? 0) + (prevSorted[myP.idx - 1].trackPos ?? 0);
+          const sl = ahP - ((myP.prog) ?? 0);
+          if (sl > 0 && sl < 0.016 && !scActive) { effSpeed *= 1.045; racer.inSlipstream = true; }
+          if (sl > 0 && sl <= 0.022 && !scActive && Math.random() < dt * 0.7 * ((racer.overtakingLevel || 0) / 100) + dt * 0.05)
+            racer.overtakeBoostUntil = nowSec + 0.4;
+        }
+        if (nowSec < (racer.overtakeBoostUntil || 0)) effSpeed *= 1.04;
+        if (scActive) effSpeed = Math.min(effSpeed, 0.35 * (trk.lapBase / (TARGET_LAP_SEC * avgCSM)));
+
+        // Corner physics from speed profile + grip
+        const trackT = ((racer.trackPos % 1) + 1) % 1;
+        const pidx = Math.round(trackT * (PROFILE_N - 1));
+        const curvature = getCurvature(trk, trackT);
+
+        const gripBasedMult = cornerGripMult(curvature, effGrip);
+        const profileMult = Math.max(0.50, Math.min(1.0, profile[pidx] + (effGrip - 0.85) * 0.55));
+        const cornerSM = Math.min(profileMult, gripBasedMult);
+
+        // Curvature-aware braking/acceleration rates
+        const isTightCorner = curvature > 0.12;
+        const isMedCorner = curvature > 0.055;
+        const ABRAKE = isTightCorner ? 6.5 : isMedCorner ? 5.0 : 4.0;
+        const AACCEL = isTightCorner ? 2.2 : isMedCorner ? 2.8 : 3.6;
+        const SSCALE = 0.170, SCAP = 160;
+        const applyLerp = (cur, tgt) => {
+          if (tgt == null) return tgt; if (cur == null) return tgt;
+          const brk = tgt < cur;
+          return cur + (tgt - cur) * Math.min(1, dt * (brk ? ABRAKE : AACCEL));
+        };
+
+        // Movement
+        const prevPos = racer.trackPos;
+        if (racer.slideOffUntil > 0 && nowSec < racer.slideOffUntil) {
+          racer.trackPos = (racer.trackPos + (1 / (trk.lapBase / effSpeed)) * dt * 0.18 + 1) % 1;
+          racer.currentSpeedMph = 20;
+        } else {
+          racer.slideOffUntil = 0;
+          const lapTime = trk.lapBase / (effSpeed * cornerSM);
+          racer.trackPos = (racer.trackPos + (1 / lapTime) * dt + 1) % 1;
+
+          // Realistic MPH display (based on track's natural pace, not compressed orbit)
+          const displayEff = 1.0 * posSpeedMult * tyreGripFactor * enginePenalty;
+          const rawMph = trk.km && trk.lapBase
+            ? SSCALE * (3600 * trk.km * cornerSM * displayEff) / trk.lapBase : null;
+          const tMph = rawMph != null ? Math.max(0, Math.min(SCAP, rawMph)) : null;
+          racer.currentSpeedMph = tMph != null
+            ? (racer.currentSpeedMph != null ? applyLerp(racer.currentSpeedMph, tMph) : tMph) : null;
+
+          // Slide-off on low grip + sharp corners
+          if (curvature > 0.22 && effGrip < 0.66 && Math.random() < dt * 0.5 * (0.66 - effGrip) * Math.min(1, curvature / 0.36)) {
+            racer.slideOffUntil = nowSec + 0.5 + Math.random() * 0.65;
+            addInc(`${racer.name} off track!`);
+            if (!sc.active && nowSec > sc.cooldownUntil && Math.random() < 0.15 && totLaps > 1) {
+              sc.active = true; sc.endsAtSec = nowSec + 6 + Math.random() * 4;
+              sc.cooldownUntil = sc.endsAtSec + 10;
+              addInc("Safety car deployed!"); setCommentary(rnd(COMMENTARY.safetyCar));
+            }
+          }
         }
 
-        const effSpeed = speed * trk.lapBase * 280;
-        racer.currentSpeedMph = racer.currentSpeedMph != null
-          ? racer.currentSpeedMph + (effSpeed - racer.currentSpeedMph) * Math.min(1, dt * 5)
-          : effSpeed;
+        // Sync lap count from backend
+        racer.totalLapsDone = Math.max(racer.totalLapsDone, curLap);
 
-        const curv = getCurvature(trk, racer.trackPos);
-        if (curv > 0.06 && racer.tyreWear < 40) {
+        // Sector crossings
+        const sfL = trk.sfLine ?? 0;
+        const relT = ((trackT - sfL + 1) % 1);
+        const ns2 = relT < 0.333 ? 0 : relT < 0.666 ? 1 : 2;
+        if (ns2 !== racer.currentSector) {
+          const el = nowSec - (racer.lastSectorCross || nowSec);
+          if (racer.lastSectorCross > 0 && el > 0.5 && racer.isPlayer) {
+            const delta = el - racer.bestSectors[racer.currentSector];
+            racer.sectorDelta = delta;
+            racer.bestSectors[racer.currentSector] = Math.min(racer.bestSectors[racer.currentSector], el);
+          }
+          racer.currentSector = ns2; racer.lastSectorCross = nowSec;
+        }
+
+        // Visual lap crossing
+        const sfL2 = trk.sfLine ?? 0;
+        const crossedSF = (() => {
+          if (sfL2 === 0) return prevPos > 0.93 && racer.trackPos < 0.07;
+          const p0 = prevPos, p1 = racer.trackPos;
+          if (p0 < sfL2 && p1 >= sfL2) return true;
+          if (p0 > p1 && sfL2 <= p1) return true;
+          if (p0 > p1 && sfL2 >= p0) return true;
+          return false;
+        })();
+        if (crossedSF && !racer._justCrossed) {
+          racer._justCrossed = true;
+          setTimeout(() => { if (racer) racer._justCrossed = false; }, 100);
+          racer.lapCount++;
+          const lt = trk.lapBase / (effSpeed * 0.97) + (Math.random() - 0.5) * 0.8;
+          racer.lapTimes.push(lt);
+          if (lt < fl.time) { fl.time = lt; fl.holderId = racer.id; stateRef.current.fastestLap = fl; addInc(`${racer.name} — fastest lap!`); }
+        } else if (!crossedSF) {
+          racer._justCrossed = false;
+        }
+
+        // Visual tyre wear (gentle degradation between backend updates)
+        if (racer.tyreWear > 5 && !racer.inPit) {
+          const sl2 = stintLaps(racer.currentTyre, wd.wearMult || 1, 1);
+          const wearPerLap = 90 / sl2;
+          const wearPerSec = wearPerLap / TARGET_LAP_SEC;
+          racer.tyreWear = Math.max(td.minWear, racer.tyreWear - wearPerSec * dt * 0.3);
+        }
+        racer.tyreBlister = racer.tyreWear < 20;
+        racer.tyreCliffWarning = racer.tyreWear < (td.cliffStart * 100 + 12);
+
+        // Visual fuel drain
+        if (racer.fuelLoad != null && totLaps > 1) {
+          const fps = 100 / (TARGET_LAP_SEC * totLaps);
+          racer.fuelLoad = Math.max(0, racer.fuelLoad - fps * dt * 0.3);
+        }
+
+        // Tyre smoke in corners with worn tyres
+        if (curvature > 0.06 && racer.tyreWear < 40) {
           const pt = trk.getPoint(racer.trackPos);
           addTireSmoke(pt.x, pt.y, 0.4 + (1 - racer.tyreWear / 100) * 0.6);
         }
+        // Engine smoke on critical wear
         if (racer.engineHealth < 25 && Math.random() < 0.08) {
           const pt = trk.getPoint(racer.trackPos);
           addTireSmoke(pt.x, pt.y, 0.3);
         }
-
-        const idx = r.indexOf(racer);
-        if (idx > 0) {
-          const ahead = r[idx - 1];
-          if (ahead && !ahead.dnf && !ahead.inPit) {
-            const gap = Math.abs(ahead.trackPos - racer.trackPos);
-            racer.inSlipstream = gap < 0.08 && gap > 0.01;
-          } else {
-            racer.inSlipstream = false;
-          }
-        }
       });
 
+      // Sort standings by progress
       r.sort((a, b) => {
         if (a.dnf && !b.dnf) return 1;
         if (!a.dnf && b.dnf) return -1;
