@@ -524,10 +524,8 @@ export default function LootBox() {
       <style>{globalStyles}</style>
       <style>{LOOT_BOX_STYLES}</style>
 
-      <div className={`space-y-1.5 ${styles.pageContent} mobile-page-root`} data-testid="lootbox-page">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-3">
-          {/* ── Main column ── */}
-          <div className="space-y-1.5 min-w-0">
+      <div className={`space-y-1.5 ${styles.pageContent} mobile-page-root flex flex-col items-center`} data-testid="lootbox-page">
+        <div className="w-full max-w-xl space-y-1.5">
             {/* Header */}
             <div className="relative lb-fade-in">
               <p className="text-[9px] text-zinc-500 font-heading italic">Earn pieces from <Link to="/account/missions" className="text-primary underline">the Consigliere's Ledger</Link>. One hundred pieces open a box. Exclusives are scarce.</p>
@@ -694,38 +692,37 @@ export default function LootBox() {
                 <div className="lb-art-line text-primary mx-2.5" />
               </div>
             )}
-          </div>
 
-          {/* ── Side: Last 10 wins (compact) ── */}
-          <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in h-fit mobile-panel`} style={{ animationDelay: '0.05s' }}>
-            <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-            <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
-              <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Last 10 wins</span>
+            {/* ── Last 10 wins (below, centered) ── */}
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
+                <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Last 10 wins</span>
+              </div>
+              <div className="p-1.5 max-h-[50vh] overflow-y-auto">
+                {last10.length === 0 ? (
+                  <p className="text-[9px] text-mutedForeground font-heading italic py-0.5">No opens yet.</p>
+                ) : (
+                  <ul className="list-none p-0 m-0 space-y-1">
+                    {last10.map((win, i) => (
+                      <li key={i} className="text-[8px] font-heading border-b border-primary/10 pb-1 last:border-0 last:pb-0 leading-tight">
+                        <div className="flex items-center justify-between gap-0.5 text-mutedForeground uppercase tracking-wider">
+                          <span>{win.box_quality ?? '—'} · {win.prizes_count ?? 0}</span>
+                          <span>{win.opened_at ? new Date(win.opened_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}</span>
+                        </div>
+                        <ul className="mt-0.5 space-y-0.5 text-foreground">
+                          {(win.rewards || []).slice(0, 4).map((r, j) => (
+                            <li key={j} className="truncate">{rewardLabel(r)}</li>
+                          ))}
+                          {(win.rewards?.length ?? 0) > 4 && <li className="text-mutedForeground text-[7px]">+{(win.rewards?.length ?? 0) - 4}</li>}
+                        </ul>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="lb-art-line text-primary mx-2.5" />
             </div>
-            <div className="p-1.5 max-h-[50vh] overflow-y-auto">
-              {last10.length === 0 ? (
-                <p className="text-[9px] text-mutedForeground font-heading italic py-0.5">No opens yet.</p>
-              ) : (
-                <ul className="list-none p-0 m-0 space-y-1">
-                  {last10.map((win, i) => (
-                    <li key={i} className="text-[8px] font-heading border-b border-primary/10 pb-1 last:border-0 last:pb-0 leading-tight">
-                      <div className="flex items-center justify-between gap-0.5 text-mutedForeground uppercase tracking-wider">
-                        <span>{win.box_quality ?? '—'} · {win.prizes_count ?? 0}</span>
-                        <span>{win.opened_at ? new Date(win.opened_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}</span>
-                      </div>
-                      <ul className="mt-0.5 space-y-0.5 text-foreground">
-                        {(win.rewards || []).slice(0, 4).map((r, j) => (
-                          <li key={j} className="truncate">{rewardLabel(r)}</li>
-                        ))}
-                        {(win.rewards?.length ?? 0) > 4 && <li className="text-mutedForeground text-[7px]">+{(win.rewards?.length ?? 0) - 4}</li>}
-                      </ul>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="lb-art-line text-primary mx-2.5" />
-          </div>
         </div>
 
         {result && <ResultModal result={result} onClose={closeModal} />}

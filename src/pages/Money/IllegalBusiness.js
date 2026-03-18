@@ -14,14 +14,15 @@ function formatMoney(n) {
 function formatMissionRewards(rewards) {
   if (!rewards || typeof rewards !== 'object') return null;
   const parts = [];
+  if (rewards.vault_cash) parts.push(`${formatMoney(rewards.vault_cash)} to vault`);
   if (rewards.guard_slots) parts.push(`+${rewards.guard_slots} guard slot${rewards.guard_slots > 1 ? 's' : ''}`);
   if (rewards.income_mult) {
     const pct = Math.round((Number(rewards.income_mult) - 1) * 100);
     if (pct) parts.push(`+${pct}% income`);
   }
   if (rewards.guard_weapon_max) parts.push('Weapon tier +1');
-  if (rewards.points) parts.push(`+${rewards.points} pts`);
-  if (rewards.cash) parts.push(formatMoney(rewards.cash));
+  if (rewards.jailbust_tokens) parts.push(`${rewards.jailbust_tokens} Jailbust token`);
+  if (rewards.xp_crimes_tokens) parts.push(`${rewards.xp_crimes_tokens} XP Crimes token`);
   return parts.length ? parts.join(' · ') : null;
 }
 
@@ -169,6 +170,7 @@ export default function IllegalBusiness() {
   const [raidState, setRaidState] = useState('');
   const [raidResult, setRaidResult] = useState(null);
   const [user, setUser] = useState(null);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
 
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -223,24 +225,39 @@ export default function IllegalBusiness() {
   });
   const handleCollect = withSave(async () => {
     const res = await api.post('/illegal-business/collect');
-    toast.success(res.data?.message || 'Collected.');
-    if (res.data?.cash != null) refreshUser();
+    toast.success(res.data?.message || 'Collected to vault.');
     fetchData();
+  });
+  const handleWithdraw = withSave(async () => {
+    const amt = parseInt(withdrawAmount, 10);
+    if (!amt || amt <= 0) return;
+    const res = await api.post('/illegal-business/withdraw', { amount: amt });
+    toast.success(res.data?.message || 'Withdrawn.');
+    setWithdrawAmount('');
+    refreshUser(); fetchData();
+  });
+  const handleWithdrawAll = withSave(async () => {
+    const vault = parseInt(data?.business?.vault ?? 0, 10);
+    if (vault <= 0) return;
+    const res = await api.post('/illegal-business/withdraw', { amount: vault });
+    toast.success(res.data?.message || 'Withdrawn.');
+    setWithdrawAmount('');
+    refreshUser(); fetchData();
   });
   const handleHireGuard = withSave(async (slotNumber, armourLevel = 0, weaponLevel = 0) => {
     await api.post('/illegal-business/guards/hire', { slot_number: slotNumber, armour_level: armourLevel, weapon_level: weaponLevel });
     toast.success('Another pair of hands on the door.');
-    refreshUser(); fetchData();
+    fetchData();
   });
   const handleBuyGuardSlot = withSave(async () => {
     await api.post('/illegal-business/guards/buy-slot');
     toast.success('Another slot on the door.');
-    refreshUser(); fetchData();
+    fetchData();
   });
   const handleUpgradeSecurity = withSave(async (upgradeId) => {
     await api.post(`/illegal-business/security/upgrade/${upgradeId}`);
     toast.success('Upgrade installed.');
-    refreshUser(); fetchData();
+    fetchData();
   });
   const handleCompleteMission = withSave(async (missionId) => {
     const res = await api.post(`/illegal-business/missions/${missionId}/complete`);
@@ -300,7 +317,8 @@ export default function IllegalBusiness() {
   const securityList = data?.security_upgrades_list || [];
   const guardSlots = business?.guard_slots ?? 2;
   const nextGuardSlotCostCash = data?.next_guard_slot_cost_cash ?? null;
-  const nextGuardSlotCostPoints = data?.next_guard_slot_cost_points ?? null;
+  const guardHireCost = data?.guard_hire_cost ?? 2500;
+  const vault = parseInt(business?.vault ?? 0, 10);
   const upgradesDone = business?.security_upgrades || [];
   const nextUpgradeIdx = upgradesDone.length;
   const nextUpgrade = nextUpgradeIdx < securityList.length ? securityList[nextUpgradeIdx] : null;
@@ -308,11 +326,6 @@ export default function IllegalBusiness() {
   const missions = Array.isArray(data?.missions) ? data.missions : [];
   const completedMissions = missions.filter(m => m.completed);
   const activeMission = missions.find(m => !m.completed);
-
-  const heatLevel = business?.heat_level ?? 0;
-  const heatPct = Math.min(100, Math.round((heatLevel / 10) * 100));
-  const heatColor = heatLevel > 6 ? 'from-red-600 to-red-400' : heatLevel > 3 ? 'from-amber-600 to-amber-400' : 'from-emerald-600 to-emerald-400';
-  const heatLabel = heatLevel > 6 ? 'High Heat' : heatLevel > 3 ? 'Moderate' : 'Running Cold';
 
   return (
     <div className={`${styles.pageContent} racket-page mobile-page-root`}>
@@ -330,15 +343,8 @@ export default function IllegalBusiness() {
               <span className="text-xs font-body italic text-mutedForeground">{typeInfo?.name}</span>
               {business?.state && <span className="text-[10px] text-zinc-600">· {business.state}</span>}
             </div>
-            {/* Heat meter */}
-            <div className="flex items-center gap-2 mt-2">
-              <span className="text-[9px] font-heading uppercase tracking-widest text-zinc-600 w-16 shrink-0">Heat</span>
-              <div className="flex-1 h-1.5 rounded-full bg-zinc-800 max-w-[120px]">
-                <div className={`r-bar-fill h-full rounded-full bg-gradient-to-r ${heatColor}`} style={{ width: `${Math.max(heatPct, 5)}%` }} />
-              </div>
-              <span className={`text-[9px] font-heading font-bold ${heatLevel > 6 ? 'text-red-400' : heatLevel > 3 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                {heatLabel}
-              </span>
+            <div className="text-[10px] text-zinc-500 mt-1 font-heading">
+              Level {business?.level ?? 1} · Security {nextUpgradeIdx}/{totalUpgrades} · {guards.length}/{guardSlots} guards
             </div>
           </div>
           <div className="income-glow border border-primary/25 rounded-md px-4 py-2.5 text-right bg-primary/5 shrink-0">
@@ -385,23 +391,42 @@ export default function IllegalBusiness() {
           </div>
         )}
 
-        {/* ── Collect ── */}
+        {/* ── Vault ── */}
         <div className={`${styles.panel} r-card border border-primary/25 rounded-md overflow-hidden mobile-panel`}>
-          <CardHead icon={TrendingUp} title="Cash on the Table" />
-          <div className="p-4 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="text-[10px] font-heading uppercase tracking-widest text-mutedForeground mb-0.5">Awaiting Collection</div>
-              <div className="text-3xl font-heading font-bold text-primary leading-none">
-                {formatMoney(business?.pending_cash ?? 0)}
+          <CardHead icon={TrendingUp} title="Vault"
+            right={<span className="text-[9px] font-heading text-zinc-500">All spending comes from here</span>}
+          />
+          <div className="p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="text-[10px] font-heading uppercase tracking-widest text-mutedForeground mb-0.5">Vault Balance</div>
+                <div className="text-3xl font-heading font-bold text-primary leading-none">
+                  {formatMoney(vault)}
+                </div>
               </div>
-              <div className="text-[10px] text-zinc-500 mt-1 font-heading">
-                Level {business?.level ?? 1} · Security {nextUpgradeIdx}/{totalUpgrades} · {guards.length}/{guardSlots} guards
-              </div>
+              <button onClick={handleCollect} disabled={saving}
+                className="collect-btn px-6 py-3 bg-primary/20 text-primary font-heading font-bold uppercase tracking-widest text-xs rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-40 transition-all">
+                {saving ? 'Collecting…' : '⚑  Collect the Take'}
+              </button>
             </div>
-            <button onClick={handleCollect} disabled={saving}
-              className="collect-btn px-6 py-3 bg-primary/20 text-primary font-heading font-bold uppercase tracking-widest text-xs rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-40 transition-all">
-              {saving ? 'Collecting…' : '⚑  Collect the Take'}
-            </button>
+            {vault > 0 && (
+              <div className="flex flex-wrap items-end gap-2 pt-2 border-t border-primary/10">
+                <div className="flex-1 min-w-[100px]">
+                  <label className="block text-[9px] font-heading uppercase tracking-widest text-mutedForeground mb-1">Pocket Cash</label>
+                  <input type="number" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)}
+                    placeholder={`Max ${formatMoney(vault)}`} min="1" max={vault}
+                    className="w-full px-3 py-2 bg-zinc-900/60 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 focus:border-primary/50 focus:outline-none" />
+                </div>
+                <button onClick={handleWithdraw} disabled={saving || !withdrawAmount || parseInt(withdrawAmount, 10) <= 0}
+                  className="px-4 py-2 bg-primary/15 text-primary font-heading font-bold uppercase tracking-wider text-[10px] rounded border border-primary/35 hover:bg-primary/25 disabled:opacity-40 transition-all whitespace-nowrap">
+                  Withdraw
+                </button>
+                <button onClick={handleWithdrawAll} disabled={saving}
+                  className="px-4 py-2 bg-primary/10 text-primary font-heading font-bold uppercase tracking-wider text-[10px] rounded border border-primary/30 hover:bg-primary/20 disabled:opacity-40 transition-all whitespace-nowrap">
+                  Withdraw All
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -488,7 +513,7 @@ export default function IllegalBusiness() {
                 <div className="mt-3 flex items-center gap-3 p-2.5 rounded border border-primary/25 bg-primary/5">
                   <div className="flex-1 min-w-0">
                     <span className="text-xs font-heading font-bold text-foreground block">{nextUpgrade.name}</span>
-                    <span className="text-[10px] text-mutedForeground font-heading">{formatMoney(nextUpgrade.cost_cash)} + {nextUpgrade.cost_points} pts</span>
+                    <span className="text-[10px] text-mutedForeground font-heading">{formatMoney(nextUpgrade.cost_cash)}</span>
                   </div>
                   <button onClick={() => handleUpgradeSecurity(nextUpgrade.id)} disabled={saving}
                     className="px-3 py-1.5 bg-primary/15 text-primary border border-primary/35 rounded text-[9px] font-heading font-bold uppercase tracking-wider hover:bg-primary/25 disabled:opacity-40 transition-all shrink-0">
@@ -522,13 +547,13 @@ export default function IllegalBusiness() {
                 {guards.length < guardSlots && (
                   <button onClick={() => handleHireGuard(guards.length + 1)} disabled={saving}
                     className="flex items-center gap-1 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2.5 py-1.5 rounded hover:bg-primary/10 disabled:opacity-40 transition-all">
-                    <UserPlus size={9} /> Hire Guard (Slot {guards.length + 1})
+                    <UserPlus size={9} /> Hire Guard — {formatMoney(guardHireCost)}
                   </button>
                 )}
                 {guards.length >= guardSlots && nextGuardSlotCostCash != null && (
                   <button onClick={handleBuyGuardSlot} disabled={saving}
                     className="flex items-center gap-1 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2.5 py-1.5 rounded hover:bg-primary/10 disabled:opacity-40 transition-all">
-                    <UserPlus size={9} /> Add Slot — {formatMoney(nextGuardSlotCostCash)}{nextGuardSlotCostPoints ? ` / ${nextGuardSlotCostPoints} pts` : ''}
+                    <UserPlus size={9} /> Add Slot — {formatMoney(nextGuardSlotCostCash)}
                   </button>
                 )}
               </div>
