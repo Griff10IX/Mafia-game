@@ -70,12 +70,10 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       icon: Target,
       label: 'Rank',
       items: [
-        { path: '/game/ranking', label: 'Ranking' },
-        { path: '/game/ranking/badges', label: 'Badges' },
         { path: '/crime/crimes', label: 'Crimes' },
         { path: '/crime/gta', label: 'GTA' },
-        { path: '/crime/jail', label: 'Jail' },
-        { path: '/organised-crime', label: 'Organised Crime' },
+        { path: '/crime/jail', label: 'Jailbust' },
+        { path: '/game/ranking/badges', label: 'Badges' },
         { path: '/account/prestige', label: 'Prestige' },
       ],
     },
@@ -1381,8 +1379,8 @@ export default function Layout({ children }) {
             </button>
           )}
 
-          {/* Flash news — fixed width band so bar looks even */}
-          <div className="hidden sm:flex items-center flex-1 min-w-0 max-w-sm md:max-w-md">
+          {/* Flash news — show on desktop; on mobile show when bottom bar layout so top bar isn't empty */}
+          <div className={`${(!isMobileViewport || mobileNavStyle === 'bottom') ? 'flex' : 'hidden'} items-center flex-1 min-w-0 max-w-sm md:max-w-md`}>
             {flashNews.length > 0 && (
               <div className="flex items-center gap-2 min-w-0 w-full min-h-[2rem] rounded px-2 py-1 border border-primary/15 bg-primary/5">
                 <Newspaper size={14} className="shrink-0 text-primary/70 self-center" aria-hidden />
@@ -1393,6 +1391,19 @@ export default function Layout({ children }) {
               </div>
             )}
           </div>
+
+          {/* Casino & property profit — show on mobile when bottom bar so top bar has useful info */}
+          {isMobileViewport && mobileNavStyle === 'bottom' && user && (
+            <Link
+              to="/my-properties"
+              className="flex items-center gap-2 min-h-[2rem] rounded px-2 py-1 border border-primary/15 bg-primary/5 shrink-0 hover:bg-primary/10 hover:border-primary/25 transition-colors"
+            >
+              <Building2 size={14} className="shrink-0 text-primary/70 self-center" aria-hidden />
+              <span className={`font-heading text-xs tabular-nums ${(user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>C {formatMoneyCompact(user.casino_profit ?? 0)}</span>
+              <span className="text-primary/50 text-[10px]">·</span>
+              <span className="font-heading text-xs text-mutedForeground tabular-nums">P {formatCompact(user.property_profit ?? 0)} pts</span>
+            </Link>
+          )}
 
           {/* IMPROVEMENT 1: Improved travel indicator — 2-line compact card */}
           {travelStatus && travelStatus.traveling && travelStatus.seconds_remaining > 0 && (
