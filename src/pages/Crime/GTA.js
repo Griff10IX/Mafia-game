@@ -271,27 +271,28 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
       
       {!isCollapsed && (
         <div className="p-2">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-            {recentStolen.map((car, index) => {
-              const displayName = car.car_name || car.name || 'Car';
-              const rarity = (car.rarity || 'common').replace(/_/g, ' ');
-              const value = car.value ?? 0;
-              const damage = Math.min(100, Math.max(0, Number(car.damage_percent) ?? 0));
-              return (
-                <Link
-                  key={car.user_car_id ?? `car-${index}`}
-                  to={`/view-car?id=${encodeURIComponent(car.user_car_id)}`}
-                  data-testid={`recent-stolen-car-${index}`}
-                  className={`${styles.panel} rounded-lg border border-border hover:border-primary/30 p-1.5 transition-all overflow-hidden block text-left`}
-                >
-                  <div className="w-full max-w-[75%] sm:max-w-none mx-auto sm:mx-0 aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1 relative">
-                    {car.image ? (
-                      <img
-                        src={car.image}
-                        alt={displayName}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
+          <div className="max-w-[75%] sm:max-w-none mx-auto sm:mx-0">
+            <div className="grid grid-cols-5 gap-1 sm:gap-2">
+              {recentStolen.map((car, index) => {
+                const displayName = car.car_name || car.name || 'Car';
+                const rarity = (car.rarity || 'common').replace(/_/g, ' ');
+                const value = car.value ?? 0;
+                const damage = Math.min(100, Math.max(0, Number(car.damage_percent) ?? 0));
+                return (
+                  <Link
+                    key={car.user_car_id ?? `car-${index}`}
+                    to={`/view-car?id=${encodeURIComponent(car.user_car_id)}`}
+                    data-testid={`recent-stolen-car-${index}`}
+                    className={`${styles.panel} rounded-lg border border-border hover:border-primary/30 p-1 sm:p-1.5 transition-all overflow-hidden block text-left`}
+                  >
+                    <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1 relative">
+                      {car.image ? (
+                        <img
+                          src={car.image}
+                          alt={displayName}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Car size={24} className="text-primary/30" />
@@ -315,6 +316,7 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
                 </Link>
               );
             })}
+            </div>
           </div>
           <p className="text-[9px] text-mutedForeground font-heading mt-2 text-center">
             <Link to="/cars/garage" className="text-primary hover:underline">View full garage →</Link>
