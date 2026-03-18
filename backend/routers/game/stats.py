@@ -457,7 +457,7 @@ def register(router):
         cursor = db.gambling_log.find(
             {"user_id": uid},
             {"_id": 0, "game_type": 1, "details": 1},
-        )
+        ).limit(5000)
         async for entry in cursor:
             gt = (entry.get("game_type") or "").strip()
             if not gt:

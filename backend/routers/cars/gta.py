@@ -1118,47 +1118,64 @@ async def buy_listed_car(
 ):
     """Buy a car listed by another player (pay cash to seller)."""
     buyer_id = current_user.get("id") or ""
-    user_car = await db.user_cars.find_one(
-        {"id": request.user_car_id, "listed_for_sale": True}
+    # Atomically claim the car before payment to prevent double-buy race condition
+    claim_filter = {"id": request.user_car_id, "listed_for_sale": True, "user_id": {"$ne": buyer_id}}
+    user_car = await db.user_cars.find_one_and_update(
+        claim_filter,
+        {"$set": {"listed_for_sale": False, "user_id": buyer_id}, "$unset": {"sale_price": "", "listed_at": ""}},
     )
     if not user_car:
         try:
-            user_car = await db.user_cars.find_one(
-                {"_id": ObjectId(request.user_car_id), "listed_for_sale": True}
+            claim_filter_oid = {"_id": ObjectId(request.user_car_id), "listed_for_sale": True, "user_id": {"$ne": buyer_id}}
+            user_car = await db.user_cars.find_one_and_update(
+                claim_filter_oid,
+                {"$set": {"listed_for_sale": False, "user_id": buyer_id}, "$unset": {"sale_price": "", "listed_at": ""}},
             )
         except Exception:
             user_car = None
     if not user_car:
-        raise HTTPException(status_code=404, detail="Listing not found or no longer available")
+        # Distinguish self-buy from unavailable
+        maybe_car = await db.user_cars.find_one({"id": request.user_car_id, "listed_for_sale": True})
+        if not maybe_car:
+            try:
+                maybe_car = await db.user_cars.find_one({"_id": ObjectId(request.user_car_id), "listed_for_sale": True})
+            except Exception:
+                pass
+        if maybe_car and maybe_car.get("user_id") == buyer_id:
+            raise HTTPException(status_code=400, detail="Cannot buy your own listing")
+        raise HTTPException(status_code=400, detail="Car no longer available")
     seller_id = user_car.get("user_id")
-    if seller_id == buyer_id:
-        raise HTTPException(status_code=400, detail="Cannot buy your own listing")
+    rollback_q = {"_id": user_car["_id"]} if user_car.get("_id") else {"id": user_car.get("id")}
+
+    def _rollback_car():
+        return db.user_cars.update_one(
+            rollback_q,
+            {"$set": {"user_id": seller_id, "listed_for_sale": True, "sale_price": int(user_car.get("sale_price") or 0), "listed_at": user_car.get("listed_at")}},
+        )
+
     car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
     if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
         seller_family_id = await resolve_family_id(seller_id)
         if seller_family_id and await _family_in_active_war(seller_family_id):
+            await _rollback_car()
             raise HTTPException(status_code=403, detail="Cannot buy — seller's family is at war; exclusive cars cannot be sold during war")
     price = int(user_car.get("sale_price") or 0)
     if price <= 0:
+        await _rollback_car()
         raise HTTPException(status_code=400, detail="Invalid listing")
     buyer = await db.users.find_one({"id": buyer_id})
     if not buyer:
+        await _rollback_car()
         raise HTTPException(status_code=400, detail=f"Insufficient money. Need ${price:,}.")
     result = await db.users.update_one(
         {"id": buyer_id, "money": {"$gte": price}},
         {"$inc": {"money": -price}},
     )
     if result.modified_count == 0:
+        await _rollback_car()
         raise HTTPException(status_code=400, detail=f"Insufficient money. Need ${price:,}.")
     car_name = (user_car.get("custom_name") or user_car.get("car_name") or (car_info or {}).get("name") or "Car") if (user_car.get("car_id") == "car_custom") else ((car_info or {}).get("name") or user_car.get("car_name") or "Car")
-    if user_car.get("_id") is not None:
-        q = {"_id": user_car["_id"]}
-    else:
-        q = {"id": user_car.get("id")}
-    await db.user_cars.update_one(
-        q,
-        {"$set": {"user_id": buyer_id}, "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}},
-    )
+    # Ownership already transferred by find_one_and_update; pay seller
     await db.users.update_one({"id": seller_id}, {"$inc": {"money": price}})
     seller = await db.users.find_one({"id": seller_id}, {"_id": 0, "username": 1})
     now_iso = datetime.now(timezone.utc).isoformat()

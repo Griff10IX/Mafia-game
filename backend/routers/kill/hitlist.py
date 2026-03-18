@@ -397,7 +397,7 @@ async def hitlist_list(current_user: dict = Depends(get_current_user)):
         {"target_type": {"$ne": "npc"}},
         {"target_type": "npc", "placer_id": user_id},
     ]}
-    cursor = db.hitlist.find(query, {"_id": 0}).sort("reward_amount", -1).sort("created_at", -1)
+    cursor = db.hitlist.find(query, {"_id": 0}).sort("reward_amount", -1).sort("created_at", -1).limit(200)
     items = []
     async for doc in cursor:
         # Build response from allowed fields only; never include placer_id or target_id

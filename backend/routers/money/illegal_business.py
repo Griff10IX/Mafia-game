@@ -1,6 +1,7 @@
 # Illegal business (1920s–30s mafia): one per player, Capo+, raid formula, guards/security, missions, killer choice on death
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
+import re
 import uuid
 import secrets
 _rng = secrets.SystemRandom()
@@ -780,7 +781,8 @@ async def patch_illegal_business(req: PatchBusinessRequest, current_user: dict =
 
 
 async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(get_current_user)):
-    target_user = await db.users.find_one({"username": {"$regex": f"^{req.target_username.strip()}$", "$options": "i"}}, {"_id": 0, "id": 1, "username": 1})
+    safe = re.escape(req.target_username.strip())
+    target_user = await db.users.find_one({"username": {"$regex": f"^{safe}$", "$options": "i"}}, {"_id": 0, "id": 1, "username": 1})
     if not target_user:
         raise HTTPException(status_code=404, detail="Target not found.")
     target_id = target_user["id"]

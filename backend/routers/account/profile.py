@@ -735,7 +735,7 @@ def register(router):
             raise HTTPException(status_code=401, detail="Current password is incorrect")
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$set": {"password_hash": get_password_hash(request.new_password)}}
+            {"$set": {"password_hash": get_password_hash(request.new_password), "sessions": []}, "$inc": {"token_version": 1}}
         )
         return {"message": "Password changed successfully"}
 

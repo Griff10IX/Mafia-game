@@ -103,6 +103,18 @@ api.interceptors.response.use(
       }
     }
 
+    // ── 403 In jail → redirect to jail page instead of showing broken pages ──
+    if (error.response?.status === 403 && typeof window !== 'undefined') {
+      const detail = error.response?.data?.detail;
+      if (typeof detail === 'string' && detail.toLowerCase().includes('while in jail')) {
+        const currentPath = window.location.pathname;
+        if (currentPath !== '/crime/jail' && currentPath !== '/jail') {
+          window.location.replace('/crime/jail');
+          return Promise.reject(error);
+        }
+      }
+    }
+
     if ((error.response?.status === 401 || error.response?.status === 403) && !hasRedirectedOnAuthFailure && !isPublicPath()) {
       const isAuthMe = error.config?.url?.includes('/auth/me');
       if (error.response?.status === 401 || (error.response?.status === 403 && isAuthMe)) {

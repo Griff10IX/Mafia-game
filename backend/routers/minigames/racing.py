@@ -9,6 +9,7 @@ from datetime import datetime, timezone, timedelta
 import asyncio
 import os
 import random
+import re
 import uuid
 from typing import Optional, List, Dict, Any
 from fastapi import Depends, HTTPException, Header
@@ -2217,6 +2218,7 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
 
 
 async def get_racing_leaderboard(current_user: dict = Depends(get_current_user), limit: int = 50):
+    limit = min(limit, 100)
     cursor = db.racing_profiles.find({}, {"_id": 0, "user_id": 1, "wins": 1, "racing_rep": 1, "races_completed": 1}).sort("wins", -1).limit(limit)
     profs = await cursor.to_list(limit)
     user_ids = [p["user_id"] for p in profs]
@@ -2462,7 +2464,8 @@ async def create_race_challenge(payload: RaceChallengeCreateRequest, current_use
     target_name = (payload.target_username or "").strip()
     if not target_name:
         raise HTTPException(status_code=400, detail="Target username required")
-    target = await db.users.find_one({"username": {"$regex": f"^{target_name}$", "$options": "i"}}, {"_id": 0, "id": 1, "username": 1})
+    safe = re.escape(target_name)
+    target = await db.users.find_one({"username": {"$regex": f"^{safe}$", "$options": "i"}}, {"_id": 0, "id": 1, "username": 1})
     if not target:
         raise HTTPException(status_code=404, detail="Player not found")
     if target["id"] == current_user["id"]:
@@ -2654,6 +2657,7 @@ async def decline_race_challenge(challenge_id: str, current_user: dict = Depends
 
 async def get_race_history(current_user: dict = Depends(get_current_user_verified), limit: int = 30):
     """Return the player's recent completed races."""
+    limit = min(limit, 100)
     races = await db.racing_races.find(
         {"state": "completed", "participants.user_id": current_user["id"]},
         {"_id": 0, "id": 1, "track_id": 1, "track_name": 1, "weather": 1, "laps": 1,

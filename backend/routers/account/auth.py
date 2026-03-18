@@ -931,7 +931,7 @@ def register(router):
         new_password_hash = get_password_hash(data.new_password)
         await db.users.update_one(
             {"id": reset_record["user_id"]},
-            {"$set": {"password_hash": new_password_hash}}
+            {"$set": {"password_hash": new_password_hash, "sessions": []}, "$inc": {"token_version": 1}}
         )
 
         await db.password_resets.update_one(

@@ -133,14 +133,14 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
         non_hidden_count = await db.trade_sell_offers.count_documents({"user_id": user_id, "status": "active", "hide_name": False})
         if non_hidden_count >= 10:
             raise HTTPException(status_code=400, detail="Maximum 10 regular offers allowed")
-    user = await db.users.find_one({"id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user.get("points", 0) < offer.points:
-        raise HTTPException(status_code=400, detail="Insufficient points")
     fee = max(1, int(offer.points * 0.005))
     points_after_fee = offer.points - fee
-    await db.users.update_one({"id": user_id}, {"$inc": {"points": -offer.points}})
+    result = await db.users.update_one(
+        {"id": user_id, "points": {"$gte": offer.points}},
+        {"$inc": {"points": -offer.points}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
     new_offer = {
         "user_id": user_id,
         "username": username,
@@ -183,10 +183,18 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
 async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
     buyer_id = current_user["id"]
     buyer_username = current_user.get("username", "Unknown")
-    offer = await db.trade_sell_offers.find_one({"_id": ObjectId(offer_id), "status": "active"})
+    now = datetime.now(timezone.utc)
+    offer = await db.trade_sell_offers.find_one_and_update(
+        {"_id": ObjectId(offer_id), "status": "active"},
+        {"$set": {"status": "completed", "buyer_id": buyer_id, "buyer_username": buyer_username, "completed_at": now}},
+    )
     if not offer:
-        raise HTTPException(status_code=404, detail="Offer not found or already completed")
+        raise HTTPException(status_code=400, detail="Offer no longer available")
     if offer["user_id"] == buyer_id:
+        await db.trade_sell_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
+        )
         raise HTTPException(status_code=400, detail="Cannot accept your own offer")
     buyer = await db.users.find_one({"id": buyer_id})
     if not buyer:
@@ -198,10 +206,6 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient cash")
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"money": offer["cost"]}})
-    await db.trade_sell_offers.update_one(
-        {"_id": ObjectId(offer_id)},
-        {"$set": {"status": "completed", "buyer_id": buyer_id, "buyer_username": buyer_username, "completed_at": datetime.now(timezone.utc)}}
-    )
     _invalidate_trade_caches()
     await log_activity(
         buyer_id,
@@ -351,15 +355,24 @@ async def create_token_offer(offer: CreateTokenOffer, current_user: dict = Depen
     if active_token_offers >= 10:
         raise HTTPException(status_code=400, detail="Maximum 10 token offers at once")
     field = TOKEN_CONFIG[offer.token_type]["count_field"]
-    user = await db.users.find_one({"id": user_id}, {"_id": 0, field: 1, "referral_tokens": 1})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    have = int(user.get(field) or 0)
-    referral_count = int((user.get("referral_tokens") or {}).get(field) or 0)
-    sellable = max(0, have - referral_count)
-    if sellable < offer.quantity:
+    referral_key = f"referral_tokens.{field}"
+    result = await db.users.update_one(
+        {
+            "id": user_id,
+            "$expr": {
+                "$gte": [
+                    {"$subtract": [
+                        {"$ifNull": ["$" + field, 0]},
+                        {"$ifNull": ["$" + referral_key, 0]}
+                    ]},
+                    offer.quantity
+                ]
+            }
+        },
+        {"$inc": {field: -offer.quantity}}
+    )
+    if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient sellable tokens (referral tokens cannot be sold on Quick Trade)")
-    await db.users.update_one({"id": user_id}, {"$inc": {field: -offer.quantity}})
     new_offer = {
         "user_id": user_id,
         "username": username,
@@ -379,10 +392,18 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
     """Buyer pays points and receives tokens; seller receives points."""
     buyer_id = current_user["id"]
     buyer_username = current_user.get("username", "Unknown")
-    offer = await db.trade_token_offers.find_one({"_id": ObjectId(offer_id), "status": "active"})
+    now = datetime.now(timezone.utc)
+    offer = await db.trade_token_offers.find_one_and_update(
+        {"_id": ObjectId(offer_id), "status": "active"},
+        {"$set": {"status": "completed", "buyer_id": buyer_id, "buyer_username": buyer_username, "completed_at": now}},
+    )
     if not offer:
-        raise HTTPException(status_code=404, detail="Offer not found or already completed")
+        raise HTTPException(status_code=400, detail="Offer no longer available")
     if offer["user_id"] == buyer_id:
+        await db.trade_token_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
+        )
         raise HTTPException(status_code=400, detail="Cannot accept your own offer")
     buyer = await db.users.find_one({"id": buyer_id})
     if not buyer:
@@ -396,10 +417,6 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": offer["price_points"]}})
-    await db.trade_token_offers.update_one(
-        {"_id": ObjectId(offer_id)},
-        {"$set": {"status": "completed", "buyer_id": buyer_id, "buyer_username": buyer_username, "completed_at": datetime.now(timezone.utc)}},
-    )
     _invalidate_trade_caches()
     await log_activity(
         buyer_id,
@@ -534,10 +551,18 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(g
 async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
     seller_id = current_user["id"]
     seller_username = current_user.get("username", "Unknown")
-    offer = await db.trade_buy_offers.find_one({"_id": ObjectId(offer_id), "status": "active"})
+    now = datetime.now(timezone.utc)
+    offer = await db.trade_buy_offers.find_one_and_update(
+        {"_id": ObjectId(offer_id), "status": "active"},
+        {"$set": {"status": "completed", "seller_id": seller_id, "seller_username": seller_username, "completed_at": now}},
+    )
     if not offer:
-        raise HTTPException(status_code=404, detail="Offer not found or already completed")
+        raise HTTPException(status_code=400, detail="Offer no longer available")
     if offer["user_id"] == seller_id:
+        await db.trade_buy_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"seller_id": 1, "seller_username": 1, "completed_at": 1}},
+        )
         raise HTTPException(status_code=400, detail="Cannot accept your own offer")
     seller = await db.users.find_one({"id": seller_id})
     if not seller:
@@ -549,10 +574,6 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": offer["points"]}})
-    await db.trade_buy_offers.update_one(
-        {"_id": ObjectId(offer_id)},
-        {"$set": {"status": "completed", "seller_id": seller_id, "seller_username": seller_username, "completed_at": datetime.now(timezone.utc)}}
-    )
     _invalidate_trade_caches()
     await log_activity(
         seller_id,
@@ -666,34 +687,44 @@ async def get_properties_for_sale(current_user: dict = Depends(get_current_user)
 async def buy_property(property_id: str, current_user: dict = Depends(get_current_user)):
     buyer_id = current_user["id"]
     buyer_username = current_user.get("username", "Unknown")
-    prop = await db.properties.find_one({"_id": ObjectId(property_id), "for_sale": True})
+    prop = await db.properties.find_one_and_update(
+        {"_id": ObjectId(property_id), "for_sale": True},
+        {"$set": {"for_sale": False}},
+    )
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found or not for sale")
     if prop.get("owner_id") == buyer_id:
+        await db.properties.update_one({"_id": ObjectId(property_id)}, {"$set": {"for_sale": True}})
         raise HTTPException(status_code=400, detail="Cannot buy your own property")
+    _restore = lambda: db.properties.update_one({"_id": ObjectId(property_id)}, {"$set": {"for_sale": True}})
     prop_type = prop.get("type") or ""
     if prop_type.startswith("casino_") or prop_type == "airport" or prop_type == "bullet_factory":
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
         prestige_level = int(current_user.get("prestige_level") or 0)
         if rank_id < CAPO_RANK_ID and prestige_level < 1:
+            await _restore()
             raise HTTPException(status_code=403, detail="You must be rank Capo or higher to buy a casino or property. Reach Capo to hold one.")
     buyer = await db.users.find_one({"id": buyer_id})
     if not buyer:
+        await _restore()
         raise HTTPException(status_code=404, detail="User not found")
     sale_price = prop.get("sale_price", 0)
     if prop.get("type") == "airport":
         owned = await _user_owns_any_property(buyer_id)
         if owned:
+            await _restore()
             raise HTTPException(status_code=400, detail="You may only own one property. Relinquish it first.")
     if prop.get("type") == "bullet_factory":
         owned = await _user_owns_any_property(buyer_id)
         if owned:
+            await _restore()
             raise HTTPException(status_code=400, detail="You may only own one property. Relinquish it first.")
     result = await db.users.update_one(
         {"id": buyer_id, "points": {"$gte": sale_price}},
         {"$inc": {"points": -sale_price}}
     )
     if result.modified_count == 0:
+        await _restore()
         raise HTTPException(status_code=400, detail="Insufficient points")
     if prop.get("owner_id"):
         await db.users.update_one({"id": prop["owner_id"]}, {"$inc": {"points": sale_price}})

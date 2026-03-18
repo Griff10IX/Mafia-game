@@ -684,6 +684,17 @@ JAIL_WHITELIST_PREFIXES = (
     "/api/hitlist/",
     "/api/armoury/",
     "/api/sports-betting/",
+    "/api/profile/",
+    "/api/boxing/",
+    "/api/racing/",
+    "/api/snake/",
+    "/api/gauntlet/",
+    "/api/minigames/",
+    "/api/minesweeper/",
+    "/api/battleships/",
+    "/api/the-getaway/",
+    "/api/family-run/",
+    "/api/whack-a-copper/",
 )
 
 
