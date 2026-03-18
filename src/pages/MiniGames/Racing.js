@@ -408,7 +408,7 @@ export default function Racing() {
   const handleAdminWipeTeams = async () => {
     if (!window.confirm("ADMIN: This will permanently delete ALL racing teams, cars, upgrades, races, championships, and data. Continue?")) return;
     try {
-      const r = await api.post("/api/racing/admin/wipe-all-teams");
+      const r = await api.post("/racing/admin/wipe-all-teams");
       const d = r.data?.deleted || {};
       toast.success(`Wiped: ${d.profiles ?? 0} profiles, ${d.cars ?? 0} cars, ${d.races ?? 0} races, ${d.championships ?? 0} championships`);
       fetchAll();
