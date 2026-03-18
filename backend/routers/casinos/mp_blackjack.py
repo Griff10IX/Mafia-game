@@ -2,7 +2,8 @@
 # Supports: ready-up system, elimination rounds, stable game listing
 from datetime import datetime, timezone
 from typing import List, Optional
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import uuid
 
 MP_BJ_TURN_SECONDS = 60
@@ -180,7 +181,7 @@ def register(router):
             if len(to_eliminate_ids) == len(active):
                 # Everyone tied (e.g. both have 21) — play another round, no elimination
                 new_deck = _mp_bj_make_deck()
-                random.shuffle(new_deck)
+                _rng.shuffle(new_deck)
                 for p in players:
                     if not p.get("eliminated"):
                         p["hand"] = []
@@ -287,7 +288,7 @@ def register(router):
                 next_round = int(game.get("current_round") or 1) + 1
                 # Reset hands for remaining players
                 new_deck = _mp_bj_make_deck()
-                random.shuffle(new_deck)
+                _rng.shuffle(new_deck)
                 for p in players:
                     if not p.get("eliminated"):
                         p["hand"] = []
@@ -342,7 +343,7 @@ def register(router):
             if tie_or_no_winner:
                 # Tie (e.g. both 21) or everyone bust — play another round: no refunds, back to ready
                 new_deck = _mp_bj_make_deck()
-                random.shuffle(new_deck)
+                _rng.shuffle(new_deck)
                 for p in players:
                     if not p.get("eliminated"):
                         p["hand"] = []
@@ -864,7 +865,7 @@ def register(router):
 
         # Deal cards
         deck = _mp_bj_make_deck()
-        random.shuffle(deck)
+        _rng.shuffle(deck)
         players, deck = _deal_round(players, deck)
 
         # Find first active player's turn

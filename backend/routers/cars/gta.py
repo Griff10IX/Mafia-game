@@ -2,7 +2,8 @@
 import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import uuid
 from typing import List, Optional, Dict
 from fastapi import Depends, HTTPException, Query
@@ -319,14 +320,14 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
     ev = await get_effective_event()
     success_rate = progress / 100.0
     gta_rate = success_rate * ev.get("gta_success", 1.0) * GTA_DIFFICULTY_MULT
-    success = random.random() < min(1.0, gta_rate)
+    success = _rng.random() < min(1.0, gta_rate)
     
     if success:
-        gain = random.randint(GTA_PROGRESS_GAIN_MIN, GTA_PROGRESS_GAIN_MAX)
+        gain = _rng.randint(GTA_PROGRESS_GAIN_MIN, GTA_PROGRESS_GAIN_MAX)
         progress_after = min(GTA_PROGRESS_MAX, progress + gain)
         progress_max = max(progress_max, progress_after)
     else:
-        drop = random.randint(
+        drop = _rng.randint(
             GTA_PROGRESS_DROP_PER_FAIL_MIN,
             GTA_PROGRESS_DROP_PER_FAIL_MAX
         )
@@ -393,18 +394,18 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         if _rare_boost > 0:
             _rarity_weights = {"common": 1.0, "uncommon": 1.0 + _rare_boost * 0.5, "rare": 1.0 + _rare_boost, "ultra_rare": 1.0 + _rare_boost * 1.5, "legendary": 1.0 + _rare_boost * 2.0, "exclusive": GTA_EXCLUSIVE_DROP_WEIGHT}
             _weights = [_rarity_weights.get(c.get("rarity", "common"), 1.0) for c in available_cars]
-            car = random.choices(available_cars, weights=_weights, k=1)[0]
+            car = _rng.choices(available_cars, weights=_weights, k=1)[0]
         else:
             if exclusive_car and available_cars and available_cars[-1].get("id") == GTA_EXCLUSIVE_CAR_ID:
                 _weights = [1.0] * (len(available_cars) - 1) + [GTA_EXCLUSIVE_DROP_WEIGHT]
-                car = random.choices(available_cars, weights=_weights, k=1)[0]
+                car = _rng.choices(available_cars, weights=_weights, k=1)[0]
             else:
-                car = random.choice(available_cars)
+                car = _rng.choice(available_cars)
         # Stolen car damage: 15–77% common; 0–14% uncommon but possible
-        if random.random() < 0.08:
-            damage_percent = random.randint(0, 14)
+        if _rng.random() < 0.08:
+            damage_percent = _rng.randint(0, 14)
         else:
-            damage_percent = random.randint(15, 77)
+            damage_percent = _rng.randint(15, 77)
         rank_points_map = {
             "common": 5,
             "uncommon": 10,
@@ -465,7 +466,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             await update_objectives_progress(current_user.get("id") or "", "gta", 1)
         except Exception:
             pass
-        msg = random.choice(GTA_SUCCESS_MESSAGES).format(car_name=car["name"])
+        msg = _rng.choice(GTA_SUCCESS_MESSAGES).format(car_name=car["name"])
         return GTAAttemptResponse(
             success=True,
             message=msg,
@@ -477,14 +478,14 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             respect_points=respect_earned,
         )
     # Failure: sometimes caught (jail), sometimes get away (no car, no jail)
-    caught = random.random() < GTA_CAUGHT_CHANCE
+    caught = _rng.random() < GTA_CAUGHT_CHANCE
     if caught:
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=option["jail_time"])
         await db.users.update_one(
             {"id": current_user.get("id") or ""},
             {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitch_attempted_this_term": False}},
         )
-        fail_msg = random.choice(GTA_FAIL_CAUGHT_MESSAGES).format(seconds=option["jail_time"])
+        fail_msg = _rng.choice(GTA_FAIL_CAUGHT_MESSAGES).format(seconds=option["jail_time"])
         return GTAAttemptResponse(
             success=False,
             message=fail_msg,
@@ -495,7 +496,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             progress_after=progress_after,
             respect_points=0,
         )
-    fail_msg = random.choice(GTA_FAIL_ESCAPED_MESSAGES)
+    fail_msg = _rng.choice(GTA_FAIL_ESCAPED_MESSAGES)
     return GTAAttemptResponse(
         success=False,
         message=fail_msg,
@@ -1462,7 +1463,7 @@ async def run_dealer_replenish_loop():
                     continue
                 r = c.get("rarity") or "common"
                 restock_chance = DEALER_RESTOCK_CHANCE_BY_RARITY.get(r, 0.8)
-                if random.random() > restock_chance:
+                if _rng.random() > restock_chance:
                     continue  # skip this car this cycle (high rarities often don't stock)
                 car_id = c["id"]
                 max_stock = _dealer_max_stock(c)
@@ -1472,7 +1473,7 @@ async def run_dealer_replenish_loop():
                     await db.dealer_stock.insert_many([{"car_id": car_id, "added_at": now} for _ in range(need)])
         except Exception as e:
             logger.exception("Dealer replenish loop: %s", e)
-        delay = random.uniform(DEALER_REPLENISH_MIN_SEC, DEALER_REPLENISH_MAX_SEC)
+        delay = _rng.uniform(DEALER_REPLENISH_MIN_SEC, DEALER_REPLENISH_MAX_SEC)
         await asyncio.sleep(delay)
 
 

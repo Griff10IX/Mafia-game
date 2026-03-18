@@ -2,7 +2,8 @@
 from datetime import datetime, timezone, timedelta
 import asyncio
 import logging
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import time
 import uuid
 import os
@@ -1139,10 +1140,10 @@ async def families_leave(current_user: dict = Depends(get_current_user)):
     _invalidate_my_cache(current_user["id"])
 
     # 50% chance of retribution: family sends a hitman; you get shot and lose up to 50% health (you don't die)
-    if random.random() < RETRIBUTION_CHANCE:
+    if _rng.random() < RETRIBUTION_CHANCE:
         user_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "health": 1})
         health = max(0, min(100, float(user_doc.get("health") or 100)))
-        loss_pct = random.uniform(0, RETRIBUTION_MAX_HEALTH_LOSS_PCT)
+        loss_pct = _rng.uniform(0, RETRIBUTION_MAX_HEALTH_LOSS_PCT)
         damage = health * loss_pct
         new_health = max(MIN_HEALTH_PCT, health - damage)
         await db.users.update_one({"id": current_user["id"]}, {"$set": {"health": new_health}})
@@ -1897,7 +1898,7 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     collect_result = await db.families.update_one(filter_cond, {"$set": {"rackets": rackets}, "$inc": {"treasury": income_final}})
     if collect_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Racket on cooldown")
-    msg = random.choice(FAMILY_RACKET_COLLECT_SUCCESS_MESSAGES).format(income=income_final)
+    msg = _rng.choice(FAMILY_RACKET_COLLECT_SUCCESS_MESSAGES).format(income=income_final)
     _invalidate_my_cache(current_user["id"])
     return {"message": msg, "amount": income_final}
 
@@ -2014,7 +2015,7 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
         income_per, _ = _racket_income_and_cooldown(request.racket_id, level, ev)
         take = int(income_per * FAMILY_RACKET_ATTACK_REVENUE_PCT)
         success_chance = max(FAMILY_RACKET_ATTACK_MIN_SUCCESS, FAMILY_RACKET_ATTACK_BASE_SUCCESS - level * FAMILY_RACKET_ATTACK_LEVEL_PENALTY)
-        success = random.random() < success_chance
+        success = _rng.random() < success_chance
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.family_racket_attacks.insert_one({"attacker_family_id": my_family_id, "target_family_id": request.family_id, "target_racket_id": request.racket_id, "last_at": now_iso})
         r_def = next((x for x in FAMILY_RACKETS if x["id"] == request.racket_id), None)
@@ -2033,11 +2034,11 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
                     await db.families.update_one({"id": my_family_id}, {"$inc": {"treasury": actual}})
                 else:
                     actual = 0
-            msg = random.choice(FAMILY_RACKET_RAID_SUCCESS_MESSAGES).format(amount=actual, family_name=family_name, racket_name=racket_name)
+            msg = _rng.choice(FAMILY_RACKET_RAID_SUCCESS_MESSAGES).format(amount=actual, family_name=family_name, racket_name=racket_name)
             _invalidate_list_cache()
             _invalidate_my_cache(current_user["id"])
             return {"success": True, "message": msg, "amount": actual}
-        fail_msg = random.choice(FAMILY_RACKET_RAID_FAIL_MESSAGES).format(family_name=family_name, racket_name=racket_name)
+        fail_msg = _rng.choice(FAMILY_RACKET_RAID_FAIL_MESSAGES).format(family_name=family_name, racket_name=racket_name)
         return {"success": False, "message": fail_msg, "amount": 0}
 
 

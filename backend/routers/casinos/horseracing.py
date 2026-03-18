@@ -1,7 +1,8 @@
 # Casino Horse Racing (racetrack): config, ownership, claim, relinquish, set-max-bet, set-buy-back, send-to-user, sell-on-trade, race, history, buy-back
 from datetime import datetime, timezone, timedelta
 import re
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import time
 import uuid
 from pydantic import BaseModel
@@ -103,8 +104,8 @@ def _horseracing_pick_winner() -> dict:
     weights = [1.0 / max(1, h.get("odds") or 1) for h in horses]
     total = sum(weights)
     if total <= 0:
-        return random.choice(horses)
-    r = random.uniform(0, total)
+        return _rng.choice(horses)
+    r = _rng.uniform(0, total)
     acc = 0
     for h, w in zip(horses, weights):
         acc += w
@@ -125,19 +126,19 @@ def _horseracing_finish_order(winner_id: int):
     # Sort 2nd–7th by weighted random: better (lower odds) horses tend to finish ahead
     order_others = sorted(
         others,
-        key=lambda h: (random.random() * 0.4 + 1.0 / max(1, h.get("odds") or 1)),
+        key=lambda h: (_rng.random() * 0.4 + 1.0 / max(1, h.get("odds") or 1)),
         reverse=True,
     )
     finish_order_ids = [winner["id"]] + [h["id"] for h in order_others]
 
     # Race closeness: ~15% neck-and-neck, ~55% medium, ~30% blowout
-    r = random.random()
+    r = _rng.random()
     if r < 0.15:
-        margins = [random.uniform(0.2, 0.8) for _ in range(6)]
+        margins = [_rng.uniform(0.2, 0.8) for _ in range(6)]
     elif r < 0.70:
-        margins = [random.uniform(0.8, 2.8) for _ in range(6)]
+        margins = [_rng.uniform(0.8, 2.8) for _ in range(6)]
     else:
-        margins = [random.uniform(3, 12) for _ in range(6)]
+        margins = [_rng.uniform(3, 12) for _ in range(6)]
 
     positions = [100.0]
     for m in margins:

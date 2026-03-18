@@ -1,7 +1,8 @@
 # Crack the Safe: jackpot game. Every attempt costs 1M. No free entries, no purchasable extra. Admins unlimited.
 # Reward pool: cash jackpot (always) + 25% chance for 1 bonus token (Crimes XP, GTA XP, Melt, etc.)
-from datetime import datetime, timezone
-import random
+from datetime import datetime, timedelta, timezone
+import secrets
+_rng = secrets.SystemRandom()
 from typing import List
 
 from pydantic import BaseModel, field_validator
@@ -26,6 +27,7 @@ SAFE_JACKPOT_PER_ATTEMPT = 250_000  # Jackpot increases by exactly 250K per atte
 SAFE_DIGITS = 5
 SAFE_MIN = 1
 SAFE_MAX = 9
+SAFE_GUESS_COOLDOWN_SECONDS = 10
 
 
 class SafeGuessRequest(BaseModel):
@@ -45,7 +47,7 @@ class SafeGuessRequest(BaseModel):
 async def _get_or_create_safe():
     safe = await db.safe_game.find_one({})
     if not safe:
-        combo = [random.randint(SAFE_MIN, SAFE_MAX) for _ in range(SAFE_DIGITS)]
+        combo = [_rng.randint(SAFE_MIN, SAFE_MAX) for _ in range(SAFE_DIGITS)]
         doc = {
             "combination": combo,
             "jackpot": SAFE_JACKPOT_SEED,
@@ -120,6 +122,12 @@ def register(router):
             desc = (_token_desc.get(t, "1h bonus") + " — 1–3 types, 1–2 each (25% chance)")
             possible_rewards.append({"id": t, "name": name, "desc": desc})
 
+        cd = user.get("crack_safe_cooldown_until")
+        now = datetime.now(timezone.utc)
+        next_guess_at = None
+        if not is_admin and cd and isinstance(cd, datetime) and cd > now:
+            next_guess_at = cd.isoformat()
+
         base = {
             "jackpot": safe.get("jackpot", SAFE_JACKPOT_SEED),
             "total_attempts": total_attempts,
@@ -127,7 +135,7 @@ def register(router):
             "last_won_at": safe.get("last_won_at").isoformat() if safe.get("last_won_at") else None,
             "last_winners": winners,
             "can_guess": can_guess if not is_admin else True,
-            "next_guess_at": None,
+            "next_guess_at": next_guess_at,
             "entry_cost": SAFE_ENTRY_COST,
             "clues": clues,
             "is_admin": is_admin,
@@ -144,10 +152,20 @@ def register(router):
         now = datetime.now(timezone.utc)
         is_admin = _is_admin(user)
 
+        if not is_admin:
+            cd = user.get("crack_safe_cooldown_until")
+            if cd and isinstance(cd, datetime) and cd > now:
+                remaining = int((cd - now).total_seconds()) + 1
+                raise HTTPException(status_code=400, detail=f"Wait {remaining}s before your next guess.")
+
         if user.get("money", 0) < SAFE_ENTRY_COST:
             raise HTTPException(status_code=400, detail=f"You need ${SAFE_ENTRY_COST:,} to attempt to crack the safe.")
 
-        await db.users.update_one({"id": user.get("id") or ""}, {"$inc": {"money": -SAFE_ENTRY_COST}})
+        cooldown_until = now + timedelta(seconds=SAFE_GUESS_COOLDOWN_SECONDS)
+        await db.users.update_one(
+            {"id": user.get("id") or ""},
+            {"$inc": {"money": -SAFE_ENTRY_COST}, "$set": {"crack_safe_cooldown_until": cooldown_until}},
+        )
 
         await db.safe_game.update_one({}, {"$inc": {"jackpot": SAFE_JACKPOT_PER_ATTEMPT, "total_attempts": 1}})
 
@@ -176,17 +194,17 @@ def register(router):
 
             # 25% chance for 1–3 different token types, each 1–2 amount
             bonus_tokens = []
-            if random.random() < SAFE_TOKEN_REWARD_CHANCE:
+            if _rng.random() < SAFE_TOKEN_REWARD_CHANCE:
                 try:
                     from routers.kill.armoury import TOKEN_CONFIG
                     types_list = list(SAFE_TOKEN_REWARD_TYPES)
-                    num_types = random.randint(SAFE_TOKEN_REWARD_MIN_TYPES, SAFE_TOKEN_REWARD_MAX_TYPES)
-                    chosen = random.sample(types_list, min(num_types, len(types_list)))
+                    num_types = _rng.randint(SAFE_TOKEN_REWARD_MIN_TYPES, SAFE_TOKEN_REWARD_MAX_TYPES)
+                    chosen = _rng.sample(types_list, min(num_types, len(types_list)))
                     incs = {}
                     for token_type in chosen:
                         cfg = TOKEN_CONFIG.get(token_type)
                         if cfg:
-                            amt = random.randint(SAFE_TOKEN_REWARD_MIN_AMOUNT, SAFE_TOKEN_REWARD_MAX_AMOUNT)
+                            amt = _rng.randint(SAFE_TOKEN_REWARD_MIN_AMOUNT, SAFE_TOKEN_REWARD_MAX_AMOUNT)
                             count_field = cfg["count_field"]
                             incs[count_field] = incs.get(count_field, 0) + amt
                             bonus_tokens.append({"token_type": token_type, "amount": amt})
@@ -195,7 +213,7 @@ def register(router):
                 except Exception:
                     pass
 
-            new_combo = [random.randint(SAFE_MIN, SAFE_MAX) for _ in range(SAFE_DIGITS)]
+            new_combo = [_rng.randint(SAFE_MIN, SAFE_MAX) for _ in range(SAFE_DIGITS)]
             await db.safe_game.update_one(
                 {},
                 {"$set": {
@@ -235,7 +253,7 @@ def register(router):
         clues = _generate_clues(fresh.get("combination") or [], fresh.get("total_attempts", 0))
 
         # Only sometimes reveal how many digits were in the correct position (randomly, not every attempt)
-        show_position_hint = random.random() < 0.5
+        show_position_hint = _rng.random() < 0.5
         message = (
             f"Wrong combination. {correct_positions} number{'s' if correct_positions != 1 else ''} in the correct position."
             if show_position_hint

@@ -1,7 +1,8 @@
 # Casino Roulette: config, ownership, claim, relinquish, set-max-bet, send-to-user, sell-on-trade, spin, buy-back
 from datetime import datetime, timezone, timedelta
 import re
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import time
 import uuid
 from typing import Optional, Union
@@ -469,7 +470,7 @@ def register(router):
         )
         if not debit_res:
             raise HTTPException(status_code=400, detail="Not enough money")
-        result = random.randint(0, 36)
+        result = _rng.randint(0, 36)
         total_payout = 0
         for bet in validated_bets:
             if _roulette_check_bet_win(bet["type"], bet["selection"], result):

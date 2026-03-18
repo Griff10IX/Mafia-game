@@ -3,7 +3,8 @@
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 from pydantic import BaseModel
-import random
+import secrets
+_rng = secrets.SystemRandom()
 
 from fastapi import Depends, HTTPException
 
@@ -331,8 +332,8 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     # Risk event: if money has been capped for a while, chance to lose a slice
     risk_event = None
     if hours_passed >= RISK_HOURS_THRESHOLD and total_income >= total_base_cap * 0.99:
-        if random.random() < RISK_EVENT_CHANCE:
-            loss_pct = random.uniform(RISK_LOSS_MIN, RISK_LOSS_MAX)
+        if _rng.random() < RISK_EVENT_CHANCE:
+            loss_pct = _rng.uniform(RISK_LOSS_MIN, RISK_LOSS_MAX)
             loss_amount = income * loss_pct
             income -= loss_amount
             risk_event = {

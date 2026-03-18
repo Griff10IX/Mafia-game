@@ -1,6 +1,7 @@
 # Racket (property extortion) endpoints: extort, targets
 from datetime import datetime, timezone, timedelta
-import random
+import secrets
+_rng = secrets.SystemRandom()
 from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException
@@ -50,7 +51,7 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
             raise HTTPException(status_code=400, detail="Must wait 2 hours between attacks on the same property")
     defender_level = target_property.get("level", 1)
     success_chance = max(PROPERTY_ATTACK_MIN_SUCCESS, PROPERTY_ATTACK_BASE_SUCCESS - defender_level * PROPERTY_ATTACK_LEVEL_PENALTY)
-    success = random.random() < success_chance
+    success = _rng.random() < success_chance
     if success:
         revenue_12h = prop["income_per_hour"] * defender_level * PROPERTY_ATTACK_HOURS
         extortion_amount = int(revenue_12h * PROPERTY_ATTACK_REVENUE_PCT)

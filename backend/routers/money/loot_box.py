@@ -1,6 +1,7 @@
 # Loot box: 100 pieces = 1 open. Box gives 1-2, 1-3, or 1-5 prizes by rarity. Exclusives very rare (~2%); standard rewards common.
 import logging
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any, Tuple
@@ -285,13 +286,13 @@ def _roll_box_quality_from_config(config: Dict[str, Any]) -> Tuple[str, int]:
         total = 100
     probs = [(c / total, (1, 2)), (u / total, (1, 3)), (r / total, (1, 5))]
     names = ["common", "uncommon", "rare"]
-    roll = random.random()
+    roll = _rng.random()
     acc = 0.0
     for i, (p, (lo, hi)) in enumerate(probs):
         acc += p
         if roll <= acc:
-            return (names[i], random.randint(lo, hi))
-    return ("rare", random.randint(1, 5))
+            return (names[i], _rng.randint(lo, hi))
+    return ("rare", _rng.randint(1, 5))
 
 
 async def open_loot_box(
@@ -367,7 +368,7 @@ async def open_loot_box(
         chosen_standard_types: set = set()  # diversify: avoid same type twice in one open
         for _ in range(num_prizes):
             claimed = await _get_claimed_counts()
-            roll = random.random()
+            roll = _rng.random()
             if roll < exclusive_chance:
                 available = []
                 if claimed["weapon"] < EXCLUSIVE_CAP_PER_TYPE and not await _user_has_loot_exclusive_weapon(user_id):
@@ -384,7 +385,7 @@ async def open_loot_box(
                     if not await _user_has_exclusive_property(user_id):
                         available.append("property")
                 if available:
-                    typ = random.choice(available)
+                    typ = _rng.choice(available)
                     if typ == "weapon":
                         await db.user_weapons.update_one(
                             {"user_id": user_id, "weapon_id": LOOT_EXCLUSIVE_WEAPON_ID},
@@ -453,7 +454,7 @@ async def open_loot_box(
                 available = list(STANDARD_REWARD_WEIGHTS)
             weights = [w for _, w in available]
             total_w = sum(weights)
-            r = random.random() * total_w
+            r = _rng.random() * total_w
             acc = 0
             chosen = available[0][0]
             for name, w in available:
@@ -464,16 +465,16 @@ async def open_loot_box(
             chosen_standard_types.add(chosen)
 
             if chosen == "points":
-                amount = random.choice([10, 30, 50]) if random.random() < 0.6 else random.randint(1, 200)
+                amount = _rng.choice([10, 30, 50]) if _rng.random() < 0.6 else _rng.randint(1, 200)
                 amount = min(200, amount)
                 merged_inc["points"] = merged_inc.get("points", 0) + amount
                 rewards.append({"type": "points", "amount": amount, "rarity": "standard"})
             elif chosen == "rank_points":
-                amount = random.randint(100, 5000)
+                amount = _rng.randint(100, 5000)
                 merged_inc["rank_points"] = merged_inc.get("rank_points", 0) + amount
                 rewards.append({"type": "rank_points", "amount": amount, "rarity": "standard"})
             elif chosen == "cash":
-                amount = random.randint(25_000, 6_250_000)  # 75% reduction for beta
+                amount = _rng.randint(25_000, 6_250_000)  # 75% reduction for beta
                 merged_inc["money"] = merged_inc.get("money", 0) + amount
                 rewards.append({"type": "cash", "amount": amount, "rarity": "standard"})
             elif chosen == "cars":
@@ -482,35 +483,35 @@ async def open_loot_box(
                     pool = [c for c in CARS if c.get("id") != LOOT_EXCLUSIVE_CAR_ID and c.get("rarity") != "loot_exclusive"]
                 if not pool:
                     # No cars available (e.g. CARS empty); give cash instead
-                    amount = random.randint(25_000, 6_250_000)  # 75% reduction for beta
+                    amount = _rng.randint(25_000, 6_250_000)  # 75% reduction for beta
                     merged_inc["money"] = merged_inc.get("money", 0) + amount
                     rewards.append({"type": "cash", "amount": amount, "rarity": "standard"})
                 else:
-                    count = random.randint(2, 5)
+                    count = _rng.randint(2, 5)
                     items = []
                     for _ in range(count):
-                        car = random.choice(pool)
+                        car = _rng.choice(pool)
                         await db.user_cars.insert_one({
                             "id": str(uuid.uuid4()),
                             "user_id": user_id,
                             "car_id": car["id"],
                             "car_name": car.get("name", car["id"]),
                             "acquired_at": now.isoformat(),
-                            "damage_percent": random.randint(0, 30),
+                            "damage_percent": _rng.randint(0, 30),
                         })
                         items.append({"name": car.get("name", car["id"]), "rarity": car.get("rarity", "common")})
                     rewards.append({"type": "cars", "count": count, "items": items, "rarity": "standard"})
             elif chosen == "bullets":
-                amount = random.randint(50, 10_000)
+                amount = _rng.randint(50, 10_000)
                 merged_inc["bullets"] = merged_inc.get("bullets", 0) + amount
                 rewards.append({"type": "bullets", "amount": amount, "rarity": "standard"})
             elif chosen == "tokens":
-                token_type = random.choice(LOOT_BOX_TOKEN_TYPES)
+                token_type = _rng.choice(LOOT_BOX_TOKEN_TYPES)
                 field = TOKEN_CONFIG[token_type]["count_field"]
                 merged_inc[field] = merged_inc.get(field, 0) + 1
                 rewards.append({"type": "token", "token_type": token_type, "amount": 1, "rarity": "standard"})
             else:
-                perk = random.choice(PERK_TYPES)
+                perk = _rng.choice(PERK_TYPES)
                 if perk == "property_income_10":
                     merged_set["property_income_perk_until"] = _stacked_perk_until(merged_set, current_user, "property_income_perk_until", now)
                 elif perk == "rp_10":

@@ -2,7 +2,8 @@
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 import uuid
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import logging
 from pydantic import BaseModel
 
@@ -275,7 +276,7 @@ def _attacker_strength(user: dict) -> float:
 
 
 def _raid_win_probability(attacker_str: float, defender_str: float) -> float:
-    variance = 1.0 + random.uniform(-RAID_VARIANCE, RAID_VARIANCE)
+    variance = 1.0 + _rng.uniform(-RAID_VARIANCE, RAID_VARIANCE)
     a = attacker_str * variance
     d = max(1.0, defender_str)
     return a / (a + d)
@@ -497,8 +498,8 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
         updates["last_extras_collected_at"] = now.isoformat()
     respect_earned = min(100, max(0, int(income * 0.001 * ib_mult))) if grant_extras else 0
     bullets_earned = max(1, int((1 + min(level + security_level, 9)) * ib_mult)) if grant_extras else 0
-    points_earned = int((random.randint(1, 5) if level >= 3 else 0) * ib_mult) if grant_extras else 0
-    loot_pieces_earned = (random.randint(1, 2) if random.random() < 0.05 else 0) if grant_extras else 0
+    points_earned = int((_rng.randint(1, 5) if level >= 3 else 0) * ib_mult) if grant_extras else 0
+    loot_pieces_earned = (_rng.randint(1, 2) if _rng.random() < 0.05 else 0) if grant_extras else 0
     inc = {"illegal_business_collections": 1}
     if respect_earned > 0:
         inc["respect_points"] = respect_earned
@@ -509,8 +510,8 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
     if loot_pieces_earned > 0:
         inc["loot_box_pieces"] = loot_pieces_earned
     # Ultra-rare token drop (0.001% = 1 in 100,000) - same as crimes
-    if random.random() < 0.00001:
-        token_type = random.choice(TOKEN_TYPES)
+    if _rng.random() < 0.00001:
+        token_type = _rng.choice(TOKEN_TYPES)
         field = TOKEN_CONFIG[token_type]["count_field"]
         inc[field] = inc.get(field, 0) + 1
     booze_earned = 0
@@ -817,7 +818,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
     defender_str = _business_defender_strength(business, guards)
     attacker_str = _attacker_strength(current_user)
     win_prob = _raid_win_probability(attacker_str, defender_str)
-    won = random.random() < win_prob
+    won = _rng.random() < win_prob
     now = datetime.now(timezone.utc).isoformat()
     cooldowns_new = dict(cooldowns)
     cooldowns_new[target_id] = now

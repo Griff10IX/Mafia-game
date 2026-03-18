@@ -1,7 +1,8 @@
 # Organised Crime endpoints: equipment, heists, team management
 import logging
 from datetime import datetime, timezone, timedelta
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import uuid
 from typing import Optional
 from fastapi import Depends, HTTPException
@@ -319,7 +320,7 @@ async def run_heist(
     
     # Success chance from job base + equipment bonus (capped 92%); ensures equipment always helps
     success_rate = min(0.92, job["base_success_rate"] + equipment["success_bonus"])
-    success = random.random() < success_rate
+    success = _rng.random() < success_rate
     
     now = datetime.now(timezone.utc)
     
@@ -357,7 +358,7 @@ async def run_heist(
             upsert=True
         )
         
-        msg = random.choice(OC_HEIST_SUCCESS_MESSAGES).format(
+        msg = _rng.choice(OC_HEIST_SUCCESS_MESSAGES).format(
             reward=job["reward"], rank_points=job["rank_points"]
         )
         return HeistResponse(
@@ -370,7 +371,7 @@ async def run_heist(
     
     else:
         # Failure — 50% jail, 50% escape
-        goes_to_jail = random.random() < OC_JAIL_CHANCE_ON_FAIL
+        goes_to_jail = _rng.random() < OC_JAIL_CHANCE_ON_FAIL
         
         # Track failed heist
         await db.user_organised_crime.update_one(
@@ -399,7 +400,7 @@ async def run_heist(
                 }
             )
             
-            msg = random.choice(OC_HEIST_FAIL_CAUGHT_MESSAGES).format(jail_time=jail_time_sec)
+            msg = _rng.choice(OC_HEIST_FAIL_CAUGHT_MESSAGES).format(jail_time=jail_time_sec)
             return HeistResponse(
                 success=False,
                 message=msg,
@@ -414,7 +415,7 @@ async def run_heist(
                 {"id": current_user["id"]},
                 {"$inc": {"total_heists": 1}}
             )
-            msg = random.choice(OC_HEIST_FAIL_ESCAPED_MESSAGES)
+            msg = _rng.choice(OC_HEIST_FAIL_ESCAPED_MESSAGES)
             return HeistResponse(
                 success=False,
                 message=msg,

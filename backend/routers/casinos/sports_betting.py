@@ -2,7 +2,8 @@
 from datetime import datetime, timezone, timedelta
 import asyncio
 import time
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import os
 import uuid
 from typing import List, Optional
@@ -316,9 +317,9 @@ async def _fetch_football_events_thesportsdb() -> list:
                                 "name": name,
                                 "category": "Football",
                                 "options": [
-                                    {"id": "home_" + opt_h, "name": home, "odds": round(2.0 + random.uniform(0.2, 1.2), 2)},
-                                    {"id": "draw", "name": "Draw", "odds": round(3.0 + random.uniform(0.1, 0.6), 2)},
-                                    {"id": "away_" + opt_a, "name": away, "odds": round(2.0 + random.uniform(0.2, 1.2), 2)},
+                                    {"id": "home_" + opt_h, "name": home, "odds": round(2.0 + _rng.uniform(0.2, 1.2), 2)},
+                                    {"id": "draw", "name": "Draw", "odds": round(3.0 + _rng.uniform(0.1, 0.6), 2)},
+                                    {"id": "away_" + opt_a, "name": away, "odds": round(2.0 + _rng.uniform(0.2, 1.2), 2)},
                                 ],
                             })
                         if out:

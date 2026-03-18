@@ -1,7 +1,8 @@
 # Organised Crime: team heists (Driver, Weapons, Explosives, Hacker), 4 job types, 6h/4h cooldown
 from datetime import datetime, timezone, timedelta
 from typing import Optional
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import re
 import os
 import sys
@@ -515,14 +516,14 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     ev = await get_effective_event()
     rank_mult = float(ev.get("rank_points", 1.0))
     cash_mult = float(ev.get("kill_cash", 1.0))
-    success = random.random() < OC_SUCCESS_RATE
+    success = _rng.random() < OC_SUCCESS_RATE
     new_cooldown_until = now + timedelta(hours=cooldown_hours)
     await db.users.update_one(
         {"id": uid},
         {"$set": {"oc_cooldown_until": new_cooldown_until.isoformat()}},
     )
     if not success:
-        goes_to_jail = random.random() < OC_JAIL_CHANCE_ON_FAIL
+        goes_to_jail = _rng.random() < OC_JAIL_CHANCE_ON_FAIL
         if goes_to_jail:
             jail_until = now + timedelta(seconds=OC_JAIL_SECONDS_TEAM)
             unbreakable_until = now + timedelta(seconds=60)
@@ -530,7 +531,7 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
                 {"id": uid},
                 {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "unbreakable_until": unbreakable_until.isoformat(), "snitch_attempted_this_term": False}},
             )
-            msg = random.choice(OC_TEAM_HEIST_JAIL_MESSAGES).format(jail_time=OC_JAIL_SECONDS_TEAM)
+            msg = _rng.choice(OC_TEAM_HEIST_JAIL_MESSAGES).format(jail_time=OC_JAIL_SECONDS_TEAM)
             return {
                 "success": False,
                 "message": msg,
@@ -540,7 +541,7 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
             }
         return {
             "success": False,
-            "message": random.choice(OC_TEAM_HEIST_FAIL_MESSAGES),
+            "message": _rng.choice(OC_TEAM_HEIST_FAIL_MESSAGES),
             "cooldown_until": new_cooldown_until.isoformat(),
         }
     user_ids = [r for r in resolved if r is not None]
@@ -611,7 +612,7 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
                     {"id": referred_by},
                     {"$inc": {"money": referral_cash, "referral_earnings_oc": referral_cash}},
                 )
-    msg = random.choice(OC_TEAM_HEIST_SUCCESS_MESSAGES).format(job_name=job["name"])
+    msg = _rng.choice(OC_TEAM_HEIST_SUCCESS_MESSAGES).format(job_name=job["name"])
     return {
         "success": True,
         "message": msg,

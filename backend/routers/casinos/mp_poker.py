@@ -2,7 +2,8 @@
 # Real rules: blinds, preflop, flop, turn, river, betting rounds, showdown
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import uuid
 import itertools
 
@@ -361,7 +362,7 @@ def register(router):
             await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"players": players}})
             await _vs_dealer_advance_street(game_id)
             return await db.mp_poker_games.find_one({"id": game_id})
-        if cat >= HAND_PAIR and bot_stack >= min_raise and random.random() < 0.6:
+        if cat >= HAND_PAIR and bot_stack >= min_raise and _rng.random() < 0.6:
             raise_amt = min(min_raise, bot_stack)
             bot["stack"] -= raise_amt
             bot["current_bet"] = int(bot.get("current_bet") or 0) + raise_amt
@@ -378,7 +379,7 @@ def register(router):
             if human.get("status") == "all_in":
                 await _vs_dealer_run_out_all_in(game_id)
             return await db.mp_poker_games.find_one({"id": game_id})
-        elif call_amount <= bot_stack and (call_amount <= int(g.get("big_blind") or 0) * 2 or cat >= HAND_PAIR or random.random() < 0.5):
+        elif call_amount <= bot_stack and (call_amount <= int(g.get("big_blind") or 0) * 2 or cat >= HAND_PAIR or _rng.random() < 0.5):
             bot["stack"] -= call_amount
             bot["current_bet"] = int(bot.get("current_bet") or 0) + call_amount
             bot["total_bet_this_hand"] = int(bot.get("total_bet_this_hand") or 0) + call_amount
@@ -422,7 +423,7 @@ def register(router):
             raise HTTPException(status_code=400, detail="Need at least 4x blind to play")
         game_id = str(uuid.uuid4())
         deck = _make_deck()
-        random.shuffle(deck)
+        _rng.shuffle(deck)
         human_stack = blind * 20
         bot_stack = blind * 20
         human = {
@@ -1016,7 +1017,7 @@ def register(router):
         if not all(p.get("ready") for p in players) or len(players) < 2:
             raise HTTPException(status_code=400, detail="Not all ready")
         deck = _make_deck()
-        random.shuffle(deck)
+        _rng.shuffle(deck)
         sb = int(g.get("small_blind") or 1)
         bb = int(g.get("big_blind") or 2)
         button_index = int(g.get("button_index") or 0)

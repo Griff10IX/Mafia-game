@@ -1,7 +1,8 @@
 # Casino MDG (Pot Game): create game (fee points/money/both), join, list; one winner takes pot; auto-roll when N spots filled
 from datetime import datetime, timezone
 from typing import Optional
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import uuid
 
 from pydantic import BaseModel
@@ -182,7 +183,7 @@ def register(router):
             # Build pool preserving order, only alive players
             alive_entries = [e for e in new_entries if e["user_id"] in alive_ids]
             pool = alive_entries if alive_entries else new_entries
-            roll = random.randint(1, len(pool))
+            roll = _rng.randint(1, len(pool))
             winner_entry = pool[roll - 1]  # roll is 1-indexed, list is 0-indexed
             winner_id = winner_entry["user_id"]
             winner_user = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
@@ -231,7 +232,7 @@ def register(router):
         # Build pool preserving order, only alive players
         alive_entries = [e for e in entries if e["user_id"] in alive_ids]
         pool = alive_entries if alive_entries else entries
-        roll = random.randint(1, len(pool))
+        roll = _rng.randint(1, len(pool))
         winner_entry = pool[roll - 1]  # roll is 1-indexed, list is 0-indexed
         winner_id = winner_entry["user_id"]
         winner_user = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})

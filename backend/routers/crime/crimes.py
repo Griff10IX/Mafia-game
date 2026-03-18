@@ -2,7 +2,8 @@
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import os
 import sys
 import logging
@@ -429,7 +430,7 @@ def _apply_prestige_bonus(crime: dict, user: dict) -> dict:
         trigger = True
         mult = float(multiplier)
     elif rare_chance is not None:
-        trigger = random.random() < float(rare_chance)
+        trigger = _rng.random() < float(rare_chance)
         mult = 1.0
     else:
         return {}
@@ -439,23 +440,23 @@ def _apply_prestige_bonus(crime: dict, user: dict) -> dict:
 
     if "cash" in bonus:
         lo, hi = bonus["cash"]
-        earned["cash"] = max(1, int(random.randint(lo, hi) * mult))
+        earned["cash"] = max(1, int(_rng.randint(lo, hi) * mult))
     if "respect_points" in bonus:
         lo, hi = bonus["respect_points"]
-        earned["respect_points"] = max(1, int(random.randint(lo, hi) * mult))
+        earned["respect_points"] = max(1, int(_rng.randint(lo, hi) * mult))
     if "booze" in bonus:
         b = bonus["booze"]
-        amt = max(1, int(random.randint(b["min"], b["max"]) * mult))
+        amt = max(1, int(_rng.randint(b["min"], b["max"]) * mult))
         earned["booze"] = {"id": b["id"], "amount": amt}
     if "bullets" in bonus:
         lo, hi = bonus["bullets"]
-        earned["bullets"] = max(1, int(random.randint(lo, hi) * mult))
+        earned["bullets"] = max(1, int(_rng.randint(lo, hi) * mult))
     if "molotovs" in bonus:
         lo, hi = bonus["molotovs"]
-        earned["molotovs"] = max(1, int(random.randint(lo, hi) * mult))
+        earned["molotovs"] = max(1, int(_rng.randint(lo, hi) * mult))
     if "points" in bonus:
         lo, hi = bonus["points"]
-        earned["points"] = max(1, int(random.randint(lo, hi) * mult))
+        earned["points"] = max(1, int(_rng.randint(lo, hi) * mult))
     return earned
 
 
@@ -500,14 +501,14 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
     else:
         progress_max = max(progress, _progress_from_attempts(crime_attempts))
     success_rate = (progress / 100.0) * CRIME_DIFFICULTY_MULT
-    success = random.random() < success_rate
+    success = _rng.random() < success_rate
 
     if success:
-        gain = random.randint(CRIME_PROGRESS_GAIN_MIN, CRIME_PROGRESS_GAIN_MAX)
+        gain = _rng.randint(CRIME_PROGRESS_GAIN_MIN, CRIME_PROGRESS_GAIN_MAX)
         progress_after = min(CRIME_PROGRESS_MAX, progress + gain)
         progress_max = max(progress_max, progress_after)
     else:
-        drop = random.randint(
+        drop = _rng.randint(
             CRIME_PROGRESS_DROP_PER_FAIL_MIN,
             CRIME_PROGRESS_DROP_PER_FAIL_MAX
         )
@@ -523,7 +524,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         r_max = int(crime.get("reward_max", 100))
         if r_max < r_min:
             r_max = r_min
-        reward = random.randint(r_min, r_max)
+        reward = _rng.randint(r_min, r_max)
         rank_points = (
             3 if crime["crime_type"] == "petty"
             else 7 if crime["crime_type"] == "medium"
@@ -579,20 +580,20 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
             inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_CRIMES_MULT))
         # Global ultra-rare molotov drop from any successful crime
         prestige_bonus_earned: Optional[dict] = None
-        if random.random() < MOLOTOV_GLOBAL_DROP_CHANCE:
+        if _rng.random() < MOLOTOV_GLOBAL_DROP_CHANCE:
             inc["molotovs"] = inc.get("molotovs", 0) + MOLOTOV_GLOBAL_DROP_AMOUNT
             prestige_bonus_earned = {"molotovs": MOLOTOV_GLOBAL_DROP_AMOUNT}
         # Global ultra-rare loot box piece drop with slightly higher chance on prestige crimes
         loot_piece_chance = LOOT_PIECE_CHANCE_PRESTIGE if crime.get("crime_type") == "prestige" else LOOT_PIECE_CHANCE_NORMAL
-        if random.random() < loot_piece_chance:
+        if _rng.random() < loot_piece_chance:
             inc["loot_box_pieces"] = inc.get("loot_box_pieces", 0) + LOOT_PIECE_AMOUNT
             if prestige_bonus_earned is None:
                 prestige_bonus_earned = {"loot_box_pieces": LOOT_PIECE_AMOUNT}
             else:
                 prestige_bonus_earned["loot_box_pieces"] = prestige_bonus_earned.get("loot_box_pieces", 0) + LOOT_PIECE_AMOUNT
         # Ultra-rare random token drop (1 in 100,000)
-        if random.random() < TOKEN_GLOBAL_DROP_CHANCE:
-            token_type = random.choice(TOKEN_TYPES)
+        if _rng.random() < TOKEN_GLOBAL_DROP_CHANCE:
+            token_type = _rng.choice(TOKEN_TYPES)
             token_field = TOKEN_CONFIG[token_type]["count_field"]
             inc[token_field] = inc.get(token_field, 0) + 1
             if prestige_bonus_earned is None:
@@ -693,11 +694,11 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                 await update_objectives_progress(current_user["id"], "crimes_in_city", 1, city=city)
         except Exception:
             pass
-        message = random.choice(CRIME_SUCCESS_MESSAGES).format(reward=reward, rank_points=rank_points)
+        message = _rng.choice(CRIME_SUCCESS_MESSAGES).format(reward=reward, rank_points=rank_points)
     else:
         reward = None
         prestige_bonus_earned = None
-        message = random.choice(CRIME_FAIL_MESSAGES)
+        message = _rng.choice(CRIME_FAIL_MESSAGES)
         respect_earned = 0
     cooldown_min = crime.get("cooldown_minutes", 5)
     cooldown_seconds = crime.get("cooldown_seconds")

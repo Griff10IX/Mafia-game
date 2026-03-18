@@ -1,7 +1,8 @@
 # Casino Video Poker (Jacks or Better): config, ownership, claim, relinquish, set-max-bet, set-buy-back, send-to-user, sell-on-trade, deal, draw, game, history, buy-back
 from datetime import datetime, timezone, timedelta
 import re
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import time
 import uuid
 from collections import Counter
@@ -502,7 +503,7 @@ def register(router):
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": bet}})
             raise HTTPException(status_code=400, detail="Finish your current game first")
         deck = _make_deck()
-        random.shuffle(deck)
+        _rng.shuffle(deck)
         hand = [deck.pop() for _ in range(5)]
         if owner_id:
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})

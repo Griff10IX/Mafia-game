@@ -1,7 +1,8 @@
 # Casino Dice: config, play, claim, relinquish, set-max-bet, set-buy-back, reset-profit, sell-on-trade, buy-back, send-to-user
 from datetime import datetime, timezone, timedelta
 import re
-import random
+import secrets
+_rng = secrets.SystemRandom()
 
 import uuid
 import time
@@ -230,7 +231,7 @@ def register(router):
             raise HTTPException(status_code=400, detail="Not enough cash")
         player_money = int((debit_result.get("money") or 0) or 0)
         payout_full = int(stake * sides * (1 - DICE_HOUSE_EDGE))
-        roll = random.randint(1, sides)
+        roll = _rng.randint(1, sides)
         win = roll == chosen
         head_family_id = await get_head_family_id_for_state(db_city)
         if not win:

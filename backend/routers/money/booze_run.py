@@ -2,7 +2,8 @@
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 import time
-import random
+import secrets
+_rng = secrets.SystemRandom()
 from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException
@@ -216,8 +217,8 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int) -> dict:
     current_carry = _booze_user_carrying_total(carrying)
     if current_carry + amount > capacity:
         raise HTTPException(status_code=400, detail=f"Over capacity (max {capacity} units)")
-    jail_chance = random.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
-    if random.random() < jail_chance:
+    jail_chance = _rng.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
+    if _rng.random() < jail_chance:
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
         await db.users.update_one(
             {"id": user["id"]},
@@ -272,8 +273,8 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
     have = int(carrying.get(booze_id, 0))
     if have < amount:
         raise HTTPException(status_code=400, detail=f"Only carrying {have} units")
-    jail_chance = random.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
-    if random.random() < jail_chance:
+    jail_chance = _rng.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
+    if _rng.random() < jail_chance:
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
         await db.users.update_one(
             {"id": user["id"]},

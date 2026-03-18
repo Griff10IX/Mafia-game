@@ -1,4 +1,5 @@
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
@@ -129,7 +130,7 @@ def _choose_punch(stam: float, hp: float) -> str:
         weights = [30, 15, 10, 8, 37]
     else:
         weights = [25, 22, 20, 15, 18]
-    r = random.random() * sum(weights)
+    r = _rng.random() * sum(weights)
     for i, w in enumerate(weights):
         r -= w
         if r <= 0:
@@ -155,7 +156,7 @@ def _simulate_fight(a_stats: dict, b_stats: dict) -> dict:
     scorecard_a, scorecard_b = [], []
 
     for rnd in range(1, MAX_ROUNDS + 1):
-        exchanges = random.randint(8, 12)
+        exchanges = _rng.randint(8, 12)
         round_events: List[dict] = []
         round_dmg_a, round_dmg_b = 0.0, 0.0
         round_kd_a, round_kd_b = 0, 0
@@ -175,13 +176,13 @@ def _simulate_fight(a_stats: dict, b_stats: dict) -> dict:
                 acc -= max(0.0, (40 - attacker["stam"]) * 0.005)
                 acc = max(0.08, min(0.85, acc))
 
-                landed = random.random() < acc
+                landed = _rng.random() < acc
                 dmg = 0.0
                 knockdown = False
 
                 if landed:
                     lo, hi = PUNCH_BASE_DMG[punch]
-                    raw = random.uniform(lo, hi)
+                    raw = _rng.uniform(lo, hi)
                     power_mult = 1.0 + (attacker["power"] - 10) * 0.025
                     def_mult = max(0.3, 1.0 - (defender["defense"] - 10) * 0.012)
                     stam_mult = max(0.5, attacker["stam"] / 100.0)
@@ -207,7 +208,7 @@ def _simulate_fight(a_stats: dict, b_stats: dict) -> dict:
                         def_factor = max(0.3, 1.0 - (defender["defense"] - 10) * 0.015)
                         kd_chance = (dmg / 80.0) * hurt_mult * stam_factor * def_factor
                         kd_chance = min(0.30, kd_chance)
-                        if random.random() < kd_chance and defender["kds"] < MAX_KNOCKDOWNS:
+                        if _rng.random() < kd_chance and defender["kds"] < MAX_KNOCKDOWNS:
                             knockdown = True
                             defender["kds"] += 1
                             defender["hp"] = max(1, defender["hp"] - 5)

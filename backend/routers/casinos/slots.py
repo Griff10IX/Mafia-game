@@ -3,7 +3,8 @@
 from datetime import datetime, timezone, timedelta
 import logging
 import re
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import uuid
 from typing import Optional
 from pydantic import BaseModel, field_validator
@@ -159,7 +160,7 @@ async def _run_slots_draw_if_needed(state: str):
             cooldown_until = (now + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
             if previous_owner_id:
                 await db.users.update_one({"id": previous_owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
-            winner_id = random.choice(eligible)
+            winner_id = _rng.choice(eligible)
             winner = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1, "rank_points": 1})
             winner_name = (winner.get("username") or "?") if winner else "?"
             expires_at = next_draw_iso
@@ -255,7 +256,7 @@ class SlotsBuyBackRejectRequest(BaseModel):
 
 def _slots_weighted_symbol():
     total = sum(s["weight"] for s in SLOTS_SYMBOLS)
-    r = random.uniform(0, total)
+    r = _rng.uniform(0, total)
     acc = 0
     for sym in SLOTS_SYMBOLS:
         acc += sym["weight"]

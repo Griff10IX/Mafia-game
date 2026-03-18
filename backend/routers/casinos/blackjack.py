@@ -1,7 +1,8 @@
 # Casino Blackjack: config, ownership, claim, relinquish, set-max-bet, set-buy-back, buy-back, send-to-user, sell-on-trade, start, hit, stand, history
 from datetime import datetime, timezone, timedelta
 import re
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import uuid
 import time
 from typing import Optional
@@ -595,7 +596,7 @@ def register(router):
             raise HTTPException(status_code=400, detail="Not enough money")
         user = debit_res
         deck = _blackjack_make_deck()
-        random.shuffle(deck)
+        _rng.shuffle(deck)
         player_hand = [deck.pop(), deck.pop()]
         dealer_hand = [deck.pop(), deck.pop()]
         player_total = _blackjack_hand_total(player_hand)

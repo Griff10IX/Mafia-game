@@ -2,7 +2,8 @@
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 import uuid
-import random
+import secrets
+_rng = secrets.SystemRandom()
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 
@@ -35,18 +36,18 @@ REWARD_TYPES = [
 ]
 
 def _random_cash():
-    return random.randint(100, 2000)
+    return _rng.randint(100, 2000)
 
 def _random_points():
-    return random.randint(5, 50)
+    return _rng.randint(5, 50)
 
 def _random_bullets():
-    return random.randint(1, 25)
+    return _rng.randint(1, 25)
 
 
 async def _give_random_reward(user_id: str) -> dict:
     """Apply a random reward to user. Returns description for result."""
-    reward_type = random.choice(REWARD_TYPES)
+    reward_type = _rng.choice(REWARD_TYPES)
     desc = {"reward_type": reward_type, "points": 0, "money": 0, "bullets": 0, "cars": []}
     updates = {}
     if reward_type == "points":
@@ -79,7 +80,7 @@ async def _give_random_reward(user_id: str) -> dict:
         desc["money"], desc["bullets"], desc["points"] = c, b, p
     elif reward_type == "car":
         if E_GAME_CAR_IDS:
-            car_id = random.choice(E_GAME_CAR_IDS)
+            car_id = _rng.choice(E_GAME_CAR_IDS)
             car = next((c for c in CARS if c.get("id") == car_id), None)
             if car:
                 await db.user_cars.insert_one({
@@ -92,7 +93,7 @@ async def _give_random_reward(user_id: str) -> dict:
                 desc["cars"] = [car.get("name", car_id)]
     elif reward_type == "two_cars":
         if E_GAME_CAR_IDS:
-            chosen = random.sample(E_GAME_CAR_IDS, min(2, len(E_GAME_CAR_IDS)))
+            chosen = _rng.sample(E_GAME_CAR_IDS, min(2, len(E_GAME_CAR_IDS)))
             for car_id in chosen:
                 car = next((c for c in CARS if c.get("id") == car_id), None)
                 if car:
@@ -109,7 +110,7 @@ async def _give_random_reward(user_id: str) -> dict:
         updates["money"] = c
         desc["money"] = c
         if E_GAME_CAR_IDS:
-            car_id = random.choice(E_GAME_CAR_IDS)
+            car_id = _rng.choice(E_GAME_CAR_IDS)
             car = next((c for c in CARS if c.get("id") == car_id), None)
             if car:
                 await db.user_cars.insert_one({
@@ -220,7 +221,7 @@ async def _run_dice_payout(game: dict):
         return None
     n = len(participants)
     order = list(participants)
-    random.shuffle(order)
+    _rng.shuffle(order)
     number_to_uid = {}
     assignments = []
     for i, p in enumerate(order):
@@ -229,7 +230,7 @@ async def _run_dice_payout(game: dict):
         if uid:
             number_to_uid[num] = uid
             assignments.append({"user_id": uid, "username": p.get("username"), "number": num})
-    roll = random.randint(1, n)
+    roll = _rng.randint(1, n)
     winner_id = number_to_uid.get(roll)
     winner_username = next((a["username"] for a in assignments if a["user_id"] == winner_id), None)
     reward = None
@@ -537,12 +538,12 @@ async def admin_auto_create_now(current_user: dict = Depends(get_current_user)):
             status_code=400,
             detail=f"Too many open games ({open_count}). Roll or wait for some to settle before creating more (max {MAX_OPEN_ENTERTAINER_GAMES}).",
         )
-    n = random.randint(3, 5)
+    n = _rng.randint(3, 5)
     n = min(n, MAX_OPEN_ENTERTAINER_GAMES - open_count)
     created = []
     for _ in range(n):
-        game_type = random.choice(["dice", "gbox"])
-        max_players = random.randint(2, 10)
+        game_type = _rng.choice(["dice", "gbox"])
+        max_players = _rng.randint(2, 10)
         g = await _create_system_game(game_type, max_players)
         created.append(g)
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -582,14 +583,14 @@ async def run_auto_create_if_enabled():
     open_count = await _count_open_entertainer_games()
     if open_count >= MAX_OPEN_ENTERTAINER_GAMES:
         return
-    n = random.randint(3, 5)
+    n = _rng.randint(3, 5)
     # Don't create more than would exceed the cap
     n = min(n, MAX_OPEN_ENTERTAINER_GAMES - open_count)
     if n <= 0:
         return
     for _ in range(n):
-        game_type = random.choice(["dice", "gbox"])
-        max_players = random.randint(2, 10)
+        game_type = _rng.choice(["dice", "gbox"])
+        max_players = _rng.randint(2, 10)
         await _create_system_game(game_type, max_players)
     now_iso = now.isoformat()
     await db.game_config.update_one(

@@ -2,7 +2,8 @@
 import asyncio
 import logging
 import re
-import random
+import secrets
+_rng = secrets.SystemRandom()
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
@@ -293,7 +294,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
 
     npc = await db.jail_npcs.find_one({"username": username_ci}, {"_id": 0})
     if npc:
-        success = random.random() < player_success_rate
+        success = _rng.random() < player_success_rate
         rank_points = 25
         now_utc = datetime.now(timezone.utc)
         xp_double_until = current_user.get("xp_double_until")
@@ -333,7 +334,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             new_claimed = [m for m in BUST_MILESTONES if m <= new_total and m not in claimed]
             respect_earned = sum(BUST_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
             await _award_bust_milestones(current_user["id"], new_total, claimed)
-            msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=target_username)
+            msg = _rng.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=target_username)
             return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": bust_reward_cash, "respect_points": respect_earned}
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
         next_attempts = total_attempts + 1
@@ -344,7 +345,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 until = datetime.fromisoformat(jailbust_bonus_until.replace("Z", "+00:00"))
                 if until.tzinfo is None:
                     until = until.replace(tzinfo=timezone.utc)
-                if datetime.now(timezone.utc) < until and random.random() < 0.5:
+                if datetime.now(timezone.utc) < until and _rng.random() < 0.5:
                     go_to_jail = False
             except Exception:
                 pass
@@ -359,7 +360,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 {"$set": {"jail_bust_attempts": next_attempts, "current_consecutive_busts": 0}},
             )
         await _record_bust_event(current_user["id"], False, 0, target_username=target_username, is_npc=True)
-        return {"success": False, "message": random.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30 if go_to_jail else 0}
+        return {"success": False, "message": _rng.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30 if go_to_jail else 0}
 
     target = await db.users.find_one({"username": username_ci}, {"_id": 0})
     if not target:
@@ -377,7 +378,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         except (ValueError, TypeError):
             pass
 
-    success = random.random() < player_success_rate
+    success = _rng.random() < player_success_rate
     if success:
         rank_points = 15
         now_utc = datetime.now(timezone.utc)
@@ -444,7 +445,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         respect_earned = sum(BUST_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
         await _award_bust_milestones(current_user["id"], new_total, claimed)
         display_name = target.get("username") or target_username or "Unknown"
-        msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=display_name)
+        msg = _rng.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=display_name)
         return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": cash_to_pay, "respect_points": respect_earned}
     jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
     next_attempts = total_attempts + 1
@@ -453,7 +454,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         {"$set": {"jail_bust_attempts": next_attempts, "in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0, "snitch_attempted_this_term": False}},
     )
     await _record_bust_event(current_user["id"], False, 0, target_username=target.get("username") or "", is_npc=False)
-    return {"success": False, "message": random.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30}
+    return {"success": False, "message": _rng.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30}
 
 
 async def bust_out_of_jail(
@@ -606,8 +607,8 @@ SNITCH_IMMUNITY_MINUTES = 5
 
 def _snitch_success_roll() -> bool:
     """Return True with a random chance between 10% and 20%."""
-    chance = random.uniform(SNITCH_SUCCESS_CHANCE_MIN, SNITCH_SUCCESS_CHANCE_MAX)
-    return random.random() < chance
+    chance = _rng.uniform(SNITCH_SUCCESS_CHANCE_MIN, SNITCH_SUCCESS_CHANCE_MAX)
+    return _rng.random() < chance
 
 
 async def _get_random_online_user(exclude_user_id: str):
@@ -644,7 +645,7 @@ async def _get_random_online_user(exclude_user_id: str):
     users = await cursor.to_list(100)
     if not users:
         return None
-    return random.choice(users)
+    return _rng.choice(users)
 
 
 async def snitch(
@@ -765,18 +766,18 @@ async def toggle_npcs(request: NPCToggleRequest, current_user: dict = Depends(ge
         await db.test_npcs.delete_many({})
         npcs_to_create = []
         for i in range(min(request.count, 50)):
-            rank_idx = random.randint(0, len(RANKS) - 1)
+            rank_idx = _rng.randint(0, len(RANKS) - 1)
             rank = RANKS[rank_idx]
             npc = {
                 "id": str(uuid.uuid4()),
-                "username": f"{random.choice(npc_first)} {random.choice(npc_last)} #{i+1}",
+                "username": f"{_rng.choice(npc_first)} {_rng.choice(npc_last)} #{i+1}",
                 "rank": rank["id"],
                 "rank_name": rank["name"],
-                "rank_points": random.randint(rank["required_points"], rank["required_points"] + 500),
-                "money": random.randint(1000, 10000000),
-                "current_state": random.choice(STATES),
-                "in_jail": random.random() < 0.2,
-                "bullets": random.randint(0, 1000),
+                "rank_points": _rng.randint(rank["required_points"], rank["required_points"] + 500),
+                "money": _rng.randint(1000, 10000000),
+                "current_state": _rng.choice(STATES),
+                "in_jail": _rng.random() < 0.2,
+                "bullets": _rng.randint(0, 1000),
                 "is_npc": True,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
@@ -818,20 +819,20 @@ async def spawn_jail_npcs():
     ]
     while True:
         try:
-            await asyncio.sleep(random.randint(60, 120))
+            await asyncio.sleep(_rng.randint(60, 120))
             current_npcs = await db.jail_npcs.count_documents({})
             if current_npcs < 10:
-                npc_name = random.choice(npc_names)
+                npc_name = _rng.choice(npc_names)
                 rank_names = [r["name"] for r in RANKS]
                 weights = [30, 25, 20, 15, 10, 7, 5, 3, 2, 1, 1, 1, 1]
                 existing = await db.jail_npcs.find_one({"username": npc_name})
                 if not existing:
-                    rank_name = random.choices(rank_names, weights=weights, k=1)[0]
+                    rank_name = _rng.choices(rank_names, weights=weights, k=1)[0]
                     # Cash reward scales with rank (low for beta - few hundred max)
                     rank_index = rank_names.index(rank_name) if rank_name in rank_names else 0
                     cash_min = 50 + rank_index * 30
                     cash_max = 150 + rank_index * 50
-                    bust_reward_cash = random.randint(cash_min, cash_max)
+                    bust_reward_cash = _rng.randint(cash_min, cash_max)
                     await db.jail_npcs.insert_one({
                         "username": npc_name,
                         "rank_name": rank_name,
