@@ -15,7 +15,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import Depends, HTTPException, Header
 from pydantic import BaseModel
 
-from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, send_notification, log_gambling
+from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, send_notification, log_gambling, _is_admin
 
 # ---------- Constants ----------
 def _now_iso() -> str:
@@ -4178,6 +4178,35 @@ async def get_rnd_status(current_user: dict = Depends(get_current_user_verified)
     }
 
 
+async def admin_wipe_all_teams(current_user: dict = Depends(get_current_user_verified)):
+    """Admin tool: wipe ALL racing teams, profiles, cars, upgrades, races, championships, and R&D. Full reset."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    del_profiles = await db.racing_profiles.delete_many({})
+    del_cars = await db.user_racing_cars.delete_many({})
+    del_upgrades = await db.racing_upgrades.delete_many({})
+    del_races = await db.racing_races.delete_many({})
+    del_bets = await db.racing_bets.delete_many({})
+    del_challenges = await db.racing_challenges.delete_many({})
+    del_comps = await db.racing_comps.delete_many({})
+    del_champs = await db.racing_championships.delete_many({})
+
+    return {
+        "message": "All racing data wiped",
+        "deleted": {
+            "profiles": del_profiles.deleted_count,
+            "cars": del_cars.deleted_count,
+            "upgrades": del_upgrades.deleted_count,
+            "races": del_races.deleted_count,
+            "bets": del_bets.deleted_count,
+            "challenges": del_challenges.deleted_count,
+            "comps": del_comps.deleted_count,
+            "championships": del_champs.deleted_count,
+        },
+    }
+
+
 def register(router):
     router.add_api_route("/racing/cars", get_racing_cars, methods=["GET"])
     router.add_api_route("/racing/tracks", get_racing_tracks, methods=["GET"])
@@ -4221,6 +4250,7 @@ def register(router):
     router.add_api_route("/racing/rnd/tree", get_rnd_tree, methods=["GET"])
     router.add_api_route("/racing/rnd/research", start_rnd_research, methods=["POST"])
     router.add_api_route("/racing/rnd/status", get_rnd_status, methods=["GET"])
+    router.add_api_route("/racing/admin/wipe-all-teams", admin_wipe_all_teams, methods=["POST"])
 
     # Cron: automated daily races (same X-Cron-Secret as Auto Rank)
     cron_secret = (os.environ.get("CRON_SECRET") or "").strip()
