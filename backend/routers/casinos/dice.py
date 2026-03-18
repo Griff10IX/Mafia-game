@@ -251,8 +251,8 @@ def register(router):
             await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full})
             return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": payout_full, "owner_paid": 0, "shortfall": 0, "ownership_transferred": False, "buy_back_offer": None}
         owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
-        owner_money = int((owner.get("money") or 0) or 0)
-        owner_username = owner.get("username") if owner else None
+        owner_money = int(((owner or {}).get("money") or 0) or 0)
+        owner_username = (owner or {}).get("username")
         actual_payout = min(payout_full, owner_money)
         shortfall = payout_full - actual_payout
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})

@@ -500,8 +500,8 @@ def register(router):
         else:
             # Check if owner can afford to pay
             owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
-            owner_money = int((owner.get("money") or 0) if owner else 0)
-            owner_username = owner.get("username") if owner else None
+            owner_money = int(((owner or {}).get("money") or 0) or 0)
+            owner_username = (owner or {}).get("username")
             net_cost = total_payout - total_stake
             if head_family_id and edge > 0:
                 net_cost += edge

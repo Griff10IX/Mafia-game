@@ -577,8 +577,8 @@ def register(router):
                 owner_doc = await db.videopoker_ownership.find_one({"city": city}, {"_id": 0, "buy_back_reward": 1})
                 points_offered = int((owner_doc or {}).get("buy_back_reward") or 0)
                 owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
-                owner_money = int((owner.get("money") or 0) or 0)
-                owner_username = owner.get("username") if owner else None
+                owner_money = int(((owner or {}).get("money") or 0) or 0)
+                owner_username = (owner or {}).get("username")
                 actual_payout = min(payout, owner_money)
                 shortfall = payout - actual_payout
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})

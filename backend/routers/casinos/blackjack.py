@@ -220,7 +220,7 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
     if payout > 0:
         if owner_id and result in ("win", "dealer_bust"):
             owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
-            owner_money = int((owner.get("money") or 0) or 0)
+            owner_money = int(((owner or {}).get("money") or 0) or 0)
             actual_owner_pay = min(bet, owner_money)
             shortfall = bet - actual_owner_pay
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": bet + actual_owner_pay}})
@@ -637,7 +637,7 @@ def register(router):
             ownership_transferred = False
             if owner_id:
                 owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
-                owner_money = int((owner.get("money") or 0) or 0)
+                owner_money = int(((owner or {}).get("money") or 0) or 0)
                 actual_owner_pay = min(owner_pay, owner_money)
                 actual_payout = bet + actual_owner_pay
                 shortfall = owner_pay - actual_owner_pay
@@ -891,7 +891,7 @@ def register(router):
         if payout > 0:
             if owner_id and result in ("win", "dealer_bust"):
                 owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
-                owner_money = int((owner.get("money") or 0) or 0)
+                owner_money = int(((owner or {}).get("money") or 0) or 0)
                 actual_owner_pay = min(bet, owner_money)
                 shortfall = bet - actual_owner_pay
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": bet + actual_owner_pay}})
