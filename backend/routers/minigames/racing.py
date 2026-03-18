@@ -3894,12 +3894,7 @@ async def _maybe_advance_interactive_lap(race_id: str):
     except (ValueError, TypeError):
         return
 
-    participants = race.get("participants") or []
-    decisions_map = race.get("decisions") or {}
-    human_ids = [p.get("user_id") for p in participants if not p.get("is_npc")]
-    all_submitted = all(uid in decisions_map for uid in human_ids)
-
-    if now >= dl or all_submitted:
+    if now >= dl:
         await _advance_one_lap(race)
 
 

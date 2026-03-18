@@ -1923,7 +1923,10 @@ export default function CircuitRaceView({
           // Take the more conservative (minimum) of the two so physics are consistent.
           const gripBasedMult = cornerGripMult(curvature, effGrip);
           const profileMult   = Math.max(0.50, Math.min(1.0, profile[pidx] + (effGrip-0.85)*0.55));
-          const cornerSM      = Math.min(profileMult, gripBasedMult);
+          let   cornerSM      = Math.min(profileMult, gripBasedMult);
+          const sfLP = track.sfLine ?? 0;
+          const dbSF = ((sfLP - trackT + 1) % 1), daSF = ((trackT - sfLP + 1) % 1);
+          if (dbSF <= 0.14 || daSF <= 0.10) cornerSM = Math.max(0.95, cornerSM);
 
           // Curvature-aware brake/accel rates — sharper on straights, gentler in tight corners
           // In real cars: brake distance is short (0.2-0.4s), accel ramp is longer (0.5-1.2s)
@@ -2245,7 +2248,7 @@ export default function CircuitRaceView({
 
   // Countdown draw loop
   useEffect(()=>{
-    if(uiPhase!=="countdown"||(mode!=="replay"&&mode!=="live"))return;
+    if(uiPhase!=="countdown"||(mode!=="replay"&&mode!=="live"&&mode!=="interactive-live"))return;
     let id;const draw=()=>{const{track,racers}=stateRef.current||{};if(track&&racers?.length)drawCanvas(track,effCond,racers);id=requestAnimationFrame(draw);};
     id=requestAnimationFrame(draw);return()=>{cancelAnimationFrame(id);};
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2313,11 +2316,27 @@ export default function CircuitRaceView({
     const sc = { active: false, endsAtSec: 0, cooldownUntil: 0 };
     const fl = { holderId: null, time: Infinity };
     stateRef.current = { racers, track, nLaps: liveTotalLaps, wd, safetyCar: sc, fastestLap: fl, finishFlash: 0, incidents: [] };
-    setUiPhase("racing");
-    setLapDisp(`${liveCurrentLap} / ${liveTotalLaps}`);
-    setCommentary(rnd(COMMENTARY.start));
     liveInitDone.current = true;
 
+    // Formation lap / countdown: draw the grid and count 3-2-1-GO
+    setUiPhase("countdown"); setCountdown(3);
+    setLapDisp(`0 / ${liveTotalLaps}`);
+    setCommentary("Cars on the grid — lights sequence...");
+    drawCanvas(track, cond, racers, 0);
+
+    let cdVal = 3;
+    const cdI = setInterval(() => {
+      cdVal--; setCountdown(cdVal);
+      if (cdVal <= 0) {
+        clearInterval(cdI);
+        setUiPhase("racing");
+        setLapDisp(`${liveCurrentLap} / ${liveTotalLaps}`);
+        setCommentary(rnd(COMMENTARY.start));
+        startRacing();
+      }
+    }, 1000);
+
+    function startRacing() {
     let lastFrame = performance.now();
     let firstFrame = true;
     let prevPitStopsLen = (livePitStopsRef.current || []).length;
@@ -2347,6 +2366,18 @@ export default function CircuitRaceView({
       if (curLap !== prevBackendLap) {
         prevBackendLap = curLap;
         r.forEach(x => { x.lastSectorCross = nowSec; x.currentSector = 0; });
+      }
+
+      // Race completion detection: backend finished all laps
+      if (curLap >= totLaps && totLaps > 0 && !st._raceFinished) {
+        st._raceFinished = true;
+        st.finishFlash = nowSec + 3.0;
+        addInc("CHECKERED FLAG!");
+        setCommentary(rnd(COMMENTARY.done));
+        let fo = 1;
+        [...r].sort((a, b) => (a._targetPos ?? 99) - (b._targetPos ?? 99)).forEach(x => {
+          if (!x.dnf) { x.finished = true; x.finishOrder = fo++; }
+        });
       }
 
       const scActive = sc.active && nowSec < sc.endsAtSec;
@@ -2479,7 +2510,15 @@ export default function CircuitRaceView({
 
         const gripBasedMult = cornerGripMult(curvature, effGrip);
         const profileMult = Math.max(0.50, Math.min(1.0, profile[pidx] + (effGrip - 0.85) * 0.55));
-        const cornerSM = Math.min(profileMult, gripBasedMult);
+        let cornerSM = Math.min(profileMult, gripBasedMult);
+
+        // S/F zone protection: cars must not slow down on the main straight
+        const sfLp = trk.sfLine ?? 0;
+        const dBehindSF = ((sfLp - trackT + 1) % 1);
+        const dAheadSF  = ((trackT - sfLp + 1) % 1);
+        if (dBehindSF <= 0.14 || dAheadSF <= 0.10) {
+          cornerSM = Math.max(0.95, cornerSM);
+        }
 
         // Curvature-aware braking/acceleration rates
         const isTightCorner = curvature > 0.12;
@@ -2611,7 +2650,9 @@ export default function CircuitRaceView({
     };
 
     rafRef.current = requestAnimationFrame(loop);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+    } // end startRacing()
+
+    return () => { clearInterval(cdI); if (rafRef.current) cancelAnimationFrame(rafRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, currentUserId, participants.length, initialTrackId, weatherIdProp]);
 

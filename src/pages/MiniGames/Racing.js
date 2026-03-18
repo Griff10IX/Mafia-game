@@ -547,8 +547,13 @@ export default function Racing() {
         setLiveRace(data);
         if (data.status === "completed" || data.status === "finished") {
           clearInterval(liveRacePoll.current);
-          const r = await api.get(`/racing/races/${activeRace.id}`);
-          setActiveRace(r.data?.race);
+          const raceId = activeRace.id;
+          setTimeout(async () => {
+            try {
+              const r = await api.get(`/racing/races/${raceId}`);
+              setActiveRace(r.data?.race);
+            } catch {}
+          }, 4000);
         }
         if (data.my_decision === null) setDecisionSubmitted(false);
       } catch {}
