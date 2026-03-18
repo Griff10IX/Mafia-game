@@ -678,6 +678,19 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
             status_code=400,
             detail="You can only be a bodyguard for one person at a time. Ask your current client to drop you first.",
         )
+    # You cannot accept if you own bodyguards (robots or humans) - must drop them first
+    owned_filled = await db.bodyguards.count_documents({
+        "user_id": current_user["id"],
+        "$or": [
+            {"bodyguard_user_id": {"$exists": True, "$ne": None}},
+            {"is_robot": True},
+        ],
+    })
+    if owned_filled > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="You must drop your bodyguards before accepting to work as someone else's bodyguard.",
+        )
     inviter = await db.users.find_one({"id": invite["inviter_id"]}, {"_id": 0})
     if not inviter:
         raise HTTPException(status_code=400, detail="Inviter no longer exists")
