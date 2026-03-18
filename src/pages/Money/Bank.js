@@ -291,6 +291,7 @@ const SendMoneyCard = ({
   onTransferAmountChange,
   transferNum,
   onSend,
+  sending = false,
   hideHeader = false
 }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in ${!hideHeader ? 'mobile-panel' : ''}`}>
@@ -336,9 +337,10 @@ const SendMoneyCard = ({
       <button
         type="button"
         onClick={onSend}
-        className="w-full bg-primary/20 text-primary rounded font-heading font-bold uppercase tracking-wide py-2 text-[10px] border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation"
+        disabled={sending}
+        className="w-full bg-primary/20 text-primary rounded font-heading font-bold uppercase tracking-wide py-2 text-[10px] border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        📤 Send
+        {sending ? 'Sending...' : '📤 Send'}
       </button>
     </div>
     <div className="bank-art-line text-primary mx-2" />
@@ -392,6 +394,7 @@ export default function Bank() {
   const location = useLocation();
   const [transferTo, setTransferTo] = useState(location.state?.transferTo ?? '');
   const [transferAmount, setTransferAmount] = useState('');
+  const [sending, setSending] = useState(false);
 
   const COLLAPSED_KEY = 'mafia_bank_collapsed';
   const [collapsedSections, setCollapsedSections] = useState(() => {
@@ -520,9 +523,11 @@ export default function Bank() {
   }, [transferAmount]);
 
   const sendMoney = async () => {
+    if (sending) return;
     const to = (transferTo || '').trim();
     if (!to) return toast.error('Enter a username');
     if (!transferNum || transferNum <= 0) return toast.error('Enter an amount');
+    setSending(true);
     try {
       const res = await api.post('/bank/transfer', { to_username: to, amount: transferNum });
       toast.success(res.data?.message || 'Sent');
@@ -532,6 +537,8 @@ export default function Bank() {
       await fetchAll();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to send');
+    } finally {
+      setSending(false);
     }
   };
 
@@ -659,6 +666,7 @@ export default function Bank() {
                 onTransferAmountChange={setTransferAmount}
                 transferNum={transferNum}
                 onSend={sendMoney}
+                sending={sending}
                 hideHeader
               />
             </div>

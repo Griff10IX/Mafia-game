@@ -278,10 +278,33 @@ async def bank_transfer(request: MoneyTransferRequest, req: Request, current_use
     if recipient.get("is_dead"):
         raise HTTPException(status_code=400, detail="Recipient is dead")
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
     transfer_id = str(uuid.uuid4())
     sender_id = current_user.get("id") or ""
     recipient_id = recipient["id"]
+
+    duplicate_cutoff = (now - timedelta(seconds=5)).isoformat()
+    recent_dup = await db.money_transfers.find_one({
+        "from_user_id": sender_id,
+        "to_user_id": recipient_id,
+        "amount": int(amount),
+        "created_at": {"$gte": duplicate_cutoff},
+    })
+    if recent_dup:
+        raise HTTPException(status_code=400, detail="Duplicate transfer detected. Please wait a few seconds before sending again.")
+
+    transfer_doc = {
+        "id": transfer_id,
+        "from_user_id": sender_id,
+        "from_username": current_user.get("username", ""),
+        "to_user_id": recipient_id,
+        "to_username": recipient.get("username", ""),
+        "amount": int(amount),
+        "created_at": now_iso,
+    }
+    await db.money_transfers.insert_one(transfer_doc)
+
     result = await db.users.bulk_write([
         UpdateOne({"id": sender_id, "money": {"$gte": amount}}, {"$inc": {"money": -amount}}),
         UpdateOne({"id": recipient_id}, {"$inc": {"money": amount}}),
@@ -289,24 +312,16 @@ async def bank_transfer(request: MoneyTransferRequest, req: Request, current_use
     if result.modified_count < 2:
         if result.modified_count == 1:
             await db.users.update_one({"id": sender_id}, {"$inc": {"money": amount}})
+        await db.money_transfers.delete_one({"id": transfer_id})
         raise HTTPException(status_code=400, detail="Insufficient cash on hand")
     if security_module and getattr(security_module, "check_negative_balance", None):
         try:
-            await security_module.check_negative_balance(db, current_user.get("id") or "", current_user.get("username", ""))
-            await security_module.check_negative_balance(db, recipient["id"], recipient.get("username", ""))
+            await security_module.check_negative_balance(db, sender_id, current_user.get("username", ""))
+            await security_module.check_negative_balance(db, recipient_id, recipient.get("username", ""))
         except Exception:
             pass
-    await db.money_transfers.insert_one({
-        "id": transfer_id,
-        "from_user_id": current_user.get("id") or "",
-        "from_username": current_user.get("username", ""),
-        "to_user_id": recipient["id"],
-        "to_username": recipient.get("username", ""),
-        "amount": int(amount),
-        "created_at": now,
-    })
-    _invalidate_overview_cache(current_user.get("id") or "")
-    _invalidate_overview_cache(recipient["id"])
+    _invalidate_overview_cache(sender_id)
+    _invalidate_overview_cache(recipient_id)
     return {"message": f"Sent ${amount:,} to {recipient.get('username', '')}"}
 
 
