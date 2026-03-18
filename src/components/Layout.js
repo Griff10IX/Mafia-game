@@ -1239,6 +1239,18 @@ export default function Layout({ children }) {
         .gta-exclusive-flash {
           animation: gtaExclusivePulse 1.6s ease-in-out infinite;
         }
+        @keyframes flash-marquee {
+          0% { transform: translateX(100%); }
+          100% { transform: translateX(-100%); }
+        }
+        .flash-marquee {
+          display: inline-block;
+          white-space: nowrap;
+          animation: flash-marquee 15s linear infinite;
+        }
+        @media (min-width: 768px) {
+          .flash-marquee { animation: none; }
+        }
       `}</style>
       {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
       <div
@@ -1380,13 +1392,13 @@ export default function Layout({ children }) {
             </button>
           )}
 
-          {/* Flash news — show on desktop; on mobile show when bottom bar layout so top bar isn't empty */}
+          {/* Flash news — show on desktop; on mobile show when bottom bar layout so top bar isn't empty. On mobile, message scrolls R→L so full text is visible. */}
           <div className={`${(!isMobileViewport || mobileNavStyle === 'bottom') ? 'flex' : 'hidden'} items-center flex-1 min-w-0 max-w-sm md:max-w-md`}>
             {flashNews.length > 0 && (
               <div className="flex items-center gap-1 md:gap-2 min-w-0 w-full min-h-[1.5rem] md:min-h-[2rem] rounded px-1.5 py-0.5 md:px-2 md:py-1 border border-primary/15 bg-primary/5">
                 <Newspaper className="shrink-0 text-primary/70 self-center w-3 h-3 md:w-3.5 md:h-3.5" aria-hidden />
                 <div className="flex items-baseline gap-1 min-w-0 flex-1 overflow-hidden">
-                  <span className="text-[10px] md:text-xs text-mutedForeground truncate font-heading leading-none min-w-0" title={flashNews[flashIndex]?.message}>{flashNews[flashIndex]?.message}</span>
+                  <span className="flash-marquee text-[10px] md:text-xs text-mutedForeground md:truncate font-heading leading-none min-w-0" title={flashNews[flashIndex]?.message}>{flashNews[flashIndex]?.message}</span>
                   {flashNews.length > 1 && <span className="text-[9px] md:text-[10px] text-primary/50 shrink-0 font-heading leading-none tabular-nums">{flashIndex + 1}/{flashNews.length}</span>}
                 </div>
               </div>
