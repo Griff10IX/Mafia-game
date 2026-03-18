@@ -72,6 +72,158 @@ RACING_NPCS: List[dict] = [
     {"id": "npc_rusty", "name": "Rusty Wheeler", "base_speed_offset": -2},
 ]
 
+# ---------- Driver Pool ----------
+def _driver_tier(d: dict) -> str:
+    avg = (d["skill"] + d["consistency"] + d["racecraft"] + d["wet_ability"] + d["tire_management"]) / 5
+    if avg >= 82:
+        return "platinum"
+    if avg >= 68:
+        return "gold"
+    if avg >= 52:
+        return "silver"
+    return "bronze"
+
+_RAW_DRIVERS = [
+    {"id": "drv_marcello",    "name": "Tommy 'Leadfoot' Marcello",   "skill": 92, "consistency": 88, "racecraft": 85, "wet_ability": 70, "tire_management": 65, "aggression": 75, "salary_per_race": 14000},
+    {"id": "drv_costa",       "name": "Vinnie 'The Wheel' Costa",    "skill": 88, "consistency": 82, "racecraft": 90, "wet_ability": 78, "tire_management": 72, "aggression": 60, "salary_per_race": 13000},
+    {"id": "drv_oleary",      "name": "Seamus O'Leary",              "skill": 55, "consistency": 90, "racecraft": 50, "wet_ability": 92, "tire_management": 88, "aggression": 25, "salary_per_race": 7500},
+    {"id": "drv_bellini",     "name": "Carlo 'Iron Hands' Bellini",  "skill": 85, "consistency": 75, "racecraft": 88, "wet_ability": 60, "tire_management": 55, "aggression": 85, "salary_per_race": 11000},
+    {"id": "drv_kowalski",    "name": "Stan Kowalski",               "skill": 60, "consistency": 65, "racecraft": 55, "wet_ability": 50, "tire_management": 70, "aggression": 40, "salary_per_race": 3000},
+    {"id": "drv_dupont",      "name": "Jacques Dupont",              "skill": 78, "consistency": 80, "racecraft": 72, "wet_ability": 85, "tire_management": 78, "aggression": 35, "salary_per_race": 9500},
+    {"id": "drv_rossi",       "name": "Enzo 'The Ghost' Rossi",      "skill": 90, "consistency": 70, "racecraft": 92, "wet_ability": 65, "tire_management": 50, "aggression": 88, "salary_per_race": 14500},
+    {"id": "drv_murphy",      "name": "Red Murphy",                  "skill": 45, "consistency": 55, "racecraft": 42, "wet_ability": 48, "tire_management": 60, "aggression": 30, "salary_per_race": 800},
+    {"id": "drv_zhang",       "name": "Henry Zhang",                 "skill": 70, "consistency": 72, "racecraft": 68, "wet_ability": 74, "tire_management": 80, "aggression": 45, "salary_per_race": 6500},
+    {"id": "drv_santos",      "name": "Miguel 'Quick' Santos",       "skill": 82, "consistency": 60, "racecraft": 78, "wet_ability": 55, "tire_management": 45, "aggression": 80, "salary_per_race": 9000},
+    {"id": "drv_novak",       "name": "Josef Novak",                 "skill": 65, "consistency": 85, "racecraft": 60, "wet_ability": 62, "tire_management": 90, "aggression": 20, "salary_per_race": 5500},
+    {"id": "drv_romano",      "name": "Sal 'The Cannon' Romano",     "skill": 94, "consistency": 65, "racecraft": 80, "wet_ability": 72, "tire_management": 48, "aggression": 90, "salary_per_race": 15000},
+    {"id": "drv_petrov",      "name": "Nikolai Petrov",              "skill": 72, "consistency": 78, "racecraft": 70, "wet_ability": 88, "tire_management": 75, "aggression": 50, "salary_per_race": 7000},
+    {"id": "drv_burke",       "name": "Jimmy Burke",                 "skill": 48, "consistency": 50, "racecraft": 45, "wet_ability": 42, "tire_management": 55, "aggression": 65, "salary_per_race": 1200},
+    {"id": "drv_moretti",     "name": "Aldo 'Silk' Moretti",         "skill": 80, "consistency": 92, "racecraft": 75, "wet_ability": 68, "tire_management": 88, "aggression": 30, "salary_per_race": 11500},
+    {"id": "drv_oconnor",     "name": "Paddy O'Connor",              "skill": 58, "consistency": 62, "racecraft": 55, "wet_ability": 90, "tire_management": 58, "aggression": 35, "salary_per_race": 3500},
+    {"id": "drv_fischer",     "name": "Klaus Fischer",               "skill": 75, "consistency": 82, "racecraft": 78, "wet_ability": 72, "tire_management": 70, "aggression": 55, "salary_per_race": 8000},
+    {"id": "drv_garcia",      "name": "Luis 'El Rayo' Garcia",       "skill": 88, "consistency": 58, "racecraft": 85, "wet_ability": 45, "tire_management": 40, "aggression": 85, "salary_per_race": 10000},
+    {"id": "drv_thompson",    "name": "Hank Thompson",               "skill": 42, "consistency": 48, "racecraft": 40, "wet_ability": 44, "tire_management": 50, "aggression": 55, "salary_per_race": 500},
+    {"id": "drv_valentino",   "name": "Marco Valentino",             "skill": 86, "consistency": 84, "racecraft": 82, "wet_ability": 80, "tire_management": 82, "aggression": 50, "salary_per_race": 13500},
+    {"id": "drv_wong",        "name": "Charlie Wong",                "skill": 68, "consistency": 70, "racecraft": 65, "wet_ability": 60, "tire_management": 72, "aggression": 40, "salary_per_race": 5000},
+    {"id": "drv_brennan",     "name": "Mick 'Rainstorm' Brennan",    "skill": 62, "consistency": 68, "racecraft": 58, "wet_ability": 95, "tire_management": 60, "aggression": 30, "salary_per_race": 4500},
+    {"id": "drv_deluca",      "name": "Frankie DeLuca",              "skill": 50, "consistency": 58, "racecraft": 52, "wet_ability": 46, "tire_management": 65, "aggression": 70, "salary_per_race": 2000},
+    {"id": "drv_hartmann",    "name": "Otto Hartmann",               "skill": 78, "consistency": 76, "racecraft": 80, "wet_ability": 70, "tire_management": 68, "aggression": 60, "salary_per_race": 8500},
+    {"id": "drv_sullivan",    "name": "Benny 'Brakes' Sullivan",     "skill": 55, "consistency": 75, "racecraft": 48, "wet_ability": 52, "tire_management": 92, "aggression": 22, "salary_per_race": 3800},
+    {"id": "drv_conti",       "name": "Luca Conti",                  "skill": 74, "consistency": 70, "racecraft": 72, "wet_ability": 68, "tire_management": 74, "aggression": 45, "salary_per_race": 6000},
+    {"id": "drv_kelly",       "name": "Ace Kelly",                   "skill": 40, "consistency": 42, "racecraft": 44, "wet_ability": 40, "tire_management": 45, "aggression": 60, "salary_per_race": 500},
+    {"id": "drv_bianchi",     "name": "Gianni 'Monsoon' Bianchi",    "skill": 70, "consistency": 66, "racecraft": 64, "wet_ability": 93, "tire_management": 62, "aggression": 38, "salary_per_race": 6500},
+    {"id": "drv_watts",       "name": "Dizzy Watts",                 "skill": 52, "consistency": 45, "racecraft": 50, "wet_ability": 48, "tire_management": 42, "aggression": 88, "salary_per_race": 1500},
+    {"id": "drv_caruso",      "name": "Dominic 'The Don' Caruso",    "skill": 95, "consistency": 90, "racecraft": 88, "wet_ability": 82, "tire_management": 78, "aggression": 65, "salary_per_race": 15000},
+]
+DRIVER_POOL: List[dict] = [{**d, "tier": _driver_tier(d)} for d in _RAW_DRIVERS]
+
+def _get_driver(driver_id: str) -> Optional[dict]:
+    for d in DRIVER_POOL:
+        if d["id"] == driver_id:
+            return d
+    return None
+
+# ---------- R&D Tree ----------
+RND_PATHS = {
+    "speed": {
+        "name": "Speed",
+        "description": "Raw pace and straight-line performance",
+        "tiers": [
+            {"tier": 1, "options": [
+                {"id": "turbo_intake", "name": "Turbo Intake", "cost": 50000, "research_hours": 2, "bonus": {"speed_pct": 0.03}, "desc": "+3% straight-line speed"},
+                {"id": "exhaust_tune", "name": "Exhaust Tune", "cost": 45000, "research_hours": 2, "bonus": {"speed_pct": 0.025, "engine_wear_reduction": 0.01}, "desc": "+2.5% speed, -1% engine wear"},
+            ]},
+            {"tier": 2, "options": [
+                {"id": "straight_line_kit", "name": "Straight-Line Kit", "cost": 120000, "research_hours": 3, "bonus": {"speed_pct": 0.04}, "desc": "+4% top speed"},
+                {"id": "corner_exit_boost", "name": "Corner Exit Boost", "cost": 110000, "research_hours": 3, "bonus": {"speed_pct": 0.02, "grip_pct": 0.02}, "desc": "+2% speed, +2% grip"},
+            ]},
+            {"tier": 3, "options": [
+                {"id": "aero_kit_adv", "name": "Advanced Aero Kit", "cost": 250000, "research_hours": 4, "bonus": {"speed_pct": 0.05, "grip_penalty": 0.01}, "desc": "+5% speed, -1% grip"},
+                {"id": "streamline_body", "name": "Streamline Body", "cost": 230000, "research_hours": 4, "bonus": {"speed_pct": 0.035, "tyre_wear_reduction": 0.02}, "desc": "+3.5% speed, -2% tyre wear"},
+            ]},
+            {"tier": 4, "options": [
+                {"id": "forced_induction", "name": "Forced Induction", "cost": 500000, "research_hours": 5, "bonus": {"speed_pct": 0.06}, "desc": "+6% raw speed"},
+                {"id": "lightweight_pistons", "name": "Lightweight Pistons", "cost": 480000, "research_hours": 5, "bonus": {"speed_pct": 0.04, "acceleration_pct": 0.03}, "desc": "+4% speed, +3% acceleration"},
+            ]},
+            {"tier": 5, "options": [
+                {"id": "supercharger", "name": "Supercharger", "cost": 1000000, "research_hours": 6, "bonus": {"speed_pct": 0.08}, "desc": "+8% speed (ultimate)"},
+                {"id": "twin_turbo", "name": "Twin Turbo System", "cost": 950000, "research_hours": 6, "bonus": {"speed_pct": 0.06, "overtaking_pct": 0.03}, "desc": "+6% speed, +3% overtake chance"},
+            ]},
+        ],
+    },
+    "reliability": {
+        "name": "Reliability",
+        "description": "Engine longevity and consistency",
+        "tiers": [
+            {"tier": 1, "options": [
+                {"id": "engine_hardening", "name": "Engine Hardening", "cost": 40000, "research_hours": 2, "bonus": {"engine_wear_reduction": 0.04}, "desc": "-4% engine wear per race"},
+                {"id": "belt_upgrade", "name": "Belt Upgrade", "cost": 35000, "research_hours": 2, "bonus": {"engine_wear_reduction": 0.03, "dnf_reduction": 0.02}, "desc": "-3% wear, -2% DNF risk"},
+            ]},
+            {"tier": 2, "options": [
+                {"id": "cooling_duct", "name": "Cooling Duct", "cost": 100000, "research_hours": 3, "bonus": {"engine_wear_reduction": 0.05, "speed_pct": 0.01}, "desc": "-5% wear, +1% speed"},
+                {"id": "oil_system", "name": "Oil System", "cost": 90000, "research_hours": 3, "bonus": {"engine_wear_reduction": 0.06}, "desc": "-6% engine wear"},
+            ]},
+            {"tier": 3, "options": [
+                {"id": "reinforced_block", "name": "Reinforced Block", "cost": 200000, "research_hours": 4, "bonus": {"engine_wear_reduction": 0.07, "dnf_reduction": 0.04}, "desc": "-7% wear, -4% DNF risk"},
+                {"id": "heat_management", "name": "Heat Management", "cost": 220000, "research_hours": 4, "bonus": {"engine_wear_reduction": 0.05, "tyre_wear_reduction": 0.03}, "desc": "-5% wear, -3% tyre wear"},
+            ]},
+            {"tier": 4, "options": [
+                {"id": "ceramic_coating", "name": "Ceramic Coating", "cost": 450000, "research_hours": 5, "bonus": {"engine_wear_reduction": 0.08, "speed_pct": 0.02}, "desc": "-8% wear, +2% speed"},
+                {"id": "titanium_internals", "name": "Titanium Internals", "cost": 470000, "research_hours": 5, "bonus": {"engine_wear_reduction": 0.10}, "desc": "-10% engine wear"},
+            ]},
+            {"tier": 5, "options": [
+                {"id": "indestructible_engine", "name": "Indestructible Engine", "cost": 900000, "research_hours": 6, "bonus": {"engine_wear_reduction": 0.15, "dnf_reduction": 0.08}, "desc": "-15% wear, -8% DNF risk"},
+                {"id": "perpetual_motion", "name": "Perpetual Motion", "cost": 950000, "research_hours": 6, "bonus": {"engine_wear_reduction": 0.12, "speed_pct": 0.03}, "desc": "-12% wear, +3% speed"},
+            ]},
+        ],
+    },
+    "handling": {
+        "name": "Handling",
+        "description": "Cornering, tyre management, and wet performance",
+        "tiers": [
+            {"tier": 1, "options": [
+                {"id": "soft_springs", "name": "Soft Springs", "cost": 45000, "research_hours": 2, "bonus": {"grip_pct": 0.03}, "desc": "+3% grip"},
+                {"id": "sway_bars", "name": "Sway Bars", "cost": 42000, "research_hours": 2, "bonus": {"grip_pct": 0.02, "tyre_wear_reduction": 0.02}, "desc": "+2% grip, -2% tyre wear"},
+            ]},
+            {"tier": 2, "options": [
+                {"id": "toe_angle", "name": "Toe Angle Tuning", "cost": 105000, "research_hours": 3, "bonus": {"grip_pct": 0.04}, "desc": "+4% corner grip"},
+                {"id": "camber_adjust", "name": "Camber Adjustment", "cost": 100000, "research_hours": 3, "bonus": {"grip_pct": 0.025, "wet_grip_pct": 0.03}, "desc": "+2.5% grip, +3% wet grip"},
+            ]},
+            {"tier": 3, "options": [
+                {"id": "active_diff", "name": "Active Differential", "cost": 240000, "research_hours": 4, "bonus": {"grip_pct": 0.05, "overtaking_pct": 0.02}, "desc": "+5% grip, +2% overtake"},
+                {"id": "traction_control", "name": "Traction Control", "cost": 220000, "research_hours": 4, "bonus": {"grip_pct": 0.03, "tyre_wear_reduction": 0.04}, "desc": "+3% grip, -4% tyre wear"},
+            ]},
+            {"tier": 4, "options": [
+                {"id": "rain_channels", "name": "Rain Channels", "cost": 460000, "research_hours": 5, "bonus": {"wet_grip_pct": 0.08, "grip_pct": 0.02}, "desc": "+8% wet grip, +2% grip"},
+                {"id": "ground_effect", "name": "Ground Effect", "cost": 480000, "research_hours": 5, "bonus": {"grip_pct": 0.06}, "desc": "+6% corner grip"},
+            ]},
+            {"tier": 5, "options": [
+                {"id": "active_suspension", "name": "Active Suspension", "cost": 1000000, "research_hours": 6, "bonus": {"grip_pct": 0.08, "tyre_wear_reduction": 0.05}, "desc": "+8% grip, -5% tyre wear"},
+                {"id": "all_conditions", "name": "All-Conditions Package", "cost": 950000, "research_hours": 6, "bonus": {"grip_pct": 0.05, "wet_grip_pct": 0.10, "tyre_wear_reduction": 0.03}, "desc": "+5% grip, +10% wet grip, -3% wear"},
+            ]},
+        ],
+    },
+}
+
+# ---------- Championship ----------
+CHAMPIONSHIP_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1]  # F1-style for P1-P10
+
+CHAMPIONSHIP_REWARDS = {
+    1: {"cash": 5000000, "bonus_pct": 5},
+    2: {"cash": 3000000, "bonus_pct": 3},
+    3: {"cash": 1500000, "bonus_pct": 2},
+    4: {"cash": 750000, "bonus_pct": 0},
+    5: {"cash": 500000, "bonus_pct": 0},
+}
+
+RACE_CALENDAR_TRACKS = [
+    "chicago_board", "daytona_beach", "roosevelt", "indianapolis",
+    "boardwalk", "lakeside", "harbor", "mountain",
+    "brooklands", "monza", "lemans", "avus", "targa",
+]
+RACES_PER_DAY = 2
+GP_TIMES = ["10:00", "20:00"]  # UTC times for automated GPs
+
 MAX_GRID = 8
 MIN_GRID = 2
 RACE_LOBBY_COUNTDOWN_SEC = 45
@@ -197,6 +349,7 @@ WEIGHT_COST_BASE = 45000
 FUEL_COST_BASE = 35000
 NUM_LAPS_MIN = 2
 NUM_LAPS_MAX = 20
+INTERACTIVE_LAP_DEADLINE_SEC = 8
 TIRE_WEAR_PER_LAP = 18
 # Pit a lap before tires are gone: ~18 wear/lap → pit when below 50 so next lap wouldn't kill tires
 TIRE_PIT_THRESHOLD = 50
@@ -248,6 +401,9 @@ DEFAULT_PROFILE = {
     "tyre_stock_inter": 0,
     "tyre_stock_full_wet": 0,
     "crew_bank": 0,
+    "hired_driver_id": None,
+    "rnd_researched": [],
+    "rnd_active": None,
 }
 for _suffix, _max, _ in CREW_EXTRA_TYPES:
     DEFAULT_PROFILE[f"{_suffix}_level"] = 0
@@ -297,11 +453,19 @@ class CreateRaceRequest(BaseModel):
     laps: int = 3
     tyre_compound: str = "medium"  # soft, medium, hard
     weather_id: Optional[str] = None  # clear, rain, snow, very_hot; if omitted, random at create
+    interactive: bool = False
 
 
 class JoinRaceRequest(BaseModel):
     racing_car_instance_id: str
     tyre_compound: str = "medium"  # soft, medium, hard
+
+
+class RaceDecisionRequest(BaseModel):
+    push_level: int = 3
+    pit_this_lap: bool = False
+    pit_compound: str = "medium"
+    defend: bool = False
 
 
 class UpgradeCrewRequest(BaseModel):
@@ -353,6 +517,23 @@ class RaceChallengeCreateRequest(BaseModel):
     stake: int = 0
     laps: int = 3
     weather_id: Optional[str] = None
+
+
+class HireDriverRequest(BaseModel):
+    driver_id: str
+
+
+class FireDriverRequest(BaseModel):
+    pass
+
+
+class RndResearchRequest(BaseModel):
+    path_id: str
+    node_id: str
+
+
+class AssignDriverRequest(BaseModel):
+    driver_id: str
 
 
 class CreateRacingTeamRequest(BaseModel):
@@ -586,6 +767,23 @@ async def _get_user_racing_car(user_id: str, instance_id: str) -> Optional[dict]
     return doc
 
 
+def _get_rnd_bonuses(profile: dict) -> dict:
+    researched = profile.get("rnd_researched") or []
+    bonuses = {
+        "speed_pct": 0, "grip_pct": 0, "wet_grip_pct": 0,
+        "engine_wear_reduction": 0, "tyre_wear_reduction": 0,
+        "dnf_reduction": 0, "overtaking_pct": 0,
+        "acceleration_pct": 0, "grip_penalty": 0,
+    }
+    for path in RND_PATHS.values():
+        for tier in path["tiers"]:
+            for opt in tier["options"]:
+                if opt["id"] in researched:
+                    for k, v in opt["bonus"].items():
+                        bonuses[k] = bonuses.get(k, 0) + v
+    return bonuses
+
+
 def _effective_speed_and_grip(entrant: dict, profile: Optional[dict], upgrades_map: Dict[str, dict]) -> tuple:
     """Returns (effective_speed, effective_grip) with upgrade trade-offs: engine, tires, aero, reliability, brakes, gearbox, weight, fuel."""
     car_def = _get_racing_car(entrant.get("racing_car_id") or "")
@@ -712,6 +910,7 @@ def _run_race_simulation_laps(
         corner_weight = min(0.75, corner_weight * 1.35)
 
     crew_cache: Dict[str, dict] = {}
+    driver_cache: Dict[str, dict] = {}
     for e in entrants:
         eid = e.get("user_id") or e.get("id")
         prof = profile_by_user.get(eid) or {}
@@ -725,6 +924,40 @@ def _run_race_simulation_laps(
             "morale": int(prof.get("morale_level") or 0),
             "tactician": int(prof.get("tactician_level") or 0),
         }
+        if e.get("is_npc"):
+            driver_cache[eid] = {
+                "skill": random.randint(50, 70),
+                "consistency": random.randint(50, 70),
+                "racecraft": random.randint(50, 70),
+                "wet_ability": random.randint(50, 70),
+                "tire_management": random.randint(50, 70),
+                "aggression": random.randint(30, 60),
+            }
+        else:
+            drv_id = prof.get("hired_driver_id")
+            drv = _get_driver(drv_id) if drv_id else None
+            if drv:
+                driver_cache[eid] = {
+                    "skill": drv["skill"],
+                    "consistency": drv["consistency"],
+                    "racecraft": drv["racecraft"],
+                    "wet_ability": drv["wet_ability"],
+                    "tire_management": drv["tire_management"],
+                    "aggression": drv["aggression"],
+                }
+            else:
+                driver_cache[eid] = {
+                    "skill": 50, "consistency": 50, "racecraft": 50,
+                    "wet_ability": 50, "tire_management": 50, "aggression": 40,
+                }
+
+    rnd_cache: Dict[str, dict] = {}
+    for e in entrants:
+        eid = e.get("user_id") or e.get("id")
+        if not e.get("is_npc"):
+            rnd_cache[eid] = _get_rnd_bonuses(profile_by_user.get(eid) or {})
+        else:
+            rnd_cache[eid] = _get_rnd_bonuses({})
 
     def _compound_wear_mult(entrant: dict) -> float:
         cid = (entrant.get("tyre_compound") or "medium").lower()
@@ -757,7 +990,9 @@ def _run_race_simulation_laps(
             up_eng = _get_upgrades(entrant) if entrant else {}
             cooling = int(up_eng.get("cooling_level") or 0)
             cooling_risk_mult = max(0.4, 1.0 - cooling * COOLING_DNF_RISK_REDUCTION_PER_LEVEL)
+            rnd_b = rnd_cache.get(eid, {})
             dnf_chance = (wear - ENGINE_RISK_THRESHOLD) / (ENGINE_WEAR_MAX - ENGINE_RISK_THRESHOLD) * ENGINE_DNF_CHANCE_PER_LAP_AT_100
+            dnf_chance *= (1.0 - rnd_b.get("dnf_reduction", 0))
             if random.random() < (dnf_chance * cooling_risk_mult):
                 dnf_ids.append(eid)
                 engine_issue_this_lap[eid] = True
@@ -784,6 +1019,10 @@ def _run_race_simulation_laps(
                 lap_speeds.append((eid, 0.0))
                 continue
             speed_val, grip_val = _effective_speed_and_grip(e, profile_by_user.get(eid) or {}, upgrades_map)
+            rnd_b = rnd_cache.get(eid, {})
+            speed_val *= (1.0 + rnd_b.get("speed_pct", 0))
+            grip_val *= (1.0 + rnd_b.get("grip_pct", 0) - rnd_b.get("grip_penalty", 0))
+            grip_val = max(0.5, min(1.0, grip_val))
             wear = engine_wear_by_entrant.get(eid) or 0
             if wear >= ENGINE_RISK_THRESHOLD:
                 up = _get_upgrades(e)
@@ -797,7 +1036,6 @@ def _run_race_simulation_laps(
             base_weight_penalty = 0.03 * ((num_laps - lap + 1) / max(1, num_laps))
             weight_penalty = max(0.0, base_weight_penalty - fuel_lvl * FUEL_WEIGHT_PENALTY_PER_LEVEL - fuel_tech * FUEL_TECH_WEIGHT_PER_LEVEL)
             fuel_weight_mult = 1.0 + weight_penalty
-            # F1 Clash–style: worn tyres hurt more (steeper curve to match frontend)
             tire_factor = max(0.3, (tire_wear[eid] / 100.0) ** 1.2)
             compound_mult = _compound_grip_mult(e)
 
@@ -812,8 +1050,20 @@ def _run_race_simulation_laps(
             corner_perf = (grip_val * tire_factor * corner_grip_bonus * speed_mult) / fuel_weight_mult
 
             combined = straight_perf * (1.0 - corner_weight) + corner_perf * corner_weight
+            accel_bonus = accel_lvl * ACCELERATION_BONUS_PER_LEVEL + rnd_b.get("acceleration_pct", 0)
             if accel_lvl > 0 and random.random() < 0.15:
-                combined *= 1.0 + accel_lvl * ACCELERATION_BONUS_PER_LEVEL
+                combined *= 1.0 + accel_bonus
+
+            drv_stats = driver_cache.get(eid, {})
+            drv_skill = drv_stats.get("skill", 50)
+            drv_consistency = drv_stats.get("consistency", 50)
+            drv_wet = drv_stats.get("wet_ability", 50)
+            combined *= 1.0 + (drv_skill - 50) * 0.002
+            variance_scale = max(0.2, 1.0 - drv_consistency * 0.008)
+            combined += random.uniform(-0.5, 0.5) * variance_scale
+            if is_wet:
+                combined *= 1.0 + (drv_wet - 50) * 0.003
+                combined *= (1.0 + rnd_b.get("wet_grip_pct", 0))
 
             tactician = crew.get("tactician", 0)
             if is_wet and tactician > 0:
@@ -850,7 +1100,10 @@ def _run_race_simulation_laps(
             if sa <= 0 or sb <= 0:
                 continue
             closeness = abs(sa - sb) / max(sa, sb)
-            if closeness < 0.04 and random.random() < ovt * OVERTAKING_CHANCE_PER_LEVEL:
+            behind_drv = driver_cache.get(car_behind, {})
+            rnd_b_behind = rnd_cache.get(car_behind, {})
+            overtake_prob = ovt * OVERTAKING_CHANCE_PER_LEVEL + behind_drv.get("racecraft", 50) * 0.0008 + behind_drv.get("aggression", 40) * 0.0003 + rnd_b_behind.get("overtaking_pct", 0)
+            if closeness < 0.04 and random.random() < overtake_prob:
                 order[i], order[i + 1] = order[i + 1], order[i]
         lap_results.append(order)
 
@@ -865,7 +1118,10 @@ def _run_race_simulation_laps(
                 closeness = abs(score_a - score_b) / max(score_a, score_b)
                 if closeness > 0.05:
                     continue
-                contact_chance = corner_severity * 0.08
+                aggr_a = driver_cache.get(eid_a, {}).get("aggression", 40)
+                aggr_b = driver_cache.get(eid_b, {}).get("aggression", 40)
+                avg_aggression = (aggr_a + aggr_b) / 2
+                contact_chance = corner_severity * 0.08 * (1.0 + avg_aggression * 0.005)
                 if random.random() < contact_chance:
                     victim = random.choice([eid_a, eid_b])
                     spotter = crew_cache.get(victim, {}).get("spotter", 0)
@@ -881,6 +1137,7 @@ def _run_race_simulation_laps(
                 continue
             up = _get_upgrades(e)
             rel = int(up.get("reliability_level") or 0)
+            rnd_b = rnd_cache.get(eid, {})
             wear_mult_rel = max(0.5, 1.0 - rel * RELIABILITY_WEAR_REDUCTION_PER_LEVEL)
             if eid in pitting:
                 tire_wear[eid] = 100.0
@@ -891,6 +1148,9 @@ def _run_race_simulation_laps(
                 comp_wear = _compound_wear_mult(e)
                 crew_wear_reduction = 1.0 - tyre_tech * TYRE_TECH_WEAR_REDUCTION_PER_LEVEL - logistics * LOGISTICS_WEAR_REDUCTION_PER_LEVEL
                 wear_this_lap = (TIRE_WEAR_PER_LAP + random.uniform(-2, 2)) * tire_wear_mult * comp_wear * wear_mult_rel * max(0.7, crew_wear_reduction)
+                wear_this_lap *= (1.0 - rnd_b.get("tyre_wear_reduction", 0))
+                drv_tire_mgmt = driver_cache.get(eid, {}).get("tire_management", 50)
+                wear_this_lap *= max(0.7, 1.0 - drv_tire_mgmt * 0.003)
                 tire_wear[eid] = max(0, tire_wear[eid] - wear_this_lap)
             tire_wear_after_lap[eid].append(round(tire_wear[eid], 1))
 
@@ -957,6 +1217,212 @@ def _run_qualifying(
     qualifying_order = [x[0] for x in lap_times]
     qualifying_results = [{"entrant_id": eid, "lap_time": round(t, 3)} for eid, t in lap_times]
     return qualifying_order, qualifying_results
+
+
+# ---------- Championship Helpers ----------
+
+def _generate_championship_season() -> dict:
+    """Create a new championship season document with a 26-race calendar (2 per day, cycling 13 tracks)."""
+    now = datetime.now(timezone.utc)
+    month_str = now.strftime("%Y_%m")
+    season_id = f"season_{month_str}"
+    season_name = f"Season {now.month} - {now.strftime('%B %Y')}"
+    calendar = []
+    for i in range(26):
+        track_id = RACE_CALENDAR_TRACKS[i % len(RACE_CALENDAR_TRACKS)]
+        track_def = _get_track(track_id)
+        day_offset = i // RACES_PER_DAY
+        slot_index = i % RACES_PER_DAY
+        gp_time = GP_TIMES[slot_index] if slot_index < len(GP_TIMES) else GP_TIMES[0]
+        hour, minute = int(gp_time.split(":")[0]), int(gp_time.split(":")[1])
+        scheduled = (now + timedelta(days=day_offset)).replace(
+            hour=hour, minute=minute, second=0, microsecond=0
+        )
+        calendar.append({
+            "round": i + 1,
+            "track_id": track_id,
+            "track_name": track_def.get("name") if track_def else track_id,
+            "scheduled_at": scheduled.isoformat().replace("+00:00", "Z"),
+            "race_id": None,
+            "completed": False,
+        })
+    end_date = now + timedelta(days=14)
+    return {
+        "_id": season_id,
+        "season_name": season_name,
+        "start_date": now.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "end_date": end_date.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "race_calendar": calendar,
+        "driver_standings": {},
+        "constructor_standings": {},
+        "status": "active",
+    }
+
+
+async def _ensure_active_championship() -> dict:
+    """Get current active championship, auto-creating one if none exists."""
+    champ = await db.racing_championships.find_one({"status": "active"})
+    if champ:
+        return champ
+    doc = _generate_championship_season()
+    try:
+        await db.racing_championships.insert_one(doc)
+    except Exception:
+        champ = await db.racing_championships.find_one({"status": "active"})
+        if champ:
+            return champ
+    return await db.racing_championships.find_one({"_id": doc["_id"]}) or doc
+
+
+async def _award_championship_points(race_id: str, result_order: list, dnf_ids: list, participants: list):
+    """After a race completes, check if it's a championship race and award points."""
+    champ = await db.racing_championships.find_one({"status": "active"})
+    if not champ:
+        return
+
+    calendar = champ.get("race_calendar") or []
+    matched_round = None
+    for entry in calendar:
+        if entry.get("race_id") == race_id and not entry.get("completed"):
+            matched_round = entry
+            break
+
+    if not matched_round:
+        return
+
+    driver_standings = dict(champ.get("driver_standings") or {})
+    constructor_standings = dict(champ.get("constructor_standings") or {})
+
+    for i, entrant_id in enumerate(result_order):
+        if entrant_id in (dnf_ids or []):
+            continue
+        points = CHAMPIONSHIP_POINTS[i] if i < len(CHAMPIONSHIP_POINTS) else 0
+        if points == 0:
+            continue
+
+        entrant = next((p for p in participants if (p.get("user_id") or p.get("id")) == entrant_id), None)
+        if not entrant or entrant.get("is_npc"):
+            continue
+
+        uid = entrant.get("user_id")
+        if not uid:
+            continue
+
+        prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0, "team_name": 1, "team_color": 1})
+        user = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
+        driver_name = (user or {}).get("username") or "?"
+        team_name = (prof or {}).get("team_name") or "?"
+        team_color = (prof or {}).get("team_color") or "#888888"
+        position = i + 1
+
+        if uid not in driver_standings:
+            driver_standings[uid] = {"points": 0, "wins": 0, "podiums": 0, "races": 0, "driver_name": driver_name, "team_name": team_name}
+        ds = driver_standings[uid]
+        ds["points"] = ds.get("points", 0) + points
+        ds["races"] = ds.get("races", 0) + 1
+        ds["driver_name"] = driver_name
+        ds["team_name"] = team_name
+        if position == 1:
+            ds["wins"] = ds.get("wins", 0) + 1
+        if position <= 3:
+            ds["podiums"] = ds.get("podiums", 0) + 1
+
+        if uid not in constructor_standings:
+            constructor_standings[uid] = {"points": 0, "wins": 0, "team_name": team_name, "team_color": team_color}
+        cs = constructor_standings[uid]
+        cs["points"] = cs.get("points", 0) + points
+        cs["team_name"] = team_name
+        cs["team_color"] = team_color
+        if position == 1:
+            cs["wins"] = cs.get("wins", 0) + 1
+
+    matched_round["completed"] = True
+
+    await db.racing_championships.update_one(
+        {"_id": champ["_id"]},
+        {"$set": {
+            "race_calendar": calendar,
+            "driver_standings": driver_standings,
+            "constructor_standings": constructor_standings,
+        }},
+    )
+
+    await _check_championship_end(champ["_id"])
+
+
+async def _check_championship_end(championship_id: str):
+    """If all calendar races are completed, mark championship as done, award rewards, auto-create next."""
+    champ = await db.racing_championships.find_one({"_id": championship_id})
+    if not champ or champ.get("status") != "active":
+        return
+
+    calendar = champ.get("race_calendar") or []
+    if not all(entry.get("completed") for entry in calendar):
+        return
+
+    driver_standings = champ.get("driver_standings") or {}
+    sorted_drivers = sorted(
+        driver_standings.items(),
+        key=lambda x: (-x[1].get("points", 0), -x[1].get("wins", 0)),
+    )
+
+    for rank_idx, (uid, stats) in enumerate(sorted_drivers):
+        position = rank_idx + 1
+        reward = CHAMPIONSHIP_REWARDS.get(position)
+        if not reward:
+            continue
+        cash = reward.get("cash", 0)
+        if cash > 0:
+            await db.users.update_one({"id": uid}, {"$inc": {"money": cash}})
+        try:
+            driver_name = stats.get("driver_name", "?")
+            await send_notification(
+                uid,
+                f"🏆 Championship P{position}! Earned ${cash:,}",
+                f"Congratulations {driver_name}! You finished P{position} in {champ.get('season_name', 'the championship')}.",
+                "system",
+                category="racing",
+            )
+        except Exception:
+            pass
+
+    await db.racing_championships.update_one(
+        {"_id": championship_id},
+        {"$set": {"status": "completed"}},
+    )
+
+    new_season = _generate_championship_season()
+    try:
+        await db.racing_championships.insert_one(new_season)
+    except Exception:
+        pass
+
+
+async def _get_next_championship_round() -> Optional[dict]:
+    """Get the next unplayed round from the active championship calendar."""
+    champ = await db.racing_championships.find_one({"status": "active"})
+    if not champ:
+        return None
+    for entry in (champ.get("race_calendar") or []):
+        if not entry.get("completed") and not entry.get("race_id"):
+            return entry
+    return None
+
+
+async def _link_race_to_championship(race_id: str, round_num: int):
+    """Link a created race to a championship calendar round."""
+    champ = await db.racing_championships.find_one({"status": "active"})
+    if not champ:
+        return
+    calendar = champ.get("race_calendar") or []
+    for entry in calendar:
+        if entry.get("round") == round_num:
+            entry["race_id"] = race_id
+            break
+    await db.racing_championships.update_one(
+        {"_id": champ["_id"]},
+        {"$set": {"race_calendar": calendar}},
+    )
 
 
 # ---------- Endpoints ----------
@@ -1042,7 +1508,7 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         o["effective_speed"] = round(s, 1)
         o["effective_grip"] = round(g * 100, 0)
         o["upgrade_levels_used"] = _total_upgrade_levels(upgrades.get(o["id"]) or {}, o)
-    return {
+    result = {
         "profile": prof,
         "owned_cars": owned,
         "upgrades": upgrades,
@@ -1093,7 +1559,26 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "next_automated_race_utc": _next_automated_race_utc(),
         "sponsor": _get_sponsor(int(prof.get("racing_rep") or 0)),
         "sponsor_tiers": SPONSOR_TIERS,
+        "championship_points": 0,
+        "championship_position": None,
     }
+    try:
+        champ = await db.racing_championships.find_one({"status": "active"})
+        if champ:
+            ds = (champ.get("driver_standings") or {}).get(current_user["id"])
+            if ds:
+                result["championship_points"] = ds.get("points", 0)
+                sorted_d = sorted(
+                    champ.get("driver_standings", {}).items(),
+                    key=lambda x: (-x[1].get("points", 0), -x[1].get("wins", 0)),
+                )
+                for idx, (uid, _) in enumerate(sorted_d):
+                    if uid == current_user["id"]:
+                        result["championship_position"] = idx + 1
+                        break
+    except Exception:
+        pass
+    return result
 
 
 async def buy_racing_car(body: BuyRacingCarRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -1512,6 +1997,7 @@ async def create_race(body: CreateRaceRequest, current_user: dict = Depends(get_
         "reward_mult": track.get("reward_mult", 1.0),
         "laps": num_laps,
         "lobby_ends_at": (datetime.now(timezone.utc) + timedelta(seconds=RACE_LOBBY_COUNTDOWN_SEC)).isoformat().replace("+00:00", "Z"),
+        "interactive": bool(getattr(body, "interactive", False)),
     }
     await db.racing_races.insert_one(doc)
     if entry_fee > 0:
@@ -1748,6 +2234,12 @@ async def _start_race_internal(race_id: str) -> dict:
         up = upgrades_map.get(p.get("racing_car_instance_id") or p.get("id"))
         p["reliability_level"] = int(up.get("reliability_level") or 0) if up else 0
         p["overtaking_level"] = int(up.get("overtaking_level") or 0) if up else 0
+    if race.get("interactive"):
+        return await _start_interactive_race(
+            race_id, race, participants, profile_by_user, upgrades_map,
+            engine_wear_by_entrant, num_laps, weather_id, weather,
+            qualifying_order, qualifying_results, track,
+        )
     # Pre-compute race simulation so live replay matches final results
     with _SeededRandom(f"race:{race_id}"):
         lap_results, result_order, pit_stops, tire_wear_after_lap, sim_dnf_ids, sim_incidents = _run_race_simulation_laps(
@@ -1880,10 +2372,16 @@ async def _create_automated_race(slot_label: str) -> Optional[str]:
     
     if len(participants) < MIN_GRID:
         return None
-    track = random.choice(TRACKS)
+    championship_round = await _get_next_championship_round()
+    if championship_round:
+        track = _get_track(championship_round.get("track_id")) or random.choice(TRACKS)
+    else:
+        track = random.choice(TRACKS)
     weather = random.choice(WEATHER_TYPES)
     num_laps = max(NUM_LAPS_MIN, min(NUM_LAPS_MAX, 5))
     race_id = str(uuid.uuid4())
+    if championship_round:
+        await _link_race_to_championship(race_id, championship_round.get("round"))
     now = _now_iso()
     created_by = participants[0]["user_id"]
     doc = {
@@ -2139,12 +2637,18 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
         rp = 0 if is_dnf else (RANK_POINTS_BY_POSITION[i] if i < len(RANK_POINTS_BY_POSITION) else 0)
         rep = 0 if is_dnf else (RACING_REP_BY_POSITION[i] if i < len(RACING_REP_BY_POSITION) else 0)
         sponsor_income = 0
+        driver_salary = 0
         if entrant and not entrant.get("is_npc"):
             uid = entrant.get("user_id")
             prof_for_sponsor = profile_by_user.get(uid) or {}
             sponsor = _get_sponsor(int(prof_for_sponsor.get("racing_rep") or 0))
             sponsor_income = sponsor.get("income_per_race", 0) if not is_dnf else 0
-            total_crew_income = cash + sponsor_income
+            hired_drv_id = prof_for_sponsor.get("hired_driver_id")
+            if hired_drv_id:
+                hired_drv = _get_driver(hired_drv_id)
+                if hired_drv:
+                    driver_salary = hired_drv.get("salary_per_race", 0)
+            total_crew_income = cash + sponsor_income - driver_salary
             if not is_dnf:
                 await db.users.update_one({"id": uid}, {"$inc": {"rank_points": rp}})
                 await db.racing_profiles.update_one(
@@ -2158,9 +2662,12 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
                 except Exception:
                     pass
             else:
+                dnf_inc = {"races_completed": 1}
+                if driver_salary > 0:
+                    dnf_inc["crew_bank"] = -driver_salary
                 await db.racing_profiles.update_one(
                     {"user_id": uid},
-                    {"$inc": {"races_completed": 1}},
+                    {"$inc": dnf_inc},
                     upsert=True,
                 )
             inst_id = entrant.get("racing_car_instance_id")
@@ -2183,7 +2690,7 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
                 {"$inc": {f"tyre_stock_{compound}": -1}},
                 upsert=True,
             )
-        rewards.append({"entrant_id": entrant_id, "position": position, "cash": cash, "rank_points": rp, "racing_rep": rep, "dnf": is_dnf, "sponsor_income": sponsor_income})
+        rewards.append({"entrant_id": entrant_id, "position": position, "cash": cash, "rank_points": rp, "racing_rep": rep, "dnf": is_dnf, "sponsor_income": sponsor_income, "driver_salary": driver_salary})
     now = _now_iso()
     await db.racing_races.update_one(
         {"id": race_id},
@@ -2214,7 +2721,72 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
     else:
         asyncio.create_task(_refund_race_bets(race_id))
     asyncio.create_task(_update_track_records(race_id, race.get("track_id") or "", lap_results, participants))
+    asyncio.create_task(_award_championship_points(race_id, result_order, dnf_ids, participants))
     return {"message": "Race completed", "race": race}
+
+
+async def get_championship(current_user: dict = Depends(get_current_user_verified)):
+    """Get current active championship with calendar, standings, and next race info."""
+    champ = await _ensure_active_championship()
+    calendar = champ.get("race_calendar") or []
+    next_race = None
+    for entry in calendar:
+        if not entry.get("completed"):
+            next_race = entry
+            break
+    completed_races = sum(1 for e in calendar if e.get("completed"))
+    driver_standings = champ.get("driver_standings") or {}
+    sorted_drivers = sorted(
+        driver_standings.items(),
+        key=lambda x: (-x[1].get("points", 0), -x[1].get("wins", 0)),
+    )
+    my_position = None
+    for i, (uid, _) in enumerate(sorted_drivers):
+        if uid == current_user["id"]:
+            my_position = i + 1
+            break
+    safe_champ = {k: v for k, v in champ.items() if k != "_id"}
+    safe_champ["championship_id"] = champ.get("_id")
+    return {
+        "championship": safe_champ,
+        "next_race": next_race,
+        "completed_races": completed_races,
+        "total_races": len(calendar),
+        "my_championship_position": my_position,
+    }
+
+
+async def get_championship_standings(current_user: dict = Depends(get_current_user_verified)):
+    """Detailed championship standings sorted by points."""
+    champ = await _ensure_active_championship()
+    driver_standings = champ.get("driver_standings") or {}
+    constructor_standings = champ.get("constructor_standings") or {}
+
+    sorted_drivers = sorted(
+        [{"user_id": uid, **data} for uid, data in driver_standings.items()],
+        key=lambda x: (-x.get("points", 0), -x.get("wins", 0)),
+    )
+    for i, d in enumerate(sorted_drivers):
+        d["position"] = i + 1
+
+    sorted_constructors = sorted(
+        [{"user_id": uid, **data} for uid, data in constructor_standings.items()],
+        key=lambda x: (-x.get("points", 0), -x.get("wins", 0)),
+    )
+    for i, c in enumerate(sorted_constructors):
+        c["position"] = i + 1
+
+    my_driver = next((d for d in sorted_drivers if d["user_id"] == current_user["id"]), None)
+    my_constructor = next((c for c in sorted_constructors if c["user_id"] == current_user["id"]), None)
+
+    return {
+        "driver_standings": sorted_drivers,
+        "constructor_standings": sorted_constructors,
+        "my_driver_standing": my_driver,
+        "my_constructor_standing": my_constructor,
+        "season_name": champ.get("season_name"),
+        "status": champ.get("status"),
+    }
 
 
 async def get_racing_leaderboard(current_user: dict = Depends(get_current_user), limit: int = 50):
@@ -2793,6 +3365,819 @@ async def get_race_season_stats(current_user: dict = Depends(get_current_user_ve
     }
 
 
+# ---------- Driver Endpoints ----------
+
+async def get_driver_market(current_user: dict = Depends(get_current_user_verified)):
+    prof = await _ensure_racing_profile(current_user["id"])
+    _require_racing_team(prof)
+    hired_ids_cursor = db.racing_profiles.find(
+        {"hired_driver_id": {"$ne": None}},
+        {"_id": 0, "hired_driver_id": 1},
+    )
+    hired_docs = await hired_ids_cursor.to_list(200)
+    hired_set = {d["hired_driver_id"] for d in hired_docs if d.get("hired_driver_id")}
+    pool = []
+    for d in DRIVER_POOL:
+        pool.append({**d, "hired": d["id"] in hired_set})
+    return {"drivers": pool}
+
+
+async def hire_driver(body: HireDriverRequest, current_user: dict = Depends(get_current_user_verified)):
+    prof = await _ensure_racing_profile(current_user["id"])
+    _require_racing_team(prof)
+    if prof.get("hired_driver_id"):
+        raise HTTPException(status_code=400, detail="You already have a driver. Fire your current driver first.")
+    driver = _get_driver(body.driver_id)
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver not found in pool")
+    already = await db.racing_profiles.find_one(
+        {"hired_driver_id": body.driver_id, "user_id": {"$ne": current_user["id"]}},
+        {"_id": 0, "user_id": 1},
+    )
+    if already:
+        raise HTTPException(status_code=400, detail="This driver is already hired by another team")
+    await db.racing_profiles.update_one(
+        {"user_id": current_user["id"]},
+        {"$set": {"hired_driver_id": body.driver_id}},
+    )
+    return {"message": f"Hired {driver['name']}", "driver": driver}
+
+
+async def fire_driver(current_user: dict = Depends(get_current_user_verified)):
+    prof = await _ensure_racing_profile(current_user["id"])
+    _require_racing_team(prof)
+    if not prof.get("hired_driver_id"):
+        raise HTTPException(status_code=400, detail="You don't have a driver to fire")
+    old_driver = _get_driver(prof["hired_driver_id"])
+    await db.racing_profiles.update_one(
+        {"user_id": current_user["id"]},
+        {"$set": {"hired_driver_id": None}},
+    )
+    name = old_driver["name"] if old_driver else "Unknown"
+    return {"message": f"Fired {name}"}
+
+
+async def get_my_driver(current_user: dict = Depends(get_current_user_verified)):
+    prof = await _ensure_racing_profile(current_user["id"])
+    driver_id = prof.get("hired_driver_id")
+    if not driver_id:
+        return {"driver": None}
+    driver = _get_driver(driver_id)
+    return {"driver": driver}
+
+
+# ---------- Interactive Race Mode ----------
+
+
+def _build_sim_caches(
+    entrants: List[dict], profile_by_user: Dict[str, dict],
+) -> tuple:
+    """Build crew_cache and driver_cache for simulation.  Call inside a seeded RNG context for NPC consistency."""
+    crew_cache: Dict[str, dict] = {}
+    driver_cache: Dict[str, dict] = {}
+    for e in entrants:
+        eid = e.get("user_id") or e.get("id")
+        prof = profile_by_user.get(eid) or {}
+        crew_cache[eid] = {
+            "strategist": int(prof.get("strategist_level") or 0),
+            "spotter": int(prof.get("spotter_level") or 0),
+            "tyre_tech": int(prof.get("tyre_tech_level") or 0),
+            "fuel_tech": int(prof.get("fuel_tech_level") or 0),
+            "data_analyst": int(prof.get("data_analyst_level") or 0),
+            "logistics": int(prof.get("logistics_level") or 0),
+            "morale": int(prof.get("morale_level") or 0),
+            "tactician": int(prof.get("tactician_level") or 0),
+        }
+        if e.get("is_npc"):
+            driver_cache[eid] = {
+                "skill": random.randint(50, 70),
+                "consistency": random.randint(50, 70),
+                "racecraft": random.randint(50, 70),
+                "wet_ability": random.randint(50, 70),
+                "tire_management": random.randint(50, 70),
+                "aggression": random.randint(30, 60),
+            }
+        else:
+            drv_id = prof.get("hired_driver_id")
+            drv = _get_driver(drv_id) if drv_id else None
+            if drv:
+                driver_cache[eid] = {
+                    "skill": drv["skill"],
+                    "consistency": drv["consistency"],
+                    "racecraft": drv["racecraft"],
+                    "wet_ability": drv["wet_ability"],
+                    "tire_management": drv["tire_management"],
+                    "aggression": drv["aggression"],
+                }
+            else:
+                driver_cache[eid] = {
+                    "skill": 50, "consistency": 50, "racecraft": 50,
+                    "wet_ability": 50, "tire_management": 50, "aggression": 40,
+                }
+    return crew_cache, driver_cache
+
+
+async def _start_interactive_race(
+    race_id: str, race: dict, participants: List[dict],
+    profile_by_user: Dict[str, dict], upgrades_map: Dict[str, dict],
+    engine_wear_by_entrant: Dict[str, float], num_laps: int,
+    weather_id: str, weather: dict, qualifying_order: list,
+    qualifying_results: list, track: Optional[dict],
+) -> dict:
+    """Set up interactive race state instead of running the full simulation."""
+    with _SeededRandom(f"interactive_init:{race_id}"):
+        crew_cache, driver_cache = _build_sim_caches(participants, profile_by_user)
+
+    car_states: Dict[str, dict] = {}
+    for i, p in enumerate(participants):
+        eid = p.get("user_id") or p.get("id")
+        car_states[eid] = {
+            "tyre_wear": 100.0,
+            "engine_wear": float(engine_wear_by_entrant.get(eid) or 0),
+            "damage": 0.0,
+            "dnf": False,
+            "compound": (p.get("tyre_compound") or "medium").lower(),
+            "push_level": 3,
+            "last_lap_time": None,
+            "position": i + 1,
+            "fuel_pct": 100.0,
+        }
+
+    now = _now_iso()
+    deadline = (datetime.now(timezone.utc) + timedelta(seconds=INTERACTIVE_LAP_DEADLINE_SEC)).isoformat().replace("+00:00", "Z")
+
+    safe_profiles = {}
+    for k, v in profile_by_user.items():
+        safe_profiles[k] = {fk: fv for fk, fv in v.items() if fk != "_id"}
+
+    update_fields = {
+        "state": "running",
+        "mode": "interactive",
+        "participants": participants,
+        "qualifying_order": qualifying_order,
+        "qualifying_results": qualifying_results,
+        "upgrades_snapshot": upgrades_map,
+        "engine_wear_snapshot": engine_wear_by_entrant,
+        "profile_snapshot": safe_profiles,
+        "driver_snapshot": driver_cache,
+        "crew_snapshot": crew_cache,
+        "laps": num_laps,
+        "current_lap": 0,
+        "total_laps": num_laps,
+        "lap_deadline": deadline,
+        "car_states": car_states,
+        "decisions": {},
+        "lap_results": [],
+        "pit_stops": [],
+        "incidents": [],
+        "dnf_ids": [],
+        "weather": weather_id,
+        "weather_name": weather.get("name", "Clear"),
+        "started_at": now,
+        "result_order": None,
+        "rewards": None,
+        "completed_at": None,
+    }
+
+    await db.racing_races.update_one({"id": race_id}, {"$set": update_fields})
+    race_out = dict(race)
+    race_out.update(update_fields)
+    return race_out
+
+
+def _run_one_interactive_lap(
+    lap_num: int, total_laps: int,
+    entrants: List[dict], profile_by_user: Dict[str, dict],
+    upgrades_map: Dict[str, dict], car_states: Dict[str, dict],
+    decisions: Dict[str, dict], weather_id: str,
+    track: Optional[dict], crew_cache: Dict[str, dict],
+    driver_cache: Dict[str, dict], prior_lap_results: List[List[str]],
+) -> tuple:
+    """Run one interactive lap.  Returns (lap_order, new_pit_stops, new_incidents, car_states, new_dnf_ids)."""
+    weather = _get_weather(weather_id)
+    tire_wear_mult = float(weather.get("tire_wear_mult", 1.0))
+    speed_mult = float(weather.get("speed_mult", 1.0))
+
+    ids = [e.get("user_id") or e.get("id") for e in entrants]
+    dnf_ids = [eid for eid in ids if car_states.get(eid, {}).get("dnf")]
+
+    track = track or {}
+    corners = int(track.get("corners") or 10)
+    corner_severity = float(track.get("corner_severity") or 0.4)
+    is_wet = weather_id in ("rain", "snow")
+    corner_weight = min(0.6, corners * corner_severity * 0.015)
+    if is_wet:
+        corner_weight = min(0.75, corner_weight * 1.35)
+
+    new_pit_stops: List[Dict[str, Any]] = []
+    new_incidents: List[Dict[str, Any]] = []
+    new_dnfs: List[str] = []
+    engine_wear_per_lap = ENGINE_WEAR_PER_RACE / max(1, total_laps)
+
+    rnd_cache: Dict[str, dict] = {}
+    for e in entrants:
+        eid = e.get("user_id") or e.get("id")
+        if not e.get("is_npc"):
+            rnd_cache[eid] = _get_rnd_bonuses(profile_by_user.get(eid) or {})
+        else:
+            rnd_cache[eid] = _get_rnd_bonuses({})
+
+    # --- Engine DNF check ---
+    for eid in ids:
+        if eid in dnf_ids:
+            continue
+        cs = car_states.get(eid, {})
+        wear = float(cs.get("engine_wear") or 0)
+        if wear < ENGINE_RISK_THRESHOLD:
+            continue
+        entrant = next((e for e in entrants if (e.get("user_id") or e.get("id")) == eid), None)
+        up = upgrades_map.get((entrant or {}).get("racing_car_instance_id") or (entrant or {}).get("id") or "") or {}
+        cooling = int(up.get("cooling_level") or 0)
+        cooling_risk_mult = max(0.4, 1.0 - cooling * COOLING_DNF_RISK_REDUCTION_PER_LEVEL)
+        rnd_b = rnd_cache.get(eid, {})
+        dnf_chance = (wear - ENGINE_RISK_THRESHOLD) / (ENGINE_WEAR_MAX - ENGINE_RISK_THRESHOLD) * ENGINE_DNF_CHANCE_PER_LAP_AT_100
+        dnf_chance *= (1.0 - rnd_b.get("dnf_reduction", 0))
+        if random.random() < (dnf_chance * cooling_risk_mult):
+            dnf_ids.append(eid)
+            new_dnfs.append(eid)
+            car_states[eid]["dnf"] = True
+
+    # --- Pit stop decisions ---
+    pitting = set()
+    for eid in ids:
+        if eid in dnf_ids:
+            continue
+        decision = decisions.get(eid, {})
+        entrant = next((e for e in entrants if (e.get("user_id") or e.get("id")) == eid), None)
+        is_npc = (entrant or {}).get("is_npc")
+        if not is_npc and eid in decisions and decision.get("pit_this_lap"):
+            pitting.add(eid)
+            new_compound = (decision.get("pit_compound") or "medium").lower()
+            if new_compound not in ("soft", "medium", "hard", "inter", "full_wet"):
+                new_compound = "medium"
+            car_states[eid]["compound"] = new_compound
+        elif is_npc or eid not in decisions:
+            cs = car_states.get(eid, {})
+            prof = profile_by_user.get(eid) or {}
+            pit_level = min(MAX_CREW_LEVEL, int(prof.get("pit_level") or 0))
+            strategist = crew_cache.get(eid, {}).get("strategist", 0)
+            pit_threshold = min(65, TIRE_PIT_THRESHOLD + pit_level * PIT_THRESHOLD_PER_LEVEL - strategist * STRATEGIST_PIT_OFFSET_PER_LEVEL)
+            tw = float(cs.get("tyre_wear") or 100)
+            if tw < pit_threshold:
+                pitting.add(eid)
+            elif lap_num > 1 and lap_num < total_laps and random.random() < 0.12 and tw < (55 + pit_level * PIT_RANDOM_THRESHOLD_PER_LEVEL):
+                pitting.add(eid)
+    for eid in pitting:
+        new_pit_stops.append({"lap": lap_num, "entrant_id": eid})
+
+    # --- Lap speed calculation ---
+    lap_speeds: List[tuple] = []
+    for e in entrants:
+        eid = e.get("user_id") or e.get("id")
+        if eid in dnf_ids:
+            lap_speeds.append((eid, 0.0))
+            continue
+
+        cs = car_states.get(eid, {})
+        decision = decisions.get(eid, {})
+        is_npc = e.get("is_npc")
+
+        if is_npc or eid not in decisions:
+            drv = driver_cache.get(eid, {})
+            push_level = max(1, min(5, 2 + int(drv.get("aggression", 40) / 30)))
+            defend = random.random() < 0.1
+        else:
+            push_level = max(1, min(5, int(decision.get("push_level") or 3)))
+            defend = bool(decision.get("defend"))
+
+        car_states[eid]["push_level"] = push_level
+
+        speed_val, grip_val = _effective_speed_and_grip(e, profile_by_user.get(eid) or {}, upgrades_map)
+        rnd_b = rnd_cache.get(eid, {})
+        speed_val *= (1.0 + rnd_b.get("speed_pct", 0))
+        grip_val *= (1.0 + rnd_b.get("grip_pct", 0) - rnd_b.get("grip_penalty", 0))
+        grip_val = max(0.5, min(1.0, grip_val))
+
+        eng_wear = float(cs.get("engine_wear") or 0)
+        if eng_wear >= ENGINE_RISK_THRESHOLD:
+            up = upgrades_map.get(e.get("racing_car_instance_id") or e.get("id") or "") or {}
+            cooling_lvl = int(up.get("cooling_level") or 0)
+            penalty = min(1.0, ENGINE_SPEED_PENALTY_AT_RISK + cooling_lvl * COOLING_SPEED_PENALTY_AT_RISK_PER_LEVEL)
+            speed_val *= penalty
+
+        speed_val *= (0.92 + push_level * 0.04)
+        if defend:
+            speed_val *= 0.97
+
+        up_fuel = upgrades_map.get(e.get("racing_car_instance_id") or e.get("id") or "") or {}
+        fuel_lvl = int(up_fuel.get("fuel_level") or 0)
+        crew = crew_cache.get(eid, {})
+        fuel_tech = crew.get("fuel_tech", 0)
+        base_weight_penalty = 0.03 * ((total_laps - lap_num + 1) / max(1, total_laps))
+        weight_penalty = max(0.0, base_weight_penalty - fuel_lvl * FUEL_WEIGHT_PENALTY_PER_LEVEL - fuel_tech * FUEL_TECH_WEIGHT_PER_LEVEL)
+        fuel_weight_mult = 1.0 + weight_penalty
+
+        tw = float(cs.get("tyre_wear") or 100)
+        tire_factor = max(0.3, (tw / 100.0) ** 1.2)
+
+        compound = (cs.get("compound") or "medium").lower()
+        compound_mult = 1.0
+        for c in TYRE_COMPOUNDS:
+            if c.get("id") == compound:
+                compound_mult = float(c.get("grip_mult", 1.0))
+                if is_wet and c.get("wet_grip_bonus"):
+                    compound_mult += float(c.get("wet_grip_bonus", 0))
+                break
+
+        up = upgrades_map.get(e.get("racing_car_instance_id") or e.get("id") or "") or {}
+        brakes = int(up.get("brakes_level") or 0)
+        aero = int(up.get("aero_level") or 0)
+        susp = int(up.get("suspension_level") or 0)
+        accel_lvl = int(up.get("acceleration_level") or 0)
+
+        straight_perf = (speed_val * tire_factor * speed_mult) / fuel_weight_mult
+        corner_grip_bonus = compound_mult + brakes * CORNER_GRIP_BRAKES_PER_LEVEL + aero * CORNER_GRIP_AERO_PER_LEVEL + susp * CORNER_GRIP_SUSP_PER_LEVEL
+        corner_perf = (grip_val * tire_factor * corner_grip_bonus * speed_mult) / fuel_weight_mult
+
+        combined = straight_perf * (1.0 - corner_weight) + corner_perf * corner_weight
+        accel_bonus = accel_lvl * ACCELERATION_BONUS_PER_LEVEL + rnd_b.get("acceleration_pct", 0)
+        if accel_lvl > 0 and random.random() < 0.15:
+            combined *= 1.0 + accel_bonus
+
+        drv_stats = driver_cache.get(eid, {})
+        combined *= 1.0 + (drv_stats.get("skill", 50) - 50) * 0.002
+        variance_scale = max(0.2, 1.0 - drv_stats.get("consistency", 50) * 0.008)
+        combined += random.uniform(-0.5, 0.5) * variance_scale
+        if is_wet:
+            combined *= 1.0 + (drv_stats.get("wet_ability", 50) - 50) * 0.003
+            combined *= (1.0 + rnd_b.get("wet_grip_pct", 0))
+
+        tactician = crew.get("tactician", 0)
+        if is_wet and tactician > 0:
+            combined *= 1.0 + tactician * TACTICIAN_WET_PACE_PER_LEVEL
+
+        morale = crew.get("morale", 0)
+        if morale > 0 and prior_lap_results:
+            last_lap = prior_lap_results[-1]
+            pos_idx = last_lap.index(eid) if eid in last_lap else len(last_lap)
+            if pos_idx < len(ids) // 2:
+                combined *= 1.0 + morale * MORALE_TOP_HALF_PACE_PER_LEVEL
+
+        dmg = float(cs.get("damage") or 0)
+        if dmg > 0:
+            combined *= (1.0 - dmg)
+
+        if eid in pitting:
+            ent_prof = profile_by_user.get(eid) or {}
+            ent_pit_level = min(MAX_CREW_LEVEL, int(ent_prof.get("pit_level") or 0))
+            pit_factor = PIT_PENALTY_FACTOR_BASE + ent_pit_level * PIT_PENALTY_IMPROVEMENT_PER_LEVEL
+            combined *= pit_factor
+
+        lap_speeds.append((eid, combined))
+
+    # --- Sort + overtaking ---
+    random.shuffle(lap_speeds)
+    lap_speeds.sort(key=lambda x: -x[1])
+    order = [x[0] for x in lap_speeds]
+    speed_by_id = {eid: s for eid, s in lap_speeds}
+
+    for i in range(len(order) - 1):
+        car_ahead, car_behind = order[i], order[i + 1]
+        entrant_behind = next((e for e in entrants if (e.get("user_id") or e.get("id")) == car_behind), None)
+        up_behind = upgrades_map.get((entrant_behind or {}).get("racing_car_instance_id") or (entrant_behind or {}).get("id") or "") or {}
+        ovt = int(up_behind.get("overtaking_level") or 0)
+        if ovt <= 0:
+            continue
+        sa, sb = speed_by_id.get(car_ahead, 0), speed_by_id.get(car_behind, 0)
+        if sa <= 0 or sb <= 0:
+            continue
+        closeness = abs(sa - sb) / max(sa, sb)
+        behind_drv = driver_cache.get(car_behind, {})
+        rnd_b_behind = rnd_cache.get(car_behind, {})
+        overtake_prob = ovt * OVERTAKING_CHANCE_PER_LEVEL + behind_drv.get("racecraft", 50) * 0.0008 + behind_drv.get("aggression", 40) * 0.0003 + rnd_b_behind.get("overtaking_pct", 0)
+        ahead_decision = decisions.get(car_ahead, {})
+        if ahead_decision.get("defend"):
+            overtake_prob *= 0.5
+        if closeness < 0.04 and random.random() < overtake_prob:
+            order[i], order[i + 1] = order[i + 1], order[i]
+
+    # --- Contact incidents ---
+    active_ids = [eid for eid in ids if eid not in dnf_ids]
+    for i in range(len(active_ids)):
+        for j in range(i + 1, len(active_ids)):
+            eid_a, eid_b = active_ids[i], active_ids[j]
+            score_a, score_b = speed_by_id.get(eid_a, 0), speed_by_id.get(eid_b, 0)
+            if score_a <= 0 or score_b <= 0:
+                continue
+            closeness = abs(score_a - score_b) / max(score_a, score_b)
+            if closeness > 0.05:
+                continue
+            aggr_a = driver_cache.get(eid_a, {}).get("aggression", 40)
+            aggr_b = driver_cache.get(eid_b, {}).get("aggression", 40)
+            contact_chance = corner_severity * 0.08 * (1.0 + ((aggr_a + aggr_b) / 2) * 0.005)
+            if random.random() < contact_chance:
+                victim = random.choice([eid_a, eid_b])
+                spotter = crew_cache.get(victim, {}).get("spotter", 0)
+                if spotter > 0 and random.random() < spotter * SPOTTER_DODGE_CHANCE_PER_LEVEL:
+                    continue
+                dmg_val = random.uniform(0.02, 0.08)
+                old_dmg = float(car_states.get(victim, {}).get("damage") or 0)
+                car_states[victim]["damage"] = min(0.25, old_dmg + dmg_val)
+                new_incidents.append({"lap": lap_num, "entrant_ids": [eid_a, eid_b], "damaged": victim, "damage_pct": round(dmg_val * 100, 1)})
+
+    # --- Update tyre wear + engine wear ---
+    for e in entrants:
+        eid = e.get("user_id") or e.get("id")
+        if eid in dnf_ids:
+            continue
+        cs = car_states.get(eid, {})
+        up = upgrades_map.get(e.get("racing_car_instance_id") or e.get("id") or "") or {}
+        rel = int(up.get("reliability_level") or 0)
+        rnd_b = rnd_cache.get(eid, {})
+        wear_mult_rel = max(0.5, 1.0 - rel * RELIABILITY_WEAR_REDUCTION_PER_LEVEL)
+
+        if eid in pitting:
+            cs["tyre_wear"] = 100.0
+        else:
+            crew = crew_cache.get(eid, {})
+            tyre_tech = crew.get("tyre_tech", 0)
+            logistics = crew.get("logistics", 0)
+            compound = (cs.get("compound") or "medium").lower()
+            comp_wear = 1.0
+            for c in TYRE_COMPOUNDS:
+                if c.get("id") == compound:
+                    comp_wear = float(c.get("wear_mult", 1.0))
+                    break
+            crew_wear_reduction = 1.0 - tyre_tech * TYRE_TECH_WEAR_REDUCTION_PER_LEVEL - logistics * LOGISTICS_WEAR_REDUCTION_PER_LEVEL
+            push = int(cs.get("push_level") or 3)
+            push_wear_mult = 0.7 + push * 0.15
+            wear_this_lap = (TIRE_WEAR_PER_LAP + random.uniform(-2, 2)) * tire_wear_mult * comp_wear * wear_mult_rel * max(0.7, crew_wear_reduction) * push_wear_mult
+            wear_this_lap *= (1.0 - rnd_b.get("tyre_wear_reduction", 0))
+            drv_tire_mgmt = driver_cache.get(eid, {}).get("tire_management", 50)
+            wear_this_lap *= max(0.7, 1.0 - drv_tire_mgmt * 0.003)
+            cs["tyre_wear"] = max(0, float(cs.get("tyre_wear") or 100) - wear_this_lap)
+
+        cooling = int(up.get("cooling_level") or 0)
+        eng_wear_mult = max(0, 1.0 - cooling * COOLING_WEAR_REDUCTION_PER_LEVEL)
+        eng_wear_increment = engine_wear_per_lap * eng_wear_mult * (1.0 - rnd_b.get("engine_wear_reduction", 0))
+        cs["engine_wear"] = min(ENGINE_WEAR_MAX, float(cs.get("engine_wear") or 0) + eng_wear_increment)
+        cs["fuel_pct"] = max(0, 100.0 * (total_laps - lap_num) / max(1, total_laps))
+
+    for i, eid in enumerate(order):
+        if eid in car_states:
+            car_states[eid]["position"] = i + 1
+
+    return order, new_pit_stops, new_incidents, car_states, new_dnfs
+
+
+async def _advance_one_lap(race: dict) -> Optional[dict]:
+    """Advance an interactive race by one lap.  Returns updated race or None if already advanced."""
+    race_id = race["id"]
+    current_lap = int(race.get("current_lap") or 0)
+    total_laps = int(race.get("total_laps") or race.get("laps") or 3)
+
+    if current_lap >= total_laps:
+        return None
+
+    new_lap = current_lap + 1
+    participants = list(race.get("participants") or [])
+    profile_by_user = race.get("profile_snapshot") or {}
+    upgrades_map = race.get("upgrades_snapshot") or {}
+    car_states = {k: dict(v) for k, v in (race.get("car_states") or {}).items()}
+    decisions_raw = race.get("decisions") or {}
+    weather_id = race.get("weather") or "clear"
+    track = _get_track(race.get("track_id") or "")
+    crew_cache = race.get("crew_snapshot") or {}
+    driver_cache = race.get("driver_snapshot") or {}
+    prior_lap_results = list(race.get("lap_results") or [])
+
+    lap_order, new_pit_stops, new_incidents, updated_cs, new_dnfs = _run_one_interactive_lap(
+        new_lap, total_laps, participants, profile_by_user, upgrades_map,
+        car_states, decisions_raw, weather_id, track, crew_cache, driver_cache, prior_lap_results,
+    )
+
+    all_lap_results = prior_lap_results + [lap_order]
+    all_pit_stops = list(race.get("pit_stops") or []) + new_pit_stops
+    all_incidents = list(race.get("incidents") or []) + new_incidents
+    all_dnf_ids = list(dict.fromkeys(list(race.get("dnf_ids") or []) + new_dnfs))
+
+    is_final = new_lap >= total_laps
+
+    if is_final:
+        finishers = [eid for eid in lap_order if eid not in all_dnf_ids]
+        result_order = finishers + all_dnf_ids
+
+        update = {
+            "current_lap": new_lap,
+            "car_states": updated_cs,
+            "decisions": {},
+            "lap_results": all_lap_results,
+            "pit_stops": all_pit_stops,
+            "incidents": all_incidents,
+            "dnf_ids": all_dnf_ids,
+            "result_order": result_order,
+            "lap_deadline": None,
+        }
+
+        res = await db.racing_races.update_one(
+            {"id": race_id, "current_lap": current_lap, "state": "running"},
+            {"$set": update},
+        )
+        if res.modified_count == 0:
+            return None
+
+        creator = next((p for p in participants if not p.get("is_npc")), participants[0] if participants else None)
+        if creator:
+            mock_user = {"id": creator.get("user_id") or creator.get("id"), "username": creator.get("username", "?")}
+            body = CompleteRaceRequest(result_order=result_order, dnf_ids=all_dnf_ids)
+            await complete_race(race_id, body, mock_user)
+
+        for p in participants:
+            if p.get("is_npc"):
+                continue
+            uid = p.get("user_id")
+            cs = updated_cs.get(uid)
+            inst_id = p.get("racing_car_instance_id")
+            if cs and inst_id:
+                final_wear = round(min(ENGINE_WEAR_MAX, float(cs.get("engine_wear") or 0)), 1)
+                await db.user_racing_cars.update_one(
+                    {"user_id": uid, "id": inst_id},
+                    {"$set": {"engine_wear": final_wear}},
+                )
+
+        return await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    else:
+        deadline = (datetime.now(timezone.utc) + timedelta(seconds=INTERACTIVE_LAP_DEADLINE_SEC)).isoformat().replace("+00:00", "Z")
+
+        update = {
+            "current_lap": new_lap,
+            "car_states": updated_cs,
+            "decisions": {},
+            "lap_results": all_lap_results,
+            "pit_stops": all_pit_stops,
+            "incidents": all_incidents,
+            "dnf_ids": all_dnf_ids,
+            "lap_deadline": deadline,
+        }
+
+        res = await db.racing_races.update_one(
+            {"id": race_id, "current_lap": current_lap, "state": "running"},
+            {"$set": update},
+        )
+        if res.modified_count == 0:
+            return None
+
+        return await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+
+
+async def _maybe_advance_interactive_lap(race_id: str):
+    """Check if lap deadline passed (or all players submitted) and advance if needed."""
+    race = await db.racing_races.find_one(
+        {"id": race_id, "mode": "interactive", "state": "running"}, {"_id": 0},
+    )
+    if not race:
+        return
+    deadline = race.get("lap_deadline")
+    if not deadline:
+        return
+
+    now = datetime.now(timezone.utc)
+    try:
+        dl = datetime.fromisoformat(deadline.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return
+
+    participants = race.get("participants") or []
+    decisions_map = race.get("decisions") or {}
+    human_ids = [p.get("user_id") for p in participants if not p.get("is_npc")]
+    all_submitted = all(uid in decisions_map for uid in human_ids)
+
+    if now >= dl or all_submitted:
+        await _advance_one_lap(race)
+
+
+async def submit_race_decision(
+    race_id: str, body: RaceDecisionRequest,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    if not race:
+        raise HTTPException(status_code=404, detail="Race not found")
+    if race.get("mode") != "interactive":
+        raise HTTPException(status_code=400, detail="Race is not interactive")
+    if race.get("state") != "running":
+        raise HTTPException(status_code=400, detail="Race is not in progress")
+
+    current_lap = int(race.get("current_lap") or 0)
+    total_laps = int(race.get("total_laps") or race.get("laps") or 3)
+    if current_lap >= total_laps:
+        raise HTTPException(status_code=400, detail="Race already finished")
+
+    participants = race.get("participants") or []
+    entrant_id = None
+    for p in participants:
+        if p.get("user_id") == current_user["id"] and not p.get("is_npc"):
+            entrant_id = p["user_id"]
+            break
+    if not entrant_id:
+        raise HTTPException(status_code=403, detail="You are not a participant in this race")
+
+    cs = (race.get("car_states") or {}).get(entrant_id, {})
+    if cs.get("dnf"):
+        raise HTTPException(status_code=400, detail="Your car has DNF'd")
+
+    decision = {
+        "push_level": max(1, min(5, int(body.push_level or 3))),
+        "pit_this_lap": bool(body.pit_this_lap),
+        "pit_compound": (body.pit_compound or "medium").strip().lower(),
+        "defend": bool(body.defend),
+    }
+
+    await db.racing_races.update_one(
+        {"id": race_id, "state": "running"},
+        {"$set": {f"decisions.{entrant_id}": decision}},
+    )
+
+    await _maybe_advance_interactive_lap(race_id)
+    return {"message": "Decision submitted", "decision": decision}
+
+
+async def advance_race_lap(
+    race_id: str,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    if not race:
+        raise HTTPException(status_code=404, detail="Race not found")
+    if race.get("mode") != "interactive":
+        raise HTTPException(status_code=400, detail="Race is not interactive")
+    if race.get("state") != "running":
+        raise HTTPException(status_code=400, detail="Race is not in progress")
+
+    await _maybe_advance_interactive_lap(race_id)
+    race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    return {"race": race}
+
+
+async def get_race_live(
+    race_id: str,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    if not race:
+        raise HTTPException(status_code=404, detail="Race not found")
+    if race.get("mode") != "interactive":
+        raise HTTPException(status_code=400, detail="Race is not interactive")
+
+    if race.get("state") == "running":
+        await _maybe_advance_interactive_lap(race_id)
+        race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+
+    my_decision = (race.get("decisions") or {}).get(current_user["id"])
+    track = _get_track(race.get("track_id") or "")
+
+    return {
+        "mode": "interactive",
+        "status": race.get("state"),
+        "current_lap": race.get("current_lap"),
+        "total_laps": race.get("total_laps") or race.get("laps"),
+        "lap_deadline": race.get("lap_deadline"),
+        "car_states": race.get("car_states"),
+        "lap_results": race.get("lap_results"),
+        "pit_stops": race.get("pit_stops"),
+        "incidents": race.get("incidents"),
+        "dnf_ids": race.get("dnf_ids"),
+        "weather": race.get("weather"),
+        "track": track,
+        "my_decision": my_decision,
+        "participants": race.get("participants"),
+        "rewards": race.get("rewards"),
+    }
+
+
+async def get_rnd_tree(current_user: dict = Depends(get_current_user_verified)):
+    prof = await _ensure_racing_profile(current_user["id"])
+    researched = set(prof.get("rnd_researched") or [])
+    active = prof.get("rnd_active")
+
+    tree = {}
+    for path_id, path_def in RND_PATHS.items():
+        tiers_out = []
+        for tier_def in path_def["tiers"]:
+            tier_num = tier_def["tier"]
+            prev_tier_done = tier_num == 1
+            if tier_num > 1:
+                prev_tier = next((t for t in path_def["tiers"] if t["tier"] == tier_num - 1), None)
+                if prev_tier:
+                    prev_tier_done = any(o["id"] in researched for o in prev_tier["options"])
+            same_tier_done = any(o["id"] in researched for o in tier_def["options"])
+            options_out = []
+            for opt in tier_def["options"]:
+                options_out.append({
+                    **opt,
+                    "researched": opt["id"] in researched,
+                    "researching": bool(active and active.get("node_id") == opt["id"]),
+                    "available": prev_tier_done and not same_tier_done,
+                })
+            tiers_out.append({"tier": tier_num, "options": options_out})
+        tree[path_id] = {
+            "name": path_def["name"],
+            "description": path_def["description"],
+            "tiers": tiers_out,
+        }
+
+    return {
+        "tree": tree,
+        "active_research": active,
+        "researched": list(researched),
+    }
+
+
+async def start_rnd_research(body: RndResearchRequest, current_user: dict = Depends(get_current_user_verified)):
+    prof = await _ensure_racing_profile(current_user["id"])
+    _require_racing_team(prof)
+
+    if body.path_id not in RND_PATHS:
+        raise HTTPException(status_code=400, detail="Invalid R&D path")
+    path_def = RND_PATHS[body.path_id]
+
+    node = None
+    node_tier = None
+    for tier_def in path_def["tiers"]:
+        for opt in tier_def["options"]:
+            if opt["id"] == body.node_id:
+                node = opt
+                node_tier = tier_def["tier"]
+                break
+        if node:
+            break
+    if not node:
+        raise HTTPException(status_code=400, detail="Unknown R&D node")
+
+    researched = set(prof.get("rnd_researched") or [])
+
+    if node["id"] in researched:
+        raise HTTPException(status_code=400, detail="Already researched")
+
+    if prof.get("rnd_active"):
+        raise HTTPException(status_code=400, detail="Research already in progress — wait for it to complete")
+
+    same_tier = next((t for t in path_def["tiers"] if t["tier"] == node_tier), None)
+    if same_tier and any(o["id"] in researched for o in same_tier["options"]):
+        raise HTTPException(status_code=400, detail="Already researched a node in this tier — only 1 choice per tier")
+
+    if node_tier > 1:
+        prev_tier = next((t for t in path_def["tiers"] if t["tier"] == node_tier - 1), None)
+        if prev_tier and not any(o["id"] in researched for o in prev_tier["options"]):
+            raise HTTPException(status_code=400, detail="Must complete previous tier first")
+
+    cost = node["cost"]
+    bank = int(prof.get("crew_bank") or 0)
+    if bank < cost:
+        raise HTTPException(status_code=400, detail=f"Not enough crew bank (need ${cost:,}, have ${bank:,})")
+
+    now = datetime.now(timezone.utc)
+    completes_at = now + timedelta(hours=node["research_hours"])
+    rnd_active = {
+        "node_id": node["id"],
+        "path_id": body.path_id,
+        "started_at": now.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "completes_at": completes_at.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+    }
+
+    await db.racing_profiles.update_one(
+        {"user_id": current_user["id"]},
+        {"$inc": {"crew_bank": -cost}, "$set": {"rnd_active": rnd_active}},
+    )
+
+    return {"ok": True, "rnd_active": rnd_active, "cost": cost}
+
+
+async def get_rnd_status(current_user: dict = Depends(get_current_user_verified)):
+    prof = await _ensure_racing_profile(current_user["id"])
+    active = prof.get("rnd_active")
+
+    if active and active.get("completes_at"):
+        completes_at = datetime.fromisoformat(active["completes_at"].replace("Z", "+00:00"))
+        if datetime.now(timezone.utc) >= completes_at:
+            node_id = active["node_id"]
+            await db.racing_profiles.update_one(
+                {"user_id": current_user["id"]},
+                {"$push": {"rnd_researched": node_id}, "$set": {"rnd_active": None}},
+            )
+            active = None
+            prof = await db.racing_profiles.find_one({"user_id": current_user["id"]}, {"_id": 0})
+
+    researched = prof.get("rnd_researched") or []
+    bonuses = _get_rnd_bonuses(prof)
+
+    return {
+        "active": active,
+        "researched": researched,
+        "bonuses": bonuses,
+    }
+
+
 def register(router):
     router.add_api_route("/racing/cars", get_racing_cars, methods=["GET"])
     router.add_api_route("/racing/tracks", get_racing_tracks, methods=["GET"])
@@ -2810,7 +4195,12 @@ def register(router):
     router.add_api_route("/racing/races/{race_id}/join", join_race, methods=["POST"])
     router.add_api_route("/racing/races/{race_id}/start", start_race, methods=["POST"])
     router.add_api_route("/racing/races/{race_id}/complete", complete_race, methods=["POST"])
+    router.add_api_route("/racing/races/{race_id}/decision", submit_race_decision, methods=["POST"])
+    router.add_api_route("/racing/races/{race_id}/advance-lap", advance_race_lap, methods=["POST"])
+    router.add_api_route("/racing/races/{race_id}/live", get_race_live, methods=["GET"])
     router.add_api_route("/racing/leaderboard", get_racing_leaderboard, methods=["GET"])
+    router.add_api_route("/racing/championship", get_championship, methods=["GET"])
+    router.add_api_route("/racing/championship/standings", get_championship_standings, methods=["GET"])
     router.add_api_route("/racing/comps", get_racing_comps, methods=["GET"])
     router.add_api_route("/racing/comps/{comp_id}/enter", enter_racing_comp, methods=["POST"])
     router.add_api_route("/racing/automated/latest", get_latest_automated_race, methods=["GET"])
@@ -2824,6 +4214,13 @@ def register(router):
     router.add_api_route("/racing/challenges/create", create_race_challenge, methods=["POST"])
     router.add_api_route("/racing/challenges/{challenge_id}/accept", accept_race_challenge, methods=["POST"])
     router.add_api_route("/racing/challenges/{challenge_id}/decline", decline_race_challenge, methods=["POST"])
+    router.add_api_route("/racing/drivers/market", get_driver_market, methods=["GET"])
+    router.add_api_route("/racing/drivers/hire", hire_driver, methods=["POST"])
+    router.add_api_route("/racing/drivers/fire", fire_driver, methods=["POST"])
+    router.add_api_route("/racing/drivers/mine", get_my_driver, methods=["GET"])
+    router.add_api_route("/racing/rnd/tree", get_rnd_tree, methods=["GET"])
+    router.add_api_route("/racing/rnd/research", start_rnd_research, methods=["POST"])
+    router.add_api_route("/racing/rnd/status", get_rnd_status, methods=["GET"])
 
     # Cron: automated daily races (same X-Cron-Secret as Auto Rank)
     cron_secret = (os.environ.get("CRON_SECRET") or "").strip()

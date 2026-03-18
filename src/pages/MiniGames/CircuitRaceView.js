@@ -794,6 +794,76 @@ class SkidMarks {
 
 const SKIDS = new SkidMarks();
 
+// ─── PARTICLE SYSTEM ──────────────────────────────────────────────────────
+
+const _particles = [];
+const MAX_PARTICLES = 200;
+
+function addTireSmoke(x, y, intensity = 1) {
+  for (let i = 0; i < Math.ceil(3 * intensity); i++) {
+    if (_particles.length >= MAX_PARTICLES) _particles.shift();
+    _particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 1.5,
+      vy: (Math.random() - 0.5) * 1.5,
+      life: 1.0,
+      decay: 0.02 + Math.random() * 0.03,
+      size: 2 + Math.random() * 3,
+      type: 'smoke',
+    });
+  }
+}
+
+function addSparks(x, y) {
+  for (let i = 0; i < 5; i++) {
+    if (_particles.length >= MAX_PARTICLES) _particles.shift();
+    _particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 4,
+      vy: (Math.random() - 0.5) * 4,
+      life: 1.0,
+      decay: 0.05 + Math.random() * 0.05,
+      size: 1 + Math.random(),
+      type: 'spark',
+    });
+  }
+}
+
+function updateAndDrawParticles(ctx) {
+  for (let i = _particles.length - 1; i >= 0; i--) {
+    const p = _particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= p.decay;
+    if (p.life <= 0) { _particles.splice(i, 1); continue; }
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    if (p.type === 'spark') {
+      ctx.fillStyle = `rgba(255,200,50,${(p.life * 0.8).toFixed(2)})`;
+    } else {
+      ctx.fillStyle = `rgba(180,180,180,${(p.life * 0.5).toFixed(2)})`;
+    }
+    ctx.fill();
+  }
+}
+
+function drawConfetti(ctx, W, H, elapsed) {
+  if (elapsed > 5000 || elapsed < 0) return;
+  const count = 40;
+  ctx.save();
+  for (let i = 0; i < count; i++) {
+    const seed = i * 137.508;
+    const x = ((seed * 7.3 + elapsed * 0.05 * (1 + (i%3)*0.3)) % W);
+    const y = ((seed * 3.7 + elapsed * 0.08 * (1 + (i%2)*0.2)) % H);
+    const colors = ["#e8c870","#dc2626","#3b82f6","#22c55e","#f59e0b","#ec4899"];
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.globalAlpha = Math.max(0, 1 - elapsed/5000);
+    ctx.fillRect(x, y, 4 + (i%3)*2, 2 + (i%2)*2);
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
 // ─── COMPONENT ─────────────────────────────────────────────────────────────
 
 export default function CircuitRaceView({
@@ -1087,14 +1157,24 @@ export default function CircuitRaceView({
       ctx.strokeStyle="rgba(255,255,255,0.18)"; ctx.lineWidth=1.2; ctx.stroke();
     }
 
-    // Kerbs (alternating red/white dots)
+    // Kerbs (corner-aware: rectangles at corners, dots on straights)
     for (let edge=-1; edge<=1; edge+=2) {
-      for (let i=0; i<84; i++) {
-        const f=i/84, p=track.getPoint(f), pn=track.getPoint((f+0.003)%1);
+      for (let i=0; i<120; i++) {
+        const f=i/120, p=track.getPoint(f), pn=track.getPoint((f+0.003)%1);
         const ang=Math.atan2(pn.y-p.y,pn.x-p.x)+Math.PI/2;
+        const c = getCurvature(track, f);
+        const isCorner = c > 0.04;
         const kx=sx(p.x)+Math.cos(ang)*(halfW+2)*edge, ky=sy(p.y)+Math.sin(ang)*(halfW+2)*edge;
-        ctx.fillStyle = i%2===0 ? "rgba(220,38,38,0.48)" : "rgba(255,255,255,0.32)";
-        ctx.beginPath(); ctx.arc(kx,ky,2.3,0,Math.PI*2); ctx.fill();
+        if (isCorner) {
+          const ka = Math.atan2(pn.y-p.y, pn.x-p.x);
+          ctx.save(); ctx.translate(kx, ky); ctx.rotate(ka);
+          ctx.fillStyle = i%2===0 ? "rgba(220,38,38,0.55)" : "rgba(255,255,255,0.45)";
+          ctx.fillRect(-3, -2, 6, 4);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = i%2===0 ? "rgba(220,38,38,0.30)" : "rgba(255,255,255,0.18)";
+          ctx.beginPath(); ctx.arc(kx,ky,1.8,0,Math.PI*2); ctx.fill();
+        }
       }
     }
 
@@ -1269,6 +1349,15 @@ export default function CircuitRaceView({
           SKIDS.add(px+Math.cos(angle)*2, py+Math.sin(angle)*2, angle+0.3, 0.85);
           SKIDS.add(px-Math.cos(angle)*2, py-Math.sin(angle)*2, angle-0.3, 0.85);
         }
+        // Tire smoke at braking zones
+        if (curv > 0.08 && (r.currentSpeedMph||0) > 40) {
+          const smokeI = Math.min(1, (curv - 0.08) / 0.15);
+          if (Math.random() < smokeI * 0.3) addTireSmoke(px - Math.cos(angle)*6, py - Math.sin(angle)*6, smokeI);
+        }
+        // Slide smoke
+        if (r.slideOffUntil>0 && nowSec<r.slideOffUntil) {
+          addTireSmoke(px, py, 0.8);
+        }
       }
 
       // Exhaust trail
@@ -1306,15 +1395,21 @@ export default function CircuitRaceView({
         ctx.restore();
       }
 
+      // Overtaking sparks
+      if (r.inSlipstream && !r.inPit && nowSec < (r.overtakeBoostUntil||0) && Math.random() < 0.4) {
+        addSparks(px - Math.cos(angle)*5, py - Math.sin(angle)*5);
+      }
+
       // Speed glow
       const clr = r.color||"#888";
       const grd = ctx.createRadialGradient(px,py,0,px,py,22);
       grd.addColorStop(0,clr+"55"); grd.addColorStop(1,clr+"00");
       ctx.fillStyle=grd; ctx.fillRect(px-22,py-22,44,44);
 
-      // Shadow
-      ctx.save(); ctx.translate(px,py+5); ctx.scale(CAR_SCALE,CAR_SCALE); ctx.scale(1.2,0.4);
-      ctx.fillStyle="rgba(0,0,0,0.5)"; ctx.beginPath(); ctx.arc(0,0,11,0,Math.PI*2); ctx.fill(); ctx.restore();
+      // Shadow (angle-aware ellipse)
+      ctx.save(); ctx.translate(px+2, py+3); ctx.rotate(angle); ctx.scale(CAR_SCALE,CAR_SCALE);
+      ctx.beginPath(); ctx.ellipse(0, 0, 13, 4.5, 0, 0, Math.PI*2);
+      ctx.fillStyle="rgba(0,0,0,0.25)"; ctx.fill(); ctx.restore();
 
       // Brake glow (red lights rear)
       if (curv>0.06 && !r.inPit && !r.dnf) {
@@ -1326,24 +1421,48 @@ export default function CircuitRaceView({
         ctx.restore();
       }
 
-      // Car body
+      // Car body — F1 top-down shape
       ctx.save(); ctx.translate(px,py); ctx.rotate(angle); ctx.scale(CAR_SCALE,CAR_SCALE);
-      ctx.fillStyle = r.color||"#888";
+      const carClr = r.color||"#888";
       ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(-11,-5,22,10,3);
-      else {
-        ctx.moveTo(-8,-5); ctx.lineTo(8,-5); ctx.quadraticCurveTo(11,-5,11,-2); ctx.lineTo(11,2);
-        ctx.quadraticCurveTo(11,5,8,5); ctx.lineTo(-8,5); ctx.quadraticCurveTo(-11,5,-11,2);
-        ctx.lineTo(-11,-2); ctx.quadraticCurveTo(-11,-5,-8,-5); ctx.closePath();
-      }
+      ctx.moveTo(-11, -4);
+      ctx.lineTo(8, -4);
+      ctx.quadraticCurveTo(12, -4, 12, 0);
+      ctx.quadraticCurveTo(12, 4, 8, 4);
+      ctx.lineTo(-11, 4);
+      ctx.lineTo(-13, 0);
+      ctx.closePath();
+      ctx.fillStyle = carClr;
       ctx.fill();
-      ctx.strokeStyle="rgba(255,255,255,0.25)"; ctx.lineWidth=0.8; ctx.stroke();
-      // Team stripe
-      ctx.fillStyle="rgba(255,255,255,0.15)"; ctx.fillRect(-8,-5,16,2);
+      ctx.strokeStyle = "rgba(255,255,255,0.3)";
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
       // Cockpit
-      ctx.fillStyle="rgba(0,0,0,0.68)"; ctx.beginPath(); ctx.ellipse(1,0,4,3,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(-2, -2.5, 6, 5);
+      // Front wing
+      ctx.fillStyle = carClr;
+      ctx.globalAlpha = 0.7;
+      ctx.fillRect(10, -5.5, 2, 11);
+      ctx.globalAlpha = 1;
+      // Rear wing
+      ctx.fillStyle = carClr;
+      ctx.globalAlpha = 0.6;
+      ctx.fillRect(-12, -5, 2, 10);
+      ctx.globalAlpha = 1;
+      // Team stripe
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      ctx.fillRect(-6, -4, 12, 1.5);
+      // Number on car body
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 5px monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(r.carNumber!=null?r.carNumber:(di+1)).slice(0,2), -4, 0);
+      ctx.textBaseline = "alphabetic";
       // Windshield glint
-      ctx.fillStyle="rgba(180,200,220,0.16)"; ctx.beginPath(); ctx.ellipse(3,-1,2,1.5,0.3,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle = "rgba(180,200,220,0.2)";
+      ctx.beginPath(); ctx.ellipse(3, -1, 2, 1.5, 0.3, 0, Math.PI*2); ctx.fill();
       ctx.restore();
 
       // Night headlights
@@ -1416,6 +1535,19 @@ export default function CircuitRaceView({
       else if (r.inPit) { ctx.fillStyle="#ff9800"; ctx.font="bold 8px Cinzel,serif"; ctx.textAlign="center"; ctx.fillText("PIT",px,py+16); }
       else if (r.slideOffUntil>0&&nowSec<r.slideOffUntil) { ctx.fillStyle="#e74c3c"; ctx.font="bold 7px Cinzel,serif"; ctx.textAlign="center"; ctx.fillText("OFF",px,py+16); }
     });
+
+    // ── Particles (tire smoke, sparks) ──
+    updateAndDrawParticles(ctx);
+
+    // ── Confetti (race finish celebration) ──
+    const ff2 = stateRef.current?.finishFlash || 0;
+    if (ff2 > 0) {
+      const crossTime = ff2 - 2;
+      const elapsed = (nowSec - crossTime) * 1000;
+      if (elapsed >= 0 && elapsed < 5000) {
+        drawConfetti(ctx, W, H, elapsed);
+      }
+    }
 
     // Incident log
     const log = stateRef.current?.incidents;

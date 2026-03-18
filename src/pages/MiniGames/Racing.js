@@ -132,6 +132,42 @@ function Collapsible({ label, count, children, defaultOpen = false }) {
   );
 }
 
+function LiveCountdown({ deadline }) {
+  const [remaining, setRemaining] = useState("");
+  useEffect(() => {
+    const tick = () => {
+      const dl = new Date(deadline);
+      const now = new Date();
+      const diff = Math.max(0, Math.ceil((dl - now) / 1000));
+      setRemaining(diff > 0 ? `${diff}s` : "Advancing...");
+    };
+    tick();
+    const iv = setInterval(tick, 500);
+    return () => clearInterval(iv);
+  }, [deadline]);
+  return <span className="text-xs font-heading tabular-nums px-2 py-1 rounded bg-black/30 border border-[var(--noir-border)]" style={{ color: "var(--noir-primary)" }}>{remaining}</span>;
+}
+
+function RndCountdown({ completes_at, onComplete }) {
+  const [remaining, setRemaining] = useState("");
+  useEffect(() => {
+    const tick = () => {
+      const target = new Date(completes_at);
+      const now = new Date();
+      const diff = Math.max(0, target - now);
+      if (diff <= 0) { setRemaining("Complete!"); onComplete?.(); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setRemaining(`${h}h ${m}m ${s}s`);
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [completes_at, onComplete]);
+  return <span className="text-xs font-heading tabular-nums px-2 py-1 rounded bg-black/30 border border-[var(--noir-border)]" style={{ color: "var(--noir-primary)" }}>{remaining}</span>;
+}
+
 export default function Racing() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -155,7 +191,7 @@ export default function Racing() {
   const [joiningId, setJoiningId] = useState(null);
   const [joinTyre, setJoinTyre] = useState("medium");
   const [trackFilter, setTrackFilter] = useState("all");
-  const [createForm, setCreateForm] = useState({ track_id: "", circuitId: "", entry_fee: 0, max_grid: 6, laps: 3, tyre_compound: "medium", weather_id: "clear" });
+  const [createForm, setCreateForm] = useState({ track_id: "", circuitId: "", entry_fee: 0, max_grid: 6, laps: 3, tyre_compound: "medium", weather_id: "clear", interactive: false });
   const [teamCreateName, setTeamCreateName] = useState("");
   const [teamCreateColor, setTeamCreateColor] = useState("#e8d020");
   const [teamCreating, setTeamCreating] = useState(false);
@@ -173,6 +209,19 @@ export default function Racing() {
   const [challenges, setChallenges] = useState({ incoming: [], outgoing: [], completed: [] });
   const [challengeForm, setChallengeForm] = useState({ target_username: "", track_id: "", stake: 0, laps: 3, weather_id: "clear" });
   const [challengeCreating, setChallengeCreating] = useState(false);
+  const [driverMarket, setDriverMarket] = useState([]);
+  const [myDriver, setMyDriver] = useState(null);
+  const [driverLoading, setDriverLoading] = useState(false);
+  const [liveRace, setLiveRace] = useState(null);
+  const [myDecision, setMyDecision] = useState({ push_level: 3, pit_this_lap: false, pit_compound: "medium", defend: false });
+  const [decisionSubmitted, setDecisionSubmitted] = useState(false);
+  const [rndTree, setRndTree] = useState(null);
+  const [rndActive, setRndActive] = useState(null);
+  const [rndResearching, setRndResearching] = useState(false);
+  const [championship, setChampionship] = useState(null);
+  const [champStandings, setChampStandings] = useState(null);
+  const [champView, setChampView] = useState("calendar");
+  const liveRacePoll = useRef(null);
   const refreshTimer = useRef(null);
 
   const applyProfile = useCallback((d) => {
@@ -210,6 +259,42 @@ export default function Racing() {
     return p;
   }, []);
 
+  const fetchDriverMarket = useCallback(async () => {
+    try {
+      const { data } = await api.get("/api/racing/drivers/market");
+      setDriverMarket(data.drivers || []);
+    } catch {}
+  }, []);
+
+  const fetchMyDriver = useCallback(async () => {
+    try {
+      const { data } = await api.get("/api/racing/drivers/mine");
+      setMyDriver(data.driver || null);
+    } catch {}
+  }, []);
+
+  const fetchRndTree = useCallback(async () => {
+    try {
+      const { data } = await api.get("/api/racing/rnd/tree");
+      setRndTree(data.paths || null);
+      setRndActive(data.active_research || null);
+    } catch {}
+  }, []);
+
+  const fetchChampionship = useCallback(async () => {
+    try {
+      const { data } = await api.get("/api/racing/championship");
+      setChampionship(data);
+    } catch {}
+  }, []);
+
+  const fetchChampStandings = useCallback(async () => {
+    try {
+      const { data } = await api.get("/api/racing/championship/standings");
+      setChampStandings(data);
+    } catch {}
+  }, []);
+
   const fetchAll = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
@@ -238,6 +323,7 @@ export default function Racing() {
       setLatestAutomated(la);
       const nau = autoRes.data?.next_automated_race_utc || null;
       if (nau) setNextAutoRaceUtc(nau);
+      fetchMyDriver();
 
       _cached = {
         profile: prof, cars: profileRes.data?.owned_cars || [], availableCars: avCars,
@@ -254,7 +340,7 @@ export default function Racing() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [applyProfile]);
+  }, [applyProfile, fetchMyDriver]);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -332,6 +418,29 @@ export default function Racing() {
     finally { setPlacingBet(false); }
   }, [bettingRaceId, betEntrant, betStake, fetchBets]);
 
+  const handleHireDriver = async (driverId) => {
+    setDriverLoading(true);
+    try {
+      await api.post("/api/racing/drivers/hire", { driver_id: driverId });
+      toast.success("Driver hired!");
+      fetchDriverMarket();
+      fetchMyDriver();
+      fetchAll();
+    } catch (e) { toast.error(apiDetail(e)); }
+    setDriverLoading(false);
+  };
+
+  const handleFireDriver = async () => {
+    setDriverLoading(true);
+    try {
+      await api.post("/api/racing/drivers/fire", {});
+      toast.success("Driver released");
+      fetchDriverMarket();
+      fetchMyDriver();
+    } catch (e) { toast.error(apiDetail(e)); }
+    setDriverLoading(false);
+  };
+
   useEffect(() => {
     if (_cached && Date.now() - _racingLastFetch < RACING_REFRESH) {
       setLoading(false);
@@ -406,7 +515,31 @@ export default function Racing() {
     if (tab === "bets") fetchBets();
     if (tab === "history") { fetchHistory(); fetchSeasonStats(); fetchTrackRecords(); }
     if (tab === "challenges") fetchChallenges();
-  }, [tab, fetchBets, fetchHistory, fetchSeasonStats, fetchTrackRecords, fetchChallenges]);
+    if (tab === "garage") { fetchDriverMarket(); fetchMyDriver(); }
+    if (tab === "rnd") fetchRndTree();
+    if (tab === "championship") { fetchChampionship(); fetchChampStandings(); }
+  }, [tab, fetchBets, fetchHistory, fetchSeasonStats, fetchTrackRecords, fetchChallenges, fetchDriverMarket, fetchMyDriver, fetchRndTree, fetchChampionship, fetchChampStandings]);
+
+  useEffect(() => {
+    if (liveRacePoll.current) clearInterval(liveRacePoll.current);
+    if (!activeRace?.id || activeRace?.mode !== "interactive") return;
+
+    const poll = async () => {
+      try {
+        const { data } = await api.get(`/api/racing/races/${activeRace.id}/live`);
+        setLiveRace(data);
+        if (data.status === "completed" || data.status === "finished") {
+          clearInterval(liveRacePoll.current);
+          const r = await api.get(`/racing/races/${activeRace.id}`);
+          setActiveRace(r.data?.race);
+        }
+        if (data.my_decision === null) setDecisionSubmitted(false);
+      } catch {}
+    };
+    poll();
+    liveRacePoll.current = setInterval(poll, 2000);
+    return () => { if (liveRacePoll.current) clearInterval(liveRacePoll.current); };
+  }, [activeRace?.id, activeRace?.mode]);
 
   const createRacePayload = () => ({
     track_id: createForm.track_id,
@@ -415,6 +548,7 @@ export default function Racing() {
     laps: Number(createForm.laps) || 3,
     tyre_compound: createForm.tyre_compound || "medium",
     weather_id: WEATHER_ID_FOR_API(createForm.weather_id || "clear"),
+    interactive: createForm.interactive || false,
   });
 
   const handleCreateRace = async () => {
@@ -502,6 +636,15 @@ export default function Racing() {
     } catch (e) { toast.error(apiDetail(e)); }
   };
 
+  const handleSubmitDecision = async () => {
+    if (!activeRace?.id) return;
+    try {
+      await api.post(`/api/racing/races/${activeRace.id}/decision`, myDecision);
+      setDecisionSubmitted(true);
+      toast.success("Strategy submitted");
+    } catch (e) { toast.error(apiDetail(e)); }
+  };
+
   const handleCreateTeam = async (e) => {
     e?.preventDefault();
     const name = (teamCreateName || "").trim();
@@ -534,6 +677,17 @@ export default function Racing() {
   const handleUpgradeCrew = async (crewType) => {
     try { await api.post("/racing/crew/upgrade", { crew_type: crewType }); await fetchProfile(); refreshUser(); toast.success(`${crewType} upgraded`); }
     catch (e) { toast.error(apiDetail(e)); }
+  };
+
+  const handleStartResearch = async (pathId, nodeId) => {
+    setRndResearching(true);
+    try {
+      await api.post("/api/racing/rnd/research", { path_id: pathId, node_id: nodeId });
+      toast.success("Research started!");
+      fetchRndTree();
+      fetchAll();
+    } catch (e) { toast.error(apiDetail(e)); }
+    setRndResearching(false);
   };
 
   const handleUpgradeCar = async (instanceId, upgradeType = "engine") => {
@@ -641,8 +795,10 @@ export default function Racing() {
     { id: "challenges", label: "H2H" },
     { id: "bets", label: "Bets" },
     { id: "history", label: "History" },
-    { id: "myride", label: "My Ride" },
+    { id: "garage", label: "Garage" },
     { id: "crew", label: "Crew" },
+    { id: "rnd", label: "R&D" },
+    { id: "championship", label: "Champ" },
     { id: "leaderboard", label: "Board" },
     { id: "comps", label: "Comps" },
   ];
@@ -684,8 +840,167 @@ export default function Racing() {
         </div>
       </div>
 
+      {/* ─── INTERACTIVE RACE HUD ─── */}
+      {activeRace?.state === "running" && (activeRace?.mode === "interactive" || activeRace?.interactive) && liveRace && (
+        <div className="p-3 space-y-3">
+          {/* Race Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-primary)]">
+                LIVE — Lap {liveRace.current_lap}/{liveRace.total_laps}
+              </p>
+              <p className="text-[8px] text-[var(--noir-muted)]">
+                {liveRace.track?.name} · {liveRace.weather || "Clear"}
+              </p>
+            </div>
+            {liveRace.lap_deadline && (
+              <LiveCountdown deadline={liveRace.lap_deadline} />
+            )}
+          </div>
+
+          {/* Timing Tower */}
+          <div className={styles.panel + " mobile-panel overflow-hidden"}>
+            <CardHead title="Timing Tower" />
+            <div className="divide-y divide-[var(--noir-border)]">
+              {Object.entries(liveRace.car_states || {})
+                .sort((a, b) => (a[1].position ?? 99) - (b[1].position ?? 99))
+                .map(([eid, cs], idx) => {
+                  const participant = (liveRace.participants || activeRace.participants || []).find(p => (p.user_id || p.id) === eid);
+                  const isMe = eid === profile?.user_id;
+                  const tyreColors = { soft: "#e82020", medium: "#e8d020", hard: "#c0c0b8", inter: "#20a840", full_wet: "#2080e8" };
+                  return (
+                    <div key={eid} className={"flex items-center gap-2 px-3 py-1.5 text-xs" + (isMe ? " bg-amber-900/10" : "")}
+                      style={isMe ? { borderLeft: "2px solid var(--noir-primary)" } : {}}>
+                      <span className="w-5 font-heading text-center" style={{ color: idx === 0 ? "#e8c870" : idx === 1 ? "#bbb" : idx === 2 ? "#c07a30" : "var(--noir-muted)" }}>
+                        {cs.dnf ? "DNF" : `P${idx + 1}`}
+                      </span>
+                      <span className="flex-1 truncate" style={{ color: isMe ? "var(--noir-primary)" : "var(--noir-foreground)" }}>
+                        {participant?.team_name || participant?.username || eid.slice(0,8)}
+                      </span>
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: tyreColors[cs.compound] || "#ccc" }} title={cs.compound} />
+                      <span className="text-[9px] tabular-nums w-10 text-right" style={{ color: (cs.tyre_wear ?? 100) < 30 ? "#e74c3c" : "var(--noir-muted)" }}>
+                        {Math.round(cs.tyre_wear ?? 100)}%
+                      </span>
+                      <span className="text-[9px] tabular-nums w-10 text-right" style={{ color: (cs.engine_wear ?? 0) > 75 ? "#f59e0b" : "var(--noir-muted)" }}>
+                        E:{Math.round(cs.engine_wear ?? 0)}%
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+
+          {/* Strategy Panel */}
+          {liveRace.status === "in_progress" && liveRace.current_lap < liveRace.total_laps && (
+            <div className={styles.panel + " mobile-panel overflow-hidden"}>
+              <CardHead title="Strategy" right={
+                decisionSubmitted ? <span className="text-[9px] text-green-400 font-heading">LOCKED IN</span> :
+                <span className="text-[9px] text-amber-400 font-heading">AWAITING DECISION</span>
+              } />
+              <div className="p-3 space-y-3">
+                {/* Push Level */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[9px] font-heading uppercase text-[var(--noir-muted)]">Push Level</span>
+                    <span className="text-xs font-heading" style={{ color: myDecision.push_level >= 4 ? "#ef4444" : myDecision.push_level <= 2 ? "#22c55e" : "var(--noir-primary)" }}>
+                      {["", "Conserve", "Steady", "Normal", "Push", "Max Attack"][myDecision.push_level]}
+                    </span>
+                  </div>
+                  <div className="flex gap-1">
+                    {[1,2,3,4,5].map(lv => (
+                      <button key={lv} type="button"
+                        className={"flex-1 py-1.5 text-[10px] font-heading rounded border transition-all " +
+                          (myDecision.push_level === lv ? "border-[var(--noir-primary)] bg-amber-900/30 text-[var(--noir-primary)]" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
+                        disabled={decisionSubmitted}
+                        onClick={() => setMyDecision(d => ({...d, push_level: lv}))}>
+                        {lv}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex justify-between text-[7px] text-[var(--noir-muted)] mt-0.5 px-1">
+                    <span>Save tyres</span>
+                    <span>Max speed</span>
+                  </div>
+                </div>
+
+                {/* Pit + Defend Row */}
+                <div className="flex gap-2">
+                  <button type="button"
+                    className={"flex-1 py-2 text-[10px] font-heading rounded border transition-all " +
+                      (myDecision.pit_this_lap ? "border-blue-500 bg-blue-900/30 text-blue-300" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
+                    disabled={decisionSubmitted}
+                    onClick={() => setMyDecision(d => ({...d, pit_this_lap: !d.pit_this_lap}))}>
+                    {myDecision.pit_this_lap ? "PIT THIS LAP" : "No Pit"}
+                  </button>
+                  <button type="button"
+                    className={"flex-1 py-2 text-[10px] font-heading rounded border transition-all " +
+                      (myDecision.defend ? "border-red-500 bg-red-900/30 text-red-300" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
+                    disabled={decisionSubmitted}
+                    onClick={() => setMyDecision(d => ({...d, defend: !d.defend}))}>
+                    {myDecision.defend ? "DEFENDING" : "No Defend"}
+                  </button>
+                </div>
+
+                {/* Tyre Compound Selector */}
+                {myDecision.pit_this_lap && (
+                  <div className="flex gap-1">
+                    {["soft","medium","hard","inter","full_wet"].map(c => {
+                      const colors = { soft: "#e82020", medium: "#e8d020", hard: "#c0c0b8", inter: "#20a840", full_wet: "#2080e8" };
+                      const labels = { soft: "S", medium: "M", hard: "H", inter: "I", full_wet: "W" };
+                      return (
+                        <button key={c} type="button"
+                          className={"flex-1 py-1 text-[10px] font-heading rounded border transition-all " +
+                            (myDecision.pit_compound === c ? "border-[var(--noir-primary)]" : "border-[var(--noir-border)] hover:bg-[var(--noir-surface)]")}
+                          style={{ color: colors[c], borderColor: myDecision.pit_compound === c ? colors[c] : undefined }}
+                          disabled={decisionSubmitted}
+                          onClick={() => setMyDecision(d => ({...d, pit_compound: c}))}>
+                          {labels[c]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Submit Button */}
+                <button type="button"
+                  className={styles.btnGoldDarkText + " w-full py-2 text-xs font-heading"}
+                  disabled={decisionSubmitted}
+                  onClick={handleSubmitDecision}>
+                  {decisionSubmitted ? "Decision Locked" : "Confirm Strategy"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Incident Feed */}
+          {(liveRace.incidents || []).length > 0 && (
+            <div className={styles.panel + " mobile-panel overflow-hidden"}>
+              <CardHead title="Incidents" />
+              <div className="p-2 max-h-32 overflow-y-auto space-y-0.5">
+                {(liveRace.incidents || []).slice(-10).reverse().map((inc, i) => (
+                  <div key={i} className="text-[9px] text-[var(--noir-muted)] flex gap-1.5">
+                    <span className="text-amber-400 font-heading flex-shrink-0">LAP {inc.lap}</span>
+                    <span>Contact: damage {inc.damage_pct}% to {inc.damaged?.slice(0,8) || "car"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Race Finished */}
+          {(liveRace.status === "completed" || liveRace.status === "finished") && (
+            <div className={styles.panel + " mobile-panel overflow-hidden"}>
+              <CardHead title="Race Finished!" />
+              <div className="p-3">
+                <p className="text-xs text-[var(--noir-muted)]">Results are being processed...</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ─── LIVE RACE: same CircuitRaceView as replay — uses full realism (getCornerMult ~120 mph in corners, brake/accel smoothing, track width, car scale 0.88, final order from backend result_order) ─── */}
-      {activeRace?.state === "running" && (
+      {activeRace?.state === "running" && !(activeRace?.mode === "interactive" || activeRace?.interactive) && (
         <div className="p-3">
           {activeRace.qualifying_order?.length > 0 && (
             <p className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-primary)] mb-1.5">Live race — Grid by qualifying</p>
@@ -950,6 +1265,12 @@ export default function Racing() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--noir-border)]">
+                  <label className="flex items-center gap-2 text-xs">
+                    <input type="checkbox" checked={createForm.interactive || false}
+                      onChange={e => setCreateForm(f => ({...f, interactive: e.target.checked}))} />
+                    <span style={{color: "var(--noir-primary)"}}>Interactive Race</span>
+                    <span className="text-[8px] text-[var(--noir-muted)]">(make decisions each lap)</span>
+                  </label>
                   <button type="button" className="text-[10px] font-heading px-2 py-1 rounded border border-[var(--noir-border)] hover:bg-[var(--noir-primary)]/10 touch-manipulation"
                     onClick={() => setCreateForm((f) => ({ ...f, weather_id: WEATHER_OPTIONS[Math.floor(Math.random() * WEATHER_OPTIONS.length)].id }))}>
                     Random weather
@@ -967,12 +1288,12 @@ export default function Racing() {
                   </button>
                 </div>
                 {(cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 && (
-                  <p className="text-[10px] text-amber-400">Engine at 100% wear — repair in My Ride.</p>
+                  <p className="text-[10px] text-amber-400">Engine at 100% wear — repair in Garage.</p>
                 )}
                 {effectiveTyreStock(createForm.tyre_compound, profile) < 1 && (
-                  <p className="text-[10px] text-amber-400">No {createForm.tyre_compound} tyres — buy in My Ride.</p>
+                  <p className="text-[10px] text-amber-400">No {createForm.tyre_compound} tyres — buy in Garage.</p>
                 )}
-                {!selectedInstanceId && <p className="text-[10px] text-amber-400">Select a car in My Ride first.</p>}
+                {!selectedInstanceId && <p className="text-[10px] text-amber-400">Select a car in Garage first.</p>}
               </div>
             </div>
 
@@ -1052,9 +1373,96 @@ export default function Racing() {
           </>
         )}
 
-        {/* ─── MY RIDE TAB ─── */}
-        {tab === "myride" && (
+        {/* ─── GARAGE TAB ─── */}
+        {tab === "garage" && (
           <>
+            {/* ─── MY DRIVER ─── */}
+            <div className={styles.panel + " mobile-panel overflow-hidden mb-3"}>
+              <CardHead title="My Driver" right={myDriver && (
+                <button type="button" className={styles.btnPrimary + " text-[9px] px-2 py-0.5"}
+                  disabled={driverLoading} onClick={handleFireDriver}>
+                  Release
+                </button>
+              )} />
+              <div className="p-3">
+                {myDriver ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-heading text-sm" style={{ color: "var(--noir-primary)" }}>{myDriver.name}</span>
+                        <span className={`text-[9px] ml-2 px-1.5 py-0.5 rounded font-heading uppercase ${
+                          myDriver.tier === "platinum" ? "bg-purple-900/40 text-purple-300" :
+                          myDriver.tier === "gold" ? "bg-amber-900/40 text-amber-300" :
+                          myDriver.tier === "silver" ? "bg-gray-700/40 text-gray-300" :
+                          "bg-orange-900/40 text-orange-400"
+                        }`}>{myDriver.tier}</span>
+                      </div>
+                      <span className="text-[10px] text-[var(--noir-muted)]">{formatMoney(myDriver.salary_per_race)}/race</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { label: "Skill", val: myDriver.skill, color: "#e8c870" },
+                        { label: "Consistency", val: myDriver.consistency, color: "#22c55e" },
+                        { label: "Racecraft", val: myDriver.racecraft, color: "#3b82f6" },
+                        { label: "Wet", val: myDriver.wet_ability, color: "#60a5fa" },
+                        { label: "Tyre Mgmt", val: myDriver.tire_management, color: "#a855f7" },
+                        { label: "Aggression", val: myDriver.aggression, color: "#ef4444" },
+                      ].map(s => (
+                        <div key={s.label} className="p-1.5 rounded bg-black/20 text-center">
+                          <div className="text-[8px] uppercase text-[var(--noir-muted)]">{s.label}</div>
+                          <div className="text-sm font-heading" style={{ color: s.color }}>{s.val}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-[var(--noir-muted)]">No driver hired. Visit the Driver Market below to hire one.</p>
+                )}
+              </div>
+            </div>
+
+            {/* ─── DRIVER MARKET ─── */}
+            <div className={styles.panel + " mobile-panel overflow-hidden mb-3"}>
+              <CardHead title="Driver Market" right={<span className="text-[9px] text-[var(--noir-muted)]">30 drivers · salary from crew bank</span>} />
+              <div className="p-3 space-y-1.5 max-h-[400px] overflow-y-auto">
+                {driverMarket.map(d => {
+                  const avg = Math.round((d.skill + d.consistency + d.racecraft + d.wet_ability + d.tire_management) / 5);
+                  const tierColor = d.tier === "platinum" ? "text-purple-300" : d.tier === "gold" ? "text-amber-300" : d.tier === "silver" ? "text-gray-300" : "text-orange-400";
+                  return (
+                    <div key={d.id} className="flex items-center justify-between py-1.5 border-b border-[var(--noir-border)] last:border-0">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-heading text-xs truncate">{d.name}</span>
+                          <span className={`text-[8px] font-heading uppercase ${tierColor}`}>{d.tier}</span>
+                        </div>
+                        <div className="flex gap-2 text-[8px] text-[var(--noir-muted)] mt-0.5">
+                          <span>SKL {d.skill}</span>
+                          <span>CON {d.consistency}</span>
+                          <span>RCR {d.racecraft}</span>
+                          <span>WET {d.wet_ability}</span>
+                          <span>TYR {d.tire_management}</span>
+                          <span>AGG {d.aggression}</span>
+                          <span className="text-[var(--noir-primary)]">AVG {avg}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-[9px] text-[var(--noir-muted)]">{formatMoney(d.salary_per_race)}/race</span>
+                        {d.hired ? (
+                          <span className="text-[8px] text-red-400 font-heading">TAKEN</span>
+                        ) : (
+                          <button type="button" className={styles.btnGoldDarkText + " text-[9px] px-2 py-0.5"}
+                            disabled={driverLoading || !!myDriver}
+                            onClick={() => handleHireDriver(d.id)}>
+                            Hire
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Tyre stock — inline badges */}
             <div className={styles.panel + " mobile-panel overflow-hidden mb-3"}>
               <CardHead title="Tyre Stock" right={<span className="text-[9px] text-[var(--noir-muted)]">1 set / race · crew bank</span>} />
@@ -1345,6 +1753,80 @@ export default function Racing() {
           </div>
         )}
 
+        {/* ─── R&D TAB ─── */}
+        {tab === "rnd" && (
+          <div className="space-y-3">
+            {rndActive && (
+              <div className={styles.panel + " mobile-panel overflow-hidden"}>
+                <div className="p-3 flex items-center gap-3" style={{ background: "rgba(201,164,96,.08)" }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-heading uppercase tracking-wider text-amber-400">Researching</p>
+                    <p className="text-sm font-heading truncate" style={{ color: "var(--noir-primary)" }}>{rndActive.node_id?.replace(/_/g, " ")}</p>
+                  </div>
+                  <RndCountdown completes_at={rndActive.completes_at} onComplete={fetchRndTree} />
+                </div>
+              </div>
+            )}
+
+            {rndTree && Object.entries(rndTree).map(([pathId, path]) => {
+              const pathColors = { speed: "#e8c870", reliability: "#22c55e", handling: "#3b82f6" };
+              const pathColor = pathColors[pathId] || "var(--noir-primary)";
+              return (
+                <div key={pathId} className={styles.panel + " mobile-panel overflow-hidden"}>
+                  <CardHead title={path.name + " Path"} right={
+                    <span className="text-[9px]" style={{ color: pathColor }}>{path.description}</span>
+                  } />
+                  <div className="p-3 space-y-2">
+                    {(path.tiers || []).map((tier) => (
+                      <div key={tier.tier}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[8px] font-heading uppercase tracking-widest" style={{ color: "var(--noir-muted)" }}>Tier {tier.tier}</span>
+                          <div className="flex-1 h-px" style={{ background: "var(--noir-border)" }} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(tier.options || []).map(node => {
+                            const otherInTier = tier.options.find(o => o.id !== node.id);
+                            const otherResearched = otherInTier?.researched;
+                            const isLocked = !node.available || otherResearched;
+                            const bank = profile?.crew_bank ?? 0;
+                            return (
+                              <div key={node.id}
+                                className={"p-2 rounded border transition-all " + (
+                                  node.researched ? "border-green-700 bg-green-900/15" :
+                                  node.researching ? "border-amber-600 bg-amber-900/15 animate-pulse" :
+                                  isLocked ? "border-[var(--noir-border)] opacity-40" :
+                                  "border-[var(--noir-border)] hover:border-[var(--noir-primary)]"
+                                )}>
+                                <div className="flex items-start justify-between gap-1">
+                                  <div className="min-w-0">
+                                    <p className="text-[10px] font-heading truncate" style={{ color: node.researched ? "#22c55e" : pathColor }}>{node.name}</p>
+                                    <p className="text-[8px] text-[var(--noir-muted)] mt-0.5">{node.desc}</p>
+                                  </div>
+                                  {node.researched && <span className="text-green-400 text-[10px]">✓</span>}
+                                </div>
+                                <div className="flex items-center justify-between mt-1.5">
+                                  <span className="text-[8px] text-[var(--noir-muted)]">{formatMoney(node.cost)} · {node.research_hours}h</span>
+                                  {!node.researched && !node.researching && !isLocked && !rndActive && (
+                                    <button type="button" className={styles.btnGoldDarkText + " text-[8px] px-1.5 py-0.5"}
+                                      disabled={rndResearching || bank < node.cost}
+                                      onClick={() => handleStartResearch(pathId, node.id)}>
+                                      Research
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* ─── LEADERBOARD TAB ─── */}
         {tab === "leaderboard" && (
           <div className={styles.panel + " mobile-panel overflow-hidden"}>
@@ -1413,6 +1895,145 @@ export default function Racing() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ─── CHAMPIONSHIP TAB ─── */}
+        {tab === "championship" && (
+          <div className="space-y-3">
+            {championship?.next_race && (
+              <div className={styles.panel + " mobile-panel overflow-hidden"}>
+                <div className="p-3" style={{ background: "linear-gradient(135deg, rgba(201,164,96,.08), transparent)" }}>
+                  <p className="text-[8px] font-heading uppercase tracking-widest text-amber-400 mb-1">Next Grand Prix</p>
+                  <p className="text-sm font-heading" style={{ color: "var(--noir-primary)" }}>
+                    Round {championship.next_race.round} — {championship.next_race.track_name}
+                  </p>
+                  <p className="text-[10px] text-[var(--noir-muted)] mt-0.5">
+                    {new Date(championship.next_race.scheduled_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {championship?.my_position && (
+              <div className="flex gap-2">
+                <div className={styles.panel + " mobile-panel flex-1 p-2 text-center"}>
+                  <p className="text-[8px] text-[var(--noir-muted)] uppercase">Driver Standing</p>
+                  <p className="text-lg font-heading" style={{ color: "var(--noir-primary)" }}>P{championship.my_position.driver_pos || "—"}</p>
+                  <p className="text-[9px] tabular-nums" style={{ color: "var(--noir-muted)" }}>{championship.my_position.driver_points || 0} pts</p>
+                </div>
+                <div className={styles.panel + " mobile-panel flex-1 p-2 text-center"}>
+                  <p className="text-[8px] text-[var(--noir-muted)] uppercase">Constructor</p>
+                  <p className="text-lg font-heading" style={{ color: "var(--noir-primary)" }}>P{championship.my_position.constructor_pos || "—"}</p>
+                  <p className="text-[9px] tabular-nums" style={{ color: "var(--noir-muted)" }}>{championship.my_position.constructor_points || 0} pts</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-1">
+              {[
+                { id: "calendar", label: "Calendar" },
+                { id: "drivers", label: "Drivers" },
+                { id: "constructors", label: "Teams" },
+              ].map(v => (
+                <button key={v.id} type="button"
+                  className={"flex-1 py-1.5 text-[10px] font-heading rounded border transition-all " +
+                    (champView === v.id ? "border-[var(--noir-primary)] bg-amber-900/20 text-[var(--noir-primary)]" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
+                  onClick={() => setChampView(v.id)}>
+                  {v.label}
+                </button>
+              ))}
+            </div>
+
+            {champView === "calendar" && championship?.championship?.race_calendar && (
+              <div className={styles.panel + " mobile-panel overflow-hidden"}>
+                <CardHead title={championship.championship.season_name || "Championship"} />
+                <div className="divide-y divide-[var(--noir-border)]">
+                  {championship.championship.race_calendar.map((round) => (
+                    <div key={round.round} className={"flex items-center gap-2 px-3 py-2 text-xs " + (round.completed ? "opacity-60" : "")}>
+                      <span className="w-6 font-heading text-center" style={{ color: round.completed ? "#22c55e" : "var(--noir-muted)" }}>
+                        {round.completed ? "✓" : `R${round.round}`}
+                      </span>
+                      <span className="flex-1 truncate" style={{ color: "var(--noir-foreground)" }}>{round.track_name}</span>
+                      <span className="text-[9px] tabular-nums text-[var(--noir-muted)]">
+                        {new Date(round.scheduled_at).toLocaleDateString([], { month: "short", day: "numeric" })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {champView === "drivers" && champStandings?.driver_standings && (
+              <div className={styles.panel + " mobile-panel overflow-hidden"}>
+                <CardHead title="Driver Championship" />
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--noir-border)]">
+                      <th className="py-1.5 px-2 text-left text-[9px] text-[var(--noir-muted)]">Pos</th>
+                      <th className="py-1.5 px-1 text-left text-[9px] text-[var(--noir-muted)]">Driver</th>
+                      <th className="py-1.5 px-1 text-left text-[9px] text-[var(--noir-muted)]">Team</th>
+                      <th className="py-1.5 px-1 text-right text-[9px] text-[var(--noir-muted)]">Pts</th>
+                      <th className="py-1.5 px-1 text-right text-[9px] text-[var(--noir-muted)]">Wins</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {champStandings.driver_standings.map((row, i) => {
+                      const isMe = row.user_id === profile?.user_id;
+                      return (
+                        <tr key={row.user_id} className={"border-b border-[var(--noir-border)] last:border-0" + (isMe ? " bg-amber-900/10" : "")}>
+                          <td className="py-1.5 px-2 font-heading" style={{ color: i === 0 ? "#e8c870" : i === 1 ? "#bbb" : i === 2 ? "#c07a30" : "var(--noir-muted)" }}>{i + 1}</td>
+                          <td className="py-1.5 px-1 truncate max-w-[100px]" style={{ color: isMe ? "var(--noir-primary)" : "var(--noir-foreground)" }}>{row.driver_name || "—"}</td>
+                          <td className="py-1.5 px-1 text-[var(--noir-muted)] truncate max-w-[80px]">{row.team_name || "—"}</td>
+                          <td className="py-1.5 px-1 text-right tabular-nums font-heading" style={{ color: "var(--noir-primary)" }}>{row.points}</td>
+                          <td className="py-1.5 px-1 text-right tabular-nums">{row.wins}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {champView === "constructors" && champStandings?.constructor_standings && (
+              <div className={styles.panel + " mobile-panel overflow-hidden"}>
+                <CardHead title="Constructor Championship" />
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--noir-border)]">
+                      <th className="py-1.5 px-2 text-left text-[9px] text-[var(--noir-muted)]">Pos</th>
+                      <th className="py-1.5 px-1 text-left text-[9px] text-[var(--noir-muted)]">Team</th>
+                      <th className="py-1.5 px-1 text-right text-[9px] text-[var(--noir-muted)]">Pts</th>
+                      <th className="py-1.5 px-1 text-right text-[9px] text-[var(--noir-muted)]">Wins</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {champStandings.constructor_standings.map((row, i) => {
+                      const isMe = row.user_id === profile?.user_id;
+                      return (
+                        <tr key={row.user_id} className={"border-b border-[var(--noir-border)] last:border-0" + (isMe ? " bg-amber-900/10" : "")}>
+                          <td className="py-1.5 px-2 font-heading" style={{ color: i === 0 ? "#e8c870" : i === 1 ? "#bbb" : i === 2 ? "#c07a30" : "var(--noir-muted)" }}>{i + 1}</td>
+                          <td className="py-1.5 px-1">
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full" style={{ background: row.team_color || "var(--noir-muted)" }} />
+                              <span className={"truncate max-w-[120px]" + (isMe ? " text-[var(--noir-primary)]" : "")}>{row.team_name || "—"}</span>
+                            </span>
+                          </td>
+                          <td className="py-1.5 px-1 text-right tabular-nums font-heading" style={{ color: "var(--noir-primary)" }}>{row.points}</td>
+                          <td className="py-1.5 px-1 text-right tabular-nums">{row.wins}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {!championship?.championship && (
+              <div className={styles.panel + " mobile-panel p-4 text-center"}>
+                <p className="text-xs text-[var(--noir-muted)]">No active championship. Create a team and join races to start!</p>
+              </div>
+            )}
           </div>
         )}
 
