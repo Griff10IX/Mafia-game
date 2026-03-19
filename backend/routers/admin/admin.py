@@ -4273,11 +4273,14 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         import random
+        from routers.game.families import cleanup_dead_families, _invalidate_list_cache
+        await cleanup_dead_families()
+        _invalidate_list_cache()
         password_hash = get_password_hash(SEED_TEST_PASSWORD)
         now = datetime.now(timezone.utc).isoformat()
         created_users = []
         created_families = []
-        current_count = await db.families.count_documents({})
+        current_count = await db.families.count_documents({"wiped": {"$ne": True}})
         for fam_cfg in SEED_FAMILIES_CONFIG:
             if current_count >= MAX_FAMILIES:
                 break
