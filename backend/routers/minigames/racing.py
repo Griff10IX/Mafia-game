@@ -14,6 +14,7 @@ import uuid
 from typing import Optional, List, Dict, Any
 from fastapi import Depends, HTTPException, Header
 from pydantic import BaseModel
+from pymongo import UpdateOne
 
 from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, send_notification, log_gambling, _is_admin
 
@@ -1293,23 +1294,37 @@ async def _award_championship_points(race_id: str, result_order: list, dnf_ids: 
     driver_standings = dict(champ.get("driver_standings") or {})
     constructor_standings = dict(champ.get("constructor_standings") or {})
 
+    scoring_rows: List[tuple] = []
     for i, entrant_id in enumerate(result_order):
         if entrant_id in (dnf_ids or []):
             continue
         points = CHAMPIONSHIP_POINTS[i] if i < len(CHAMPIONSHIP_POINTS) else 0
         if points == 0:
             continue
-
         entrant = next((p for p in participants if (p.get("user_id") or p.get("id")) == entrant_id), None)
         if not entrant or entrant.get("is_npc"):
             continue
-
         uid = entrant.get("user_id")
         if not uid:
             continue
+        scoring_rows.append((i, uid))
 
-        prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0, "team_name": 1, "team_color": 1})
-        user = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
+    uids = list({uid for _, uid in scoring_rows})
+    profiles_by_uid: Dict[str, dict] = {}
+    users_by_uid: Dict[str, dict] = {}
+    if uids:
+        async for p in db.racing_profiles.find(
+            {"user_id": {"$in": uids}},
+            {"_id": 0, "user_id": 1, "team_name": 1, "team_color": 1},
+        ):
+            profiles_by_uid[p["user_id"]] = p
+        async for u in db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "username": 1}):
+            users_by_uid[u["id"]] = u
+
+    for i, uid in scoring_rows:
+        points = CHAMPIONSHIP_POINTS[i] if i < len(CHAMPIONSHIP_POINTS) else 0
+        prof = profiles_by_uid.get(uid)
+        user = users_by_uid.get(uid)
         driver_name = (user or {}).get("username") or "?"
         team_name = (prof or {}).get("team_name") or "?"
         team_color = (prof or {}).get("team_color") or "#888888"
@@ -2163,6 +2178,9 @@ async def _start_race_internal(race_id: str) -> dict:
         })
     profile_by_user = {}
     upgrades_map = {}
+    human_uids: List[str] = []
+    inst_pairs: List[tuple] = []
+    seen_pairs = set()
     for p in participants:
         if p.get("is_npc"):
             eid = p.get("id")
@@ -2179,17 +2197,44 @@ async def _start_race_internal(race_id: str) -> dict:
             }
             continue
         uid = p.get("user_id")
-        prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0})
-        if prof:
-            profile_by_user[uid] = prof
+        if uid:
+            human_uids.append(uid)
         inst_id = p.get("racing_car_instance_id")
-        if inst_id:
-            up = await db.racing_upgrades.find_one({"user_id": uid, "racing_car_instance_id": inst_id}, {"_id": 0})
-            car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0})
-            base = {"engine_level": (car_doc or {}).get("engine_level", 0), "tires_level": (car_doc or {}).get("tires_level", 0)}
-            if up:
-                base.update(up)
-            upgrades_map[inst_id] = base
+        if inst_id and uid:
+            pair = (uid, inst_id)
+            if pair not in seen_pairs:
+                seen_pairs.add(pair)
+                inst_pairs.append(pair)
+
+    unique_uids = list(dict.fromkeys(human_uids))
+    if unique_uids:
+        async for prof in db.racing_profiles.find({"user_id": {"$in": unique_uids}}, {"_id": 0}):
+            if prof:
+                profile_by_user[prof["user_id"]] = prof
+
+    car_by_pair: Dict[tuple, dict] = {}
+    up_by_pair: Dict[tuple, dict] = {}
+    if inst_pairs:
+        or_cars = [{"user_id": u, "id": inst} for u, inst in inst_pairs]
+        async for car_doc in db.user_racing_cars.find({"$or": or_cars}, {"_id": 0}):
+            car_by_pair[(car_doc["user_id"], car_doc["id"])] = car_doc
+        or_ups = [{"user_id": u, "racing_car_instance_id": inst} for u, inst in inst_pairs]
+        async for up in db.racing_upgrades.find({"$or": or_ups}, {"_id": 0}):
+            up_by_pair[(up["user_id"], up["racing_car_instance_id"])] = up
+
+    for p in participants:
+        if p.get("is_npc"):
+            continue
+        uid = p.get("user_id")
+        inst_id = p.get("racing_car_instance_id")
+        if not inst_id or not uid:
+            continue
+        up = up_by_pair.get((uid, inst_id))
+        car_doc = car_by_pair.get((uid, inst_id))
+        base = {"engine_level": (car_doc or {}).get("engine_level", 0), "tires_level": (car_doc or {}).get("tires_level", 0)}
+        if up:
+            base.update(up)
+        upgrades_map[inst_id] = base
     num_laps = max(NUM_LAPS_MIN, min(NUM_LAPS_MAX, int(race.get("laps") or 3)))
     if race.get("weather") and any(w.get("id") == race.get("weather") for w in WEATHER_TYPES):
         weather = _get_weather(race["weather"])
@@ -2197,6 +2242,7 @@ async def _start_race_internal(race_id: str) -> dict:
         weather = random.choice(WEATHER_TYPES)
     weather_id = weather.get("id", "clear")
     engine_wear_by_entrant: Dict[str, float] = {}
+    tyre_prof_bulk: List[UpdateOne] = []
     if not race.get("is_automated"):
         for p in participants:
             if p.get("is_npc"):
@@ -2205,21 +2251,26 @@ async def _start_race_internal(race_id: str) -> dict:
             inst_id = p.get("racing_car_instance_id")
             if not inst_id:
                 continue
-            car_doc = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0, "engine_wear": 1})
+            car_doc = car_by_pair.get((uid, inst_id))
             wear = float(car_doc.get("engine_wear") or 0) if car_doc else 0
             engine_wear_by_entrant[uid] = wear
             if wear >= ENGINE_WEAR_MAX:
                 raise HTTPException(status_code=400, detail="A participant's engine is at 100% wear. They must repair or replace before the race.")
             compound = (p.get("tyre_compound") or "medium").strip().lower()
-            prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0})
+            prof = profile_by_user.get(uid)
             if prof is not None:
+                set_missing = {}
                 for key in ("tyre_stock_soft", "tyre_stock_medium", "tyre_stock_hard"):
                     if prof.get(key) is None:
-                        await db.racing_profiles.update_one({"user_id": uid}, {"$set": {key: TYRE_STOCK_INITIAL}})
+                        set_missing[key] = TYRE_STOCK_INITIAL
                         prof[key] = TYRE_STOCK_INITIAL
+                if set_missing:
+                    tyre_prof_bulk.append(UpdateOne({"user_id": uid}, {"$set": set_missing}))
                 stock = int(prof.get(f"tyre_stock_{compound}") or 0)
                 if stock < 1:
                     raise HTTPException(status_code=400, detail=f"Not enough {compound} tyres in stock for a participant. Buy tyres before the race.")
+        if tyre_prof_bulk:
+            await db.racing_profiles.bulk_write(tyre_prof_bulk, ordered=False)
     # Deterministic qualifying so grid is stable and fair for a given race_id.
     with _SeededRandom(f"qualifying:{race_id}"):
         qualifying_order, qualifying_results = _run_qualifying(participants, profile_by_user, upgrades_map, track, weather_id)

@@ -1,6 +1,6 @@
 # Organised Crime: team heists (Driver, Weapons, Explosives, Hacker), 4 job types, 6h/4h cooldown
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, Dict
 import secrets
 _rng = secrets.SystemRandom()
 import re
@@ -693,6 +693,11 @@ async def execute_oc(
         job_id = pending["job_id"]
         pcts = [pending.get("driver_pct", 25), pending.get("weapons_pct", 25), pending.get("explosives_pct", 25), pending.get("hacker_pct", 25)]
         resolved = [None, None, None, None]
+        invite_docs = await db.oc_invites.find(
+            {"pending_heist_id": request.pending_heist_id},
+            {"_id": 0},
+        ).to_list(20)
+        invite_by_role: Dict[str, dict] = {d.get("role"): d for d in invite_docs if d.get("role")}
         for i, role in enumerate(ROLE_KEYS):
             val = (pending.get(role) or "").strip() if isinstance(pending.get(role), str) else None
             if not val:
@@ -702,7 +707,7 @@ async def execute_oc(
             elif (val or "").lower() == "npc":
                 resolved[i] = None
             else:
-                inv = await db.oc_invites.find_one({"pending_heist_id": request.pending_heist_id, "role": role}, {"_id": 0})
+                inv = invite_by_role.get(role)
                 if inv and inv.get("status") == "accepted":
                     resolved[i] = inv.get("target_id")
                 else:
@@ -729,6 +734,14 @@ async def execute_oc(
             resolved.append(r)
         if not any(r == uid for r in resolved):
             raise HTTPException(status_code=400, detail="You must fill at least one slot (use 'self')")
+        other_ids = [r for r in resolved if r is not None and r != uid]
+        others_map: Dict[str, dict] = {}
+        if other_ids:
+            async for o in db.users.find(
+                {"id": {"$in": other_ids}},
+                {"_id": 0, "id": 1, "is_dead": 1},
+            ):
+                others_map[o["id"]] = o
         for i, r in enumerate(resolved):
             slot_val = (slots_raw[i] or "").strip().lower()
             if r is None:
@@ -736,7 +749,7 @@ async def execute_oc(
                     raise HTTPException(status_code=400, detail=f"User not found: {slots_raw[i]}")
                 continue
             if r != uid:
-                other = await db.users.find_one({"id": r}, {"_id": 0, "id": 1, "is_dead": 1})
+                other = others_map.get(r)
                 if not other:
                     raise HTTPException(status_code=400, detail=f"User not found: {slots_raw[i]}")
                 if other.get("is_dead"):

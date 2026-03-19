@@ -10,6 +10,7 @@ import sys
 import logging
 from fastapi import Depends, HTTPException, Request, Query
 from pydantic import BaseModel, field_validator
+from pymongo import UpdateOne
 
 logger = logging.getLogger(__name__)
 
@@ -588,26 +589,71 @@ async def get_attack_status(
 async def list_attacks(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=24)
-    await db.attacks.delete_many({"attacker_id": current_user["id"], "expires_at": {"$lte": now.isoformat()}})
+    attacker_id = current_user["id"]
+    await db.attacks.delete_many({"attacker_id": attacker_id, "expires_at": {"$lte": now.isoformat()}})
     attacks = await db.attacks.find(
-        {"attacker_id": current_user["id"], "status": {"$in": ["searching", "found"]}},
+        {"attacker_id": attacker_id, "status": {"$in": ["searching", "found"]}},
         {"_id": 0}
     ).sort("search_started", -1).to_list(50)
+    if not attacks:
+        return {"attacks": []}
+
+    target_ids = list({a["target_id"] for a in attacks if a.get("target_id")})
+    users_map: Dict[str, dict] = {}
+    if target_ids:
+        async for u in db.users.find(
+            {"id": {"$in": target_ids}},
+            {"_id": 0, "id": 1, "is_dead": 1, "is_bodyguard": 1, "current_state": 1},
+        ):
+            users_map[u["id"]] = u
+
+    bg_target_ids = [tid for tid in target_ids if (users_map.get(tid) or {}).get("is_bodyguard")]
+    still_bg_tids = set()
+    if bg_target_ids:
+        async for b in db.bodyguards.find(
+            {"bodyguard_user_id": {"$in": bg_target_ids}},
+            {"_id": 0, "bodyguard_user_id": 1},
+        ):
+            still_bg_tids.add(b["bodyguard_user_id"])
+
+    bgs_by_owner: Dict[str, List[dict]] = {}
+    if target_ids:
+        async for b in db.bodyguards.find({"user_id": {"$in": target_ids}}, {"_id": 0}).to_list(500):
+            uid = b.get("user_id")
+            if uid:
+                bgs_by_owner.setdefault(uid, []).append(b)
+    guard_ids = list(
+        {
+            b["bodyguard_user_id"]
+            for rows in bgs_by_owner.values()
+            for b in rows
+            if b.get("bodyguard_user_id")
+        }
+    )
+    guard_users: Dict[str, dict] = {}
+    if guard_ids:
+        async for u in db.users.find(
+            {"id": {"$in": guard_ids}},
+            {"_id": 0, "id": 1, "username": 1},
+        ):
+            guard_users[u["id"]] = u
+
+    delete_ids: List[str] = []
+    bulk_ops: List[UpdateOne] = []
+
     items = []
     for attack in attacks:
         # Remove searches for dead targets (players or bodyguards; e.g. someone else killed them)
-        if attack.get("target_id"):
-            target_user = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0, "is_dead": 1, "is_bodyguard": 1})
+        tid = attack.get("target_id")
+        if tid:
+            target_user = users_map.get(tid)
             if target_user:
                 if target_user.get("is_dead"):
-                    await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
+                    delete_ids.append(attack["id"])
                     continue
-                # Bodyguard no longer in bodyguards collection (killed, record deleted)
-                if target_user.get("is_bodyguard"):
-                    still_bg = await db.bodyguards.find_one({"bodyguard_user_id": attack["target_id"]}, {"_id": 1})
-                    if not still_bg:
-                        await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
-                        continue
+                if target_user.get("is_bodyguard") and tid not in still_bg_tids:
+                    delete_ids.append(attack["id"])
+                    continue
         if not attack.get("expires_at"):
             started_iso = attack.get("search_started") or attack.get("found_at")
             try:
@@ -617,21 +663,34 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
             except Exception:
                 started = None
             if started and started <= cutoff:
-                await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
+                delete_ids.append(attack["id"])
                 continue
             if started:
-                await db.attacks.update_one(
-                    {"id": attack["id"], "attacker_id": current_user["id"]},
-                    {"$set": {"expires_at": (started + timedelta(hours=24)).isoformat()}}
+                exp_iso = (started + timedelta(hours=24)).isoformat()
+                bulk_ops.append(
+                    UpdateOne(
+                        {"id": attack["id"], "attacker_id": attacker_id},
+                        {"$set": {"expires_at": exp_iso}},
+                    )
                 )
+                attack["expires_at"] = exp_iso
         if attack["status"] == "searching":
             found_time = _parse_iso_datetime(attack.get("found_at"))
             if found_time is None:
                 found_time = now
             if now >= found_time:
-                target_user = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0, "current_state": 1})
-                new_location = (target_user.get("current_state") if target_user and target_user.get("current_state") in STATES else None) or attack.get("planned_location_state") or random.choice(STATES)
-                await db.attacks.update_one({"id": attack["id"]}, {"$set": {"status": "found", "location_state": new_location}})
+                tu = users_map.get(attack.get("target_id") or "")
+                new_location = (
+                    (tu.get("current_state") if tu and tu.get("current_state") in STATES else None)
+                    or attack.get("planned_location_state")
+                    or random.choice(STATES)
+                )
+                bulk_ops.append(
+                    UpdateOne(
+                        {"id": attack["id"]},
+                        {"$set": {"status": "found", "location_state": new_location}},
+                    )
+                )
                 attack["status"] = "found"
                 attack["location_state"] = new_location
         can_travel = attack["status"] == "found" and attack.get("location_state") and current_user["current_state"] != attack["location_state"]
@@ -653,14 +712,14 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
             "can_attack": can_attack,
             "message": msg
         }
-        if attack["status"] == "found" and attack.get("target_id"):
-            target_bgs = await db.bodyguards.find({"user_id": attack["target_id"]}, {"_id": 0}).to_list(10)
+        if attack["status"] == "found" and tid:
+            target_bgs = bgs_by_owner.get(tid) or []
             if target_bgs:
                 first_bg = max(target_bgs, key=lambda b: b.get("slot_number", 0))
                 search_username = None
                 display_name = first_bg.get("robot_name") or "bodyguard"
                 if first_bg.get("bodyguard_user_id"):
-                    bg_user = await db.users.find_one({"id": first_bg["bodyguard_user_id"]}, {"_id": 0, "username": 1})
+                    bg_user = guard_users.get(first_bg["bodyguard_user_id"])
                     if bg_user:
                         search_username = bg_user.get("username")
                         if not first_bg.get("robot_name"):
@@ -669,6 +728,11 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
                 item["first_bodyguard"] = {"display_name": display_name, "search_username": search_username, "slot_number": slot_n, "target_username": attack.get("target_username")}
                 item["bodyguard_count"] = len(target_bgs)
         items.append(item)
+
+    if delete_ids:
+        await db.attacks.delete_many({"attacker_id": attacker_id, "id": {"$in": delete_ids}})
+    if bulk_ops:
+        await db.attacks.bulk_write(bulk_ops, ordered=False)
     return {"attacks": items}
 
 async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depends(get_current_user_verified)):

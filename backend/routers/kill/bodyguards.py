@@ -264,6 +264,20 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
                 return payload
         bodyguards = await db.bodyguards.find({"user_id": uid}, {"_id": 0}).to_list(10)
         logger.debug("get_bodyguards found %d raw slots for uid=%s", len(bodyguards), uid)
+        guard_ids = list(
+            {
+                b["bodyguard_user_id"]
+                for b in bodyguards
+                if b.get("bodyguard_user_id")
+            }
+        )
+        guard_users_map = {}
+        if guard_ids:
+            async for u in db.users.find(
+                {"id": {"$in": guard_ids}},
+                {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "armour_level": 1},
+            ):
+                guard_users_map[u["id"]] = u
         result = []
         for i in range(4):
             bg = next((b for b in bodyguards if b.get("slot_number") == i + 1), None)
@@ -274,20 +288,14 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
                 if not is_robot and bg.get("bodyguard_user_id"):
                     # Human: armour is always the guard's actual user armour (never from the slot doc)
                     guard_id = bg["bodyguard_user_id"]
-                    bg_user = await db.users.find_one(
-                        {"id": guard_id},
-                        {"_id": 0, "username": 1, "rank_points": 1, "armour_level": 1}
-                    )
+                    bg_user = guard_users_map.get(guard_id)
                     username_bg = bg_user.get("username", "Unknown") if bg_user else "Unknown"
                     if bg_user:
                         _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
                     armour_level = int(bg_user.get("armour_level", 0) or 0) if bg_user else 0
                 else:
                     if bg.get("bodyguard_user_id"):
-                        bg_user = await db.users.find_one(
-                            {"id": bg["bodyguard_user_id"]},
-                            {"_id": 0, "username": 1, "rank_points": 1}
-                        )
+                        bg_user = guard_users_map.get(bg["bodyguard_user_id"])
                         username_bg = bg_user.get("username") if bg_user else None
                         if bg_user:
                             _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
@@ -367,6 +375,14 @@ async def get_bodyguards_stats(current_user: dict = Depends(get_current_user)):
         {"user_id": uid},
         {"_id": 0, "slot_number": 1, "hired_at": 1, "bodyguard_user_id": 1, "is_robot": 1, "robot_name": 1},
     ).to_list(10)
+    human_guard_ids = list({b["bodyguard_user_id"] for b in bodyguards if b.get("bodyguard_user_id")})
+    human_names = {}
+    if human_guard_ids:
+        async for u in db.users.find(
+            {"id": {"$in": human_guard_ids}},
+            {"_id": 0, "id": 1, "username": 1},
+        ):
+            human_names[u["id"]] = u.get("username", "Unknown")
     longest_surviving_seconds = None
     longest_surviving_name = None
     now = datetime.now(timezone.utc)
@@ -384,11 +400,8 @@ async def get_bodyguards_stats(current_user: dict = Depends(get_current_user)):
             if bg.get("is_robot") and bg.get("robot_name"):
                 longest_surviving_name = bg.get("robot_name", "Robot")
             elif bg.get("bodyguard_user_id"):
-                u = await db.users.find_one(
-                    {"id": bg["bodyguard_user_id"]},
-                    {"_id": 0, "username": 1},
-                )
-                longest_surviving_name = u.get("username", "Unknown") if u else "Unknown"
+                gid = bg["bodyguard_user_id"]
+                longest_surviving_name = human_names.get(gid, "Unknown")
             else:
                 longest_surviving_name = "Bodyguard"
     return {

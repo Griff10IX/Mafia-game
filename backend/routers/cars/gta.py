@@ -1020,13 +1020,21 @@ async def get_marketplace_listings(current_user: dict = Depends(get_current_user
         {"_id": 1, "id": 1, "user_id": 1, "car_id": 1, "car_name": 1, "custom_name": 1, "sale_price": 1, "listed_at": 1, "damage_percent": 1},
     ).sort("listed_at", -1)
     listings = await cursor.to_list(200)
+    seller_ids = list({uc["user_id"] for uc in listings if uc.get("user_id")})
+    seller_map = {}
+    if seller_ids:
+        async for u in db.users.find(
+            {"id": {"$in": seller_ids}},
+            {"_id": 0, "id": 1, "username": 1},
+        ):
+            seller_map[u["id"]] = u
     out = []
     for uc in listings:
         car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
         if not car_info:
             continue
         display_name = (uc.get("custom_name") or uc.get("car_name") or car_info.get("name")) if uc.get("car_id") == "car_custom" else (uc.get("car_name") or car_info.get("name"))
-        seller = await db.users.find_one({"id": uc["user_id"]}, {"_id": 0, "username": 1})
+        seller = seller_map.get(uc.get("user_id") or "")
         listing_id = uc.get("id") or str(uc.get("_id", ""))
         # Custom cars never have damage
         car_id = uc.get("car_id")
