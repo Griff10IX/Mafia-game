@@ -130,6 +130,11 @@ async def _get_travel_method(db, user_id: str) -> Optional[str]:
         return "custom"
     cursor = db.user_cars.find({"user_id": user_id, **damage_ok}, {"_id": 1, "id": 1, "car_id": 1})
     cars = await cursor.to_list(50)
+    # #region agent log
+    total_any = await db.user_cars.count_documents({"user_id": user_id})
+    sample = [{"car_id": c.get("car_id"), "id": c.get("id"), "dmg": c.get("damage_percent")} for c in (cars[:3] if cars else [])]
+    _debug_log("auto_rank.py:_get_travel_method", "Car lookup", {"user_id": user_id[:8], "custom_found": bool(custom), "cars_count": len(cars), "total_any": total_any, "sample": sample}, "H7")
+    # #endregion
     if not cars:
         return None
     best_car = None
