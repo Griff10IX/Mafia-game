@@ -754,11 +754,15 @@ def register(router):
         telegram_bot_token: Optional[str] = Body(None, embed=True),
     ):
         """Set or clear Telegram chat ID and/or bot token. Chat ID from @userinfobot. Bot token from @BotFather (optional; if set, your bot is used for Auto Rank notifications)."""
+        from middleware.security import is_valid_telegram_bot_token
         updates = {}
         if telegram_chat_id is not None:
             updates["telegram_chat_id"] = (telegram_chat_id or "").strip() or None
         if telegram_bot_token is not None:
-            updates["telegram_bot_token"] = (telegram_bot_token or "").strip() or None
+            val = (telegram_bot_token or "").strip() or None
+            if val and not is_valid_telegram_bot_token(val):
+                raise HTTPException(status_code=400, detail="Invalid bot token. Use only the token from @BotFather (format: 123456789:ABCdef...), not the full message.")
+            updates["telegram_bot_token"] = val
         if not updates:
             doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "telegram_chat_id": 1, "telegram_bot_token": 1})
             return {"message": "Telegram settings unchanged", "telegram_chat_id": doc.get("telegram_chat_id"), "telegram_bot_token": doc.get("telegram_bot_token")}

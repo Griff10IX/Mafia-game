@@ -3,8 +3,24 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
 import logging
 import os
+import re
 from collections import defaultdict
 import asyncio
+
+# Telegram bot token format: 8-10 digits, colon, ~35 alphanumeric chars. Reject BotFather message paste.
+_TELEGRAM_TOKEN_RE = re.compile(r"^[0-9]{8,10}:[a-zA-Z0-9_-]{30,40}$")
+
+
+def is_valid_telegram_bot_token(token: str) -> bool:
+    """Return True if token looks like a valid Telegram bot token. Rejects BotFather message paste."""
+    if not token or not isinstance(token, str):
+        return False
+    t = token.strip()
+    if len(t) > 55 or "\n" in t or "  " in t:
+        return False
+    if "Done" in t or "Congratulations" in t or "t.me/" in t:
+        return False
+    return bool(_TELEGRAM_TOKEN_RE.match(t))
 
 # Optional httpx import for Telegram alerts
 try:
@@ -107,29 +123,31 @@ async def flush_telegram_alerts():
     """Send all pending alerts to Telegram (batch). Called periodically or on critical alert."""
     if not pending_alerts or not TELEGRAM_ENABLED:
         return
-    
+    if not is_valid_telegram_bot_token(TELEGRAM_BOT_TOKEN):
+        logger.warning("TELEGRAM_BOT_TOKEN invalid (check format: digits:alphanumeric, not BotFather message)")
+        pending_alerts.clear()
+        return
     if not HTTPX_AVAILABLE:
         logger.warning(f"httpx not installed - cannot send {len(pending_alerts)} Telegram alerts. Install with: pip install httpx")
         pending_alerts.clear()
         return
-    
-    # Take up to 10 alerts at a time
     batch = pending_alerts[:10]
     for _ in range(len(batch)):
         pending_alerts.pop(0)
-    
     combined_message = "\n\n---\n\n".join(batch)
-    
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            await client.post(
+            payload = {"chat_id": TELEGRAM_CHAT_ID, "text": combined_message[:4000], "parse_mode": "Markdown"}
+            r = await client.post(
                 f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-                json={
-                    "chat_id": TELEGRAM_CHAT_ID,
-                    "text": combined_message[:4000],  # Telegram limit
-                    "parse_mode": "Markdown"
-                }
+                json=payload,
             )
+            if r.status_code == 400:
+                payload.pop("parse_mode", None)
+                await client.post(
+                    f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                    json=payload,
+                )
     except Exception as e:
         logger.exception(f"Failed to send Telegram alert: {e}")
 
@@ -140,21 +158,27 @@ async def send_telegram_to_chat(chat_id: str, message: str, bot_token: Optional[
     if not chat_id:
         return False
     token = (bot_token or "").strip() or TELEGRAM_BOT_TOKEN
-    if not token:
+    if not token or not is_valid_telegram_bot_token(token):
         return False
     if not HTTPX_AVAILABLE:
         logger.warning("httpx not installed - cannot send Telegram to user")
         return False
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            await client.post(
+            payload = {"chat_id": chat_id, "text": message[:4000], "parse_mode": "Markdown"}
+            r = await client.post(
                 "https://api.telegram.org/bot{}/sendMessage".format(token),
-                json={
-                    "chat_id": chat_id,
-                    "text": message[:4000],
-                    "parse_mode": "Markdown",
-                },
+                json=payload,
             )
+            if r.status_code == 400:
+                payload.pop("parse_mode", None)
+                r = await client.post(
+                    "https://api.telegram.org/bot{}/sendMessage".format(token),
+                    json=payload,
+                )
+            if r.status_code != 200:
+                logger.warning("Telegram sendMessage failed: %s %s", r.status_code, r.text[:200])
+                return False
         return True
     except Exception as e:
         logger.exception("Failed to send Telegram to chat %s: %s", chat_id, e)
@@ -177,7 +201,7 @@ async def set_telegram_webhook(webhook_url: str, secret_token: Optional[str] = N
     if not url:
         return False
     token = (bot_token or "").strip() or TELEGRAM_BOT_TOKEN
-    if not token:
+    if not token or not is_valid_telegram_bot_token(token):
         return False
     if not HTTPX_AVAILABLE:
         logger.warning("httpx not installed - cannot set Telegram webhook")
@@ -204,7 +228,7 @@ async def set_telegram_webhook(webhook_url: str, secret_token: Optional[str] = N
 async def get_telegram_webhook_info(bot_token: Optional[str] = None) -> Optional[dict]:
     """Get current webhook URL and pending update count from Telegram (getWebhookInfo). Returns None on failure."""
     token = (bot_token or "").strip() or TELEGRAM_BOT_TOKEN
-    if not token or not HTTPX_AVAILABLE:
+    if not token or not is_valid_telegram_bot_token(token) or not HTTPX_AVAILABLE:
         return None
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -227,7 +251,7 @@ async def get_telegram_webhook_info(bot_token: Optional[str] = None) -> Optional
 async def set_telegram_bot_commands(bot_token: Optional[str] = None) -> bool:
     """Register bot command menu with Telegram (setMyCommands) so /commands appear in the app menu. Uses TELEGRAM_BOT_TOKEN if bot_token not provided."""
     token = (bot_token or "").strip() or TELEGRAM_BOT_TOKEN
-    if not token:
+    if not token or not is_valid_telegram_bot_token(token):
         return False
     if not HTTPX_AVAILABLE:
         logger.warning("httpx not installed - cannot set Telegram bot commands")
