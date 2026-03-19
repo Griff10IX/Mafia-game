@@ -1263,7 +1263,7 @@ export default function Layout({ children }) {
       {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
       <div
         data-layout="sidebar"
-        className={`fixed left-0 top-0 h-full w-48 ${styles.sidebar} z-50 transform transition-transform duration-300 ${mobileNavStyle === 'bottom' ? 'hidden md:translate-x-0 md:block' : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}`}
+        className={`fixed left-0 top-0 h-full ${themeVariant === 'modern' ? 'w-40' : 'w-48'} ${styles.sidebar} z-50 transform transition-transform duration-300 ${mobileNavStyle === 'bottom' ? 'hidden md:translate-x-0 md:block' : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}`}
         style={sidebarBgStyle}
       >
         <div className="flex flex-col h-full">
@@ -1390,7 +1390,7 @@ export default function Layout({ children }) {
       )}
 
       {/* ── TOP BAR ─────────────────────────────────────────────────────────── */}
-      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 md:left-48 min-h-[38px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-2 py-1.5 md:px-3 md:py-0 gap-1 md:gap-2 ${mobileStatsDisplay === 'right_sidebar' ? 'md:right-52' : ''}`}>
+      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 ${themeVariant === 'modern' ? 'md:left-40' : 'md:left-48'} min-h-[38px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-2 py-1.5 md:px-3 md:py-0 gap-1 md:gap-2 ${mobileStatsDisplay === 'right_sidebar' ? 'md:right-52' : ''}`}>
         <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0 overflow-hidden md:justify-end">
           {mobileNavStyle !== 'bottom' && (
             <button onClick={() => setSidebarOpen(!sidebarOpen)} data-testid="mobile-menu-toggle"
@@ -1400,8 +1400,8 @@ export default function Layout({ children }) {
             </button>
           )}
 
-          {/* Flash news — show on desktop; on mobile show when bottom bar layout so top bar isn't empty. On mobile, message scrolls R→L so full text is visible. */}
-          <div className={`${(!isMobileViewport || mobileNavStyle === 'bottom') ? 'flex' : 'hidden'} items-center flex-1 min-w-0 max-w-sm md:max-w-md`}>
+          {/* Flash news — show on desktop; on mobile hide when top bar stats selected (moved to bottom). */}
+          <div className={`${(!isMobileViewport || (mobileNavStyle === 'bottom' && mobileStatsDisplay !== 'top_bar')) ? 'flex' : 'hidden'} items-center flex-1 min-w-0 max-w-sm md:max-w-md`}>
             {flashNews.length > 0 && (
               <div className="flex items-center gap-1 md:gap-2 min-w-0 w-full min-h-[1.5rem] md:min-h-[2rem] rounded px-1.5 py-0.5 md:px-2 md:py-1 border border-primary/15 bg-primary/5">
                 <Newspaper className="shrink-0 text-primary/70 self-center w-3 h-3 md:w-3.5 md:h-3.5" aria-hidden />
@@ -1413,8 +1413,8 @@ export default function Layout({ children }) {
             )}
           </div>
 
-          {/* Casino & property profit — show on mobile when bottom bar so top bar has useful info */}
-          {isMobileViewport && mobileNavStyle === 'bottom' && user && (
+          {/* Casino & property profit — show on mobile when bottom bar, but not when top bar stats selected */}
+          {isMobileViewport && mobileNavStyle === 'bottom' && mobileStatsDisplay !== 'top_bar' && user && (
             <Link
               to="/my-properties"
               className="flex items-center gap-1 min-h-[1.5rem] rounded px-1.5 py-0.5 border border-primary/15 bg-primary/5 shrink-0 hover:bg-primary/10 hover:border-primary/25 transition-colors"
@@ -1649,7 +1649,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
-      <main data-layout="main" className={`md:ml-48 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-24 md:pb-6' : ''} ${mobileStatsDisplay === 'right_sidebar' ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
+      <main data-layout="main" className={`${themeVariant === 'modern' ? 'md:ml-40' : 'md:ml-48'} mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-24 md:pb-6' : ''} ${isMobileViewport && mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && mobileNavStyle !== 'bottom' ? 'pb-16 md:pb-6' : ''} ${mobileStatsDisplay === 'right_sidebar' ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
         {needsEmailVerification && (
           <div className="mb-3 px-3 py-2 rounded-sm flex items-center gap-2 flex-wrap" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', border: '1px solid rgba(var(--noir-primary-rgb), 0.4)' }}>
             <Mail size={16} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
@@ -1859,9 +1859,38 @@ export default function Layout({ children }) {
         </>
       )}
 
-      {/* ── MOBILE BOTTOM NAV ────────────────────────────────────────────────── */}
-      {mobileNavStyle === 'bottom' && (
-        <div ref={mobileBottomNavRef} data-layout="bottom-nav" className="md:hidden fixed bottom-0 left-0 right-0 z-40">
+      {/* ── MOBILE BOTTOM AREA (nav + news/casino bar when top bar stats) ─────── */}
+      {isMobileViewport && (mobileNavStyle === 'bottom' || (mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)))) && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex flex-col-reverse">
+          {/* News + casino bar — above nav when top bar stats selected */}
+          {mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && (
+            <div data-layout="mobile-bottom-bar" className="flex items-center gap-2 px-3 py-2 safe-area-pb"
+              style={{ backgroundColor: 'var(--noir-content)', borderTop: '1px solid var(--noir-border-mid)' }}>
+              {flashNews.length > 0 && (
+                <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden rounded px-2 py-1.5 border border-primary/15 bg-primary/5">
+                  <Newspaper className="shrink-0 text-primary/70 self-center w-3 h-3" aria-hidden />
+                  <div className="flex items-baseline gap-1 min-w-0 flex-1 overflow-hidden">
+                    <span className="flash-marquee text-[10px] text-mutedForeground font-heading leading-none min-w-0" title={flashNews[flashIndex]?.message}>{flashNews[flashIndex]?.message}</span>
+                    {flashNews.length > 1 && <span className="text-[9px] text-primary/50 shrink-0 font-heading leading-none tabular-nums">{flashIndex + 1}/{flashNews.length}</span>}
+                  </div>
+                </div>
+              )}
+              {user && hasCasinoOrProperty && (
+                <Link
+                  to="/my-properties"
+                  className="flex items-center gap-1 min-h-[1.5rem] rounded px-2 py-1.5 border border-primary/15 bg-primary/5 shrink-0 hover:bg-primary/10 hover:border-primary/25 transition-colors"
+                >
+                  <Building2 className="shrink-0 text-primary/70 self-center w-3 h-3" aria-hidden />
+                  <span className={`font-heading text-[10px] tabular-nums ${(user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>C {formatMoneyCompact(user.casino_profit ?? 0)}</span>
+                  <span className="text-primary/50 text-[9px]">·</span>
+                  <span className="font-heading text-[10px] text-mutedForeground tabular-nums">P {formatCompact(user.property_profit ?? 0)} pts</span>
+                </Link>
+              )}
+            </div>
+          )}
+          {/* Bottom nav */}
+          {mobileNavStyle === 'bottom' && (
+        <div ref={mobileBottomNavRef} data-layout="bottom-nav">
           {/* IMPROVEMENT 3: 3-column grid submenu */}
           {mobileBottomMenuOpen && (() => {
             const group = mobileBottomNavItems.find((i) => i.type === 'group' && i.id === mobileBottomMenuOpen);
@@ -1989,6 +2018,8 @@ export default function Layout({ children }) {
               );
             })}
           </nav>
+        </div>
+          )}
         </div>
       )}
 
