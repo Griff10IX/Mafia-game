@@ -119,14 +119,32 @@ def _parse_iso(s):
 
 
 async def _get_travel_method(db, user_id: str) -> Optional[str]:
-    """Find the best travel method for a user: custom car first, then any non-destroyed car. Used for booze (cars only, no airport)."""
-    custom = await db.user_cars.find_one({"user_id": user_id, "car_id": "car_custom", "damage_percent": {"$not": {"$gte": 100}}}, {"_id": 0, "id": 1})
+    """Find the fastest travel method for a user: custom car first, then fastest non-destroyed car by rarity. Used for booze (cars only, no airport)."""
+    import server as srv
+    CARS = getattr(srv, "CARS", None) or []
+    TRAVEL_TIMES = getattr(srv, "TRAVEL_TIMES", None) or {}
+    # Match damage < 100 OR missing damage_percent (legacy cars)
+    damage_ok = {"$or": [{"damage_percent": {"$lt": 100}}, {"damage_percent": {"$exists": False}}]}
+    custom = await db.user_cars.find_one({"user_id": user_id, "car_id": "car_custom", **damage_ok}, {"_id": 1, "id": 1})
     if custom:
         return "custom"
-    car = await db.user_cars.find_one({"user_id": user_id, "damage_percent": {"$not": {"$gte": 100}}}, {"_id": 0, "id": 1})
-    if car:
-        return car.get("id") or str(car.get("_id", ""))
-    return None
+    cursor = db.user_cars.find({"user_id": user_id, **damage_ok}, {"_id": 1, "id": 1, "car_id": 1})
+    cars = await cursor.to_list(50)
+    if not cars:
+        return None
+    best_car = None
+    best_time = 999
+    for uc in cars:
+        if uc.get("car_id") == "car_custom":
+            continue
+        car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
+        travel_time = TRAVEL_TIMES.get(car_info.get("rarity", "common"), 45) if car_info else 45
+        if travel_time < best_time:
+            best_time = travel_time
+            best_car = uc
+    if not best_car:
+        return None
+    return best_car.get("id") or str(best_car.get("_id", ""))
 
 
 async def _apply_overdue_travel(db, user_id: str, user: dict, now: datetime) -> dict:
