@@ -120,6 +120,8 @@ const SEARCHABLE_TOOLS = [
   { label: 'Wipe Database', categoryId: 'admin-database', collapseKey: 'wipe', keywords: ['wipe', 'database', 'reset', 'delete'] },
   { label: 'New Release', categoryId: 'admin-database', collapseKey: 'newRelease', keywords: ['new', 'release', 'season'] },
   { label: 'Delete User', categoryId: 'admin-database', collapseKey: 'deleteUser', keywords: ['delete', 'user', 'remove'] },
+  { label: 'Delete Family', categoryId: 'admin-database', collapseKey: 'deleteFamily', keywords: ['delete', 'family', 'crew', 'remove'] },
+  { label: 'Wipe All Families', categoryId: 'admin-database', collapseKey: 'wipeAllFamilies', keywords: ['wipe', 'all', 'families', 'crews'] },
   { label: 'Create Test Users', categoryId: 'admin-database', collapseKey: 'testUsers', keywords: ['test', 'users', 'create', 'seed'] },
   // Staff Management
   { label: 'Staff Management', categoryId: 'admin-staff', collapseKey: 'staff', keywords: ['staff', 'mod', 'helper', 'promote'] },
@@ -289,6 +291,9 @@ export default function Admin() {
   const [searchUsername, setSearchUsername] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [deleteUserId, setDeleteUserId] = useState('');
+  const [adminFamiliesList, setAdminFamiliesList] = useState([]);
+  const [deleteFamilyId, setDeleteFamilyId] = useState('');
+  const [wipeAllFamiliesConfirmText, setWipeAllFamiliesConfirmText] = useState('');
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [freshConfirmText, setFreshConfirmText] = useState('');
   const [dropAllCasinosConfirmText, setDropAllCasinosConfirmText] = useState('');
@@ -726,6 +731,12 @@ export default function Admin() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { checkAdmin(); }, []);
+
+  useEffect(() => {
+    if (activeCategoryId === 'admin-database' && isAdmin) {
+      api.get('/admin/families-list').then((res) => setAdminFamiliesList(res.data?.families || [])).catch(() => {});
+    }
+  }, [activeCategoryId, isAdmin]);
 
   // Auto-load rate limit status for admin
   useEffect(() => {
@@ -2420,6 +2431,41 @@ export default function Admin() {
       toast.success(res.data?.message || 'Deleted');
       setDeleteUserId('');
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+    finally { setDbLoading(false); }
+  };
+
+  const handleFetchAdminFamilies = async () => {
+    try {
+      const res = await api.get('/admin/families-list');
+      setAdminFamiliesList(res.data?.families || []);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load families');
+    }
+  };
+
+  const handleDeleteFamily = async () => {
+    if (!deleteFamilyId) { toast.error('Select a family'); return; }
+    if (!window.confirm('DELETE this family? All members will be removed from the crew. Cannot be undone.')) return;
+    setDbLoading(true);
+    try {
+      const res = await api.post('/admin/delete-family', { family_id: deleteFamilyId });
+      toast.success(res.data?.message || 'Family deleted');
+      setDeleteFamilyId('');
+      handleFetchAdminFamilies();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setDbLoading(false); }
+  };
+
+  const handleWipeAllFamilies = async () => {
+    if (wipeAllFamiliesConfirmText !== 'WIPE ALL FAMILIES') { toast.error('Type "WIPE ALL FAMILIES" to confirm'); return; }
+    if (!window.confirm('FINAL WARNING: Delete ALL families? Every user will be removed from their crew. Cannot be undone.')) return;
+    setDbLoading(true);
+    try {
+      const res = await api.post('/admin/wipe-all-families', { confirmation_text: 'WIPE ALL FAMILIES' });
+      toast.success(res.data?.message || 'All families wiped');
+      setWipeAllFamiliesConfirmText('');
+      handleFetchAdminFamilies();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
     finally { setDbLoading(false); }
   };
 
@@ -7440,6 +7486,46 @@ export default function Admin() {
                 />
                 <BtnDanger onClick={handleDeleteUser} disabled={dbLoading}>
                   {dbLoading ? '...' : 'Delete'}
+                </BtnDanger>
+              </div>
+            </div>
+
+            {/* Delete Family */}
+            <div className="space-y-2">
+              <label className="text-[10px] text-mutedForeground font-heading uppercase">Delete Family</label>
+              <div className="flex gap-2 flex-wrap items-center">
+                <select
+                  value={deleteFamilyId}
+                  onChange={(e) => setDeleteFamilyId(e.target.value)}
+                  className="flex-1 min-w-[160px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="">Select family...</option>
+                  {adminFamiliesList.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name} [{f.tag}]{f.wiped ? ' (wiped)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <BtnDanger onClick={handleDeleteFamily} disabled={dbLoading || !deleteFamilyId}>
+                  {dbLoading ? '...' : 'Delete'}
+                </BtnDanger>
+              </div>
+            </div>
+
+            {/* Wipe All Families */}
+            <div className="space-y-2 p-2 rounded border border-red-500/50 bg-red-500/5">
+              <label className="text-[10px] text-red-400 font-heading uppercase font-bold">⚠️ Wipe All Families</label>
+              <p className="text-[10px] text-red-400/80">Delete ALL families. Every user removed from their crew. State heads cleared.</p>
+              <div className="flex gap-2 flex-wrap">
+                <input
+                  type="text"
+                  placeholder='Type "WIPE ALL FAMILIES"'
+                  value={wipeAllFamiliesConfirmText}
+                  onChange={(e) => setWipeAllFamiliesConfirmText(e.target.value)}
+                  className="flex-1 min-w-[180px] bg-zinc-900/50 border border-red-500/50 rounded px-2 py-1 text-xs text-foreground focus:border-red-500 focus:outline-none"
+                />
+                <BtnDanger onClick={handleWipeAllFamilies} disabled={dbLoading || wipeAllFamiliesConfirmText !== 'WIPE ALL FAMILIES'}>
+                  {dbLoading ? '...' : 'Wipe all'}
                 </BtnDanger>
               </div>
             </div>

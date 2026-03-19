@@ -147,6 +147,14 @@ class DropAllCasinosPropertiesConfirmation(BaseModel):
     confirmation_text: str  # "DROP ALL CASINOS PROPERTIES"
 
 
+class DeleteFamilyRequest(BaseModel):
+    family_id: str
+
+
+class WipeAllFamiliesConfirmation(BaseModel):
+    confirmation_text: str  # "WIPE ALL FAMILIES"
+
+
 class AdminSetCasinoMaxBetRequest(BaseModel):
     game_type: str  # dice, roulette, blackjack, horseracing, videopoker, slots, or "all"
     location: Optional[str] = None  # city/state; if None, applies to all locations for that game type
@@ -4077,6 +4085,77 @@ def register(router):
         deleted["family_war_stats"] = (await db.family_war_stats.delete_many({"user_id": resolved_id})).deleted_count
         total = sum(deleted.values())
         return {"message": f"Deleted user '{username}' and {total} related documents", "details": deleted}
+
+    @router.get("/admin/families-list")
+    async def admin_families_list(current_user: dict = Depends(get_current_user)):
+        """List all families (including wiped) for admin dropdown. Returns id, name, tag, wiped."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        fams = await db.families.find({}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "wiped": 1}).sort("name", 1).to_list(50)
+        return {"families": [{"id": f["id"], "name": f.get("name", "?"), "tag": f.get("tag", "?"), "wiped": bool(f.get("wiped"))} for f in fams]}
+
+    @router.post("/admin/delete-family")
+    async def admin_delete_family(request: DeleteFamilyRequest, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        family_id = (request.family_id or "").strip()
+        if not family_id:
+            raise HTTPException(status_code=400, detail="Family ID required")
+        fam = await db.families.find_one({"id": family_id}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "head_of_state": 1})
+        if not fam:
+            raise HTTPException(status_code=404, detail="Family not found")
+        set_state_head = srv.set_state_head
+        head_state = (fam.get("head_of_state") or "").strip()
+        if head_state:
+            await set_state_head(head_state, None)
+        member_ids = [m["user_id"] for m in await db.family_members.find({"family_id": family_id}, {"_id": 0, "user_id": 1}).to_list(500)]
+        await db.users.update_many({"id": {"$in": member_ids}}, {"$set": {"family_id": None, "family_role": None}})
+        deleted = {}
+        deleted["family_members"] = (await db.family_members.delete_many({"family_id": family_id})).deleted_count
+        deleted["family_wars"] = (await db.family_wars.delete_many({"$or": [{"family_a_id": family_id}, {"family_b_id": family_id}]})).deleted_count
+        deleted["family_war_stats"] = (await db.family_war_stats.delete_many({"family_id": family_id})).deleted_count
+        deleted["family_racket_attacks"] = (await db.family_racket_attacks.delete_many({"$or": [{"attacker_family_id": family_id}, {"target_family_id": family_id}]})).deleted_count
+        deleted["family_crew_oc_applications"] = (await db.family_crew_oc_applications.delete_many({"family_id": family_id})).deleted_count
+        deleted["family_join_applications"] = (await db.family_join_applications.delete_many({"family_id": family_id})).deleted_count
+        deleted["families"] = (await db.families.delete_one({"id": family_id})).deleted_count
+        try:
+            from routers.game.families import _invalidate_list_cache
+            _invalidate_list_cache()
+        except Exception:
+            pass
+        total = sum(deleted.values())
+        return {"message": f"Deleted family '{fam.get('name', '?')}' [{fam.get('tag', '?')}] and {total} related documents", "details": deleted}
+
+    @router.post("/admin/wipe-all-families")
+    async def admin_wipe_all_families(confirm: WipeAllFamiliesConfirmation, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if confirm.confirmation_text != "WIPE ALL FAMILIES":
+            raise HTTPException(
+                status_code=400,
+                detail='Confirmation required. Send {"confirmation_text": "WIPE ALL FAMILIES"} to confirm.',
+            )
+        logging.warning(f"🚨 WIPE ALL FAMILIES initiated by {current_user['email']} ({current_user['username']})")
+        set_state_head = srv.set_state_head
+        for state in (STATES or []):
+            await set_state_head(state, None)
+        await db.users.update_many({}, {"$set": {"family_id": None, "family_role": None}})
+        deleted = {}
+        deleted["family_members"] = (await db.family_members.delete_many({})).deleted_count
+        deleted["family_wars"] = (await db.family_wars.delete_many({})).deleted_count
+        deleted["family_war_stats"] = (await db.family_war_stats.delete_many({})).deleted_count
+        deleted["family_racket_attacks"] = (await db.family_racket_attacks.delete_many({})).deleted_count
+        deleted["family_crew_oc_applications"] = (await db.family_crew_oc_applications.delete_many({})).deleted_count
+        deleted["family_join_applications"] = (await db.family_join_applications.delete_many({})).deleted_count
+        deleted["families"] = (await db.families.delete_many({})).deleted_count
+        try:
+            from routers.game.families import _invalidate_list_cache
+            _invalidate_list_cache()
+        except Exception:
+            pass
+        total = sum(deleted.values())
+        logging.warning(f"🚨 WIPE ALL FAMILIES completed by {current_user['email']}: {total} documents deleted")
+        return {"message": f"All families wiped ({total} documents deleted) and users cleared from crews", "details": deleted}
 
     @router.get("/admin/events")
     async def admin_get_events(current_user: dict = Depends(get_current_user)):
