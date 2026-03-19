@@ -1,10 +1,23 @@
 # Auto Rank: background task that auto-commits crimes and GTA for users who bought it, sends results to Telegram
 import asyncio
+import json
 import logging
 import os
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
+
+# #region agent log
+def _debug_log(location: str, message: str, data: dict, hypothesis_id: str = ""):
+    try:
+        _root = Path(__file__).resolve().parent.parent.parent.parent
+        _path = _root / "debug-e7d80d.log"
+        entry = {"sessionId": "e7d80d", "location": location, "message": message, "data": data, "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000), "hypothesisId": hypothesis_id}
+        with open(_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass
+# #endregion
 
 # Ensure backend/.env is loaded (e.g. when process cwd is not the backend dir)
 try:
@@ -444,6 +457,9 @@ async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_
 
     travel_method = await _get_travel_method(db, user_id)
     if not travel_method:
+        # #region agent log
+        _debug_log("auto_rank.py:_booze_buy_and_travel", "No car", {"user_id": user_id}, "H5")
+        # #endregion
         logger.info("Auto rank booze %s: no working car for buy+travel", user_id)
         return False
 
@@ -463,10 +479,16 @@ async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_
             best_buy_price = p_buy
 
     if not best_booze_id or best_profit <= 0 or best_buy_price <= 0:
+        # #region agent log
+        _debug_log("auto_rank.py:_booze_buy_and_travel", "No profit", {"user_id": user_id, "best_profit": best_profit, "best_buy_price": best_buy_price}, "H5")
+        # #endregion
         logger.info("Auto rank booze %s: no profitable booze route (best_profit=%s)", user_id, best_profit)
         return False
     amount = min(capacity, money // best_buy_price)
     if amount <= 0:
+        # #region agent log
+        _debug_log("auto_rank.py:_booze_buy_and_travel", "Insufficient money", {"user_id": user_id, "money": money, "best_buy_price": best_buy_price}, "H5")
+        # #endregion
         logger.info("Auto rank booze %s: insufficient money ($%s) for buy (price=$%s)", user_id, money, best_buy_price)
         return False
 
@@ -495,6 +517,9 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
     from routers.admin.airport import _start_travel_impl
 
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    # #region agent log
+    _debug_log("auto_rank.py:_run_booze_for_user", "Entry", {"user_id": user_id, "user_found": bool(user), "in_jail": user.get("in_jail") if user else None, "travel_arrives_at": user.get("travel_arrives_at") if user else None, "current_state": user.get("current_state") if user else None}, "H2")
+    # #endregion
     if not user:
         logger.info("Auto rank booze %s: user not found", user_id)
         return False
@@ -505,9 +530,15 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
     if user.get("travel_arrives_at"):
         adt = _parse_iso(user["travel_arrives_at"])
         if adt and now < adt:
+            # #region agent log
+            _debug_log("auto_rank.py:_run_booze_for_user", "Still traveling", {"user_id": user_id, "travel_arrives_at": user.get("travel_arrives_at")}, "H2")
+            # #endregion
             return False
 
     round_trip = _booze_round_trip_cities()
+    # #region agent log
+    _debug_log("auto_rank.py:_run_booze_for_user", "Round trip", {"user_id": user_id, "round_trip": round_trip, "current": user.get("current_state"), "in_cities": (user.get("current_state") or "") in (round_trip or [])}, "H3")
+    # #endregion
     if not round_trip or len(round_trip) < 2:
         logger.warning("Auto rank booze %s: no round trip cities available", user_id)
         return False
@@ -518,6 +549,9 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
 
     if current not in (city_a, city_b):
         travel_method = await _get_travel_method(db, user_id)
+        # #region agent log
+        _debug_log("auto_rank.py:_run_booze_for_user", "Wrong city", {"user_id": user_id, "current": current, "city_a": city_a, "city_b": city_b, "travel_method": travel_method}, "H4")
+        # #endregion
         if travel_method:
             try:
                 await _start_travel_impl(user, city_a, travel_method, airport_slot=None, booze_run=True)
@@ -980,6 +1014,9 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                         logger.exception("Auto rank scrap for %s: %s", user_id, e)
 
     # --- Booze ---
+    # #region agent log
+    _debug_log("auto_rank.py:booze_block", "Booze block check", {"user_id": user_id, "auto_rank_booze": user.get("auto_rank_booze"), "bust_every_5": user.get("auto_rank_bust_every_5_sec")}, "H1")
+    # #endregion
     if user.get("auto_rank_booze", False):
         try:
             if await _run_booze_for_user(db, user_id, username, chat_id, bot_token, now, lines):
@@ -1030,7 +1067,10 @@ async def run_booze_arrivals():
         {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
     )
     users = await cursor.to_list(200)
-    
+    # #region agent log
+    _debug_log("auto_rank.py:run_booze_arrivals", "Booze arrivals query", {"users_count": len(users), "user_ids": [u.get("id") for u in users[:5]]}, "H6")
+    # #endregion
+
     # Check each user for idle status and filter out those who should be idle
     active_users = []
     for u in users:

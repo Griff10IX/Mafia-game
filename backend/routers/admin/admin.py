@@ -3456,6 +3456,37 @@ def register(router):
             if g.get("ip_vpn"):
                 g["risk_score"] = min(100, g["risk_score"] + 10)
 
+        # Proxy/VPN users: users whose IPs are detected as VPN/proxy (beyond same_ip_groups)
+        proxy_users_list: List[dict] = []
+        if check_vpn:
+            all_unique_ips = set()
+            for u in users:
+                ips, _ = _all_ips(u)
+                all_unique_ips.update(ips)
+            ips_to_check = [ip for ip in all_unique_ips if ip not in ip_vpn][:max_vpn_checks]
+            for ip in ips_to_check:
+                try:
+                    ip_vpn[ip] = await is_proxy_or_vpn(ip)
+                except Exception:
+                    ip_vpn[ip] = False
+                await asyncio.sleep(0.15)
+            vpn_ips = {ip for ip, v in ip_vpn.items() if v}
+            seen_proxy_ids = set()
+            for u in users:
+                ips, sources = _all_ips(u)
+                vpn_used = [ip for ip in ips if ip in vpn_ips]
+                if vpn_used and u.get("id") not in seen_proxy_ids:
+                    seen_proxy_ids.add(u["id"])
+                    proxy_users_list.append({
+                        "id": u["id"],
+                        "username": u.get("username"),
+                        "email": u.get("email"),
+                        "created_at": u.get("created_at"),
+                        "vpn_ips": vpn_used,
+                        "registration_from_vpn": bool(sources.get("registration") and sources["registration"] in vpn_ips),
+                    })
+        proxy_users_list.sort(key=lambda x: (-int(x.get("registration_from_vpn", False)), x.get("created_at") or ""))
+
         return {
             "same_ip_groups": same_ip_groups[:80],
             "total_same_ip_groups": len(same_ip_groups),
@@ -3471,6 +3502,8 @@ def register(router):
             "by_similar_email": similar_email_groups[:50],
             "by_same_day_same_ip": same_day_ip_groups[:30],
             "ip_vpn": ip_vpn,
+            "proxy_users": proxy_users_list[:100],
+            "total_proxy_users": len(proxy_users_list),
         }
 
     def _normalize_user_agent(ua: str) -> str:

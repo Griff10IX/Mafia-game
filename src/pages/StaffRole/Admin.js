@@ -5313,6 +5313,7 @@ export default function Admin() {
           badge={
             ((cheatDupeIntelligent?.total_same_ip_groups ?? 0) > 0 || (cheatDupeIntelligent?.total_same_ua_groups ?? 0) > 0 ||
              (cheatDupeIntelligent?.total_same_subnet_groups ?? 0) > 0 || (cheatDupeIntelligent?.total_same_fingerprint_groups ?? 0) > 0 ||
+             (cheatDupeIntelligent?.total_proxy_users ?? 0) > 0 ||
              (cheatSameIp?.total_groups ?? 0) > 0 || (cheatSameDeviceIps?.total_groups ?? 0) > 0 ||
              ((cheatDuplicates?.by_domain?.length ?? 0) + (cheatDuplicates?.by_similar_username?.length ?? 0) + (cheatDuplicates?.by_similar_email?.length ?? 0) + (cheatDuplicates?.by_same_day_same_ip?.length ?? 0) + (cheatDuplicates?.by_fuzzy_username?.length ?? 0)) > 0) && (
               <span className="text-[10px] font-heading text-amber-400">Review below</span>
@@ -5433,10 +5434,28 @@ export default function Admin() {
                       </div>
                     </div>
                   )}
+                  {(cheatDupeIntelligent.proxy_users?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-purple-400 uppercase mb-2">Possible proxy/VPN users ({cheatDupeIntelligent.total_proxy_users ?? 0}) — registered or logged in from VPN/proxy IP</div>
+                      <div className="max-h-64 overflow-y-auto space-y-2">
+                        {(cheatDupeIntelligent.proxy_users || []).slice(0, 50).map((u, i) => (
+                          <div key={i} className="p-2 rounded bg-purple-500/10 border border-purple-500/30">
+                            <div className="text-[10px] font-heading flex flex-wrap items-center gap-x-2">
+                              <span className="font-bold text-foreground">{u.username}</span>
+                              <span className="text-mutedForeground">· {u.email}</span>
+                              {u.registration_from_vpn && <span className="px-1 rounded text-[9px] bg-red-500/20 text-red-400">Reg from VPN</span>}
+                              <button type="button" onClick={() => handleViewUserFromCheat(u.username)} className="ml-auto shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>
+                            </div>
+                            <div className="text-[9px] font-mono text-mutedForeground mt-0.5">VPN IPs: {(u.vpn_ips || []).join(', ') || '—'}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {(cheatDupeIntelligent.by_domain?.length ?? 0) > 0 && (
                       <div>
-                        <div className="text-[10px] font-heading text-primary uppercase mb-1">Same email domain</div>
+                        <div className="text-[10px] font-heading text-primary uppercase mb-1">Same email domain (gmail/icloud/outlook excluded)</div>
                         <div className="max-h-40 overflow-y-auto space-y-1">
                           {(cheatDupeIntelligent.by_domain || []).slice(0, 15).map((g, i) => (
                             <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
@@ -5500,7 +5519,7 @@ export default function Admin() {
                       </div>
                     )}
                   </div>
-                  {!(cheatDupeIntelligent.same_ip_groups?.length || cheatDupeIntelligent.same_user_agent_groups?.length || cheatDupeIntelligent.same_subnet_groups?.length || cheatDupeIntelligent.same_fingerprint_groups?.length || cheatDupeIntelligent.by_domain?.length || cheatDupeIntelligent.by_similar_username?.length || cheatDupeIntelligent.by_similar_email?.length || cheatDupeIntelligent.by_same_day_same_ip?.length || cheatDupeIntelligent.by_fuzzy_username?.length) && (
+                  {!(cheatDupeIntelligent.same_ip_groups?.length || cheatDupeIntelligent.same_user_agent_groups?.length || cheatDupeIntelligent.same_subnet_groups?.length || cheatDupeIntelligent.same_fingerprint_groups?.length || cheatDupeIntelligent.proxy_users?.length || cheatDupeIntelligent.by_domain?.length || cheatDupeIntelligent.by_similar_username?.length || cheatDupeIntelligent.by_similar_email?.length || cheatDupeIntelligent.by_same_day_same_ip?.length || cheatDupeIntelligent.by_fuzzy_username?.length) && (
                     <p className="text-xs text-mutedForeground">No duplicate suspects in this report (try without username filter).</p>
                   )}
                 </div>
@@ -5611,7 +5630,7 @@ export default function Admin() {
             </div>
             <div>
               <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Duplicate account suspects</div>
-              <p className="text-xs text-mutedForeground mb-2">Same email domain or similar usernames (e.g. name1, name2).</p>
+              <p className="text-xs text-mutedForeground mb-2">Same email domain (gmail/icloud/outlook excluded) or similar usernames (e.g. name1, name2).</p>
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <input
                   type="text"
@@ -5625,7 +5644,7 @@ export default function Admin() {
               {cheatDuplicates && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
                   <div>
-                    <div className="text-[10px] font-heading text-primary uppercase mb-1">Same email domain</div>
+                    <div className="text-[10px] font-heading text-primary uppercase mb-1">Same email domain (gmail/icloud excluded)</div>
                     <div className="max-h-48 overflow-y-auto space-y-1">
                       {(cheatDuplicates.by_domain || []).length === 0 ? (
                         <p className="text-xs text-mutedForeground">None</p>

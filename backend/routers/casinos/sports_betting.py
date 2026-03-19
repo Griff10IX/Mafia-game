@@ -93,9 +93,10 @@ def _parse_odds_event(event: dict, category: str, three_way: bool, sport_key: st
         return None
     bookmakers = event.get("bookmakers") or []
     outcomes = []
+    market_keys = ["h2h_3_way", "h2h"] if three_way else ["h2h"]
     for b in bookmakers:
         for m in (b.get("markets") or []):
-            if (m.get("key") or "").lower() == "h2h":
+            if (m.get("key") or "").lower() in market_keys:
                 outcomes = m.get("outcomes") or []
                 break
         if outcomes:
@@ -203,14 +204,14 @@ async def _fetch_odds_api_soccer() -> list:
             for sport_key in SOCCER_LEAGUES:
                 r = await client.get(
                     "%s/sports/%s/odds" % (ODDS_API_BASE, sport_key),
-                    params={"apiKey": key, "regions": "uk,us", "markets": "h2h", "oddsFormat": "decimal"},
+                    params={"apiKey": key, "regions": "uk,us,eu", "markets": "h2h,h2h_3_way", "oddsFormat": "decimal"},
                 )
                 if r.status_code != 200:
                     continue
                 events = r.json()
                 if not isinstance(events, list):
                     continue
-                for ev in events[:20]:
+                for ev in events[:25]:
                     if not _is_future_event(ev):
                         continue
                     parsed = _parse_odds_event(ev, "Football", three_way=True, sport_key=sport_key)
@@ -503,6 +504,7 @@ async def _fetch_football_events_thesportsdb() -> list:
 
 
 async def _fetch_football_events() -> list:
+    """Use Odds API exclusively when key is set. Fallback only when no key or API fails."""
     if _odds_api_key():
         events = await _fetch_odds_api_soccer()
         if events:

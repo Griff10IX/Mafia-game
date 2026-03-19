@@ -671,6 +671,13 @@ def register(router):
 
         ip = _client_ip(request)
 
+        # Block VPN/proxy on login (staff can bypass)
+        if not staff_route and ip and await is_proxy_or_vpn(ip):
+            raise HTTPException(
+                status_code=403,
+                detail="Login from proxy or VPN is not allowed. Please disconnect your VPN to use the game.",
+            )
+
         # Find user by email or username (case-insensitive)
         pattern = re.compile("^" + re.escape(login_input) + "$", re.IGNORECASE)
         user = await db.users.find_one({"$or": [{"email": pattern}, {"username": pattern}]}, {"_id": 0})

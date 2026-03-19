@@ -4,6 +4,16 @@ from difflib import SequenceMatcher
 from typing import Dict, List, Tuple, Any, Optional
 import ipaddress
 
+# Common email domains: exclude from domain-based dupe grouping (too many unrelated users)
+COMMON_EMAIL_DOMAINS = frozenset({
+    "gmail.com", "googlemail.com", "google.com",
+    "icloud.com", "me.com", "mac.com",
+    "outlook.com", "hotmail.com", "hotmail.co.uk", "live.com", "live.co.uk", "msn.com",
+    "yahoo.com", "yahoo.co.uk", "yahoo.fr", "yahoo.de",
+    "aol.com", "protonmail.com", "proton.me", "mail.com",
+    "ymail.com", "mail.ru", "yandex.com", "yandex.ru",
+})
+
 
 def _email_local_base(local: str) -> str:
     """Normalize email local part: lowercase, strip +suffix, remove digits for grouping."""
@@ -11,8 +21,9 @@ def _email_local_base(local: str) -> str:
     return re.sub(r"\d+", "", s) or s
 
 
-def group_by_domain(users: List[dict]) -> List[dict]:
-    """Group users by email domain. Returns groups with at least 2 accounts."""
+def group_by_domain(users: List[dict], exclude_common_domains: bool = True) -> List[dict]:
+    """Group users by email domain. Returns groups with at least 2 accounts.
+    When exclude_common_domains=True, skips gmail.com, icloud.com, outlook.com, etc. (too many unrelated users)."""
     domain_to_users: Dict[str, List[dict]] = {}
     for u in users:
         email = (u.get("email") or "").strip()
@@ -20,6 +31,8 @@ def group_by_domain(users: List[dict]) -> List[dict]:
             domain = email.split("@")[-1].lower()
             domain_to_users.setdefault(domain, []).append(u)
     groups = [{"domain": d, "count": len(accs), "accounts": accs} for d, accs in domain_to_users.items() if len(accs) >= 2]
+    if exclude_common_domains:
+        groups = [g for g in groups if g["domain"] not in COMMON_EMAIL_DOMAINS]
     groups.sort(key=lambda g: -g["count"])
     return groups
 
