@@ -339,8 +339,10 @@ def _racket_previous_id(racket_id: str):
 
 
 async def cleanup_dead_families():
-    """Mark families where all members are dead as wiped (soft-delete); transfer assets to war winners."""
+    """Mark families where all members are dead as wiped (soft-delete); transfer assets to war winners.
+    Returns True if any family was marked as wiped (caller should invalidate list cache)."""
     families = await db.families.find({"wiped": {"$ne": True}}, {"_id": 0}).to_list(50)
+    marked_any = False
     for fam in families:
         family_id = fam["id"]
         members = await db.family_members.find({"family_id": family_id}, {"_id": 0}).to_list(100)
@@ -489,6 +491,9 @@ async def cleanup_dead_families():
                     "compound_deposits_by_user": {},
                 }}
             )
+            marked_any = True
+
+    return marked_any
 
 
 _family_raid_locks: Dict[tuple, asyncio.Lock] = {}
@@ -613,9 +618,11 @@ def _invalidate_my_cache(user_id: str):
 async def families_list(current_user: dict = Depends(get_current_user)):
     global _list_cache
     now_ts = time.monotonic()
+    marked = await cleanup_dead_families()
+    if marked:
+        _invalidate_list_cache()
     if _list_cache is not None and _list_cache[1] > now_ts:
         return _list_cache[0]
-    await cleanup_dead_families()
     cursor = db.families.find({"wiped": {"$ne": True}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "join_mode": 1})
     fams = await cursor.to_list(MAX_FAMILIES * 2)
     out = []

@@ -2100,7 +2100,7 @@ export default function FamilyPage() {
                 <Tab active={activeTab === 'statehead'} onClick={() => setActiveTab('statehead')} icon={<MapPin size={10} />}>Head of state</Tab>
               )}
               <Tab active={activeTab === 'roster'} onClick={() => setActiveTab('roster')} icon={<Users size={10} />}>Made Men</Tab>
-              <Tab active={activeTab === 'families'} onClick={() => setActiveTab('families')} icon={<Building2 size={10} />}>Families</Tab>
+              <Tab active={activeTab === 'families'} onClick={() => { setActiveTab('families'); fetchData(); }} icon={<Building2 size={10} />}>Families</Tab>
               <Tab active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<Trophy size={10} />}>Vendettas</Tab>
             </div>
 
