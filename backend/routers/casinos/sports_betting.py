@@ -114,25 +114,37 @@ def _parse_odds_event(event: dict, category: str, three_way: bool, sport_key: st
         opt_id = name.lower().replace(" ", "_").replace(".", "")[:24]
         options.append({"id": opt_id, "name": name, "odds": round(price, 2)})
     if three_way:
-        if len(options) != 3:
+        if len(options) == 3:
+            used = set()
+            ordered = []
+            for candidate in [home, "Draw", away]:
+                for i, o in enumerate(options):
+                    if i in used:
+                        continue
+                    n = (o.get("name") or "").strip()
+                    if candidate == "Draw" and "draw" in n.lower():
+                        ordered.append(o)
+                        used.add(i)
+                        break
+                    if n == candidate:
+                        ordered.append(o)
+                        used.add(i)
+                        break
+            if len(ordered) == 3:
+                options = ordered
+        elif len(options) == 2:
+            ordered = []
+            for candidate in [home, away]:
+                for o in options:
+                    if (o.get("name") or "").strip() == candidate:
+                        ordered.append(o)
+                        break
+            if len(ordered) == 2:
+                options = ordered
+            else:
+                options = options[:2]
+        else:
             return None
-        used = set()
-        ordered = []
-        for candidate in [home, "Draw", away]:
-            for i, o in enumerate(options):
-                if i in used:
-                    continue
-                n = (o.get("name") or "").strip()
-                if candidate == "Draw" and "draw" in n.lower():
-                    ordered.append(o)
-                    used.add(i)
-                    break
-                if n == candidate:
-                    ordered.append(o)
-                    used.add(i)
-                    break
-        if len(ordered) == 3:
-            options = ordered
     elif len(options) != 2:
         return None
     name = "%s vs %s" % (home, away)
@@ -162,19 +174,22 @@ SOCCER_LEAGUES = (
 )
 
 
-def _is_future_event(ev: dict) -> bool:
-    """True if event has not started yet (or starts in 10+ min)."""
+def _is_future_event(ev: dict, require_time: bool = False) -> bool:
+    """True if event has not started yet (or starts in 10+ min). If require_time, skip events without commence_time."""
     ct = ev.get("commence_time")
     if not ct:
-        return True
+        return not require_time
     try:
         if isinstance(ct, (int, float)):
             dt = datetime.fromtimestamp(int(ct), tz=timezone.utc)
         else:
             dt = datetime.fromisoformat(str(ct).replace("Z", "+00:00"))
-        return datetime.now(timezone.utc) < dt - timedelta(minutes=10)
+        now = datetime.now(timezone.utc)
+        if dt < now - timedelta(hours=24):
+            return False
+        return now < dt - timedelta(minutes=10)
     except Exception:
-        return True
+        return not require_time
 
 
 async def _fetch_odds_api_soccer() -> list:
@@ -188,7 +203,7 @@ async def _fetch_odds_api_soccer() -> list:
             for sport_key in SOCCER_LEAGUES:
                 r = await client.get(
                     "%s/sports/%s/odds" % (ODDS_API_BASE, sport_key),
-                    params={"apiKey": key, "regions": "uk", "markets": "h2h", "oddsFormat": "decimal"},
+                    params={"apiKey": key, "regions": "uk,us", "markets": "h2h", "oddsFormat": "decimal"},
                 )
                 if r.status_code != 200:
                     continue
@@ -216,7 +231,7 @@ async def _fetch_odds_api_mma() -> list:
         async with httpx.AsyncClient(timeout=12.0) as client:
             r = await client.get(
                 "%s/sports/mma_mixed_martial_arts/odds" % ODDS_API_BASE,
-                params={"apiKey": key, "regions": "uk", "markets": "h2h", "oddsFormat": "decimal"},
+                params={"apiKey": key, "regions": "uk,us", "markets": "h2h", "oddsFormat": "decimal"},
             )
             if r.status_code != 200:
                 return []
@@ -224,7 +239,7 @@ async def _fetch_odds_api_mma() -> list:
             if not isinstance(events, list):
                 return []
             for ev in events[:20]:
-                if not _is_future_event(ev):
+                if not _is_future_event(ev, require_time=True):
                     continue
                 parsed = _parse_odds_event(ev, "UFC", three_way=False, sport_key="mma_mixed_martial_arts")
                 if parsed:
@@ -243,7 +258,7 @@ async def _fetch_odds_api_boxing() -> list:
         async with httpx.AsyncClient(timeout=12.0) as client:
             r = await client.get(
                 "%s/sports/boxing_boxing/odds" % ODDS_API_BASE,
-                params={"apiKey": key, "regions": "uk", "markets": "h2h", "oddsFormat": "decimal"},
+                params={"apiKey": key, "regions": "uk,us", "markets": "h2h", "oddsFormat": "decimal"},
             )
             if r.status_code != 200:
                 return []
@@ -251,6 +266,8 @@ async def _fetch_odds_api_boxing() -> list:
             if not isinstance(events, list):
                 return []
             for ev in events[:15]:
+                if not _is_future_event(ev, require_time=True):
+                    continue
                 parsed = _parse_odds_event(ev, "Boxing", three_way=False, sport_key="boxing_boxing")
                 if parsed:
                     out.append(parsed)
