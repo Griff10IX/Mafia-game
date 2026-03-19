@@ -50,7 +50,7 @@ class AdminAddCustomSportsEventRequest(BaseModel):
 
 
 # ----- Constants -----
-SPORTS_LIVE_CACHE_TTL = 6 * 3600
+SPORTS_LIVE_CACHE_TTL = 30 * 60  # 30 min (was 6h) so "Check for events" gets fresher templates
 ODDS_API_BASE = "https://api.the-odds-api.com/v4"
 THESPORTSDB_LEAGUE_PREMIER = 4328
 THESPORTSDB_LEAGUE_LALIGA = 4335
@@ -146,14 +146,46 @@ def _parse_odds_event(event: dict, category: str, three_way: bool, sport_key: st
     return out
 
 
+SOCCER_LEAGUES = (
+    "soccer_epl",
+    "soccer_spain_la_liga",
+    "soccer_germany_bundesliga",
+    "soccer_italy_serie_a",
+    "soccer_france_ligue_one",
+    "soccer_uefa_champs_league",
+    "soccer_uefa_europa_league",
+    "soccer_netherlands_eredivisie",
+    "soccer_portugal_primeira_liga",
+    "soccer_usa_mls",
+    "soccer_england_league_one",
+    "soccer_england_efl",
+)
+
+
+def _is_future_event(ev: dict) -> bool:
+    """True if event has not started yet (or starts in 10+ min)."""
+    ct = ev.get("commence_time")
+    if not ct:
+        return True
+    try:
+        if isinstance(ct, (int, float)):
+            dt = datetime.fromtimestamp(int(ct), tz=timezone.utc)
+        else:
+            dt = datetime.fromisoformat(str(ct).replace("Z", "+00:00"))
+        return datetime.now(timezone.utc) < dt - timedelta(minutes=10)
+    except Exception:
+        return True
+
+
 async def _fetch_odds_api_soccer() -> list:
     key = _odds_api_key()
     if not key:
         return []
     out = []
+    seen_ids = set()
     try:
-        async with httpx.AsyncClient(timeout=12.0) as client:
-            for sport_key in ("soccer_epl", "soccer_spain_la_liga", "soccer_germany_bundesliga"):
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            for sport_key in SOCCER_LEAGUES:
                 r = await client.get(
                     "%s/sports/%s/odds" % (ODDS_API_BASE, sport_key),
                     params={"apiKey": key, "regions": "uk", "markets": "h2h", "oddsFormat": "decimal"},
@@ -163,9 +195,12 @@ async def _fetch_odds_api_soccer() -> list:
                 events = r.json()
                 if not isinstance(events, list):
                     continue
-                for ev in events[:12]:
+                for ev in events[:20]:
+                    if not _is_future_event(ev):
+                        continue
                     parsed = _parse_odds_event(ev, "Football", three_way=True, sport_key=sport_key)
-                    if parsed:
+                    if parsed and parsed.get("id") not in seen_ids:
+                        seen_ids.add(parsed["id"])
                         out.append(parsed)
     except Exception:
         pass
@@ -188,8 +223,10 @@ async def _fetch_odds_api_mma() -> list:
             events = r.json()
             if not isinstance(events, list):
                 return []
-            for ev in events[:15]:
-                parsed = _parse_odds_event(ev, "UFC", three_way=False)
+            for ev in events[:20]:
+                if not _is_future_event(ev):
+                    continue
+                parsed = _parse_odds_event(ev, "UFC", three_way=False, sport_key="mma_mixed_martial_arts")
                 if parsed:
                     out.append(parsed)
     except Exception:
@@ -224,7 +261,7 @@ async def _fetch_odds_api_boxing() -> list:
 
 # ----- Odds API Scores (for auto-settle) -----
 ODDS_API_SPORT_KEYS = {
-    "Football": ["soccer_epl", "soccer_spain_la_liga", "soccer_germany_bundesliga"],
+    "Football": list(SOCCER_LEAGUES),
     "UFC": ["mma_mixed_martial_arts"],
     "Boxing": ["boxing_boxing"],
 }
@@ -331,7 +368,7 @@ async def _fetch_football_events_football_data_org() -> list:
     out = []
     try:
         async with httpx.AsyncClient(timeout=12.0) as client:
-            for code in ("PL", "PD", "BL1"):
+            for code in ("PL", "PD", "BL1", "SA", "FL1", "CL", "EL", "DED", "PPL"):
                 r = await client.get(
                     "https://api.football-data.org/v4/competitions/%s/matches" % code,
                     headers={"X-Auth-Token": token},
@@ -342,11 +379,19 @@ async def _fetch_football_events_football_data_org() -> list:
                 matches = data.get("matches") or []
                 count = 0
                 for i, m in enumerate(matches):
-                    if count >= 15:
+                    if count >= 20:
                         break
                     status = (m.get("status") or "").upper()
                     if status not in ("SCHEDULED", "TIMED"):
                         continue
+                    utc_str = (m.get("utcDate") or m.get("date")) or ""
+                    if utc_str:
+                        try:
+                            md = datetime.fromisoformat(utc_str.replace("Z", "+00:00"))
+                            if datetime.now(timezone.utc) >= md - timedelta(minutes=10):
+                                continue
+                        except Exception:
+                            pass
                     ht = (m.get("homeTeam") or {}).get("name") or ""
                     at = (m.get("awayTeam") or {}).get("name") or ""
                     if not ht or not at:
