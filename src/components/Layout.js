@@ -1720,11 +1720,6 @@ export default function Layout({ children }) {
                     style={{ color: 'var(--noir-primary)' }} aria-label="Close stats panel"><X size={22} /></button>
                 )}
               </div>
-              {user && (
-                <p className="text-[9px] font-heading truncate" style={{ color: 'var(--noir-muted)' }} title={`Page: ${location.pathname} | User: ${user?.username || '—'}`}>
-                  Page: {location.pathname || '/'} · User: {user?.username || '—'}
-                </p>
-              )}
             </div>
 
             <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2 min-h-0">
