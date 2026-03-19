@@ -756,7 +756,7 @@ export default function Racing() {
 
   if (loading) {
     return (
-      <div className={styles.page}>
+      <div className={`${styles.pageContent} mobile-page-root`}>
         <div className="p-4 text-center text-[var(--noir-muted)]">Loading racing...</div>
       </div>
     );
@@ -767,12 +767,12 @@ export default function Racing() {
 
   if (!hasTeam) {
     return (
-      <div className={styles.page + " mobile-page-root overflow-x-hidden"} style={{ minHeight: "100%", WebkitOverflowScrolling: "touch" }}>
-        <div className="px-0 md:px-4 py-3 border-b border-[var(--noir-border)]" style={{ background: "rgba(201,164,96,.03)" }}>
+      <div className={`${styles.pageContent} mobile-page-root overflow-x-hidden space-y-4`} style={{ minHeight: "100%", WebkitOverflowScrolling: "touch" }}>
+        <div className="px-4 md:px-4 py-3 border-b border-[var(--noir-border)]" style={{ background: "rgba(201,164,96,.03)" }}>
           <h1 className="text-lg font-heading" style={{ color: "var(--noir-primary)" }}>Bootleg Runs</h1>
           <p className="text-xs text-[var(--noir-muted)] mt-0.5">Create a racing team to enter races.</p>
         </div>
-        <div className="px-0 md:px-4 py-4 max-w-md">
+        <div className="px-4 md:px-4 py-4 max-w-md">
           <div className={styles.panel + " mobile-panel overflow-hidden"}>
             <CardHead title="Create Your Racing Team" />
             <div className="p-4 space-y-3">
@@ -828,9 +828,9 @@ export default function Racing() {
   const crewBankPct = Math.min(100, ((profile?.crew_bank ?? 0) / 10000000) * 100);
 
   return (
-    <div className={styles.page + " mobile-page-root overflow-x-hidden"} style={{ minHeight: "100%", WebkitOverflowScrolling: "touch" }}>
+    <div className={`${styles.pageContent} mobile-page-root overflow-x-hidden space-y-0`} style={{ minHeight: "100%", WebkitOverflowScrolling: "touch" }}>
       {/* ─── COMPACT HEADER ─── */}
-      <div className="px-0 md:px-4 py-2.5 border-b border-[var(--noir-border)]" style={{ background: "rgba(201,164,96,.03)" }}>
+      <div className="px-4 md:px-4 py-2.5 border-b border-[var(--noir-border)]" style={{ background: "rgba(201,164,96,.03)" }}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <h1 className="text-base font-heading truncate" style={{ color: "var(--noir-primary)" }}>Bootleg Runs</h1>
@@ -874,7 +874,7 @@ export default function Racing() {
         const _tColors = { soft: "#e82020", medium: "#e8d020", hard: "#c0c0b8", inter: "#20a840", full_wet: "#2080e8" };
         const _lapProg = (liveRace.current_lap || 1) / (liveRace.total_laps || 3);
         return (
-        <div className="p-3 space-y-3">
+        <div className="px-4 py-3 md:px-3 md:py-3 space-y-3">
           {/* Race Header Bar */}
           <div className={styles.panel + " mobile-panel overflow-hidden"}>
             <div className="flex items-center justify-between px-3 py-2" style={{ background: "linear-gradient(90deg, rgba(212,175,55,0.08), transparent)" }}>
@@ -1082,7 +1082,7 @@ export default function Racing() {
 
       {/* ─── LIVE RACE: same CircuitRaceView as replay — uses full realism (getCornerMult ~120 mph in corners, brake/accel smoothing, track width, car scale 0.88, final order from backend result_order) ─── */}
       {activeRace?.state === "running" && !(activeRace?.mode === "interactive" || activeRace?.interactive) && (
-        <div className="p-3">
+        <div className="px-4 py-3 md:px-3 md:py-3">
           {activeRace.qualifying_order?.length > 0 && (
             <p className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-primary)] mb-1.5">Live race — Grid by qualifying</p>
           )}
@@ -1111,7 +1111,7 @@ export default function Racing() {
 
       {/* ─── AUTOMATED RACE REPLAY ─── */}
       {activeRace?.state === "replay" && (
-        <div className="p-3">
+        <div className="px-4 py-3 md:px-3 md:py-3">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[10px] font-heading uppercase tracking-wider text-[var(--noir-primary)]">
               Replay — {activeRace.track_name} {activeRace.weather_name && `(${activeRace.weather_name})`}
@@ -1148,6 +1148,7 @@ export default function Racing() {
 
       {/* ─── POST-RACE RESULTS ─── */}
       {activeRace?.state === "completed" && (
+        <div className="px-4 md:px-3">
         <div className={styles.panel + " mobile-panel overflow-hidden mb-3"}>
           <CardHead title="Race Results" />
           <div className="p-3">
@@ -1195,10 +1196,11 @@ export default function Racing() {
             </button>
           </div>
         </div>
+        </div>
       )}
 
       {/* ─── TABS ─── */}
-      <div className="flex border-b border-[var(--noir-border)] px-0 md:px-3 gap-1 overflow-x-auto overflow-y-hidden touch-pan-x" style={{ minHeight: 40, WebkitOverflowScrolling: "touch" }}>
+      <div className="flex border-b border-[var(--noir-border)] px-4 md:px-3 gap-1 overflow-x-auto overflow-y-hidden touch-pan-x" style={{ minHeight: 40, WebkitOverflowScrolling: "touch" }}>
         {tabs.map((t) => (
           <button key={t.id} type="button"
             className={"py-2 px-2.5 text-xs font-heading whitespace-nowrap flex-shrink-0 transition-colors " + (tab === t.id ? "border-b-2 text-[var(--noir-primary)]" : "text-[var(--noir-muted)]")}
@@ -1209,7 +1211,7 @@ export default function Racing() {
         ))}
       </div>
 
-      <div className="px-0 md:px-3 py-3">
+      <div className="px-4 md:px-3 py-3">
 
         {/* ─── RACES TAB ─── */}
         {tab === "races" && (

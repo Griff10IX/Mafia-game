@@ -1650,7 +1650,7 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
           <select value={joinId} onChange={(e) => setJoinId(e.target.value)}
             className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors">
             <option value="">Select family...</option>
-            {families.map((f) => <option key={f.id} value={f.id}>{f.name} [{f.tag}]{f.join_mode === 'approval' ? ' (approval)' : ''}</option>)}
+            {families.filter((f) => f?.id).map((f) => <option key={f.id} value={f.id}>{f.name} [{f.tag}]{f.join_mode === 'approval' ? ' (approval)' : ''}</option>)}
           </select>
           <button type="submit" className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-xs font-heading font-bold uppercase border bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary transition-all touch-manipulation shrink-0">
             {joinModeForSelected === 'approval' ? 'Apply to join' : 'Join'}

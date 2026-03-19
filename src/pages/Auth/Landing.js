@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getBaseURL, AUTH_ERROR_KEY } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
@@ -46,6 +47,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
   const [bannerEnabled, setBannerEnabled]           = useState(false);
   const [bannerMessage, setBannerMessage]           = useState('');
   const [referralCode, setReferralCode]             = useState('');
+  const [preregisteredSuccess, setPreregisteredSuccess] = useState(null);
 
   // Track unique login-page visits for admin stats (when viewing login/landing page at / or /login)
   useEffect(() => {
@@ -119,6 +121,18 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     return () => clearInterval(t);
   }, [resendCooldownSeconds]);
 
+  const referralUrl = preregisteredSuccess?.username && typeof window !== 'undefined'
+    ? `${window.location.origin}/?ref=${encodeURIComponent(preregisteredSuccess.username)}`
+    : '';
+
+  const copyReferralLink = () => {
+    if (referralUrl && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(referralUrl).then(() => toast.success('Link copied')).catch(() => toast.error('Copy failed'));
+    } else {
+      toast.error('Copy not supported');
+    }
+  };
+
   const handleResendVerification = async () => {
     const email = verifySentForEmail || formData.email;
     if (!email || resendCooldownSeconds > 0) return;
@@ -162,8 +176,10 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
 
       // Pre-registration mode: account created but can't login until launch
       if (response.data.preregistered) {
-        toast.success(response.data.message || 'Account created! You can log in when the game launches.');
+        const username = response.data.username || formData.username;
+        setPreregisteredSuccess({ username });
         setFormData({ email: '', username: '', password: '', confirmPassword: '' });
+        toast.success(response.data.message || 'Account created! You can log in when the game launches.');
         return;
       }
 
@@ -390,8 +406,38 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
               </button>
             </div>
 
-            {/* Launch Countdown - shown when login is locked and on Login tab */}
-            {launchStatus.loginLocked && isLogin ? (
+            {/* Pre-registration success - show referral link */}
+            {preregisteredSuccess ? (
+              <div className="p-6 space-y-4">
+                <p className="text-sm font-heading text-center" style={{ color: 'var(--noir-foreground)' }}>
+                  Account created! You&apos;re now a Founding Member. You&apos;ll be able to log in when the game launches.
+                </p>
+                <p className="text-[10px] font-heading uppercase tracking-wider text-center" style={{ color: 'var(--noir-primary)', opacity: 0.8 }}>
+                  Share your link to get friends to pre-register
+                </p>
+                <div className="flex items-center gap-2 rounded border p-3" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.2)', backgroundColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.05)' }}>
+                  <code className="flex-1 truncate text-xs font-mono" style={{ color: 'var(--noir-foreground)' }}>
+                    {referralUrl}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={copyReferralLink}
+                    className={`${styles.btnPrimary} shrink-0 flex items-center gap-1.5 px-3 py-2 rounded font-heading text-[10px] uppercase tracking-wider`}
+                  >
+                    <Copy size={12} />
+                    Copy
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreregisteredSuccess(null)}
+                  className="w-full py-2.5 rounded font-heading text-[10px] uppercase tracking-wider opacity-70 hover:opacity-100 transition-opacity"
+                  style={{ color: 'var(--noir-muted)' }}
+                >
+                  Done
+                </button>
+              </div>
+            ) : launchStatus.loginLocked && isLogin ? (
               <div className="p-6 space-y-6 text-center">
                 {launchStatus.lockMessage && (
                   <p className="text-sm font-heading" style={{ color: 'var(--noir-foreground)' }}>

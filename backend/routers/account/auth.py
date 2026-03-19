@@ -460,6 +460,7 @@ def register(router):
                     "message": "Account created! You're now a Founding Member. You'll be able to log in when the game launches.",
                     "preregistered": True,
                     "founding_member": True,
+                    "username": user_doc["username"],
                 }
 
             if not require_verification:

@@ -972,23 +972,39 @@ async def _add_member_to_family(family_id: str, user_id: str) -> None:
     await db.users.update_one({"id": user_id}, {"$set": {"family_id": family_id, "family_role": "associate"}})
 
 
+async def _resolve_family_id(identifier: str):
+    """Resolve family by id or by tag. Returns (fam_doc, family_id) or (None, None)."""
+    if not identifier or not str(identifier).strip():
+        return None, None
+    ident = str(identifier).strip()
+    fam = await db.families.find_one({"id": ident}, {"_id": 0, "id": 1, "join_mode": 1, "join_auto_accept": 1, "join_auto_accept_rank_min": 1})
+    if fam:
+        return fam, fam["id"]
+    tag_clean = ident.upper().replace(" ", "")[:4]
+    if tag_clean:
+        fam = await db.families.find_one({"tag": tag_clean, "wiped": {"$ne": True}}, {"_id": 0, "id": 1, "join_mode": 1, "join_auto_accept": 1, "join_auto_accept_rank_min": 1})
+        if fam:
+            return fam, fam["id"]
+    return None, None
+
+
 async def families_join(request: FamilyJoinRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_id"):
         raise HTTPException(status_code=400, detail="Already in a family")
-    fam = await db.families.find_one({"id": request.family_id}, {"_id": 0, "join_mode": 1})
-    if not fam:
+    fam, family_id = await _resolve_family_id(request.family_id)
+    if not fam or not family_id:
         raise HTTPException(status_code=404, detail="Family not found")
     if fam.get("join_mode") == "approval":
         raise HTTPException(status_code=400, detail="This family requires approval. Apply to join instead.")
-    count = await db.family_members.count_documents({"family_id": request.family_id})
+    count = await db.family_members.count_documents({"family_id": family_id})
     if count >= sum(FAMILY_ROLE_LIMITS.values()):
         raise HTTPException(status_code=400, detail="Family is full")
     now = datetime.now(timezone.utc).isoformat()
     await db.family_members.insert_one({
-        "id": str(uuid.uuid4()), "family_id": request.family_id, "user_id": current_user["id"],
+        "id": str(uuid.uuid4()), "family_id": family_id, "user_id": current_user["id"],
         "role": "associate", "joined_at": now,
     })
-    await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_id": request.family_id, "family_role": "associate"}})
+    await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_id": family_id, "family_role": "associate"}})
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
     return {"message": "Joined family"}
@@ -998,16 +1014,16 @@ async def families_apply(request: FamilyApplyRequest, current_user: dict = Depen
     """Apply to join a family when join_mode is approval. May auto-accept if family settings allow."""
     if current_user.get("family_id"):
         raise HTTPException(status_code=400, detail="Already in a family")
-    fam = await db.families.find_one({"id": request.family_id}, {"_id": 0, "join_mode": 1, "join_auto_accept": 1, "join_auto_accept_rank_min": 1})
-    if not fam:
+    fam, family_id = await _resolve_family_id(request.family_id)
+    if not fam or not family_id:
         raise HTTPException(status_code=404, detail="Family not found")
     if fam.get("join_mode") != "approval":
         raise HTTPException(status_code=400, detail="This family accepts direct join. Use Join instead.")
-    count = await db.family_members.count_documents({"family_id": request.family_id})
+    count = await db.family_members.count_documents({"family_id": family_id})
     if count >= sum(FAMILY_ROLE_LIMITS.values()):
         raise HTTPException(status_code=400, detail="Family is full")
     existing = await db.family_join_applications.find_one(
-        {"family_id": request.family_id, "user_id": current_user["id"], "status": "pending"},
+        {"family_id": family_id, "user_id": current_user["id"], "status": "pending"},
         {"_id": 0, "id": 1},
     )
     if existing:
@@ -1021,14 +1037,14 @@ async def families_apply(request: FamilyApplyRequest, current_user: dict = Depen
     elif auto == "rank_min" and rank_min is not None and applicant_rank >= int(rank_min):
         auto_accept = True
     if auto_accept:
-        await _add_member_to_family(request.family_id, current_user["id"])
+        await _add_member_to_family(family_id, current_user["id"])
         _invalidate_list_cache()
         _invalidate_my_cache(current_user["id"])
         return {"message": "Joined family", "auto_accepted": True}
     now = datetime.now(timezone.utc).isoformat()
     app_id = str(uuid.uuid4())
     await db.family_join_applications.insert_one({
-        "id": app_id, "family_id": request.family_id, "user_id": current_user["id"],
+        "id": app_id, "family_id": family_id, "user_id": current_user["id"],
         "username": current_user.get("username") or "?",
         "rank": applicant_rank,
         "applied_at": now, "status": "pending",
