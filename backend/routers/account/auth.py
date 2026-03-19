@@ -129,6 +129,7 @@ def register(router):
     DEFAULT_GARAGE_BATCH_LIMIT = srv.DEFAULT_GARAGE_BATCH_LIMIT
     SWISS_BANK_LIMIT_START = srv.SWISS_BANK_LIMIT_START
     ADMIN_EMAILS = srv.ADMIN_EMAILS
+    send_notification = srv.send_notification
     RANKS = getattr(srv, "RANKS", [])
     PRESTIGE_CONFIGS = getattr(srv, "PRESTIGE_CONFIGS", {})
     CARS = getattr(srv, "CARS", [])
@@ -164,6 +165,21 @@ def register(router):
         if doc is None:
             return True
         return bool(doc.get("value"))
+
+    async def _notify_admins_vpn_blocked(ip: str, context: str, details: str):
+        """Send inbox notification to all admins when VPN/proxy block occurs."""
+        admin_emails = list(ADMIN_EMAILS or [])
+        if not admin_emails:
+            return
+        try:
+            admins = await db.users.find({"email": {"$in": admin_emails}}, {"_id": 0, "id": 1}).to_list(100)
+            title = "VPN/Proxy Blocked"
+            msg = f"{context}: IP {ip}. {details}"
+            for a in admins:
+                if a.get("id"):
+                    await send_notification(a["id"], title, msg, "system", category="admin")
+        except Exception:
+            logger.exception("Failed to notify admins of VPN block")
 
     @router.get("/auth/launch-status")
     async def get_launch_status():
@@ -207,6 +223,11 @@ def register(router):
                 )
             client_ip = _client_ip(request)
             if client_ip and await is_proxy_or_vpn(client_ip):
+                await _notify_admins_vpn_blocked(
+                    client_ip,
+                    "Registration blocked",
+                    f"Attempted email: {email_clean[:3]}***, username: {user_data.username.strip()[:20]}",
+                )
                 raise HTTPException(
                     status_code=400,
                     detail="Registration from proxy or VPN is not allowed.",
@@ -673,6 +694,11 @@ def register(router):
 
         # Block VPN/proxy on login (staff can bypass)
         if not staff_route and ip and await is_proxy_or_vpn(ip):
+            await _notify_admins_vpn_blocked(
+                ip,
+                "Login blocked",
+                f"Attempted login: {login_input[:30]}",
+            )
             raise HTTPException(
                 status_code=403,
                 detail="Login from proxy or VPN is not allowed. Please disconnect your VPN to use the game.",

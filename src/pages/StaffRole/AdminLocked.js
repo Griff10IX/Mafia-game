@@ -92,7 +92,7 @@ export default function AdminLocked() {
   }
 
   return (
-    <div className={`max-w-2xl mx-auto p-4 pb-24 ${styles.pageContent} mobile-page-root`}>
+    <div className={`max-w-2xl mx-auto pb-24 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden`} style={{ padding: '12px 14px', margin: '0 auto' }}>
       <div className={`rounded-lg overflow-hidden border ${styles.panel} border-primary/20 mobile-panel`}>
         <div className="px-4 py-3 border-b border-primary/20 flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">

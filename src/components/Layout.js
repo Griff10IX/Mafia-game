@@ -51,6 +51,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       id: 'minigames',
       icon: Gamepad2,
       label: 'Mini games',
+      mobileShortLabel: 'Mini',
       items: [
         { path: '/casino/mini-games/racing', label: 'Racing' },
         { path: '/casino/mini-games/boxing', label: 'Boxing' },
@@ -1983,7 +1984,7 @@ export default function Layout({ children }) {
                           <Icon size={13} strokeWidth={2} />
                           {isInbox && unreadCount > 0 && <span className="absolute -top-0.5 -right-1 min-w-[10px] h-[10px] rounded-full bg-red-600 text-[8px] font-bold text-white flex items-center justify-center px-0.5">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                         </span>
-                        <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.label}</span>
+                        <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.mobileShortLabel ?? item.label}</span>
                       </Link>
                     );
                   })()}
@@ -2005,7 +2006,7 @@ export default function Layout({ children }) {
                           {showInboxBadge && <span className="absolute -top-0.5 -right-1 min-w-[10px] h-[10px] rounded-full bg-red-600 text-[8px] font-bold text-white flex items-center justify-center px-0.5">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                           {showGtaExclusiveStar && <span className="absolute -top-0.5 -left-1 text-violet-400 text-[10px] font-bold" aria-hidden title="Exclusive car in GTA pool">★</span>}
                         </span>
-                        <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.label}</span>
+                        <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.mobileShortLabel ?? item.label}</span>
                       </button>
                     );
                   })()}

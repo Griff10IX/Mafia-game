@@ -2881,7 +2881,7 @@ export default function Admin() {
   const Select = AdminSelect;
 
   return (
-    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="admin-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden`} style={{ padding: '12px 14px', maxWidth: 1400, margin: '0 auto' }} data-testid="admin-page">
       <style>{ADMIN_STYLES}</style>
       <div className="relative admin-fade-in flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[10px] text-zinc-500 font-heading italic">Use with caution</p>
@@ -2913,10 +2913,10 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Sidebar + main layout: one category at a time */}
-      <div className="flex gap-4 flex-1 min-h-0">
+      {/* Sidebar + main layout: stack on mobile, side-by-side on desktop */}
+      <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0 min-w-0">
         {/* Sidebar: search + category list */}
-        <aside className="w-[220px] shrink-0 flex flex-col gap-3 border-r border-primary/20 pr-4">
+        <aside className="w-full md:w-[220px] shrink-0 flex flex-col gap-3 border-r-0 md:border-r border-primary/20 pr-0 md:pr-4">
           <div className="relative">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-mutedForeground" />
             <input
@@ -2985,7 +2985,7 @@ export default function Admin() {
         </aside>
 
         {/* Main: Target Username (sticky) + active category content only */}
-        <main className="flex-1 min-w-0 space-y-4 overflow-y-auto">
+        <main className="flex-1 min-w-0 min-h-0 space-y-4 overflow-y-auto overflow-x-hidden">
           {/* Target Username - sticky so it stays visible when scrolling */}
           <div className={`sticky top-0 z-10 relative admin-module admin-focus-block ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-background/95 backdrop-blur mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
