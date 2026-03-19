@@ -34,12 +34,15 @@ load_dotenv(ROOT_DIR / '.env')
 # Also load project root .env if present (e.g. when running from root)
 load_dotenv(ROOT_DIR.parent / '.env')
 
-# MongoDB connection (certifi CA bundle only needed for Atlas SSL, skip for localhost)
+# MongoDB connection (certifi CA bundle only needed for Atlas/DO SSL, skip for localhost)
 mongo_url = os.environ['MONGO_URL']
-if 'mongodb+srv' in mongo_url or 'mongodb.net' in mongo_url:
-    client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where())
+_mps = os.environ.get("MONGO_MAX_POOL_SIZE", "").strip()
+_mongo_max_pool = int(_mps) if _mps.isdigit() else 25  # friendly default for 1vCPU managed Mongo tiers
+_mongo_client_kwargs = {"maxPoolSize": _mongo_max_pool}
+if 'mongodb+srv' in mongo_url or 'mongodb.net' in mongo_url or 'mongo.ondigitalocean.com' in mongo_url:
+    client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where(), **_mongo_client_kwargs)
 else:
-    client = AsyncIOMotorClient(mongo_url)
+    client = AsyncIOMotorClient(mongo_url, **_mongo_client_kwargs)
 db = client[os.environ['DB_NAME']]
 
 # Security

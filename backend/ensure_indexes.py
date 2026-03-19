@@ -47,6 +47,7 @@ async def ensure_all_indexes(db):
         await db.families.create_index("id", unique=True)
         await db.families.create_index("name")
         await db.families.create_index("tag")
+        await db.families.create_index("wiped")  # list non-wiped families
 
         # --- Attack ---
         await db.attacks.create_index([("attacker_id", 1), ("search_started", -1)])

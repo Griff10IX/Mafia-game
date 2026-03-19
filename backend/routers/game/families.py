@@ -9,6 +9,7 @@ import uuid
 import os
 import sys
 from typing import Optional, Dict
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -342,15 +343,35 @@ async def cleanup_dead_families():
     """Mark families where all members are dead as wiped (soft-delete); transfer assets to war winners.
     Returns True if any family was marked as wiped (caller should invalidate list cache)."""
     families = await db.families.find({"wiped": {"$ne": True}}, {"_id": 0}).to_list(50)
+    if not families:
+        return False
+    family_ids = [f["id"] for f in families]
+    all_members = await db.family_members.find(
+        {"family_id": {"$in": family_ids}},
+        {"_id": 0, "family_id": 1, "user_id": 1},
+    ).to_list(500)
+    members_by_family: dict = defaultdict(list)
+    user_ids = set()
+    for m in all_members:
+        fid = m.get("family_id")
+        uid = m.get("user_id")
+        if fid and uid:
+            members_by_family[fid].append(m)
+            user_ids.add(uid)
+    alive_by_user_id: dict = {}
+    if user_ids:
+        async for u in db.users.find(
+            {"id": {"$in": list(user_ids)}},
+            {"_id": 0, "id": 1, "is_dead": 1},
+        ):
+            uid = u.get("id")
+            if uid:
+                alive_by_user_id[uid] = not u.get("is_dead", False)
     marked_any = False
     for fam in families:
         family_id = fam["id"]
-        members = await db.family_members.find({"family_id": family_id}, {"_id": 0}).to_list(100)
-        living_count = 0
-        for m in members:
-            user = await db.users.find_one({"id": m["user_id"]}, {"_id": 0, "id": 1, "is_dead": 1})
-            if user and user.get("id") and not user.get("is_dead", False):
-                living_count += 1
+        members = members_by_family.get(family_id, [])
+        living_count = sum(1 for m in members if alive_by_user_id.get(m["user_id"]))
         if living_count == 0:
             active_wars = await db.family_wars.find({
                 "$or": [{"family_a_id": family_id}, {"family_b_id": family_id}],
@@ -623,20 +644,41 @@ async def families_list(current_user: dict = Depends(get_current_user)):
     cursor = db.families.find({"wiped": {"$ne": True}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "join_mode": 1})
     fams = await cursor.to_list(MAX_FAMILIES * 2)
     out = []
-    for f in fams:
-        members = await db.family_members.find({"family_id": f["id"]}, {"_id": 0, "user_id": 1}).to_list(100)
-        living_count = 0
-        for m in members:
-            user = await db.users.find_one({"id": m["user_id"]}, {"_id": 0, "id": 1, "is_dead": 1})
-            if user and user.get("id") and not user.get("is_dead", False):
-                living_count += 1
-        if living_count > 0:
-            out.append({
-                "id": f["id"], "name": f["name"], "tag": f["tag"],
-                "member_count": living_count, "treasury": f.get("treasury", 0),
-                "at_war": False,
-                "join_mode": f.get("join_mode") or "open",
-            })
+    if fams:
+        family_ids = [f["id"] for f in fams]
+        # Batched queries: avoid 1 + N families + N*M users round-trips (was killing small Mongo tiers)
+        all_members = await db.family_members.find(
+            {"family_id": {"$in": family_ids}},
+            {"_id": 0, "family_id": 1, "user_id": 1},
+        ).to_list(500)
+        members_by_family: dict = defaultdict(list)
+        user_ids = set()
+        for m in all_members:
+            fid = m.get("family_id")
+            uid = m.get("user_id")
+            if fid and uid:
+                members_by_family[fid].append(uid)
+                user_ids.add(uid)
+        alive_by_user_id: dict = {}
+        if user_ids:
+            ucursor = db.users.find(
+                {"id": {"$in": list(user_ids)}},
+                {"_id": 0, "id": 1, "is_dead": 1},
+            )
+            async for u in ucursor:
+                uid = u.get("id")
+                if uid:
+                    alive_by_user_id[uid] = not u.get("is_dead", False)
+        for f in fams:
+            fid = f["id"]
+            living_count = sum(1 for uid in members_by_family.get(fid, ()) if alive_by_user_id.get(uid))
+            if living_count > 0:
+                out.append({
+                    "id": fid, "name": f["name"], "tag": f["tag"],
+                    "member_count": living_count, "treasury": f.get("treasury", 0),
+                    "at_war": False,
+                    "join_mode": f.get("join_mode") or "open",
+                })
     # Tag families that are currently in an active war
     active_wars = await db.family_wars.find(
         {"status": {"$in": ["active", "truce_offered"]}},
