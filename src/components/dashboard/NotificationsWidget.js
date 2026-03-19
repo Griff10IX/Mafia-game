@@ -75,7 +75,7 @@ export default function NotificationsWidget({ onRefresh }) {
 
   if (loading) {
     return (
-      <div className={`${styles.panel} rounded-md border border-primary/20 p-2.5`}>
+      <div className={`${styles.panel} rounded-md border border-primary/20 p-2.5 mobile-panel`}>
         <div className="flex items-center gap-2 text-mutedForeground">
           <Mail size={14} className="animate-pulse" />
           <span className="text-[10px] font-heading">Loading...</span>
@@ -89,7 +89,7 @@ export default function NotificationsWidget({ onRefresh }) {
   const preview = notifications.slice(0, 3);
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
         <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">

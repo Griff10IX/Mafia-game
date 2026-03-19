@@ -22,7 +22,7 @@ export default function ActiveEventWidget() {
   const message = event.message || `Today: ${event.name || 'Event'}`;
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-1">
         <Zap size={10} className="text-primary" />
