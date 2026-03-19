@@ -94,9 +94,9 @@ export default function ObjectivesWidget({ onRefresh }) {
     );
   }
 
-  const daily = data?.daily_list ?? [];
-  const allDone = data?.daily_all_done ?? false;
-  const claimed = data?.daily_claimed ?? true;
+  const daily = data?.daily?.objectives ?? [];
+  const allDone = data?.daily?.all_complete ?? false;
+  const claimed = data?.daily?.claimed ?? true;
   const canClaim = allDone && !claimed;
 
   return (
