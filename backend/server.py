@@ -702,6 +702,7 @@ JAIL_WHITELIST_PREFIXES = (
     "/api/family-run/",
     "/api/whack-a-copper/",
     "/api/states",
+    "/api/my-properties",
 )
 
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   DollarSign,
@@ -6,32 +6,31 @@ import {
   Target,
   Shield,
   MapPin,
-  ChevronRight,
   User,
   Swords,
-  Building2,
-  Dice5,
   Landmark,
-  ShoppingBag,
   Car,
   Trophy,
-  Zap,
+  Bot,
   LayoutDashboard,
 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 import styles from '../../styles/noir.module.css';
+import DailyRewardsWidget from '../../components/dashboard/DailyRewardsWidget';
+import ObjectivesWidget from '../../components/dashboard/ObjectivesWidget';
+import NotificationsWidget from '../../components/dashboard/NotificationsWidget';
+import ActiveEventWidget from '../../components/dashboard/ActiveEventWidget';
+import AutoRankStatusWidget from '../../components/dashboard/AutoRankStatusWidget';
 
 const DASH_STYLES = `
   @keyframes dash-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .dash-fade-in { animation: dash-fade-in 0.4s ease-out both; }
-  @keyframes dash-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
   .dash-scale-in { animation: dash-scale-in 0.35s ease-out both; }
+  @keyframes dash-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
   @keyframes dash-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
   .dash-glow { animation: dash-glow 4s ease-in-out infinite; }
-  .dash-card { transition: all 0.3s ease; }
-  .dash-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .dash-stat-card { transition: all 0.3s ease; }
   .dash-stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .dash-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
@@ -64,8 +63,8 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
           Rank Progress
         </h2>
         {!hasPremiumBar && (
-          <Link 
-            to="/game/store" 
+          <Link
+            to="/game/store"
             className="text-[9px] font-heading font-bold text-primary hover:text-primary/80 transition-colors"
           >
             Premium bar →
@@ -126,8 +125,8 @@ const StatCard = ({ stat, delay = 0 }) => {
             {stat.value}
           </p>
         </TooltipTrigger>
-        <TooltipContent 
-          side="top" 
+        <TooltipContent
+          side="top"
           className={`${styles.panel} text-foreground border-primary/30 rounded-md px-3 py-2 text-xs font-heading`}
         >
           {stat.tooltip}
@@ -156,79 +155,23 @@ const StatCard = ({ stat, delay = 0 }) => {
   );
 };
 
-const QuickActionCard = ({ action, delay = 0 }) => {
-  const Icon = action.icon;
+const QUICK_LINKS = [
+  { to: '/account/profile', icon: User, label: 'Profile' },
+  { to: '/crime/crimes', icon: Target, label: 'Crimes' },
+  { to: '/kill/attack', icon: Shield, label: 'Attack' },
+  { to: '/money/bank', icon: Landmark, label: 'Bank' },
+  { to: '/game/store', icon: DollarSign, label: 'Store' },
+  { to: '/game/travel', icon: Car, label: 'Travel' },
+  { to: '/game/leaderboard', icon: Trophy, label: 'Leaderboard' },
+  { to: '/account/autorank', icon: Bot, label: 'Auto Rank' },
+];
 
-  return (
-    <Link
-      to={action.to}
-      data-testid={`quick-action-${action.id}`}
-      className={`group relative ${styles.panel} border border-primary/20 rounded-md p-2 flex items-center gap-2 dash-card dash-fade-in touch-manipulation overflow-hidden`}
-      style={{ animationDelay: `${delay}s` }}
-    >
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/15 to-transparent pointer-events-none" />
-      <div className="p-1 rounded bg-primary/20 border border-primary/30 group-hover:bg-primary/30 shrink-0 transition-colors">
-        <Icon className="text-primary" size={14} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-heading font-bold text-foreground group-hover:text-primary transition-colors">
-          {action.title}
-        </p>
-        <p className="text-[9px] text-mutedForeground truncate mt-0.5">
-          {action.desc}
-        </p>
-      </div>
-      <ChevronRight 
-        className="text-mutedForeground group-hover:text-primary shrink-0 transition-colors" 
-        size={12} 
-      />
-    </Link>
-  );
-};
-
-const GameSystemsCard = () => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 dash-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
-    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center gap-1">
-      <Zap size={9} className="text-primary" />
-      <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-        Game Systems
-      </span>
-    </div>
-    <div className="p-2 grid sm:grid-cols-2 gap-1.5">
-      <div>
-        <p className="font-bold text-primary text-[10px] mb-0.5 flex items-center gap-0.5">
-          <span className="text-primary">▸</span> Ranks
-        </p>
-        <p className="text-mutedForeground text-[9px] leading-tight">
-          Rise from Rat to Godfather. Each rank unlocks crimes, weapons, and opportunities.
-        </p>
-      </div>
-      <div>
-        <p className="font-bold text-primary text-[10px] mb-0.5 flex items-center gap-0.5">
-          <span className="text-primary">▸</span> Bodyguards
-        </p>
-        <p className="text-mutedForeground text-[9px] leading-tight">
-          Hire up to 4 bodyguards (points). Human or robot guards protect you from attacks.
-        </p>
-      </div>
-    </div>
-    <div className="dash-art-line text-primary mx-2" />
-  </div>
-);
-
-// Main component
 export default function Dashboard() {
   const [user, setUser] = useState(null);
   const [rankProgress, setRankProgress] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [userRes, progressRes] = await Promise.all([
         api.get('/auth/me'),
@@ -242,86 +185,54 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleWidgetRefresh = useCallback(() => {
+    api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
+  }, []);
 
   if (loading) {
     return <LoadingSpinner />;
   }
 
   const stats = [
-    { 
-      id: 'money', 
-      label: 'Cash', 
-      icon: DollarSign, 
-      value: `$${Math.floor(Number(user?.money ?? 0)).toLocaleString()}`, 
-      testId: 'stat-money' 
-    },
-    { 
-      id: 'rank', 
-      label: 'Rank', 
-      icon: TrendingUp, 
-      value: user?.rank_name ?? '—', 
-      sub: `#${user?.rank ?? 0}`, 
-      testId: 'stat-rank' 
-    },
-    {
-      id: 'wealth',
-      label: 'Wealth tier',
-      icon: DollarSign,
-      value: user?.wealth_rank_name ?? '—',
-      tooltip: user?.wealth_rank_range ?? '$0',
-      testId: 'stat-wealth',
-    },
-    { 
-      id: 'rp', 
-      label: 'Rank points', 
-      icon: Target, 
-      value: Number(user?.rank_points ?? 0).toLocaleString(), 
-      testId: 'stat-rank-points' 
-    },
-    { 
-      id: 'location', 
-      label: 'Location', 
-      icon: MapPin, 
-      value: user?.current_state ?? '—', 
-      testId: 'stat-location' 
-    },
-    { 
-      id: 'kills', 
-      label: 'Kills', 
-      icon: Swords, 
-      value: user?.total_kills ?? 0, 
-      testId: 'stat-kills' 
-    },
-  ];
-
-  const quickActions = [
-    { id: 'profile', to: '/profile', title: 'Profile', desc: 'View & edit your gangster', icon: User },
-    { id: 'ranking', to: '/ranking', title: 'Ranking', desc: 'Crimes, GTA, Jail', icon: Target },
-    { id: 'attack', to: '/attack', title: 'Attack', desc: 'Search and hit rivals', icon: Shield },
-    { id: 'families', to: '/families', title: 'Families & Rackets', desc: 'Crew, rackets, raid enemies', icon: Building2 },
-    { id: 'casino', to: '/casino', title: 'Casino', desc: 'Dice, blackjack, horses', icon: Dice5 },
-    { id: 'bank', to: '/bank', title: 'Bank', desc: 'Deposits & Swiss account', icon: Landmark },
-    { id: 'store', to: '/store', title: 'Store', desc: 'Points shop & upgrades', icon: ShoppingBag },
-    { id: 'bodyguards', to: '/bodyguards', title: 'Bodyguards', desc: 'Hire protection', icon: Shield },
-    { id: 'travel', to: '/travel', title: 'Travel', desc: 'Move between states', icon: Car },
-    { id: 'leaderboard', to: '/leaderboard', title: 'Leaderboard', desc: 'Top players', icon: Trophy },
+    { id: 'money', label: 'Cash', icon: DollarSign, value: `$${Math.floor(Number(user?.money ?? 0)).toLocaleString()}`, testId: 'stat-money' },
+    { id: 'rank', label: 'Rank', icon: TrendingUp, value: user?.rank_name ?? '—', sub: `#${user?.rank ?? 0}`, testId: 'stat-rank' },
+    { id: 'wealth', label: 'Wealth tier', icon: DollarSign, value: user?.wealth_rank_name ?? '—', tooltip: user?.wealth_rank_range ?? '$0', testId: 'stat-wealth' },
+    { id: 'rp', label: 'Rank points', icon: Target, value: Number(user?.rank_points ?? 0).toLocaleString(), testId: 'stat-rank-points' },
+    { id: 'location', label: 'Location', icon: MapPin, value: user?.current_state ?? '—', testId: 'stat-location' },
+    { id: 'kills', label: 'Kills', icon: Swords, value: user?.total_kills ?? 0, testId: 'stat-kills' },
   ];
 
   return (
     <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="dashboard-page">
       <style>{DASH_STYLES}</style>
 
-      <p className="text-[9px] text-zinc-500 font-heading italic">At a glance and quick actions — your empire starts here.</p>
+      <p className="text-[9px] text-zinc-500 font-heading italic">Your command center — play, claim, and stay on top.</p>
 
       {rankProgress && (
-        <RankProgressCard 
-          rankProgress={rankProgress} 
-          hasPremiumBar={!!user?.premium_rank_bar} 
+        <RankProgressCard
+          rankProgress={rankProgress}
+          hasPremiumBar={!!user?.premium_rank_bar}
         />
       )}
 
-      {/* Stats grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+        <DailyRewardsWidget onRefresh={handleWidgetRefresh} />
+        <ObjectivesWidget onRefresh={handleWidgetRefresh} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+        <NotificationsWidget onRefresh={handleWidgetRefresh} />
+        <ActiveEventWidget />
+      </div>
+
+      <AutoRankStatusWidget user={user} />
+
       <section className="mobile-panel">
         <div className="flex items-center gap-1.5 mb-1.5">
           <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
@@ -336,22 +247,36 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* Quick actions */}
       <section className="mobile-panel">
         <div className="flex items-center gap-1.5 mb-1.5">
           <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-            Quick Actions
+            Go to
           </h2>
           <div className="flex-1 h-px bg-gradient-to-r from-primary/40 via-primary/20 to-transparent" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 md:gap-2">
-          {quickActions.map((action, i) => (
-            <QuickActionCard key={action.id} action={action} delay={i * 0.03} />
-          ))}
+        <div className="flex flex-wrap gap-1.5">
+          {QUICK_LINKS.map((link) => {
+            const Icon = link.icon;
+            return (
+              <TooltipProvider key={link.to}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      to={link.to}
+                      className="flex items-center justify-center w-10 h-10 rounded-md border border-primary/20 bg-primary/5 hover:bg-primary/15 hover:border-primary/30 transition-all active:scale-95"
+                    >
+                      <Icon size={16} className="text-primary" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className={`${styles.panel} text-foreground border-primary/30 rounded-md px-2 py-1 text-[10px] font-heading`}>
+                    {link.label}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            );
+          })}
         </div>
       </section>
-
-      <GameSystemsCard />
     </div>
   );
 }

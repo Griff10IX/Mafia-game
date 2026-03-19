@@ -110,7 +110,7 @@ api.interceptors.response.use(
         const p = window.location.pathname;
         const jailAllowed = [
           '/crime/jail', '/jail',
-          '/casino', '/kill', '/game/travel', '/game/states', '/states', '/game/family',
+          '/casino', '/kill', '/game/travel', '/game/states', '/states', '/my-properties', '/game/family',
           '/game/users-online', '/account/profile', '/account/autorank',
           '/account/settings', '/social/forum', '/staffrole',
           '/game/daily-rewards', '/game/leaderboard', '/game/help-desk',
