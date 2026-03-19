@@ -1098,7 +1098,9 @@ export default function Layout({ children }) {
   const renderTopBarStat = (statId, { topBarChipStyle, topBarChipMinHeight, topBarIconSizeEffectiveMobile, topBarTextClass, rankBarWidthPx, rankColMinWidthPx, chipWidthScale, chipHeightScale, isMobileViewport: isMobile }) => {
     const casinoProfit = user?.casino_profit ?? 0;
     const propertyProfit = user?.property_profit ?? 0;
-    const chipBase = `flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm shrink-0 cursor-grab active:cursor-grabbing touch-manipulation transition-all duration-150 hover:border-primary/40`;
+    const chipBase = isMobile
+      ? `flex items-center gap-1 rounded-lg shrink-0 cursor-grab active:cursor-grabbing touch-manipulation transition-all duration-150 bg-white/[0.05] hover:bg-white/[0.08]`
+      : `flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm shrink-0 cursor-grab active:cursor-grabbing touch-manipulation transition-all duration-150 hover:border-primary/40`;
 
     if (statId === 'rank') {
       const pct = rankProgress ? Number(rankProgress.rank_points_progress) : 0;
@@ -1134,7 +1136,11 @@ export default function Layout({ children }) {
       const healthColor = healthNum > 50 ? 'text-emerald-400' : healthNum > 25 ? 'text-amber-400' : 'text-red-400';
       const heartColor = healthNum > 50 ? '#34d399' : healthNum > 25 ? '#fbbf24' : '#f87171';
       return (
-        <div className={`${chipBase} flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight, borderColor: healthNum <= 25 ? 'rgba(248,113,113,0.3)' : healthNum <= 50 ? 'rgba(251,191,36,0.25)' : undefined }} title={`Health: ${healthStr}%`}>
+        <div className={`${chipBase} flex min-w-0`} style={{
+          ...topBarChipStyle, minHeight: topBarChipMinHeight,
+          ...(isMobile ? {} : { borderColor: healthNum <= 25 ? 'rgba(248,113,113,0.3)' : healthNum <= 50 ? 'rgba(251,191,36,0.25)' : undefined }),
+          ...(isMobile && healthNum <= 50 ? { backgroundColor: healthNum <= 25 ? 'rgba(248,113,113,0.12)' : 'rgba(251,191,36,0.1)' } : {}),
+        }} title={`Health: ${healthStr}%`}>
           <Heart size={topBarIconSizeEffectiveMobile} style={{ color: heartColor, flexShrink: 0 }} aria-hidden />
           <span className={`font-heading ${topBarTextClass} ${healthColor} tabular-nums truncate max-w-[4rem]`} data-testid="topbar-health">{healthStr}%</span>
         </div>
@@ -1384,13 +1390,13 @@ export default function Layout({ children }) {
       )}
 
       {/* ── TOP BAR ─────────────────────────────────────────────────────────── */}
-      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 md:left-48 min-h-[40px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-1.5 py-1 md:px-3 md:py-0 gap-1 md:gap-2 ${mobileStatsDisplay === 'right_sidebar' ? 'md:right-52' : ''}`}>
+      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 md:left-48 min-h-[38px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-2 py-1.5 md:px-3 md:py-0 gap-1 md:gap-2 ${mobileStatsDisplay === 'right_sidebar' ? 'md:right-52' : ''}`}>
         <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0 overflow-hidden md:justify-end">
           {mobileNavStyle !== 'bottom' && (
             <button onClick={() => setSidebarOpen(!sidebarOpen)} data-testid="mobile-menu-toggle"
-              className="md:hidden shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center -m-1.5 order-last"
+              className="md:hidden shrink-0 min-h-[34px] min-w-[34px] flex items-center justify-center -m-1 rounded-lg hover:bg-white/[0.06] active:bg-white/[0.1] transition-colors order-last"
               style={{ color: 'var(--noir-primary)' }} aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}>
-              {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
+              {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
           )}
 
@@ -1468,24 +1474,24 @@ export default function Layout({ children }) {
             const setTopBarChipWidthScalePersist = (v) => { const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v))); try { localStorage.setItem(TOPBAR_CHIP_WIDTH_SCALE_KEY, String(n)); } catch (_) {} setTopBarChipWidthScale(n); window.dispatchEvent(new Event('topbar-prefs-changed')); };
             const setTopBarChipHeightScalePersist = (v) => { const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v))); try { localStorage.setItem(TOPBAR_CHIP_HEIGHT_SCALE_KEY, String(n)); } catch (_) {} setTopBarChipHeightScale(n); window.dispatchEvent(new Event('topbar-prefs-changed')); };
 
-            const topBarGapClass = topBarGap === 'compact' ? 'gap-0.5 md:gap-2' : topBarGap === 'spread' ? 'gap-2 md:gap-4' : 'gap-0.5 md:gap-2';
+            const topBarGapClass = topBarGap === 'compact' ? 'gap-1 md:gap-2' : topBarGap === 'spread' ? 'gap-2 md:gap-4' : 'gap-1 md:gap-2';
             const topBarIconSize = topBarSize === 'small' ? 12 : topBarSize === 'large' ? 20 : 16;
             const chipWidthScale = topBarChipWidthScale / 100;
             const chipHeightScale = topBarChipHeightScale / 100;
             const chipScaleAvg = (chipWidthScale + chipHeightScale) / 2;
             const topBarIconSizeEffective = Math.max(8, Math.min(20, Math.round(topBarIconSize * chipScaleAvg)));
-            const topBarIconSizeEffectiveMobile = isMobileViewport ? Math.min(14, topBarIconSizeEffective) : topBarIconSizeEffective;
+            const topBarIconSizeEffectiveMobile = isMobileViewport ? Math.min(12, topBarIconSizeEffective) : topBarIconSizeEffective;
             const topBarChipStyle = {
-              paddingTop: isMobileViewport ? Math.round(4 * chipHeightScale) : Math.round(6 * chipHeightScale),
-              paddingBottom: isMobileViewport ? Math.round(4 * chipHeightScale) : Math.round(6 * chipHeightScale),
-              paddingLeft: isMobileViewport ? Math.round(5 * chipWidthScale) : Math.round(8 * chipWidthScale),
-              paddingRight: isMobileViewport ? Math.round(5 * chipWidthScale) : Math.round(8 * chipWidthScale),
+              paddingTop: isMobileViewport ? Math.round(3 * chipHeightScale) : Math.round(6 * chipHeightScale),
+              paddingBottom: isMobileViewport ? Math.round(3 * chipHeightScale) : Math.round(6 * chipHeightScale),
+              paddingLeft: isMobileViewport ? Math.round(6 * chipWidthScale) : Math.round(8 * chipWidthScale),
+              paddingRight: isMobileViewport ? Math.round(6 * chipWidthScale) : Math.round(8 * chipWidthScale),
             };
-            // IMPROVEMENT 6: min 36px touch height on mobile
-            const topBarChipMinHeight = isMobileViewport ? Math.max(36, Math.round(34 * chipHeightScale)) : undefined;
-            const rankBarWidthPx = Math.max(isMobileViewport ? 20 : 20, Math.round((isMobileViewport ? 28 : 44) * chipWidthScale));
+            // Mobile: slimmer chips (32px min); desktop: use scale
+            const topBarChipMinHeight = isMobileViewport ? Math.max(32, Math.round(30 * chipHeightScale)) : undefined;
+            const rankBarWidthPx = Math.max(isMobileViewport ? 18 : 20, Math.round((isMobileViewport ? 24 : 44) * chipWidthScale));
             const rankColMinWidthPx = Math.max(isMobileViewport ? 28 : 36, Math.round((isMobileViewport ? 44 : 52) * chipWidthScale));
-            const topBarTextClass = topBarSize === 'small' ? 'text-xs md:text-[10px]' : topBarSize === 'large' ? 'text-sm' : 'text-xs';
+            const topBarTextClass = topBarSize === 'small' ? 'text-[11px] md:text-[10px]' : topBarSize === 'large' ? 'text-sm' : (isMobileViewport ? 'text-[11px]' : 'text-xs');
 
             const statRenderProps = { topBarChipStyle, topBarChipMinHeight, topBarIconSizeEffectiveMobile, topBarTextClass, rankBarWidthPx, rankColMinWidthPx, chipWidthScale, chipHeightScale, isMobileViewport };
 
@@ -1503,7 +1509,7 @@ export default function Layout({ children }) {
                         {!userSearchExpanded ? (
                           <button type="button" draggable={false}
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setUserSearchExpanded(true); setUserSearchOpen(true); setTimeout(() => userSearchInputRef.current?.focus(), 0); }}
-                            className="flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm text-primary hover:bg-noir-raised/90 hover:border-primary/40 active:scale-95 transition-all cursor-pointer touch-manipulation"
+                            className={`flex items-center justify-center gap-1 text-primary active:scale-95 transition-all cursor-pointer touch-manipulation ${isMobileViewport ? 'rounded-lg bg-white/[0.06] hover:bg-white/[0.1]' : 'bg-noir-surface/90 border border-primary/20 rounded-sm hover:bg-noir-raised/90 hover:border-primary/40'}`}
                             style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }}
                             aria-label="Search user" title="Find any made man">
                             <Search size={topBarIconSizeEffectiveMobile} strokeWidth={2} />
@@ -1563,7 +1569,7 @@ export default function Layout({ children }) {
 
                       {isMobileViewport && (
                         <button type="button" onClick={() => setTopBarCustomizeOpen(true)}
-                          className="shrink-0 flex items-center justify-center gap-1 rounded-sm bg-noir-surface/90 border border-primary/20 text-primary hover:bg-noir-raised/90 transition-colors touch-manipulation"
+                          className="shrink-0 flex items-center justify-center gap-1 rounded-lg bg-white/[0.06] text-primary hover:bg-white/[0.1] transition-colors touch-manipulation"
                           style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }}
                           aria-label="Customize top bar" title="Reorder, size & spacing">
                           <Settings size={topBarIconSizeEffectiveMobile} strokeWidth={2} />

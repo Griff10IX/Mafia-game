@@ -684,6 +684,11 @@ JAIL_WHITELIST_PREFIXES = (
     "/api/attack/",
     "/api/hitlist/",
     "/api/armoury/",
+    "/api/bullet-factory",
+    "/api/armour/",
+    "/api/weapons",
+    "/api/shooting-range/",
+    "/api/inventory",
     "/api/sports-betting/",
     "/api/profile/",
     "/api/boxing/",
@@ -696,6 +701,7 @@ JAIL_WHITELIST_PREFIXES = (
     "/api/the-getaway/",
     "/api/family-run/",
     "/api/whack-a-copper/",
+    "/api/states",
 )
 
 
