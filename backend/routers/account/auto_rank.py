@@ -139,6 +139,7 @@ async def _get_travel_method(db, user_id: str) -> Optional[str]:
     all_cars = await cursor.to_list(50)
     usable = [uc for uc in all_cars if _is_car_usable(uc)]
     if not usable:
+        logger.info("Auto rank booze car lookup %s: total=%d usable=0 (all damaged or no cars)", user_id[:8], len(all_cars))
         return None
     # Prefer custom first (fastest non-exclusive)
     custom = next((uc for uc in usable if uc.get("car_id") == "car_custom"), None)
@@ -155,8 +156,13 @@ async def _get_travel_method(db, user_id: str) -> Optional[str]:
             best_time = travel_time
             best_car = uc
     if not best_car:
+        logger.info("Auto rank booze car lookup %s: usable=%d but no non-custom (all custom?)", user_id[:8], len(usable))
         return None
-    return best_car.get("id") or str(best_car.get("_id", ""))
+    result = best_car.get("id") or str(best_car.get("_id", ""))
+    if not result:
+        logger.info("Auto rank booze car lookup %s: best_car has no id or _id", user_id[:8])
+        return None
+    return result
 
 
 async def _apply_overdue_travel(db, user_id: str, user: dict, now: datetime) -> dict:
