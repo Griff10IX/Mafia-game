@@ -4,6 +4,9 @@
 # Option A — Ticker (recommended, runs in loop):
 #   python scripts/cron-sports-settle.py
 #
+# Test once (backend must be running):
+#   python scripts/cron-sports-settle.py --once
+#
 # Option B — Crontab (every 30 min):
 
 # Every 30 min:
