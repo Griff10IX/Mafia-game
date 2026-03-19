@@ -134,12 +134,22 @@ async def _get_travel_method(db, user_id: str) -> Optional[str]:
     import server as srv
     CARS = getattr(srv, "CARS", None) or []
     TRAVEL_TIMES = getattr(srv, "TRAVEL_TIMES", None) or {}
+    user_id = (user_id or "").strip()
+    if not user_id:
+        return None
     # Fetch all cars; filter in Python to avoid MongoDB query quirks (legacy docs, type coercion)
     cursor = db.user_cars.find({"user_id": user_id}, {"_id": 1, "id": 1, "car_id": 1, "damage_percent": 1})
     all_cars = await cursor.to_list(50)
     usable = [uc for uc in all_cars if _is_car_usable(uc)]
     if not usable:
-        logger.info("Auto rank booze car lookup %s: total=%d usable=0 (all damaged or no cars)", user_id[:8], len(all_cars))
+        u = await db.users.find_one({"id": user_id}, {"_id": 0, "username": 1})
+        uname = (u or {}).get("username", "?")
+        sample_uc = await db.user_cars.find_one({}, {"user_id": 1}) if len(all_cars) == 0 else None
+        sample_uid = (sample_uc or {}).get("user_id")
+        logger.info(
+            "Auto rank booze car lookup %s (%s): total=%d usable=0. Sample user_cars.user_id type=%s",
+            user_id[:8], uname, len(all_cars), type(sample_uid).__name__ if sample_uid is not None else "no_docs",
+        )
         return None
     # Prefer custom first (fastest non-exclusive)
     custom = next((uc for uc in usable if uc.get("car_id") == "car_custom"), None)
