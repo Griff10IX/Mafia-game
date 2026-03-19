@@ -2085,6 +2085,24 @@ def register(router):
             ],
         }
 
+    @router.post("/admin/auto-rank/users/{username}/wipe-telegram")
+    async def admin_wipe_user_telegram(username: str, current_user: dict = Depends(get_current_user)):
+        """Admin: clear telegram_chat_id and telegram_bot_token for a user. Use when chat_id is invalid (e.g. chat not found)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        import re
+        username_ci = re.compile("^" + re.escape(username.strip()) + "$", re.IGNORECASE) if username else None
+        if not username_ci:
+            raise HTTPException(status_code=400, detail="Username required")
+        target = await db.users.find_one({"username": username_ci}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        await db.users.update_one(
+            {"id": target["id"]},
+            {"$unset": {"telegram_chat_id": "", "telegram_bot_token": ""}},
+        )
+        return {"message": "Telegram cleared", "username": target.get("username")}
+
     @router.patch("/admin/auto-rank/users/{username}")
     async def admin_update_auto_rank_user(username: str, body: AdminUserUpdateBody, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

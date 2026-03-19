@@ -1599,6 +1599,22 @@ export default function AutoRank() {
     }
   };
 
+  const handleWipeUserTelegram = async (username) => {
+    if (!window.confirm(`Clear Telegram (chat ID + bot token) for ${username}? They will need to re-link.`)) return;
+    setSavingUser(username);
+    try {
+      await api.post(`/admin/auto-rank/users/${encodeURIComponent(username)}/wipe-telegram`);
+      toast.success(`Telegram cleared for ${username}`);
+      setEditingChatId((p) => ({ ...p, [username]: false }));
+      setEditingToken((p) => ({ ...p, [username]: false }));
+      fetchAdminUsers();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to wipe');
+    } finally {
+      setSavingUser(null);
+    }
+  };
+
   const handleWipeAllStats = async () => {
     if (!window.confirm('Wipe all Auto Rank stats for every user? Running time and all counters will reset. This cannot be undone.')) return;
     setWipingStats(true);
@@ -1930,17 +1946,30 @@ export default function AutoRank() {
                             )}
                           </td>
                           <td className="py-2">
-                            {u.auto_rank_enabled && (
-                              <button
-                                type="button"
-                                onClick={() => handleDisableUser(u.username)}
-                                disabled={savingUser === u.username}
-                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/50 text-red-400 text-[8px] sm:text-[9px] font-bold hover:bg-red-500/30 disabled:opacity-50 transition-all active:scale-95"
-                              >
-                                <Ban size={9} />
-                                Off
-                              </button>
-                            )}
+                            <div className="flex flex-wrap items-center gap-1">
+                              {(u.telegram_chat_id || u.telegram_bot_token) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleWipeUserTelegram(u.username)}
+                                  disabled={savingUser === u.username}
+                                  title="Clear chat ID and bot token"
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/50 text-amber-400 text-[8px] sm:text-[9px] font-bold hover:bg-amber-500/30 disabled:opacity-50 transition-all active:scale-95"
+                                >
+                                  Wipe
+                                </button>
+                              )}
+                              {u.auto_rank_enabled && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDisableUser(u.username)}
+                                  disabled={savingUser === u.username}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/50 text-red-400 text-[8px] sm:text-[9px] font-bold hover:bg-red-500/30 disabled:opacity-50 transition-all active:scale-95"
+                                >
+                                  <Ban size={9} />
+                                  Off
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
