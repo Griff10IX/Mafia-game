@@ -554,6 +554,62 @@ async def resolve_family_id(user_id: str):
     return _norm_fid((fam or {}).get("id"))
 
 
+async def _batch_resolve_family_ids(user_ids: list) -> dict:
+    """Map user_id -> family id (same rules as resolve_family_id, batched)."""
+    out: dict = {}
+    if not user_ids:
+        return out
+    user_ids = list(dict.fromkeys([u for u in user_ids if u]))
+    udocs = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "family_id": 1}).to_list(len(user_ids))
+    seen = {u.get("id") for u in udocs}
+    need_member = []
+    for u in udocs:
+        uid = u.get("id")
+        if not uid:
+            continue
+        fid = _norm_fid(u.get("family_id"))
+        if fid:
+            out[uid] = fid
+        else:
+            need_member.append(uid)
+    for uid in user_ids:
+        if uid not in seen:
+            need_member.append(uid)
+    need_member = list(dict.fromkeys([u for u in need_member if u not in out]))
+    if need_member:
+        mdocs = await db.family_members.find({"user_id": {"$in": need_member}}, {"_id": 0, "user_id": 1, "family_id": 1}).to_list(200)
+        mby = {m["user_id"]: m for m in mdocs}
+        need_boss = []
+        for uid in need_member:
+            if uid in out:
+                continue
+            m = mby.get(uid)
+            fid = _norm_fid((m or {}).get("family_id")) if m else None
+            if fid:
+                out[uid] = fid
+            else:
+                need_boss.append(uid)
+    else:
+        need_boss = []
+    if need_boss:
+        fdocs = await db.families.find({"boss_id": {"$in": need_boss}}, {"_id": 0, "id": 1, "boss_id": 1}).to_list(50)
+        for f in fdocs:
+            bid = f.get("boss_id")
+            if bid and bid not in out:
+                out[bid] = _norm_fid(f.get("id"))
+    return out
+
+
+async def _users_map_by_ids(user_ids: list, projection: Optional[dict] = None) -> dict:
+    """Return dict id -> user doc for non-empty unique ids."""
+    if not user_ids:
+        return {}
+    uids = list(dict.fromkeys([u for u in user_ids if u]))
+    proj = projection or {"_id": 0, "username": 1, "rank": 1, "is_dead": 1, "dead_at": 1}
+    docs = await db.users.find({"id": {"$in": uids}}, proj).to_list(200)
+    return {d["id"]: d for d in docs if d.get("id")}
+
+
 async def family_qualifies_for_state_head(family_id: str) -> bool:
     """True if the family's boss has prestige_level >= 1."""
     if not (family_id or "").strip():
@@ -734,10 +790,12 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     if my_role:
         my_role = str(my_role).strip().lower()
     ev = await get_effective_event()
+    member_uids = [m["user_id"] for m in members_docs if m.get("user_id")]
+    users_by_id = await _users_map_by_ids(member_uids)
     members = []
     fallen = []
     for m in members_docs:
-        u = await db.users.find_one({"id": m["user_id"]}, {"_id": 0, "username": 1, "rank": 1, "is_dead": 1, "dead_at": 1})
+        u = users_by_id.get(m["user_id"])
         rank_name = "—"
         if u:
             rid = u.get("rank", 1)
@@ -817,7 +875,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     for car in compound_cars:
         if car.get("deposited_by_user_id") == current_user["id"]:
             my_compound_cars += 1
-    returning_members_with_balance = []
+    returning_raw = []
     if my_role and my_role in ("boss", "underboss", "consigliere"):
         member_ids = {m["user_id"] for m in members_docs}
         for uid, attrib in compound_deposits_by_user.items():
@@ -827,21 +885,30 @@ async def families_my(current_user: dict = Depends(get_current_user)):
                 al = int((attrib.get("loot_pieces") or 0) or 0)
                 cars_count = sum(1 for c in compound_cars if c.get("deposited_by_user_id") == uid)
                 if ac > 0 or ap > 0 or al > 0 or cars_count > 0:
-                    u = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
-                    returning_members_with_balance.append({
+                    returning_raw.append({
                         "user_id": uid,
-                        "username": (u or {}).get("username", "?"),
                         "compound_cash": ac, "compound_points": ap, "compound_loot_pieces": al,
                         "compound_cars": cars_count,
                     })
+    returning_members_with_balance = []
+    if returning_raw:
+        rb_map = await _users_map_by_ids([r["user_id"] for r in returning_raw], {"_id": 0, "id": 1, "username": 1})
+        for r in returning_raw:
+            u = rb_map.get(r["user_id"])
+            returning_members_with_balance.append({
+                **r,
+                "username": (u or {}).get("username", "?"),
+            })
     join_applications = []
     if my_role and my_role in ("boss", "underboss"):
         join_apps = await db.family_join_applications.find(
             {"family_id": family_id, "status": "pending"},
             {"_id": 0, "id": 1, "user_id": 1, "username": 1, "rank": 1, "applied_at": 1},
         ).sort("applied_at", 1).to_list(100)
+        ja_uids = [a["user_id"] for a in join_apps if a.get("user_id")]
+        ja_users = await _users_map_by_ids(ja_uids, {"_id": 0, "id": 1, "username": 1, "rank": 1})
         for a in join_apps:
-            u = await db.users.find_one({"id": a["user_id"]}, {"_id": 0, "username": 1, "rank": 1})
+            u = ja_users.get(a["user_id"])
             if u:
                 a["username"] = u.get("username") or a.get("username") or "?"
                 a["rank"] = u.get("rank", 1)
@@ -903,10 +970,12 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
     members_docs = await db.family_members.find({"family_id": fam["id"]}, {"_id": 0}).to_list(100)
+    lookup_uids = [m["user_id"] for m in members_docs if m.get("user_id")]
+    users_by_id = await _users_map_by_ids(lookup_uids)
     members = []
     fallen = []
     for m in members_docs:
-        u = await db.users.find_one({"id": m["user_id"]}, {"_id": 0, "username": 1, "rank": 1, "is_dead": 1, "dead_at": 1})
+        u = users_by_id.get(m["user_id"])
         rank_name = "—"
         if u and RANKS:
             rank_name = next((x["name"] for x in RANKS if x.get("id") == u.get("rank", 1)), str(u.get("rank", 1)))
@@ -1110,8 +1179,10 @@ async def families_join_applications_list(current_user: dict = Depends(get_curre
         {"_id": 0, "id": 1, "user_id": 1, "username": 1, "rank": 1, "applied_at": 1},
     ).sort("applied_at", 1)
     apps = await cursor.to_list(100)
+    app_uids = [a["user_id"] for a in apps if a.get("user_id")]
+    app_users = await _users_map_by_ids(app_uids, {"_id": 0, "id": 1, "username": 1, "rank": 1})
     for a in apps:
-        u = await db.users.find_one({"id": a["user_id"]}, {"_id": 0, "username": 1, "rank": 1})
+        u = app_users.get(a["user_id"])
         if u:
             a["username"] = u.get("username") or a.get("username") or "?"
             a["rank"] = u.get("rank", 1)
@@ -2126,37 +2197,87 @@ async def families_war_stats(current_user: dict = Depends(get_current_user)):
         {"$or": [{"family_a_id": my_family_id}, {"family_b_id": my_family_id}], "status": {"$in": ["active", "truce_offered"]}},
         {"_id": 0},
     ).to_list(10)
-    out = []
+    if not wars:
+        return {"wars": []}
 
+    war_ids = [w["id"] for w in wars]
+    war_meta = []
+    other_ids_set = set()
     for w in wars:
         war_fid_a = _norm_fid(w["family_a_id"])
         war_fid_b = _norm_fid(w["family_b_id"])
         other_id = war_fid_b if war_fid_a == my_family_id else war_fid_a
+        war_meta.append((w, war_fid_a, war_fid_b, other_id))
+        if other_id:
+            other_ids_set.add(other_id)
 
-        other_fam = await db.families.find_one({"id": other_id}, {"_id": 0, "name": 1, "tag": 1})
-        other_name = (other_fam or {}).get("name", "?")
-        other_tag = (other_fam or {}).get("tag", "?")
+    other_fams = {}
+    if other_ids_set:
+        async for f in db.families.find({"id": {"$in": list(other_ids_set)}}, {"_id": 0, "id": 1, "name": 1, "tag": 1}):
+            if f.get("id"):
+                other_fams[f["id"]] = f
 
-        stats_docs = await db.family_war_stats.find({"war_id": w["id"]}, {"_id": 0}).to_list(500)
-        by_user: dict = {}
-        for s in stats_docs:
+    all_stats = await db.family_war_stats.find({"war_id": {"$in": war_ids}}, {"_id": 0}).to_list(5000)
+    stats_by_war: dict = defaultdict(list)
+    for s in all_stats:
+        wid = s.get("war_id")
+        if wid:
+            stats_by_war[wid].append(s)
+
+    need_resolve_uids = set()
+    all_uids = set()
+    all_fids = set()
+    for (w, war_fid_a, war_fid_b, _other_id) in war_meta:
+        for s in stats_by_war.get(w["id"], []):
             uid = s.get("user_id")
             if not uid:
                 continue
-            # Fetch username
-            u = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
-            # Use the family_id stored in the stat doc — always kept current via $set on writes
+            all_uids.add(uid)
             fid = _norm_fid(s.get("family_id"))
-            # If fid doesn't match either war family, try to re-resolve it
+            if fid in (war_fid_a, war_fid_b):
+                all_fids.add(fid)
+            else:
+                need_resolve_uids.add(uid)
+
+    resolve_map = await _batch_resolve_family_ids(list(need_resolve_uids))
+    for _uid, rfid in resolve_map.items():
+        if rfid:
+            all_fids.add(rfid)
+
+    user_map = {}
+    if all_uids:
+        async for u in db.users.find({"id": {"$in": list(all_uids)}}, {"_id": 0, "id": 1, "username": 1}):
+            if u.get("id"):
+                user_map[u["id"]] = u
+
+    fam_map = {}
+    if all_fids:
+        async for f in db.families.find({"id": {"$in": list(all_fids)}}, {"_id": 0, "id": 1, "name": 1, "tag": 1}):
+            if f.get("id"):
+                fam_map[f["id"]] = f
+
+    out = []
+    for (w, war_fid_a, war_fid_b, other_id) in war_meta:
+        other_fam = other_fams.get(other_id, {})
+        other_name = (other_fam or {}).get("name", "?")
+        other_tag = (other_fam or {}).get("tag", "?")
+
+        by_user: dict = {}
+        for s in stats_by_war.get(w["id"], []):
+            uid = s.get("user_id")
+            if not uid:
+                continue
+            u = user_map.get(uid, {})
+            fid = _norm_fid(s.get("family_id"))
             if fid not in (war_fid_a, war_fid_b):
-                fid = await resolve_family_id(uid)
-            fam_doc = await db.families.find_one({"id": fid}, {"_id": 0, "name": 1, "tag": 1}) if fid else None
+                fid = resolve_map.get(uid) or fid
+            fam_doc = fam_map.get(fid) if fid else None
             by_user[uid] = {
                 **s,
                 "family_id": fid,
                 "family_name": (fam_doc or {}).get("name", "?"),
                 "family_tag": (fam_doc or {}).get("tag", "?"),
-                "username": (u or {}).get("username", "?"),
+                "username": u.get("username", "?"),
                 "impact": (s.get("kills") or 0) + (s.get("bodyguard_kills") or 0),
             }
 
@@ -2338,15 +2459,34 @@ async def admin_debug_war_stats(current_user: dict = Depends(get_current_user)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     wars = await db.family_wars.find({"status": {"$in": ["active", "truce_offered"]}}, {"_id": 0}).to_list(20)
+    war_ids = [w["id"] for w in wars]
+    fam_ids = set()
+    for w in wars:
+        if w.get("family_a_id"):
+            fam_ids.add(w["family_a_id"])
+        if w.get("family_b_id"):
+            fam_ids.add(w["family_b_id"])
+    fam_map = {}
+    if fam_ids:
+        async for f in db.families.find({"id": {"$in": list(fam_ids)}}, {"_id": 0, "id": 1, "name": 1}):
+            if f.get("id"):
+                fam_map[f["id"]] = f
+    all_stats = await db.family_war_stats.find({"war_id": {"$in": war_ids}}, {"_id": 0}).to_list(2000)
+    stats_by_war: dict = defaultdict(list)
+    for s in all_stats:
+        wid = s.get("war_id")
+        if wid:
+            stats_by_war[wid].append(s)
     result = []
     for w in wars:
-        stats = await db.family_war_stats.find({"war_id": w["id"]}, {"_id": 0}).to_list(100)
-        fa = await db.families.find_one({"id": w.get("family_a_id")}, {"_id": 0, "name": 1})
-        fb = await db.families.find_one({"id": w.get("family_b_id")}, {"_id": 0, "name": 1})
+        wid = w["id"]
+        stats = stats_by_war.get(wid, [])
+        fa = fam_map.get(w.get("family_a_id"), {})
+        fb = fam_map.get(w.get("family_b_id"), {})
         result.append({
-            "war_id": w["id"],
-            "family_a": w.get("family_a_id"), "family_a_name": (fa or {}).get("name"),
-            "family_b": w.get("family_b_id"), "family_b_name": (fb or {}).get("name"),
+            "war_id": wid,
+            "family_a": w.get("family_a_id"), "family_a_name": fa.get("name"),
+            "family_b": w.get("family_b_id"), "family_b_name": fb.get("name"),
             "status": w.get("status"),
             "stat_count": len(stats),
             "stats": stats,

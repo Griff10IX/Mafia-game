@@ -1,4 +1,5 @@
 # Auth: register, login, password reset, /auth/me
+import asyncio
 import logging
 import re
 import traceback
@@ -1141,7 +1142,23 @@ def register(router):
             wealth_range = get_wealth_rank_range(money_val)
             # Casino/property loaded separately via GET /user/casino-property to keep auth/me fast
             u = current_user
-            admin_color_doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
+            equipped_weapon_id = u.get("equipped_weapon_id")
+            family_id = u.get("family_id")
+            referred_by = u.get("referred_by")
+            _noop = lambda: asyncio.sleep(0, result=None)
+            admin_color_doc, weapon_doc, fam, bodyguard_count, ref_user = await asyncio.gather(
+                db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1}),
+                db.weapons.find_one({"id": equipped_weapon_id}, {"_id": 0, "name": 1}) if equipped_weapon_id else _noop(),
+                db.families.find_one({"id": family_id}, {"_id": 0, "name": 1}) if family_id else _noop(),
+                db.bodyguards.count_documents({
+                    "user_id": u["id"],
+                    "$or": [
+                        {"bodyguard_user_id": {"$exists": True, "$ne": None}},
+                        {"is_robot": True},
+                    ],
+                }),
+                db.users.find_one({"id": referred_by}, {"_id": 0, "username": 1}) if referred_by else _noop(),
+            )
             admin_online_color = (admin_color_doc.get("value") or "#a78bfa") if admin_color_doc else "#a78bfa"
             if not isinstance(admin_online_color, str) or not admin_online_color.strip():
                 admin_online_color = "#a78bfa"
@@ -1152,11 +1169,8 @@ def register(router):
                 mod_online_color = raw if raw.startswith("#") and len(raw) <= 9 else "#1e3a5f"
             # Resolve gun_name, armour_name, gang_name for sidebar
             gun_name = None
-            equipped_weapon_id = u.get("equipped_weapon_id")
-            if equipped_weapon_id:
-                weapon_doc = await db.weapons.find_one({"id": equipped_weapon_id}, {"_id": 0, "name": 1})
-                if weapon_doc:
-                    gun_name = weapon_doc.get("name") or equipped_weapon_id
+            if equipped_weapon_id and weapon_doc:
+                gun_name = weapon_doc.get("name") or equipped_weapon_id
             armour_name = None
             alvl = _safe_int(u.get("armour_level"), 0)
             if alvl >= 6:
@@ -1167,25 +1181,12 @@ def register(router):
             location = str(u.get("current_state") or "").strip() or None
             gang_name = None
             family_name = None
-            family_id = u.get("family_id")
-            if family_id:
-                fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1})
-                if fam:
-                    gang_name = fam.get("name")
-                    family_name = fam.get("name")
-            bodyguard_count = await db.bodyguards.count_documents({
-                "user_id": u["id"],
-                "$or": [
-                    {"bodyguard_user_id": {"$exists": True, "$ne": None}},
-                    {"is_robot": True},
-                ],
-            })
-            referred_by = u.get("referred_by")
+            if fam:
+                gang_name = fam.get("name")
+                family_name = fam.get("name")
             referred_by_username = None
-            if referred_by:
-                ref_user = await db.users.find_one({"id": referred_by}, {"_id": 0, "username": 1})
-                if ref_user:
-                    referred_by_username = ref_user.get("username") or None
+            if ref_user:
+                referred_by_username = ref_user.get("username") or None
             return UserResponse(
                 id=str(u["id"]),
                 email=str(u.get("email") or ""),

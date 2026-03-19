@@ -238,6 +238,10 @@ async def ensure_all_indexes(db):
         await db.forum_comments.create_index("topic_id")
         await db.forum_comments.create_index([("topic_id", 1), ("created_at", 1)])
         await db.forum_comment_likes.create_index([("comment_id", 1), ("user_id", 1)])
+        await db.forum_comment_dislikes.create_index([("comment_id", 1), ("user_id", 1)])
+
+        # --- War kill feed (family war UI) ---
+        await db.war_kill_feed.create_index([("war_id", 1), ("created_at", -1)])
 
         # --- Game chat ---
         await db.game_chat_messages.create_index([("created_at", -1)])

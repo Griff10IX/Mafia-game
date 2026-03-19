@@ -136,18 +136,35 @@ async def get_topics(
         if not t.get("author_id") and (t.get("author_username") or "").strip()
     ))
     if usernames_to_resolve:
-        for uname in usernames_to_resolve:
-            u = await db.users.find_one(
-                {"username": re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)},
-                {"_id": 0, "id": 1, "username": 1},
-            )
-            if u and u.get("id"):
-                username_to_id[(uname or "").lower()] = u["id"]
-                author_ids.append(u["id"])
+        or_clauses = [{"username": re.compile("^" + re.escape(u) + "$", re.IGNORECASE)} for u in usernames_to_resolve if u]
+        if or_clauses:
+            resolved = await db.users.find({"$or": or_clauses}, {"_id": 0, "id": 1, "username": 1}).to_list(100)
+            by_lower = {(u.get("username") or "").strip().lower(): u.get("id") for u in resolved if u.get("id")}
+            for uname in usernames_to_resolve:
+                key = (uname or "").strip().lower()
+                uid = by_lower.get(key)
+                if uid:
+                    username_to_id[key] = uid
+                    author_ids.append(uid)
     colors = await _get_author_display_colors(author_ids)
+    topic_ids = [t["id"] for t in topics]
+    count_by_topic = {}
+    if topic_ids:
+        pipeline = [
+            {"$match": {"topic_id": {"$in": topic_ids}}},
+            {"$group": {"_id": "$topic_id", "cnt": {"$sum": 1}}},
+        ]
+        count_rows = await db.forum_comments.aggregate(pipeline).to_list(100)
+        count_by_topic = {r["_id"]: int(r.get("cnt") or 0) for r in count_rows}
+    crew_oc_ids = list({t["crew_oc_family_id"] for t in topics if t.get("crew_oc_family_id")})
+    crew_oc_fam_map = {}
+    if crew_oc_ids:
+        async for fam in db.families.find({"id": {"$in": crew_oc_ids}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "crew_oc_join_fee": 1}):
+            if fam.get("id"):
+                crew_oc_fam_map[fam["id"]] = fam
     out = []
     for t in topics:
-        comment_count = await db.forum_comments.count_documents({"topic_id": t["id"]})
+        comment_count = count_by_topic.get(t["id"], 0)
         item = {
             "id": t["id"],
             "title": t["title"],
@@ -167,7 +184,7 @@ async def get_topics(
             item["author_online_color"] = colors[author_id]
         if t.get("crew_oc_family_id"):
             item["crew_oc_family_id"] = t["crew_oc_family_id"]
-            fam = await db.families.find_one({"id": t["crew_oc_family_id"]}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_join_fee": 1})
+            fam = crew_oc_fam_map.get(t["crew_oc_family_id"])
             if fam:
                 item["crew_oc_family_name"] = fam.get("name")
                 item["crew_oc_family_tag"] = fam.get("tag")
@@ -197,16 +214,17 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
         if not c.get("author_id") and (c.get("author_username") or "").strip():
             usernames_to_resolve.append((c.get("author_username") or "").strip())
     username_to_id = {}
-    for uname in set(usernames_to_resolve):
-        if not uname:
-            continue
-        u = await db.users.find_one(
-            {"username": re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)},
-            {"_id": 0, "id": 1, "username": 1},
-        )
-        if u and u.get("id"):
-            username_to_id[uname.lower()] = u["id"]
-            author_ids.append(u["id"])
+    unique_names = [u for u in set(usernames_to_resolve) if u]
+    if unique_names:
+        or_clauses = [{"username": re.compile("^" + re.escape(u) + "$", re.IGNORECASE)} for u in unique_names]
+        resolved = await db.users.find({"$or": or_clauses}, {"_id": 0, "id": 1, "username": 1}).to_list(200)
+        by_lower = {(u.get("username") or "").strip().lower(): u.get("id") for u in resolved if u.get("id")}
+        for uname in unique_names:
+            key = (uname or "").strip().lower()
+            uid = by_lower.get(key)
+            if uid:
+                username_to_id[key] = uid
+                author_ids.append(uid)
     colors = await _get_author_display_colors(author_ids)
     topic_author_id = topic.get("author_id") or username_to_id.get((topic.get("author_username") or "").strip().lower())
     if topic_author_id and colors.get(topic_author_id):
@@ -215,13 +233,26 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
         c_author_id = c.get("author_id") or username_to_id.get((c.get("author_username") or "").strip().lower())
         if c_author_id and colors.get(c_author_id):
             c["author_online_color"] = colors[c_author_id]
-    # Attach like/dislike status for current user
+    # Attach like/dislike status for current user (batched)
     uid = current_user.get("id") or ""
+    comment_ids = [c["id"] for c in comments if c.get("id")]
+    liked_ids = set()
+    disliked_ids = set()
+    if comment_ids and uid:
+        like_docs = await db.forum_comment_likes.find(
+            {"comment_id": {"$in": comment_ids}, "user_id": uid},
+            {"_id": 0, "comment_id": 1},
+        ).to_list(500)
+        liked_ids = {d["comment_id"] for d in like_docs if d.get("comment_id")}
+        dislike_docs = await db.forum_comment_dislikes.find(
+            {"comment_id": {"$in": comment_ids}, "user_id": uid},
+            {"_id": 0, "comment_id": 1},
+        ).to_list(500)
+        disliked_ids = {d["comment_id"] for d in dislike_docs if d.get("comment_id")}
     for c in comments:
-        liked = await db.forum_comment_likes.find_one({"comment_id": c["id"], "user_id": uid})
-        c["liked"] = liked is not None
-        disliked = await db.forum_comment_dislikes.find_one({"comment_id": c["id"], "user_id": uid})
-        c["disliked"] = disliked is not None
+        cid = c.get("id")
+        c["liked"] = cid in liked_ids if cid else False
+        c["disliked"] = cid in disliked_ids if cid else False
     if topic.get("crew_oc_family_id"):
         fam = await db.families.find_one({"id": topic["crew_oc_family_id"]}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_join_fee": 1, "crew_oc_cooldown_until": 1})
         if fam:
@@ -454,23 +485,29 @@ async def add_comment(
             comment_id=comment_id,
         )
         notified_ids.add(reply_to_author_id)
-    for username in _extract_mention_usernames(content):
-        pattern = re.compile("^" + re.escape(username) + "$", re.IGNORECASE)
-        mentioned = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1})
-        if mentioned:
-            uid = mentioned.get("id")
-            if uid and uid != current_user["id"] and uid not in notified_ids:
-                await send_notification(
-                    uid,
-                    "Mentioned in forum",
-                    f'{author_username} mentioned you in "{topic_title}"',
-                    "forum_mention",
-                    category="forum_mention",
-                    topic_id=topic_id,
-                    topic_title=topic.get("title"),
-                    comment_id=comment_id,
-                )
-                notified_ids.add(uid)
+    mention_names = list(dict.fromkeys(_extract_mention_usernames(content)))
+    if mention_names:
+        m_or = [{"username": re.compile("^" + re.escape(u) + "$", re.IGNORECASE)} for u in mention_names if u]
+        if m_or:
+            mentioned_users = await db.users.find({"$or": m_or}, {"_id": 0, "id": 1, "username": 1}).to_list(50)
+            by_lower = {(u.get("username") or "").strip().lower(): u for u in mentioned_users if u.get("id")}
+            for username in mention_names:
+                key = (username or "").strip().lower()
+                mentioned = by_lower.get(key)
+                if mentioned:
+                    uid = mentioned.get("id")
+                    if uid and uid != current_user["id"] and uid not in notified_ids:
+                        await send_notification(
+                            uid,
+                            "Mentioned in forum",
+                            f'{author_username} mentioned you in "{topic_title}"',
+                            "forum_mention",
+                            category="forum_mention",
+                            topic_id=topic_id,
+                            topic_title=topic.get("title"),
+                            comment_id=comment_id,
+                        )
+                        notified_ids.add(uid)
 
     return {"id": comment_id, "message": "Comment posted", "comment": {**doc, "liked": False, "disliked": False, "dislikes": 0}}
 

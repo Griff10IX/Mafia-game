@@ -145,16 +145,21 @@ async def _run_slots_draw_if_needed(state: str):
                 logging.getLogger().info("Slots entries for state=%s found via case-insensitive match (doc.state=%r)", state, entries_doc.get("state"))
         user_ids = list((entries_doc or {}).get("user_ids") or [])
         eligible = []
-        for uid in user_ids:
-            u = await db.users.find_one({"id": uid}, {"_id": 0, "slots_cooldown_until": 1})
-            if not u:
-                continue
-            until = u.get("slots_cooldown_until")
-            if until:
-                t = _parse_iso_datetime(until)
-                if t and now < t:
+        if user_ids:
+            user_docs = await db.users.find(
+                {"id": {"$in": user_ids}},
+                {"_id": 0, "id": 1, "slots_cooldown_until": 1},
+            ).to_list(500)
+            cooldown_by_uid = {d["id"]: d.get("slots_cooldown_until") for d in user_docs if d.get("id")}
+            for uid in user_ids:
+                if uid not in cooldown_by_uid:
                     continue
-            eligible.append(uid)
+                until = cooldown_by_uid.get(uid)
+                if until:
+                    t = _parse_iso_datetime(until)
+                    if t and now < t:
+                        continue
+                eligible.append(uid)
         if eligible:
             # Only the previous owner gets cooldown; entrants who lost can enter the next draw
             cooldown_until = (now + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
