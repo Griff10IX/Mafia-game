@@ -175,6 +175,24 @@ async def _get_travel_method(db, user_id: str) -> Optional[str]:
     return result
 
 
+async def _get_booze_protected_car_ids(db, user_id: str) -> set:
+    """Return user_car ids that booze run uses, so melt/scrap must not touch them."""
+    method = await _get_travel_method(db, user_id)
+    if not method:
+        return set()
+    if method == "custom":
+        custom = await db.user_cars.find_one(
+            {"user_id": user_id, "car_id": "car_custom"},
+            {"_id": 1, "id": 1},
+            sort=[("acquired_at", 1)],
+        )
+        if custom:
+            uid = custom.get("id") or str(custom.get("_id", ""))
+            return {uid} if uid else set()
+        return set()
+    return {method}
+
+
 async def _apply_overdue_travel(db, user_id: str, user: dict, now: datetime) -> dict:
     """If user has overdue travel, apply arrival and return refreshed user doc."""
     arrives_at = user.get("travel_arrives_at")
@@ -909,11 +927,15 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             # No rarities selected = don't melt/scrap any cars
             allowed_rarities = set(melt_rarity_ids) if isinstance(melt_rarity_ids, list) and len(melt_rarity_ids) > 0 else set()
             batch_limit = user.get("garage_batch_limit") or getattr(srv, "DEFAULT_GARAGE_BATCH_LIMIT", 6)
+            booze_protected = await _get_booze_protected_car_ids(db, user_id) if user.get("auto_rank_booze") else set()
             cars_cursor = db.user_cars.find({"user_id": user_id})
             user_cars = await cars_cursor.to_list(1000)
             eligible = []
             for uc in user_cars:
                 if uc.get("listed_for_sale"):
+                    continue
+                ucid = uc.get("id") or str(uc.get("_id", ""))
+                if ucid and ucid in booze_protected:
                     continue
                 car_id = uc.get("car_id")
                 car_info = next((c for c in (CARS or []) if c.get("id") == car_id), None)
@@ -922,7 +944,6 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 rarity = car_info.get("rarity") or "common"
                 if rarity not in allowed_rarities:
                     continue
-                ucid = uc.get("id") or str(uc.get("_id", ""))
                 value = int(car_info.get("value") or 0)
                 eligible.append({"user_car_id": ucid, "value": value})
             eligible.sort(key=lambda x: x["value"])
@@ -992,13 +1013,15 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                             for uc in user_cars:
                                 if uc.get("listed_for_sale"):
                                     continue
+                                ucid = uc.get("id") or str(uc.get("_id", ""))
+                                if ucid and ucid in booze_protected:
+                                    continue
                                 car_info = next((c for c in (CARS or []) if c.get("id") == uc.get("car_id")), None)
                                 if not car_info:
                                     continue
                                 rarity = car_info.get("rarity") or "common"
                                 if rarity not in allowed_rarities:
                                     continue
-                                ucid = uc.get("id") or str(uc.get("_id", ""))
                                 eligible.append({"user_car_id": ucid, "value": int(car_info.get("value") or 0)})
                             eligible.sort(key=lambda x: x["value"])
                             car_ids = [e["user_car_id"] for e in eligible[:max(0, batch_limit - melted_this_cycle)]]
@@ -1024,11 +1047,15 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 if not user or user.get("in_jail"):
                     return
                 batch_limit = user.get("garage_batch_limit") or getattr(srv, "DEFAULT_GARAGE_BATCH_LIMIT", 6)
+                booze_protected = await _get_booze_protected_car_ids(db, user_id) if user.get("auto_rank_booze") else set()
                 cars_cursor = db.user_cars.find({"user_id": user_id})
                 user_cars = await cars_cursor.to_list(1000)
                 eligible = []
                 for uc in user_cars:
                     if uc.get("listed_for_sale"):
+                        continue
+                    ucid = uc.get("id") or str(uc.get("_id", ""))
+                    if ucid and ucid in booze_protected:
                         continue
                     car_info = next((c for c in (CARS or []) if c.get("id") == uc.get("car_id")), None)
                     if not car_info:
@@ -1036,7 +1063,6 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     rarity = car_info.get("rarity") or "common"
                     if rarity not in allowed_scrap_rarities:
                         continue
-                    ucid = uc.get("id") or str(uc.get("_id", ""))
                     value = int(car_info.get("value") or 0)
                     eligible.append({"user_car_id": ucid, "value": value})
                 eligible.sort(key=lambda x: x["value"])
