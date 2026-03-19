@@ -1086,9 +1086,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                         logger.exception("Auto rank scrap for %s: %s", user_id, e)
 
     # --- Booze ---
-    # #region agent log
-    _debug_log("auto_rank.py:booze_block", "Booze block check", {"user_id": user_id, "auto_rank_booze": user.get("auto_rank_booze"), "bust_every_5": user.get("auto_rank_bust_every_5_sec")}, "H1")
-    # #endregion
+    # Refetch user: scrap block uses minimal projection that omits auto_rank_booze
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user or user.get("in_jail"):
+        return
     if user.get("auto_rank_booze", False):
         try:
             if await _run_booze_for_user(db, user_id, username, chat_id, bot_token, now, lines):
