@@ -1,0 +1,13 @@
+# Sports betting auto-settle: poll Odds API scores and settle matching events.
+# Run every 30 minutes. Requires THE_ODDS_API_KEY and CRON_SECRET in backend/.env.
+#
+# Option A — Ticker (recommended, runs in loop):
+#   python scripts/cron-sports-settle.py
+#
+# Option B — Crontab (every 30 min):
+
+# Every 30 min:
+*/30 * * * * curl -s -X POST -H "X-Cron-Secret: YOUR_CRON_SECRET" -H "Content-Type: application/json" http://127.0.0.1:8000/api/sports-betting/cron/auto-settle
+
+# Or with public URL:
+# */30 * * * * curl -s -X POST -H "X-Cron-Secret: YOUR_CRON_SECRET" -H "Content-Type: application/json" https://mafiawars.co.uk/api/sports-betting/cron/auto-settle

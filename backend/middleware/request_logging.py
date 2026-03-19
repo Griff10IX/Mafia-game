@@ -21,6 +21,7 @@ _SKIP_PREFIXES = [
     "/api/travel/status",
     "/api/auto-rank/cron",
     "/api/auto-rank/cron-bust",
+    "/api/sports-betting/cron",
     "/static",
     "/health",
 ]

@@ -9,7 +9,7 @@ import uuid
 from typing import List, Optional
 
 from pydantic import BaseModel
-from fastapi import Depends, HTTPException
+from fastapi import Depends, Header, HTTPException
 import httpx
 
 from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin
@@ -85,7 +85,7 @@ def _parse_commence_time(commence_time) -> str | None:
         return None
 
 
-def _parse_odds_event(event: dict, category: str, three_way: bool) -> dict | None:
+def _parse_odds_event(event: dict, category: str, three_way: bool, sport_key: str = "") -> dict | None:
     event_id = (event.get("id") or "").strip()
     home = (event.get("home_team") or "").strip()
     away = (event.get("away_team") or "").strip()
@@ -140,6 +140,9 @@ def _parse_odds_event(event: dict, category: str, three_way: bool) -> dict | Non
     out = {"id": "odds_%s_%s" % (category.lower()[:3], event_id[:16]), "name": name, "category": category, "options": options}
     if start_time:
         out["start_time"] = start_time
+    if sport_key:
+        out["external_event_id"] = event_id
+        out["external_sport_key"] = sport_key
     return out
 
 
@@ -161,7 +164,7 @@ async def _fetch_odds_api_soccer() -> list:
                 if not isinstance(events, list):
                     continue
                 for ev in events[:12]:
-                    parsed = _parse_odds_event(ev, "Football", three_way=True)
+                    parsed = _parse_odds_event(ev, "Football", three_way=True, sport_key=sport_key)
                     if parsed:
                         out.append(parsed)
     except Exception:
@@ -211,12 +214,114 @@ async def _fetch_odds_api_boxing() -> list:
             if not isinstance(events, list):
                 return []
             for ev in events[:15]:
-                parsed = _parse_odds_event(ev, "Boxing", three_way=False)
+                parsed = _parse_odds_event(ev, "Boxing", three_way=False, sport_key="boxing_boxing")
                 if parsed:
                     out.append(parsed)
     except Exception:
         pass
     return out
+
+
+# ----- Odds API Scores (for auto-settle) -----
+ODDS_API_SPORT_KEYS = {
+    "Football": ["soccer_epl", "soccer_spain_la_liga", "soccer_germany_bundesliga"],
+    "UFC": ["mma_mixed_martial_arts"],
+    "Boxing": ["boxing_boxing"],
+}
+
+
+async def _fetch_odds_api_scores(sport_key: str, days_from: int = 1) -> list:
+    """Fetch completed events with scores from The Odds API. days_from 1-3 returns completed games."""
+    key = _odds_api_key()
+    if not key:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(
+                "%s/sports/%s/scores" % (ODDS_API_BASE, sport_key),
+                params={"apiKey": key, "daysFrom": min(3, max(1, days_from))},
+            )
+            if r.status_code != 200:
+                return []
+            events = r.json()
+            return events if isinstance(events, list) else []
+    except Exception:
+        return []
+
+
+def _derive_winning_option_from_scores(api_event: dict, options: list, three_way: bool) -> str | None:
+    """Derive winning_option_id from Odds API scores. Returns option id or None if unclear."""
+    scores = api_event.get("scores") or []
+    home_team = (api_event.get("home_team") or "").strip()
+    away_team = (api_event.get("away_team") or "").strip()
+    option_by_name = {(o.get("name") or "").strip().lower(): o.get("id") for o in (options or []) if o.get("id")}
+    if len(scores) == 1:
+        winner_name = (scores[0].get("name") or "").strip()
+        for name, opt_id in option_by_name.items():
+            if name and winner_name and name.lower() == winner_name.lower():
+                return opt_id
+        return None
+    if len(scores) != 2:
+        return None
+    s0_name = (scores[0].get("name") or "").strip()
+    s1_name = (scores[1].get("name") or "").strip()
+    try:
+        s0_val = int(scores[0].get("score") or 0)
+        s1_val = int(scores[1].get("score") or 0)
+    except (TypeError, ValueError):
+        return None
+    if s0_val > s1_val:
+        winner_name = s0_name
+    elif s1_val > s0_val:
+        winner_name = s1_name
+    else:
+        if three_way:
+            for o in options or []:
+                if "draw" in (o.get("name") or "").lower():
+                    return o.get("id")
+        return None
+    for name, opt_id in option_by_name.items():
+        if name and winner_name and name.lower() == winner_name.lower():
+            return opt_id
+    return None
+
+
+async def _auto_settle_from_scores() -> dict:
+    """Poll Odds API scores, match to open events with external_event_id, settle and pay. Returns stats."""
+    settled_count = 0
+    skipped_no_match = 0
+    skipped_no_winner = 0
+    key = _odds_api_key()
+    if not key:
+        return {"settled": 0, "message": "No Odds API key"}
+    sport_keys_used = set()
+    for category, keys in ODDS_API_SPORT_KEYS.items():
+        three_way = category == "Football"
+        for sport_key in keys:
+            if sport_key in sport_keys_used:
+                continue
+            sport_keys_used.add(sport_key)
+            events = await _fetch_odds_api_scores(sport_key, days_from=1)
+            for api_ev in events:
+                if not api_ev.get("completed"):
+                    continue
+                ext_id = (api_ev.get("id") or "").strip()
+                if not ext_id:
+                    continue
+                ev = await db.sports_events.find_one(
+                    {"external_event_id": ext_id, "external_sport_key": sport_key, "status": "open"},
+                    {"_id": 0, "id": 1, "options": 1},
+                )
+                if not ev:
+                    skipped_no_match += 1
+                    continue
+                winning_id = _derive_winning_option_from_scores(api_ev, ev.get("options") or [], three_way)
+                if not winning_id:
+                    skipped_no_winner += 1
+                    continue
+                if await _settle_event_internal(ev["id"], winning_id):
+                    settled_count += 1
+    return {"settled": settled_count, "skipped_no_match": skipped_no_match, "skipped_no_winner": skipped_no_winner}
 
 
 async def _fetch_football_events_football_data_org() -> list:
@@ -828,6 +933,9 @@ async def admin_sports_add_event(request: AdminAddSportsEventRequest, current_us
         "is_special": False,
         "status": "open",
     }
+    if template.get("external_event_id") and template.get("external_sport_key"):
+        ev["external_event_id"] = template["external_event_id"]
+        ev["external_sport_key"] = template["external_sport_key"]
     await db.sports_events.insert_one(ev)
     return {"message": f"Added event: {template['name']}", "event_id": ev["id"]}
 
@@ -872,18 +980,15 @@ async def admin_sports_add_custom_event(request: AdminAddCustomSportsEventReques
     return {"message": f"Added custom event: {name}", "event_id": ev["id"]}
 
 
-async def admin_sports_settle(request: SportsSettleEventRequest, current_user: dict = Depends(get_current_user_verified)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
-    event_id = (request.event_id or "").strip()
-    winning_option_id = (request.winning_option_id or "").strip()
+async def _settle_event_internal(event_id: str, winning_option_id: str) -> bool:
+    """Settle an event: update status, settle all open bets, pay winners. Returns True if settled."""
     now = datetime.now(timezone.utc).isoformat()
     ev = await db.sports_events.find_one_and_update(
         {"id": event_id, "status": "open"},
         {"$set": {"status": "settled", "winning_option_id": winning_option_id, "settled_at": now}},
     )
     if not ev:
-        raise HTTPException(status_code=400, detail="Event not found or already settled")
+        return False
     cursor = db.sports_bets.find(
         {"event_id": event_id, "status": "open"},
         {"_id": 0, "id": 1, "user_id": 1, "option_id": 1, "stake": 1, "odds": 1, "event_name": 1, "option_name": 1},
@@ -912,6 +1017,19 @@ async def admin_sports_settle(request: SportsSettleEventRequest, current_user: d
                 await db.users.update_one({"id": bet_claim["user_id"]}, {"$set": update_fields})
         else:
             await db.users.update_one({"id": bet_claim["user_id"]}, {"$set": {"sports_current_win_streak": 0}})
+    return True
+
+
+async def admin_sports_settle(request: SportsSettleEventRequest, current_user: dict = Depends(get_current_user_verified)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    event_id = (request.event_id or "").strip()
+    winning_option_id = (request.winning_option_id or "").strip()
+    if not event_id or not winning_option_id:
+        raise HTTPException(status_code=400, detail="event_id and winning_option_id required")
+    settled = await _settle_event_internal(event_id, winning_option_id)
+    if not settled:
+        raise HTTPException(status_code=400, detail="Event not found or already settled")
     return {"message": f"Event {event_id} settled. Winning option: {winning_option_id}. Winners paid out."}
 
 
@@ -965,3 +1083,18 @@ def register(router):
     router.add_api_route("/admin/sports-betting/custom-event", admin_sports_add_custom_event, methods=["POST"])
     router.add_api_route("/admin/sports-betting/settle", admin_sports_settle, methods=["POST"])
     router.add_api_route("/admin/sports-betting/cancel-event", admin_sports_cancel_event, methods=["POST"])
+
+    # Cron: auto-settle from Odds API scores (call every 15-30 min)
+    cron_secret = (os.environ.get("CRON_SECRET") or "").strip()
+
+    async def verify_sports_cron_secret(x_cron_secret: Optional[str] = Header(None, alias="X-Cron-Secret")):
+        if not cron_secret:
+            raise HTTPException(status_code=503, detail="Sports cron not configured (CRON_SECRET unset)")
+        if (x_cron_secret or "").strip() != cron_secret:
+            raise HTTPException(status_code=403, detail="Invalid cron secret")
+
+    async def cron_sports_auto_settle(_: None = Depends(verify_sports_cron_secret)):
+        """Cron: poll Odds API scores, settle matching events, pay winners. Call every 15-30 min. Header: X-Cron-Secret."""
+        return await _auto_settle_from_scores()
+
+    router.add_api_route("/sports-betting/cron/auto-settle", cron_sports_auto_settle, methods=["POST"])
