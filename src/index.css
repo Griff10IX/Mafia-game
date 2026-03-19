@@ -406,6 +406,11 @@ a.from-primary {
   transition: all 0.3s ease;
 }
 
+/* Mobile bottom nav: extra padding so content isn't hidden behind fixed nav + safe area */
+.pb-safe-bottom-nav {
+  padding-bottom: max(7rem, calc(7rem + env(safe-area-inset-bottom, 0px)));
+}
+
 /* Dice animations with 3D tumbling */
 @keyframes dice-roll {
   0% { 

@@ -13,10 +13,14 @@ import {
   Trophy,
   Bot,
   LayoutDashboard,
+  Settings,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../components/ui/sheet';
 import styles from '../../styles/noir.module.css';
 import DailyRewardsWidget from '../../components/dashboard/DailyRewardsWidget';
 import ObjectivesWidget from '../../components/dashboard/ObjectivesWidget';
@@ -168,19 +172,65 @@ const QUICK_LINKS = [
   { to: '/account/autorank', icon: Bot, label: 'Auto Rank' },
 ];
 
+const DEFAULT_SECTION_ORDER = [
+  'rank_progress', 'rewards_objectives', 'notifications_event',
+  'bodyguards_properties', 'auto_rank', 'at_a_glance', 'go_to',
+];
+const DEFAULT_AT_A_GLANCE_STATS = ['money', 'rank', 'wealth', 'rp', 'location', 'kills'];
+const SECTION_LABELS = {
+  rank_progress: 'Rank Progress',
+  rewards_objectives: 'Rewards & Objectives',
+  notifications_event: 'Notifications & Store',
+  bodyguards_properties: 'Bodyguards & Properties',
+  auto_rank: 'Auto Rank',
+  at_a_glance: 'At a Glance',
+  go_to: 'Go to',
+};
+const STAT_OPTIONS = [
+  { id: 'money', label: 'Cash' },
+  { id: 'rank', label: 'Rank' },
+  { id: 'wealth', label: 'Wealth tier' },
+  { id: 'rp', label: 'Rank points' },
+  { id: 'location', label: 'Location' },
+  { id: 'kills', label: 'Kills' },
+];
+
 export default function Dashboard() {
   const [user, setUser] = useState(null);
   const [rankProgress, setRankProgress] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [preferences, setPreferences] = useState({
+    section_order: DEFAULT_SECTION_ORDER,
+    at_a_glance_visible: true,
+    at_a_glance_stats: DEFAULT_AT_A_GLANCE_STATS,
+  });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editPrefs, setEditPrefs] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const [userRes, progressRes] = await Promise.all([
+      const [userRes, progressRes, dashRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/user/rank-progress'),
+        api.get('/profile/dashboard').catch(() => ({ data: null })),
       ]);
       setUser(userRes.data);
       setRankProgress(progressRes.data);
+      if (dashRes?.data) {
+        setPreferences({
+          section_order: dashRes.data.section_order || DEFAULT_SECTION_ORDER,
+          at_a_glance_visible: dashRes.data.at_a_glance_visible !== false,
+          at_a_glance_stats: dashRes.data.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
+        });
+      } else if (userRes.data?.dashboard_preferences) {
+        const dp = userRes.data.dashboard_preferences;
+        setPreferences({
+          section_order: dp.section_order || DEFAULT_SECTION_ORDER,
+          at_a_glance_visible: dp.at_a_glance_visible !== false,
+          at_a_glance_stats: dp.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
+        });
+      }
     } catch (error) {
       toast.error(getApiErrorMessage(error) || 'Failed to load profile');
       console.error('Error fetching dashboard data:', error);
@@ -197,11 +247,60 @@ export default function Dashboard() {
     api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
   }, []);
 
+  const openSettings = useCallback(() => {
+    setEditPrefs({
+      section_order: [...preferences.section_order],
+      at_a_glance_visible: preferences.at_a_glance_visible,
+      at_a_glance_stats: [...preferences.at_a_glance_stats],
+    });
+    setSettingsOpen(true);
+  }, [preferences]);
+
+  const moveSection = useCallback((index, dir) => {
+    if (!editPrefs) return;
+    const next = [...editPrefs.section_order];
+    const ni = dir === 'up' ? index - 1 : index + 1;
+    if (ni < 0 || ni >= next.length) return;
+    [next[index], next[ni]] = [next[ni], next[index]];
+    setEditPrefs((p) => ({ ...p, section_order: next }));
+  }, [editPrefs]);
+
+  const toggleStat = useCallback((id) => {
+    if (!editPrefs) return;
+    const stats = editPrefs.at_a_glance_stats.includes(id)
+      ? editPrefs.at_a_glance_stats.filter((s) => s !== id)
+      : [...editPrefs.at_a_glance_stats, id];
+    setEditPrefs((p) => ({ ...p, at_a_glance_stats: stats }));
+  }, [editPrefs]);
+
+  const savePreferences = useCallback(async () => {
+    if (!editPrefs || saving) return;
+    setSaving(true);
+    try {
+      const res = await api.patch('/profile/dashboard', {
+        section_order: editPrefs.section_order,
+        at_a_glance_visible: editPrefs.at_a_glance_visible,
+        at_a_glance_stats: editPrefs.at_a_glance_stats,
+      });
+      setPreferences({
+        section_order: res.data.section_order,
+        at_a_glance_visible: res.data.at_a_glance_visible,
+        at_a_glance_stats: res.data.at_a_glance_stats,
+      });
+      toast.success('Dashboard layout saved');
+      setSettingsOpen(false);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  }, [editPrefs, saving]);
+
   if (loading) {
     return <LoadingSpinner />;
   }
 
-  const stats = [
+  const allStats = [
     { id: 'money', label: 'Cash', icon: DollarSign, value: `$${Math.floor(Number(user?.money ?? 0)).toLocaleString()}`, testId: 'stat-money' },
     { id: 'rank', label: 'Rank', icon: TrendingUp, value: user?.rank_name ?? '—', sub: `#${user?.rank ?? 0}`, testId: 'stat-rank' },
     { id: 'wealth', label: 'Wealth tier', icon: DollarSign, value: user?.wealth_rank_name ?? '—', tooltip: user?.wealth_rank_range ?? '$0', testId: 'stat-wealth' },
@@ -209,81 +308,170 @@ export default function Dashboard() {
     { id: 'location', label: 'Location', icon: MapPin, value: user?.current_state ?? '—', testId: 'stat-location' },
     { id: 'kills', label: 'Kills', icon: Swords, value: user?.total_kills ?? 0, testId: 'stat-kills' },
   ];
+  const stats = allStats.filter((s) => preferences.at_a_glance_stats.includes(s.id));
+
+  const renderSection = (id) => {
+    switch (id) {
+      case 'rank_progress':
+        return rankProgress ? (
+          <RankProgressCard key={id} rankProgress={rankProgress} hasPremiumBar={!!user?.premium_rank_bar} />
+        ) : null;
+      case 'rewards_objectives':
+        return (
+          <div key={id} className="grid grid-cols-1 lg:grid-cols-2 gap-2 min-w-0">
+            <DailyRewardsWidget onRefresh={handleWidgetRefresh} />
+            <ObjectivesWidget onRefresh={handleWidgetRefresh} />
+          </div>
+        );
+      case 'notifications_event':
+        return (
+          <div key={id} className="grid grid-cols-1 lg:grid-cols-2 gap-2 min-w-0">
+            <NotificationsWidget onRefresh={handleWidgetRefresh} />
+            <EventOrStoreSlot user={user} />
+          </div>
+        );
+      case 'bodyguards_properties':
+        return (
+          <div key={id} className="grid grid-cols-1 lg:grid-cols-2 gap-2 min-w-0">
+            <BodyguardsWidget />
+            <MyPropertiesWidget />
+          </div>
+        );
+      case 'auto_rank':
+        return <AutoRankStatusWidget key={id} user={user} />;
+      case 'at_a_glance':
+        if (!preferences.at_a_glance_visible || stats.length === 0) return null;
+        return (
+          <section key={id} className="mobile-panel">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">At a Glance</h2>
+              <div className="flex-1 h-px bg-gradient-to-r from-primary/40 via-primary/20 to-transparent" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 md:gap-2">
+              {stats.map((stat, i) => (
+                <StatCard key={stat.id} stat={stat} delay={i * 0.04} />
+              ))}
+            </div>
+          </section>
+        );
+      case 'go_to':
+        return (
+          <section key={id} className="mobile-panel">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Go to</h2>
+              <div className="flex-1 h-px bg-gradient-to-r from-primary/40 via-primary/20 to-transparent" />
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {QUICK_LINKS.map((link) => {
+                const Icon = link.icon;
+                return (
+                  <TooltipProvider key={link.to}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Link
+                          to={link.to}
+                          className="flex items-center justify-center w-10 h-10 rounded-md border border-primary/20 bg-primary/5 hover:bg-primary/15 hover:border-primary/30 transition-all active:scale-95"
+                        >
+                          <Icon size={16} className="text-primary" />
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className={`${styles.panel} text-foreground border-primary/30 rounded-md px-2 py-1 text-[10px] font-heading`}>
+                        {link.label}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                );
+              })}
+            </div>
+          </section>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
-    <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="dashboard-page">
+    <div className={`space-y-3 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden`} data-testid="dashboard-page">
       <style>{DASH_STYLES}</style>
 
-      <p className="text-[9px] text-zinc-500 font-heading italic">Your command center — play, claim, and stay on top.</p>
-
-      {rankProgress && (
-        <RankProgressCard
-          rankProgress={rankProgress}
-          hasPremiumBar={!!user?.premium_rank_bar}
-        />
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-        <DailyRewardsWidget onRefresh={handleWidgetRefresh} />
-        <ObjectivesWidget onRefresh={handleWidgetRefresh} />
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[9px] text-zinc-500 font-heading italic">Your command center — play, claim, and stay on top.</p>
+        <button
+          type="button"
+          onClick={openSettings}
+          className="p-1.5 rounded border border-primary/20 bg-primary/5 hover:bg-primary/15 hover:border-primary/30 transition-all active:scale-95"
+          aria-label="Dashboard settings"
+        >
+          <Settings size={14} className="text-primary" />
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-        <NotificationsWidget onRefresh={handleWidgetRefresh} />
-        <EventOrStoreSlot user={user} />
-      </div>
+      {preferences.section_order.map((id) => renderSection(id)).filter(Boolean)}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-        <BodyguardsWidget />
-        <MyPropertiesWidget />
-      </div>
-
-      <AutoRankStatusWidget user={user} />
-
-      <section className="mobile-panel">
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-            At a Glance
-          </h2>
-          <div className="flex-1 h-px bg-gradient-to-r from-primary/40 via-primary/20 to-transparent" />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 md:gap-2">
-          {stats.map((stat, i) => (
-            <StatCard key={stat.id} stat={stat} delay={i * 0.04} />
-          ))}
-        </div>
-      </section>
-
-      <section className="mobile-panel">
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-            Go to
-          </h2>
-          <div className="flex-1 h-px bg-gradient-to-r from-primary/40 via-primary/20 to-transparent" />
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {QUICK_LINKS.map((link) => {
-            const Icon = link.icon;
-            return (
-              <TooltipProvider key={link.to}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Link
-                      to={link.to}
-                      className="flex items-center justify-center w-10 h-10 rounded-md border border-primary/20 bg-primary/5 hover:bg-primary/15 hover:border-primary/30 transition-all active:scale-95"
-                    >
-                      <Icon size={16} className="text-primary" />
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className={`${styles.panel} text-foreground border-primary/30 rounded-md px-2 py-1 text-[10px] font-heading`}>
-                    {link.label}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            );
-          })}
-        </div>
-      </section>
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent side="right" className={`${styles.panel} border-primary/20 w-[min(100vw,320px)]`}>
+          <SheetHeader>
+            <SheetTitle className="text-primary font-heading text-sm">Dashboard layout</SheetTitle>
+          </SheetHeader>
+          {editPrefs && (
+            <div className="mt-4 space-y-4">
+              <div>
+                <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] mb-2">Section order</h3>
+                <div className="space-y-1">
+                  {editPrefs.section_order.map((id, i) => (
+                    <div key={id} className="flex items-center gap-1 rounded border border-primary/20 bg-primary/5 px-2 py-1.5">
+                      <div className="flex flex-col gap-0">
+                        <button type="button" onClick={() => moveSection(i, 'up')} disabled={i === 0} className="p-0.5 disabled:opacity-30">
+                          <ChevronUp size={12} className="text-primary" />
+                        </button>
+                        <button type="button" onClick={() => moveSection(i, 'down')} disabled={i === editPrefs.section_order.length - 1} className="p-0.5 disabled:opacity-30">
+                          <ChevronDown size={12} className="text-primary" />
+                        </button>
+                      </div>
+                      <span className="text-[10px] font-heading text-foreground flex-1">{SECTION_LABELS[id] || id}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] mb-2">At a Glance</h3>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editPrefs.at_a_glance_visible}
+                    onChange={(e) => setEditPrefs((p) => ({ ...p, at_a_glance_visible: e.target.checked }))}
+                    className="rounded border-primary/30"
+                  />
+                  <span className="text-[10px] font-heading">Show section</span>
+                </label>
+                {editPrefs.at_a_glance_visible && (
+                  <div className="mt-2 space-y-1 pl-4">
+                    {STAT_OPTIONS.map((opt) => (
+                      <label key={opt.id} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editPrefs.at_a_glance_stats.includes(opt.id)}
+                          onChange={() => toggleStat(opt.id)}
+                          className="rounded border-primary/30"
+                        />
+                        <span className="text-[10px] font-heading text-mutedForeground">{opt.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={savePreferences}
+                disabled={saving}
+                className="w-full py-2 rounded border border-primary/40 bg-primary/20 text-primary text-[10px] font-heading font-bold hover:bg-primary/30 disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save layout'}
+              </button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

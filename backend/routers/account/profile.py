@@ -58,6 +58,7 @@ def register(router):
     AvatarUpdateRequest = srv.AvatarUpdateRequest
     ThemePreferencesRequest = srv.ThemePreferencesRequest
     ChangePasswordRequest = srv.ChangePasswordRequest
+    DashboardPreferencesRequest = srv.DashboardPreferencesRequest
     CARS = srv.CARS
 
     async def _top_cars_for_profile(user_id: str, limit: int = 5, show_cars: bool = False, profile_car_ids: Optional[list] = None):
@@ -724,6 +725,58 @@ def register(router):
             {"$set": {"theme_preferences": new_prefs}},
         )
         return {"message": "Theme saved", "theme_preferences": new_prefs}
+
+    DEFAULT_SECTION_ORDER = [
+        "rank_progress", "rewards_objectives", "notifications_event",
+        "bodyguards_properties", "auto_rank", "at_a_glance", "go_to",
+    ]
+    DEFAULT_AT_A_GLANCE_STATS = ["money", "rank", "wealth", "rp", "location", "kills"]
+
+    @router.get("/profile/dashboard")
+    async def get_profile_dashboard(current_user: dict = Depends(get_current_user)):
+        """Get dashboard layout preferences. Returns defaults if never set."""
+        prefs = current_user.get("dashboard_preferences") or {}
+        return {
+            "section_order": prefs.get("section_order") or DEFAULT_SECTION_ORDER,
+            "at_a_glance_visible": prefs.get("at_a_glance_visible", True),
+            "at_a_glance_stats": prefs.get("at_a_glance_stats") or DEFAULT_AT_A_GLANCE_STATS,
+        }
+
+    @router.patch("/profile/dashboard")
+    async def update_profile_dashboard(request: DashboardPreferencesRequest, current_user: dict = Depends(get_current_user)):
+        """Save dashboard preferences to DB so they sync across devices. Only provided keys are updated."""
+        updates = request.model_dump(exclude_unset=True)
+        if not updates:
+            prefs = current_user.get("dashboard_preferences") or {}
+            return {
+                "message": "No dashboard updates",
+                "section_order": prefs.get("section_order") or DEFAULT_SECTION_ORDER,
+                "at_a_glance_visible": prefs.get("at_a_glance_visible", True),
+                "at_a_glance_stats": prefs.get("at_a_glance_stats") or DEFAULT_AT_A_GLANCE_STATS,
+            }
+        valid_section_ids = {"rank_progress", "rewards_objectives", "notifications_event", "bodyguards_properties", "auto_rank", "at_a_glance", "go_to"}
+        valid_stat_ids = {"money", "rank", "wealth", "rp", "location", "kills"}
+        if "section_order" in updates:
+            order = updates["section_order"]
+            if not isinstance(order, list) or not all(isinstance(s, str) and s in valid_section_ids for s in order):
+                raise HTTPException(status_code=400, detail="Invalid section_order")
+            if set(order) != valid_section_ids:
+                raise HTTPException(status_code=400, detail="section_order must contain all section IDs exactly once")
+        if "at_a_glance_stats" in updates:
+            stats = updates["at_a_glance_stats"]
+            if not isinstance(stats, list) or not all(isinstance(s, str) and s in valid_stat_ids for s in stats):
+                raise HTTPException(status_code=400, detail="Invalid at_a_glance_stats")
+        new_prefs = {**(current_user.get("dashboard_preferences") or {}), **updates}
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"dashboard_preferences": new_prefs}},
+        )
+        return {
+            "message": "Dashboard preferences saved",
+            "section_order": new_prefs.get("section_order") or DEFAULT_SECTION_ORDER,
+            "at_a_glance_visible": new_prefs.get("at_a_glance_visible", True),
+            "at_a_glance_stats": new_prefs.get("at_a_glance_stats") or DEFAULT_AT_A_GLANCE_STATS,
+        }
 
     @router.post("/profile/change-password")
     async def change_password(request: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):

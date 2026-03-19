@@ -20,16 +20,16 @@ const ObjectiveRow = ({ obj }) => {
   const progressPct = obj.target > 0 ? Math.min(100, (obj.current / obj.target) * 100) : 0;
   return (
     <div
-      className={`flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 rounded border ${
+      className={`flex flex-wrap items-center gap-x-2 gap-y-1.5 px-2.5 py-1.5 rounded border min-w-0 ${
         obj.done ? 'bg-primary/10 border-primary/30' : 'bg-zinc-800/20 border-zinc-700/30'
       }`}
     >
-      <span className="shrink-0">
-        {obj.done ? <CheckCircle2 className="w-3.5 h-3.5 text-primary" /> : <Circle className="w-3.5 h-3.5 text-mutedForeground" />}
+      <span className="shrink-0 self-start sm:self-center pt-0.5 sm:pt-0">
+        {obj.done ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Circle className="w-4 h-4 text-mutedForeground" />}
       </span>
-      <p className="text-[10px] font-heading text-foreground min-w-0 flex-1 line-clamp-2">{obj.label}</p>
-      <div className="flex items-center gap-1.5 shrink-0">
-        <div className="relative w-12 h-1 bg-secondary rounded-full overflow-hidden border border-primary/20">
+      <p className="text-[11px] font-heading text-foreground min-w-0 flex-1 break-words line-clamp-3">{obj.label}</p>
+      <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+        <div className="relative w-14 sm:w-16 h-1.5 bg-secondary rounded-full overflow-hidden border border-primary/20 shrink-0">
           <div
             className="absolute top-0 left-0 h-full rounded-full transition-all duration-300"
             style={{
@@ -37,9 +37,13 @@ const ObjectiveRow = ({ obj }) => {
               minWidth: progressPct > 0 ? 2 : 0,
               background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))',
             }}
+            role="progressbar"
+            aria-valuenow={obj.current}
+            aria-valuemin={0}
+            aria-valuemax={obj.target}
           />
         </div>
-        <span className="text-[9px] font-heading font-bold text-primary tabular-nums">
+        <span className="text-[10px] font-heading font-bold text-primary tabular-nums shrink-0 text-right">
           {Number(obj.current).toLocaleString()}/{Number(obj.target).toLocaleString()}
         </span>
       </div>
@@ -85,7 +89,7 @@ export default function ObjectivesWidget({ onRefresh }) {
 
   if (loading) {
     return (
-      <div className={`${styles.panel} rounded-md border border-primary/20 p-2.5 mobile-panel`}>
+      <div className={`${styles.panel} rounded-md border border-primary/20 p-2.5 mobile-panel flex flex-col min-w-0`}>
         <div className="flex items-center gap-2 text-mutedForeground">
           <ListChecks size={14} className="animate-pulse" />
           <span className="text-[10px] font-heading">Loading...</span>
@@ -100,18 +104,18 @@ export default function ObjectivesWidget({ onRefresh }) {
   const canClaim = allDone && !claimed;
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
+    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0 mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
-          <ListChecks size={10} />
+      <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 shrink-0 min-w-0 flex items-center justify-between gap-2">
+        <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5 min-w-0 truncate">
+          <ListChecks size={12} className="shrink-0 text-primary" />
           Today&apos;s Objectives
         </h2>
-        <Link to="/account/objectives" className="text-[9px] font-heading text-primary hover:text-primary/80 flex items-center gap-0.5">
+        <Link to="/account/objectives" className="text-[10px] font-heading text-primary hover:text-primary/80 flex items-center gap-0.5 shrink-0">
           All <ChevronRight size={10} />
         </Link>
       </div>
-      <div className="p-2 space-y-1.5">
+      <div className="px-3 py-2 space-y-1.5 flex-1 min-h-0 overflow-auto min-w-0">
         {daily.length === 0 ? (
           <p className="text-[10px] font-heading text-mutedForeground">No objectives today</p>
         ) : (
@@ -124,7 +128,7 @@ export default function ObjectivesWidget({ onRefresh }) {
             type="button"
             onClick={handleClaim}
             disabled={claiming}
-            className="w-full mt-1.5 px-2 py-1.5 rounded border border-primary/50 bg-primary/20 text-primary text-[10px] font-heading font-bold hover:bg-primary/30 disabled:opacity-50 transition-all"
+            className="w-full mt-1.5 px-3 py-2 rounded border border-primary/50 bg-primary/20 text-primary text-[10px] font-heading font-bold hover:bg-primary/30 disabled:opacity-50 transition-all"
           >
             {claiming ? 'Claiming...' : 'Claim rewards'}
           </button>

@@ -1209,6 +1209,7 @@ def register(router):
                 property_profit=0,
                 has_casino_or_property=False,
                 theme_preferences=u.get("theme_preferences"),
+                dashboard_preferences=u.get("dashboard_preferences"),
                 account_locked=bool(u.get("account_locked", False)),
                 account_locked_at=u.get("account_locked_at"),
                 account_locked_until=u.get("account_locked_until"),

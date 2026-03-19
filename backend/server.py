@@ -520,6 +520,7 @@ class UserResponse(BaseModel):
     property_profit: int = 0  # points from owned property (e.g. airport)
     has_casino_or_property: bool = False  # true if user owns a casino or property (airport, bullet factory, armory) — for menu visibility
     theme_preferences: Optional[Dict] = None  # saved theme (colour, font, etc.) for cross-device sync
+    dashboard_preferences: Optional[Dict] = None  # dashboard layout (section order, at_a_glance visibility/stats)
     account_locked: bool = False  # under investigation: only /locked page and one comment allowed
     account_locked_at: Optional[str] = None
     account_locked_until: Optional[str] = None  # when set, lock auto-expires at this time (e.g. test lock)
@@ -590,6 +591,13 @@ class ThemePreferencesRequest(BaseModel):
     sidebar_layout: Optional[str] = None
     mobile_nav_style: Optional[str] = None
     button_shape_id: Optional[str] = None
+
+
+class DashboardPreferencesRequest(BaseModel):
+    """Dashboard layout preferences (all optional). Omitted keys are left unchanged."""
+    section_order: Optional[List[str]] = None
+    at_a_glance_visible: Optional[bool] = None
+    at_a_glance_stats: Optional[List[str]] = None
 
 
 class ChangePasswordRequest(BaseModel):
