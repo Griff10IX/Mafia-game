@@ -23,6 +23,8 @@ import ObjectivesWidget from '../../components/dashboard/ObjectivesWidget';
 import NotificationsWidget from '../../components/dashboard/NotificationsWidget';
 import ActiveEventWidget from '../../components/dashboard/ActiveEventWidget';
 import AutoRankStatusWidget from '../../components/dashboard/AutoRankStatusWidget';
+import BodyguardsWidget from '../../components/dashboard/BodyguardsWidget';
+import MyPropertiesWidget from '../../components/dashboard/MyPropertiesWidget';
 
 const DASH_STYLES = `
   @keyframes dash-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -229,6 +231,11 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         <NotificationsWidget onRefresh={handleWidgetRefresh} />
         <ActiveEventWidget />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+        <BodyguardsWidget />
+        <MyPropertiesWidget />
       </div>
 
       <AutoRankStatusWidget user={user} />
