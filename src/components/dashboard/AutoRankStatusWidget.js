@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Bot, ChevronRight } from 'lucide-react';
 import api from '../../utils/api';
@@ -22,6 +22,7 @@ function secondsUntil(iso) {
 export default function AutoRankStatusWidget({ user }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [, setTick] = useState(0);
 
   const hasAutoRank = user?.auto_rank_purchased || user?.auto_rank_enabled;
 
@@ -36,12 +37,27 @@ export default function AutoRankStatusWidget({ user }) {
       .finally(() => setLoading(false));
   }, [hasAutoRank]);
 
+  const lastRefetchRef = useRef(0);
+  useEffect(() => {
+    if (!hasAutoRank || !stats) return;
+    const id = setInterval(() => {
+      setTick((t) => t + 1);
+      const next = secondsUntil(stats?.auto_rank_next_run_at);
+      if (next != null && next <= 0 && Date.now() - lastRefetchRef.current > 30_000) {
+        lastRefetchRef.current = Date.now();
+        api.get('/auto-rank/stats').then((r) => setStats(r.data)).catch(() => {});
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [hasAutoRank, stats]);
+
   if (!hasAutoRank || loading) return null;
 
   const inJail = stats?.in_jail ?? false;
   const activityDetail = stats?.activity_detail;
-  const jailSeconds = stats?.jail_seconds_remaining;
+  const jailUntil = stats?.jail_until;
   const nextRunAt = stats?.auto_rank_next_run_at;
+  const jailSeconds = secondsUntil(jailUntil);
   const nextCycleSeconds = secondsUntil(nextRunAt);
 
   let statusText = activityDetail || (inJail ? 'In jail — paused' : 'Running');

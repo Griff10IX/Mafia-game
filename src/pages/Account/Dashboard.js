@@ -21,7 +21,7 @@ import styles from '../../styles/noir.module.css';
 import DailyRewardsWidget from '../../components/dashboard/DailyRewardsWidget';
 import ObjectivesWidget from '../../components/dashboard/ObjectivesWidget';
 import NotificationsWidget from '../../components/dashboard/NotificationsWidget';
-import ActiveEventWidget from '../../components/dashboard/ActiveEventWidget';
+import EventOrStoreSlot from '../../components/dashboard/EventOrStoreSlot';
 import AutoRankStatusWidget from '../../components/dashboard/AutoRankStatusWidget';
 import BodyguardsWidget from '../../components/dashboard/BodyguardsWidget';
 import MyPropertiesWidget from '../../components/dashboard/MyPropertiesWidget';
@@ -230,7 +230,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         <NotificationsWidget onRefresh={handleWidgetRefresh} />
-        <ActiveEventWidget />
+        <EventOrStoreSlot user={user} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
