@@ -1265,6 +1265,11 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         except Exception as e:
             logging.exception("Promote after boss death: %s", e)
         try:
+            from routers.game.families import _invalidate_list_cache
+            _invalidate_list_cache()
+        except Exception:
+            pass
+        try:
             from routers.money.quicktrade import cancel_offers_on_death
             await cancel_offers_on_death(victim_id)
         except Exception as e:

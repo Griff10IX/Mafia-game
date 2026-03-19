@@ -1257,8 +1257,9 @@ def register(router):
             }, "$inc": {"total_deaths": 1}}
         )
         try:
-            from routers.game.families import maybe_promote_after_boss_death
+            from routers.game.families import maybe_promote_after_boss_death, _invalidate_list_cache
             await maybe_promote_after_boss_death(target["id"])
+            _invalidate_list_cache()
         except Exception as e:
             logging.exception("Promote after boss death: %s", e)
         try:

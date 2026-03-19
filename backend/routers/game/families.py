@@ -925,6 +925,7 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
     tag = (request.tag or "").strip().upper().replace(" ", "")[:4]
     if len(name) < 2 or len(tag) < 2:
         raise HTTPException(status_code=400, detail="Name and tag must be at least 2 characters")
+    await cleanup_dead_families()
     count = await db.families.count_documents({"wiped": {"$ne": True}})
     if count >= MAX_FAMILIES:
         raise HTTPException(status_code=400, detail="Maximum number of families reached")
