@@ -152,8 +152,8 @@ async def flush_telegram_alerts():
         logger.exception(f"Failed to send Telegram alert: {e}")
 
 
-async def send_telegram_to_chat(chat_id: str, message: str, bot_token: Optional[str] = None) -> bool:
-    """Send a message to a specific Telegram chat (e.g. for Auto Rank results). Uses user's bot_token if provided, else global TELEGRAM_BOT_TOKEN."""
+async def send_telegram_to_chat(chat_id: str, message: str, bot_token: Optional[str] = None, username: Optional[str] = None) -> bool:
+    """Send a message to a specific Telegram chat (e.g. for Auto Rank results). Uses user's bot_token if provided, else global TELEGRAM_BOT_TOKEN. username is optional, for logging when send fails."""
     chat_id = (chat_id or "").strip()
     if not chat_id:
         return False
@@ -171,13 +171,19 @@ async def send_telegram_to_chat(chat_id: str, message: str, bot_token: Optional[
                 json=payload,
             )
             if r.status_code == 400:
+                txt = (r.text or "").lower()
+                if "chat not found" in txt or "user is deactivated" in txt:
+                    user_part = f" user={username}" if username else ""
+                    logger.info("Telegram chat %s%s: %s (user may need to /start the bot or fix chat_id)", chat_id, user_part, r.text[:120])
+                    return False
                 payload.pop("parse_mode", None)
                 r = await client.post(
                     "https://api.telegram.org/bot{}/sendMessage".format(token),
                     json=payload,
                 )
             if r.status_code != 200:
-                logger.warning("Telegram sendMessage failed: %s %s", r.status_code, r.text[:200])
+                user_part = f" user={username}" if username else ""
+                logger.warning("Telegram sendMessage failed%s: %s %s", user_part, r.status_code, r.text[:200])
                 return False
         return True
     except Exception as e:

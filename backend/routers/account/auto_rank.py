@@ -441,7 +441,7 @@ async def _send_jail_notification(telegram_chat_id: str, username: str, reason: 
         return
     from middleware.security import send_telegram_to_chat
     msg = f"**Auto Rank** — {username}\n\n🔒 You're in jail ({reason}). {jail_seconds}s."
-    await send_telegram_to_chat(telegram_chat_id, msg, bot_token)
+    await send_telegram_to_chat(telegram_chat_id, msg, bot_token, username=username)
 
 
 # ─── Booze running ────────────────────────────────────────────────
@@ -678,7 +678,7 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
         if chat_id:
             msg = f"**Auto Rank** — {username}\n\n**Bust** — " + ". ".join(parts) + "."
             try:
-                await send_telegram_to_chat(chat_id, msg, token)
+                await send_telegram_to_chat(chat_id, msg, token, username=username)
             except Exception as e:
                 logger.warning("Auto rank bust Telegram send for %s failed (bust completed): %s", user_id, e)
     except Exception as e:
@@ -1063,7 +1063,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             lines.append(f"**Respect** — +{respect_gained} respect points.")
         lines.append("")
         try:
-            await send_telegram_to_chat(chat_id, "\n".join(lines), token or None)
+            await send_telegram_to_chat(chat_id, "\n".join(lines), token or None, username=username)
         except Exception as e:
             logger.warning("Auto rank Telegram send for %s failed (run completed): %s", user_id, e)
 
@@ -1114,7 +1114,7 @@ async def run_booze_arrivals():
             has_success = await _run_booze_for_user(db, u["id"], u.get("username", "?"), chat_id, bot_token, now, lines)
             if has_success and len(lines) > 2 and chat_id:
                 try:
-                    await send_telegram_to_chat(chat_id, "\n".join(lines), bot_token)
+                    await send_telegram_to_chat(chat_id, "\n".join(lines), bot_token, username=u.get("username", "?"))
                 except Exception as e:
                     logger.warning("Auto rank booze arrival Telegram send for %s failed: %s", u.get("id"), e)
         except HTTPException:
@@ -1310,7 +1310,7 @@ async def run_auto_rank_oc_once():
                 if chat_id and result.get("ran") is True and result.get("success") is True:
                     msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist done')}."
                     try:
-                        await send_telegram_to_chat(chat_id, msg, bot_token)
+                        await send_telegram_to_chat(chat_id, msg, bot_token, username=u.get("username", "?"))
                     except Exception as e:
                         logger.warning("Auto rank OC Telegram send for %s failed: %s", u.get("id"), e)
                 if result.get("ran"):
@@ -1486,9 +1486,10 @@ def register(router):
                 )
                 if start_user and (start_user.get("auto_rank_purchased") or start_user.get("auto_rank_enabled")):
                     reply = f"Hi {start_user.get('username', 'there')}! Use /autorank for your Auto Rank summary. Commands: /autorank /summary /enable /disable."
+                    await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None, username=start_user.get("username"))
                 else:
                     reply = "Welcome! Link your Chat ID in the game (Profile → Telegram). Get your ID from @userinfobot. Then use /autorank for your Auto Rank summary."
-                await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None)
+                    await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None)
                 return {"ok": True}
         except Exception as e:
             logger.exception("Telegram /start handler: %s", e)
@@ -1506,7 +1507,7 @@ def register(router):
             has_autorank = user.get("auto_rank_purchased") or user.get("auto_rank_enabled")
             if not has_autorank:
                 reply = "Auto Rank is not active on your account. Enable it in game (Store / Auto Rank) first."
-                await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None)
+                await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None, username=user.get("username"))
                 return {"ok": True}
 
             reply = None
@@ -1580,7 +1581,7 @@ def register(router):
                     reply = "Commands: /autorank or /summary — stats. /enable or /disable plus: all, crimes, gta, bust, oc, booze, melt, scrap. Example: /disable bust"
 
             if reply:
-                await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None)
+                await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None, username=user.get("username"))
             return {"ok": True}
         except Exception as e:
             logger.exception("Telegram webhook handler: %s", e)
