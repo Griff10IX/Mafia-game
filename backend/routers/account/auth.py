@@ -484,6 +484,7 @@ def register(router):
                     "v": user_doc.get("token_version", 0),
                     "email": user_doc.get("email") or "",
                     "session_id": session_id,
+                    "username": user_doc.get("username") or "",
                 })
                 user_response = {
                     "id": user_doc["id"],
@@ -544,6 +545,7 @@ def register(router):
                 "v": user_doc.get("token_version", 0),
                 "email": user_doc.get("email") or "",
                 "session_id": session_id,
+                "username": user_doc.get("username") or "",
             })
             user_response = {
                 "id": user_doc["id"],
@@ -812,6 +814,7 @@ def register(router):
             "v": user.get("token_version", 0),
             "email": user.get("email") or "",
             "session_id": session_id,
+            "username": user.get("username") or "",
         })
         
         # Release any pending preorder points if release date has passed
@@ -983,6 +986,7 @@ def register(router):
             "v": user.get("token_version", 0),
             "email": user.get("email") or "",
             "session_id": session_id,
+            "username": user.get("username") or "",
         })
         user_response = {k: v for k, v in user.items() if k not in ("password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used")}
         return {

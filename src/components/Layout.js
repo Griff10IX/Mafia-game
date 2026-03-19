@@ -1700,17 +1700,24 @@ export default function Layout({ children }) {
           )}
           <div data-layout="right-sidebar" className={`fixed right-0 w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${isMobileViewport ? (rightSidebarOpen ? 'translate-x-0' : 'translate-x-full') : 'translate-x-0'} ${isMobileViewport ? 'top-0 h-full' : 'md:top-0 md:h-full'}`} style={sidebarBgStyle}>
 
-            {/* IMPROVEMENT 4: username + rank in header */}
-            <div className={`h-12 flex items-center justify-between px-2.5 border-b ${styles.borderGoldLight} shrink-0 gap-2`}>
-              <div className="flex items-center gap-1.5 min-w-0">
-                <User size={13} style={{ color: 'var(--noir-primary)', flexShrink: 0 }} />
-                <span className="text-[11px] font-heading font-bold truncate" style={{ color: 'var(--noir-primary)' }}>{user.username || 'Profile'}</span>
+            {/* IMPROVEMENT 4: username + rank in header; page + user for logs */}
+            <div className={`flex flex-col px-2.5 py-1.5 border-b ${styles.borderGoldLight} shrink-0 gap-0.5`}>
+              <div className="flex items-center justify-between gap-2 min-h-[28px]">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <User size={13} style={{ color: 'var(--noir-primary)', flexShrink: 0 }} />
+                  <span className="text-[11px] font-heading font-bold truncate" style={{ color: 'var(--noir-primary)' }}>{user.username || 'Profile'}</span>
+                </div>
+                <span className="text-[9px] font-heading uppercase tracking-wider shrink-0" style={{ color: 'var(--noir-muted)' }}>{user.rank_name || rankProgress?.current_rank_name || ''}</span>
+                {isMobileViewport && (
+                  <button type="button" onClick={() => setRightSidebarOpen(false)}
+                    className="min-w-[44px] min-h-[44px] -m-1 flex items-center justify-center rounded touch-manipulation active:scale-95 transition-transform"
+                    style={{ color: 'var(--noir-primary)' }} aria-label="Close stats panel"><X size={22} /></button>
+                )}
               </div>
-              <span className="text-[9px] font-heading uppercase tracking-wider shrink-0" style={{ color: 'var(--noir-muted)' }}>{user.rank_name || rankProgress?.current_rank_name || ''}</span>
-              {isMobileViewport && (
-                <button type="button" onClick={() => setRightSidebarOpen(false)}
-                  className="min-w-[44px] min-h-[44px] -m-1 flex items-center justify-center rounded touch-manipulation active:scale-95 transition-transform"
-                  style={{ color: 'var(--noir-primary)' }} aria-label="Close stats panel"><X size={22} /></button>
+              {user && (
+                <p className="text-[9px] font-heading truncate" style={{ color: 'var(--noir-muted)' }} title={`Page: ${location.pathname} | User: ${user?.username || '—'}`}>
+                  Page: {location.pathname || '/'} · User: {user?.username || '—'}
+                </p>
               )}
             </div>
 

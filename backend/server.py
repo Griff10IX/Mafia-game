@@ -657,6 +657,7 @@ DEAD_ACCOUNT_WHITELIST = {
 JAIL_WHITELIST_EXACT = {
     "/api/auth/me",
     "/api/user/rank-progress",
+    "/api/bodyguards",
 }
 JAIL_WHITELIST_PREFIXES = (
     "/api/jail/",
@@ -1758,6 +1759,12 @@ try:
     app.add_middleware(SecurityMiddleware, db=db)
 except ImportError:
     print("Warning: security_middleware.py not found - rate limiting disabled")
+
+try:
+    from middleware.request_logging import RequestLoggingMiddleware
+    app.add_middleware(RequestLoggingMiddleware)
+except ImportError:
+    pass
 
 app.add_middleware(OPTIONSResponder)
 app.add_middleware(
