@@ -49,26 +49,28 @@ const ObjectiveRow = ({ obj, delay = 0 }) => {
         {obj.done ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Circle className="w-4 h-4 text-mutedForeground" />}
       </span>
       <p className="text-[11px] font-heading text-foreground min-w-0 flex-1 break-words line-clamp-3">{obj.label}</p>
-      <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-        <div className="relative w-14 sm:w-16 h-1.5 bg-secondary rounded-full overflow-hidden border border-primary/20 shrink-0">
-          <div
-            className="absolute top-0 left-0 h-full rounded-full transition-all duration-300"
-            style={{
-              width: `${progressPct}%`,
-              minWidth: progressPct > 0 ? 2 : 0,
-              background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))',
-            }}
-            role="progressbar"
-            aria-valuenow={obj.current}
-            aria-valuemin={0}
-            aria-valuemax={obj.target}
-          />
+      <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 w-full sm:w-auto shrink-0 min-w-0">
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="relative w-14 sm:w-16 h-1.5 bg-secondary rounded-full overflow-hidden border border-primary/20 shrink-0">
+            <div
+              className="absolute top-0 left-0 h-full rounded-full transition-all duration-300"
+              style={{
+                width: `${progressPct}%`,
+                minWidth: progressPct > 0 ? 2 : 0,
+                background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))',
+              }}
+              role="progressbar"
+              aria-valuenow={obj.current}
+              aria-valuemin={0}
+              aria-valuemax={obj.target}
+            />
+          </div>
+          <span className="text-[10px] font-heading font-bold text-primary tabular-nums shrink-0 text-right">
+            {Number(obj.current).toLocaleString()}/{Number(obj.target).toLocaleString()}
+          </span>
         </div>
-        <span className="text-[10px] font-heading font-bold text-primary tabular-nums shrink-0 text-right">
-          {Number(obj.current).toLocaleString()}/{Number(obj.target).toLocaleString()}
-        </span>
         {obj.reward && (
-          <span className="text-[9px] text-mutedForeground font-heading shrink-0 whitespace-nowrap ml-1" title={formatReward(obj.reward)}>
+          <span className="text-[9px] text-mutedForeground font-heading break-words min-w-0" title={formatReward(obj.reward)}>
             {formatReward(obj.reward)}
           </span>
         )}
@@ -163,7 +165,7 @@ export default function Objectives() {
   };
 
   return (
-    <div className={`space-y-3 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden`} data-testid="objectives-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="objectives-page">
       <style>{OBJ_STYLES}</style>
 
       <p className="text-[11px] text-zinc-500 font-heading italic break-words">Complete daily, weekly, and monthly goals for extra rewards. New objectives each period.</p>

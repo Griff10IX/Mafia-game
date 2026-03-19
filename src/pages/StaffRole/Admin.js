@@ -2881,7 +2881,7 @@ export default function Admin() {
   const Select = AdminSelect;
 
   return (
-    <div className={`space-y-4 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden`} style={{ padding: '12px 14px', maxWidth: 1400, margin: '0 auto' }} data-testid="admin-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="admin-page">
       <style>{ADMIN_STYLES}</style>
       <div className="relative admin-fade-in flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[10px] text-zinc-500 font-heading italic">Use with caution</p>

@@ -298,7 +298,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} style={{ padding: '12px 14px', maxWidth: 900, margin: '0 auto' }}>
+      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{DASH_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -396,7 +396,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className={`space-y-3 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden`} style={{ padding: '12px 14px', maxWidth: 900, margin: '0 auto' }} data-testid="dashboard-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="dashboard-page">
       <style>{DASH_STYLES}</style>
 
       <div className="flex items-center justify-between gap-2">
