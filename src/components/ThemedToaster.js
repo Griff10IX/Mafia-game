@@ -184,6 +184,7 @@ export function ThemedToaster() {
         closeButton={closeButton}
         style={toasterStyle}
         toastOptions={toastOptions}
+        limit={3}
       />
     </>
   );

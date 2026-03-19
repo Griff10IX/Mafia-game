@@ -7,7 +7,7 @@ export default function ServerUnavailableOverlay() {
   const [visible, setVisible] = useState(false);
   const [countdown, setCountdown] = useState(REFRESH_SECONDS);
   const lastShownRef = useRef(0);
-  const DEBOUNCE_MS = 3000;
+  const DEBOUNCE_MS = 8000; // Avoid re-showing overlay when many requests fail in quick succession
 
   useEffect(() => {
     let timerId = null;

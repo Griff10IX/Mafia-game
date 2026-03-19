@@ -77,6 +77,9 @@ export const AUTH_ERROR_KEY = 'auth_profile_error';
 /** Event to show full-screen "server restarted" overlay with auto-refresh. Dispatched on 502/503/504 or network error. */
 export const SERVER_UNAVAILABLE_EVENT = 'app:server-unavailable';
 
+let _lastServerUnavailableDispatch = 0;
+const _SERVER_UNAVAILABLE_THROTTLE_MS = 30_000; // Only dispatch once per 30s to avoid overlay + toast spam
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -147,9 +150,14 @@ api.interceptors.response.use(
       error.response = { status: 0, data: { detail: NETWORK_ERROR_MSG } };
     }
     // Show full-screen overlay for server-down scenarios (skip 401/403 — those redirect)
+    // Throttle: only dispatch once per 30s to avoid overlay + toast spam when many requests fail at once
     const status = error.response?.status;
     if ((status === 0 || isServerUnavailable(status)) && typeof window !== 'undefined' && !isPublicPath()) {
-      window.dispatchEvent(new CustomEvent(SERVER_UNAVAILABLE_EVENT));
+      const now = Date.now();
+      if (now - _lastServerUnavailableDispatch >= _SERVER_UNAVAILABLE_THROTTLE_MS) {
+        _lastServerUnavailableDispatch = now;
+        window.dispatchEvent(new CustomEvent(SERVER_UNAVAILABLE_EVENT));
+      }
     }
     return Promise.reject(error);
   }
