@@ -616,13 +616,10 @@ def _invalidate_my_cache(user_id: str):
 
 # ============ Routes ============
 async def families_list(current_user: dict = Depends(get_current_user)):
-    global _list_cache
-    now_ts = time.monotonic()
     marked = await cleanup_dead_families()
     if marked:
         _invalidate_list_cache()
-    if _list_cache is not None and _list_cache[1] > now_ts:
-        return _list_cache[0]
+    # No in-memory cache: multi-worker setups would show stale data (e.g. deleted families) until TTL
     cursor = db.families.find({"wiped": {"$ne": True}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "join_mode": 1})
     fams = await cursor.to_list(MAX_FAMILIES * 2)
     out = []
@@ -652,7 +649,6 @@ async def families_list(current_user: dict = Depends(get_current_user)):
     for f in out:
         if f["id"] in at_war_fids:
             f["at_war"] = True
-    _list_cache = (out, now_ts + _list_cache_ttl_sec)
     return out
 
 

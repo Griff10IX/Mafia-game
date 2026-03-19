@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Link2, KeyRound, DollarSign, UserPlus, Crosshair, Building2, Car, Wine, BarChart3, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../utils/api';
 import styles from '../../styles/noir.module.css';
@@ -60,9 +61,34 @@ export default function PreRegister() {
     return () => clearInterval(interval);
   }, [launchStatus.lockUntil, calculateCountdown]);
 
+  const [redeemCodeInput, setRedeemCodeInput] = useState('');
+  const [redeemLoading, setRedeemLoading] = useState(false);
+
   const handleCreateAccount = () => {
-    // Navigate to dedicated register route that bypasses preregister redirect
     navigate('/register');
+  };
+
+  const copyReferralPlaceholder = () => {
+    const url = typeof window !== 'undefined' ? `${window.location.origin}/?ref=YourUsername` : 'https://mafiawars.co.uk/?ref=YourUsername';
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(() => toast.success('Create account to get your personal link'));
+    }
+  };
+
+  const handleRedeem = async () => {
+    const code = (redeemCodeInput || '').trim();
+    if (!code) { toast.error('Enter a code'); return; }
+    setRedeemLoading(true);
+    try {
+      const res = await api.post('/account/redeem', { code });
+      const granted = res.data?.granted?.length ? res.data.granted.join(', ') : 'Rewards granted';
+      toast.success(`Redeemed: ${granted}`);
+      setRedeemCodeInput('');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Create an account first to redeem codes');
+    } finally {
+      setRedeemLoading(false);
+    }
   };
 
   return (
@@ -252,6 +278,127 @@ export default function PreRegister() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Referral & Redeem — same layout as Referral page */}
+          <div className="mt-8 space-y-2 sm:space-y-4 fade-up-3">
+            <div className={`${styles.panel} rounded-lg overflow-hidden`}>
+              <div className="px-2.5 sm:px-3 py-2 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.15)' }}>
+                <h2 className="text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--noir-primary)' }}>
+                  <Link2 size={14} /> Your referral link
+                </h2>
+              </div>
+              <div className="p-2.5 sm:p-3 space-y-2">
+                <p className="text-[9px] sm:text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                  When someone signs up with this link, they&apos;re linked as referred by you. You earn rewards when they play (game-paid, not taken from them).
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={typeof window !== 'undefined' ? `${window.location.origin}/?ref=YourUsername` : 'https://mafiawars.co.uk/?ref=YourUsername'}
+                    className="flex-1 min-w-0 px-2.5 py-2 rounded bg-zinc-900/50 border border-zinc-700/50 text-foreground text-[11px] sm:text-sm font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={copyReferralPlaceholder}
+                    className="px-3 py-2 rounded-md font-heading font-bold text-[10px] sm:text-xs flex items-center gap-1.5"
+                    style={{ backgroundColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.2)', color: 'var(--noir-primary)' }}
+                  >
+                    <Copy size={12} /> Copy link
+                  </button>
+                </div>
+                <p className="text-[9px] font-heading" style={{ color: 'var(--noir-muted)' }}>Create an account to get your personal referral link.</p>
+              </div>
+            </div>
+
+            <div className={`${styles.panel} rounded-lg overflow-hidden`}>
+              <div className="px-2.5 sm:px-3 py-2 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.15)' }}>
+                <h2 className="text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--noir-primary)' }}>
+                  <KeyRound size={14} /> Redeem a code
+                </h2>
+              </div>
+              <div className="p-2.5 sm:p-3 space-y-2">
+                <p className="text-[9px] sm:text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                  Enter a reward code to claim cash, points, cars, tokens, or loot pieces. Each code can only be used once per account.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={redeemCodeInput}
+                    onChange={(e) => setRedeemCodeInput(e.target.value)}
+                    placeholder="Enter code"
+                    className="flex-1 min-w-0 px-2.5 py-2 rounded bg-zinc-900/50 border border-zinc-700/50 text-foreground text-[11px] sm:text-sm font-mono placeholder:text-zinc-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRedeem}
+                    disabled={redeemLoading}
+                    className="px-3 py-2 rounded-md font-heading font-bold text-[10px] sm:text-xs flex items-center gap-1.5 disabled:opacity-50"
+                    style={{ backgroundColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.2)', color: 'var(--noir-primary)' }}
+                  >
+                    {redeemLoading ? '...' : 'Redeem'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className={`${styles.panel} rounded-lg overflow-hidden`}>
+              <div className="px-2.5 sm:px-3 py-2 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.15)' }}>
+                <h2 className="text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--noir-primary)' }}>
+                  <DollarSign size={14} /> When someone uses your link you earn
+                </h2>
+              </div>
+              <div className="p-2.5 sm:p-3">
+                <ul className="text-[9px] sm:text-[10px] font-heading space-y-1 list-disc list-inside" style={{ color: 'var(--noir-muted)' }}>
+                  <li>10% of their bullets from melting cars</li>
+                  <li>5% of their crime profit (cash)</li>
+                  <li>5% of their OC heist profit (cash)</li>
+                  <li>5% of their garage scrap profit (cash)</li>
+                  <li>2% of their booze profit (cash)</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className={`${styles.panel} rounded-lg overflow-hidden`}>
+              <div className="px-2.5 sm:px-3 py-2 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.15)' }}>
+                <h2 className="text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--noir-primary)' }}>
+                  <UserPlus size={14} /> What referred users get
+                </h2>
+              </div>
+              <div className="p-2.5 sm:p-3">
+                <p className="text-[9px] sm:text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                  People who sign up with your link get: free premium rank bar, 500 respect, 18 tokens (non-tradeable), 2% higher crime payouts, and a slight GTA rare car boost.
+                </p>
+              </div>
+            </div>
+
+            <div className={`${styles.panel} rounded-lg overflow-hidden`}>
+              <div className="px-2.5 sm:px-3 py-2 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.15)' }}>
+                <h2 className="text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--noir-primary)' }}>
+                  <BarChart3 size={14} /> Your earnings
+                </h2>
+              </div>
+              <div className="p-2.5 sm:p-3 space-y-3">
+                <p className="text-[9px] sm:text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>Example lifetime totals from referred users</p>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {[
+                    { label: 'Melt bullets', value: '4', valueColor: 'text-amber-400', Icon: Crosshair },
+                    { label: 'Crime profit', value: '$6,516', valueColor: 'text-emerald-400', Icon: DollarSign },
+                    { label: 'OC profit', value: '$26,424', valueColor: 'text-emerald-400', Icon: Building2 },
+                    { label: 'Garage scrap', value: '$4,232', valueColor: 'text-emerald-400', Icon: Car },
+                    { label: 'Booze profit', value: '$22,609', valueColor: 'text-emerald-400', Icon: Wine },
+                  ].map(({ label, value, valueColor, Icon }) => (
+                    <div key={label} className="p-2 sm:p-3 rounded border text-center" style={{ backgroundColor: 'rgba(0,0,0,0.2)', borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.15)' }}>
+                      <div className={`text-base sm:text-lg font-heading font-bold ${valueColor}`}>{value}</div>
+                      <div className="text-[9px] sm:text-[10px] font-heading uppercase tracking-wider flex items-center justify-center gap-1 mt-0.5" style={{ color: 'var(--noir-muted)' }}>
+                        <Icon size={10} /> {label}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
