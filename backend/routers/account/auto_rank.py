@@ -118,28 +118,35 @@ def _parse_iso(s):
         return None
 
 
+def _is_car_usable(uc: dict) -> bool:
+    """True if car has damage < 100 (or no damage field)."""
+    dmg = uc.get("damage_percent")
+    if dmg is None:
+        return True
+    try:
+        return float(dmg) < 100
+    except (TypeError, ValueError):
+        return True
+
+
 async def _get_travel_method(db, user_id: str) -> Optional[str]:
     """Find the fastest travel method for a user: custom car first, then fastest non-destroyed car by rarity. Used for booze (cars only, no airport)."""
     import server as srv
     CARS = getattr(srv, "CARS", None) or []
     TRAVEL_TIMES = getattr(srv, "TRAVEL_TIMES", None) or {}
-    # Match damage < 100 OR missing damage_percent (legacy cars)
-    damage_ok = {"$or": [{"damage_percent": {"$lt": 100}}, {"damage_percent": {"$exists": False}}]}
-    custom = await db.user_cars.find_one({"user_id": user_id, "car_id": "car_custom", **damage_ok}, {"_id": 1, "id": 1})
+    # Fetch all cars; filter in Python to avoid MongoDB query quirks (legacy docs, type coercion)
+    cursor = db.user_cars.find({"user_id": user_id}, {"_id": 1, "id": 1, "car_id": 1, "damage_percent": 1})
+    all_cars = await cursor.to_list(50)
+    usable = [uc for uc in all_cars if _is_car_usable(uc)]
+    if not usable:
+        return None
+    # Prefer custom first (fastest non-exclusive)
+    custom = next((uc for uc in usable if uc.get("car_id") == "car_custom"), None)
     if custom:
         return "custom"
-    cursor = db.user_cars.find({"user_id": user_id, **damage_ok}, {"_id": 1, "id": 1, "car_id": 1})
-    cars = await cursor.to_list(50)
-    # #region agent log
-    total_any = await db.user_cars.count_documents({"user_id": user_id})
-    sample = [{"car_id": c.get("car_id"), "id": c.get("id"), "dmg": c.get("damage_percent")} for c in (cars[:3] if cars else [])]
-    _debug_log("auto_rank.py:_get_travel_method", "Car lookup", {"user_id": user_id[:8], "custom_found": bool(custom), "cars_count": len(cars), "total_any": total_any, "sample": sample}, "H7")
-    # #endregion
-    if not cars:
-        return None
     best_car = None
     best_time = 999
-    for uc in cars:
+    for uc in usable:
         if uc.get("car_id") == "car_custom":
             continue
         car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
