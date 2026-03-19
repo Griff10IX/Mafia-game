@@ -1321,16 +1321,32 @@ def get_wealth_rank_range(money: int | float) -> str:
 
 # Bullet reward per rank up (flat 5000 bullets each time you rank up)
 RANK_UP_BULLET_REWARD = 5000
-# Respect points per rank up (random 5–25 per rank tier)
-RANK_UP_RESPECT_MIN = 5
-RANK_UP_RESPECT_MAX = 25
+# Respect when you *reach* each rank id (2 = first promotion from Rat). Scales up so high ranks feel meaningful.
+# If you skip multiple ranks in one update, you get the sum for each tier crossed.
+RANK_UP_RESPECT_BY_REACHED_RANK = {
+    2: 80,
+    3: 150,
+    4: 260,
+    5: 400,
+    6: 580,
+    7: 800,
+    8: 1050,
+    9: 1350,
+    10: 1700,
+    11: 2100,
+    12: 2550,
+    13: 3000,
+}
 
 async def check_and_process_rank_up(user_id: str, old_rank: int, new_rank: int, username: str = ""):
     """Process rank up: give bullets and respect, send inbox notification."""
     if new_rank > old_rank:
         num_ranks = new_rank - old_rank
         total_bullets = RANK_UP_BULLET_REWARD * num_ranks
-        total_respect = sum(random.randint(RANK_UP_RESPECT_MIN, RANK_UP_RESPECT_MAX) for _ in range(num_ranks))
+        total_respect = sum(
+            int(RANK_UP_RESPECT_BY_REACHED_RANK.get(r, 0))
+            for r in range(old_rank + 1, new_rank + 1)
+        )
 
         inc = {"bullets": total_bullets}
         if total_respect > 0:
