@@ -295,6 +295,7 @@ async def ensure_all_indexes(db):
         await db.designer_competition_votes.create_index([("competition_id", 1), ("user_id", 1)], unique=True)
         await db.designer_competition_votes.create_index("competition_id")
         await db.designer_competition_votes.create_index("entry_id")
+        await db.designer_competition_votes.create_index([("competition_id", 1), ("entry_id", 1)])
 
         # --- Racket / extortions ---
         await db.extortions.create_index([("extorter_id", 1), ("target_id", 1), ("property_id", 1)])

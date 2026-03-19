@@ -3280,6 +3280,22 @@ async def get_race_track_records(current_user: dict = Depends(get_current_user))
 
 async def _update_track_records(race_id: str, track_id: str, lap_results: list, participants: list):
     """After a race completes, update global and personal lap records."""
+    global_rec = await db.racing_records.find_one({"track_id": track_id, "type": "global"}, {"_id": 0})
+    human_eids = []
+    for entrant_laps in lap_results:
+        eid = entrant_laps.get("entrant_id")
+        entrant = next((p for p in participants if (p.get("user_id") or p.get("id")) == eid), None)
+        if entrant and not entrant.get("is_npc") and eid:
+            human_eids.append(eid)
+    human_eids = list(dict.fromkeys(human_eids))
+    personal_by_uid: Dict[str, dict] = {}
+    if human_eids:
+        async for doc in db.racing_records.find(
+            {"track_id": track_id, "type": "personal", "user_id": {"$in": human_eids}},
+            {"_id": 0},
+        ):
+            personal_by_uid[doc["user_id"]] = doc
+
     for entrant_laps in lap_results:
         eid = entrant_laps.get("entrant_id")
         laps = entrant_laps.get("laps") or []
@@ -3290,27 +3306,34 @@ async def _update_track_records(race_id: str, track_id: str, lap_results: list, 
             lap_time = float(lap_data.get("time") or lap_data.get("lap_time") or 999)
             if lap_time <= 0 or lap_time >= 999:
                 continue
-            # Global record
-            global_rec = await db.racing_records.find_one({"track_id": track_id, "type": "global"}, {"_id": 0})
+            # Global record (one in-memory read per lap; refresh after beat)
             if not global_rec or lap_time < float(global_rec.get("best_lap") or 999):
+                best = round(lap_time, 3)
                 await db.racing_records.update_one(
                     {"track_id": track_id, "type": "global"},
-                    {"$set": {"best_lap": round(lap_time, 3), "user_id": eid, "username": username,
+                    {"$set": {"best_lap": best, "user_id": eid, "username": username,
                               "race_id": race_id, "set_at": _now_iso()}},
                     upsert=True,
                 )
+                global_rec = {
+                    "best_lap": best, "user_id": eid, "username": username,
+                    "race_id": race_id, "set_at": _now_iso(),
+                }
             # Personal record (skip NPCs)
-            if not is_npc:
-                personal_rec = await db.racing_records.find_one(
-                    {"track_id": track_id, "type": "personal", "user_id": eid}, {"_id": 0}
-                )
+            if not is_npc and eid:
+                personal_rec = personal_by_uid.get(eid)
                 if not personal_rec or lap_time < float(personal_rec.get("best_lap") or 999):
+                    best = round(lap_time, 3)
                     await db.racing_records.update_one(
                         {"track_id": track_id, "type": "personal", "user_id": eid},
-                        {"$set": {"best_lap": round(lap_time, 3), "username": username,
+                        {"$set": {"best_lap": best, "username": username,
                                   "race_id": race_id, "set_at": _now_iso()}},
                         upsert=True,
                     )
+                    personal_by_uid[eid] = {
+                        "best_lap": best, "user_id": eid, "username": username,
+                        "race_id": race_id, "set_at": _now_iso(),
+                    }
 
 
 async def get_race_season_stats(current_user: dict = Depends(get_current_user_verified)):

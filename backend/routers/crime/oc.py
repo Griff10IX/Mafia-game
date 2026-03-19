@@ -222,16 +222,26 @@ async def get_oc_status(current_user: dict = Depends(get_current_user)):
             {"pending_heist_id": pending["id"]},
             {"_id": 0, "id": 1, "role": 1, "target_username": 1, "status": 1, "expires_at": 1}
         ).to_list(10)
+        invite_ids_to_expire = []
         for inv in invites:
             exp = inv.get("expires_at")
             if exp:
                 try:
                     exp_dt = _parse_iso_datetime(exp)
                     if exp_dt and exp_dt <= now and inv.get("status") == "pending":
-                        await db.oc_invites.update_one({"id": inv["id"]}, {"$set": {"status": "expired"}})
-                        inv["status"] = "expired"
+                        invite_ids_to_expire.append(inv["id"])
                 except Exception:
                     pass
+        if invite_ids_to_expire:
+            await db.oc_invites.update_many(
+                {"id": {"$in": invite_ids_to_expire}},
+                {"$set": {"status": "expired"}},
+            )
+            expired_set = set(invite_ids_to_expire)
+            for inv in invites:
+                if inv.get("id") in expired_set:
+                    inv["status"] = "expired"
+        for inv in invites:
             out["pending_invites"].append({
                 "invite_id": inv["id"],
                 "role": inv.get("role"),

@@ -342,12 +342,40 @@ async def list_entries(comp_id: str, current_user: dict = Depends(get_current_us
     if not comp:
         raise HTTPException(status_code=404, detail="Competition not found")
     entries = await db.designer_competition_entries.find({"competition_id": comp_id}, {"_id": 0}).sort("created_at", 1).to_list(100)
+    comment_ids = list({e["comment_id"] for e in entries if e.get("comment_id")})
+    topic_ids = list({e["topic_id"] for e in entries if e.get("topic_id")})
+    entry_ids = [e["id"] for e in entries if e.get("id")]
+
+    comments_map = {}
+    if comment_ids:
+        async for c in db.forum_comments.find(
+            {"id": {"$in": comment_ids}},
+            {"_id": 0, "id": 1, "gif_url": 1, "content": 1},
+        ):
+            comments_map[c["id"]] = c
+    topics_map = {}
+    if topic_ids:
+        async for t in db.forum_topics.find(
+            {"id": {"$in": topic_ids}},
+            {"_id": 0, "id": 1, "title": 1, "gif_url": 1},
+        ):
+            topics_map[t["id"]] = t
+
+    vote_counts = {eid: 0 for eid in entry_ids}
+    if entry_ids:
+        pipeline = [
+            {"$match": {"competition_id": comp_id, "entry_id": {"$in": entry_ids}}},
+            {"$group": {"_id": "$entry_id", "count": {"$sum": 1}}},
+        ]
+        async for row in db.designer_competition_votes.aggregate(pipeline):
+            vote_counts[row["_id"]] = int(row.get("count") or 0)
+
     out = []
     for e in entries:
         gif_url = None
         title = "Entry"
         if e.get("comment_id"):
-            comment = await db.forum_comments.find_one({"id": e["comment_id"]}, {"_id": 0, "gif_url": 1, "content": 1})
+            comment = comments_map.get(e["comment_id"])
             if comment:
                 gif_url = comment.get("gif_url")
                 raw_content = comment.get("content") or ""
@@ -361,11 +389,11 @@ async def list_entries(comp_id: str, current_user: dict = Depends(get_current_us
                     else:
                         title = (raw_content[:80] or "Entry").strip() or "Entry"
         elif e.get("topic_id"):
-            topic = await db.forum_topics.find_one({"id": e["topic_id"]}, {"_id": 0, "title": 1, "gif_url": 1})
+            topic = topics_map.get(e["topic_id"])
             if topic:
                 gif_url = topic.get("gif_url")
                 title = topic.get("title") or "Entry"
-        vote_count = await db.designer_competition_votes.count_documents({"entry_id": e["id"]})
+        vote_count = vote_counts.get(e.get("id"), 0)
         out.append({
             "id": e["id"],
             "comment_id": e.get("comment_id"),

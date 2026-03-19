@@ -1174,9 +1174,17 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     # Fallback: robot user doc has bodyguard_owner_id if bodyguard collection doc missing
                     if not victim_as_bodyguard and target.get("bodyguard_owner_id"):
                         victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"], "hire_cost": 0}]
+                    owner_ids_bg = list({bg["user_id"] for bg in victim_as_bodyguard if bg.get("user_id")})
+                    owner_map_bg: Dict[str, dict] = {}
+                    if owner_ids_bg:
+                        async for u in db.users.find(
+                            {"id": {"$in": owner_ids_bg}},
+                            {"_id": 0, "id": 1, "username": 1, "family_id": 1},
+                        ):
+                            owner_map_bg[u["id"]] = u
                     for bg in victim_as_bodyguard:
                         owner_id = bg["user_id"]
-                        owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
+                        owner_doc = owner_map_bg.get(owner_id)
                         bg_hire_cost = int(bg.get("hire_cost") or 0)
                         delete_criteria = {"user_id": owner_id, "bodyguard_user_id": victim_id}
                         if bg.get("id"):
@@ -1228,9 +1236,18 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             car_info = next((c for c in CARS if c["id"] == uc.get("car_id")), None)
             if car_info and car_info.get("rarity") == "exclusive":
                 exclusive_car_count += 1
+        prop_id_list = list({up["property_id"] for up in victim_props if up.get("property_id")})
+        prop_docs_by_id = {}
+        if prop_id_list:
+            async for p in db.properties.find(
+                {"id": {"$in": prop_id_list}},
+                {"_id": 0, "id": 1, "name": 1},
+            ):
+                prop_docs_by_id[p["id"]] = p
         prop_name_counts = {}
         for up in victim_props:
-            p = await db.properties.find_one({"id": up["property_id"]}, {"_id": 0, "name": 1})
+            pid = up.get("property_id")
+            p = prop_docs_by_id.get(pid) if pid else None
             if p:
                 name = p["name"]
                 prop_name_counts[name] = prop_name_counts.get(name, 0) + 1

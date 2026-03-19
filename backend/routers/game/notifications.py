@@ -95,11 +95,29 @@ def register(router):
         entry = _list_cache.get(user_id)
         if entry and (now_ts - entry["ts"]) < _LIST_TTL_SEC:
             return entry["data"]
-        notifications = await db.notifications.find(
-            {"user_id": user_id},
-            {"_id": 0}
-        ).sort("created_at", -1).to_list(50)
-        unread_count = await db.notifications.count_documents({"user_id": user_id, "read": False})
+        agg = await db.notifications.aggregate(
+            [
+                {"$match": {"user_id": user_id}},
+                {
+                    "$facet": {
+                        "notifications": [
+                            {"$sort": {"created_at": -1}},
+                            {"$limit": 50},
+                        ],
+                        "unread": [
+                            {"$match": {"read": False}},
+                            {"$count": "n"},
+                        ],
+                    }
+                },
+            ]
+        ).to_list(length=1)
+        row = agg[0] if agg else {}
+        notifications = list(row.get("notifications") or [])
+        for doc in notifications:
+            doc.pop("_id", None)
+        ur = row.get("unread") or []
+        unread_count = int(ur[0].get("n", 0)) if ur else 0
         out = {"notifications": notifications, "unread_count": unread_count}
         if len(_list_cache) < _LIST_MAX_ENTRIES:
             _list_cache[user_id] = {"ts": now_ts, "data": out}
