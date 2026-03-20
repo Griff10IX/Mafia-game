@@ -6,6 +6,7 @@ import time
 import secrets
 _rng = secrets.SystemRandom()
 import os
+import re
 import uuid
 from pathlib import Path
 from typing import List, Optional
@@ -73,6 +74,68 @@ THESPORTSDB_LEAGUE_BOXING = 4445
 _sports_live_cache = {"football": [], "ufc": [], "boxing": [], "f1": [], "updated_at": 0.0}
 
 
+def _sports_odds_cache_ttl_sec() -> int:
+    try:
+        return max(120, int(os.environ.get("SPORTS_ODDS_CACHE_TTL_SEC", "1800")))
+    except ValueError:
+        return 1800
+
+
+def _sports_odds_scores_cache_ttl_sec() -> int:
+    try:
+        return max(60, int(os.environ.get("SPORTS_ODDS_SCORES_CACHE_TTL_SEC", "900")))
+    except ValueError:
+        return 900
+
+
+def _sports_odds_fetch_concurrency() -> int:
+    try:
+        return max(1, min(12, int(os.environ.get("SPORTS_ODDS_FETCH_CONCURRENCY", "4"))))
+    except ValueError:
+        return 4
+
+
+async def _odds_cache_read_list_if_fresh(cache_key: str, ttl_sec: int) -> list | None:
+    try:
+        doc = await db.sports_odds_api_cache.find_one({"cache_key": cache_key}, {"_id": 0, "fetched_at": 1, "http_status": 1, "payload": 1})
+        if not doc or doc.get("http_status") != 200:
+            return None
+        fetched = doc.get("fetched_at")
+        if fetched is None:
+            return None
+        if isinstance(fetched, str):
+            try:
+                fetched = datetime.fromisoformat(fetched.replace("Z", "+00:00"))
+            except Exception:
+                return None
+        if getattr(fetched, "tzinfo", None) is None:
+            fetched = fetched.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) - fetched > timedelta(seconds=ttl_sec):
+            return None
+        pl = doc.get("payload")
+        return pl if isinstance(pl, list) else None
+    except Exception:
+        return None
+
+
+async def _odds_cache_write_list(cache_key: str, status_code: int, payload: list) -> None:
+    try:
+        await db.sports_odds_api_cache.update_one(
+            {"cache_key": cache_key},
+            {
+                "$set": {
+                    "cache_key": cache_key,
+                    "fetched_at": datetime.now(timezone.utc),
+                    "http_status": int(status_code),
+                    "payload": payload if isinstance(payload, list) else [],
+                }
+            },
+            upsert=True,
+        )
+    except Exception as ex:
+        logger.warning("sports_odds_api_cache write failed (%s): %s", cache_key, ex)
+
+
 def _odds_api_key():
     k = (os.environ.get("THE_ODDS_API_KEY") or "").strip()
     if len(k) >= 2 and k[0] == k[-1] and k[0] in "\"'":
@@ -81,11 +144,15 @@ def _odds_api_key():
 
 
 def _parse_commence_time(commence_time) -> str | None:
+    """Normalize Odds API commence_time to UTC ISO Z. Handles ISO strings, Unix sec, and Unix ms."""
     if commence_time is None:
         return None
     if isinstance(commence_time, (int, float)):
         try:
-            dt = datetime.fromtimestamp(int(commence_time), tz=timezone.utc)
+            ts = float(commence_time)
+            if ts > 1e12:
+                ts /= 1000.0
+            dt = datetime.fromtimestamp(int(ts), tz=timezone.utc)
             return dt.replace(microsecond=0).isoformat().replace("+00:00", "Z")
         except (ValueError, OSError):
             return None
@@ -98,7 +165,58 @@ def _parse_commence_time(commence_time) -> str | None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt.replace(microsecond=0).isoformat().replace("+00:00", "Z")
     except Exception:
+        pass
+    try:
+        ts = float(s)
+        if ts > 1e12:
+            ts /= 1000.0
+        dt = datetime.fromtimestamp(int(ts), tz=timezone.utc)
+        return dt.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    except (ValueError, OSError, OverflowError):
         return None
+
+
+def _is_draw_outcome_name(n: str) -> bool:
+    x = (n or "").strip().lower()
+    if not x:
+        return False
+    if x in ("draw", "tie", "x", "empate", "remis", "nul", "void"):
+        return True
+    return "draw" in x or "tie" in x or "empate" in x or "remis" in x
+
+
+def _extract_outcomes_from_bookmakers(bookmakers: list, three_way: bool) -> list:
+    if not bookmakers:
+        return []
+    if three_way:
+        for b in bookmakers:
+            for m in (b.get("markets") or []):
+                if (m.get("key") or "").lower() == "h2h_3_way":
+                    out = m.get("outcomes") or []
+                    if out:
+                        return out
+        for b in bookmakers:
+            for m in (b.get("markets") or []):
+                if (m.get("key") or "").lower() == "h2h":
+                    out = m.get("outcomes") or []
+                    if out:
+                        return out
+        return []
+    for b in bookmakers:
+        for m in (b.get("markets") or []):
+            if (m.get("key") or "").lower() == "h2h":
+                out = m.get("outcomes") or []
+                if out:
+                    return out
+    return []
+
+
+def _odds_template_id(sport_key: str, event_id: str) -> str:
+    sk = re.sub(r"[^a-zA-Z0-9_-]+", "_", (sport_key or "x").strip())[:40]
+    eid = re.sub(r"[^a-zA-Z0-9_-]+", "_", (event_id or "").strip())[:80]
+    if not eid:
+        eid = "unknown"
+    return "odds_%s__%s" % (sk, eid)
 
 
 def _parse_odds_event(event: dict, category: str, three_way: bool, sport_key: str = "") -> dict | None:
@@ -108,15 +226,7 @@ def _parse_odds_event(event: dict, category: str, three_way: bool, sport_key: st
     if not home or not away or not event_id:
         return None
     bookmakers = event.get("bookmakers") or []
-    outcomes = []
-    market_keys = ["h2h_3_way", "h2h"] if three_way else ["h2h"]
-    for b in bookmakers:
-        for m in (b.get("markets") or []):
-            if (m.get("key") or "").lower() in market_keys:
-                outcomes = m.get("outcomes") or []
-                break
-        if outcomes:
-            break
+    outcomes = _extract_outcomes_from_bookmakers(bookmakers, three_way)
     if not outcomes:
         return None
     options = []
@@ -139,7 +249,7 @@ def _parse_odds_event(event: dict, category: str, three_way: bool, sport_key: st
                     if i in used:
                         continue
                     n = (o.get("name") or "").strip()
-                    if candidate == "Draw" and "draw" in n.lower():
+                    if candidate == "Draw" and _is_draw_outcome_name(n):
                         ordered.append(o)
                         used.add(i)
                         break
@@ -165,10 +275,16 @@ def _parse_odds_event(event: dict, category: str, three_way: bool, sport_key: st
     elif len(options) != 2:
         return None
     name = "%s vs %s" % (home, away)
-    start_time = _parse_commence_time(event.get("commence_time"))
-    out = {"id": "odds_%s_%s" % (category.lower()[:3], event_id[:16]), "name": name, "category": category, "options": options}
+    ct_raw = event.get("commence_time")
+    if ct_raw is not None:
+        out = {"id": "", "name": name, "category": category, "options": options, "commence_time": ct_raw}
+    else:
+        out = {"id": "", "name": name, "category": category, "options": options}
+    start_time = _parse_commence_time(ct_raw)
     if start_time:
         out["start_time"] = start_time
+    tid = _odds_template_id(sport_key, event_id) if sport_key else "odds_%s_%s" % (category.lower()[:3], re.sub(r"[^a-zA-Z0-9_-]+", "_", event_id)[:48])
+    out["id"] = tid
     if sport_key:
         out["external_event_id"] = event_id
         out["external_sport_key"] = sport_key
@@ -191,8 +307,8 @@ SOCCER_LEAGUES = (
 )
 
 
-def _is_future_event(ev: dict, require_time: bool = False) -> bool:
-    """True if event has not started yet (or starts in 10+ min). If require_time, skip events without commence_time."""
+def _is_future_event(ev: dict, require_time: bool = False, buffer_minutes: int = 10) -> bool:
+    """True if event has not started yet (or starts after buffer). If require_time, skip events without commence_time."""
     ct = ev.get("commence_time")
     if not ct:
         return not require_time
@@ -204,9 +320,34 @@ def _is_future_event(ev: dict, require_time: bool = False) -> bool:
         now = datetime.now(timezone.utc)
         if dt < now - timedelta(hours=24):
             return False
-        return now < dt - timedelta(minutes=10)
+        return now < dt - timedelta(minutes=max(0, int(buffer_minutes)))
     except Exception:
         return not require_time
+
+
+async def _fetch_odds_api_soccer_league_raw(client: httpx.AsyncClient, sport_key: str, sem: asyncio.Semaphore, api_key: str) -> list:
+    cache_key = "v1:odds:%s" % sport_key
+    ttl = _sports_odds_cache_ttl_sec()
+    cached = await _odds_cache_read_list_if_fresh(cache_key, ttl)
+    if cached is not None:
+        return cached
+    async with sem:
+        try:
+            r = await client.get(
+                "%s/sports/%s/odds" % (ODDS_API_BASE, sport_key),
+                params={"apiKey": api_key, "regions": "uk,us,eu", "markets": "h2h,h2h_3_way", "oddsFormat": "decimal"},
+            )
+        except Exception as ex:
+            logger.warning("Odds API odds fetch failed %s: %s", sport_key, ex)
+            return []
+    if r.status_code != 200:
+        logger.warning("Odds API odds %s HTTP %s", sport_key, r.status_code)
+        return []
+    events = r.json()
+    if not isinstance(events, list):
+        events = []
+    await _odds_cache_write_list(cache_key, 200, events)
+    return events
 
 
 async def _fetch_odds_api_soccer() -> list:
@@ -214,28 +355,29 @@ async def _fetch_odds_api_soccer() -> list:
     if not key:
         return []
     out = []
-    seen_ids = set()
+    seen_event = set()
+    sem = asyncio.Semaphore(_sports_odds_fetch_concurrency())
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            for sport_key in SOCCER_LEAGUES:
-                r = await client.get(
-                    "%s/sports/%s/odds" % (ODDS_API_BASE, sport_key),
-                    params={"apiKey": key, "regions": "uk,us,eu", "markets": "h2h,h2h_3_way", "oddsFormat": "decimal"},
-                )
-                if r.status_code != 200:
+        async with httpx.AsyncClient(timeout=22.0) as client:
+            raw_lists = await asyncio.gather(*[_fetch_odds_api_soccer_league_raw(client, sk, sem, key) for sk in SOCCER_LEAGUES])
+        for sport_key, events in zip(SOCCER_LEAGUES, raw_lists):
+            if not isinstance(events, list):
+                continue
+            for ev in events[:35]:
+                eid = (ev.get("id") or "").strip()
+                if not eid:
                     continue
-                events = r.json()
-                if not isinstance(events, list):
+                dedupe = (sport_key, eid)
+                if dedupe in seen_event:
                     continue
-                for ev in events[:25]:
-                    if not _is_future_event(ev):
-                        continue
-                    parsed = _parse_odds_event(ev, "Football", three_way=True, sport_key=sport_key)
-                    if parsed and parsed.get("id") not in seen_ids:
-                        seen_ids.add(parsed["id"])
-                        out.append(parsed)
-    except Exception:
-        pass
+                if not _is_future_event(ev, buffer_minutes=5):
+                    continue
+                parsed = _parse_odds_event(ev, "Football", three_way=True, sport_key=sport_key)
+                if parsed:
+                    seen_event.add(dedupe)
+                    out.append(parsed)
+    except Exception as ex:
+        logger.warning("Odds API soccer aggregate failed: %s", ex)
     return out
 
 
@@ -243,26 +385,32 @@ async def _fetch_odds_api_mma() -> list:
     key = _odds_api_key()
     if not key:
         return []
+    cache_key = "v1:odds:mma_mixed_martial_arts"
+    ttl = _sports_odds_cache_ttl_sec()
     out = []
     try:
-        async with httpx.AsyncClient(timeout=12.0) as client:
-            r = await client.get(
-                "%s/sports/mma_mixed_martial_arts/odds" % ODDS_API_BASE,
-                params={"apiKey": key, "regions": "uk,us", "markets": "h2h", "oddsFormat": "decimal"},
-            )
+        events = await _odds_cache_read_list_if_fresh(cache_key, ttl)
+        if events is None:
+            async with httpx.AsyncClient(timeout=14.0) as client:
+                r = await client.get(
+                    "%s/sports/mma_mixed_martial_arts/odds" % ODDS_API_BASE,
+                    params={"apiKey": key, "regions": "uk,us", "markets": "h2h", "oddsFormat": "decimal"},
+                )
             if r.status_code != 200:
+                logger.warning("Odds API odds mma HTTP %s", r.status_code)
                 return []
             events = r.json()
             if not isinstance(events, list):
-                return []
-            for ev in events[:20]:
-                if not _is_future_event(ev, require_time=True):
-                    continue
-                parsed = _parse_odds_event(ev, "UFC", three_way=False, sport_key="mma_mixed_martial_arts")
-                if parsed:
-                    out.append(parsed)
-    except Exception:
-        pass
+                events = []
+            await _odds_cache_write_list(cache_key, 200, events)
+        for ev in events[:20]:
+            if not _is_future_event(ev, require_time=True):
+                continue
+            parsed = _parse_odds_event(ev, "UFC", three_way=False, sport_key="mma_mixed_martial_arts")
+            if parsed:
+                out.append(parsed)
+    except Exception as ex:
+        logger.warning("Odds API mma: %s", ex)
     return out
 
 
@@ -270,26 +418,32 @@ async def _fetch_odds_api_boxing() -> list:
     key = _odds_api_key()
     if not key:
         return []
+    cache_key = "v1:odds:boxing_boxing"
+    ttl = _sports_odds_cache_ttl_sec()
     out = []
     try:
-        async with httpx.AsyncClient(timeout=12.0) as client:
-            r = await client.get(
-                "%s/sports/boxing_boxing/odds" % ODDS_API_BASE,
-                params={"apiKey": key, "regions": "uk,us", "markets": "h2h", "oddsFormat": "decimal"},
-            )
+        events = await _odds_cache_read_list_if_fresh(cache_key, ttl)
+        if events is None:
+            async with httpx.AsyncClient(timeout=14.0) as client:
+                r = await client.get(
+                    "%s/sports/boxing_boxing/odds" % ODDS_API_BASE,
+                    params={"apiKey": key, "regions": "uk,us", "markets": "h2h", "oddsFormat": "decimal"},
+                )
             if r.status_code != 200:
+                logger.warning("Odds API odds boxing HTTP %s", r.status_code)
                 return []
             events = r.json()
             if not isinstance(events, list):
-                return []
-            for ev in events[:15]:
-                if not _is_future_event(ev, require_time=True):
-                    continue
-                parsed = _parse_odds_event(ev, "Boxing", three_way=False, sport_key="boxing_boxing")
-                if parsed:
-                    out.append(parsed)
-    except Exception:
-        pass
+                events = []
+            await _odds_cache_write_list(cache_key, 200, events)
+        for ev in events[:15]:
+            if not _is_future_event(ev, require_time=True):
+                continue
+            parsed = _parse_odds_event(ev, "Boxing", three_way=False, sport_key="boxing_boxing")
+            if parsed:
+                out.append(parsed)
+    except Exception as ex:
+        logger.warning("Odds API boxing: %s", ex)
     return out
 
 
@@ -306,17 +460,27 @@ async def _fetch_odds_api_scores(sport_key: str, days_from: int = 1) -> list:
     key = _odds_api_key()
     if not key:
         return []
+    d = min(3, max(1, int(days_from)))
+    cache_key = "v1:scores:%s:d%s" % (sport_key, d)
+    ttl = _sports_odds_scores_cache_ttl_sec()
     try:
+        cached = await _odds_cache_read_list_if_fresh(cache_key, ttl)
+        if cached is not None:
+            return cached
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.get(
                 "%s/sports/%s/scores" % (ODDS_API_BASE, sport_key),
-                params={"apiKey": key, "daysFrom": min(3, max(1, days_from))},
+                params={"apiKey": key, "daysFrom": d},
             )
-            if r.status_code != 200:
-                return []
-            events = r.json()
-            return events if isinstance(events, list) else []
-    except Exception:
+        if r.status_code != 200:
+            logger.warning("Odds API scores %s HTTP %s", sport_key, r.status_code)
+            return []
+        events = r.json()
+        events = events if isinstance(events, list) else []
+        await _odds_cache_write_list(cache_key, 200, events)
+        return events
+    except Exception as ex:
+        logger.warning("Odds API scores %s: %s", sport_key, ex)
         return []
 
 
@@ -348,7 +512,7 @@ def _derive_winning_option_from_scores(api_event: dict, options: list, three_way
     else:
         if three_way:
             for o in options or []:
-                if "draw" in (o.get("name") or "").lower():
+                if _is_draw_outcome_name((o.get("name") or "")):
                     return o.get("id")
         return None
     for name, opt_id in option_by_name.items():
@@ -752,11 +916,6 @@ def _sports_template_to_response(t):
     st = t.get("start_time")
     if st:
         row["start_time"] = st
-        try:
-            dt = datetime.fromisoformat(st.replace("Z", "+00:00"))
-            row["start_time_display"] = dt.strftime("%d-%m-%Y %H:%M")
-        except Exception:
-            row["start_time_display"] = st
     return row
 
 
@@ -794,7 +953,6 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
             "name": e.get("name", "?"),
             "category": e.get("category", "—"),
             "start_time": st,
-            "start_time_display": start_dt.strftime("%d-%m-%Y - %H:%M"),
             "options": e.get("options") or [],
             "is_special": bool(e.get("is_special")),
             "betting_open": betting_open,
@@ -1003,7 +1161,9 @@ async def admin_sports_add_event(request: AdminAddSportsEventRequest, current_us
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     now = datetime.now(timezone.utc)
-    start_time = template.get("start_time") or (now + timedelta(hours=2)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    start_time = template.get("start_time") or _parse_commence_time(template.get("commence_time"))
+    if not start_time:
+        start_time = (now + timedelta(hours=2)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     ev = {
         "id": str(uuid.uuid4()),
         "name": template["name"],

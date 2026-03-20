@@ -194,6 +194,10 @@ async def ensure_all_indexes(db):
         await db.sports_bets.create_index([("user_id", 1), ("status", 1), ("settled_at", -1)])
         await db.sports_bets.create_index("id")
 
+        # --- The Odds API response cache (sports betting templates / scores) ---
+        await db.sports_odds_api_cache.create_index("cache_key", unique=True)
+        await db.sports_odds_api_cache.create_index([("fetched_at", -1)])
+
         # --- Flappy Gangster (Gauntlet) ---
         await db.gauntlet_scores.create_index("id", unique=True)
         await db.gauntlet_scores.create_index([("score", -1), ("at", 1)])
