@@ -619,7 +619,7 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
 
     bgs_by_owner: Dict[str, List[dict]] = {}
     if target_ids:
-        async for b in db.bodyguards.find({"user_id": {"$in": target_ids}}, {"_id": 0}).to_list(500):
+        for b in await db.bodyguards.find({"user_id": {"$in": target_ids}}, {"_id": 0}).to_list(500):
             uid = b.get("user_id")
             if uid:
                 bgs_by_owner.setdefault(uid, []).append(b)
