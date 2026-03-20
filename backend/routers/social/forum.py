@@ -68,9 +68,9 @@ async def _get_author_display_colors(author_ids) -> dict:
                 result[uid] = mod_default
     return result
 
-FORUM_CATEGORIES = ["general", "entertainer", "crew_oc", "designer"]  # crew_oc = family Crew OC ads; designer = picture designers
+FORUM_CATEGORIES = ["general", "entertainer", "crew_oc", "designer", "game_ideas"]  # game_ideas = Game Ideas hub + submissions
 FORUM_TOPICS_PER_PAGE = 20
-FORUM_TOPICS_MAX_TOTAL = 40  # page 1 = 20, page 2 = 20; beyond that topics are deleted (mods/admins only see page 2)
+FORUM_TOPICS_MAX_TOTAL = 40  # page 1 = 20, page 2 = 20; beyond that topics are deleted (mods/admins only see page 2). Topics with prune_exempt=True are never auto-deleted.
 
 class TopicCreate(BaseModel):
     title: str
@@ -99,11 +99,12 @@ class TopicUpdate(BaseModel):
 
 
 async def _delete_topic_fully(topic_id: str) -> None:
-    """Delete a topic and all its comments and comment likes."""
+    """Delete a topic and all its comments and comment likes/dislikes."""
     comments = await db.forum_comments.find({"topic_id": topic_id}, {"_id": 0, "id": 1}).to_list(500)
     comment_ids = [c["id"] for c in comments]
     if comment_ids:
         await db.forum_comment_likes.delete_many({"comment_id": {"$in": comment_ids}})
+        await db.forum_comment_dislikes.delete_many({"comment_id": {"$in": comment_ids}})
     await db.forum_comments.delete_many({"topic_id": topic_id})
     await db.forum_topics.delete_one({"id": topic_id})
 
@@ -327,6 +328,11 @@ async def create_topic(
                 )
     if category not in FORUM_CATEGORIES:
         category = "general"
+    if category == "game_ideas" and not _is_admin(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Only admins can create Game Ideas forum topics. Use the official hub topic when a season is running.",
+        )
     if not title:
         raise HTTPException(status_code=400, detail="Title is required")
     gif_url = (request.gif_url or "").strip()
@@ -375,8 +381,10 @@ async def create_topic(
     # Keep only FORUM_TOPICS_MAX_TOTAL topics per category; delete oldest beyond that
     cleanup_query = {"category": category} if category in FORUM_CATEGORIES else {"$or": [{"category": "general"}, {"category": {"$exists": False}}]}
     sort = [("is_important", -1), ("is_sticky", -1), ("updated_at", -1)]
-    all_in_category = await db.forum_topics.find(cleanup_query, {"_id": 0, "id": 1}).sort(sort).to_list(FORUM_TOPICS_MAX_TOTAL + 50)
+    all_in_category = await db.forum_topics.find(cleanup_query, {"_id": 0, "id": 1, "prune_exempt": 1}).sort(sort).to_list(FORUM_TOPICS_MAX_TOTAL + 50)
     for t in all_in_category[FORUM_TOPICS_MAX_TOTAL:]:
+        if t.get("prune_exempt"):
+            continue
         await _delete_topic_fully(t["id"])
     return {"id": topic_id, "message": "Topic created", "topic": {**doc, "_id": 0}}
 
@@ -634,6 +642,47 @@ async def update_topic(
     )
     updated = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     return {"message": "Topic updated", "topic": updated}
+
+
+async def create_redeem_code_forum_topic(
+    author_id: str,
+    author_username: str,
+    code_normalized: str,
+    reward_lines: List[str],
+) -> str:
+    """Insert a locked sticky general topic advertising a redeem code. Caller stores returned id on redeem_codes.forum_topic_id."""
+    topic_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    lines_bb = "\n".join(f"[*]{strip_emoji(line)}" for line in reward_lines) if reward_lines else ""
+    content = (
+        f"[b]Code:[/b] [color=#FFD700]{code_normalized}[/color]\n\n[b]Rewards:[/b]\n[list]{lines_bb}\n[/list]\n\n"
+        f"[i]Redeem from your Referral / Redeem page. One redemption per account; limited codes disappear when fully used.[/i]"
+    )
+    doc = {
+        "id": topic_id,
+        "title": strip_emoji(f"Redeem code: {code_normalized}"),
+        "content": content,
+        "category": "general",
+        "author_id": author_id,
+        "author_username": author_username or "?",
+        "created_at": now,
+        "updated_at": now,
+        "views": 0,
+        "is_sticky": True,
+        "is_important": False,
+        "is_locked": True,
+        "prune_exempt": True,
+        "redeem_code": code_normalized,
+    }
+    await db.forum_topics.insert_one(doc)
+    return topic_id
+
+
+async def remove_redeem_code_forum_topic(topic_id: Optional[str]) -> None:
+    """Delete forum topic created for a redeem code (no-op if falsy)."""
+    if not topic_id:
+        return
+    await _delete_topic_fully(topic_id)
 
 
 async def delete_topic(

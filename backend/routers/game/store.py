@@ -282,9 +282,10 @@ async def buy_health(
     cost_used, inc, gte_filter = _store_cost_inc(current_user, BUY_HEALTH_COST_POINTS)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    now_iso = datetime.now(timezone.utc).isoformat()
     result = await db.users.update_one(
         {"id": current_user["id"], **gte_filter},
-        {"$inc": inc, "$set": {"health": FULL_HEALTH}}
+        {"$inc": inc, "$set": {"health": FULL_HEALTH, "health_regen_last_at": now_iso}},
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")

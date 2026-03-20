@@ -203,7 +203,7 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
-            {category === 'entertainer' ? '🎭 Entertainer: New Topic' : category === 'designer' ? '🎨 Designer Forum: New Topic' : '📝 Create New Topic'}
+            {category === 'entertainer' ? '🎭 Entertainer: New Topic' : category === 'designer' ? '🎨 Designer Forum: New Topic' : category === 'game_ideas' ? '💡 Game Ideas: New Topic (admin)' : '📝 Create New Topic'}
           </h2>
         </div>
         <form onSubmit={handleSubmit} className="p-3 space-y-3">
@@ -554,6 +554,7 @@ const FORUM_TABS = [
   { id: 'general', label: 'General' },
   { id: 'entertainer', label: 'Entertainer Forum' },
   { id: 'designer', label: 'Designer Forum' },
+  { id: 'game_ideas', label: 'Game Ideas' },
   { id: 'crew_oc', label: 'Crew OC' },
 ];
 
@@ -562,7 +563,7 @@ export default function Forum() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(() => {
     const t = searchParams.get('tab');
-    if (t === 'entertainer' || t === 'designer' || t === 'crew_oc') return t;
+    if (t === 'entertainer' || t === 'designer' || t === 'crew_oc' || t === 'game_ideas') return t;
     return 'general';
   });
   const [topics, setTopics] = useState([]);
@@ -572,6 +573,7 @@ export default function Forum() {
     if (searchParams.get('tab') === 'entertainer' || location.state?.category === 'entertainer') setActiveTab('entertainer');
     else if (searchParams.get('tab') === 'designer') setActiveTab('designer');
     else if (searchParams.get('tab') === 'crew_oc' || location.state?.category === 'crew_oc') setActiveTab('crew_oc');
+    else if (searchParams.get('tab') === 'game_ideas') setActiveTab('game_ideas');
     else setActiveTab('general');
   }, [searchParams, location.state?.category]);
   const [loading, setLoading] = useState(true);
@@ -608,6 +610,39 @@ export default function Forum() {
   const [myEntryCommentId, setMyEntryCommentId] = useState(null);
   const [designerSubmittingEntry, setDesignerSubmittingEntry] = useState(false);
   const [designerSubmittingTopicId, setDesignerSubmittingTopicId] = useState(null);
+  const [giSeasons, setGiSeasons] = useState([]);
+  const [giSeasonsLoading, setGiSeasonsLoading] = useState(false);
+  const [giForm, setGiForm] = useState({
+    title: '',
+    description: '',
+    finalist_count: '5',
+    finalist_reward_money: '',
+    finalist_reward_points: '',
+    winner_reward_money: '',
+    winner_reward_points: '',
+  });
+  const [giCreating, setGiCreating] = useState(false);
+  const [giActionId, setGiActionId] = useState(null);
+  const [giConfirmSeason, setGiConfirmSeason] = useState('');
+  const [giConfirmEntry, setGiConfirmEntry] = useState('');
+  const [giConfirming, setGiConfirming] = useState(false);
+
+  const fetchGiSeasons = useCallback(async () => {
+    if (!isAdmin) return;
+    setGiSeasonsLoading(true);
+    try {
+      const res = await api.get('/admin/game-ideas/seasons');
+      setGiSeasons(res.data?.seasons ?? []);
+    } catch {
+      setGiSeasons([]);
+    } finally {
+      setGiSeasonsLoading(false);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (activeTab === 'game_ideas' && isAdmin) fetchGiSeasons();
+  }, [activeTab, isAdmin, fetchGiSeasons]);
 
   const fetchTopics = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -808,7 +843,7 @@ export default function Forum() {
   const pinnedTopics = topics.filter(t => t.is_sticky || t.is_important);
   const regularTopics = topics.filter(t => !t.is_sticky && !t.is_important);
 
-  const currentCategory = activeTab === 'entertainer' ? 'entertainer' : activeTab === 'crew_oc' ? 'crew_oc' : activeTab === 'designer' ? 'designer' : 'general';
+  const currentCategory = activeTab === 'entertainer' ? 'entertainer' : activeTab === 'crew_oc' ? 'crew_oc' : activeTab === 'designer' ? 'designer' : activeTab === 'game_ideas' ? 'game_ideas' : 'general';
   const openGames = (entertainerGames || []).filter((g) => g.status === 'open');
   const handleJoinGame = async (gameId) => {
     setJoiningId(gameId);
@@ -909,6 +944,65 @@ export default function Forum() {
     }
   };
 
+  const handleCreateGiSeason = async (e) => {
+    e.preventDefault();
+    if (!giForm.title.trim()) { toast.error('Title required'); return; }
+    setGiCreating(true);
+    try {
+      await api.post('/admin/game-ideas/seasons', {
+        title: giForm.title.trim(),
+        description: giForm.description.trim() || undefined,
+        finalist_count: parseInt(giForm.finalist_count, 10) || 5,
+        finalist_reward_money: parseInt(String(giForm.finalist_reward_money).replace(/\D/g, ''), 10) || 0,
+        finalist_reward_points: parseInt(String(giForm.finalist_reward_points).replace(/\D/g, ''), 10) || 0,
+        winner_reward_money: parseInt(String(giForm.winner_reward_money).replace(/\D/g, ''), 10) || 0,
+        winner_reward_points: parseInt(String(giForm.winner_reward_points).replace(/\D/g, ''), 10) || 0,
+      });
+      toast.success('Game Ideas season created (draft)');
+      setGiForm({
+        title: '', description: '', finalist_count: '5',
+        finalist_reward_money: '', finalist_reward_points: '',
+        winner_reward_money: '', winner_reward_points: '',
+      });
+      fetchGiSeasons();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally {
+      setGiCreating(false);
+    }
+  };
+
+  const runGiAction = async (seasonId, path, okMsg) => {
+    setGiActionId(seasonId);
+    try {
+      await api.post(`/admin/game-ideas/seasons/${seasonId}/${path}`);
+      toast.success(okMsg);
+      fetchGiSeasons();
+      fetchTopics(true);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally {
+      setGiActionId(null);
+    }
+  };
+
+  const handleGiConfirmImplementation = async () => {
+    const sid = (giConfirmSeason || '').trim();
+    const eid = (giConfirmEntry || '').trim();
+    if (!sid || !eid) { toast.error('Season id and entry id required'); return; }
+    setGiConfirming(true);
+    try {
+      await api.post(`/admin/game-ideas/seasons/${sid}/confirm-implementation`, { entry_id: eid });
+      toast.success('Implementation reward granted');
+      setGiConfirmEntry('');
+      fetchGiSeasons();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally {
+      setGiConfirming(false);
+    }
+  };
+
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="forum-page">
       <style>{FORUM_STYLES}</style>
@@ -921,6 +1015,7 @@ export default function Forum() {
             {activeTab === 'entertainer' && 'Dice games, gbox — auto payout when full'}
             {activeTab === 'designer' && 'Designers: advertise your pictures. Users: request work or discuss.'}
             {activeTab === 'crew_oc' && 'Family Crew OC ads — apply from topic or family profile'}
+            {activeTab === 'game_ideas' && 'Suggest features in the hub topic; vote on the Game Ideas board'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -932,7 +1027,7 @@ export default function Forum() {
               <Dice5 size={14} /> New Game
             </button>
           )}
-          {activeTab !== 'crew_oc' && (
+          {activeTab !== 'crew_oc' && activeTab !== 'game_ideas' && (
             <button
               onClick={() => setModalOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/20 text-primary text-xs font-heading font-bold uppercase rounded border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation"
@@ -957,6 +1052,88 @@ export default function Forum() {
           ))}
         </div>
       </div>
+
+      {activeTab === 'game_ideas' && (
+        <>
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-500/25 f-fade-in mobile-panel`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/20 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">Game Ideas</span>
+              <Link
+                to="/game/game-ideas"
+                className="text-[10px] font-heading font-bold text-primary uppercase hover:underline"
+              >
+                Open voting board →
+              </Link>
+            </div>
+            <div className="p-3 text-[11px] text-mutedForeground">
+              When staff start a season, a pinned hub topic appears below. Post your idea there, then click <strong className="text-foreground">Register as my idea</strong> on your post. Cast votes on the voting board (not for your own entry). Finalists get rewards when staff advance rounds; the winner receives the implementation bonus when staff confirm the feature is live.
+            </div>
+          </div>
+          {isAdmin && (
+            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-red-500/30 f-fade-in mobile-panel`}>
+              <div className="px-3 py-2 bg-red-500/10 border-b border-red-500/20">
+                <span className="text-[10px] font-heading font-bold text-red-400 uppercase tracking-widest">Admin — Game Ideas seasons</span>
+              </div>
+              <form onSubmit={handleCreateGiSeason} className="p-3 space-y-2 border-b border-zinc-700/30 text-[11px]">
+                <div className="font-heading text-mutedForeground uppercase text-[10px]">New draft season</div>
+                <input
+                  className="w-full px-2 py-1 rounded border border-input bg-transparent text-xs font-heading"
+                  placeholder="Season title"
+                  value={giForm.title}
+                  onChange={(e) => setGiForm((p) => ({ ...p, title: e.target.value }))}
+                />
+                <textarea
+                  className="w-full px-2 py-1 rounded border border-input bg-transparent text-xs min-h-[50px]"
+                  placeholder="Hub topic description (optional)"
+                  value={giForm.description}
+                  onChange={(e) => setGiForm((p) => ({ ...p, description: e.target.value }))}
+                />
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <label className="text-[10px] text-mutedForeground">Finalists (top N)<input type="number" min={1} max={50} className="w-full mt-0.5 px-2 py-1 rounded border border-input bg-transparent text-xs" value={giForm.finalist_count} onChange={(e) => setGiForm((p) => ({ ...p, finalist_count: e.target.value }))} /></label>
+                  <label className="text-[10px] text-mutedForeground">Finalist $ <input className="w-full mt-0.5 px-2 py-1 rounded border border-input bg-transparent text-xs" value={giForm.finalist_reward_money} onChange={(e) => setGiForm((p) => ({ ...p, finalist_reward_money: e.target.value }))} /></label>
+                  <label className="text-[10px] text-mutedForeground">Finalist pts<input className="w-full mt-0.5 px-2 py-1 rounded border border-input bg-transparent text-xs" value={giForm.finalist_reward_points} onChange={(e) => setGiForm((p) => ({ ...p, finalist_reward_points: e.target.value }))} /></label>
+                  <label className="text-[10px] text-mutedForeground">Winner impl. $<input className="w-full mt-0.5 px-2 py-1 rounded border border-input bg-transparent text-xs" value={giForm.winner_reward_money} onChange={(e) => setGiForm((p) => ({ ...p, winner_reward_money: e.target.value }))} /></label>
+                  <label className="text-[10px] text-mutedForeground">Winner impl. pts<input className="w-full mt-0.5 px-2 py-1 rounded border border-input bg-transparent text-xs" value={giForm.winner_reward_points} onChange={(e) => setGiForm((p) => ({ ...p, winner_reward_points: e.target.value }))} /></label>
+                </div>
+                <button type="submit" disabled={giCreating} className="px-3 py-1.5 bg-red-500/20 border border-red-500/50 text-red-300 text-[10px] font-heading font-bold uppercase rounded">{giCreating ? '...' : 'Create draft'}</button>
+              </form>
+              <div className="p-3 space-y-2 text-[10px]">
+                <div className="font-heading text-mutedForeground uppercase">Seasons</div>
+                {giSeasonsLoading ? <p className="text-mutedForeground">Loading…</p> : giSeasons.length === 0 ? <p className="text-mutedForeground">None yet.</p> : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto">
+                    {giSeasons.map((s) => (
+                      <div key={s.id} className="rounded border border-zinc-700/40 p-2 space-y-1">
+                        <div className="font-mono text-[9px] text-zinc-500">{s.id}</div>
+                        <div className="text-foreground font-heading">{s.title} <span className="text-mutedForeground font-normal">({s.status})</span></div>
+                        <div className="flex flex-wrap gap-1">
+                          {s.status === 'draft' && (
+                            <button type="button" disabled={giActionId === s.id} onClick={() => runGiAction(s.id, 'start', 'Season started')} className="px-2 py-0.5 bg-primary/20 border border-primary/40 text-primary rounded uppercase font-heading">Start</button>
+                          )}
+                          {s.status === 'primary' && (
+                            <button type="button" disabled={giActionId === s.id} onClick={() => runGiAction(s.id, 'advance-final', 'Advanced to final')} className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/40 text-amber-400 rounded uppercase font-heading">Advance final</button>
+                          )}
+                          {s.status === 'final' && (
+                            <button type="button" disabled={giActionId === s.id} onClick={() => runGiAction(s.id, 'close-final', 'Final closed')} className="px-2 py-0.5 bg-zinc-600/40 border border-zinc-500/50 text-zinc-200 rounded uppercase font-heading">Close final</button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="pt-2 border-t border-zinc-700/30 space-y-1">
+                  <div className="font-heading text-mutedForeground uppercase">Confirm implementation (closed season)</div>
+                  <div className="flex flex-wrap gap-2 items-end">
+                    <input className="flex-1 min-w-[120px] px-2 py-1 rounded border border-input bg-transparent text-[10px] font-mono" placeholder="Season id" value={giConfirmSeason} onChange={(e) => setGiConfirmSeason(e.target.value)} />
+                    <input className="flex-1 min-w-[120px] px-2 py-1 rounded border border-input bg-transparent text-[10px] font-mono" placeholder="Entry id" value={giConfirmEntry} onChange={(e) => setGiConfirmEntry(e.target.value)} />
+                    <button type="button" disabled={giConfirming} onClick={handleGiConfirmImplementation} className="px-2 py-1 bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 rounded uppercase font-heading">{giConfirming ? '...' : 'Pay reward'}</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Designer: competition block + entries */}
       {activeTab === 'designer' && (

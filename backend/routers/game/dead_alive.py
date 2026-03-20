@@ -247,6 +247,7 @@ def register(router):
                         "money": reviver_money,
                         "points": reviver_points_after,
                         "health": DEFAULT_HEALTH,
+                        "health_regen_last_at": now_iso,
                         "in_jail": False,
                     },
                     "$unset": {

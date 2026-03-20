@@ -21,6 +21,7 @@ from server import (
     db,
     get_current_user,
     get_current_user_verified,
+    apply_passive_health_regen,
     RANKS,
     STATES,
     CARS,
@@ -777,6 +778,8 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     target = await db.users.find_one(user_filter, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
+    if not target.get("is_npc"):
+        await apply_passive_health_regen(target["id"], target)
     if target.get("is_dead"):
         raise HTTPException(status_code=400, detail="Target is dead")
     attacker_rank_id, attacker_rank_name = get_rank_info(current_user.get("rank_points", 0))
@@ -869,6 +872,8 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             status_code=400,
             detail="Target is already dead. This search has been removed — refresh your list and search for another target if needed.",
         )
+    if not target.get("is_npc"):
+        await apply_passive_health_regen(target["id"], target)
     if target.get("email") in ADMIN_EMAILS or _is_moderator(target):
         await _log_attack_error(current_user["id"], current_user.get("username"), "Target cannot be attacked", req)
         raise HTTPException(status_code=403, detail="Target cannot be attacked")
@@ -1132,7 +1137,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 except Exception:
                     pass
                 now_iso = datetime.now(timezone.utc).isoformat()
-                await db.users.update_one({"id": victim_id}, {"$set": {"is_dead": True, "dead_at": now_iso, "money": 0, "health": 0}, "$inc": {"total_deaths": 1}})
+                await db.users.update_one(
+                    {"id": victim_id},
+                    {"$set": {"is_dead": True, "dead_at": now_iso, "money": 0, "health": 0, "health_regen_last_at": now_iso}, "$inc": {"total_deaths": 1}},
+                )
                 await db.attacks.delete_many({"target_id": victim_id})
                 try:
                     from routers.money.quicktrade import cancel_offers_on_death
@@ -1224,6 +1232,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 "dead_at": now_iso,
                 "money": 0,
                 "health": 0,
+                "health_regen_last_at": now_iso,
                 "killed_by_username": current_user.get("username"),
                 "killed_by_user_id": current_user["id"],
                 "killed_by_family_name": (killer_family_doc or {}).get("name"),
@@ -1702,9 +1711,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     else:
         new_health = max(0.0, target_health - health_dealt_pct)
         damage_done = float(max(0.0, target_health - new_health))
+        dmg_iso = datetime.now(timezone.utc).isoformat()
         await db.users.update_one(
             {"id": target["id"]},
-            {"$set": {"health": new_health}}
+            {"$set": {"health": new_health, "health_regen_last_at": dmg_iso}},
         )
         await db.attacks.update_one(
             {"id": attack["id"]},

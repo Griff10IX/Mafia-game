@@ -1302,6 +1302,29 @@ export default function Admin() {
     }
   };
 
+  const handleDeactivateRedeemCode = async (code) => {
+    if (!code) return;
+    try {
+      await api.patch(`/admin/redeem-codes/${encodeURIComponent(code)}`, { active: false });
+      toast.success('Code deactivated; forum topic removed');
+      await fetchRedeemCodes();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to deactivate');
+    }
+  };
+
+  const handleDeleteRedeemCode = async (code) => {
+    if (!code) return;
+    if (!window.confirm(`Delete redeem code ${code}? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/admin/redeem-codes/${encodeURIComponent(code)}`);
+      toast.success('Redeem code deleted');
+      await fetchRedeemCodes();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to delete');
+    }
+  };
+
   const fetchNPCs = async () => {
     try {
       const response = await api.get('/admin/npcs');
@@ -7424,6 +7447,10 @@ export default function Admin() {
                       {!rc.active && <span className="text-red-400">Inactive</span>}
                       <span className="text-mutedForeground">{rc.used_count}{rc.max_uses != null ? ` / ${rc.max_uses}` : ''} uses</span>
                       <span className="text-mutedForeground truncate">{Object.keys(rc.rewards || {}).join(', ')}</span>
+                      {rc.active && (
+                        <button type="button" onClick={() => handleDeactivateRedeemCode(rc.code)} className="text-amber-400 hover:underline text-[10px] font-heading uppercase">Deactivate</button>
+                      )}
+                      <button type="button" onClick={() => handleDeleteRedeemCode(rc.code)} className="text-red-400 hover:underline text-[10px] font-heading uppercase">Delete</button>
                     </div>
                   ))}
                 </div>

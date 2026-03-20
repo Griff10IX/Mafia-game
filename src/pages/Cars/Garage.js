@@ -17,6 +17,8 @@ const GARAGE_STYLES = `
 const RARITY_ORDER = { exclusive: 7, loot_exclusive: 6, custom: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
 const DEFAULT_VISIBLE = 16;
 const MELT_SCRAP_RARITIES_KEY = 'garage_melt_scrap_rarities';
+/** Keep in sync with backend `server.MELT_VALUE_PER_BULLET` (melt bullets = floor(value / this)). */
+const MELT_VALUE_PER_BULLET = 500;
 const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive'];
 
 function loadMeltScrapRarities() {
@@ -656,7 +658,7 @@ export default function Garage() {
   );
   const predictedMeltBullets = selectedCarsForMelt
     .slice(0, batchLimit)
-    .reduce((sum, c) => sum + Math.floor((c.value || 0) / 500), 0);
+    .reduce((sum, c) => sum + Math.floor((c.value || 0) / MELT_VALUE_PER_BULLET), 0);
 
   const toggleSelectAllDisplayed = () => {
     if (noEligibleInView) return;

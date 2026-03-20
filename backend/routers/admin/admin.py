@@ -78,6 +78,10 @@ class RedeemCodeRewards(BaseModel):
 class RedeemCodeCreateRequest(BaseModel):
     code: str
     max_uses: Optional[int] = None  # null = unlimited
+
+
+class RedeemCodePatchRequest(BaseModel):
+    active: bool
     rewards: RedeemCodeRewards
 
 
@@ -211,6 +215,7 @@ def register(router):
     import middleware.security as security_module
     from routers.game.families import FAMILY_RACKETS, MAX_FAMILIES
     from routers.kill.bodyguards import _create_robot_bodyguard_user
+    from routers.social.forum import create_redeem_code_forum_topic, remove_redeem_code_forum_topic
 
     db = srv.db
     get_current_user = srv.get_current_user
@@ -4253,6 +4258,24 @@ def register(router):
         )
         return {"message": "Event override cleared; daily rotation applies again", "override_event_id": None}
 
+    def _redeem_forum_reward_lines(reward_dict: dict) -> List[str]:
+        lines: List[str] = []
+        if reward_dict.get("money"):
+            lines.append(f"${int(reward_dict['money']):,} cash")
+        if reward_dict.get("points"):
+            lines.append(f"{int(reward_dict['points']):,} points")
+        if reward_dict.get("respect_points"):
+            lines.append(f"{int(reward_dict['respect_points']):,} respect")
+        if reward_dict.get("loot_box_pieces"):
+            lines.append(f"{int(reward_dict['loot_box_pieces'])} loot box pieces")
+        for car_id in reward_dict.get("cars") or []:
+            car_info = next((c for c in CARS if c.get("id") == car_id), None)
+            lines.append(car_info.get("name", car_id) if car_info else str(car_id))
+        for token_type, amount in (reward_dict.get("tokens") or {}).items():
+            if amount:
+                lines.append(f"{int(amount)} {str(token_type).replace('_', ' ')} token(s)")
+        return lines
+
     @router.get("/admin/redeem-codes")
     async def admin_get_redeem_codes(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
@@ -4317,7 +4340,53 @@ def register(router):
             "active": True,
         }
         await db.redeem_codes.insert_one(doc)
-        return {"message": "Redeem code created", "code": code_normalized}
+        try:
+            topic_id = await create_redeem_code_forum_topic(
+                current_user["id"],
+                current_user.get("username") or "?",
+                code_normalized,
+                _redeem_forum_reward_lines(reward_dict),
+            )
+            await db.redeem_codes.update_one({"code": code_normalized}, {"$set": {"forum_topic_id": topic_id}})
+        except Exception:
+            await db.redeem_codes.delete_one({"code": code_normalized})
+            raise HTTPException(status_code=500, detail="Redeem code was not saved: forum topic creation failed.")
+        return {"message": "Redeem code created", "code": code_normalized, "forum_topic_id": topic_id}
+
+    @router.patch("/admin/redeem-codes/{code}")
+    async def admin_patch_redeem_code(
+        code: str,
+        request: RedeemCodePatchRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        code_normalized = (code or "").strip().upper()
+        doc = await db.redeem_codes.find_one({"code": code_normalized}, {"_id": 0, "forum_topic_id": 1})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Redeem code not found")
+        if request.active is False:
+            await remove_redeem_code_forum_topic(doc.get("forum_topic_id"))
+            await db.redeem_codes.update_one(
+                {"code": code_normalized},
+                {"$set": {"active": False}, "$unset": {"forum_topic_id": ""}},
+            )
+            return {"message": "Redeem code deactivated; forum topic removed", "code": code_normalized, "active": False}
+        await db.redeem_codes.update_one({"code": code_normalized}, {"$set": {"active": True}})
+        return {"message": "Redeem code activated (no forum topic recreated)", "code": code_normalized, "active": True}
+
+    @router.delete("/admin/redeem-codes/{code}")
+    async def admin_delete_redeem_code(code: str, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        code_normalized = (code or "").strip().upper()
+        doc = await db.redeem_codes.find_one({"code": code_normalized}, {"_id": 0, "forum_topic_id": 1})
+        if doc:
+            await remove_redeem_code_forum_topic(doc.get("forum_topic_id"))
+        result = await db.redeem_codes.delete_one({"code": code_normalized})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Redeem code not found")
+        return {"message": "Redeem code deleted", "code": code_normalized}
 
     @router.get("/admin/beta-signup")
     async def admin_get_beta_signup(current_user: dict = Depends(get_current_user)):

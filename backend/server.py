@@ -203,6 +203,8 @@ BANK_INTEREST_OPTIONS = [
 
 # Health & armour: health 0-100, armour 0-5. Bullets to kill clamped to [MIN_BULLETS_TO_KILL, MAX_BULLETS_TO_KILL]
 DEFAULT_HEALTH = 100
+# Passive regen: linear 0→100% over this many seconds of real time (lazy: applied on auth + before PvP damage calc)
+HEALTH_REGEN_FULL_SECONDS = 7200  # 2 hours
 MIN_BULLETS_TO_KILL = 5000
 MAX_BULLETS_TO_KILL = 100000
 ARMOUR_BASE_BULLETS = {0: 5000, 1: 25000, 2: 45000, 3: 65000, 4: 85000, 5: 100000, 6: 120000}  # 6 = loot-exclusive Steel Plate Vest (1922)
@@ -440,6 +442,9 @@ TRAVEL_TIMES = {
     "airport": 0   # Airport (instant)
 }
 
+# Melt-for-bullets: floor(car_value / MELT_VALUE_PER_BULLET) per car — see gta._melt_cars_impl
+MELT_VALUE_PER_BULLET = 500
+
 CARS = [
     # Common (difficulty 1) - 6 cars, values $125-$188 ascending (75% reduction)
     {"id": "car1", "name": "Model T Ford", "rarity": "common", "min_difficulty": 1, "value": 125, "travel_bonus": 0, "image": "/images/gta/car1.jpg"},
@@ -448,25 +453,25 @@ CARS = [
     {"id": "car6", "name": "Durant Star", "rarity": "common", "min_difficulty": 1, "value": 163, "travel_bonus": 5, "image": "/images/gta/car6.jpg"},
     {"id": "car4", "name": "Ford Model A", "rarity": "common", "min_difficulty": 1, "value": 175, "travel_bonus": 5, "image": "/images/gta/car4.jpg"},
     {"id": "car3", "name": "Dodge Brothers", "rarity": "common", "min_difficulty": 1, "value": 188, "travel_bonus": 5, "image": "/images/gta/car3.jpg"},
-    # Uncommon (difficulty 2) - 4 cars, values $300-$500 ascending (75% reduction)
-    {"id": "car7", "name": "Oakland", "rarity": "uncommon", "min_difficulty": 2, "value": 300, "travel_bonus": 10, "image": "/images/gta/car7.jpg"},
-    {"id": "car8", "name": "Willys-Knight", "rarity": "uncommon", "min_difficulty": 2, "value": 375, "travel_bonus": 10, "image": "/images/gta/car8.jpg"},
-    {"id": "car10", "name": "Buick Master Six", "rarity": "uncommon", "min_difficulty": 2, "value": 450, "travel_bonus": 12, "image": "/images/gta/car10.jpg"},
-    {"id": "car9", "name": "Cadillac V-8", "rarity": "uncommon", "min_difficulty": 2, "value": 500, "travel_bonus": 15, "image": "/images/gta/car9.jpg"},
-    # Rare (difficulty 3) - 4 cars, values $875-$1,375 ascending (75% reduction)
-    {"id": "car11", "name": "Packard Eight", "rarity": "rare", "min_difficulty": 3, "value": 875, "travel_bonus": 20, "image": "/images/gta/car11.jpg"},
-    {"id": "car12", "name": "Lincoln Model L", "rarity": "rare", "min_difficulty": 3, "value": 1000, "travel_bonus": 20, "image": "/images/gta/car12.jpg"},
-    {"id": "car13", "name": "Pierce-Arrow", "rarity": "rare", "min_difficulty": 3, "value": 1250, "travel_bonus": 25, "image": "/images/gta/car13.jpg"},
-    {"id": "car14", "name": "Stutz Bearcat", "rarity": "rare", "min_difficulty": 3, "value": 1375, "travel_bonus": 25, "image": "/images/gta/car14.jpg"},
-    # Ultra Rare (difficulty 4) - 3 cars, values $2,500-$3,750 ascending (75% reduction)
-    {"id": "car15", "name": "Duesenberg Model J", "rarity": "ultra_rare", "min_difficulty": 4, "value": 2500, "travel_bonus": 35, "image": "/images/gta/car15.jpeg"},
-    {"id": "car16", "name": "Cord L-29", "rarity": "ultra_rare", "min_difficulty": 4, "value": 3000, "travel_bonus": 35, "image": "/images/gta/car16.jpg"},
-    {"id": "car17", "name": "Auburn Speedster", "rarity": "ultra_rare", "min_difficulty": 4, "value": 3750, "travel_bonus": 40, "image": "/images/gta/car17.jpg"},
-    # Legendary (difficulty 5) - 2 cars, values $6,250-$7,500 ascending (75% reduction)
-    {"id": "car18", "name": "Bugatti Type 41 Royale", "rarity": "legendary", "min_difficulty": 5, "value": 6250, "travel_bonus": 50, "image": "/images/gta/car18.jpg"},
-    {"id": "car19", "name": "Rolls-Royce Phantom II", "rarity": "legendary", "min_difficulty": 5, "value": 7500, "travel_bonus": 55, "image": "/images/gta/car19.jpg"},
-    # Custom (store only, 500 pts) - $12,500 value (75% reduction)
-    {"id": "car_custom", "name": "Custom Car", "rarity": "custom", "min_difficulty": 5, "value": 12500, "travel_bonus": 55, "image": None},
+    # Uncommon (difficulty 2) - 4 cars; melt ~3–7 bullets each at MELT_VALUE_PER_BULLET=500
+    {"id": "car7", "name": "Oakland", "rarity": "uncommon", "min_difficulty": 2, "value": 1500, "travel_bonus": 10, "image": "/images/gta/car7.jpg"},
+    {"id": "car8", "name": "Willys-Knight", "rarity": "uncommon", "min_difficulty": 2, "value": 2250, "travel_bonus": 10, "image": "/images/gta/car8.jpg"},
+    {"id": "car10", "name": "Buick Master Six", "rarity": "uncommon", "min_difficulty": 2, "value": 3000, "travel_bonus": 12, "image": "/images/gta/car10.jpg"},
+    {"id": "car9", "name": "Cadillac V-8", "rarity": "uncommon", "min_difficulty": 2, "value": 3850, "travel_bonus": 15, "image": "/images/gta/car9.jpg"},
+    # Rare (difficulty 3) - 4 cars; melt ~8–17 bullets each
+    {"id": "car11", "name": "Packard Eight", "rarity": "rare", "min_difficulty": 3, "value": 4000, "travel_bonus": 20, "image": "/images/gta/car11.jpg"},
+    {"id": "car12", "name": "Lincoln Model L", "rarity": "rare", "min_difficulty": 3, "value": 5500, "travel_bonus": 20, "image": "/images/gta/car12.jpg"},
+    {"id": "car13", "name": "Pierce-Arrow", "rarity": "rare", "min_difficulty": 3, "value": 7000, "travel_bonus": 25, "image": "/images/gta/car13.jpg"},
+    {"id": "car14", "name": "Stutz Bearcat", "rarity": "rare", "min_difficulty": 3, "value": 8500, "travel_bonus": 25, "image": "/images/gta/car14.jpg"},
+    # Ultra Rare (difficulty 4) - 3 cars; melt ~19–35 bullets each
+    {"id": "car15", "name": "Duesenberg Model J", "rarity": "ultra_rare", "min_difficulty": 4, "value": 9500, "travel_bonus": 35, "image": "/images/gta/car15.jpeg"},
+    {"id": "car16", "name": "Cord L-29", "rarity": "ultra_rare", "min_difficulty": 4, "value": 12500, "travel_bonus": 35, "image": "/images/gta/car16.jpg"},
+    {"id": "car17", "name": "Auburn Speedster", "rarity": "ultra_rare", "min_difficulty": 4, "value": 17500, "travel_bonus": 40, "image": "/images/gta/car17.jpg"},
+    # Legendary (difficulty 5) - 2 cars; melt ~40–47 bullets each
+    {"id": "car18", "name": "Bugatti Type 41 Royale", "rarity": "legendary", "min_difficulty": 5, "value": 20000, "travel_bonus": 50, "image": "/images/gta/car18.jpg"},
+    {"id": "car19", "name": "Rolls-Royce Phantom II", "rarity": "legendary", "min_difficulty": 5, "value": 23500, "travel_bonus": 55, "image": "/images/gta/car19.jpg"},
+    # Custom (store only, 500 pts) - melt ~100 bullets
+    {"id": "car_custom", "name": "Custom Car", "rarity": "custom", "min_difficulty": 5, "value": 50000, "travel_bonus": 55, "image": None},
     # Exclusive (admin only) - $62,500,000 (75% reduction)
     {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 62500000, "travel_bonus": 60, "image": "/images/gta/car20.png"},
     # Loot-exclusive (loot box only, cap 3 globally) - $125,000,000 (75% reduction)
@@ -717,6 +722,50 @@ JAIL_WHITELIST_PREFIXES = (
 )
 
 
+async def apply_passive_health_regen(user_id: str, user: dict) -> None:
+    """Lazy passive health for alive human players. Mutates user dict; may persist health + health_regen_last_at."""
+    if not user_id or user.get("is_dead") or user.get("is_npc"):
+        return
+    try:
+        h = float(user.get("health", DEFAULT_HEALTH))
+    except (TypeError, ValueError):
+        h = float(DEFAULT_HEALTH)
+    if h >= 100.0:
+        user["health"] = 100.0
+        return
+    now = datetime.now(timezone.utc)
+    raw_last = user.get("health_regen_last_at")
+    if not raw_last:
+        iso = now.isoformat()
+        await db.users.update_one({"id": user_id}, {"$set": {"health_regen_last_at": iso}})
+        user["health_regen_last_at"] = iso
+        return
+    try:
+        last = datetime.fromisoformat(str(raw_last).replace("Z", "+00:00"))
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+    except Exception:
+        iso = now.isoformat()
+        await db.users.update_one({"id": user_id}, {"$set": {"health_regen_last_at": iso}})
+        user["health_regen_last_at"] = iso
+        return
+    elapsed = (now - last).total_seconds()
+    if elapsed < 0:
+        elapsed = 0.0
+    elapsed = min(elapsed, 86400.0 * 7)
+    if elapsed < 1.0:
+        return
+    gain = elapsed * (100.0 / float(HEALTH_REGEN_FULL_SECONDS))
+    new_h = round(min(100.0, h + gain), 2)
+    iso = now.isoformat()
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"health": new_h, "health_regen_last_at": iso}},
+    )
+    user["health"] = new_h
+    user["health_regen_last_at"] = iso
+
+
 async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -838,6 +887,7 @@ async def get_current_user(
                     user = await db.users.find_one({"id": user_id}, {"_id": 0})
         except Exception:
             pass
+    await apply_passive_health_regen(user_id, user)
     return user
 
 
@@ -1687,6 +1737,8 @@ jail.register(api_router)
 organised_crime.register(api_router)
 oc.register(api_router)
 forum.register(api_router)
+from routers.social import game_ideas as game_ideas_router
+game_ideas_router.register(api_router)
 entertainer.register(api_router)
 from routers.game import designer_competitions
 designer_competitions.register(api_router)

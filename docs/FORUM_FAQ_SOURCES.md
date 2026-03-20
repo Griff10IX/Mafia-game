@@ -6,15 +6,45 @@ Use this when updating [FORUM_FAQ.md](FORUM_FAQ.md) so numbers stay aligned with
 |--------|----------------------|
 | Rank names & RP thresholds | `backend/server.py` → `RANKS` |
 | Prestige titles & multipliers | `backend/server.py` → `PRESTIGE_CONFIGS`, `get_prestige_bonus` |
+| Cities / travel destinations | `backend/server.py` → `STATES` |
+| Car travel times | `backend/server.py` → `TRAVEL_TIMES`; car catalog `CARS` |
+| Melt-for-bullets yield | `backend/server.py` → `MELT_VALUE_PER_BULLET`, `CARS[].value`; `backend/routers/cars/gta.py` → `_melt_cars_impl` |
 | Interest bank terms & % | `backend/server.py` → `BANK_INTEREST_OPTIONS` |
 | Kill cash % | `backend/server.py` → `KILL_CASH_PERCENT` (events: `kill_cash` in `GAME_EVENTS`) |
+| Wealth rank thresholds | `backend/server.py` → `WEALTH_RANKS` |
+| Garage batch limits | `backend/server.py` → `DEFAULT_GARAGE_BATCH_LIMIT`, `GARAGE_BATCH_UPGRADE_*` |
 | Armour tier scaling (bullets formula) | `backend/server.py` → `ARMOUR_BASE_BULLETS`; `backend/routers/kill/attack.py` → `_bullets_to_kill` |
 | Molotov bullet equivalent | `backend/routers/kill/attack.py` → `MOLOTOV_BULLET_EQUIV` |
+| Hitlist hidden / buy-off multipliers | `backend/routers/kill/hitlist.py` → `HITLIST_HIDDEN_MULTIPLIER`, `HITLIST_BUY_OFF_MULTIPLIER` |
+| Bodyguards (slots, costs, hire rules) | `backend/routers/kill/bodyguards.py` → `BODYGUARD_SLOT_COSTS`, `buy_bodyguard_slot`, `_do_hire_bodyguard` |
 | Health restore cost | `backend/routers/game/store.py` → `buy_health` |
-| Silencer cost | `backend/routers/game/store.py` → `SILENCER_COST_POINTS` |
-| Auto Rank purchase | `backend/routers/game/store.py` → `AUTO_RANK_COST_POINTS` |
-| OC / Crew OC timer store prices | `backend/routers/game/store.py` → `OC_TIMER_COST_POINTS`, `CREW_OC_TIMER_COST_POINTS` |
+| Passive health regen (lazy tick) | `backend/server.py` → `HEALTH_REGEN_FULL_SECONDS`, `apply_passive_health_regen`; field `health_regen_last_at` on `users` |
+| Silencer / anti-snitch / OC timers / bullets / custom car | `backend/routers/game/store.py` → `SILENCER_COST_POINTS`, `ANTI_SNITCH_COST_POINTS`, `OC_TIMER_COST_POINTS`, `CREW_OC_TIMER_COST_POINTS`, `BULLET_PACKS`, `CUSTOM_CAR_COST`, `upgrade_garage_batch_limit` |
+| Dead > Alive, revive, reveal killer | `backend/routers/game/dead_alive.py` → `DEAD_ALIVE_PERCENT`, `TOKEN_RESTORE_PERCENT`, `REVIVE_COST`, `REVEAL_KILLER_COST` |
+| Booze types, capacity, jail on bust | `backend/routers/money/booze_run.py` → `BOOZE_TYPES`, `BOOZE_CAPACITY_*`, `BOOZE_RUN_JAIL_*` |
+| Regular crimes list & ranks | `backend/routers/crime/crimes.py` → crime dicts (`crime1`…`crime8`, prestige crimes) |
+| Organised crime (OC) | `backend/routers/crime/oc.py` → `OC_COOLDOWN_HOURS`, `OC_COOLDOWN_HOURS_REDUCED`, `OC_EQUIPMENT_BY_ID`, `OC_SUCCESS_RATE`, `OC_JAIL_*`, jobs, roles |
+| Crew / family OC cooldown | `backend/routers/game/families.py` → `CREW_OC_COOLDOWN_HOURS`, `CREW_OC_COOLDOWN_HOURS_REDUCED` |
+| GTA options | `backend/routers/cars/gta.py` → `GTA_OPTIONS` (cooldown seconds, jail seconds, success rates) |
+| Melt for bullets | `backend/routers/cars/gta.py` → `_melt_cars_impl`, `MELT_BULLETS_COOLDOWN_SECONDS` |
+| Jail, bust, snitch | `backend/routers/crime/jail.py` → bust logic, `SNITCH_*` |
+| API rate limits (optional) | `backend/middleware/security.py` → `GLOBAL_RATE_LIMITS_ENABLED`, `RATE_LIMIT_CONFIG` |
+| Consumable tokens | `backend/routers/kill/armoury.py` → `TOKEN_CONFIG`, `use_token`; descriptions also in `crack_safe.py` |
+| Mini-game weekly leaderboard | `backend/routers/minigames/minigame_leaderboard.py` → `VALID_GAMES`, `DEFAULT_REWARDS`, week start |
 | Property catalog ($/hr, max level) | Database `properties` collection; API via `backend/routers/money/properties.py` |
 | Weapon list & damage | Database `weapons` collection; `backend/routers/kill/armoury.py` |
 | BBCode & smileys | `src/utils/forumContent.js` → `parseForumContent` |
 | DM wink behaviour | `src/pages/Social/InboxChat.js` → `dmUnicodeSmileys` |
+| FAQ seed fallback | `backend/seeds/seed_faq_topic.py` → `FALLBACK_FAQ_CONTENT` (only if `FORUM_FAQ.md` missing) |
+| Travel per hour + extra airmiles | `backend/routers/admin/airport.py` → `MAX_TRAVELS_PER_HOUR`, `EXTRA_AIRMILES_COST`, `MAX_EXTRA_AIRMILES` (+5 per purchase until cap) |
+| Airport fare & slots | Same file → `AIRPORT_COST`, `AIRPORT_PRICE_MIN`, `AIRPORT_PRICE_MAX`, `AIRPORT_SLOTS_PER_STATE` |
+| Daily rotating event modifiers | `backend/server.py` → `GAME_EVENTS`, `get_effective_event` |
+| Badge passive bonuses | `backend/routers/game/achievements.py` → `get_badge_bonuses` (prestige scaling where applied) |
+| Bullet factory / armoury / shooting cap | `backend/routers/kill/armoury.py` → `BULLET_FACTORY_CLAIM_COST`, `SHOOTING_RANGE_MAX_PLAYS_PER_HOUR`, factory tick & stock logic |
+| Send points (P2P) | `backend/routers/game/store.py` → `send_points` / `/store/send-points` |
+| Referral payouts | `backend/routers/crime/crimes.py`, `oc.py`, `money/booze_run.py`, `cars/gta.py` (referral comment blocks) |
+| Entertainer / E-Games | `backend/routers/game/entertainer.py` |
+| Designer competitions | `backend/routers/game/designer_competitions.py` |
+| Family treasury / vault, compound, war prizes | `backend/routers/game/families.py` → `families_deposit`, `families_withdraw`, `families_compound_*`, war wipe / `compound_*` prize logic |
+| Auto Rank (purchase, toggles, cron) | `backend/routers/account/auto_rank.py`; UI `src/pages/Account/AutoRank.js` |
+| Game Ideas seasons / voting | `backend/routers/social/game_ideas.py` |

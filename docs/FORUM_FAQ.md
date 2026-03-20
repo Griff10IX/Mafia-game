@@ -15,7 +15,7 @@ Combat is the heart of the game. Attack other players to steal their cash and ea
 [*][color=#888888]Must be in the SAME CITY as your target[/color]
 [*][color=#888888]Need enough bullets based on target's armour level[/color]
 [*][color=#888888]Cannot attack while in jail or traveling[/color]
-[*][color=#888888]30 second cooldown between failed attacks[/color]
+[*][color=#888888]No separate “failed attack” cooldown built into combat; staff may turn on extra throttling behind the scenes if needed[/color]
 [/list]
 
 [b]Attack Success Rate:[/b]
@@ -41,8 +41,11 @@ Combat is the heart of the game. Attack other players to steal their cash and ea
 [*][color=#FF6B6B]Lose all properties and their upgrades[/color]
 [*][color=#FF6B6B]Lose all weapons and armour[/color]
 [*][color=#FF6B6B]Lose all cars in your garage[/color]
-[*][color=#FF6B6B]Your character is permanently dead (permadeath)[/color]
-[*][color=#FF6B6B]Must create new account to play again[/color]
+[*][color=#FF6B6B]Your character is marked dead (permadeath for that account)[/color]
+[*][color=#2ECC71][b]Dead > Alive:[/b] On a [b]new[/b] account, one-time transfer [b]99.95%[/b] of the dead account’s [b]cash and points at death[/b] (tiny tax to the state-head family), plus [b]~50% of consumable tokens[/b] stored at death. Requires the dead account’s password.[/color]
+[*][color=#2ECC71][b]Revive:[/b] Pay [b]50,000 points[/b] on a living account to revive a dead account on the [b]same email[/b] (once per email).[/color]
+[*][color=#888888]While dead: spend [b]1,000 points[/b] to reveal who killed you (if known).[/color]
+[*][color=#888888]You may register a new account to keep playing; use Dead > Alive to recover most wealth from the old character.[/color]
 [/list]
 
 [color=#FFD700][b]Weapons[/b][/color]
@@ -86,14 +89,13 @@ Place bounties on other players. Anyone who kills them collects the reward.
 [/list]
 
 [color=#FFD700][b]Bodyguards[/b][/color]
-Hire bodyguards to protect you. They absorb damage before you do.
+You can have [b]at most 4 bodyguards at once[/b] — [b]any mix[/b] of [b]robot[/b] and [b]human[/b]. They absorb damage before you do. Everything is managed on the [b]Bodyguards[/b] page (slot unlocks are bought there with points, not from the main Point Store list).
 
 [list]
-[*][color=#888888]Start with up to 4 bodyguard slots[/color]
-[*][color=#888888]Buy more slots from the point store (up to 10 total)[/color]
+[*][color=#888888][b]Slots:[/b] unlock extra empty slots via [b]Bodyguards → buy slot[/b] — [b]75 → 150 → 300 → 450[/b] pts for the 1st–4th purchase (order depends how many you already unlocked; daily events can change costs)[/color]
+[*][color=#888888][b]Robots[/b] — hire instantly into an empty slot (points; base cost depends on slot + a short inflation window if you hire often — see in-game)[/color]
+[*][color=#888888][b]Humans[/b] — send a [b]bodyguard invite[/b] to another player; when they accept, they fill a slot. The inviter pays a [b]one-time hire fee in points[/b] (lower than a robot hire at the same moment). Weekly pay (points/cash) and contract length are set in the invite. Human guards use [b]their own armour[/b]; you cannot upgrade their armour from your screen (robots can).[/color]
 [*][color=#888888]Bodyguards die first when you're attacked[/color]
-[*][color=#888888]Human bodyguards need weekly wages[/color]
-[*][color=#888888]NPC bodyguards are cheaper but weaker[/color]
 [/list]
 
 [color=#FFD700][b]Molotovs[/b][/color]
@@ -113,7 +115,7 @@ Your health affects combat effectiveness.
 [list]
 [*][color=#888888]Health ranges from 0% to 100%[/color]
 [*][color=#888888]Low health makes you easier to kill[/color]
-[*][color=#888888]Health regenerates slowly over time[/color]
+[*][color=#888888]Health passively refills while you’re alive: about [b]0→100% over 2 hours[/b] of real time, applied whenever the server checks your account (playing, menu refresh, etc.) — or buy an instant restore from the Store[/color]
 [*][color=#888888]Restore health instantly from the store: 15 points or 75 respect[/color]
 [*][color=#888888]Always check your health before attacking[/color]
 [/list]
@@ -154,22 +156,23 @@ Own properties that generate passive income every hour. Names, prices, and incom
 [color=#2ECC71][b]Booze Runs[/b][/color]
 Buy booze cheap in one city, travel to another, sell high.
 
-[b]Booze Types (by profit potential):[/b]
+[b]Booze types (as shown in the Booze screen):[/b]
 [list]
-[*][color=#888888]Beer - Low risk, low reward[/color]
-[*][color=#888888]Wine - Moderate[/color]
-[*][color=#888888]Whiskey - Moderate[/color]
-[*][color=#888888]Vodka - Good profit[/color]
-[*][color=#888888]Champagne - High profit[/color]
-[*][color=#FFD700]Moonshine - Highest profit, highest risk[/color]
+[*][color=#888888]Bathtub Gin[/color]
+[*][color=#888888]Moonshine[/color]
+[*][color=#888888]Rum Runner's Rum[/color]
+[*][color=#888888]Speakeasy Whiskey[/color]
+[*][color=#888888]Needle Beer[/color]
+[*][color=#888888]Jamaica Ginger[/color]
 [/list]
+[i]Profit depends on each city’s rotating buy/sell prices (not a fixed “type ladder”).[/i]
 
 [b]Booze Run Tips:[/b]
 [list]
 [*][color=#888888]Prices change every 3 hours - check before you travel![/color]
 [*][color=#888888]Carrying capacity increases with your rank[/color]
 [*][color=#888888]Buy capacity upgrades from the point store[/color]
-[*][color=#888888]Small risk of getting caught and jailed (5-15% depending on type)[/color]
+[*][color=#888888]Each [b]buy[/b] or [b]sell[/b] has an independent [b]2–6%[/b] chance of a short bust ([b]20 seconds[/b] jail in current config)[/color]
 [*][color=#888888]Best strategy: buy low in one city, sell high in another[/color]
 [/list]
 
@@ -194,11 +197,18 @@ Lock cash for a fixed term; interest is a percentage of what you deposit (check 
 [*][color=#FFD700]THE most important bank - always keep money here![/color]
 [/list]
 
+[color=#2ECC71][b]Daily global events[/b][/color]
+When enabled, the game runs a [b]game-wide daily modifier[/b] (examples: double rank points, kill cash, cheaper bodyguards, racket payouts — the exact mix rotates). Check the [b]dashboard banner / flash news ticker[/b] for today’s message; bonuses apply only while that event is active.
+
+[color=#2ECC71][b]Armoury & bullet factory (per city)[/b][/color]
+Each city has one [b]bullet factory + armoury[/b]: the owner sets bullet prices, collects production, and can run armour/weapon production. [b]Unowned[/b] factories use default pricing; [b]claiming[/b] costs cash (shown on the Armoury screen). Like airports, ownership is competitive — use the Armoury / factory UI for how to take or defend the slot in your city.
+
 [b]Quick Trade:[/b]
 [list]
 [*][color=#888888]Buy/sell points with other players[/color]
 [*][color=#888888]Set your own exchange rate[/color]
 [*][color=#888888]Great for converting cash to points or vice versa[/color]
+[*][color=#888888][b]Send points[/b] — from the Store, transfer points to another player by username (logged; last transfers visible in the UI)[/color]
 [/list]
 
 [color=#2ECC71][b]Illegal Business (Personal Racket)[/b][/color]
@@ -259,7 +269,7 @@ Mini-game for instant rewards.
 
 [quote]
 [color=#E67E22][b]Car Rarities[/b][/color]
-Rarities include (travel times below match the server):
+Rarities include (travel times below are the live in-game values):
 
 [list]
 [*][color=#AAAAAA]Common — starter GTA cars[/color]
@@ -273,7 +283,7 @@ Rarities include (travel times below match the server):
 [/list]
 
 [color=#E67E22][b]Travel Speed by Rarity[/b][/color]
-Car travel between cities (seconds) — from [b]TRAVEL_TIMES[/b] in the live server config:
+Car travel between cities (seconds) — current in-game values:
 [list]
 [*][color=#AAAAAA]Common — 45s[/color]
 [*][color=#2ECC71]Uncommon — 35s[/color]
@@ -292,11 +302,11 @@ Bullets are [b]not[/b] fixed per rarity: each car uses its [b]dollar value[/b] i
 [b]Typical results with the current car catalog:[/b]
 [list]
 [*][color=#AAAAAA]Common (~$125–$188) — often [b]0[/b] bullets per car[/color]
-[*][color=#2ECC71]Uncommon (~$300–$500) — usually [b]0–1[/b][/color]
-[*][color=#3498DB]Rare (~$875–$1,375) — about [b]1–2[/b][/color]
-[*][color=#9B59B6]Ultra Rare (~$2,500–$3,750) — about [b]5–7[/b][/color]
-[*][color=#F39C12]Legendary (~$6,250–$7,500) — about [b]12–15[/b][/color]
-[*][color=#888888]Custom (~$12,500) — about [b]25[/b][/color]
+[*][color=#2ECC71]Uncommon (~$1,500–$3,850) — about [b]3–7[/b][/color]
+[*][color=#3498DB]Rare (~$4,000–$8,500) — about [b]8–17[/b][/color]
+[*][color=#9B59B6]Ultra Rare (~$9,500–$17,500) — about [b]19–35[/b][/color]
+[*][color=#F39C12]Legendary (~$20,000–$23,500) — about [b]40–47[/b][/color]
+[*][color=#888888]Custom (~$50,000) — about [b]100[/b][/color]
 [*][color=#FFD700]Exclusive / loot-exclusive — huge values, so huge bullet payouts (see in-game value)[/color]
 [/list]
 [i]Melt-for-bullets cooldown = [b]45 seconds × each car[/b] you melt in that action (22.5s × each while a Melt token is active). Badges can reduce the total further. Melt tokens do [b]not[/b] add a % to bullet yield.[/i]
@@ -318,23 +328,23 @@ Bullets are [b]not[/b] fixed per rarity: each car uses its [b]dollar value[/b] i
 [color=#9B59B6][b]Regular Crimes[/b][/color]
 Commit crimes to earn cash, rank points, and loot box pieces. Higher rank unlocks better crimes.
 
-[b]Crime Types (by rank requirement):[/b]
+[b]Crime types (minimum rank — exact names on the Crimes screen):[/b]
 [list]
-[*][color=#666666]Pickpocket - Starting crime, low reward[/color]
-[*][color=#777777]Mug a Pedestrian - Rat rank[/color]
-[*][color=#888888]Bootlegging - Thief rank[/color]
-[*][color=#999999]Armed Robbery - Mugger rank[/color]
-[*][color=#AAAAAA]Extortion - Hitman rank[/color]
-[*][color=#BBBBBB]Jewelry Heist - Enforcer rank[/color]
-[*][color=#CCCCCC]Bank Heist - Associate rank[/color]
-[*][color=#FFD700]Casino Heist - Capo rank, highest rewards[/color]
+[*][color=#666666]Pickpocket — rank 1+[/color]
+[*][color=#777777]Mug a Pedestrian — rank 1+[/color]
+[*][color=#888888]Bootlegging — rank 3+[/color]
+[*][color=#999999]Armed Robbery — rank 4+[/color]
+[*][color=#AAAAAA]Extortion — rank 5+[/color]
+[*][color=#BBBBBB]Jewelry Heist — rank 6+[/color]
+[*][color=#CCCCCC]Bank Heist — rank 8+[/color]
+[*][color=#FFD700]Casino Heist — rank 10+, highest tier[/color]
 [/list]
 
 [b]Crime Rewards:[/b]
 [list]
 [*][color=#888888]Cash payout (varies by crime type)[/color]
 [*][color=#888888]Rank points (RP)[/color]
-[*][color=#888888]Loot box pieces (1-3 per crime)[/color]
+[*][color=#888888]Small chance for extra loot box pieces on a successful crime (see in-game)[/color]
 [*][color=#888888]Chance for bonus items[/color]
 [/list]
 
@@ -344,33 +354,33 @@ Team-based heists requiring 4 players with different roles.
 [b]OC Roles:[/b]
 [list]
 [*][color=#E74C3C]Driver - Getaway vehicle[/color]
-[*][color=#3498DB]Weapons Expert - Combat support[/color]
+[*][color=#3498DB]Weapons - Combat support[/color]
 [*][color=#F39C12]Explosives - Entry and distraction[/color]
 [*][color=#2ECC71]Hacker - Security bypass[/color]
 [/list]
 
 [b]OC Features:[/b]
 [list]
-[*][color=#888888]Upgrade equipment to boost success rate (up to 40%)[/color]
-[*][color=#888888]Equipment has 5 upgrade levels each[/color]
-[*][color=#888888]Failed heists = jail time for all participants[/color]
-[*][color=#888888]8 hour cooldown (4h with point store upgrade)[/color]
-[*][color=#888888]Rewards split equally among all 4 participants[/color]
+[*][color=#888888]Equipment tiers ([b]basic → master[/b]) add setup [b]cost[/b]; success rolls use a [b]50%[/b] base rate in the live heist runner (check OC UI for details)[/color]
+[*][color=#888888]Failed run: often no jail; if the “caught” branch hits, the runner gets a [b]60s[/b] jail with a [b]60s[/b] unbreakable window (see server messages)[/color]
+[*][color=#888888][b]6 hour[/b] cooldown between runs; [b]one-time[/b] store upgrade ([b]300 pts[/b]) lowers it to [b]4 hours[/b]. [b]OC Reduced[/b] token also uses the shorter cooldown while active[/color]
+[*][color=#888888]Payouts split by the % you assign to each of the four roles (you + invites + NPC fill)[/color]
 [/list]
 
 [color=#9B59B6][b]GTA (Car Theft)[/b][/color]
 Steal cars from various locations. Better locations = rarer cars.
 
-[b]Theft Locations:[/b]
+[b]Theft locations (in-game names, min rank):[/b]
 [list]
-[*][color=#AAAAAA]Street Parking - Common cars (80%)[/color]
-[*][color=#2ECC71]Parking Garage - Uncommon (60%), Common (40%)[/color]
-[*][color=#3498DB]Dealership - Rare (50%), Uncommon (40%)[/color]
-[*][color=#9B59B6]Showroom - Epic (40%), Rare (50%)[/color]
-[*][color=#F39C12]Private Estate - Legendary (30%), Epic (60%)[/color]
+[*][color=#AAAAAA]Street Parking — easiest, rank 3+[/color]
+[*][color=#2ECC71]Residential Area — rank 4+[/color]
+[*][color=#3498DB]Downtown District — rank 5+[/color]
+[*][color=#9B59B6]Luxury Garage — rank 6+[/color]
+[*][color=#F39C12]Private Estate — hardest, rank 7+[/color]
 [/list]
+[i]Each location has its own success rate, jail time if caught, and cooldown between attempts ([b]about 60s–240s[/b], depending on tier).[/i]
 
-[b]GTA Cooldown:[/b] 2 minutes between attempts
+[b]GTA cooldown:[/b] After an attempt, wait the location’s cooldown (about [b]1–4 minutes[/b] depending on tier)
 [/quote]
 
 [hr]
@@ -379,14 +389,15 @@ Steal cars from various locations. Better locations = rarer cars.
 
 [quote]
 [color=#E74C3C][b]Getting Jailed[/b][/color]
-Failed crimes, GTAs, or heists can land you in jail.
+GTA fails, booze busts, some OC outcomes, snitch victims, busted jail breaks, and other actions can jail you — [b]regular crime failures do not[/b].
 
-[b]Jail Times:[/b]
+[b]Jail sources (typical):[/b]
 [list]
-[*][color=#888888]Failed crime: 1-5 minutes[/color]
-[*][color=#888888]Failed GTA: 2-8 minutes[/color]
-[*][color=#888888]Failed OC: 10-30 minutes[/color]
-[*][color=#888888]Snitched on: +50% time added[/color]
+[*][color=#888888][b]Regular crimes:[/b] failed attempts do [b]not[/b] jail you — you only lose progress on the crime bar[/color]
+[*][color=#888888][b]GTA caught:[/b] short timer per location ([b]about 8–50 seconds[/b], depends on location)[/color]
+[*][color=#888888][b]Booze buy/sell bust:[/b] [b]20 seconds[/b][/color]
+[*][color=#888888][b]OC “caught” branch:[/b] [b]60 seconds[/b] for the initiating player, with a [b]60s[/b] unbreakable window[/color]
+[*][color=#888888][b]Snitch victim:[/b] if someone snitches successfully on you, you serve [b]45 seconds[/b] — not a % extension of their sentence[/color]
 [/list]
 
 [color=#E74C3C][b]Getting Out[/b][/color]
@@ -407,9 +418,8 @@ Free players from jail:
 
 [color=#E74C3C][b]Snitching[/b][/color]
 [list]
-[*][color=#888888]Add time to another player's sentence[/color]
-[*][color=#888888]Makes enemies - they'll remember![/color]
-[*][color=#888888]Good for revenge or family wars[/color]
+[*][color=#888888]While [b]you[/b] are in jail: one attempt per term, [b]10–20%[/b] success — on success you walk and a random/targeted free player is jailed [b]45s[/b] (Anti Snitch blocks being chosen)[/color]
+[*][color=#888888]Makes enemies — victims get a notification (not who snitched)[/color]
 [/list]
 [/quote]
 
@@ -419,7 +429,7 @@ Free players from jail:
 
 [quote]
 [color=#3498DB][b]Cities[/b][/color]
-4 cities available: Chicago, New York, Los Angeles, Detroit
+4 cities available: Chicago, New York, Las Vegas, Atlantic City
 
 Each city has:
 [list]
@@ -429,7 +439,7 @@ Each city has:
 [/list]
 
 [color=#3498DB][b]Travel Time[/b][/color]
-Based on your car rarity ([b]TRAVEL_TIMES[/b] on server):
+Based on your car rarity (same travel times as in the Garage section):
 [list]
 [*][color=#AAAAAA]Common — 45s[/color]
 [*][color=#2ECC71]Uncommon — 35s[/color]
@@ -442,6 +452,9 @@ Based on your car rarity ([b]TRAVEL_TIMES[/b] on server):
 [*][color=#888888]Airport — instant[/color]
 [/list]
 
+[color=#3498DB][b]Travel limits (hourly)[/b][/color]
+Each [b]car[/b] or [b]airport[/b] trip counts against a per-hour cap of [b]15[/b] + your [b]extra airmiles[/b]. Buy more capacity from the Travel / Store flow: [b]25 points[/b] adds [b]5[/b] toward that cap per purchase, up to [b]50[/b] total extra airmiles. The cap resets each hour (timing shown on the Travel page).
+
 [color=#3498DB][b]Why Travel?[/b][/color]
 [list]
 [*][color=#888888]Attack players in other cities[/color]
@@ -451,13 +464,13 @@ Based on your car rarity ([b]TRAVEL_TIMES[/b] on server):
 [/list]
 
 [color=#FFD700][b]Airport Ownership[/b][/color]
-Own airport slots for passive income!
+Each city has [b]one airport ownership slot[/b]. Owners earn when others pay to fly.
 
 [list]
-[*][color=#FFD700]Kill an airport slot owner to take their slot[/color]
-[*][color=#888888]Earn money from every player who travels[/color]
-[*][color=#888888]Multiple slots available per airport[/color]
-[*][color=#888888]Passive income even while offline[/color]
+[*][color=#FFD700]Kill the current slot owner to take the airport in that city[/color]
+[*][color=#888888]Unowned default fare: [b]10 points[/b] per airport travel; owners set price between [b]10–30 points[/b][/color]
+[*][color=#888888]Earn points from travellers using your airport[/color]
+[*][color=#888888]Passive income while you hold the slot[/color]
 [*][color=#888888]Lose ownership if someone kills you[/color]
 [/list]
 [/quote]
@@ -475,6 +488,21 @@ Own airport slots for passive income!
 [*][color=#888888]Capo (4) - Crew leaders, can recruit[/color]
 [*][color=#888888]Soldier (15) - Made members[/color]
 [*][color=#888888]Associate (30) - Prospects, limited access[/color]
+[/list]
+
+[color=#F39C12][b]Treasury (crew vault)[/b][/color]
+[list]
+[*][color=#888888]The family [b]treasury[/b] is the shared [b]crew vault[/b] for [b]cash[/b]: members deposit from their wallet; [b]Boss, Underboss, or Consigliere[/b] withdraw to a member’s wallet[/color]
+[*][color=#888888]The family can also hold [b]treasury points[/b] and [b]treasury loot pieces[/b] at the family level (see your family screen)[/color]
+[*][color=#888888][b]Vault and compound are locked[/b] while your family is in an [b]active war[/b] — no deposits or withdrawals until the war ends[/color]
+[/list]
+
+[color=#F39C12][b]Compound[/b][/color]
+[list]
+[*][color=#888888]Members can stash [b]cash, points, and loot pieces[/b] in the family [b]compound[/b]; the game tracks [b]your share[/b] separately while totals sit on the family[/color]
+[*][color=#888888]Leadership can [b]return[/b] your share to you or [b]claim[/b] it into the family vault (treasury) for the crew[/color]
+[*][color=#2ECC71][b]Dead > Alive[/b] only transfers the dead account’s [b]personal[/b] snapshot ([b]cash / points / tokens at death[/b] on that character). [b]Compound balances are not on that snapshot[/b] — they stay with the [b]family[/b]. Whatever you already moved into the compound is not part of your personal Dead > Alive pot.[/color]
+[*][color=#E74C3C][b]You can still lose it:[/b] if your family is [b]wiped in a war[/b], the winner takes the loser’s [b]treasury, racket cash, and compound cash[/b], and compound [b]points / loot[/b] go to the winning family — treat compound as [b]family risk[/b], not a personal safe from war[/color]
 [/list]
 
 [color=#F39C12][b]Rackets[/b][/color]
@@ -519,7 +547,7 @@ Attack other families' rackets to steal income:
 
 [color=#F39C12][b]Crew OC[/b][/color]
 [list]
-[*][color=#888888]Family-wide heist every 6-8 hours[/color]
+[*][color=#888888]Crew OC cooldown [b]8h[/b] by default; Point Store upgrade plus the right token can lower it to [b]6h[/b][/color]
 [*][color=#888888]All online members can participate[/color]
 [*][color=#888888]Rewards based on participation level[/color]
 [*][color=#888888]Builds family unity and treasury[/color]
@@ -580,6 +608,7 @@ Train weapon mastery by hitting targets:
 [*][color=#888888]Hit targets to gain mastery XP[/color]
 [*][color=#888888]Each weapon levels separately[/color]
 [*][color=#888888]Max mastery reduces bullet usage by 10%[/color]
+[*][color=#888888][b]Rate limit:[/b] auto-train uses a short cooldown between sessions; live / 3D submits are capped at [b]10 plays per hour[/b] per account[/color]
 [/list]
 
 [color=#00BCD4][b]Shooting Range 3D[/b][/color]
@@ -600,12 +629,10 @@ Classic snake game with rewards:
 [/list]
 
 [color=#00BCD4][b]Minesweeper (Minefield)[/b][/color]
-Classic puzzle game:
+Classic puzzle game — grid sizes and mine counts are defined in the client UI (Easy / Medium / Hard).
 [list]
-[*][color=#888888]Easy - 8x8 grid, 10 mines[/color]
-[*][color=#888888]Medium - 16x16 grid, 40 mines[/color]
-[*][color=#888888]Hard - 30x16 grid, 99 mines[/color]
-[*][color=#888888]Higher difficulty = better rewards[/color]
+[*][color=#888888]Submit wins through the server (hourly win cap applies)[/color]
+[*][color=#888888]Higher difficulty = better rewards (see in-game)[/color]
 [/list]
 
 [color=#00BCD4][b]Racing[/b][/color]
@@ -672,11 +699,11 @@ Family-based running game:
 [/list]
 
 [color=#00BCD4][b]Mini-Games Leaderboard[/b][/color]
-Compete for top rankings:
+Combined weekly points from the mini-games that count toward the leaderboard (listed in-game):
 [list]
-[*][color=#888888]Each mini-game has its own leaderboard[/color]
-[*][color=#888888]Weekly and all-time rankings[/color]
-[*][color=#888888]Top players earn bonus rewards[/color]
+[*][color=#888888]Weeks start [b]Monday 00:00 UTC[/b]; prizes pay out when the week rolls over[/color]
+[*][color=#888888]Top [b]5[/b] each week earn fixed cash / respect / loot / bullets (amounts on the leaderboard screen)[/color]
+[*][color=#888888]Per-play points = base + score bonus (capped) — details on the leaderboard / rules in-game[/color]
 [/list]
 [/quote]
 
@@ -751,6 +778,12 @@ Complete objectives for bonus rewards. Which periods exist (daily, weekly, etc.)
 [*][color=#888888]Rotating tasks: crimes, GTA, kills, cash earned, heists, and more[/color]
 [*][color=#888888]Rewards and reset timers are listed per objective in the UI[/color]
 [/list]
+
+[color=#FFD700][b]Badges & achievements[/b][/color]
+Open [b]Ranking → Badges[/b] (and related stats). Earning badges gives [b]small stacking bonuses[/b] across many systems — crime cash, OC payouts, jail bust odds, melt cooldown, and more — with stronger effect as your [b]prestige[/b] grows where the game applies prestige scaling. Exact % values are shown on the Badges page.
+
+[color=#FFD700][b]Respect (secondary currency)[/b][/color]
+Earn respect from kills, crimes, jail busts, missions, mini-games, and other activities. Spend it in the [b]Store[/b] (e.g. health restore [b]75 respect[/b]) and on [b]respect-priced[/b] items where the UI lists a respect cost. Respect is [b]not[/b] sendable like cash/points unless a specific feature says otherwise.
 [/quote]
 
 [hr]
@@ -785,12 +818,13 @@ Collect loot box pieces to open a box (piece cost is shown in-game). Pieces drop
 [color=#8E44AD][b]Premium Items[/b][/color]
 [list]
 [*][color=#FFD700]Auto Rank (5,000 pts)[/color] - Auto-commit crimes & GTAs while offline
-[*][color=#888888]OC Timer Reduction (300 pts)[/color] - 4h cooldown instead of 8h
-[*][color=#888888]Crew OC Timer (350 pts)[/color] - 6h family OC cooldown instead of 8h
-[*][color=#888888]Custom Car (500 pts)[/color] - Design your own unique car
-[*][color=#888888]Name Change (200 pts)[/color] - Change your username
-[*][color=#888888]Extra Bodyguard Slots (150 pts each)[/color]
-[*][color=#888888]Booze Capacity Upgrade (100 pts)[/color]
+[*][color=#888888]OC Timer Reduction (300 pts) — one-time: personal OC cooldown [b]6h → 4h[/b][/color]
+[*][color=#888888]Crew OC Timer (350 pts) — one-time: family Crew OC [b]8h → 6h[/b][/color]
+[*][color=#888888]Custom Car (500 pts) - Design your own unique car[/color]
+[*][color=#888888]Garage batch limit — [b]25 pts[/b] per +[b]10[/b] cars per melt/scrap batch (cap [b]100[/b]; starts at [b]6[/b])[/color]
+[*][color=#888888]Username changes are [b]not[/b] sold in the Point Store — ask staff / Help Desk if a rename is offered[/color]
+[*][color=#888888]Extra bodyguard slots — buy on the [b]Bodyguards[/b] screen ([b]75 / 150 / 300 / 450[/b] pts per unlock; [b]max 4[/b] filled at once, robots and/or humans — see [b]COMBAT → Bodyguards[/b])[/color]
+[*][color=#888888]Booze Capacity Upgrade ([b]30 pts[/b]) — +[b]100[/b] carry capacity per purchase, up to +[b]1000[/b] bonus (see Store / Booze screens)[/color]
 [*][color=#888888]Premium Rank Bar (50 pts)[/color] - Enhanced rank display on profile
 [/list]
 
@@ -799,26 +833,40 @@ Collect loot box pieces to open a box (piece cost is shown in-game). Pieces drop
 [*][color=#888888]Silencer (150 pts)[/color] - Fewer witness statements when you kill
 [*][color=#888888]Anti-Snitch (120 pts)[/color] - Cannot be snitched on while in jail
 [*][color=#888888]Health Restore (15 pts or 75 respect)[/color] - Instantly restore to 100% health
+[*][color=#888888][b]Respect[/b] — also earned in-game; some store purchases accept respect instead of points (see each item)[/color]
 [/list]
 
 [color=#8E44AD][b]Bullets[/b][/color]
 [list]
-[*][color=#888888]5,000 bullets - 100 pts[/color]
-[*][color=#888888]15,000 bullets - 275 pts[/color]
-[*][color=#888888]30,000 bullets - 500 pts[/color]
-[*][color=#888888]50,000 bullets - 775 pts[/color]
-[*][color=#888888]100,000 bullets - 1,525 pts[/color]
+[*][color=#888888]5,000 bullets — 100 pts[/color]
+[*][color=#888888]10,000 bullets — 175 pts[/color]
+[*][color=#888888]50,000 bullets — 775 pts[/color]
+[*][color=#888888]100,000 bullets — 1,525 pts[/color]
+[*][color=#888888]Other amounts: priced by the store formula / UI (custom packs)[/color]
 [/list]
 
-[color=#8E44AD][b]Tokens (1-Hour Boosts)[/b][/color]
-Consumable boosts that stack up to several hours:
+[color=#8E44AD][b]Tokens (1-hour stacks)[/b][/color]
+Consumable boosts (from [b]Inventory[/b]): each token adds [b]1 hour[/b] of effect, stackable up to the per-type cap shown in-game.
 [list]
-[*][color=#888888]Crime XP Token - +25% crime rewards[/color]
-[*][color=#888888]GTA XP Token - +25% GTA rewards[/color]
-[*][color=#888888]Melt Token — shorter melt-for-bullets cooldown while active (stack up to 6h)[/color]
-[*][color=#888888]OC Cooldown Token - Reduce OC timer[/color]
-[*][color=#888888]Booze Bonus Token - +25% booze profits[/color]
-[*][color=#888888]Loot Token - +25% loot box pieces[/color]
+[*][color=#888888][b]Crime XP[/b] — [b]doubles rank points[/b] from successful crimes while active[/color]
+[*][color=#888888][b]GTA XP[/b] — [b]doubles rank points[/b] from successful GTA while active[/color]
+[*][color=#888888][b]Melt[/b] — shorter melt-for-bullets cooldown while active (stack up to 6h)[/color]
+[*][color=#888888][b]OC Reduced[/b] — shorter OC cooldown + cheaper setup + higher payout while active[/color]
+[*][color=#888888][b]Booze[/b] — [b]10% cheaper[/b] unit buy prices while active[/color]
+[*][color=#888888][b]Racket / Travel / Properties / Jailbust bonus[/b] — see in-game tooltips (racket income, travel, property income, bust odds)[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#6C3483]:robot: AUTO RANK[/color][/b][/size]
+
+[quote]
+[color=#6C3483][b]What it is[/b][/color]
+[list]
+[*][color=#888888][b]Auto Rank[/b] is a [b]Point Store[/b] unlock ([b]5,000 pts[/b]) that lets the server run [b]automated[/b] actions on a schedule while you meet the game’s rules (e.g. you must be [b]online[/b] / not dead as the mode requires — see the Auto Rank screen)[/color]
+[*][color=#888888]After purchase (or if staff grant it), open [b]Account → Auto Rank[/b] to toggle modules: [b]crimes, GTA, organised crime, booze runs, jail busts[/b], and related options (intervals and caps are shown in-game)[/color]
+[*][color=#888888]Runs are driven by the game’s [b]cron / tick[/b] logic — not a third-party bot; you are still responsible for risk (jail, costs, attacks, war locks, etc.)[/color]
 [/list]
 [/quote]
 
@@ -835,6 +883,14 @@ Community discussion boards:
 [*][color=#888888]Help Desk - Get support from staff[/color]
 [*][color=#888888]Family Recruitment - Find a family to join[/color]
 [*][color=#888888]Trading - Buy/sell with other players[/color]
+[*][color=#888888][b]Entertainer / E-Games[/b] — forum-linked community games and hosts when staff enable them[/color]
+[*][color=#888888][b]Designer competitions[/b] — occasional design contests when announced in-game or on the forum[/color]
+[*][color=#888888][b]Game Ideas[/b] — when staff run a season: pinned hub topic to post ideas, register your post, then vote on the Game Ideas board; finalists and implementation rewards are configured by admins[/color]
+[/list]
+
+[color=#1ABC9C][b]Referrals[/b][/color]
+[list]
+[*][color=#888888]If you registered with a referral link, your referrer earns [b]extra rewards paid by the game[/b] (not taken from you) on some of your payouts — e.g. [b]5%[/b] of crime cash profit, [b]5%[/b] of OC heist cash share, [b]2%[/b] of booze profit, [b]10%[/b] of bullets when you melt for bullets (referrer gets a parallel grant), [b]5%[/b] of garage scrap cash. Use the register / invite UI for your own link.[/color]
 [/list]
 
 [color=#1ABC9C][b]Direct Messages[/b][/color]
@@ -857,6 +913,7 @@ Community discussion boards:
 [*][color=#888888]Write a bio[/color]
 [*][color=#888888]Display your stats and achievements[/color]
 [*][color=#888888]Show your car collection[/color]
+[*][color=#888888][b]Notification settings[/b] — profile / settings let you toggle categories (e.g. E-Games, OC invites, attacks, system, messages)[/color]
 [/list]
 [/quote]
 
@@ -992,11 +1049,9 @@ Points are the premium currency used to purchase upgrades and items.
 
 [size=1.4][color=#FFD700][b]What Happens to Points When You Die?[/b][/color][/size]
 [list]
-[*][color=#2ECC71][b]UNUSED points are SAFE[/b][/color] - They stay on your account
-[*][color=#FF6B6B][b]USED items are LOST[/b][/color] - Auto Rank, bullets, tokens, etc.
-[*][color=#888888]Contact support to transfer unused points to a new character[/color]
-[*][color=#888888]Provide your old username and new username[/color]
-[*][color=#888888]Staff will verify and transfer within 24-48 hours[/color]
+[*][color=#2ECC71][b]UNUSED points stay on the dead account[/b] — pull them to a new character with [b]Dead > Alive[/b] (one-time, password), or pay [b]Revive[/b] to restore the same account[/color]
+[*][color=#FF6B6B][b]Spent / consumed items are gone[/b] — bullets used, tokens burned, etc.[/color]
+[*][color=#888888]Staff-assisted transfers are [b]not[/b] required for the coded Dead > Alive flow — use the in-game Dead > Alive / Revive pages[/color]
 [/list]
 
 [size=1.4][color=#3498DB][b]Transaction Issues[/b][/color][/size]
@@ -1104,7 +1159,7 @@ If someone used your card without permission:
 [color=#AAAAAA]A: Melt cars from GTA (legendary cars give the most), buy from armouries with cash, or purchase with points from the store.[/color]
 
 [color=#3498DB][b]Q: What happens when I die?[/b][/color]
-[color=#AAAAAA]A: Permadeath - you lose EVERYTHING except Swiss Bank cash and unused points. Your character is gone forever. Must start a new account.[/color]
+[color=#AAAAAA]A: You lose cash on hand, properties, weapons, armour, and cars; [b]Swiss Bank[/b] and [b]unused points[/b] stay on the dead account. Use [b]Dead > Alive[/b] on a new login to recover most cash/points (one-time, dead password), [b]Revive[/b] (50k pts, same email), or see the full list under [b]COMBAT → What Happens When You Die[/b] above.[/color]
 
 [color=#3498DB][b]Q: How do I join a family?[/b][/color]
 [color=#AAAAAA]A: Visit the Families page and apply to open families, or wait for an invite. Check the forum for recruitment posts.[/color]
@@ -1113,7 +1168,7 @@ If someone used your card without permission:
 [color=#AAAAAA]A: It automatically commits crimes and GTAs while you're offline based on your settings. You configure which crimes/locations it uses. Costs 5,000 points.[/color]
 
 [color=#3498DB][b]Q: Can I get my points back if I die?[/b][/color]
-[color=#AAAAAA]A: Contact support - UNUSED points can be transferred to a new character. Used items/purchases cannot be refunded.[/color]
+[color=#AAAAAA]A: Unused points remain on the dead account — recover them via [b]Dead > Alive[/b] to a new account (or revive). Used items are not refunded.[/color]
 
 [color=#3498DB][b]Q: What's the Interest Bank vs Swiss Bank?[/b][/color]
 [color=#AAAAAA]A: Interest Bank pays interest but locks cash for your chosen term (3h–72h — see the Banks section above). Swiss Bank protects money when you die but pays no interest. USE SWISS BANK for savings you can't afford to lose![/color]
@@ -1134,7 +1189,7 @@ If someone used your card without permission:
 [color=#AAAAAA]A: Boss declares war, both families fight by killing each other's members. War ends when one side surrenders or is wiped. Winner takes treasury and rackets.[/color]
 
 [color=#3498DB][b]Q: What is Dead to Alive?[/b][/color]
-[color=#AAAAAA]A: A feature that lets you resurrect a dead account. If someone you know died, you can bring their character back to life (with some restrictions). Check the Dead to Alive page in-game.[/color]
+[color=#AAAAAA]A: [b]Dead > Alive[/b] moves ~99.95% of a dead account’s cash/points (at death) to a new account with the dead password; [b]Revive[/b] costs 50k pts and restores the same email’s dead character. Open the Dead > Alive / Revive pages in-game.[/color]
 
 [color=#3498DB][b]Q: What is Prestige?[/b][/color]
 [color=#AAAAAA]A: After reaching Godfather (top of the 13-rank ladder), you can Prestige up to 5 times for permanent bonuses — stronger crime/OC/NPC/illegal-business payouts, GTA rare-car luck, mission redo scaling, and exclusive Prestige Crimes. See the Prestige screen for exact numbers.[/color]
@@ -1187,7 +1242,7 @@ Special meme emotes:
 :crazy: [color=#666666]crazy[/color] | :hackermans: [color=#666666]hackermans[/color] | :howdie: [color=#666666]howdie[/color] | :uzi: [color=#666666]uzi[/color] | :fu: [color=#666666]fu[/color]
 
 [size=1.4][color=#9B59B6][b]Unicode smileys & text faces[/b][/color][/size]
-Hundreds of extra codes work: classic faces like [b]:)[/b] [b]:D[/b] [b];)[/b], and long [b]:name:[/b] codes (e.g. [b]:skull:[/b] [b]:rocket:[/b]) — see [b]src/utils/forumContent.js[/b] in the game repo for the full list. Some short codes render as Unicode emoji; others use the small image smileys above.
+Hundreds of extra codes work: classic faces like [b]:)[/b] [b]:D[/b] [b];)[/b], and long [b]:name:[/b] codes (e.g. [b]:skull:[/b] [b]:rocket:[/b]) — try typing [b]:[/b] in the forum or DM composer if your client suggests names, or experiment; there is no need to look up source files. Some short codes render as Unicode emoji; others use the small image smileys above.
 
 [size=1.4][color=#9B59B6][b]Direct messages[/b][/color][/size]
 In Scoop / DM chat, [b]:wink:[/b], [b];)[/b], and [b];-)[/b] may show as the Unicode wink for reliability; other codes behave like the forum.

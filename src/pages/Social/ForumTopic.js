@@ -176,6 +176,9 @@ export default function ForumTopic() {
   const [designerSubmitLoading, setDesignerSubmitLoading] = useState(false);
   const [designerSubmittingCommentId, setDesignerSubmittingCommentId] = useState(null);
   const [deletingCommentId, setDeletingCommentId] = useState(null);
+  const [activeGameIdeaSeason, setActiveGameIdeaSeason] = useState(null);
+  const [gameIdeaMyEntryCommentId, setGameIdeaMyEntryCommentId] = useState(null);
+  const [gameIdeaSubmittingCommentId, setGameIdeaSubmittingCommentId] = useState(null);
 
   const fetchTopic = useCallback(async (silent = false) => {
     if (!topicId) return;
@@ -229,6 +232,25 @@ export default function ForumTopic() {
       setMyEntryCommentId(null);
     }
   }, [topic?.category, user]);
+
+  useEffect(() => {
+    const sid = topic?.game_idea_season_id;
+    if (!sid || !user) {
+      setActiveGameIdeaSeason(null);
+      setGameIdeaMyEntryCommentId(null);
+      return;
+    }
+    api.get('/forum/game-ideas/active-season').then((r) => {
+      const s = r.data?.season;
+      if (s?.id === sid) {
+        setActiveGameIdeaSeason(s);
+        setGameIdeaMyEntryCommentId(r.data?.my_entry_comment_id ?? null);
+      } else {
+        setActiveGameIdeaSeason(null);
+        setGameIdeaMyEntryCommentId(null);
+      }
+    }).catch(() => { setActiveGameIdeaSeason(null); setGameIdeaMyEntryCommentId(null); });
+  }, [topic?.game_idea_season_id, user]);
 
   const isAuthor = topic && user && topic.author_id === user.id;
 
@@ -287,6 +309,22 @@ export default function ForumTopic() {
       toast.error(err.response?.data?.detail || 'Failed');
     } finally {
       setAdminBusy(false);
+    }
+  };
+
+  const submitToGameIdea = async (commentId) => {
+    const sid = topic?.game_idea_season_id;
+    if (!sid || !commentId) return;
+    setGameIdeaSubmittingCommentId(commentId);
+    try {
+      await api.post(`/forum/game-ideas/seasons/${sid}/entries`, { comment_id: String(commentId).trim() });
+      toast.success('Idea registered');
+      setGameIdeaMyEntryCommentId(commentId);
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : 'Failed to register');
+    } finally {
+      setGameIdeaSubmittingCommentId(null);
     }
   };
 
@@ -513,7 +551,7 @@ export default function ForumTopic() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link
-            to={topic?.category === 'designer' ? '/forum?tab=designer' : topic?.category === 'entertainer' ? '/forum?tab=entertainer' : topic?.category === 'crew_oc' ? '/forum?tab=crew_oc' : '/forum'}
+            to={topic?.category === 'designer' ? '/forum?tab=designer' : topic?.category === 'entertainer' ? '/forum?tab=entertainer' : topic?.category === 'crew_oc' ? '/forum?tab=crew_oc' : topic?.category === 'game_ideas' ? '/forum?tab=game_ideas' : '/forum'}
             className="text-mutedForeground hover:text-primary transition-colors"
           >
             <ArrowLeft size={20} />
@@ -538,6 +576,14 @@ export default function ForumTopic() {
           </div>
         </div>
       </div>
+
+      {topic?.category === 'game_ideas' && topic?.game_idea_season_id && (
+        <div className="px-3 py-2 rounded-md border border-amber-500/30 bg-amber-500/10 text-[11px] text-amber-200/90">
+          <span className="font-heading font-bold text-amber-400 uppercase tracking-wide mr-2">Game Ideas</span>
+          Post your idea below, then register your post.{' '}
+          <Link to="/game/game-ideas" className="text-primary font-heading font-bold hover:underline">Open voting board →</Link>
+        </div>
+      )}
 
       {/* Staff controls: Admin/Mod = sticky, important, lock; HDO = lock only; Admin only = delete */}
       {(isAdmin || isModerator || isHdo) && (
@@ -956,6 +1002,20 @@ export default function ForumTopic() {
                         className="flex items-center gap-1 text-[10px] font-heading px-2 py-1 rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
                       >
                         {designerSubmittingCommentId === c.id ? '...' : 'Submit as my entry'}
+                      </button>
+                    ) : null
+                  )}
+                  {topic?.game_idea_season_id && activeGameIdeaSeason?.status === 'primary' && user && c.author_id === user.id && (
+                    gameIdeaMyEntryCommentId === c.id ? (
+                      <span className="text-[10px] font-heading font-bold text-emerald-400 px-2 py-1">Registered idea</span>
+                    ) : !gameIdeaMyEntryCommentId ? (
+                      <button
+                        type="button"
+                        onClick={() => submitToGameIdea(c.id)}
+                        disabled={!!gameIdeaSubmittingCommentId}
+                        className="flex items-center gap-1 text-[10px] font-heading px-2 py-1 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50"
+                      >
+                        {gameIdeaSubmittingCommentId === c.id ? '...' : 'Register as my idea'}
                       </button>
                     ) : null
                   )}

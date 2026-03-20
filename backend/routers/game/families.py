@@ -614,7 +614,22 @@ async def _users_map_by_ids(user_ids: list, projection: Optional[dict] = None) -
         return {}
     uids = list(dict.fromkeys([s for u in user_ids if (s := _uid_str(u))]))
     proj = projection or {"_id": 0, "username": 1, "rank": 1, "is_dead": 1, "dead_at": 1}
-    docs = await db.users.find({"id": {"$in": uids}}, proj).to_list(200)
+    # Match users.id whether stored as string or legacy int (Mongo $in is strict on type)
+    or_clauses = []
+    seen = set()
+    for uid in uids:
+        or_clauses.append({"id": uid})
+        seen.add(uid)
+        if uid.isdigit():
+            try:
+                n = int(uid)
+                key = f"int:{n}"
+                if key not in seen:
+                    seen.add(key)
+                    or_clauses.append({"id": n})
+            except ValueError:
+                pass
+    docs = await db.users.find({"$or": or_clauses}, proj).to_list(200) if or_clauses else []
     out = {}
     for d in docs:
         k = _uid_str(d.get("id"))
@@ -990,15 +1005,37 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
     users_by_id = await _users_map_by_ids(lookup_uids)
     members = []
     fallen = []
+    bid_norm = _uid_str(fam.get("boss_id"))
     for m in members_docs:
-        u = users_by_id.get(_uid_str(m["user_id"]))
-        rank_name = "—"
-        if u and RANKS:
-            rank_name = next((x["name"] for x in RANKS if x.get("id") == u.get("rank", 1)), str(u.get("rank", 1)))
+        uid_s = _uid_str(m["user_id"])
+        u = users_by_id.get(uid_s) if uid_s else None
         role_norm = str(m.get("role", "")).strip().lower() or "associate"
         if role_norm == "don":
             role_norm = "boss"
+        # Boss row must show the real Don: prefer families.boss_id if member row is stale or lookup missed
+        if role_norm == "boss" and bid_norm and (not u or uid_s != bid_norm):
+            u = users_by_id.get(bid_norm) or u
+        rank_name = "—"
+        if u and RANKS:
+            rank_name = next((x["name"] for x in RANKS if x.get("id") == u.get("rank", 1)), str(u.get("rank", 1)))
         uname = ((u.get("username") if u else None) or "").strip() or "?"
+        # Last resort: direct DB load for Don if map still missed (corrupt member user_id, etc.)
+        if uname == "?" and role_norm == "boss" and bid_norm:
+            or_c = [{"id": bid_norm}]
+            if bid_norm.isdigit():
+                try:
+                    or_c.append({"id": int(bid_norm)})
+                except ValueError:
+                    pass
+            bu = await db.users.find_one(
+                {"$or": or_c},
+                {"_id": 0, "username": 1, "rank": 1, "is_dead": 1, "dead_at": 1},
+            )
+            if bu:
+                u = bu
+                if RANKS:
+                    rank_name = next((x["name"] for x in RANKS if x.get("id") == u.get("rank", 1)), str(u.get("rank", 1)))
+                uname = ((u.get("username") if u else None) or "").strip() or "?"
         entry = {"user_id": m["user_id"], "username": uname, "role": role_norm, "rank_name": rank_name}
         if (u or {}).get("is_dead"):
             entry["dead_at"] = (u or {}).get("dead_at")
@@ -1300,7 +1337,11 @@ async def families_leave(current_user: dict = Depends(get_current_user)):
         loss_pct = _rng.uniform(0, RETRIBUTION_MAX_HEALTH_LOSS_PCT)
         damage = health * loss_pct
         new_health = max(MIN_HEALTH_PCT, health - damage)
-        await db.users.update_one({"id": current_user["id"]}, {"$set": {"health": new_health}})
+        retrib_iso = datetime.now(timezone.utc).isoformat()
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"health": new_health, "health_regen_last_at": retrib_iso}},
+        )
         _invalidate_my_cache(current_user["id"])
         return {
             "message": "Left family. The family sent a hitman—you were shot and lost health. You survived.",

@@ -93,6 +93,7 @@ const StockMarket = lazy(() => import("./pages/Money/StockMarket"));
 // Social pages
 const Forum = lazy(() => import("./pages/Social/Forum"));
 const ForumTopic = lazy(() => import("./pages/Social/ForumTopic"));
+const GameIdeas = lazy(() => import("./pages/Social/GameIdeas"));
 const Inbox = lazy(() => import("./pages/Social/Inbox"));
 const InboxChat = lazy(() => import("./pages/Social/InboxChat"));
 
@@ -1229,6 +1230,19 @@ function App() {
           <Route path="/inbox/chat/:userId" element={<InboxChatRedirect />} />
           <Route path="/forum" element={<Navigate to="/social/forum" replace />} />
           <Route path="/forum/topic/:topicId" element={<ForumTopicRedirect />} />
+          <Route
+            path="/game/game-ideas"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <GameIdeas />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route path="/game-ideas" element={<Navigate to="/game/game-ideas" replace />} />
           <Route
             path="/game/dead-alive"
             element={

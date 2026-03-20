@@ -297,6 +297,16 @@ async def ensure_all_indexes(db):
         await db.designer_competition_votes.create_index("entry_id")
         await db.designer_competition_votes.create_index([("competition_id", 1), ("entry_id", 1)])
 
+        # --- Game Ideas (forum hub + voting) ---
+        await db.game_idea_seasons.create_index("id", unique=True)
+        await db.game_idea_seasons.create_index("status")
+        await db.game_idea_entries.create_index("id", unique=True)
+        await db.game_idea_entries.create_index("season_id")
+        await db.game_idea_entries.create_index("comment_id")
+        await db.game_idea_entries.create_index([("season_id", 1), ("user_id", 1)], unique=True)
+        await db.game_idea_votes.create_index([("season_id", 1), ("user_id", 1), ("phase", 1)], unique=True)
+        await db.game_idea_votes.create_index("entry_id")
+
         # --- Racket / extortions ---
         await db.extortions.create_index([("extorter_id", 1), ("target_id", 1), ("property_id", 1)])
 

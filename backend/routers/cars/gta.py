@@ -86,6 +86,7 @@ from server import (
     RANKS,
     CARS,
     TRAVEL_TIMES,
+    MELT_VALUE_PER_BULLET,
     DEFAULT_GARAGE_BATCH_LIMIT,
     CustomCarImageUpdate,
     _family_in_active_war,
@@ -766,7 +767,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                     uncommon_count += 1
                 car_value = int(car_info.get("value", 0) or 0)
                 if action == "bullets":
-                    total_bullets += car_value // 500
+                    total_bullets += car_value // MELT_VALUE_PER_BULLET
                 else:
                     total_value += int(car_value * 0.5)
                 if user_car.get("_id") is not None:

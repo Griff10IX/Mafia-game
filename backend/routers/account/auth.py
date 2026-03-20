@@ -1443,6 +1443,14 @@ def register(router):
             {"code": code_normalized},
             {"$inc": {"used_count": 1}, "$push": {"used_by": user_id}},
         )
+        new_used = used_count + 1
+        max_uses_val = doc.get("max_uses")
+        topic_id = doc.get("forum_topic_id")
+        if topic_id and max_uses_val is not None and new_used >= int(max_uses_val):
+            from routers.social.forum import remove_redeem_code_forum_topic
+
+            await remove_redeem_code_forum_topic(topic_id)
+            await db.redeem_codes.update_one({"code": code_normalized}, {"$unset": {"forum_topic_id": ""}})
         granted = []
         if inc.get("money"):
             granted.append(f"${inc['money']:,} cash")
