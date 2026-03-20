@@ -590,7 +590,8 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=24)
     attacker_id = current_user["id"]
-    await db.attacks.delete_many({"attacker_id": attacker_id, "expires_at": {"$lte": now.isoformat()}})
+    # Do not delete by expires_at via Mongo $lte on mixed types (BSON date vs ISO string) — that can
+    # incorrectly wipe rows. Expiry is handled per-document below using parsed datetimes.
     attacks = await db.attacks.find(
         {"attacker_id": attacker_id, "status": {"$in": ["searching", "found"]}},
         {"_id": 0}
@@ -643,6 +644,10 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
 
     items = []
     for attack in attacks:
+        exp_dt = _parse_iso_datetime(attack.get("expires_at"))
+        if exp_dt is not None and exp_dt <= now:
+            delete_ids.append(attack["id"])
+            continue
         # Remove searches for dead targets (players or bodyguards; e.g. someone else killed them)
         tid = attack.get("target_id")
         if tid:

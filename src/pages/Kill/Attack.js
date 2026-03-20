@@ -954,8 +954,8 @@ export default function Attack() {
   const [pendingResend, setPendingResend] = useState(null);
   const [killBannerMessage, setKillBannerMessage] = useState(null);
 
-  /** Ignore stale GET /attack/list results so initial page load cannot overwrite a newer list (e.g. after Start Search). */
-  const attackListFetchGenRef = useRef(0);
+  /** Abort in-flight GET /attack/list so overlapping polls/loads cannot apply out-of-order (empty after full). */
+  const attackListAbortRef = useRef(null);
 
   const showKillResult = (text, type, options = {}) => {
     const { description, action } = options;
@@ -1098,36 +1098,33 @@ export default function Attack() {
     }
 
     const load = async () => {
-      const attacksFetchId = ++attackListFetchGenRef.current;
       try {
-        const [attacksRes, inflationRes, meRes, eventsRes] = await Promise.all([
-          api.get('/attack/list'),
+        const [inflationRes, meRes, eventsRes] = await Promise.all([
           api.get('/attack/inflation').catch(() => ({ data: {} })),
           api.get('/auth/me').catch(() => ({ data: {} })),
           api.get('/events/active').catch(() => ({ data: {} })),
         ]);
-        if (attacksFetchId === attackListFetchGenRef.current) {
-          setAttacks(attacksRes.data?.attacks ?? []);
-        }
         setInflationPct(Number(inflationRes.data?.inflation_pct ?? 0));
         setUserBullets(meRes.data?.bullets ?? 0);
         setUserMolotovs(meRes.data?.molotovs ?? 0);
         setEvent(eventsRes.data?.event ?? null);
         setEventsEnabled(!!eventsRes.data?.events_enabled);
+        await refreshAttacks();
       } catch (_) {
-        if (attacksFetchId === attackListFetchGenRef.current) {
-          setAttacks([]);
-        }
         setInflationPct(0);
         setUserBullets(0);
         setUserMolotovs(0);
         setEvent(null);
         setEventsEnabled(false);
+        await refreshAttacks();
       }
     };
     load();
     const interval = setInterval(refreshAttacks, 10000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      attackListAbortRef.current?.abort();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -1173,7 +1170,8 @@ export default function Attack() {
       if (payload.type === 'kill') {
         setLoading(true);
         try {
-          const list = await refreshAttacks();
+          let list = await refreshAttacks();
+          if (!Array.isArray(list)) list = [];
           const username = (payload.killUsername || '').trim().toLowerCase();
           const found = list.filter((a) => (a.target_username || '').toLowerCase() === username && a.status === 'found');
           const best = found.find((a) => a.can_attack);
@@ -1373,6 +1371,7 @@ export default function Attack() {
     let list;
     try {
       list = await refreshAttacks();
+      if (!Array.isArray(list)) list = attacks;
     } catch {
       list = attacks;
     } finally {
