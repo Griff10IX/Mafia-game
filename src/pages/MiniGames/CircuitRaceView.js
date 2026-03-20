@@ -647,6 +647,14 @@ const TRACKS = [
 const PROFILE_N = 256;
 const _profileCache = new Map();
 
+/** True if moving forward from cell i hits the start/finish zone within `maxSteps` samples. Stops braking/accel bleed into the run-up. */
+function forwardReachesSfZoneWithin(i, sfZone, N, maxSteps) {
+  for (let k = 1; k <= maxSteps; k++) {
+    if (sfZone[(i + k) % N]) return true;
+  }
+  return false;
+}
+
 // FIX B1: uses geometry discontinuity detection instead of blanket 5% bypass
 function getCurvature(track, t) {
   const eps = 0.006;
@@ -664,14 +672,14 @@ function getCurvature(track, t) {
 }
 
 function buildSpeedProfile(track) {
-  const cacheKey = track.id + (track.sfLine || 0);
+  const cacheKey = `${track.id}:${track.sfLine ?? 0}:sfv4`;
   if (_profileCache.has(cacheKey)) return _profileCache.get(cacheKey);
   const N = PROFILE_N, raw = new Float32Array(N);
 
   const sfL = track.sfLine != null ? track.sfLine : 0;
-  // SF zone: 14% pre-line run-up + 10% post-line acceleration zone
-  const preZone  = 0.14;
-  const postZone = 0.10;
+  // SF zone: wide enough that profile + runtime never dip before the gantry
+  const preZone  = 0.18;
+  const postZone = 0.12;
   const inSFZone = f => {
     const dBehind = ((sfL - f + 1) % 1);
     const dAhead  = ((f - sfL + 1) % 1);
@@ -695,14 +703,12 @@ function buildSpeedProfile(track) {
   // CRITICAL: if cell i is in the SF zone, SKIP it — don't let braking reduce it.
   // Also: if cell (i+1) is in the SF zone, don't propagate from it backward
   // (cars don't brake because of a fast straight ahead of them).
+  const sfRunUpSteps = 52; // ~20% of lap — kill braking cascade into S/F approach
   for (let iter = 0; iter < 5; iter++) {
     for (let i = N-1; i >= 0; i--) {
-      if (sfZone[i]) continue;           // SF zone cells are immune — never brake here
-      const ni = (i+1) % N;
-      if (sfZone[ni]) continue;          // don't propagate FROM a fast SF zone cell backward
-      // FIX: protect 2 cells before SF zone entry — stops braking cascade dead
-      const ni2 = (i+2) % N;
-      if (sfZone[ni2]) continue;
+      if (sfZone[i]) continue;
+      if (forwardReachesSfZoneWithin(i, sfZone, N, sfRunUpSteps)) continue;
+      const ni = (i + 1) % N;
       const lim = raw[ni] / 0.956;
       if (raw[i] > lim) raw[i] = lim;
     }
@@ -712,9 +718,10 @@ function buildSpeedProfile(track) {
   // If prev cell is in SF zone, don't limit current cell — straight-exit acceleration is free.
   for (let iter = 0; iter < 3; iter++) {
     for (let i = 0; i < N; i++) {
-      if (sfZone[i]) continue;           // SF zone cells already at max — skip
-      const pi = (i-1+N) % N;
-      if (sfZone[pi]) continue;          // coming off SF straight — no limit from it
+      if (sfZone[i]) continue;
+      if (forwardReachesSfZoneWithin(i, sfZone, N, sfRunUpSteps)) continue;
+      const pi = (i - 1 + N) % N;
+      if (sfZone[pi]) continue;
       const lim = raw[pi] / 0.974;
       if (raw[i] > lim) raw[i] = lim;
     }
@@ -728,9 +735,9 @@ function buildSpeedProfile(track) {
   for (let i = 0; i < N; i++) profile[i] = 0.54 + ((raw[i]-mn)/rng)*0.46;
 
   // ── Enforce SF zone floor AFTER normalisation ──
-  // SF cells must read at least 0.97 so cars are visibly fast through the finish straight.
+  // SF cells stay near full scale after normalise.
   for (let i = 0; i < N; i++) {
-    if (sfZone[i]) profile[i] = Math.max(profile[i], 0.97);
+    if (sfZone[i]) profile[i] = Math.max(profile[i], 0.99);
   }
 
   _profileCache.set(cacheKey, profile);
@@ -1924,12 +1931,15 @@ export default function CircuitRaceView({
           // High curvature = must slow down; grip determines how slow.
           // cornerGripMult gives the grip-based limit; profile gives the geometry limit.
           // Take the more conservative (minimum) of the two so physics are consistent.
-          const gripBasedMult = cornerGripMult(curvature, effGrip);
-          const profileMult   = Math.max(0.50, Math.min(1.0, profile[pidx] + (effGrip-0.85)*0.55));
-          let   cornerSM      = Math.min(profileMult, gripBasedMult);
           const sfLP = track.sfLine ?? 0;
           const dbSF = ((sfLP - trackT + 1) % 1), daSF = ((trackT - sfLP + 1) % 1);
-          if (dbSF <= 0.14 || daSF <= 0.10) cornerSM = Math.max(0.95, cornerSM);
+          const inSfStraight = dbSF <= 0.24 || daSF <= 0.18;
+          const gripBasedMult = cornerGripMult(curvature, effGrip);
+          const profileMult   = Math.max(0.50, Math.min(1.0, profile[pidx] + (effGrip-0.85)*0.55));
+          // On the start/finish straight, ignore grip/curvature cap — it caused visible lift-off before the line
+          let cornerSM = inSfStraight
+            ? Math.min(1, Math.max(profileMult, 0.998))
+            : Math.min(profileMult, gripBasedMult);
 
           // Curvature-aware brake/accel rates — sharper on straights, gentler in tight corners
           // In real cars: brake distance is short (0.2-0.4s), accel ramp is longer (0.5-1.2s)
@@ -2511,17 +2521,15 @@ export default function CircuitRaceView({
         const pidx = Math.round(trackT * (PROFILE_N - 1));
         const curvature = getCurvature(trk, trackT);
 
-        const gripBasedMult = cornerGripMult(curvature, effGrip);
-        const profileMult = Math.max(0.50, Math.min(1.0, profile[pidx] + (effGrip - 0.85) * 0.55));
-        let cornerSM = Math.min(profileMult, gripBasedMult);
-
-        // S/F zone protection: cars must not slow down on the main straight
         const sfLp = trk.sfLine ?? 0;
         const dBehindSF = ((sfLp - trackT + 1) % 1);
-        const dAheadSF  = ((trackT - sfLp + 1) % 1);
-        if (dBehindSF <= 0.14 || dAheadSF <= 0.10) {
-          cornerSM = Math.max(0.95, cornerSM);
-        }
+        const dAheadSF = ((trackT - sfLp + 1) % 1);
+        const inSfStraight = dBehindSF <= 0.24 || dAheadSF <= 0.18;
+        const gripBasedMult = cornerGripMult(curvature, effGrip);
+        const profileMult = Math.max(0.50, Math.min(1.0, profile[pidx] + (effGrip - 0.85) * 0.55));
+        let cornerSM = inSfStraight
+          ? Math.min(1, Math.max(profileMult, 0.998))
+          : Math.min(profileMult, gripBasedMult);
 
         // Curvature-aware braking/acceleration rates
         const isTightCorner = curvature > 0.12;

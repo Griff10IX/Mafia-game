@@ -4,7 +4,7 @@ import { ArrowLeft, Send } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
-import { filterProfanity } from '../../utils/profanityFilter';
+import { parseForumContent } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
 
 function formatTime(dateString) {
@@ -208,9 +208,15 @@ export default function InboxChat() {
                     : `${styles.panel} border border-primary/20 text-foreground rounded-bl-md`
                 }`}
               >
-                <p data-chat-part="message-text" className="text-sm font-heading whitespace-pre-wrap break-words">
-                  {censorProfanity ? filterProfanity(msg.message) : msg.message}
-                </p>
+                {msg.message && !(msg.message === '(GIF)' && msg.gif_url) ? (
+                  <div
+                    data-chat-part="message-text"
+                    className="text-sm font-heading forum-content break-words"
+                    dangerouslySetInnerHTML={{
+                      __html: parseForumContent(msg.message, { censorProfanity }),
+                    }}
+                  />
+                ) : null}
                 {msg.gif_url && (
                   <img
                     src={msg.gif_url}
@@ -263,7 +269,7 @@ export default function InboxChat() {
             data-chat-part="input"
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
-            placeholder="Message..."
+            placeholder="Message… [b]bold[/b], [i]italic[/i], [url]https://…[/url], [img]https://…[/img]"
             className={`flex-1 ${styles.input} rounded-2xl px-4 py-2.5 text-sm font-heading border border-primary/30 focus:border-primary/60 focus:outline-none`}
             disabled={sending}
           />

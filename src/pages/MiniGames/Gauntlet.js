@@ -894,7 +894,7 @@ export default function Gauntlet() {
   const newlyUnlockedTheme = THEMES.find(t => t.unlockType === "score" && bestScore >= t.unlockScore && t.id !== themeId);
 
   return (
-    <div className="mobile-page-root" style={{ width: "100%", maxWidth: 520, margin: "0 auto" }}>
+    <div className="mobile-page-root w-full max-w-[min(1240px,calc(100vw-1rem))] mx-auto px-1 sm:px-2">
       {showCharSelect && (
         <CharacterSelect
           characters={CHARACTERS} selected={characterId} money={money} bestScore={bestScore}
@@ -929,7 +929,7 @@ export default function Gauntlet() {
         </div>
 
         {/* Stats bar */}
-        <div style={{ display: "flex", gap: "18px", marginBottom: "10px", padding: "8px 16px", background: "rgba(var(--noir-primary-rgb),0.06)", border: "1px solid var(--noir-border-light)", borderRadius: "6px", width: "min(420px, 100%)", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: "18px", marginBottom: "10px", padding: "8px 16px", background: "rgba(var(--noir-primary-rgb),0.06)", border: "1px solid var(--noir-border-light)", borderRadius: "6px", width: "100%", maxWidth: "min(900px, 100%)", marginLeft: "auto", marginRight: "auto", justifyContent: "space-between" }}>
           <div style={{ textAlign: "center", flex: 1 }}>
             <div style={{ color: "var(--noir-muted)", fontSize: "9px", letterSpacing: "0.1em" }}>BANK</div>
             <div style={{ color: "var(--noir-primary)", fontSize: "16px", fontWeight: "700" }}>${Number(money || 0).toLocaleString()}</div>
@@ -947,7 +947,7 @@ export default function Gauntlet() {
         </div>
 
         {/* Controls row */}
-        <div style={{ marginBottom: "10px", padding: "8px 12px", background: "var(--noir-content)", border: "1px solid var(--noir-border-light)", borderRadius: "6px", width: "min(420px, 100%)" }}>
+        <div style={{ marginBottom: "10px", padding: "8px 12px", background: "var(--noir-content)", border: "1px solid var(--noir-border-light)", borderRadius: "6px", width: "100%", maxWidth: "min(900px, 100%)", marginLeft: "auto", marginRight: "auto" }}>
           {/* Character + World pickers */}
           <div style={{ display: "flex", gap: 8, marginBottom: 8, justifyContent: "center" }}>
             <button type="button" onClick={() => setShowCharSelect(true)}
@@ -992,9 +992,9 @@ export default function Gauntlet() {
         </div>
 
         {/* Game viewport */}
-        <div className="w-full flex flex-col md:flex-row md:items-start md:justify-center gap-3">
+        <div className="w-full flex flex-col lg:flex-row lg:items-start lg:justify-center gap-4 lg:gap-6">
           <div style={{
-            position: "relative", width: "min(420px, 100%)", borderRadius: "10px",
+            position: "relative", width: "100%", maxWidth: "min(820px, 100%)", marginLeft: "auto", marginRight: "auto", borderRadius: "10px",
             overflow: "hidden", border: "2px solid var(--noir-border-mid)",
             boxShadow: "0 0 40px rgba(var(--noir-primary-rgb),0.10), inset 0 0 40px rgba(0,0,0,0.45)",
             cursor: "pointer", touchAction: "manipulation", userSelect: "none",
@@ -1143,7 +1143,7 @@ export default function Gauntlet() {
           </div>
 
           {/* Leaderboard */}
-          <div className="w-full md:w-[340px] rounded-md" style={{ background: "var(--noir-content)", border: "1px solid var(--noir-border-mid)", padding: "10px" }}>
+          <div className="w-full lg:w-[min(400px,100%)] lg:max-w-[420px] lg:shrink-0 rounded-md" style={{ background: "var(--noir-content)", border: "1px solid var(--noir-border-mid)", padding: "10px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
               <div style={{ fontSize: 12, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--noir-primary)" }}>Top 10</div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1196,7 +1196,7 @@ export default function Gauntlet() {
         </div>
 
         {/* Reward tiers */}
-        <div style={{ marginTop: "10px", display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "center", maxWidth: "min(420px, 100%)" }}>
+        <div style={{ marginTop: "10px", display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "center", width: "100%", maxWidth: "min(900px, 100%)", marginLeft: "auto", marginRight: "auto" }}>
           {REWARD_TIERS.map((t, i) => {
             const active = score >= t.score && gameState === "dead";
             const current = reward.tier === i && gameState === "dead";

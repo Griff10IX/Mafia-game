@@ -4,6 +4,7 @@ import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircl
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
+import { parseForumContent } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
 
 const INBOX_STYLES = `
@@ -180,7 +181,7 @@ const ComposeModal = ({
             <textarea
               value={sendMessage}
               onChange={(e) => onSendMessageChange(e.target.value)}
-              placeholder="Type your message..."
+              placeholder="Type your message… [b]bold[/b], [url]https://…[/url], [img]https://…[/img]"
               rows={3}
               className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y transition-colors"
             />
@@ -398,7 +399,7 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
   );
 };
 
-const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDecline, onOpenChat, isSent }) => {
+const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDecline, onOpenChat, isSent, censorProfanity }) => {
   if (!notification) {
     return (
       <div className="flex-1 flex items-center justify-center bg-secondary/20">
@@ -415,6 +416,9 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
   const Icon = isSent ? Send : (NOTIFICATION_ICONS[notification.notification_type] || Bell);
   const isOcInvite = !!notification.oc_invite_id;
   const isUserMessage = notification.notification_type === 'user_message' && notification.sender_id;
+  const isBbDirectMessage =
+    notification.notification_type === 'user_message' ||
+    notification.notification_type === 'user_message_sent';
   
   // Get recipient for sent messages
   const recipient = isSent ? (notification.recipient_username || notification.to_username || notification.target_username) : null;
@@ -470,10 +474,21 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
       {/* Message Body */}
       <div className="flex-1 overflow-y-auto p-2">
         <div className="prose prose-invert max-w-none">
-          <p className="text-[11px] text-foreground leading-snug whitespace-pre-wrap">
-            <NotificationMessage message={notification.message} actorUsername={notification.actor_username} className="text-inherit" />
-          </p>
-          
+          {isBbDirectMessage &&
+          notification.message &&
+          !(notification.message === '(GIF)' && notification.gif_url) ? (
+            <div
+              className="text-[11px] text-foreground forum-content leading-snug break-words"
+              dangerouslySetInnerHTML={{
+                __html: parseForumContent(notification.message, { censorProfanity: !!censorProfanity }),
+              }}
+            />
+          ) : (
+            <p className="text-[11px] text-foreground leading-snug whitespace-pre-wrap">
+              <NotificationMessage message={notification.message} actorUsername={notification.actor_username} className="text-inherit" />
+            </p>
+          )}
+
           {notification.gif_url && (
             <div className="mt-2">
               <img 
@@ -530,6 +545,13 @@ export default function Inbox() {
   const [sendGifUrl, setSendGifUrl] = useState('');
   const [sending, setSending] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
+  const [censorProfanity, setCensorProfanity] = useState(false);
+
+  useEffect(() => {
+    api.get('/profile/censor-profanity').then((res) => {
+      setCensorProfanity(res.data?.censor_profanity === true);
+    }).catch(() => {});
+  }, []);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -825,6 +847,7 @@ export default function Inbox() {
               onOcDecline={handleOcInviteDecline}
               onOpenChat={(n) => n.sender_id && navigate(`/inbox/chat/${n.sender_id}`)}
               isSent={filter === 'sent'}
+              censorProfanity={censorProfanity}
             />
           </div>
         </div>
@@ -850,6 +873,7 @@ export default function Inbox() {
               onOcDecline={handleOcInviteDecline}
               onOpenChat={(n) => n.sender_id && navigate(`/inbox/chat/${n.sender_id}`)}
               isSent={filter === 'sent'}
+              censorProfanity={censorProfanity}
             />
           </div>
         )}
