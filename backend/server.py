@@ -576,6 +576,17 @@ class UserResponse(BaseModel):
     travel_until: Optional[str] = None
     properties_until: Optional[str] = None
     jailbust_bonus_until: Optional[str] = None
+    # Unactivated consumable token counts (armoury inventory); store purchases respect STORE_TOKEN_MAX_HELD
+    xp_crimes_tokens: int = 0
+    xp_gta_tokens: int = 0
+    melt_tokens: int = 0
+    oc_reduced_tokens: int = 0
+    booze_tokens: int = 0
+    racket_tokens: int = 0
+    travel_tokens: int = 0
+    properties_tokens: int = 0
+    jailbust_tokens: int = 0
+    shooting_range_bonus_plays: int = 0  # store upgrade: added to base 10 plays/hour in shooting range
     censor_profanity: bool = False  # when true, chat/forum show swear words as ***
     referred_by: Optional[str] = None  # referrer user id (set at signup via referral code)
     referred_by_username: Optional[str] = None  # referrer username for display

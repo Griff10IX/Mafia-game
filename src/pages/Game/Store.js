@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import { containsProfanity } from '../../utils/profanityFilter';
@@ -33,6 +33,30 @@ const CUSTOM_BULLETS_MAX = 250_000;
 const VALID_TABS = ['points', 'sendpts', 'upgrades', 'bullets'];
 const bulletCost = (bullets) => bullets < 5000 ? Math.max(1, Math.floor(bullets * 0.02)) : 100 + Math.ceil((bullets - 5000) * 75 / 5000);
 
+const STORE_TOKEN_MAX_HELD = 15;
+const SHOOTING_RANGE_BASE_PLAYS = 10;
+const SHOOTING_RANGE_BONUS_MAX = 10;
+const SHOOTING_RANGE_BONUS_COST = 85;
+
+/** Single consumable tokens (armoury); activate from My Inventory */
+const TOKEN_STORE_ITEMS = [
+  { tokenType: 'xp_crimes', title: 'Crimes XP Token', price: 42, userKey: 'xp_crimes_tokens', desc: '2× crime XP for 1h when activated (stack caps apply).' },
+  { tokenType: 'xp_gta', title: 'GTA XP Token', price: 42, userKey: 'xp_gta_tokens', desc: '2× GTA XP for 1h when activated.' },
+  { tokenType: 'melt', title: 'Melt Token', price: 42, userKey: 'melt_tokens', desc: 'Melt bonus hour when activated.' },
+  { tokenType: 'oc_reduced', title: 'OC Token', price: 42, userKey: 'oc_reduced_tokens', desc: 'Reduced OC cooldown hour when activated.' },
+  { tokenType: 'booze', title: 'Booze Token', price: 42, userKey: 'booze_tokens', desc: 'Booze run bonus hour when activated.' },
+  { tokenType: 'racket', title: 'Racket Token', price: 42, userKey: 'racket_tokens', desc: 'Racket income bonus hour when activated.' },
+  { tokenType: 'properties', title: 'Properties Token', price: 48, userKey: 'properties_tokens', desc: 'Property income bonus when activated.' },
+  { tokenType: 'travel', title: 'Travel Token', price: 55, userKey: 'travel_tokens', desc: 'Travel bonus when activated (shorter stack cap).' },
+  { tokenType: 'jailbust_bonus', title: 'Jailbust Token', price: 48, userKey: 'jailbust_tokens', desc: '+10% bust success for 1h when activated.' },
+];
+
+const TOKEN_BUNDLES = [
+  { id: 'grinder', title: 'Grinder Pack', price: 75, desc: '+1 Crimes XP token and +1 GTA XP token.' },
+  { id: 'racket_runner', title: 'Racket Runner Pack', price: 78, desc: '+1 Racket token and +1 Booze token.' },
+  { id: 'builder', title: 'Builder Pack', price: 100, desc: '+1 Travel token and +1 Properties token.' },
+];
+
 const UPGRADES = [
   { id: 'health', title: 'Full Health', Icon: Heart, price: 15, path: '/store/buy-health', ownedKey: null, desc: 'Restore health to 100%', extra: (u) => ({ line: 'Health', value: `${Number(u?.health ?? 100).toFixed(0)}%` }) },
   { id: 'rank-bar', title: 'Premium Rank Bar', Icon: Star, price: 50, path: '/store/buy-rank-bar', ownedKey: 'premium_rank_bar', desc: 'Exact numbers & amounts for next rank' },
@@ -43,6 +67,20 @@ const UPGRADES = [
   { id: 'crew-oc-timer', title: 'Crew OC Timer', Icon: Clock, price: 350, path: '/store/buy-crew-oc-timer', ownedKey: 'crew_oc_timer_reduced', desc: 'Family Crew OC 6h when you commit' },
   { id: 'garage', title: 'Garage Batch', Icon: Zap, price: 25, path: '/store/upgrade-garage-batch', ownedKey: null, desc: '+10 melt/scrap at once', extra: (u) => ({ line: 'Limit', value: u?.garage_batch_limit ?? 6 }) },
   { id: 'booze', title: 'Booze Capacity', Icon: ShoppingBag, price: 30, path: '/store/buy-booze-capacity', ownedKey: null, desc: '+100 capacity (max 1000)', extra: (u, cfg) => cfg && ({ line: 'Capacity', value: cfg.capacity ?? '—' }) },
+  {
+    id: 'shooting-range-bonus',
+    title: 'Shooting Range Bandwidth',
+    Icon: Crosshair,
+    price: SHOOTING_RANGE_BONUS_COST,
+    path: '/store/buy-shooting-range-bonus',
+    ownedKey: null,
+    desc: `+2 plays per hour on the 3D range (max +${SHOOTING_RANGE_BONUS_MAX} from store, stacks with base ${SHOOTING_RANGE_BASE_PLAYS}).`,
+    extra: (u) => {
+      const b = Math.min(SHOOTING_RANGE_BONUS_MAX, Number(u?.shooting_range_bonus_plays ?? 0));
+      return { line: 'Plays/hour', value: `${SHOOTING_RANGE_BASE_PLAYS + b} now · max ${SHOOTING_RANGE_BASE_PLAYS + SHOOTING_RANGE_BONUS_MAX}` };
+    },
+    disabledWhen: (u) => Math.min(SHOOTING_RANGE_BONUS_MAX, Number(u?.shooting_range_bonus_plays ?? 0)) >= SHOOTING_RANGE_BONUS_MAX,
+  },
 ];
 
 const Tab = ({ active, onClick, children, disabled, className = '' }) => (
@@ -560,7 +598,61 @@ export default function Store() {
       )}
 
       {activeTab === 'upgrades' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Consumable tokens</h2>
+            <p className="text-[9px] text-zinc-500 font-heading italic max-w-2xl">
+              Buy unactivated tokens (max {STORE_TOKEN_MAX_HELD} stored per type). Activate from My Inventory. Also tradable via Quick Trade — store prices are a points sink for convenience.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
+              {TOKEN_STORE_ITEMS.map((t) => {
+                const held = Number(user?.[t.userKey] ?? 0);
+                const atCap = held >= STORE_TOKEN_MAX_HELD;
+                return (
+                  <StoreCard
+                    key={t.tokenType}
+                    title={t.title}
+                    Icon={Package}
+                    desc={t.desc}
+                    price={t.price}
+                    respectPrice={t.price * 5}
+                    owned={false}
+                    loading={loading}
+                    disabled={atCap}
+                    user={user}
+                    onBuy={() => apiBuy('/store/buy-token', { token_type: t.tokenType, amount: 1 }, `+1 ${t.title}`)}
+                  >
+                    <p className="text-[10px] text-mutedForeground mb-1">Held: {held}/{STORE_TOKEN_MAX_HELD}</p>
+                  </StoreCard>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Token bundles</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-2">
+              {TOKEN_BUNDLES.map((b) => (
+                <StoreCard
+                  key={b.id}
+                  title={b.title}
+                  Icon={Package}
+                  desc={b.desc}
+                  price={b.price}
+                  respectPrice={b.price * 5}
+                  owned={false}
+                  loading={loading}
+                  disabled={!user}
+                  user={user}
+                  onBuy={() => apiBuy('/store/buy-token-bundle', { bundle_id: b.id }, 'Bundle purchased')}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Permanent upgrades & QoL</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
           {UPGRADES.filter((u) => {
             const owned = u.ownedKey && user?.[u.ownedKey];
             if (owned) return false;
@@ -571,7 +663,10 @@ export default function Store() {
             return true;
           }).map((u) => {
             const extra = u.extra?.(user, boozeConfig);
-            const disabled = (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) || (u.id === 'health' && Number(user?.health ?? 100) >= 100);
+            const disabled =
+              (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) ||
+              (u.id === 'health' && Number(user?.health ?? 100) >= 100) ||
+              !!u.disabledWhen?.(user);
             return (
               <StoreCard
                 key={u.id}
@@ -592,9 +687,10 @@ export default function Store() {
               </StoreCard>
             );
           })}
+            </div>
+          </div>
           {/* Custom Car — always show (can buy multiple) */}
-          {(
-            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
               <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
                 <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Custom Car</span>
@@ -634,7 +730,6 @@ export default function Store() {
               </div>
               <div className="store-art-line text-primary mx-3" />
             </div>
-          )}
         </div>
       )}
 

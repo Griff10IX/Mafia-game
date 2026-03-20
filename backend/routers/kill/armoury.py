@@ -66,6 +66,8 @@ BRASS_KNUCKLES_WEAPON_ID = "weapon1"  # exclude from shooting range (no bullets)
 MASTERY_PCT_PER_LIVE_HIT = 1  # 1% per hit when playing the 3D game (max 30 hits per submit)
 MASTERY_LIVE_HITS_MAX_PER_REQUEST = 30
 SHOOTING_RANGE_MAX_PLAYS_PER_HOUR = 10
+# Store upgrade: extra plays/hour capped (see store.buy_shooting_range_bonus)
+SHOOTING_RANGE_BONUS_STORE_MAX = 10
 
 
 class StateOptionalRequest(BaseModel):
@@ -1480,12 +1482,14 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
     )
     meta_start = (meta or {}).get("shooting_range_hour_start")
     meta_count = int((meta or {}).get("shooting_range_hour_count") or 0)
+    bonus_plays = int(current_user.get("shooting_range_bonus_plays") or 0)
+    hourly_limit = SHOOTING_RANGE_MAX_PLAYS_PER_HOUR + max(0, min(bonus_plays, SHOOTING_RANGE_BONUS_STORE_MAX))
     if meta_start == hour_start_iso:
-        if meta_count >= SHOOTING_RANGE_MAX_PLAYS_PER_HOUR:
+        if meta_count >= hourly_limit:
             remaining = max(0, int((reset_dt - now_dt).total_seconds()))
             raise HTTPException(
                 status_code=400,
-                detail=f"Hourly limit reached ({SHOOTING_RANGE_MAX_PLAYS_PER_HOUR} plays). Try again in {remaining}s.",
+                detail=f"Hourly limit reached ({hourly_limit} plays). Try again in {remaining}s.",
             )
         new_count = meta_count + 1
         await db.user_meta.update_one(

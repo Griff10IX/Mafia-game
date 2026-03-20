@@ -94,6 +94,46 @@ class SendPointsRequest(BaseModel):
         return v
 
 
+# Consumable tokens (inventory caps) — prices above typical safe/loot EV; must match armoury.TOKEN_CONFIG keys
+STORE_TOKEN_MAX_HELD = 15
+TOKEN_STORE_UNIT_PRICE_POINTS = {
+    "xp_crimes": 42,
+    "xp_gta": 42,
+    "melt": 42,
+    "oc_reduced": 42,
+    "booze": 42,
+    "racket": 42,
+    "properties": 48,
+    "travel": 55,
+    "jailbust_bonus": 48,
+}
+# bundle_id -> points cost, { count_field: amount }
+TOKEN_STORE_BUNDLES = {
+    "grinder": (75, {"xp_crimes_tokens": 1, "xp_gta_tokens": 1}),
+    "racket_runner": (78, {"racket_tokens": 1, "booze_tokens": 1}),
+    "builder": (100, {"travel_tokens": 1, "properties_tokens": 1}),
+}
+SHOOTING_RANGE_BONUS_STEP = 2
+SHOOTING_RANGE_BONUS_COST_POINTS = 85
+SHOOTING_RANGE_BONUS_CAP = 10  # must match armoury.SHOOTING_RANGE_BONUS_STORE_MAX
+
+
+class BuyStoreTokenBody(BaseModel):
+    token_type: str
+    amount: int = 1
+
+    @field_validator("amount")
+    @classmethod
+    def amount_ok(cls, v):
+        if v is None or v < 1 or v > 3:
+            raise ValueError("amount must be 1–3")
+        return v
+
+
+class BuyStoreTokenBundleBody(BaseModel):
+    bundle_id: str
+
+
 async def buy_premium_rank_bar(
     current_user: dict = Depends(get_current_user),
 ):
@@ -413,6 +453,96 @@ async def admin_points_transfers(
     return {"transfers": items, "count": len(items)}
 
 
+async def buy_store_token(
+    body: BuyStoreTokenBody,
+    current_user: dict = Depends(get_current_user),
+):
+    from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
+
+    tt = (body.token_type or "").strip()
+    if tt not in TOKEN_TYPES:
+        raise HTTPException(status_code=400, detail=f"Invalid token_type. Use one of: {list(TOKEN_TYPES)}")
+    if tt not in TOKEN_STORE_UNIT_PRICE_POINTS:
+        raise HTTPException(status_code=400, detail="This token type is not sold in the store")
+    amt = int(body.amount)
+    cfg = TOKEN_CONFIG[tt]
+    cf = cfg["count_field"]
+    cur = int(current_user.get(cf) or 0)
+    if cur + amt > STORE_TOKEN_MAX_HELD:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You can hold at most {STORE_TOKEN_MAX_HELD} unactivated tokens of this type (have {cur}).",
+        )
+    unit = TOKEN_STORE_UNIT_PRICE_POINTS[tt]
+    total_cost = unit * amt
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, total_cost)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    inc[cf] = inc.get(cf, 0) + amt
+    filt = {"id": current_user["id"], cf: {"$lte": STORE_TOKEN_MAX_HELD - amt}, **gte_filter}
+    result = await db.users.update_one(filt, {"$inc": inc})
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
+    return {"message": f"+{amt} {tt.replace('_', ' ')} token(s) for {cost_used} points", "cost": cost_used, "token_type": tt, "amount": amt}
+
+
+async def buy_store_token_bundle(
+    body: BuyStoreTokenBundleBody,
+    current_user: dict = Depends(get_current_user),
+):
+    bid = (body.bundle_id or "").strip()
+    if bid not in TOKEN_STORE_BUNDLES:
+        raise HTTPException(status_code=400, detail=f"Unknown bundle. Options: {list(TOKEN_STORE_BUNDLES.keys())}")
+    cost, field_inc = TOKEN_STORE_BUNDLES[bid]
+    for field, add in field_inc.items():
+        cur = int(current_user.get(field) or 0)
+        if cur + add > STORE_TOKEN_MAX_HELD:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Would exceed max {STORE_TOKEN_MAX_HELD} stored for {field} (currently {cur}).",
+            )
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, cost)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    for field, add in field_inc.items():
+        inc[field] = inc.get(field, 0) + add
+    filt = {"id": current_user["id"], **gte_filter}
+    for field, add in field_inc.items():
+        filt[field] = {"$lte": STORE_TOKEN_MAX_HELD - add}
+    result = await db.users.update_one(filt, {"$inc": inc})
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
+    return {"message": f"Bundle '{bid}' purchased for {cost_used} points", "cost": cost_used, "bundle_id": bid}
+
+
+async def buy_shooting_range_bonus(
+    current_user: dict = Depends(get_current_user),
+):
+    """+2 max shooting range plays per hour (stacking), up to +10 from store (20/hour total with base 10)."""
+    cur = int(current_user.get("shooting_range_bonus_plays") or 0)
+    if cur >= SHOOTING_RANGE_BONUS_CAP:
+        raise HTTPException(status_code=400, detail="Shooting range hourly bonus is already maxed")
+    add = min(SHOOTING_RANGE_BONUS_STEP, SHOOTING_RANGE_BONUS_CAP - cur)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, SHOOTING_RANGE_BONUS_COST_POINTS)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    inc["shooting_range_bonus_plays"] = inc.get("shooting_range_bonus_plays", 0) + add
+    result = await db.users.update_one(
+        {"id": current_user["id"], **gte_filter},
+        {"$inc": inc},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    new_bonus = cur + add
+    base = 10  # SHOOTING_RANGE_MAX_PLAYS_PER_HOUR in armoury
+    return {
+        "message": f"+{add} hourly plays for shooting range ({base + new_bonus}/hour cap). Cost {cost_used} points.",
+        "cost": cost_used,
+        "shooting_range_bonus_plays": new_bonus,
+        "shooting_range_hourly_limit": base + new_bonus,
+    }
+
+
 def register(router):
     router.add_api_route("/store/buy-rank-bar", buy_premium_rank_bar, methods=["POST"])
     router.add_api_route("/store/buy-auto-rank", buy_auto_rank, methods=["POST"])
@@ -425,6 +555,9 @@ def register(router):
     router.add_api_route("/store/buy-bullets", store_buy_bullets, methods=["POST"])
     router.add_api_route("/store/buy-health", buy_health, methods=["POST"])
     router.add_api_route("/store/buy-custom-car", buy_custom_car, methods=["POST"])
+    router.add_api_route("/store/buy-token", buy_store_token, methods=["POST"])
+    router.add_api_route("/store/buy-token-bundle", buy_store_token_bundle, methods=["POST"])
+    router.add_api_route("/store/buy-shooting-range-bonus", buy_shooting_range_bonus, methods=["POST"])
     router.add_api_route("/store/send-points", send_points, methods=["POST"])
     router.add_api_route("/store/points-transfers", get_my_points_transfers, methods=["GET"])
     router.add_api_route("/store/points-transfers/admin", admin_points_transfers, methods=["GET"])
