@@ -986,15 +986,20 @@ export default function Attack() {
   };
 
   const refreshAttacks = useCallback(async () => {
-    const id = ++attackListFetchGenRef.current;
+    attackListAbortRef.current?.abort();
+    const ac = new AbortController();
+    attackListAbortRef.current = ac;
     try {
-      const response = await api.get('/attack/list');
-      if (id !== attackListFetchGenRef.current) return [];
-      const list = response.data.attacks || [];
+      const response = await api.get('/attack/list', { signal: ac.signal });
+      const list = response.data?.attacks || [];
       setAttacks(list);
       return list;
     } catch (error) {
-      if (id !== attackListFetchGenRef.current) return [];
+      const canceled =
+        error?.code === 'ERR_CANCELED' ||
+        error?.name === 'CanceledError' ||
+        (typeof error?.message === 'string' && error.message.toLowerCase().includes('canceled'));
+      if (canceled) return null;
       return [];
     }
   }, []);
