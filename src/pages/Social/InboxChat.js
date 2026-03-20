@@ -57,6 +57,8 @@ const CLASSIC_SMILEYS = [
   { code: ':prayge:', img: 'prayge' },
 ];
 
+const SMILEY_IMG_BASE = `${process.env.PUBLIC_URL || ''}/images/smileys`;
+
 const CHAT_EMOJIS = [
   '😀', '😃', '😄', '😁', '😊', '🙂', '😉', '😎', '🤩', '😍', 
   '😂', '🤣', '😅', '😢', '😭', '😤', '😡', '🤬', '😱', '😰',
@@ -165,6 +167,15 @@ export default function InboxChat() {
 
   return (
     <div data-chat-surface="inbox" className={`${styles.pageContent} flex flex-col h-[calc(100vh-10rem)] max-h-[700px] min-h-[320px] mobile-page-root`}>
+      <style>{`
+        [data-chat-surface="inbox"] [data-chat-part="message-text"] .inline-smiley {
+          width: 1.75em !important;
+          height: 1.75em !important;
+          min-width: 22px;
+          min-height: 22px;
+          vertical-align: middle;
+        }
+      `}</style>
       {/* Header */}
       <div data-chat-part="header" className="flex items-center gap-3 py-3 border-b border-primary/20 shrink-0">
         <button
@@ -213,7 +224,10 @@ export default function InboxChat() {
                     data-chat-part="message-text"
                     className="text-sm font-heading forum-content break-words"
                     dangerouslySetInnerHTML={{
-                      __html: parseForumContent(msg.message, { censorProfanity }),
+                      __html: parseForumContent(msg.message, {
+                        censorProfanity,
+                        dmUnicodeSmileys: true,
+                      }),
                     }}
                   />
                 ) : null}
@@ -294,7 +308,7 @@ export default function InboxChat() {
               title={code}
               aria-label={code}
             >
-              <img src={`/images/smileys/${img}.png`} alt={code} className="w-5 h-5" />
+              <img src={`${SMILEY_IMG_BASE}/${img}.png`} alt={code} className="w-5 h-5" />
             </button>
           ))}
           {/* Modern emojis */}

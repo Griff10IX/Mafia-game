@@ -480,7 +480,10 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
             <div
               className="text-[11px] text-foreground forum-content leading-snug break-words"
               dangerouslySetInnerHTML={{
-                __html: parseForumContent(notification.message, { censorProfanity: !!censorProfanity }),
+                __html: parseForumContent(notification.message, {
+                  censorProfanity: !!censorProfanity,
+                  dmUnicodeSmileys: true,
+                }),
               }}
             />
           ) : (

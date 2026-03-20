@@ -38,6 +38,23 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** CRA `PUBLIC_URL` (no trailing slash) so `/public` assets work on a subpath. */
+function getStaticAssetPrefix() {
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env.PUBLIC_URL != null) {
+      return String(process.env.PUBLIC_URL).replace(/\/$/, '');
+    }
+  } catch (_) {
+    /* ignore */
+  }
+  return '';
+}
+
+function resolveSmileyImgSrc(relativePath) {
+  const p = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
+  return `${getStaticAssetPrefix()}${p}`;
+}
+
 // ---------------------------------------------------------------------------
 // Image-based smileys — classic forum style (render as <img> tags)
 // IMPORTANT: Longer codes MUST come before shorter ones to avoid partial matches
@@ -556,6 +573,7 @@ const SMILEYS = [
  *
  * Options:
  *   censorProfanity: boolean - if true, replace swear words with ***
+ *   dmUnicodeSmileys: boolean - in DMs, map :wink: / ;) / ;-) to Unicode before image smileys (reliable if PNG path fails)
  */
 export function parseForumContent(content, options = {}) {
   if (content == null || typeof content !== 'string') return '';
@@ -719,8 +737,19 @@ export function parseForumContent(content, options = {}) {
   for (const [from, emoji] of LONG_EMOJI_CODES) {
     s = s.replace(new RegExp(escapeRegex(from), 'g'), emoji);
   }
+  if (options.dmUnicodeSmileys) {
+    const DM_WINK_UNICODE = [
+      [':wink:', '😉'],
+      [';-)', '😉'],
+      [';)', '😉'],
+    ];
+    for (const [from, ch] of DM_WINK_UNICODE) {
+      s = s.replace(new RegExp(escapeRegex(from), 'g'), ch);
+    }
+  }
   for (const [from, imgPath] of IMAGE_SMILEYS) {
-    const imgTag = `<img src="${imgPath}" alt="${escapeAttr(from)}" class="inline-smiley" style="display:inline;vertical-align:middle;width:1.2em;height:1.2em;" />`;
+    const src = escapeAttr(resolveSmileyImgSrc(imgPath));
+    const imgTag = `<img src="${src}" alt="${escapeAttr(from)}" class="inline-smiley" style="display:inline;vertical-align:middle;width:1.2em;height:1.2em;" />`;
     s = s.replace(new RegExp(escapeRegex(from), 'g'), imgTag);
   }
   for (const [from, emoji] of SMILEYS) {

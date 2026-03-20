@@ -672,7 +672,7 @@ function getCurvature(track, t) {
 }
 
 function buildSpeedProfile(track) {
-  const cacheKey = `${track.id}:${track.sfLine ?? 0}:sfv4`;
+  const cacheKey = `${track.id}:${track.sfLine ?? 0}:sfv5`;
   if (_profileCache.has(cacheKey)) return _profileCache.get(cacheKey);
   const N = PROFILE_N, raw = new Float32Array(N);
 
@@ -714,30 +714,28 @@ function buildSpeedProfile(track) {
     }
   }
 
-  // ── Pass 3: acceleration (scan forward, 3 iterations) ──
-  // If prev cell is in SF zone, don't limit current cell — straight-exit acceleration is free.
-  for (let iter = 0; iter < 3; iter++) {
+  // ── Pass 3: acceleration (scan forward, 5 iterations) ──
+  // FIX: rate 0.910 (was 0.974) — cars recover from corner in ~6 cells (~2.3% lap)
+  // instead of ~22 cells (~8.6% lap). Straights before SF line reach full speed.
+  for (let iter = 0; iter < 5; iter++) {
     for (let i = 0; i < N; i++) {
       if (sfZone[i]) continue;
-      if (forwardReachesSfZoneWithin(i, sfZone, N, sfRunUpSteps)) continue;
       const pi = (i - 1 + N) % N;
       if (sfZone[pi]) continue;
-      const lim = raw[pi] / 0.974;
+      const lim = raw[pi] / 0.910;
       if (raw[i] > lim) raw[i] = lim;
     }
   }
 
-  // ── Normalise to 0.54–1.0 ──
-  let mn = raw[0], mx = raw[0];
-  for (let i = 1; i < N; i++) { if (raw[i] < mn) mn = raw[i]; if (raw[i] > mx) mx = raw[i]; }
-  const rng = mx - mn || 1;
+  // ── FIX: clamp instead of normalize ──
+  // Normalization maps min-raw → 0.54 regardless of what min-raw actually is.
+  // On low-curvature tracks (ovals), a gentle bend with raw=0.85 gets mapped to ~0.56.
+  // Direct clamp preserves the physically correct values: straights=1.0, corners=0.54..0.85.
   const profile = new Float32Array(N);
-  for (let i = 0; i < N; i++) profile[i] = 0.54 + ((raw[i]-mn)/rng)*0.46;
-
-  // ── Enforce SF zone floor AFTER normalisation ──
-  // SF cells stay near full scale after normalise.
   for (let i = 0; i < N; i++) {
-    if (sfZone[i]) profile[i] = Math.max(profile[i], 0.99);
+    profile[i] = sfZone[i]
+      ? Math.max(0.97, Math.min(1.0, raw[i]))
+      : Math.max(0.54, Math.min(1.0, raw[i]));
   }
 
   _profileCache.set(cacheKey, profile);
