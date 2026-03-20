@@ -31,8 +31,8 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     preregisterBannerPreviewOpen: false,
   });
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-  /** Live stats + rewards for founding-member preview (matches /preregister page) */
-  const [preregisterPreview, setPreregisterPreview] = useState({ stats: null, rewards: null });
+  /** Reward copy for founding-member preview (from server; no public signup counts) */
+  const [preregisterRewards, setPreregisterRewards] = useState(null);
 
   useEffect(() => {
     const msg = sessionStorage.getItem(AUTH_ERROR_KEY);
@@ -146,14 +146,9 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
 
   useEffect(() => {
     if (!launchStatus.showPreregisterBanner) return;
-    api.get('/auth/preregister/stats')
-      .then((r) => {
-        setPreregisterPreview({
-          stats: r.data || null,
-          rewards: r.data?.rewards || null,
-        });
-      })
-      .catch(() => setPreregisterPreview({ stats: null, rewards: null }));
+    api.get('/auth/preregister/rewards')
+      .then((r) => setPreregisterRewards(r.data?.rewards || null))
+      .catch(() => setPreregisterRewards(null));
   }, [launchStatus.showPreregisterBanner]);
 
   useEffect(() => {
@@ -400,7 +395,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     <div className="p-3 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
                       <div className="text-xl mb-0.5">💎</div>
                       <div className="text-base sm:text-lg font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
-                        {(preregisterPreview.rewards?.bonus_points ?? 500).toLocaleString()} Points
+                        {(preregisterRewards?.bonus_points ?? 500).toLocaleString()} Points
                       </div>
                       <div className="text-[9px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
                         Premium Currency
@@ -409,7 +404,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     <div className="p-3 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
                       <div className="text-xl mb-0.5">💵</div>
                       <div className="text-base sm:text-lg font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
-                        ${(preregisterPreview.rewards?.bonus_cash ?? 5000).toLocaleString()}
+                        ${(preregisterRewards?.bonus_cash ?? 5000).toLocaleString()}
                       </div>
                       <div className="text-[9px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
                         Starting Cash Boost
@@ -418,29 +413,27 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     <div className="p-3 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
                       <div className="text-xl mb-0.5">🏆</div>
                       <div className="text-base sm:text-lg font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
-                        {preregisterPreview.rewards?.badge || 'Founding Member'}
+                        {preregisterRewards?.badge || 'Founding Member'}
                       </div>
                       <div className="text-[9px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
                         Profile badge &amp; bragging rights
                       </div>
                     </div>
                   </div>
-                  {(preregisterPreview.rewards?.founding_passive_blurb != null || preregisterPreview.rewards?.founding_passive_bonus_pct != null) && (
-                    <div
-                      className="mt-3 max-w-xl mx-auto text-left p-2.5 sm:p-3 rounded-md border text-[9px] sm:text-[10px] font-heading leading-relaxed"
-                      style={{
-                        backgroundColor: 'rgba(0,0,0,0.35)',
-                        borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.25)',
-                        color: 'var(--noir-muted)',
-                      }}
-                    >
-                      <p className="text-primary font-bold uppercase tracking-wider text-[8px] sm:text-[9px] mb-1">Founding Member — permanent bonus</p>
-                      <p>
-                        {preregisterPreview.rewards?.founding_passive_blurb
-                          || `+${preregisterPreview.rewards?.founding_passive_bonus_pct ?? 2.5}% on crimes, GTA, OC, hitlist NPCs, properties, family rackets, and missions (with your founder badge).`}
-                      </p>
-                    </div>
-                  )}
+                  <div
+                    className="mt-3 max-w-xl mx-auto text-left p-2.5 sm:p-3 rounded-md border text-[9px] sm:text-[10px] font-heading leading-relaxed"
+                    style={{
+                      backgroundColor: 'rgba(0,0,0,0.35)',
+                      borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.25)',
+                      color: 'var(--noir-muted)',
+                    }}
+                  >
+                    <p className="text-primary font-bold uppercase tracking-wider text-[8px] sm:text-[9px] mb-1">Founding Member — permanent bonus</p>
+                    <p>
+                      {preregisterRewards?.founding_passive_blurb
+                        || `+${preregisterRewards?.founding_passive_bonus_pct ?? 2.5}% on crimes, GTA, OC, hitlist NPCs, properties, family rackets, and missions (with your founder badge).`}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="p-4 sm:p-5 border-t text-center" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.15)' }}>
@@ -473,29 +466,6 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     Open full pre-register page
                   </Link>
                 </div>
-
-                {preregisterPreview.stats && (
-                  <div className="grid grid-cols-2 border-t" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.1)' }}>
-                    <div className="py-3 px-2 text-center border-r" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.1)' }}>
-                      <div className="text-xl sm:text-2xl font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
-                        {(preregisterPreview.stats.registered_accounts ?? 0).toLocaleString()}
-                      </div>
-                      <div className="text-[8px] sm:text-[9px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
-                        Accounts Pre-Registered
-                      </div>
-                    </div>
-                    <div className="py-3 px-2 text-center">
-                      <div className="text-xl sm:text-2xl font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
-                        {preregisterPreview.stats.registered_accounts > 0
-                          ? Math.min(100, preregisterPreview.stats.registered_accounts)
-                          : 0}
-                      </div>
-                      <div className="text-[8px] sm:text-[9px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
-                        Founding Members
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div>

@@ -16,7 +16,6 @@ const FEATURES = [
 
 export default function PreRegister() {
   const navigate = useNavigate();
-  const [stats, setStats] = useState(null);
   const [rewards, setRewards] = useState(null);
   const [launchStatus, setLaunchStatus] = useState({ loginLocked: false, lockUntil: null, lockMessage: null });
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
@@ -33,11 +32,8 @@ export default function PreRegister() {
       })
       .catch(() => {});
 
-    api.get('/auth/preregister/stats')
-      .then((r) => {
-        setStats(r.data);
-        setRewards(r.data?.rewards);
-      })
+    api.get('/auth/preregister/rewards')
+      .then((r) => setRewards(r.data?.rewards || null))
       .catch(() => {});
   }, []);
 
@@ -246,28 +242,6 @@ export default function PreRegister() {
                 Login will be available when the game launches
               </p>
             </div>
-
-            {/* Stats */}
-            {stats && (
-              <div className="grid grid-cols-2 border-t" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.1)' }}>
-                <div className="p-4 text-center border-r" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.1)' }}>
-                  <div className="text-2xl font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
-                    {stats.registered_accounts?.toLocaleString() || 0}
-                  </div>
-                  <div className="text-[9px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
-                    Accounts Pre-Registered
-                  </div>
-                </div>
-                <div className="p-4 text-center">
-                  <div className="text-2xl font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
-                    {stats.registered_accounts > 0 ? Math.min(100, stats.registered_accounts) : 0}
-                  </div>
-                  <div className="text-[9px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
-                    Founding Members
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Features Grid */}
