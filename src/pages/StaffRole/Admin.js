@@ -910,6 +910,22 @@ export default function Admin() {
     }
   };
 
+  const handleTogglePreregisterBanner = async () => {
+    setLaunchSettingsSaving(true);
+    const next = !preregisterLandingBannerEnabled;
+    try {
+      const res = await api.patch('/admin/settings', {
+        preregister_landing_banner_enabled: next,
+      });
+      setPreregisterLandingBannerEnabled(!!res.data?.preregister_landing_banner_enabled);
+      toast.success(next ? 'Pre-register banner on' : 'Pre-register banner off');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update banner');
+    } finally {
+      setLaunchSettingsSaving(false);
+    }
+  };
+
   const handleSavePreorder = async () => {
     setLaunchSettingsSaving(true);
     try {

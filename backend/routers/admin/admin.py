@@ -4024,32 +4024,48 @@ def register(router):
                 detail='Confirmation required. Send {"confirmation_text": "NEW RELEASE"} to confirm full database reset.'
             )
         logging.warning(f"🚨 DATABASE FRESH / NEW RELEASE initiated by {current_user['email']} ({current_user['username']})")
-        # All collections that hold game state or user data (wipe everything then re-seed config)
-        collections_to_wipe = [
-            "users", "family_members", "families", "family_wars", "family_war_stats", "family_racket_attacks",
-            "family_crew_oc_applications", "bodyguards", "bodyguard_invites", "user_cars", "user_properties",
-            "user_weapons", "attacks", "attack_attempts", "notifications", "extortions", "sports_bets", "sports_events",
-            "blackjack_games", "blackjack_buy_back_offers", "blackjack_ownership", "dice_ownership", "dice_buy_back_offers",
-            "roulette_ownership", "horseracing_ownership", "videopoker_ownership", "videopoker_games",
-            "slots_ownership", "slots_entries", "slots_buy_back_offers", "interest_deposits", "password_resets",
-            "money_transfers", "bank_deposits", "bullet_factory", "airport_ownership", "hitlist",
-            "user_organised_crime", "oc_pending_heists", "oc_invites", "user_crimes", "jail_npcs", "bust_events",
-            "test_npcs", "crimes", "weapons", "properties", "game_config", "game_settings",
-            "forum_topics", "forum_comments", "forum_comment_likes", "trade_sell_offers", "trade_buy_offers",
-            "dealer_stock", "user_gta", "gta_cooldowns", "safe_game", "safe_daily",
-            "security_flags", "security_logs", "bans", "ip_bans", "activity_log", "gambling_log",
-            "entertainer_games", "payment_transactions", "email_verifications", "login_lockouts",
-            "war_kill_feed", "crime_earnings", "crime_events", "profile_load_errors",
-        ]
+        # Wipe every collection in this database (except system.* and optional PRESERVE_COLLECTIONS), then re-seed.
+        _preserve_raw = (os.environ.get("PRESERVE_COLLECTIONS") or "").strip()
+        preserve_set = {x.strip() for x in _preserve_raw.split(",") if x.strip()}
+        skipped_system = []
+        skipped_preserved = []
         deleted = {}
-        for coll_name in collections_to_wipe:
+        try:
+            all_names = await db.list_collection_names()
+        except Exception as e:
+            logging.exception("database-fresh: list_collection_names failed: %s", e)
+            raise HTTPException(status_code=500, detail=f"Could not list database collections: {e}") from e
+        for coll_name in sorted(all_names):
+            if coll_name.startswith("system."):
+                skipped_system.append(coll_name)
+                continue
+            if coll_name in preserve_set:
+                skipped_preserved.append(coll_name)
+                logging.warning("database-fresh: preserving collection %s (PRESERVE_COLLECTIONS)", coll_name)
+                continue
             try:
                 res = await db[coll_name].delete_many({})
                 deleted[coll_name] = res.deleted_count
+                logging.info(
+                    "database-fresh: wiped collection=%s deleted_count=%s",
+                    coll_name,
+                    res.deleted_count,
+                )
             except Exception as e:
                 logging.warning("database-fresh: skip %s: %s", coll_name, e)
                 deleted[coll_name] = 0
         total = sum(deleted.values())
+        wipe_meta = {
+            "skipped_system_collections": skipped_system,
+            "skipped_preserved_collections": skipped_preserved,
+        }
+        logging.warning(
+            "database-fresh: wipe phase done collections=%s total_docs_deleted=%s preserved=%s system_skipped=%s",
+            len(deleted),
+            total,
+            len(skipped_preserved),
+            len(skipped_system),
+        )
         # Re-seed game data (weapons, properties, crimes) and ensure indexes
         try:
             await srv.init_game_data()
@@ -4060,12 +4076,14 @@ def register(router):
             return {
                 "message": f"Database wiped ({total} documents deleted) but re-seed failed: {e}",
                 "details": deleted,
+                "wipe_meta": wipe_meta,
                 "reseed_ok": False,
             }
         logging.warning(f"🚨 DATABASE FRESH completed by {current_user['email']}: {total} docs deleted, game data re-seeded")
         return {
             "message": f"Database reset complete. {total} documents deleted. Game data re-seeded. New release ready.",
             "details": deleted,
+            "wipe_meta": wipe_meta,
             "reseed_ok": True,
         }
 
