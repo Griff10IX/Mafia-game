@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import styles from '../../styles/noir.module.css';
 
 const BANK_CACHE_KEY = 'mafia_bank_v1';
