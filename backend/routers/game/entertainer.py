@@ -19,6 +19,31 @@ ENTERTAINER_CONFIG_KEY = "entertainer_config"
 # DB-backed cap: never create more open games than this (stops spam from restarts or double-runs)
 MAX_OPEN_ENTERTAINER_GAMES = 5
 
+# System-created games: show a non-zero cash pot in the UI; paid out on settle (not deducted from anyone at create).
+def _system_game_starting_pot(max_players: int) -> int:
+    n = max(2, min(10, int(max_players or 2)))
+    lo = max(900, 180 * n)
+    hi = min(12000, 750 * n + 2200)
+    if hi < lo:
+        hi = lo
+    return _rng.randint(lo, hi)
+
+
+def _house_bonus_pot_if_zero_stored_pot(game: dict) -> tuple[int, int]:
+    """If the stored pot is 0, add a random sponsor pot (minted on settle). Returns (effective_total_cash_pot, house_bonus_only)."""
+    base = int(game.get("pot") or 0)
+    participants = game.get("participants") or []
+    n = len(participants)
+    if base > 0 or n == 0:
+        return base, 0
+    lo = max(600, 140 * n)
+    hi = min(9000, 520 * n + 1600)
+    if hi < lo:
+        hi = lo
+    bonus = _rng.randint(lo, hi)
+    return bonus, bonus
+
+
 # Cars that can be won (common/uncommon/rare; exclude custom and exclusive)
 E_GAME_CAR_IDS = [c["id"] for c in CARS if c.get("id") not in ("car_custom", "car20") and c.get("rarity") in ("common", "uncommon", "rare")]
 
@@ -163,28 +188,31 @@ async def _settle_game(game: dict):
             result = await _run_dice_payout(game)
         else:
             result = await _run_gbox_payout(game)
-    pot = int(game.get("pot") or 0)
-    if pot > 0 and participants:
+    cash_pot, house_bonus = _house_bonus_pot_if_zero_stored_pot(game)
+    if cash_pot > 0 and participants:
         if game.get("game_type") == "dice" and result and result.get("winner_id"):
-            await db.users.update_one({"id": result["winner_id"]}, {"$inc": {"money": pot}})
+            await db.users.update_one({"id": result["winner_id"]}, {"$inc": {"money": cash_pot}})
         elif game.get("game_type") == "gbox":
             n = len(participants)
-            each = pot // n
-            remainder = pot - (each * n)
+            each = cash_pot // n
+            remainder = cash_pot - (each * n)
             for i, p in enumerate(participants):
                 uid = p.get("user_id")
                 if uid:
                     amt = each + (remainder if i == 0 else 0)
                     if amt > 0:
                         await db.users.update_one({"id": uid}, {"$inc": {"money": amt}})
+    set_doc = {"status": "completed", "completed_at": now, "result": result, "pot": cash_pot}
+    if house_bonus > 0:
+        set_doc["house_bonus_pot"] = house_bonus
     await db.entertainer_games.update_one(
         {"id": game["id"]},
-        {"$set": {"status": "completed", "completed_at": now, "result": result}},
+        {"$set": set_doc},
     )
     # Notify each participant with their winnings
     if result and participants:
         game_type = game.get("game_type") or "dice"
-        pot = game.get("pot") or 0
+        pot = cash_pot
         for p in participants:
             uid = p.get("user_id")
             if not uid:
@@ -451,33 +479,9 @@ async def join_game(game_id: str, current_user: dict = Depends(get_current_user)
     new_participants = game.get("participants") or []
     is_full = len(new_participants) >= max_players
     if is_full:
-        now = datetime.now(timezone.utc).isoformat()
-        current_pot = int(game.get("pot") or 0)
-        updated_game = {**game, "pot": current_pot}
-        if game.get("game_type") == "dice":
-            res = await _run_dice_payout(updated_game)
-        else:
-            res = await _run_gbox_payout(updated_game)
-        # Atomic transition to completed (prevents double settle)
-        settle_result = await db.entertainer_games.update_one(
-            {"id": game_id, "status": {"$ne": "completed"}},
-            {"$set": {"status": "completed", "completed_at": now, "result": res}},
-        )
-        if settle_result.modified_count > 0:
-            # Distribute pot
-            if current_pot > 0 and new_participants:
-                if game.get("game_type") == "dice" and res and res.get("winner_id"):
-                    await db.users.update_one({"id": res["winner_id"]}, {"$inc": {"money": current_pot}})
-                elif game.get("game_type") == "gbox":
-                    n = len(new_participants)
-                    each = current_pot // n
-                    remainder = current_pot - (each * n)
-                    for i, p in enumerate(new_participants):
-                        uid = p.get("user_id")
-                        if uid:
-                            amt = each + (remainder if i == 0 else 0)
-                            if amt > 0:
-                                await db.users.update_one({"id": uid}, {"$inc": {"money": amt}})
+        # Same path as timed settle: house bonus if pot was 0, pot split, notifications, single DB write
+        game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
+        await _settle_game(game)
     updated = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     return {"message": "Joined game" + (" — rewards rolled!" if is_full else ""), "game": updated}
 
