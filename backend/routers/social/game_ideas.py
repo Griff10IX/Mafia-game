@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, field_validator
 
-from server import db, get_current_user, _is_admin, send_notification
+from server import db, get_current_user, _is_admin, send_notification, send_notification_to_all
 from utils.text import strip_emoji
 
 
@@ -195,6 +195,7 @@ def register(router):
         fm = max(0, int(season.get("finalist_reward_money") or 0))
         fp = max(0, int(season.get("finalist_reward_points") or 0))
         now = datetime.now(timezone.utc).isoformat()
+        season_title = strip_emoji((season.get("title") or "Game Ideas").strip())
         for e in entries:
             eid = e["id"]
             is_f = eid in finalist_ids
@@ -208,15 +209,18 @@ def register(router):
                     if fp:
                         inc["points"] = fp
                     await db.users.update_one({"id": uid}, {"$inc": inc})
+                if uid:
                     parts = []
                     if fm:
                         parts.append(f"${fm:,}")
                     if fp:
                         parts.append(f"{fp:,} points")
+                    reward_bit = (" You also received " + " and ".join(parts) + ".") if parts else ""
                     await send_notification(
                         uid,
-                        "Game Ideas — finalist",
-                        "You reached the final vote and received " + " and ".join(parts) + ".",
+                        f'Game Ideas — you\'re in the final ("{season_title}")',
+                        "Primary voting ended and your idea advanced. Vote for finalists on the Game Ideas board."
+                        + reward_bit,
                         "system",
                         category="game_ideas",
                     )
@@ -224,6 +228,23 @@ def register(router):
                     {"id": eid},
                     {"$set": {"finalist_reward_paid_at": now}},
                 )
+            elif not is_f and e.get("user_id"):
+                await send_notification(
+                    e["user_id"],
+                    f'Game Ideas — "{season_title}"',
+                    "Primary voting ended. Thanks for entering — your idea did not advance to the final this time.",
+                    "system",
+                    category="game_ideas",
+                )
+        try:
+            await send_notification_to_all(
+                f'Game Ideas: "{season_title}" — final vote open',
+                "The shortlist is set. Open the Game Ideas voting board to vote in the final round.",
+                "system",
+                category="game_ideas",
+            )
+        except Exception:
+            pass
         await db.game_idea_seasons.update_one(
             {"id": season_id},
             {"$set": {"status": "final", "updated_at": now}},
@@ -311,6 +332,46 @@ def register(router):
             category="game_ideas",
         )
         return {"message": "Implementation reward granted", "entry_id": eid}
+
+    @router.get("/admin/game-ideas/seasons/{season_id}/implementation-options")
+    async def admin_game_idea_implementation_options(season_id: str, current_user: dict = Depends(get_current_user)):
+        """Closed seasons only: winner entries with preview for admin dropdown (confirm implementation)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        season = await db.game_idea_seasons.find_one({"id": season_id}, {"_id": 0})
+        if not season:
+            raise HTTPException(status_code=404, detail="Season not found")
+        if season.get("status") != "closed":
+            raise HTTPException(status_code=400, detail="Season must be closed")
+        winners = list(season.get("final_winner_entry_ids") or [])
+        if not winners:
+            return {"season_id": season_id, "season_title": season.get("title"), "candidates": []}
+        entries = await db.game_idea_entries.find({"id": {"$in": winners}}, {"_id": 0}).to_list(50)
+        comment_ids = [e.get("comment_id") for e in entries if e.get("comment_id")]
+        comments_map: Dict[str, Any] = {}
+        if comment_ids:
+            async for c in db.forum_comments.find({"id": {"$in": comment_ids}}, {"_id": 0}):
+                comments_map[c["id"]] = c
+        candidates: List[dict] = []
+        for e in entries:
+            cid = e.get("comment_id")
+            preview = ""
+            if cid and cid in comments_map:
+                preview = strip_emoji((comments_map[cid].get("content") or "")[:120])
+            candidates.append(
+                {
+                    "entry_id": e["id"],
+                    "author_username": e.get("author_username", "?"),
+                    "preview": (preview.strip() or "(no text preview)"),
+                    "implementation_paid": bool(e.get("implementation_reward_paid_at")),
+                }
+            )
+        candidates.sort(key=lambda x: (x["implementation_paid"], x["author_username"] or ""))
+        return {
+            "season_id": season_id,
+            "season_title": season.get("title"),
+            "candidates": candidates,
+        }
 
     @router.get("/forum/game-ideas/active-season")
     async def game_ideas_active_season(current_user: dict = Depends(get_current_user)):

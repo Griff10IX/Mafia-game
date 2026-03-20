@@ -13,7 +13,7 @@ from typing import Dict, List, Optional
 
 import httpx
 from fastapi import Body, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from middleware.security import is_proxy_or_vpn
 from utils.disposable_email import is_disposable_email
@@ -78,11 +78,11 @@ class RedeemCodeRewards(BaseModel):
 class RedeemCodeCreateRequest(BaseModel):
     code: str
     max_uses: Optional[int] = None  # null = unlimited
+    rewards: RedeemCodeRewards = Field(default_factory=RedeemCodeRewards)
 
 
 class RedeemCodePatchRequest(BaseModel):
     active: bool
-    rewards: RedeemCodeRewards
 
 
 class BetaSignupToggleRequest(BaseModel):

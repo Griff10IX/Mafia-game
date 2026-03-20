@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
 import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award } from 'lucide-react';
 import api from '../../utils/api';
@@ -1247,7 +1247,7 @@ export default function Admin() {
     } catch { setRanks([]); setCars([]); }
   };
 
-  const fetchRedeemCodes = async () => {
+  const fetchRedeemCodes = useCallback(async () => {
     setRedeemCodesLoading(true);
     try {
       const [codesRes, typesRes] = await Promise.all([
@@ -1257,24 +1257,35 @@ export default function Admin() {
       setRedeemCodesList(codesRes.data?.codes ?? []);
       if (Array.isArray(typesRes.data?.token_types)) setTokenTypes(typesRes.data.token_types);
     } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to load redeem codes');
+      const d = e.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : Array.isArray(d) ? d.map((x) => x?.msg || String(x)).join('; ') : 'Failed to load redeem codes');
       setRedeemCodesList([]);
     } finally {
       setRedeemCodesLoading(false);
     }
-  };
+  }, []);
 
   const handleCreateRedeemCode = async () => {
+    const parseRewardInt = (v) => {
+      const t = String(v ?? '').replace(/,/g, '').trim();
+      if (!t) return 0;
+      const x = parseInt(t, 10);
+      return Number.isFinite(x) && x > 0 ? x : 0;
+    };
     const code = (redeemForm.code || '').trim();
     if (!code) {
       toast.error('Code is required');
       return;
     }
     const rewards = {};
-    if (redeemForm.money && parseInt(redeemForm.money, 10) > 0) rewards.money = parseInt(redeemForm.money, 10);
-    if (redeemForm.points && parseInt(redeemForm.points, 10) > 0) rewards.points = parseInt(redeemForm.points, 10);
-    if (redeemForm.respect_points && parseInt(redeemForm.respect_points, 10) > 0) rewards.respect_points = parseInt(redeemForm.respect_points, 10);
-    if (redeemForm.loot_box_pieces && parseInt(redeemForm.loot_box_pieces, 10) > 0) rewards.loot_box_pieces = parseInt(redeemForm.loot_box_pieces, 10);
+    const m = parseRewardInt(redeemForm.money);
+    const pts = parseRewardInt(redeemForm.points);
+    const rsp = parseRewardInt(redeemForm.respect_points);
+    const loot = parseRewardInt(redeemForm.loot_box_pieces);
+    if (m > 0) rewards.money = m;
+    if (pts > 0) rewards.points = pts;
+    if (rsp > 0) rewards.respect_points = rsp;
+    if (loot > 0) rewards.loot_box_pieces = loot;
     if (redeemForm.cars && redeemForm.cars.length > 0) rewards.cars = redeemForm.cars;
     const tokenEntries = redeemForm.tokenEntries.filter((e) => e.type && e.amount > 0);
     if (tokenEntries.length > 0) {
@@ -1296,7 +1307,9 @@ export default function Admin() {
       setRedeemForm({ code: '', max_uses: '', money: '', points: '', respect_points: '', loot_box_pieces: '', cars: [], tokenEntries: [] });
       await fetchRedeemCodes();
     } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to create code');
+      const d = e.response?.data?.detail;
+      const msg = typeof d === 'string' ? d : Array.isArray(d) ? d.map((x) => x?.msg || JSON.stringify(x)).join('; ') : e.response?.data?.message;
+      toast.error(msg || 'Failed to create code');
     } finally {
       setRedeemCodeCreateLoading(false);
     }
@@ -1324,6 +1337,12 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to delete');
     }
   };
+
+  useEffect(() => {
+    if (activeCategoryId !== 'admin-quick' || !isAdmin) return;
+    if (collapsed.redeemCodes) return;
+    fetchRedeemCodes();
+  }, [activeCategoryId, isAdmin, collapsed.redeemCodes, fetchRedeemCodes]);
 
   const fetchNPCs = async () => {
     try {
@@ -7438,21 +7457,30 @@ export default function Admin() {
             <BtnPrimary onClick={handleCreateRedeemCode} disabled={redeemCodeCreateLoading}>{redeemCodeCreateLoading ? '...' : 'Create code'}</BtnPrimary>
 
             <div className="pt-2 border-t border-primary/20">
-              <p className="text-xs font-medium text-foreground mb-1">Existing codes</p>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <p className="text-xs font-medium text-foreground">Existing codes</p>
+                <button type="button" onClick={() => fetchRedeemCodes()} disabled={redeemCodesLoading} className="text-[10px] font-heading uppercase text-primary hover:underline disabled:opacity-50">Refresh list</button>
+              </div>
               {redeemCodesLoading ? <p className="text-[10px] text-mutedForeground">Loading…</p> : (
-                <div className="space-y-1 max-h-48 overflow-y-auto">
-                  {redeemCodesList.length === 0 ? <p className="text-[10px] text-mutedForeground">No redeem codes yet.</p> : redeemCodesList.map((rc, i) => (
-                    <div key={i} className="flex flex-wrap items-center gap-2 py-1.5 px-2 rounded bg-black/20 text-[10px]">
-                      <span className="font-mono font-medium">{rc.code}</span>
-                      {!rc.active && <span className="text-red-400">Inactive</span>}
-                      <span className="text-mutedForeground">{rc.used_count}{rc.max_uses != null ? ` / ${rc.max_uses}` : ''} uses</span>
-                      <span className="text-mutedForeground truncate">{Object.keys(rc.rewards || {}).join(', ')}</span>
-                      {rc.active && (
-                        <button type="button" onClick={() => handleDeactivateRedeemCode(rc.code)} className="text-amber-400 hover:underline text-[10px] font-heading uppercase">Deactivate</button>
-                      )}
-                      <button type="button" onClick={() => handleDeleteRedeemCode(rc.code)} className="text-red-400 hover:underline text-[10px] font-heading uppercase">Delete</button>
-                    </div>
-                  ))}
+                <div className="space-y-1 max-h-64 overflow-y-auto">
+                  {redeemCodesList.length === 0 ? <p className="text-[10px] text-mutedForeground">No redeem codes yet. (List loads when this section is open under Quick &amp; Bulk.)</p> : redeemCodesList.map((rc, i) => {
+                    const used = Number(rc.used_count) || 0;
+                    const cap = rc.max_uses != null ? Number(rc.max_uses) : null;
+                    const usesLabel = cap != null ? `${used} / ${cap} uses` : `${used} use${used === 1 ? '' : 's'} (no limit)`;
+                    const exhausted = cap != null && used >= cap;
+                    return (
+                      <div key={`${rc.code}-${i}`} className="flex flex-wrap items-center gap-2 py-1.5 px-2 rounded bg-black/20 text-[10px]">
+                        <span className="font-mono font-medium text-foreground">{rc.code}</span>
+                        {rc.active ? <span className="text-emerald-400 font-heading uppercase">Active</span> : <span className="text-red-400 font-heading uppercase">Inactive</span>}
+                        <span className={`tabular-nums ${exhausted ? 'text-amber-400' : 'text-mutedForeground'}`}>{usesLabel}{exhausted && rc.active ? ' · exhausted' : ''}</span>
+                        <span className="text-mutedForeground truncate max-w-[200px]" title={JSON.stringify(rc.rewards || {})}>{Object.keys(rc.rewards || {}).join(', ') || '—'}</span>
+                        {rc.active && (
+                          <button type="button" onClick={() => handleDeactivateRedeemCode(rc.code)} className="text-amber-400 hover:underline text-[10px] font-heading uppercase">Deactivate</button>
+                        )}
+                        <button type="button" onClick={() => handleDeleteRedeemCode(rc.code)} className="text-red-400 hover:underline text-[10px] font-heading uppercase">Delete</button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

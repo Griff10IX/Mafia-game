@@ -623,8 +623,10 @@ export default function Forum() {
   });
   const [giCreating, setGiCreating] = useState(false);
   const [giActionId, setGiActionId] = useState(null);
-  const [giConfirmSeason, setGiConfirmSeason] = useState('');
-  const [giConfirmEntry, setGiConfirmEntry] = useState('');
+  const [giImplSeasonId, setGiImplSeasonId] = useState('');
+  const [giImplEntryId, setGiImplEntryId] = useState('');
+  const [giImplCandidates, setGiImplCandidates] = useState([]);
+  const [giImplLoading, setGiImplLoading] = useState(false);
   const [giConfirming, setGiConfirming] = useState(false);
 
   const fetchGiSeasons = useCallback(async () => {
@@ -643,6 +645,33 @@ export default function Forum() {
   useEffect(() => {
     if (activeTab === 'game_ideas' && isAdmin) fetchGiSeasons();
   }, [activeTab, isAdmin, fetchGiSeasons]);
+
+  useEffect(() => {
+    if (!giImplSeasonId || !isAdmin) {
+      setGiImplCandidates([]);
+      setGiImplEntryId('');
+      return;
+    }
+    let cancelled = false;
+    setGiImplLoading(true);
+    api.get(`/admin/game-ideas/seasons/${giImplSeasonId}/implementation-options`)
+      .then((r) => {
+        if (!cancelled) {
+          setGiImplCandidates(r.data?.candidates ?? []);
+          setGiImplEntryId('');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGiImplCandidates([]);
+          setGiImplEntryId('');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setGiImplLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [giImplSeasonId, isAdmin]);
 
   const fetchTopics = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -987,14 +1016,16 @@ export default function Forum() {
   };
 
   const handleGiConfirmImplementation = async () => {
-    const sid = (giConfirmSeason || '').trim();
-    const eid = (giConfirmEntry || '').trim();
-    if (!sid || !eid) { toast.error('Season id and entry id required'); return; }
+    const sid = giImplSeasonId;
+    const eid = giImplEntryId;
+    if (!sid || !eid) { toast.error('Select a closed season and a winning entry'); return; }
     setGiConfirming(true);
     try {
       await api.post(`/admin/game-ideas/seasons/${sid}/confirm-implementation`, { entry_id: eid });
       toast.success('Implementation reward granted');
-      setGiConfirmEntry('');
+      const r = await api.get(`/admin/game-ideas/seasons/${sid}/implementation-options`);
+      setGiImplCandidates(r.data?.candidates ?? []);
+      setGiImplEntryId('');
       fetchGiSeasons();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed');
@@ -1104,7 +1135,6 @@ export default function Forum() {
                   <div className="space-y-2 max-h-56 overflow-y-auto">
                     {giSeasons.map((s) => (
                       <div key={s.id} className="rounded border border-zinc-700/40 p-2 space-y-1">
-                        <div className="font-mono text-[9px] text-zinc-500">{s.id}</div>
                         <div className="text-foreground font-heading">{s.title} <span className="text-mutedForeground font-normal">({s.status})</span></div>
                         <div className="flex flex-wrap gap-1">
                           {s.status === 'draft' && (
@@ -1121,12 +1151,40 @@ export default function Forum() {
                     ))}
                   </div>
                 )}
-                <div className="pt-2 border-t border-zinc-700/30 space-y-1">
-                  <div className="font-heading text-mutedForeground uppercase">Confirm implementation (closed season)</div>
-                  <div className="flex flex-wrap gap-2 items-end">
-                    <input className="flex-1 min-w-[120px] px-2 py-1 rounded border border-input bg-transparent text-[10px] font-mono" placeholder="Season id" value={giConfirmSeason} onChange={(e) => setGiConfirmSeason(e.target.value)} />
-                    <input className="flex-1 min-w-[120px] px-2 py-1 rounded border border-input bg-transparent text-[10px] font-mono" placeholder="Entry id" value={giConfirmEntry} onChange={(e) => setGiConfirmEntry(e.target.value)} />
-                    <button type="button" disabled={giConfirming} onClick={handleGiConfirmImplementation} className="px-2 py-1 bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 rounded uppercase font-heading">{giConfirming ? '...' : 'Pay reward'}</button>
+                <div className="pt-2 border-t border-zinc-700/30 space-y-2">
+                  <div className="font-heading text-mutedForeground uppercase">Confirm implementation</div>
+                  <p className="text-[9px] text-mutedForeground">Choose a closed season, then the winning player&apos;s entry (IDs are applied automatically).</p>
+                  <div className="flex flex-col sm:flex-row flex-wrap gap-2 items-stretch sm:items-end">
+                    <label className="flex flex-col gap-0.5 text-[10px] text-mutedForeground min-w-[160px] flex-1">
+                      Season
+                      <select
+                        className="px-2 py-1.5 rounded border border-input bg-zinc-900/80 text-foreground text-[11px] font-heading"
+                        value={giImplSeasonId}
+                        onChange={(e) => setGiImplSeasonId(e.target.value)}
+                      >
+                        <option value="">Select closed season…</option>
+                        {giSeasons.filter((s) => s.status === 'closed').map((s) => (
+                          <option key={s.id} value={s.id}>{s.title}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-0.5 text-[10px] text-mutedForeground min-w-[200px] flex-[2]">
+                      Winning entry
+                      <select
+                        className="px-2 py-1.5 rounded border border-input bg-zinc-900/80 text-foreground text-[11px] font-heading disabled:opacity-50"
+                        disabled={!giImplSeasonId || giImplLoading}
+                        value={giImplEntryId}
+                        onChange={(e) => setGiImplEntryId(e.target.value)}
+                      >
+                        <option value="">{giImplLoading ? 'Loading…' : giImplSeasonId ? 'Select entry…' : 'Pick a season first'}</option>
+                        {giImplCandidates.map((c) => (
+                          <option key={c.entry_id} value={c.entry_id} disabled={c.implementation_paid}>
+                            {c.author_username}{c.implementation_paid ? ' (already paid)' : ''} — {(c.preview || '').slice(0, 80)}{(c.preview || '').length > 80 ? '…' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button type="button" disabled={giConfirming || !giImplSeasonId || !giImplEntryId} onClick={handleGiConfirmImplementation} className="px-3 py-1.5 bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 rounded uppercase font-heading text-[10px] shrink-0 self-end">{giConfirming ? '...' : 'Pay reward'}</button>
                   </div>
                 </div>
               </div>
