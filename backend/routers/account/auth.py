@@ -608,7 +608,11 @@ def register(router):
 
     def _login_response_user(user: dict) -> dict:
         """Build a JSON-safe user dict for login response. Skips sensitive keys and serializes datetimes so one bad field cannot 500."""
-        skip = {"password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used"}
+        # Theme/dashboard sync via GET /profile/theme and /profile/dashboard — omit here to slim login JSON.
+        skip = {
+            "password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used",
+            "theme_preferences", "dashboard_preferences",
+        }
         out = {}
         for k, v in user.items():
             if k in skip:
@@ -1116,7 +1120,11 @@ def register(router):
         except (TypeError, ValueError):
             return default
 
-    @router.get("/auth/me")
+    @router.get(
+        "/auth/me",
+        response_model=UserResponse,
+        response_model_exclude={"theme_preferences", "dashboard_preferences"},
+    )
     async def get_me(request: Request, current_user: dict = Depends(get_current_user)):
         user_id = current_user.get("id") or "unknown"
         username = current_user.get("username") or user_id
@@ -1242,8 +1250,6 @@ def register(router):
                 casino_profit=0,
                 property_profit=0,
                 has_casino_or_property=False,
-                theme_preferences=u.get("theme_preferences"),
-                dashboard_preferences=u.get("dashboard_preferences"),
                 account_locked=bool(u.get("account_locked", False)),
                 account_locked_at=u.get("account_locked_at"),
                 account_locked_until=u.get("account_locked_until"),

@@ -223,13 +223,6 @@ export default function Dashboard() {
           at_a_glance_visible: dashRes.data.at_a_glance_visible !== false,
           at_a_glance_stats: dashRes.data.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
         });
-      } else if (userRes.data?.dashboard_preferences) {
-        const dp = userRes.data.dashboard_preferences;
-        setPreferences({
-          section_order: dp.section_order || DEFAULT_SECTION_ORDER,
-          at_a_glance_visible: dp.at_a_glance_visible !== false,
-          at_a_glance_stats: dp.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
-        });
       }
     } catch (error) {
       toast.error(getApiErrorMessage(error) || 'Failed to load profile');
