@@ -3,7 +3,8 @@
 Call POST /api/sports-betting/cron/auto-settle to auto-settle sports bets from Odds API scores. Runs every 30 min.
 
 Usage:
-  Set CRON_SECRET, BASE_URL, and THE_ODDS_API_KEY in backend/.env, then run from project root:
+  Set CRON_SECRET and BASE_URL in backend/.env (or env). THE_ODDS_API_KEY must be set on the API server
+  (backend/.env) so auto-settle can call The Odds API. Then run from project root:
     python scripts/cron-sports-settle.py
 
   Or add to crontab (every 30 min):

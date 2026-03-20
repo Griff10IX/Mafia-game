@@ -174,11 +174,11 @@ CORS_ORIGINS="https://your-frontend.vercel.app,http://YOUR_DROPLET_IP"
 # python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 JWT_SECRET_KEY="PASTE_NEW_SECRET_HERE"
 
-# API Keys (copy from your local .env)
-THE_ODDS_API_KEY=2c788302be85d5d5f05a00695b9fb183
-GIPHY_API_KEY=KLBJLRTEBF3LegHs2KKJjty541HstcpD
-TELEGRAM_BOT_TOKEN=8227124202:AAGhj8e8WRrhwXkvGm1IB-iTlR7xRL655II
-TELEGRAM_CHAT_ID=-5266781777
+# API Keys (copy from your local .env — never paste real keys into git-tracked docs)
+THE_ODDS_API_KEY=your_the_odds_api_key
+GIPHY_API_KEY=your_giphy_key
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_CHAT_ID=your_telegram_chat_id
 
 PRODUCTION=true
 ```

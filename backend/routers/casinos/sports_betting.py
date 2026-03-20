@@ -1,18 +1,31 @@
 # Sports betting: events, place/cancel bets, stats, recent results; admin templates, add/settle/cancel events
 from datetime import datetime, timezone, timedelta
 import asyncio
+import logging
 import time
 import secrets
 _rng = secrets.SystemRandom()
 import os
 import uuid
+from pathlib import Path
 from typing import List, Optional
+
+# Ensure backend/.env is loaded before reading THE_ODDS_API_KEY (matches server.py paths)
+try:
+    from dotenv import load_dotenv
+    _backend_dir = Path(__file__).resolve().parents[2]
+    load_dotenv(_backend_dir / ".env")
+    load_dotenv(_backend_dir.parent / ".env")
+except Exception:
+    pass
 
 from pydantic import BaseModel
 from fastapi import Depends, Header, HTTPException
 import httpx
 
 from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin
+
+logger = logging.getLogger(__name__)
 
 # ----- Models -----
 class SportsBetPlaceRequest(BaseModel):
@@ -61,7 +74,10 @@ _sports_live_cache = {"football": [], "ufc": [], "boxing": [], "f1": [], "update
 
 
 def _odds_api_key():
-    return os.environ.get("THE_ODDS_API_KEY", "").strip()
+    k = (os.environ.get("THE_ODDS_API_KEY") or "").strip()
+    if len(k) >= 2 and k[0] == k[-1] and k[0] in "\"'":
+        k = k[1:-1].strip()
+    return k
 
 
 def _parse_commence_time(commence_time) -> str | None:
@@ -965,7 +981,7 @@ async def admin_sports_templates(current_user: dict = Depends(get_current_user_v
     by_category = {c: [] for c in categories}
     for t in _get_all_sports_templates():
         by_category.setdefault(t["category"], []).append(_sports_template_to_response(t))
-    return {"categories": categories, "templates": by_category}
+    return {"categories": categories, "templates": by_category, "odds_api_configured": bool(_odds_api_key())}
 
 
 async def admin_sports_refresh(current_user: dict = Depends(get_current_user_verified)):
@@ -976,7 +992,7 @@ async def admin_sports_refresh(current_user: dict = Depends(get_current_user_ver
     by_category = {c: [] for c in categories}
     for t in _get_all_sports_templates():
         by_category.setdefault(t["category"], []).append(_sports_template_to_response(t))
-    return {"categories": categories, "templates": by_category}
+    return {"categories": categories, "templates": by_category, "odds_api_configured": bool(_odds_api_key())}
 
 
 async def admin_sports_add_event(request: AdminAddSportsEventRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -1134,6 +1150,11 @@ async def admin_sports_cancel_event(request: AdminCancelEventRequest, current_us
 
 
 def register(router):
+    if _odds_api_key():
+        logger.info("Sports betting: THE_ODDS_API_KEY is set — using The Odds API for Football/UFC/Boxing and for auto-settle.")
+    else:
+        logger.warning("Sports betting: THE_ODDS_API_KEY is not set — Football/UFC/Boxing use fallback sources; auto-settle will not run.")
+
     router.add_api_route("/sports-betting/events", sports_betting_events, methods=["GET"])
     router.add_api_route("/sports-betting/bet", sports_betting_place, methods=["POST"])
     router.add_api_route("/sports-betting/my-bets", sports_betting_my_bets, methods=["GET"])
