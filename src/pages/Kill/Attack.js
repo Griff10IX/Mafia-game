@@ -1067,15 +1067,17 @@ export default function Attack() {
     setTargetUsername(trimmed);
     setKillUsername(trimmed);
     if (isHitlistNpc) hitlistNpcAutoFillRef.current = true;
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('target');
-      next.delete('hitlist_npc');
-      return next;
-    }, { replace: true });
 
     const ac = new AbortController();
     let cancelled = false;
+    const stripBoardQuery = () => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('target');
+        next.delete('hitlist_npc');
+        return next;
+      }, { replace: true });
+    };
     (async () => {
       try {
         setLoading(true);
@@ -1091,12 +1093,14 @@ export default function Attack() {
           { signal: ac.signal },
         );
         if (cancelled) return;
+        stripBoardQuery();
         toast.success(response.data?.message || 'Search started');
         setTargetUsername('');
         setNote('');
         window.dispatchEvent(new CustomEvent('app:refresh-attacks'));
       } catch (error) {
         if (cancelled || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') return;
+        stripBoardQuery();
         toast.error(getApiErrorMessage(error) || 'Failed to search target');
       } finally {
         if (!cancelled) setLoading(false);

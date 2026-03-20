@@ -700,6 +700,9 @@ function buildSpeedProfile(track) {
       if (sfZone[i]) continue;           // SF zone cells are immune — never brake here
       const ni = (i+1) % N;
       if (sfZone[ni]) continue;          // don't propagate FROM a fast SF zone cell backward
+      // FIX: protect 2 cells before SF zone entry — stops braking cascade dead
+      const ni2 = (i+2) % N;
+      if (sfZone[ni2]) continue;
       const lim = raw[ni] / 0.956;
       if (raw[i] > lim) raw[i] = lim;
     }
@@ -1973,18 +1976,17 @@ export default function CircuitRaceView({
           // Use wrap-aware check: prevPos was before sfLine, trackPos is after (or vice versa wrapping)
           const sfL2 = track.sfLine ?? 0;
           const crossedSF = (() => {
-            if (sfL2 === 0) return prevPos > 0.93 && r.trackPos < 0.07;
-            // General: did we cross sfLine this frame?
+            // FIX: tight window — car must have been behind sfLine last frame
+            // and be ahead this frame, within 8% either side.
+            // Fixes false-positives on sfLine=0 tracks (was firing every wrap).
+            const CROSS_WIN = 0.08;
             const p0 = prevPos, p1 = r.trackPos;
-            if (p0 < sfL2 && p1 >= sfL2) return true;
-            // Wrap case: p0 near 1.0, p1 near 0.0 and sfLine near 0.0
-            if (p0 > p1 && sfL2 <= p1) return true;
-            if (p0 > p1 && sfL2 >= p0) return true;
-            return false;
+            const dBehind = ((sfL2 - p0 + 1) % 1); // how far behind sfL2 we were
+            const dAhead  = ((p1 - sfL2 + 1) % 1); // how far ahead of sfL2 we are
+            return dBehind <= CROSS_WIN && dAhead <= CROSS_WIN;
           })();
-          if(crossedSF && !r._justCrossed){
-            r._justCrossed = true;
-            setTimeout(() => { if(r) r._justCrossed = false; }, 100);
+          if(crossedSF && !(r._justCrossedFrames > 0)){
+            r._justCrossedFrames = 4; // FIX: frame counter, no async stutter
             r.totalLapsDone++;r.lapCount=Math.min(nLaps,r.totalLapsDone+1);
             const lt=track.lapBase/(effSpeed*0.97)+(Math.random()-0.5)*0.8;
             r.lapTimes.push(lt);
@@ -1996,8 +1998,9 @@ export default function CircuitRaceView({
               if(!r.inPit&&!(r.tyreWear>92&&tw<20))r.tyreWear=tw;
             }
             if(r.totalLapsDone>=nLaps){r.finished=true;r.finishOrder=nextFO++;r.finishVisibleUntil=nowSec+9999;if(r.finishOrder===1){finishFlash=nowSec+2.0;stateRef.current.finishFlash=finishFlash;}}
-          } else if (!crossedSF) {
-            r._justCrossed = false;
+          } else {
+            // FIX: decrement each frame
+            if (r._justCrossedFrames > 0) r._justCrossedFrames--;
           }
 
           // Tyre wear (per-frame, only when no replay data)
@@ -2582,22 +2585,21 @@ export default function CircuitRaceView({
         // Visual lap crossing
         const sfL2 = trk.sfLine ?? 0;
         const crossedSF = (() => {
-          if (sfL2 === 0) return prevPos > 0.93 && racer.trackPos < 0.07;
+          // FIX: tight window check — same as race loop fix
+          const CROSS_WIN = 0.08;
           const p0 = prevPos, p1 = racer.trackPos;
-          if (p0 < sfL2 && p1 >= sfL2) return true;
-          if (p0 > p1 && sfL2 <= p1) return true;
-          if (p0 > p1 && sfL2 >= p0) return true;
-          return false;
+          const dBehind = ((sfL2 - p0 + 1) % 1);
+          const dAhead  = ((p1 - sfL2 + 1) % 1);
+          return dBehind <= CROSS_WIN && dAhead <= CROSS_WIN;
         })();
-        if (crossedSF && !racer._justCrossed) {
-          racer._justCrossed = true;
-          setTimeout(() => { if (racer) racer._justCrossed = false; }, 100);
+        if (crossedSF && !(racer._justCrossedFrames > 0)) {
+          racer._justCrossedFrames = 4; // FIX: frame counter
           racer.lapCount++;
           const lt = trk.lapBase / (effSpeed * 0.97) + (Math.random() - 0.5) * 0.8;
           racer.lapTimes.push(lt);
           if (lt < fl.time) { fl.time = lt; fl.holderId = racer.id; stateRef.current.fastestLap = fl; addInc(`${racer.name} — fastest lap!`); }
-        } else if (!crossedSF) {
-          racer._justCrossed = false;
+        } else {
+          if (racer._justCrossedFrames > 0) racer._justCrossedFrames--;
         }
 
         // Visual tyre wear (gentle degradation between backend updates)

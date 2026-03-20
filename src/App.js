@@ -155,6 +155,10 @@ function ShootingRangePlayRedirect() {
   const { weaponId } = useParams();
   return <Navigate to={weaponId ? `/casino/mini-games/shooting-range/play/${weaponId}` : '/casino/mini-games/shooting-range/play'} replace />;
 }
+function AttackShortcutRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/kill/attack${search}`} replace />;
+}
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -649,7 +653,7 @@ function App() {
             }
           />
           {/* Kill redirects */}
-          <Route path="/attack" element={<Navigate to="/kill/attack" replace />} />
+          <Route path="/attack" element={<AttackShortcutRedirect />} />
           <Route path="/bodyguards" element={<Navigate to="/kill/bodyguards" replace />} />
           <Route path="/hitlist" element={<Navigate to="/kill/hitlist" replace />} />
           <Route path="/attempts" element={<Navigate to="/kill/attempts" replace />} />
