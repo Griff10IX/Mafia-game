@@ -57,16 +57,41 @@ const GAME_LABELS = {
 /** All casino games in display order (for Gambling section to show every casino). */
 const ALL_CASINO_GAMES = ['dice', 'roulette', 'blackjack', 'horseracing', 'videopoker', 'slots', 'mdg', 'mp_blackjack', 'mp_poker'];
 
-const LoadingSpinner = () => (
-  <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
-    <style>{STATS_STYLES}</style>
-    <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-      <BarChart3 size={20} className="text-primary/40 animate-pulse" />
-      <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      <span className="text-primary text-[9px] font-heading uppercase tracking-wider">Loading your stats...</span>
-    </div>
-  </div>
-);
+const MY_STATS_CACHE_KEY = 'mafia_stats_me_v1';
+
+function readMyStatsCache() {
+  try {
+    const raw = sessionStorage.getItem(MY_STATS_CACHE_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    return o && typeof o === 'object' ? o : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeMyStatsCache(data) {
+  if (data == null || typeof data !== 'object') return;
+  try {
+    sessionStorage.setItem(MY_STATS_CACHE_KEY, JSON.stringify(data));
+  } catch (_) {}
+}
+
+/** Safe placeholder so the page can render before the first /stats/me response. */
+const EMPTY_MY_STATS = {
+  combat: {},
+  rank: {},
+  bodyguards: {},
+  casinos: {},
+  gambling: {},
+  sports_betting: {},
+  booze: {},
+  auto_rank: {},
+  stock_market: {},
+  bank: {},
+  points: {},
+  prestige: {},
+};
 
 const StatCard = ({ title, icon: Icon, rows, delay = 0 }) => {
   const safeRows = Array.isArray(rows) ? rows : [];
@@ -93,57 +118,32 @@ const StatCard = ({ title, icon: Icon, rows, delay = 0 }) => {
   );
 };
 
-let _cachedStats = null;
-let _lastFetchTime = 0;
 const REFRESH_INTERVAL = 30_000;
 
 export default function MyStats() {
-  const [stats, setStats] = useState(_cachedStats);
-  const [loading, setLoading] = useState(!_cachedStats);
+  const [stats, setStats] = useState(() => readMyStatsCache() ?? EMPTY_MY_STATS);
 
-  const fetchStats = useCallback((silent = false) => {
-    if (!silent) setLoading(true);
+  const fetchStats = useCallback((silentError = false) => {
+    const cached = readMyStatsCache();
+    if (cached) setStats(cached);
     api
       .get('/stats/me')
       .then((res) => {
         if (res?.data) {
-          _cachedStats = res.data;
-          _lastFetchTime = Date.now();
           setStats(res.data);
+          writeMyStatsCache(res.data);
         }
       })
       .catch((e) => {
-        if (!silent) toast.error(e.response?.data?.detail || 'Failed to load your stats');
-      })
-      .finally(() => { if (!silent) setLoading(false); });
+        if (!silentError) toast.error(e.response?.data?.detail || 'Failed to load your stats');
+      });
   }, []);
 
   useEffect(() => {
-    const stale = Date.now() - _lastFetchTime > REFRESH_INTERVAL;
-    if (!_cachedStats) {
-      fetchStats(false);
-    } else if (stale) {
-      fetchStats(true);
-    }
+    fetchStats(false);
     const id = setInterval(() => fetchStats(true), REFRESH_INTERVAL);
     return () => clearInterval(id);
   }, [fetchStats]);
-
-  if (loading && !stats) return <LoadingSpinner />;
-  if (!stats) {
-    return (
-      <div className={`${styles.pageContent} p-4 mobile-page-root`}>
-        <p className="text-mutedForeground mb-2">Failed to load stats.</p>
-        <button
-          type="button"
-          onClick={() => fetchStats()}
-          className="px-2 py-1 rounded text-xs font-heading uppercase tracking-wider border border-primary/40 text-primary hover:bg-primary/10"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
 
   const combat = stats.combat || {};
   const rank = stats.rank || {};

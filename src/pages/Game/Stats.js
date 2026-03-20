@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '../../utils/api';
@@ -47,44 +47,6 @@ function formatDateTime(iso) {
 }
 
 const STAT_CARD_BODY_MIN_H = 140;
-
-// Skeleton: same grid and card structure as real content for stable LCP/CLS
-const StatsSkeleton = () => (
-  <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="stats-loading">
-    <style>{STATS_STYLES}</style>
-    <div className="h-3 w-3/4 max-w-[280px] rounded bg-primary/10 animate-pulse" aria-hidden />
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 items-start">
-      {['Game Capital', 'User Stats'].map((title) => (
-        <div key={title} className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
-          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
-            <div className="h-3 w-24 rounded bg-primary/20 animate-pulse" />
-          </div>
-          <div className="px-2 py-3 flex flex-col gap-2" style={{ minHeight: STAT_CARD_BODY_MIN_H }}>
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-4 rounded bg-primary/10 animate-pulse" style={{ animationDelay: `${i * 0.05}s` }} />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 items-start">
-      {['Vehicle Stats', 'Rank Stats'].map((title) => (
-        <div key={title} className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
-          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
-            <div className="h-3 w-24 rounded bg-primary/20 animate-pulse" />
-          </div>
-          <div className="px-2 py-3 flex flex-col gap-2" style={{ minHeight: STAT_CARD_BODY_MIN_H }}>
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-4 rounded bg-primary/10 animate-pulse" style={{ animationDelay: `${i * 0.05}s` }} />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
 
 const StatCard = ({ title, rows, delay = 0 }) => {
   const safeRows = Array.isArray(rows) ? rows : [];
@@ -400,29 +362,22 @@ function buildVehicleRows(data) {
 
 // Main component
 export default function Stats() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [usersOnlyKills, setUsersOnlyKills] = useState(false);
+  const [data, setData] = useState(() => getStatsOverview(false));
   const [statsListTab, setStatsListTab] = useState('kills'); // 'kills' | 'wiped'
-  const hasFetchedOnce = useRef(false);
 
   const rankStats = Array.isArray(data?.rank_stats) ? data.rank_stats : [];
   const recentKills = Array.isArray(data?.recent_kills) ? data.recent_kills : [];
   const wipedFamilies = Array.isArray(data?.wiped_families) ? data.wiped_families : [];
 
-  const fetchStats = useCallback(async () => {
-    setLoading(true);
+  const fetchStats = useCallback(async (silentError = false) => {
     try {
       const res = await api.get(`/stats/overview?users_only_kills=${usersOnlyKills ? 'true' : 'false'}`);
       setData(res.data);
       setStatsOverview(usersOnlyKills, res.data);
-      hasFetchedOnce.current = true;
     } catch (e) {
-      toast.error('Failed to load stats');
+      if (!silentError) toast.error('Failed to load stats');
       console.error('Error fetching stats:', e);
-      setData(null);
-    } finally {
-      setLoading(false);
     }
   }, [usersOnlyKills]);
 
@@ -432,32 +387,23 @@ export default function Stats() {
     const cached = getStatsOverview(cacheKey);
     if (cached) {
       setData(cached);
-      setLoading(false);
     } else {
-      setLoading(true);
+      setData(null);
     }
     api.get(`/stats/overview?users_only_kills=${cacheKey ? 'true' : 'false'}`)
       .then((res) => {
         if (cancelled) return;
         setData(res.data);
         setStatsOverview(cacheKey, res.data);
-        hasFetchedOnce.current = true;
       })
-      .catch((e) => {
-        if (!cancelled) {
-          toast.error('Failed to load stats');
-          setData(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+      .catch(() => {
+        if (!cancelled) toast.error('Failed to load stats');
       });
     return () => { cancelled = true; };
   }, [usersOnlyKills]);
 
-  // Auto-refresh every 60 seconds in the background (no loading state); update cache on success
+  // Auto-refresh every 60 seconds in the background; update cache on success
   useEffect(() => {
-    if (!data) return;
     const interval = setInterval(() => {
       api.get(`/stats/overview?users_only_kills=${usersOnlyKills ? 'true' : 'false'}`)
         .then((res) => {
@@ -467,11 +413,7 @@ export default function Stats() {
         .catch(() => {});
     }, 60_000);
     return () => clearInterval(interval);
-  }, [usersOnlyKills, data]);
-
-  if (loading && !data) {
-    return <StatsSkeleton />;
-  }
+  }, [usersOnlyKills]);
 
   const gameCapitalRows = buildGameCapitalRows(data);
   const userStatsRows = buildUserStatsRows(data);
