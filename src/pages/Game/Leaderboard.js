@@ -18,6 +18,44 @@ const EMPTY_BOARDS = {
   respect_points: [], bullets_melted: [], stock_market_profit: [], booze_run_profit: [],
 };
 
+const LB_CACHE_STORAGE_KEY = 'mafia_lb_top_v1';
+const LB_CACHE_MAX_KEYS = 12;
+
+function _lbCacheKey(period, topLimit, dead) {
+  return `${period}|${topLimit}|${dead ? '1' : '0'}`;
+}
+
+function readLbEntry(period, topLimit, dead) {
+  try {
+    const raw = sessionStorage.getItem(LB_CACHE_STORAGE_KEY);
+    if (!raw) return null;
+    const all = JSON.parse(raw);
+    if (!all || typeof all !== 'object') return null;
+    return all[_lbCacheKey(period, topLimit, dead)] || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLbEntry(period, topLimit, dead, boards, lastRewardWinners) {
+  try {
+    const raw = sessionStorage.getItem(LB_CACHE_STORAGE_KEY);
+    const all = raw ? JSON.parse(raw) : {};
+    if (!all || typeof all !== 'object') return;
+    all[_lbCacheKey(period, topLimit, dead)] = {
+      boards,
+      last_reward_winners: lastRewardWinners,
+      t: Date.now(),
+    };
+    const keys = Object.keys(all);
+    if (keys.length > LB_CACHE_MAX_KEYS) {
+      keys.sort((a, b) => (all[a]?.t || 0) - (all[b]?.t || 0));
+      for (let i = 0; i < keys.length - LB_CACHE_MAX_KEYS; i++) delete all[keys[i]];
+    }
+    sessionStorage.setItem(LB_CACHE_STORAGE_KEY, JSON.stringify(all));
+  } catch (_) {}
+}
+
 function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
   const list = entries || [];
   return (
@@ -96,60 +134,54 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
 
 export default function Leaderboard() {
   const [period, setPeriod] = useState('weekly');
-  const [boards, setBoards] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [topLimit, setTopLimit] = useState(10);
   const [viewMode, setViewMode] = useState('alive');
-  const [lastRewardWinners, setLastRewardWinners] = useState(null);
+  const [boards, setBoards] = useState(() => {
+    const c = readLbEntry('weekly', 10, false);
+    const b = c?.boards;
+    return b && typeof b === 'object' ? b : EMPTY_BOARDS;
+  });
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRewardWinners, setLastRewardWinners] = useState(
+    () => readLbEntry('weekly', 10, false)?.last_reward_winners ?? null,
+  );
   const intervalRef = useRef(null);
 
-  const hasLoadedOnceRef = useRef(false);
-
-  const fetchLeaderboard = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    else setRefreshing(true);
-    const timeoutId = setTimeout(() => {
-      setLoading(false);
-      setRefreshing(false);
-    }, 15000);
+  const fetchLeaderboard = useCallback(async (showRefreshSpin = false, silentError = false) => {
+    const dead = viewMode === 'dead';
+    const cached = readLbEntry(period, topLimit, dead);
+    if (cached?.boards && typeof cached.boards === 'object') {
+      setBoards(cached.boards);
+      setLastRewardWinners(cached.last_reward_winners ?? null);
+    }
+    if (showRefreshSpin) setRefreshing(true);
+    const timeoutId = setTimeout(() => setRefreshing(false), 15000);
     try {
       const response = await api.get('/leaderboards/top', {
-        params: { limit: topLimit, dead: viewMode === 'dead', period },
+        params: { limit: topLimit, dead, period },
       });
       const d = response.data || {};
       const { last_reward_winners, ...rest } = d;
+      const nextBoards = Object.keys(rest).length ? rest : EMPTY_BOARDS;
       setLastRewardWinners(last_reward_winners ?? null);
-      setBoards(Object.keys(rest).length ? rest : EMPTY_BOARDS);
+      setBoards(nextBoards);
+      writeLbEntry(period, topLimit, dead, nextBoards, last_reward_winners ?? null);
     } catch (error) {
-      if (!silent) toast.error('Failed to load leaderboard');
+      if (!silentError) toast.error('Failed to load leaderboard');
     } finally {
       clearTimeout(timeoutId);
-      setLoading(false);
       setRefreshing(false);
     }
   }, [topLimit, viewMode, period]);
 
   useEffect(() => {
-    const silent = hasLoadedOnceRef.current;
-    hasLoadedOnceRef.current = true;
-    fetchLeaderboard(silent);
+    fetchLeaderboard(false, false);
   }, [fetchLeaderboard]);
 
   useEffect(() => {
-    intervalRef.current = setInterval(() => fetchLeaderboard(true), 60_000);
+    intervalRef.current = setInterval(() => fetchLeaderboard(false, true), 60_000);
     return () => clearInterval(intervalRef.current);
   }, [fetchLeaderboard]);
-
-  if (loading && !boards) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-        <Trophy size={22} className="text-primary/40 animate-pulse" />
-        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden />
-        <span className="text-primary text-[9px] font-heading uppercase tracking-wider">Loading…</span>
-      </div>
-    );
-  }
 
   return (
     <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="leaderboard-page">
