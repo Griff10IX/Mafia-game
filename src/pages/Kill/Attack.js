@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText, Users } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -954,6 +954,9 @@ export default function Attack() {
   const [pendingResend, setPendingResend] = useState(null);
   const [killBannerMessage, setKillBannerMessage] = useState(null);
 
+  /** Ignore stale GET /attack/list results so initial page load cannot overwrite a newer list (e.g. after Start Search). */
+  const attackListFetchGenRef = useRef(0);
+
   const showKillResult = (text, type, options = {}) => {
     const { description, action } = options;
     if (getKillToastStyle() === 'banner') {
@@ -983,12 +986,15 @@ export default function Attack() {
   };
 
   const refreshAttacks = useCallback(async () => {
+    const id = ++attackListFetchGenRef.current;
     try {
       const response = await api.get('/attack/list');
+      if (id !== attackListFetchGenRef.current) return [];
       const list = response.data.attacks || [];
       setAttacks(list);
       return list;
     } catch (error) {
+      if (id !== attackListFetchGenRef.current) return [];
       return [];
     }
   }, []);
@@ -1092,6 +1098,7 @@ export default function Attack() {
     }
 
     const load = async () => {
+      const attacksFetchId = ++attackListFetchGenRef.current;
       try {
         const [attacksRes, inflationRes, meRes, eventsRes] = await Promise.all([
           api.get('/attack/list'),
@@ -1099,14 +1106,18 @@ export default function Attack() {
           api.get('/auth/me').catch(() => ({ data: {} })),
           api.get('/events/active').catch(() => ({ data: {} })),
         ]);
-        setAttacks(attacksRes.data?.attacks ?? []);
+        if (attacksFetchId === attackListFetchGenRef.current) {
+          setAttacks(attacksRes.data?.attacks ?? []);
+        }
         setInflationPct(Number(inflationRes.data?.inflation_pct ?? 0));
         setUserBullets(meRes.data?.bullets ?? 0);
         setUserMolotovs(meRes.data?.molotovs ?? 0);
         setEvent(eventsRes.data?.event ?? null);
         setEventsEnabled(!!eventsRes.data?.events_enabled);
       } catch (_) {
-        setAttacks([]);
+        if (attacksFetchId === attackListFetchGenRef.current) {
+          setAttacks([]);
+        }
         setInflationPct(0);
         setUserBullets(0);
         setUserMolotovs(0);
@@ -1272,7 +1283,7 @@ export default function Attack() {
       setNote('');
       await refreshAttacks();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to search target');
+      toast.error(getApiErrorMessage(error) || 'Failed to search target');
     } finally {
       setLoading(false);
     }
