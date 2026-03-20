@@ -603,7 +603,7 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
     if target_ids:
         async for u in db.users.find(
             {"id": {"$in": target_ids}},
-            {"_id": 0, "id": 1, "is_dead": 1, "is_bodyguard": 1, "current_state": 1},
+            {"_id": 0, "id": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1, "current_state": 1},
         ):
             users_map[u["id"]] = u
 
@@ -651,7 +651,13 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
                 if target_user.get("is_dead"):
                     delete_ids.append(attack["id"])
                     continue
-                if target_user.get("is_bodyguard") and tid not in still_bg_tids:
+                # Only drop "orphan bodyguard" searches for robot NPC bodyguards. A normal user with a stale
+                # is_bodyguard flag (no bodyguards row) would otherwise wipe every search on list fetch.
+                if (
+                    target_user.get("is_bodyguard")
+                    and tid not in still_bg_tids
+                    and target_user.get("is_npc")
+                ):
                     delete_ids.append(attack["id"])
                     continue
         if not attack.get("expires_at"):

@@ -1173,9 +1173,7 @@ export default function Attack() {
       if (payload.type === 'kill') {
         setLoading(true);
         try {
-          const response = await api.get('/attack/list');
-          const list = response.data?.attacks || [];
-          setAttacks(list);
+          const list = await refreshAttacks();
           const username = (payload.killUsername || '').trim().toLowerCase();
           const found = list.filter((a) => (a.target_username || '').toLowerCase() === username && a.status === 'found');
           const best = found.find((a) => a.can_attack);
@@ -1374,9 +1372,7 @@ export default function Attack() {
     setLoading(true);
     let list;
     try {
-      const response = await api.get('/attack/list');
-      list = response.data.attacks || [];
-      setAttacks(list);
+      list = await refreshAttacks();
     } catch {
       list = attacks;
     } finally {
