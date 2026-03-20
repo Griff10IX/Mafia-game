@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Target, Eye, ShieldOff, DollarSign, Coins, User, Users, UserPlus, Clock, Crosshair } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -689,11 +691,12 @@ const InfoCard = () => (
    Main Component
    ═══════════════════════════════════════════════════════ */
 export default function HitlistPage() {
-  const [list, setList] = useState([]);
-  const [me, setMe] = useState(null);
-  const [user, setUser] = useState(null);
-  const [npcStatus, setNpcStatus] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const hitBoot = readSessionJson(HITLIST_PAGE_CACHE_KEY);
+  const [list, setList] = useState(() => hitBoot?.list ?? []);
+  const [me, setMe] = useState(() => hitBoot?.me ?? null);
+  const [user, setUser] = useState(() => hitBoot?.user ?? null);
+  const [npcStatus, setNpcStatus] = useState(() => hitBoot?.npcStatus ?? null);
+  const [loading, setLoading] = useState(() => !hitBoot?.user);
   const [submitting, setSubmitting] = useState(false);
   const [addingNpc, setAddingNpc] = useState(false);
   const [targetUsername, setTargetUsername] = useState('');
@@ -703,7 +706,8 @@ export default function HitlistPage() {
   const [hidden, setHidden] = useState(false);
   const [buyingOffTarget, setBuyingOffTarget] = useState(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [listRes, meRes, userRes, npcStatusRes] = await Promise.all([
         api.get('/hitlist/list'),
@@ -711,25 +715,45 @@ export default function HitlistPage() {
         api.get('/auth/me'),
         api.get('/hitlist/npc-status').catch(() => ({ data: null }))
       ]);
-      setList(listRes.data?.items || []);
-      setMe(meRes.data);
-      setUser(userRes.data);
-      setNpcStatus(npcStatusRes.data);
+      const nextList = listRes.data?.items || [];
+      const nextMe = meRes.data;
+      const nextUser = userRes.data;
+      const nextNpc = npcStatusRes.data;
+      setList(nextList);
+      setMe(nextMe);
+      setUser(nextUser);
+      setNpcStatus(nextNpc);
+      if (nextUser) {
+        writeSessionJson(HITLIST_PAGE_CACHE_KEY, {
+          list: nextList,
+          me: nextMe,
+          user: nextUser,
+          npcStatus: nextNpc,
+        });
+      }
     } catch (e) {
-      toast.error('Failed to load contracts');
-      console.error('Error fetching hitlist:', e);
-      setList([]);
-      setMe(null);
-      setUser(null);
-      setNpcStatus(null);
+      if (!silent) {
+        toast.error('Failed to load contracts');
+        console.error('Error fetching hitlist:', e);
+        setList([]);
+        setMe(null);
+        setUser(null);
+        setNpcStatus(null);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    const c = readSessionJson(HITLIST_PAGE_CACHE_KEY);
+    fetchData(!!c?.user);
+  }, [fetchData]);
+
+  useEffect(() => {
+    const id = setInterval(() => fetchData(true), 60_000);
+    return () => clearInterval(id);
+  }, [fetchData]);
 
   const mult = hidden ? 1.5 : 1;
   const cashAmt = parseInt(rewardCash, 10) || 0;
@@ -865,6 +889,7 @@ export default function HitlistPage() {
         <p className="text-[9px] sm:text-[10px] text-zinc-500 font-heading italic">
           Place contracts, buy yourself off, see who wants you eliminated.
         </p>
+        <AutoRefreshNote seconds={60} />
       </div>
 
       <YourStatusCard

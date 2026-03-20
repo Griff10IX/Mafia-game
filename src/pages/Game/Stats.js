@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '../../utils/api';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { getStatsOverview, setStatsOverview } from '../../utils/statsCache';
 import styles from '../../styles/noir.module.css';
 
@@ -422,6 +423,7 @@ export default function Stats() {
   return (
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="stats-page">
       <style>{STATS_STYLES}</style>
+      <AutoRefreshNote seconds={60} />
 
       {!data && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-heading text-amber-200 flex flex-wrap items-center justify-between gap-2">

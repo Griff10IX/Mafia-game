@@ -1,8 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Car, Flame, DollarSign, CheckSquare, Square, Filter, ChevronDown, ChevronUp, Settings, Image as ImageIcon, Wrench } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
+
+const GARAGE_CACHE_KEY = 'mafia_garage_v1';
 import { filterProfanity } from '../../utils/profanityFilter';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
@@ -476,9 +480,10 @@ const CustomCarModal = ({
 
 // Main component
 export default function Garage() {
-  const [cars, setCars] = useState([]);
+  const [bootGarage] = useState(() => readSessionJson(GARAGE_CACHE_KEY));
+  const [cars, setCars] = useState(() => bootGarage?.cars ?? []);
   const [selectedCars, setSelectedCars] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => bootGarage == null);
   const [sortBy, setSortBy] = useState('rarity');
   const [filterRarity, setFilterRarity] = useState('all');
   const [showAll, setShowAll] = useState(false);
@@ -493,24 +498,36 @@ export default function Garage() {
   const [repairingCarId, setRepairingCarId] = useState(null);
   const [user, setUser] = useState(null);
 
-  useEffect(() => {
-    fetchGarage();
-    api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
-  }, []);
-
-  const fetchGarage = async () => {
+  const fetchGarage = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const response = await api.get('/gta/garage');
-      setCars(response.data?.cars ?? []);
-      setMeltBulletsCooldownUntil(response.data?.melt_bullets_cooldown_until ?? null);
+      const nextCars = response.data?.cars ?? [];
+      const cd = response.data?.melt_bullets_cooldown_until ?? null;
+      setCars(nextCars);
+      setMeltBulletsCooldownUntil(cd);
+      writeSessionJson(GARAGE_CACHE_KEY, { cars: nextCars, melt_bullets_cooldown_until: cd });
     } catch (error) {
-      toast.error('Failed to load garage');
-      setCars([]);
-      setMeltBulletsCooldownUntil(null);
+      if (!silent) {
+        toast.error('Failed to load garage');
+        setCars([]);
+        setMeltBulletsCooldownUntil(null);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const c = readSessionJson(GARAGE_CACHE_KEY);
+    fetchGarage(c != null);
+    api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
+  }, [fetchGarage]);
+
+  useEffect(() => {
+    const id = setInterval(() => fetchGarage(true), 60_000);
+    return () => clearInterval(id);
+  }, [fetchGarage]);
 
   // Tick every second while melt-for-bullets cooldown is active
   useEffect(() => {
@@ -703,6 +720,7 @@ export default function Garage() {
       <div className="relative gar-fade-in">
         <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Your Fleet</p>
         <p className="text-[10px] text-zinc-500 font-heading italic">View, melt, scrap, and list your cars.</p>
+        <AutoRefreshNote seconds={60} />
       </div>
 
       {user?.melt_until && (

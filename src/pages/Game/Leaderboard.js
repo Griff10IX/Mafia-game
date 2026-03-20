@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award, Skull, History, DollarSign, Star, Zap, TrendingUp, Wine } from 'lucide-react';
 import api from '../../utils/api';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -217,6 +218,7 @@ export default function Leaderboard() {
             ? (viewMode === 'alive' ? 'This week\'s top players (Mon–Sun UTC)' : 'This week\'s top dead by stats')
             : (viewMode === 'alive' ? 'The most powerful players in the underworld' : 'Top dead accounts by stats')}
         </p>
+        <AutoRefreshNote seconds={60} className="mb-2 text-center" />
         <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
           <span className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">View:</span>
           <div className="flex flex-wrap gap-0.5">

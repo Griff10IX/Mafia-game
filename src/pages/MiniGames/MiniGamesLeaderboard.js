@@ -2,8 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy, Medal, Award, RefreshCw, Gamepad2, Clock, Gift, DollarSign, Heart, Package, Crosshair, Bomb, Ship, Car, PersonStanding, Shield } from 'lucide-react';
 import api from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+
+const MG_LB_CACHE_KEY = 'mafia_minigames_lb_v1';
 
 const LB_STYLES = `
   .mg-fade-in { animation: mg-fade-in 0.4s ease-out both; }
@@ -80,9 +84,10 @@ function RewardBadge({ reward, rank }) {
 }
 
 export default function MiniGamesLeaderboard() {
-  const [data, setData] = useState(null);
-  const [myStats, setMyStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const initialMg = readSessionJson(MG_LB_CACHE_KEY);
+  const [data, setData] = useState(() => initialMg?.data ?? null);
+  const [myStats, setMyStats] = useState(() => initialMg?.myStats ?? null);
+  const [loading, setLoading] = useState(() => !initialMg?.data);
   const [refreshing, setRefreshing] = useState(false);
   const intervalRef = useRef(null);
 
@@ -96,6 +101,7 @@ export default function MiniGamesLeaderboard() {
       ]);
       setData(lbRes.data);
       setMyStats(statsRes.data);
+      writeSessionJson(MG_LB_CACHE_KEY, { data: lbRes.data, myStats: statsRes.data });
     } catch (error) {
       if (!silent) toast.error('Failed to load mini games leaderboard');
     } finally {
@@ -104,10 +110,9 @@ export default function MiniGamesLeaderboard() {
     }
   }, []);
 
-  const hasDataRef = useRef(false);
   useEffect(() => {
-    fetchData(hasDataRef.current);
-    hasDataRef.current = true;
+    const c = readSessionJson(MG_LB_CACHE_KEY);
+    fetchData(!!c?.data);
   }, [fetchData]);
 
   useEffect(() => {
@@ -142,6 +147,7 @@ export default function MiniGamesLeaderboard() {
         <p className="text-[9px] text-zinc-500 font-heading italic">
           Play Snake, Flappy Gangster, Shooting Range, Minefield, Rum Runner, The Getaway, and Family Run to earn points. Top 5 rewarded every Sunday!
         </p>
+        <AutoRefreshNote seconds={60} className="mt-0.5" />
         <button
           type="button"
           onClick={() => fetchData(true)}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Landmark, ShieldCheck, ArrowRightLeft, Clock, Coins, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
@@ -383,9 +383,10 @@ const TransferCard = ({ transfer, delay = 0 }) => {
 
 // Main component
 export default function Bank() {
-  const [loading, setLoading] = useState(true);
-  const [meta, setMeta] = useState({ interest_options: [] });
-  const [overview, setOverview] = useState(null);
+  const bankBoot = readSessionJson(BANK_CACHE_KEY);
+  const [loading, setLoading] = useState(() => !bankBoot?.overview);
+  const [meta, setMeta] = useState(() => bankBoot?.meta ?? { interest_options: [] });
+  const [overview, setOverview] = useState(() => bankBoot?.overview ?? null);
 
   const [depositAmount, setDepositAmount] = useState('');
   const [durationHours, setDurationHours] = useState(24);
@@ -418,24 +419,35 @@ export default function Bank() {
   };
   const isCollapsed = (id) => !!collapsedSections[id];
 
-  const fetchAll = async () => {
-    setLoading(true);
+  const fetchAll = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [m, o] = await Promise.all([api.get('/bank/meta'), api.get('/bank/overview')]);
-      setMeta(m.data ?? { interest_options: [] });
-      setOverview(o.data ?? null);
+      const nextMeta = m.data ?? { interest_options: [] };
+      const nextOverview = o.data ?? null;
+      setMeta(nextMeta);
+      setOverview(nextOverview);
+      writeSessionJson(BANK_CACHE_KEY, { meta: nextMeta, overview: nextOverview });
     } catch (e) {
-      toast.error('Failed to load bank');
-      setMeta({ interest_options: [] });
-      setOverview(null);
+      if (!silent) {
+        toast.error('Failed to load bank');
+        setMeta({ interest_options: [] });
+        setOverview(null);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchAll();
-  }, []);
+    const c = readSessionJson(BANK_CACHE_KEY);
+    fetchAll(!!c?.overview);
+  }, [fetchAll]);
+
+  useEffect(() => {
+    const id = setInterval(() => fetchAll(true), 60_000);
+    return () => clearInterval(id);
+  }, [fetchAll]);
 
   useEffect(() => {
     const to = location.state?.transferTo;
@@ -554,6 +566,7 @@ export default function Bank() {
       <style>{BANK_STYLES}</style>
 
       <p className="text-[9px] text-zinc-500 font-heading italic">Interest deposits, Swiss account, and transfers.</p>
+      <AutoRefreshNote seconds={60} />
 
       <div className="space-y-2">
         <div className="relative rounded-md overflow-hidden border border-primary/20 bank-fade-in mobile-panel">

@@ -1,9 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Shield, ListChecks, Crosshair, TrendingUp, Lock, UserPlus, Star, AlertTriangle, ChevronRight, ChevronDown } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
+
+const BIZ_CACHE_KEY = 'mafia_illegal_biz_v1';
+const BIZ_REFRESH = 30_000;
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -156,15 +161,11 @@ function StartScreen({ types, saving, onStart }) {
   );
 }
 
-let _cachedBizData = null;
-let _cachedBizTypes = [];
-let _bizLastFetch = 0;
-const BIZ_REFRESH = 30_000;
-
 export default function IllegalBusiness() {
-  const [data, setData] = useState(_cachedBizData);
-  const [types, setTypes] = useState(_cachedBizTypes);
-  const [loading, setLoading] = useState(!_cachedBizData);
+  const bizBoot = readSessionJson(BIZ_CACHE_KEY);
+  const [data, setData] = useState(() => bizBoot?.data ?? null);
+  const [types, setTypes] = useState(() => bizBoot?.types ?? []);
+  const [loading, setLoading] = useState(() => bizBoot?.data == null);
   const [saving, setSaving] = useState(false);
   const [raidTarget, setRaidTarget] = useState('');
   const [raidState, setRaidState] = useState('');
@@ -179,31 +180,41 @@ export default function IllegalBusiness() {
         api.get('/illegal-business').catch((e) => ({ ...e, response: e.response })),
         api.get('/illegal-business/types').catch(() => ({ data: { types: [] } })),
       ]);
+      const prevSnap = readSessionJson(BIZ_CACHE_KEY) || {};
+      let nextTypes = prevSnap.types ?? [];
       if (typesRes?.data?.types) {
-        _cachedBizTypes = typesRes.data.types;
-        setTypes(typesRes.data.types);
+        nextTypes = typesRes.data.types;
+        setTypes(nextTypes);
       }
+      let nextData;
       if (res.response?.status === 404) {
-        _cachedBizData = { noBusiness: true };
-        setData({ noBusiness: true });
+        nextData = { noBusiness: true };
+        setData(nextData);
       } else if (res.data) {
-        _cachedBizData = res.data;
-        _bizLastFetch = Date.now();
-        setData(res.data);
+        nextData = res.data;
+        setData(nextData);
       } else if (!silent) {
         toast.error(getApiErrorMessage(res));
       }
+      if (nextData !== undefined) {
+        writeSessionJson(BIZ_CACHE_KEY, { data: nextData, types: nextTypes, t: Date.now() });
+      }
     } catch (e) {
-      if (e.response?.status === 404) { _cachedBizData = { noBusiness: true }; setData({ noBusiness: true }); }
-      else if (!silent) toast.error(getApiErrorMessage(e));
+      if (e.response?.status === 404) {
+        const nextData = { noBusiness: true };
+        setData(nextData);
+        const prevSnap = readSessionJson(BIZ_CACHE_KEY) || {};
+        writeSessionJson(BIZ_CACHE_KEY, { data: nextData, types: prevSnap.types ?? [], t: Date.now() });
+      } else if (!silent) toast.error(getApiErrorMessage(e));
     } finally {
       if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    const stale = Date.now() - _bizLastFetch > BIZ_REFRESH;
-    if (!_cachedBizData) fetchData(false);
+    const c = readSessionJson(BIZ_CACHE_KEY);
+    const stale = !c?.t || Date.now() - c.t > BIZ_REFRESH;
+    if (c?.data == null) fetchData(false);
     else if (stale) fetchData(true);
     const id = setInterval(() => fetchData(true), BIZ_REFRESH);
     api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
@@ -305,6 +316,7 @@ export default function IllegalBusiness() {
     return (
       <div className={`${styles.pageContent} mobile-page-root`}>
         <style>{RACKET_STYLES}</style>
+        <AutoRefreshNote seconds={30} className="mb-2" />
         <StartScreen types={types} saving={saving} onStart={handleStart} />
       </div>
     );
@@ -331,6 +343,7 @@ export default function IllegalBusiness() {
     <div className={`${styles.pageContent} racket-page mobile-page-root`}>
       <style>{RACKET_STYLES}</style>
       <div className="space-y-3">
+        <AutoRefreshNote seconds={30} />
 
         {/* ── Header ── */}
         <div className="flex flex-wrap items-end justify-between gap-3 pb-3 border-b border-primary/15">

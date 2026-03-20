@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Users, User, Target, Building2, Plane, Factory, Mail } from 'lucide-react';
 import api from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardTrigger, HoverCardPortal, HoverCardContent } from "@/components/ui/hover-card";
 import PrestigeBadge from '../../components/PrestigeBadge';
@@ -318,18 +320,22 @@ const InfoCard = () => (
   </div>
 );
 
+const UO_CACHE_KEY = 'mafia_users_online_v1';
+
 // Main component
 export default function UsersOnline() {
-  const [totalOnline, setTotalOnline] = useState(0);
-  const [users, setUsers] = useState([]);
-  const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
-  const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState(DEFAULT_MOD_COLOR);
-  const [hdoOnlineColor, setHdoOnlineColor] = useState(DEFAULT_HDO_COLOR);
-  const [loading, setLoading] = useState(true);
+  const [bootCache] = useState(() => readSessionJson(UO_CACHE_KEY));
+  const [totalOnline, setTotalOnline] = useState(() => bootCache?.total_online ?? 0);
+  const [users, setUsers] = useState(() => (Array.isArray(bootCache?.users) ? bootCache.users : []));
+  const [adminOnlineColor, setAdminOnlineColor] = useState(() => bootCache?.admin_online_color ?? '#a78bfa');
+  const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState(() => bootCache?.mod_default_online_color ?? DEFAULT_MOD_COLOR);
+  const [hdoOnlineColor, setHdoOnlineColor] = useState(() => bootCache?.hdo_online_color ?? DEFAULT_HDO_COLOR);
+  const [loading, setLoading] = useState(() => !bootCache);
   const [profileCache, setProfileCache] = useState({});
   const [profileLoading, setProfileLoading] = useState({});
 
-  const fetchOnlineUsers = useCallback(async () => {
+  const fetchOnlineUsers = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const response = await api.get('/users/online');
       setTotalOnline(response.data.total_online);
@@ -337,13 +343,22 @@ export default function UsersOnline() {
       if (response.data.admin_online_color != null) setAdminOnlineColor(response.data.admin_online_color);
       if (response.data.mod_default_online_color != null) setModDefaultOnlineColor(response.data.mod_default_online_color);
       if (response.data.hdo_online_color != null) setHdoOnlineColor(response.data.hdo_online_color);
+      writeSessionJson(UO_CACHE_KEY, {
+        total_online: response.data.total_online,
+        users: response.data.users || [],
+        admin_online_color: response.data.admin_online_color,
+        mod_default_online_color: response.data.mod_default_online_color,
+        hdo_online_color: response.data.hdo_online_color,
+      });
     } catch (error) {
-      toast.error('Failed to load online users');
-      console.error('Error fetching online users:', error);
-      setTotalOnline(0);
-      setUsers([]);
+      if (!silent) {
+        toast.error('Failed to load online users');
+        console.error('Error fetching online users:', error);
+        setTotalOnline(0);
+        setUsers([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -363,19 +378,20 @@ export default function UsersOnline() {
   }, [profileCache, profileLoading]);
 
   useEffect(() => {
-    fetchOnlineUsers();
-    const interval = setInterval(fetchOnlineUsers, 30000);
+    const c = readSessionJson(UO_CACHE_KEY);
+    fetchOnlineUsers(!!c);
+    const interval = setInterval(() => fetchOnlineUsers(true), 30_000);
     return () => clearInterval(interval);
   }, [fetchOnlineUsers]);
 
   // Refetch when tab/window gains focus so mod colour changes from Admin show up immediately
   useEffect(() => {
-    const onFocus = () => fetchOnlineUsers();
+    const onFocus = () => fetchOnlineUsers(true);
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [fetchOnlineUsers]);
 
-  if (loading) {
+  if (loading && !bootCache) {
     return (
       <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{UO_STYLES}</style>
@@ -390,6 +406,9 @@ export default function UsersOnline() {
 
       <div className="relative uo-fade-in">
         <p className="text-[9px] text-zinc-500 font-heading italic">Who&apos;s active now. Hover for quick stats.</p>
+        <AutoRefreshNote seconds={30}>
+          Automatically refreshes every 30 seconds, when you focus this window, and in the background.
+        </AutoRefreshNote>
       </div>
 
       <OnlineCountCard totalOnline={totalOnline} />

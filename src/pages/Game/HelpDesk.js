@@ -1,8 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { HelpCircle, Send, MessageSquare, X, ChevronRight, VolumeX, Building2, ShieldBan } from 'lucide-react';
 import api from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+
+function hdTicketsCacheKey(statusFilter) {
+  return `mafia_helpdesk_tickets_${statusFilter === '' || statusFilter == null ? 'all' : statusFilter}`;
+}
 
 const HD_STYLES = `
   @keyframes hd-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -76,8 +82,10 @@ export default function HelpDesk() {
     }
   }, []);
 
-  const fetchTickets = useCallback(async () => {
-    setLoading(true);
+  const fetchTickets = useCallback(async (opts = {}) => {
+    const silent = opts.silent === true;
+    const ck = hdTicketsCacheKey(statusFilter);
+    if (!silent) setLoading(true);
     try {
       const params = statusFilter ? { status_filter: statusFilter } : {};
       const r = await api.get('/help-desk/tickets', { params });
@@ -85,12 +93,16 @@ export default function HelpDesk() {
       // Open tickets first; closed at bottom. Newest first within each group.
       const open = list.filter((t) => (t?.status || 'open') === 'open').sort((a, b) => new Date(b?.updated_at || 0) - new Date(a?.updated_at || 0));
       const closed = list.filter((t) => (t?.status || 'open') !== 'open').sort((a, b) => new Date(b?.updated_at || 0) - new Date(a?.updated_at || 0));
-      setTickets([...open, ...closed]);
+      const sorted = [...open, ...closed];
+      setTickets(sorted);
+      writeSessionJson(ck, { tickets: sorted });
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load tickets');
-      setTickets([]);
+      if (!silent) {
+        toast.error(e.response?.data?.detail || 'Failed to load tickets');
+        setTickets([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [statusFilter]);
 
@@ -161,7 +173,7 @@ export default function HelpDesk() {
       setCreateOpen(false);
       setCreateSubject('');
       setCreateBody('');
-      fetchTickets();
+      fetchTickets({ silent: true });
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to create ticket');
     } finally {
@@ -194,7 +206,7 @@ export default function HelpDesk() {
       const r = await api.post(`/help-desk/tickets/${selectedId}/close`);
       setTicketDetail(r.data?.ticket || null);
       toast.success('Ticket closed');
-      fetchTickets();
+      fetchTickets({ silent: true });
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to close ticket');
     } finally {
@@ -215,7 +227,7 @@ export default function HelpDesk() {
       setTicketDetail(r.data?.ticket || null);
       setRewardAmount('');
       toast.success(`Rewarded $${amount.toLocaleString()} to ${ticketDetail?.username || 'user'}`);
-      fetchTickets();
+      fetchTickets({ silent: true });
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to reward');
     } finally {
@@ -434,7 +446,7 @@ export default function HelpDesk() {
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Tickets</span>
         </div>
-        {loading ? (
+        {loading && readSessionJson(hdTicketsCacheKey(statusFilter)) == null ? (
           <div className="p-4 text-center text-mutedForeground text-[11px] font-heading">Loading…</div>
         ) : tickets.length === 0 ? (
           <div className="p-4 text-center text-mutedForeground text-[11px] font-heading">No tickets yet. Create one above.</div>

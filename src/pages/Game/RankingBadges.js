@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { ChevronDown, ChevronRight, Award } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import styles from '../../styles/noir.module.css';
+
+const BADGES_CACHE_KEY = 'mafia_ranking_badges_v1';
 
 // ─── Tier Definitions ─────────────────────────────────────────────────────────
 export const TIER_DEFS = {
@@ -427,20 +431,38 @@ function LegendBadge({ tierId }) {
 
 // ─── Main page component ──────────────────────────────────────────────────────
 export default function RankingBadges() {
-  const [data, setData]           = useState(null);
-  const [loading, setLoading]     = useState(true);
+  const [data, setData]           = useState(() => readSessionJson(BADGES_CACHE_KEY));
+  const [loading, setLoading]     = useState(() => readSessionJson(BADGES_CACHE_KEY) == null);
   const [openCategories, setOpen] = useState({});
 
-  useEffect(() => {
-    api.get('/achievements/me')
-      .then(res => { if (res?.data) setData(res.data); })
-      .catch(e  => toast.error(e.response?.data?.detail || 'Failed to load badges'))
-      .finally(() => setLoading(false));
+  const loadBadges = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const res = await api.get('/achievements/me');
+      if (res?.data) {
+        setData(res.data);
+        writeSessionJson(BADGES_CACHE_KEY, res.data);
+      }
+    } catch (e) {
+      if (!silent) toast.error(e.response?.data?.detail || 'Failed to load badges');
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const c = readSessionJson(BADGES_CACHE_KEY);
+    loadBadges(c != null);
+  }, [loadBadges]);
+
+  useEffect(() => {
+    const id = setInterval(() => loadBadges(true), 60_000);
+    return () => clearInterval(id);
+  }, [loadBadges]);
 
   const toggle = id => setOpen(prev => ({ ...prev, [id]: !prev[id] }));
 
-  if (loading) return (
+  if (loading && !data) return (
     <div className={`space-y-8 ${styles.pageContent} mobile-page-root`} data-testid="ranking-badges-page">
       <div className="flex flex-col items-center justify-center min-h-[30vh] gap-2">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -457,6 +479,7 @@ export default function RankingBadges() {
   return (
     <div className={`space-y-6 ${styles.pageContent} mobile-page-root`} data-testid="ranking-badges-page">
       <style>{BADGE_STYLES}</style>
+      <AutoRefreshNote seconds={60} />
 
       {/* Tier legend */}
       <div className={`${styles.panel} rounded-md p-4 border border-primary/20 mobile-panel`}>

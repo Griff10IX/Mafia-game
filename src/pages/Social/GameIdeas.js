@@ -2,19 +2,24 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Lightbulb } from 'lucide-react';
 import api from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
+const GI_CACHE_KEY = 'mafia_game_ideas_vote_v1';
+
 export default function GameIdeas() {
-  const [loading, setLoading] = useState(true);
-  const [season, setSeason] = useState(null);
-  const [entries, setEntries] = useState([]);
-  const [myVoteEntryId, setMyVoteEntryId] = useState(null);
-  const [votePhase, setVotePhase] = useState(null);
+  const [giBoot] = useState(() => readSessionJson(GI_CACHE_KEY));
+  const [loading, setLoading] = useState(() => giBoot == null);
+  const [season, setSeason] = useState(() => giBoot?.season ?? null);
+  const [entries, setEntries] = useState(() => giBoot?.entries ?? []);
+  const [myVoteEntryId, setMyVoteEntryId] = useState(() => giBoot?.myVoteEntryId ?? null);
+  const [votePhase, setVotePhase] = useState(() => giBoot?.votePhase ?? null);
   const [votingId, setVotingId] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const activeRes = await api.get('/forum/game-ideas/active-season');
       const s = activeRes.data?.season;
@@ -23,23 +28,37 @@ export default function GameIdeas() {
         setEntries([]);
         setMyVoteEntryId(null);
         setVotePhase(null);
+        writeSessionJson(GI_CACHE_KEY, { season: null, entries: [], myVoteEntryId: null, votePhase: null });
         return;
       }
       const entRes = await api.get(`/forum/game-ideas/seasons/${s.id}/entries`);
+      const ent = entRes.data?.entries ?? [];
+      const mv = entRes.data?.my_vote_entry_id ?? null;
+      const vp = entRes.data?.vote_phase ?? null;
       setSeason(s);
-      setEntries(entRes.data?.entries ?? []);
-      setMyVoteEntryId(entRes.data?.my_vote_entry_id ?? null);
-      setVotePhase(entRes.data?.vote_phase ?? null);
+      setEntries(ent);
+      setMyVoteEntryId(mv);
+      setVotePhase(vp);
+      writeSessionJson(GI_CACHE_KEY, { season: s, entries: ent, myVoteEntryId: mv, votePhase: vp });
     } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to load');
-      setSeason(null);
-      setEntries([]);
+      if (!silent) {
+        toast.error(e.response?.data?.detail ?? 'Failed to load');
+        setSeason(null);
+        setEntries([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load(giBoot != null);
+  }, [load, giBoot]);
+
+  useEffect(() => {
+    const id = setInterval(() => load(true), 60_000);
+    return () => clearInterval(id);
+  }, [load]);
 
   const hubId = season?.hub_topic_id;
   const status = season?.status;
@@ -52,7 +71,7 @@ export default function GameIdeas() {
       await api.post(`/forum/game-ideas/seasons/${season.id}/vote`, { entry_id: entryId });
       toast.success('Vote saved');
       setMyVoteEntryId(entryId);
-      await load();
+      await load(true);
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Vote failed');
     } finally {
@@ -74,10 +93,11 @@ export default function GameIdeas() {
           <p className="text-[10px] text-mutedForeground mt-0.5">
             Post your idea in the hub topic, then register your post. Vote here during open rounds (not for your own entry).
           </p>
+          <AutoRefreshNote seconds={60} className="mt-1" />
         </div>
       </div>
 
-      {loading ? (
+      {loading && giBoot == null ? (
         <p className="text-xs text-mutedForeground">Loading…</p>
       ) : !season ? (
         <div className={`${styles.panel} rounded-md border border-primary/20 p-4 text-sm text-mutedForeground`}>

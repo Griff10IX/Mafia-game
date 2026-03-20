@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Globe, RefreshCw, Smartphone, Monitor, LogOut } from 'lucide-react';
 import api from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+
+const IP_RULES_CACHE_KEY = 'mafia_ip_rules_v1';
 
 function DeviceIcon({ type }) {
   if (type === 'Mobile' || type === 'Tablet') return <Smartphone size={14} className="opacity-70" />;
@@ -22,32 +26,45 @@ function formatLastUsed(iso) {
 }
 
 export default function IPRules() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(() => readSessionJson(IP_RULES_CACHE_KEY));
+  const [loading, setLoading] = useState(() => readSessionJson(IP_RULES_CACHE_KEY) == null);
 
   const fetchIpInfo = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
     try {
       const res = await api.get('/auth/ip-info');
       setData(res.data);
+      writeSessionJson(IP_RULES_CACHE_KEY, res.data);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load address info');
-      setData({
+      const empty = {
         current_ip: '',
         accounts_from_current_ip: [],
         your_signin_ips: [],
         current_device_type: null,
         last_device_type: null,
         sessions: [],
-      });
+      };
+      setData(empty);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    setLoading(true);
+    const c = readSessionJson(IP_RULES_CACHE_KEY);
+    if (c != null) {
+      setData(c);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     fetchIpInfo(false);
+  }, [fetchIpInfo]);
+
+  useEffect(() => {
+    const id = setInterval(() => fetchIpInfo(false), 60_000);
+    return () => clearInterval(id);
   }, [fetchIpInfo]);
 
   useEffect(() => {
@@ -94,6 +111,9 @@ export default function IPRules() {
 
   return (
     <div className={`${styles.pageContent} space-y-2 mobile-page-root`}>
+      <AutoRefreshNote seconds={60}>
+        Refreshes every 60 seconds in the background and when you return to this tab.
+      </AutoRefreshNote>
       <div className="flex items-center justify-end gap-2">
         <button
           type="button"

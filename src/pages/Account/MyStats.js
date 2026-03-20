@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { BarChart3, Target, Sword, Dice5, Trophy, DollarSign, TrendingUp, Wine, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../utils/api';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import styles from '../../styles/noir.module.css';
 
 const STATS_STYLES = `
@@ -290,6 +291,7 @@ export default function MyStats() {
         <p className="text-[10px] sm:text-xs text-mutedForeground font-heading">
           Lifetime totals: bodyguards bought, casino profit/loss, gambling profit, booze, auto rank, stock market, bank interest, and more.
         </p>
+        <AutoRefreshNote seconds={30} />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <StatCard title="Combat & Bodyguards" icon={Sword} rows={combatRows} delay={0} />

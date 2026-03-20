@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Lock, ThumbsUp, ThumbsDown, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil } from 'lucide-react';
 import api from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import GifPicker from '../../components/GifPicker';
 import { toast } from 'sonner';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
@@ -185,8 +187,11 @@ export default function ForumTopic() {
     if (!silent) setLoading(true);
     try {
       const res = await api.get(`/forum/topics/${topicId}`);
-      setTopic(res.data?.topic ?? null);
-      setComments(res.data?.comments ?? []);
+      const t = res.data?.topic ?? null;
+      const cm = res.data?.comments ?? [];
+      setTopic(t);
+      setComments(cm);
+      if (t) writeSessionJson(`mafia_forum_topic_${topicId}`, { topic: t, comments: cm });
     } catch (e) {
       if (!silent) {
         setTopic(null);
@@ -203,15 +208,27 @@ export default function ForumTopic() {
     }
   }, [topicId, navigate]);
 
-  useEffect(() => { fetchTopic(); }, [fetchTopic]);
-  
-  // Silent background refresh every 60 seconds
   useEffect(() => {
-    const interval = setInterval(() => {
+    if (!topicId) return;
+    const k = `mafia_forum_topic_${topicId}`;
+    const c = readSessionJson(k);
+    if (c?.topic) {
+      setTopic(c.topic);
+      setComments(c.comments ?? []);
+      setLoading(false);
       fetchTopic(true);
-    }, 60000);
+    } else {
+      setTopic(null);
+      setComments([]);
+      fetchTopic(false);
+    }
+  }, [topicId, fetchTopic]);
+
+  useEffect(() => {
+    if (!topicId) return;
+    const interval = setInterval(() => fetchTopic(true), 60_000);
     return () => clearInterval(interval);
-  }, [fetchTopic]);
+  }, [topicId, fetchTopic]);
   useEffect(() => {
     api.get('/admin/check').then((r) => {
       setIsAdmin(!!r.data?.is_admin);
@@ -547,6 +564,7 @@ export default function ForumTopic() {
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="forum-topic-page">
       <style>{FORUM_CONTENT_STYLES}</style>
+      <AutoRefreshNote seconds={60}>Topic and comments refresh every 60 seconds in the background.</AutoRefreshNote>
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex items-center gap-3">

@@ -1,8 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ListChecks, Calendar, CalendarDays, CalendarRange, CheckCircle2, Circle, Gift, BarChart3, ChevronDown, ChevronUp, AlertTriangle, ThumbsUp, ThumbsDown, Trophy } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+
+const OBJ_CACHE_KEY = 'mafia_objectives_v1';
 
 const OBJ_STYLES = `
   @keyframes obj-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -80,23 +84,25 @@ const ObjectiveRow = ({ obj, delay = 0 }) => {
 };
 
 export default function Objectives() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(() => readSessionJson(OBJ_CACHE_KEY));
+  const [loading, setLoading] = useState(() => readSessionJson(OBJ_CACHE_KEY) == null);
 
   const [claiming, setClaiming] = useState(null);
   const [showAdminStats, setShowAdminStats] = useState(false);
 
-  const fetchObjectives = async () => {
-    setLoading(true);
+  const fetchObjectives = useCallback(async (opts = {}) => {
+    const silent = opts.silent === true;
+    if (!silent) setLoading(true);
     try {
       const res = await api.get('/objectives');
       setData(res.data);
+      writeSessionJson(OBJ_CACHE_KEY, res.data);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load objectives');
+      if (!silent) toast.error(e.response?.data?.detail || 'Failed to load objectives');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, []);
 
   const handleClaim = async (type) => {
     setClaiming(type);
@@ -106,7 +112,7 @@ export default function Objectives() {
         toast.success(`Rewards claimed! ${formatReward(res.data.reward)}`);
         refreshUser();
       }
-      await fetchObjectives();
+      await fetchObjectives({ silent: true });
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to claim');
     } finally {
@@ -115,8 +121,20 @@ export default function Objectives() {
   };
 
   useEffect(() => {
-    fetchObjectives();
-  }, []);
+    const c = readSessionJson(OBJ_CACHE_KEY);
+    if (c != null) {
+      setData(c);
+      setLoading(false);
+      fetchObjectives({ silent: true });
+    } else {
+      fetchObjectives({ silent: false });
+    }
+  }, [fetchObjectives]);
+
+  useEffect(() => {
+    const id = setInterval(() => fetchObjectives({ silent: true }), 60_000);
+    return () => clearInterval(id);
+  }, [fetchObjectives]);
 
   if (loading && !data) {
     return (
@@ -169,6 +187,7 @@ export default function Objectives() {
       <style>{OBJ_STYLES}</style>
 
       <p className="text-[11px] text-zinc-500 font-heading italic break-words">Complete daily, weekly, and monthly goals for extra rewards. New objectives each period.</p>
+      <AutoRefreshNote seconds={60} />
 
       {adminStats && (
         <div className={`${styles.panel} rounded-lg border border-primary/20 overflow-hidden mobile-panel`}>
