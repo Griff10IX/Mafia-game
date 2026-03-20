@@ -1056,23 +1056,58 @@ export default function Attack() {
 
   const hitlistNpcAutoFillRef = useRef(false);
 
-  // Pre-fill search and kill form from hitlist link
+  // Hitlist board crosshair → /attack?target=… — prefill kill form and start a search (same as Find User submit)
   useEffect(() => {
     const t = searchParams.get('target');
     const isHitlistNpc = searchParams.get('hitlist_npc') === '1' || searchParams.get('hitlist_npc') === 'true';
-    if (t && typeof t === 'string' && t.trim()) {
-      const trimmed = t.trim();
-      setTargetUsername(trimmed);
-      setKillUsername(trimmed);
-      if (isHitlistNpc) hitlistNpcAutoFillRef.current = true;
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete('target');
-        next.delete('hitlist_npc');
-        return next;
-      }, { replace: true });
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!t || typeof t !== 'string' || !t.trim()) return undefined;
+
+    const trimmed = t.trim();
+    const noteFromBoard = isHitlistNpc ? 'Hitlist NPC' : 'Hitlist';
+    setTargetUsername(trimmed);
+    setKillUsername(trimmed);
+    if (isHitlistNpc) hitlistNpcAutoFillRef.current = true;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('target');
+      next.delete('hitlist_npc');
+      return next;
+    }, { replace: true });
+
+    const ac = new AbortController();
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        try {
+          sessionStorage.setItem(
+            'attack-last-submit',
+            JSON.stringify({ type: 'search', target_username: trimmed, note: noteFromBoard }),
+          );
+        } catch (_) {}
+        const response = await api.post(
+          '/attack/search',
+          { target_username: trimmed, note: noteFromBoard },
+          { signal: ac.signal },
+        );
+        if (cancelled) return;
+        toast.success(response.data?.message || 'Search started');
+        setTargetUsername('');
+        setNote('');
+        window.dispatchEvent(new CustomEvent('app:refresh-attacks'));
+      } catch (error) {
+        if (cancelled || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') return;
+        toast.error(getApiErrorMessage(error) || 'Failed to search target');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [searchParams, setSearchParams]);
 
   // Clear stored submit when leaving the page so "Kill → go to Crimes → back to Kill" never auto-sends. F5 on Attack page still resends (reload doesn't run this cleanup).
   useEffect(() => {
