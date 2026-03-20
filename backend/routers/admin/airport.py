@@ -28,6 +28,11 @@ MAX_TRAVELS_PER_HOUR = 15
 EXTRA_AIRMILES_COST = 25
 MAX_EXTRA_AIRMILES = 50
 
+# Travel token: car/custom travel time multiplier (airport stays instant; airport *points* discount is separate)
+TRAVEL_TOKEN_CAR_TIME_FACTOR = 0.9
+TRAVEL_TOKEN_CAR_TIME_MIN = 3
+USER_CARS_FETCH_LIMIT = 500
+
 
 def _parse_iso_datetime(s):
     """Parse ISO datetime string safely; return timezone-aware datetime or None."""
@@ -40,6 +45,24 @@ def _parse_iso_datetime(s):
         return dt
     except Exception:
         return None
+
+
+def _travel_token_active(user: dict, now_utc: datetime) -> bool:
+    travel_until = user.get("travel_until")
+    if not travel_until:
+        return False
+    until = _parse_iso_datetime(travel_until)
+    return bool(until and now_utc < until)
+
+
+def _effective_car_travel_seconds(base_seconds: int, user: dict, now_utc: datetime) -> int:
+    """Base TRAVEL_TIMES seconds for car/custom; applies travel token when active."""
+    if base_seconds <= 0:
+        return base_seconds
+    if not _travel_token_active(user, now_utc):
+        return base_seconds
+    return max(TRAVEL_TOKEN_CAR_TIME_MIN, int(base_seconds * TRAVEL_TOKEN_CAR_TIME_FACTOR))
+
 
 # Per-user cache for GET /travel/info
 _travel_info_cache: dict = {}
@@ -130,14 +153,16 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
             )
             current_user["travels_this_hour"] = 0
 
-    user_cars = await db.user_cars.find({"user_id": uid}).to_list(50)
+    now_utc = datetime.now(timezone.utc)
+    user_cars = await db.user_cars.find({"user_id": uid}).to_list(USER_CARS_FETCH_LIMIT)
     cars_with_travel_times = []
     for uc in user_cars:
         if uc.get("car_id") == "car_custom":
             continue  # Custom car is returned separately as custom_car; don't duplicate in cars list
         car_info = next((c for c in CARS if c["id"] == uc["car_id"]), None)
         if car_info:
-            travel_time = TRAVEL_TIMES.get(car_info["rarity"], 45)
+            base_time = TRAVEL_TIMES.get(car_info["rarity"], 45)
+            travel_time = _effective_car_travel_seconds(base_time, current_user, now_utc)
             user_car_id = uc.get("id") or str(uc["_id"])
             name = car_info["name"]
             image = car_info.get("image", "")
@@ -153,7 +178,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
                 "can_travel": damage_percent < 100,
             })
 
-    # Sort by travel time ascending (fastest first) so best cars show first in destination cards
+    # Sort by effective travel time ascending (fastest first) so best cars show first in destination cards
     cars_with_travel_times.sort(key=lambda c: (c["travel_time"], c.get("name", "")))
 
     custom_car = None
@@ -162,7 +187,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         custom_damage = min(100, max(0, float(first_custom.get("damage_percent", 0))))
         custom_car = {
             "name": first_custom.get("custom_name") or "Custom Car",
-            "travel_time": TRAVEL_TIMES["custom"],
+            "travel_time": _effective_car_travel_seconds(TRAVEL_TIMES["custom"], current_user, now_utc),
             "image": first_custom.get("custom_image_url") or "",
             "damage_percent": custom_damage,
             "can_travel": custom_damage < 100,
@@ -212,6 +237,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         "custom_car": custom_car,
         "user_points": current_user.get("points", 0),
         "carrying_booze": carrying_booze,
+        "travel_boost_applies_to_car_times": _travel_token_active(current_user, now_utc),
     }
 
     if len(_travel_info_cache) >= _TRAVEL_INFO_MAX_ENTRIES:
@@ -337,11 +363,7 @@ async def _start_travel_impl(
             car_to_damage = user_car
 
     if travel_method != "airport" and travel_time > 0:
-        travel_until = user.get("travel_until")
-        if travel_until:
-            until = _parse_iso_datetime(travel_until)
-            if until and now_utc < until:
-                travel_time = max(1, int(travel_time * 0.98))
+        travel_time = _effective_car_travel_seconds(travel_time, user, now_utc)
 
     # Only count airport travel against the hourly limit; car travel is unlimited
     inc_travels = {} if booze_run or travel_method != "airport" else {"travels_this_hour": 1}

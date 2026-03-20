@@ -240,6 +240,11 @@ const DestinationCard = ({
             );
           });
         })()}
+        {travelInfo.travel_boost_applies_to_car_times && (
+          <p className="text-[8px] text-emerald-400/90 font-heading text-center pt-0.5">
+            Times shown include travel boost
+          </p>
+        )}
 
         {/* No Cars Message */}
         {(!travelInfo?.cars || travelInfo.cars.length === 0) && !travelInfo?.custom_car && (
@@ -272,6 +277,7 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
         </h4>
         <div className="space-y-0.5 text-[10px] font-heading">
           {[
+            { name: 'Loot Exclusive', time: '5s', color: 'text-amber-400' },
             { name: 'Exclusive', time: '7s', color: 'text-purple-400' },
             { name: 'Custom', time: '12s', color: 'text-primary' },
             { name: 'Legendary', time: '15s', color: 'text-orange-400' },

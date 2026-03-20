@@ -650,7 +650,7 @@ export default function CrackSafe() {
                 { id: 'oc_reduced', name: 'OC Token', desc: 'Reduced OC cost, 1h — 1–3 types, 1–2 each (25% chance)' },
                 { id: 'booze', name: 'Booze Token', desc: 'Cheaper booze, 1h — 1–3 types, 1–2 each (25% chance)' },
                 { id: 'racket', name: 'Racket Token', desc: 'Increased racket profit, 1h — 1–3 types, 1–2 each (25% chance)' },
-                { id: 'travel', name: 'Travel Token', desc: 'Cheaper & faster travel, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'travel', name: 'Travel Token', desc: 'Cheaper airport (~10% off) & faster car travel (~10%), 1h — 1–3 types, 1–2 each (25% chance)' },
                 { id: 'properties', name: 'Property Token', desc: '3x property income, 1h — 1–3 types, 1–2 each (25% chance)' },
                 { id: 'jailbust_bonus', name: 'Jailbust Token', desc: '+10% bust success, 1h — 1–3 types, 1–2 each (25% chance)' },
               ]).map((r) => (

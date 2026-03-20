@@ -7,7 +7,7 @@ const TOKEN_INFO = {
   oc_reduced: { name: 'OC Boost', desc: 'Reduced OC cost & cooldown' },
   booze: { name: 'Booze Boost', desc: 'Cheaper booze purchases' },
   racket: { name: 'Racket Boost', desc: 'Increased racket profit' },
-  travel: { name: 'Travel Boost', desc: 'Cheaper & faster travel' },
+  travel: { name: 'Travel Boost', desc: '10% off airport points · ~10% faster car travel' },
   properties: { name: 'Property Boost', desc: '3x property income' },
   jailbust_bonus: { name: 'Jailbust Boost', desc: '+10% bust success' },
 };
