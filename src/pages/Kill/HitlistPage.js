@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Target, Eye, ShieldOff, DollarSign, Coins, User, Users, UserPlus, Clock, Crosshair } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -801,15 +801,34 @@ export default function HitlistPage() {
   };
 
   const handleAddNpc = async () => {
-    if (!npcStatus?.can_add || addingNpc) return;
+    if (addingNpc) {
+      toast.info('Already adding an NPC…');
+      return;
+    }
+    if (npcStatus?.can_add === false) {
+      const maxW = npcStatus.max_per_window ?? 3;
+      const hrs = npcStatus.window_hours ?? 3;
+      const when = npcStatus.next_add_at
+        ? ` Try again after ${new Date(npcStatus.next_add_at).toLocaleString()}.`
+        : '';
+      toast.error(`You can add at most ${maxW} practice NPCs per ${hrs} hours.${when}`);
+      return;
+    }
     setAddingNpc(true);
     try {
       const res = await api.post('/hitlist/add-npc');
       toast.success(res.data?.message);
       refreshUser();
       fetchData();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app:refresh-attacks'));
+      }
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to add NPC');
+      toast.error(getApiErrorMessage(err) || 'Failed to add NPC');
+      try {
+        const st = await api.get('/hitlist/npc-status');
+        if (st.data) setNpcStatus(st.data);
+      } catch (_) {}
     } finally {
       setAddingNpc(false);
     }

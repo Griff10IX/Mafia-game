@@ -993,6 +993,17 @@ export default function Attack() {
     }
   }, []);
 
+  useEffect(() => {
+    const onRefreshAttacks = () => {
+      refreshAttacks();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('app:refresh-attacks', onRefreshAttacks);
+      return () => window.removeEventListener('app:refresh-attacks', onRefreshAttacks);
+    }
+    return undefined;
+  }, [refreshAttacks]);
+
   const searchCompleteTimeoutRef = useRef(null);
 
   // Refetch list exactly when the soonest "searching" attack is due to complete, so the UI shows "found" at the set time (e.g. 1 min on the dot)
