@@ -1079,8 +1079,6 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         victim_id = target["id"]
         if target.get("is_npc"):
             hitlist_entry = await db.hitlist.find_one_and_delete({"target_id": victim_id, "target_type": "npc"}, projection={"_id": 0, "npc_rewards": 1})
-            if not hitlist_entry:
-                raise HTTPException(status_code=400, detail="Target has already been killed")
             if hitlist_entry:
                 rewards = hitlist_entry.get("npc_rewards") or {}
                 hitlist_mult = 1.0
@@ -1214,6 +1212,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                                 update_criteria = {"id": b["id"]} if b.get("id") else {"user_id": owner_id, "slot_number": b["slot_number"]}
                                 await db.bodyguards.update_one(update_criteria, {"$set": {"slot_number": i}})
                 return AttackExecuteResponse(success=True, message=success_message, rewards=rewards)
+            # Robot bodyguards are is_npc but never appear on hitlist — use normal kill flow below
+            if not target.get("is_bodyguard"):
+                raise HTTPException(status_code=400, detail="Target has already been killed")
         now_iso = datetime.now(timezone.utc).isoformat()
         killer_family_doc = None
         if current_user.get("family_id"):
