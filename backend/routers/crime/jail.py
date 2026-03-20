@@ -186,8 +186,8 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
             {
                 "username": username,
                 "rank_name": rank_name,
-                "is_npc": False,
                 "is_self": player["id"] == current_user["id"],
+                # 15 RP = real inmate (UI: profile link). Do not send is_npc — use rp_reward to distinguish rows.
                 "rp_reward": 15,
                 "bust_reward_cash": reward_cash,
             }
@@ -198,7 +198,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
             {
                 "username": npc["username"],
                 "rank_name": npc.get("rank_name", "Goon"),
-                "is_npc": True,
+                # 25 RP = jail NPC row only (UI). Server resolves bust target via jail_npcs vs users.
                 "rp_reward": 25,
                 "bust_reward_cash": bust_reward_cash,
             }

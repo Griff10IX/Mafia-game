@@ -539,6 +539,8 @@ export default function Inbox() {
   const [notifications, setNotifications] = useState([]);
   const [sentMessages, setSentMessages] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [readRetentionDays, setReadRetentionDays] = useState(5);
+  const [unreadRetentionDays, setUnreadRetentionDays] = useState(60);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState(initialFilter);
   const [selectedNotification, setSelectedNotification] = useState(null);
@@ -726,8 +728,14 @@ export default function Inbox() {
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="inbox-page">
       <style>{INBOX_STYLES}</style>
 
-      <div className="relative ib-fade-in">
+      <div className="relative ib-fade-in space-y-1">
         <p className="text-[9px] text-zinc-500 font-heading italic">Notifications, DMs, rank-ups & more.</p>
+        <p className="text-[9px] text-zinc-500/90 font-heading leading-snug max-w-2xl">
+          <span className="text-primary/80 font-bold uppercase tracking-wider">Retention:</span>{' '}
+          messages you&apos;ve <strong className="text-zinc-400">read</strong> are removed automatically after{' '}
+          <strong className="text-zinc-400">{readRetentionDays} days</strong> (keeps the database healthy). Unread items expire after about{' '}
+          <strong className="text-zinc-400">{unreadRetentionDays} days</strong>. Save anything important elsewhere.
+        </p>
       </div>
 
       <ComposeModal

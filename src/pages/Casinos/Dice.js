@@ -13,6 +13,7 @@ const CG_STYLES = `
 
 const DICE_HOUSE_EDGE = 0.0005;
 const ROLL_DURATION_MS = 2500;
+const DICE_SIDES_BONUS_MULT_FALLBACK = 1.05;
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -179,7 +180,7 @@ const QUICK_BETS = [
 ];
 
 export default function Dice() {
-  const [diceConfig, setDiceConfig] = useState({ sides_min: 2, sides_max: 5000, max_bet: 5_000_000 });
+  const [diceConfig, setDiceConfig] = useState({ sides_min: 2, sides_max: 5000, max_bet: 5_000_000, sides_bonus_mult: DICE_SIDES_BONUS_MULT_FALLBACK });
   const [ownership, setOwnership] = useState({ current_city: null, owner: null });
 
   const [stake, setStake] = useState('');
@@ -234,9 +235,11 @@ export default function Dice() {
     if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
   }, []);
 
-  const config = diceConfig && typeof diceConfig === 'object' ? diceConfig : { sides_min: 2, sides_max: 5000, max_bet: 5_000_000 };
+  const config = diceConfig && typeof diceConfig === 'object' ? diceConfig : { sides_min: 2, sides_max: 5000, max_bet: 5_000_000, sides_bonus_mult: DICE_SIDES_BONUS_MULT_FALLBACK };
   const stakeNum = parseInt(String(stake || '').replace(/[^\d]/g, ''), 10) || 0;
   const sidesNum = Math.max(config.sides_min || 2, Math.min(config.sides_max || 5000, parseInt(String(sides || ''), 10) || 100));
+  const bonusMult = typeof config.sides_bonus_mult === 'number' && config.sides_bonus_mult > 1 ? config.sides_bonus_mult : DICE_SIDES_BONUS_MULT_FALLBACK;
+  const actualSidesNum = Math.min(config.sides_max || 5000, Math.ceil(sidesNum * bonusMult));
   const chosenNum = Math.max(1, Math.min(sidesNum, parseInt(String(chosenNumber || ''), 10) || 1));
   const returnsAmount = stakeNum > 0 && sidesNum >= 2 ? Math.floor(stakeNum * sidesNum * (1 - DICE_HOUSE_EDGE)) : 0;
   const effectiveMaxBet = ownership?.max_bet ?? config.max_bet ?? 5_000_000;
@@ -266,12 +269,12 @@ export default function Dice() {
     if (!diceLoading || sidesNum < 2) return;
     setLastResult(null);
     rollIntervalRef.current = setInterval(() => {
-      setRollingNumber(Math.floor(Math.random() * sidesNum) + 1);
+      setRollingNumber(Math.floor(Math.random() * actualSidesNum) + 1);
     }, 60);
     return () => {
       if (rollIntervalRef.current) { clearInterval(rollIntervalRef.current); rollIntervalRef.current = null; }
     };
-  }, [diceLoading, sidesNum]);
+  }, [diceLoading, sidesNum, actualSidesNum]);
 
   const applyRollResult = (data) => {
     if (rollIntervalRef.current) { clearInterval(rollIntervalRef.current); rollIntervalRef.current = null; }
@@ -310,7 +313,7 @@ export default function Dice() {
     if (!skipAnimation) {
       setDiceLoading(true);
       setLastResult(null);
-      setRollingNumber(Math.floor(Math.random() * sidesNum) + 1);
+      setRollingNumber(Math.floor(Math.random() * actualSidesNum) + 1);
     }
     if (rollTimeoutRef.current) { clearTimeout(rollTimeoutRef.current); rollTimeoutRef.current = null; }
     try {
@@ -621,12 +624,15 @@ export default function Dice() {
                 <DiceVisual isRolling={diceLoading} result={lastResult} rollingNumber={rollingNumber} />
 
                 {/* Odds info strip */}
-                <div className="flex items-center gap-4 mt-2 text-[10px] font-heading">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px] font-heading">
                   <span className="text-emerald-200/50">
-                    Sides: <span className="text-white font-bold">{sidesNum}</span>
+                    Your range: <span className="text-white font-bold">1–{sidesNum}</span>
+                  </span>
+                  <span className="text-emerald-200/50" title="The physical roll uses this many faces (5% extra, rounded up; max table cap).">
+                    Die faces: <span className="text-white font-bold">{actualSidesNum}</span>
                   </span>
                   <span className="text-emerald-200/50">
-                    Odds: <span className="text-primary font-bold">1 in {sidesNum}</span>
+                    True odds: <span className="text-primary font-bold">1 in {actualSidesNum}</span>
                   </span>
                   <span className="text-emerald-200/50">
                     Pays: <span className="text-emerald-300 font-bold">{formatMoney(returnsAmount)}</span>
@@ -752,9 +758,9 @@ export default function Dice() {
         </div>
         <div className="p-3">
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Pick 1–{sidesNum}, match the roll to win</li>
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Payout = sides × stake × 0.95</li>
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>0.05% house edge on winnings</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Pick 1–{sidesNum}; win if the roll equals your number</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Roll uses ⌈{bonusMult === 1.05 ? 'sides×1.05' : `${bonusMult}× sides`}⌉ faces (max {config.sides_max ?? 5000}) — e.g. 2→3, 1000→1050</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Payout ≈ sides × stake (minus 0.05% house edge)</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Max bet: {formatMoney(maxBet)}</li>
           </ul>
         </div>

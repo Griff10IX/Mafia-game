@@ -179,7 +179,7 @@ export default function PreRegister() {
                 Founding Member Rewards
               </h2>
               <p className="text-xs font-heading mb-4" style={{ color: 'var(--noir-muted)' }}>
-                Create your account now and receive these exclusive rewards on launch day
+                Register before launch to earn the <span className="text-primary/90 font-bold">Founding Member</span> badge on your profile, a launch-day bundle, and a permanent in-game earnings edge.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto">
                 <div className="p-4 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
@@ -206,10 +206,26 @@ export default function PreRegister() {
                     {rewards?.badge || 'Founding Member'}
                   </div>
                   <div className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
-                    Exclusive Badge
+                    Profile badge &amp; bragging rights
                   </div>
                 </div>
               </div>
+              {(rewards?.founding_passive_blurb || rewards?.founding_passive_bonus_pct != null) && (
+                <div
+                  className="mt-4 max-w-2xl mx-auto text-left p-3 rounded-md border text-[10px] sm:text-[11px] font-heading leading-relaxed"
+                  style={{
+                    backgroundColor: 'rgba(0,0,0,0.35)',
+                    borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.25)',
+                    color: 'var(--noir-muted)',
+                  }}
+                >
+                  <p className="text-primary font-bold uppercase tracking-wider text-[9px] mb-1.5">Founding Member — permanent bonus</p>
+                  <p>
+                    {rewards?.founding_passive_blurb
+                      || `+${rewards.founding_passive_bonus_pct}% on crimes, GTA, OC, hitlist NPCs, properties, family rackets, and missions (with your founder badge).`}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Create Account CTA */}

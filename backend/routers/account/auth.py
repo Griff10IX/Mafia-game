@@ -98,6 +98,13 @@ PREREGISTER_REWARDS = {
     "bonus_points": 500,
     "bonus_cash": 5000,
     "badge": "Founding Member",
+    # Shown on pre-register page; mirrors server founding_member_income_mult (1.025)
+    "founding_passive_bonus_pct": 2.5,
+    "founding_passive_blurb": (
+        "Permanent +2.5% on crime payouts (cash, rank points & respect), GTA car sale value & rare-car luck, "
+        "OC heist payouts, hitlist NPC rewards, property income, family racket collects, and mission rewards — "
+        "as long as you have the Founding Member badge."
+    ),
 }
 
 # Referred-user signup benefits (tokens are non-sellable on Quick Trade)
@@ -1573,7 +1580,10 @@ def register(router):
         await db.preregistrations.insert_one(doc)
         
         return {
-            "message": "You're in! You'll be notified when the game launches and receive exclusive founding member rewards.",
+            "message": (
+                "You're in! We'll email you when the game launches. "
+                "Create a full account to earn the Founding Member badge, launch-day points & cash, and a permanent +2.5% bonus on core payouts."
+            ),
             "rewards": PREREGISTER_REWARDS,
         }
 

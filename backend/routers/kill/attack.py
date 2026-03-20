@@ -51,6 +51,7 @@ from server import (
     _user_owns_any_casino,
     _user_owns_any_property,
     log_activity,
+    founding_member_income_mult,
 )
 from routers.money.booze_run import BOOZE_TYPES
 from routers.account.objectives import update_objectives_progress
@@ -1090,9 +1091,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 try:
                     from routers.game.achievements import get_badge_bonuses
                     bb = await get_badge_bonuses(current_user.get("id") or "")
-                    hitlist_mult = (1 + bb.get("hitlist_npc", 0) * 0.001) * bb.get("prestige_badge_mult", 1)
+                    hitlist_mult = (1 + bb.get("hitlist_npc", 0) * 0.001) * bb.get("prestige_badge_mult", 1) * founding_member_income_mult(current_user)
                 except Exception:
-                    pass
+                    hitlist_mult = founding_member_income_mult(current_user)
                 rp_added = int((rewards.get("rank_points", 0) or 0) * hitlist_mult)
                 raw_bullets = int((rewards.get("bullets", 0) or 0) * hitlist_mult)
                 min_bullets = math.ceil(bullets_required * 1.12)  # always profitable: reward >= cost + 12%

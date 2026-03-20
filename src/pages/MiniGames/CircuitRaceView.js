@@ -1856,7 +1856,17 @@ export default function CircuitRaceView({
         const wd=curWd;
 
         racers.forEach(r => {
-          if(r.finished&&!r.dnf)return;
+          // Finished cars coast forward for ~2s — avoids dead freeze at SF line (number badge cluster)
+          if (r.finished && !r.dnf) {
+            const coastDur = 2.2;
+            const t0 = r.finishedAtSec != null ? r.finishedAtSec : nowSec;
+            const coastAge = nowSec - t0;
+            if (coastAge < coastDur) {
+              const coastSpeed = Math.max(0, 1 - coastAge / coastDur) * 0.18;
+              r.trackPos = (r.trackPos + coastSpeed * dt + 1) % 1;
+            }
+            return;
+          }
           if(r.dnf){if(r.visible&&nowSec>r.dnfAtSec+30)r.visible=false;if(r.visible){r.trackPos=(r.trackPos+0.001+1)%1;r.currentSpeedMph=2;}return;}
 
           // ── Pit stop in progress ──
@@ -2005,7 +2015,7 @@ export default function CircuitRaceView({
               const tw=r.tireWearByLap[idx];
               if(!r.inPit&&!(r.tyreWear>92&&tw<20))r.tyreWear=tw;
             }
-            if(r.totalLapsDone>=nLaps){r.finished=true;r.finishOrder=nextFO++;r.finishVisibleUntil=nowSec+9999;if(r.finishOrder===1){finishFlash=nowSec+2.0;stateRef.current.finishFlash=finishFlash;}}
+            if(r.totalLapsDone>=nLaps){r.finished=true;r.finishOrder=nextFO++;r.finishedAtSec=nowSec;r.finishVisibleUntil=nowSec+9999;if(r.finishOrder===1){finishFlash=nowSec+2.0;stateRef.current.finishFlash=finishFlash;}}
           } else {
             // FIX: decrement each frame
             if (r._justCrossedFrames > 0) r._justCrossedFrames--;

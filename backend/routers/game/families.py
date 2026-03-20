@@ -41,6 +41,7 @@ from server import (
     _family_war_duration_seconds,
     _family_war_start,
     _record_war_stats_bodyguard_kill,  # kept for potential direct use
+    founding_member_income_mult,
 )
 
 # ============ Constants ============
@@ -2069,7 +2070,7 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     ev = await get_effective_event()
     income, cooldown_h = _racket_income_and_cooldown(racket_id, level, ev)
     bonus_pct = float((fam.get("racket_income_bonus_percent") or 0) or 0)
-    income_final = int(income * (1 + bonus_pct / 100.0))
+    income_final = int(income * (1 + bonus_pct / 100.0) * founding_member_income_mult(current_user))
     last_at = state.get("last_collected_at")
     now = datetime.now(timezone.utc)
     if last_at:

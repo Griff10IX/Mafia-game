@@ -104,6 +104,7 @@ GTA_EXCLUSIVE_CAR_ID = "car20"
 GTA_EXCLUSIVE_POOL_CONFIG_ID = "gta_exclusive"
 GTA_EXCLUSIVE_DROP_WEIGHT = 0.000006  # ~1 in 167k relative to weight-1.0 cars when all cars in pool
 REFERRED_USER_GTA_RARE_BOOST = 0.15  # Slight GTA rare car weight boost for users who signed up with a referral
+FOUNDING_MEMBER_GTA_RARE_BOOST = 0.025  # Founding Member: extra weight toward rarer cars
 
 # One-time respect_points rewards when total_gta crosses milestones (same progression as busts/crimes)
 GTA_MILESTONES = [
@@ -118,13 +119,13 @@ GTA_MILESTONE_REWARDS = {
 }
 
 
-async def _award_gta_milestones(user_id: str, new_total_gta: int, claimed: list) -> None:
+async def _award_gta_milestones(user_id: str, new_total_gta: int, claimed: list, bonus_mult: float = 1.0) -> None:
     """If new_total_gta crosses any unclaimed milestone, award respect_points and mark claimed."""
     new_claimed = [m for m in GTA_MILESTONES if m <= new_total_gta and m not in claimed]
     if not new_claimed:
         return
     total_reward = sum(GTA_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
-    total_reward = int(total_reward * RESPECT_FROM_GTA_MULT)
+    total_reward = int(total_reward * RESPECT_FROM_GTA_MULT * max(0.0, float(bonus_mult or 1.0)))
     if total_reward <= 0:
         await db.users.update_one({"id": user_id}, {"$addToSet": {"respect_points_gta_milestones_claimed": {"$each": new_claimed}}})
         return
@@ -376,7 +377,8 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
                 if count == 0:
                     available_cars = list(available_cars) + [exclusive_car]
         # Prestige bonus and loot-box GTA rare perk: weight rarer cars more heavily
-        from server import get_prestige_bonus
+        from server import get_prestige_bonus, founding_member_income_mult
+        _fm_gta = founding_member_income_mult(current_user)
         _gta_prestige_user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "prestige_level": 1})
         _rare_boost = get_prestige_bonus(_gta_prestige_user or {})["gta_rare_boost"]
         # Badge bonus: 0.1% per GTA badge; prestige: 0.5% boost per level
@@ -389,6 +391,8 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         # Referred user: slight GTA rare car boost
         if current_user.get("referred_by"):
             _rare_boost += REFERRED_USER_GTA_RARE_BOOST
+        if _fm_gta > 1.0:
+            _rare_boost += FOUNDING_MEMBER_GTA_RARE_BOOST
         gta_rare_perk = int(current_user.get("gta_rare_drop_perk_attempts_remaining") or 0)
         if gta_rare_perk > 0:
             _rare_boost = max(_rare_boost, 1.0)
@@ -439,14 +443,15 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         )
         _invalidate_travel_info_cache(current_user.get("id") or "")
         rp_before = int(current_user.get("rank_points") or 0)
-        gta_inc = {"money": car["value"], "rank_points": rank_points}
+        rp_granted = int(rank_points * _fm_gta)
+        gta_inc = {"money": int(car["value"] * _fm_gta), "rank_points": rp_granted}
         if not caller_updates_total_gta:
             gta_inc["total_gta"] = 1
         if (car.get("rarity") or "").strip().lower() == "uncommon":
             gta_inc["uncommon_cars_stolen"] = 1
         respect_drop = maybe_respect_points_drop()
         if respect_drop:
-            gta_inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_GTA_MULT))
+            gta_inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_GTA_MULT * _fm_gta))
         await db.users.update_one(
             {"id": current_user.get("id") or ""},
             {"$inc": gta_inc},
@@ -457,10 +462,10 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         claimed = current_user.get("respect_points_gta_milestones_claimed") or []
         new_claimed = [m for m in GTA_MILESTONES if m <= new_total_gta and m not in claimed]
         milestone_respect = sum(GTA_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
-        await _award_gta_milestones(current_user.get("id") or "", new_total_gta, claimed)
-        respect_earned = max(0, int((respect_drop or 0) * RESPECT_FROM_GTA_MULT)) + max(0, int(milestone_respect * RESPECT_FROM_GTA_MULT))
+        await _award_gta_milestones(current_user.get("id") or "", new_total_gta, claimed, bonus_mult=_fm_gta)
+        respect_earned = max(0, int((respect_drop or 0) * RESPECT_FROM_GTA_MULT * _fm_gta)) + max(0, int(milestone_respect * RESPECT_FROM_GTA_MULT * _fm_gta))
         try:
-            await maybe_process_rank_up(current_user.get("id") or "", rp_before, rank_points, current_user.get("username", ""))
+            await maybe_process_rank_up(current_user.get("id") or "", rp_before, rp_granted, current_user.get("username", ""))
         except Exception as e:
             logger.exception("Rank-up notification (GTA): %s", e)
         try:
@@ -474,7 +479,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             car=car,
             jailed=False,
             jail_until=None,
-            rank_points_earned=rank_points,
+            rank_points_earned=rp_granted,
             progress_after=progress_after,
             respect_points=respect_earned,
         )

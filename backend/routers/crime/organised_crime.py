@@ -16,7 +16,16 @@ _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
 
-from server import db, get_current_user, get_current_user_verified, get_rank_info, log_respect_earned, maybe_process_rank_up, maybe_respect_points_drop
+from server import (
+    db,
+    get_current_user,
+    get_current_user_verified,
+    get_rank_info,
+    log_respect_earned,
+    maybe_process_rank_up,
+    maybe_respect_points_drop,
+    founding_member_income_mult,
+)
 
 # Equipment tiers for Organised Crime (reduced for beta)
 EQUIPMENT_TIERS = [
@@ -356,13 +365,13 @@ async def run_heist(
         )
         
         msg = _rng.choice(OC_HEIST_SUCCESS_MESSAGES).format(
-            reward=job["reward"], rank_points=job["rank_points"]
+            reward=money_reward, rank_points=rp_added
         )
         return HeistResponse(
             success=True,
             message=msg,
-            reward=job["reward"],
-            rank_points=job["rank_points"],
+            reward=money_reward,
+            rank_points=rp_added,
             jailed=False
         )
     

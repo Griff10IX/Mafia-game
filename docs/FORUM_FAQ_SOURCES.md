@@ -48,3 +48,5 @@ Use this when updating [FORUM_FAQ.md](FORUM_FAQ.md) so numbers stay aligned with
 | Family treasury / vault, compound, war prizes | `backend/routers/game/families.py` → `families_deposit`, `families_withdraw`, `families_compound_*`, war wipe / `compound_*` prize logic |
 | Auto Rank (purchase, toggles, cron) | `backend/routers/account/auto_rank.py`; UI `src/pages/Account/AutoRank.js` |
 | Game Ideas seasons / voting | `backend/routers/social/game_ideas.py` |
+| Pre-register rewards, founding badge name, +% blurb | `backend/routers/account/auth.py` → `PREREGISTER_REWARDS`; founding payout mult `server.py` → `founding_member_income_mult` / `FOUNDING_MEMBER_INCOME_MULT` |
+| Inbox read/unread auto-delete | `backend/routers/game/notifications.py` → `READ_NOTIFICATION_RETENTION_DAYS`, `UNREAD_NOTIFICATION_RETENTION_DAYS`; list API returns `read_retention_days`, `unread_retention_days` |

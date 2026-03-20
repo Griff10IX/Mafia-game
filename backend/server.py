@@ -172,6 +172,22 @@ def get_prestige_bonus(user: dict) -> dict:
     cfg = PRESTIGE_CONFIGS[level]
     return {**{k: cfg[k] for k in ("crime_mult", "oc_mult", "gta_rare_boost", "npc_mult")}, "mission_reward_mult": cfg["mission_reward_mult"], "illegal_business_mult": cfg.get("illegal_business_mult", 1.0)}
 
+# Founding Member: +2.5% on crimes, GTA, OC, hitlist NPC, properties, rackets, missions (see founding_member_income_mult).
+FOUNDING_MEMBER_INCOME_MULT = 1.025
+
+
+def founding_member_income_mult(user: Optional[dict]) -> float:
+    """Return 1.025 if user is a founding member (flag or Founding Member badge), else 1.0."""
+    if not user:
+        return 1.0
+    if user.get("founding_member"):
+        return FOUNDING_MEMBER_INCOME_MULT
+    badges = user.get("badges")
+    if isinstance(badges, list) and "Founding Member" in badges:
+        return FOUNDING_MEMBER_INCOME_MULT
+    return 1.0
+
+
 # Wealth ranks: based on cash on hand (ordered by min_money ascending)
 WEALTH_RANKS = [
     {"id": 1, "name": "Broke", "min_money": 0},

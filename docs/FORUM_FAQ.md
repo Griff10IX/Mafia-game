@@ -780,7 +780,7 @@ Complete objectives for bonus rewards. Which periods exist (daily, weekly, etc.)
 [/list]
 
 [color=#FFD700][b]Badges & achievements[/b][/color]
-Open [b]Ranking → Badges[/b] (and related stats). Earning badges gives [b]small stacking bonuses[/b] across many systems — crime cash, OC payouts, jail bust odds, melt cooldown, and more — with stronger effect as your [b]prestige[/b] grows where the game applies prestige scaling. Exact % values are shown on the Badges page.
+Open [b]Ranking → Badges[/b] (and related stats). Earning badges gives [b]small stacking bonuses[/b] across many systems — crime cash, OC payouts, jail bust odds, melt cooldown, and more — with stronger effect as your [b]prestige[/b] grows where the game applies prestige scaling. Exact % values are shown on the Badges page. The [b]Founding Member[/b] badge from [b]pre-launch registration[/b] is a separate profile badge with its own passive payout bonus (about [b]+2.5%[/b] on listed income while you wear it) — see [b]SOCIAL FEATURES → Pre-launch registration (Founding Member)[/b] below.
 
 [color=#FFD700][b]Respect (secondary currency)[/b][/color]
 Earn respect from kills, crimes, jail busts, missions, mini-games, and other activities. Spend it in the [b]Store[/b] (e.g. health restore [b]75 respect[/b]) and on [b]respect-priced[/b] items where the UI lists a respect cost. Respect is [b]not[/b] sendable like cash/points unless a specific feature says otherwise.
@@ -893,9 +893,23 @@ Community discussion boards:
 [*][color=#888888]If you registered with a referral link, your referrer earns [b]extra rewards paid by the game[/b] (not taken from you) on some of your payouts — e.g. [b]5%[/b] of crime cash profit, [b]5%[/b] of OC heist cash share, [b]2%[/b] of booze profit, [b]10%[/b] of bullets when you melt for bullets (referrer gets a parallel grant), [b]5%[/b] of garage scrap cash. Use the register / invite UI for your own link.[/color]
 [/list]
 
+[color=#1ABC9C][b]Pre-launch registration (Founding Member)[/b][/color]
+[list]
+[*][color=#888888]Use the [b]pre-register[/b] page before launch to reserve interest with your email and see the current reward bundle in the UI.[/color]
+[*][color=#2ECC71][b]Founding Member badge[/b] — shown on your profile for bragging rights; it also gates the founding passive bonus below (if you lose the badge, that bonus no longer applies).[/color]
+[*][color=#888888][b]Launch-day bundle[/b] — bonus [b]points[/b] and [b]cash[/b] on first login after launch (exact amounts are shown on the pre-register page and may be tuned — see [b]backend/routers/account/auth.py[/b] → [b]PREREGISTER_REWARDS[/b]).[/color]
+[*][color=#888888][b]Permanent founding passive:[/b] about [b]+2.5%[/b] extra on crime payouts (cash, rank points & respect), GTA car sale value & rare-car luck, OC heist payouts, hitlist NPC rewards, property income, family racket collects, and mission rewards — [b]while you have the Founding Member badge[/b]. Server multiplier: [b]founding_member_income_mult[/b] in [b]server.py[/b].[/color]
+[/list]
+
+[color=#1ABC9C][b]Inbox & notifications[/b][/color]
+[list]
+[*][color=#888888]Open [b]Social → Inbox[/b] for system alerts, rank-ups, attacks, forum pings, and [b]direct messages[/b] in one place.[/color]
+[*][color=#888888][b]Retention (auto-cleanup):[/b] items you have [b]marked read[/b] are removed after [b]5 days[/b] (from when they were read). Items left [b]unread[/b] are removed after about [b]60 days[/b]. This keeps the database healthy — copy anything you need to keep. Constants: [b]READ_NOTIFICATION_RETENTION_DAYS[/b], [b]UNREAD_NOTIFICATION_RETENTION_DAYS[/b] in [b]backend/routers/game/notifications.py[/b].[/color]
+[/list]
+
 [color=#1ABC9C][b]Direct Messages[/b][/color]
 [list]
-[*][color=#888888]Send private messages to any player[/color]
+[*][color=#888888]Send private messages to any player (from Inbox / compose)[/color]
 [*][color=#888888]Attach GIFs and use smileys[/color]
 [*][color=#888888]Block unwanted contacts[/color]
 [/list]
@@ -913,7 +927,7 @@ Community discussion boards:
 [*][color=#888888]Write a bio[/color]
 [*][color=#888888]Display your stats and achievements[/color]
 [*][color=#888888]Show your car collection[/color]
-[*][color=#888888][b]Notification settings[/b] — profile / settings let you toggle categories (e.g. E-Games, OC invites, attacks, system, messages)[/color]
+[*][color=#888888][b]Notification settings[/b] — profile / settings let you toggle categories (e.g. E-Games, OC invites, attacks, system, messages). [b]Inbox[/b] still stores messages with [b]auto-retention[/b] (read ≈5 days, unread ≈60 days) — see [b]Inbox & notifications[/b] under Social Features.[/color]
 [/list]
 [/quote]
 

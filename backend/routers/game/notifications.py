@@ -19,7 +19,10 @@ from server import (
 )
 
 # ----- Constants -----
-INBOX_RETENTION_DAYS = 7  # Notifications older than this are deleted when inbox is loaded
+# Read items: removed 5 days after marked read (read_at). Keeps inbox DB lean.
+READ_NOTIFICATION_RETENTION_DAYS = 5
+# Unread items: removed if still unread after this many days (prevents abandoned inbox bloat)
+UNREAD_NOTIFICATION_RETENTION_DAYS = 60
 DEFAULT_NOTIFICATION_PREFS = {
     "ent_games": True,
     "oc_invites": True,
@@ -87,14 +90,36 @@ def register(router):
     @router.get("/notifications")
     async def get_notifications(current_user: dict = Depends(get_current_user)):
         user_id = current_user.get("id") or ""
-        # Delete notifications older than 7 days (inbox retention)
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=INBOX_RETENTION_DAYS)).isoformat()
-        await db.notifications.delete_many({"user_id": user_id, "created_at": {"$lt": cutoff}})
+        now_utc = datetime.now(timezone.utc)
+        cut_read = (now_utc - timedelta(days=READ_NOTIFICATION_RETENTION_DAYS)).isoformat()
+        cut_unread = (now_utc - timedelta(days=UNREAD_NOTIFICATION_RETENTION_DAYS)).isoformat()
+        await db.notifications.delete_many(
+            {
+                "user_id": user_id,
+                "$or": [
+                    {
+                        "read": True,
+                        "$or": [
+                            {"read_at": {"$lt": cut_read}},
+                            {"read_at": {"$exists": False}, "created_at": {"$lt": cut_read}},
+                        ],
+                    },
+                    {
+                        "read": {"$ne": True},
+                        "created_at": {"$lt": cut_unread},
+                    },
+                ],
+            }
+        )
         _list_cache.pop(user_id, None)
+        retention_meta = {
+            "read_retention_days": READ_NOTIFICATION_RETENTION_DAYS,
+            "unread_retention_days": UNREAD_NOTIFICATION_RETENTION_DAYS,
+        }
         now_ts = time.time()
         entry = _list_cache.get(user_id)
         if entry and (now_ts - entry["ts"]) < _LIST_TTL_SEC:
-            return entry["data"]
+            return {**entry["data"], **retention_meta}
         agg = await db.notifications.aggregate(
             [
                 {"$match": {"user_id": user_id}},
@@ -118,7 +143,7 @@ def register(router):
             doc.pop("_id", None)
         ur = row.get("unread") or []
         unread_count = int(ur[0].get("n", 0)) if ur else 0
-        out = {"notifications": notifications, "unread_count": unread_count}
+        out = {"notifications": notifications, "unread_count": unread_count, **retention_meta}
         if len(_list_cache) < _LIST_MAX_ENTRIES:
             _list_cache[user_id] = {"ts": now_ts, "data": out}
         return out
@@ -136,10 +161,17 @@ def register(router):
     @router.post("/notifications/{notification_id}/read")
     async def mark_notification_read(notification_id: str, current_user: dict = Depends(get_current_user)):
         _invalidate_list_cache(current_user.get("id") or "")
-        await db.notifications.update_one(
-            {"id": notification_id, "user_id": current_user.get("id") or ""},
-            {"$set": {"read": True}}
+        uid = current_user.get("id") or ""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        res = await db.notifications.update_one(
+            {"id": notification_id, "user_id": uid, "read": False},
+            {"$set": {"read": True, "read_at": now_iso}},
         )
+        if res.modified_count == 0:
+            await db.notifications.update_one(
+                {"id": notification_id, "user_id": uid},
+                {"$set": {"read": True}},
+            )
         return {"message": "Notification marked as read"}
 
     @router.post("/notifications/read-all")
@@ -218,6 +250,7 @@ def register(router):
         if gif_url:
             extra["gif_url"] = gif_url
         await send_notification(target["id"], title, message, "user_message", category="messages", **extra)
+        _sent_at = datetime.now(timezone.utc).isoformat()
         sent_copy = {
             "id": str(uuid.uuid4()),
             "user_id": current_user.get("id") or "",
@@ -229,7 +262,8 @@ def register(router):
             "message": message,
             "notification_type": "user_message_sent",
             "read": True,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "read_at": _sent_at,
+            "created_at": _sent_at,
         }
         if gif_url:
             sent_copy["gif_url"] = gif_url

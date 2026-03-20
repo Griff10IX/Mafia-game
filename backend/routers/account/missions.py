@@ -20,6 +20,7 @@ from server import (
     STATES,
     RANKS,
     CARS,
+    founding_member_income_mult,
 )
 from routers.money.booze_run import BOOZE_TYPES
 from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
@@ -672,7 +673,7 @@ async def complete_mission(
         raise HTTPException(status_code=400, detail=f"Complete {prev_title} first")
 
     user_id = current_user["id"]
-    mult = float(get_prestige_bonus(current_user).get("mission_reward_mult") or 1.0)
+    mult = float(get_prestige_bonus(current_user).get("mission_reward_mult") or 1.0) * founding_member_income_mult(current_user)
     reward_money = int((mission.get("reward_money") or 0) * mult)
     reward_cash_immediate = int((mission.get("reward_cash_immediate") or 0) * mult)
     reward_points = int((mission.get("reward_points") or 0) * mult)

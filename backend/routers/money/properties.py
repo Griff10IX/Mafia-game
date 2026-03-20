@@ -8,7 +8,7 @@ _rng = secrets.SystemRandom()
 
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user
+from server import db, get_current_user, founding_member_income_mult
 
 
 def _parse_iso_datetime(s):
@@ -353,6 +353,7 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
                 "loss_amount": round(loss_amount, 2),
                 "message": f"A raid hit {prop['name']}. You lost ${loss_amount:,.0f} ({loss_pct*100:.1f}% of stored income).",
             }
+    income *= founding_member_income_mult(current_user)
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$inc": {"money": income}}

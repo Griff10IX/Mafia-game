@@ -586,6 +586,10 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
             reward = int(reward * (1 + bb.get("crimes", 0) * 0.001) * bb.get("prestige_badge_mult", 1))
         except Exception:
             pass
+        from server import founding_member_income_mult
+        _fm_cr = founding_member_income_mult(current_user)
+        reward = int(reward * _fm_cr)
+        rank_points = int(rank_points * _fm_cr)
         # Referred user: 2% higher crime payouts
         if current_user.get("referred_by"):
             reward = int(reward * 1.02)
@@ -598,7 +602,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         }
         respect_drop = maybe_respect_points_drop()
         if respect_drop:
-            inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_CRIMES_MULT))
+            inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_CRIMES_MULT * _fm_cr))
         # Global ultra-rare molotov drop from any successful crime
         prestige_bonus_earned: Optional[dict] = None
         if _rng.random() < MOLOTOV_GLOBAL_DROP_CHANCE:

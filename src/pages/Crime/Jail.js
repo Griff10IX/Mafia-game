@@ -176,8 +176,12 @@ const AutoRankIcon = () => (
   </span>
 );
 
+/** Jail list rows: real inmates use rp_reward 15, NPC rows 25 (server contract; no is_npc on wire). */
+const rowIsJailNpc = (player) => (player?.rp_reward ?? 0) === 25;
+
 const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPlayDisabled }) => {
-  const rp = player.rp_reward ?? (player.is_npc ? 25 : 15);
+  const rp = player.rp_reward ?? (rowIsJailNpc(player) ? 25 : 15);
+  const isNpc = rowIsJailNpc(player);
 
   return (
     <div
@@ -192,7 +196,7 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPla
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <div className="min-w-0">
           <div className="text-[11px] font-heading font-bold text-foreground truncate">
-            {player.is_npc ? player.username : <Link to={`/profile/${encodeURIComponent(player.username)}`} className="text-primary hover:underline">{player.username}</Link>}
+            {isNpc ? player.username : <Link to={`/profile/${encodeURIComponent(player.username)}`} className="text-primary hover:underline">{player.username}</Link>}
           </div>
           <div className="text-[9px] text-mutedForeground truncate">
             {player.rank_name}
@@ -206,7 +210,7 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPla
           <span className="px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/40">
             You
           </span>
-        ) : player.is_npc ? (
+        ) : isNpc ? (
           <span className="px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-zinc-700/50 text-mutedForeground border border-zinc-600/50">
             NPC
           </span>
@@ -235,7 +239,7 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPla
         ) : (
           <button
             type="button"
-            onClick={() => onBust(player.username, player.is_npc)}
+            onClick={() => onBust(player.username)}
             disabled={loading || userInJail}
             className="bg-primary/20 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-0.5 font-heading"
             data-testid={`bust-out-${index}`}
@@ -389,7 +393,7 @@ export default function Jail() {
     }
   };
 
-  const bustOut = async (username, isNpc) => {
+  const bustOut = async (username) => {
     setLoading(true);
     try {
       const response = await api.post('/jail/bust', { target_username: username });
