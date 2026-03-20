@@ -5,16 +5,6 @@ import { toast } from 'sonner';
 import api, { getBaseURL, AUTH_ERROR_KEY } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
-/** Same feature list as PreRegister page — shown under founding card on login when pre-register strip is visible */
-const PREREGISTER_FEATURE_CHIPS = [
-  { icon: '🎰', title: 'Deep Casino System', desc: 'Roulette, Blackjack, Dice, Horse Racing, Slots, Video Poker' },
-  { icon: '💰', title: 'Organized Crime', desc: 'Team-based heists with equipment tiers and strategic planning' },
-  { icon: '🏎️', title: 'Bootleg Racing', desc: 'Unique 1920s themed racing with upgrades and competitions' },
-  { icon: '🤝', title: 'Families & Crews', desc: 'Join or create families, rise through the ranks together' },
-  { icon: '🥃', title: 'Prohibition Era', desc: 'Authentic 1920s-30s setting with booze runs and speakeasys' },
-  { icon: '⚔️', title: 'PvP Combat', desc: 'Attack rivals, defend your turf, hire bodyguards' },
-];
-
 export default function Landing({ setIsAuthenticated, defaultTab }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -318,176 +308,142 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
         .landing-fade-up-2  { animation: landing-fade-up 0.5s 0.16s ease both; }
         .landing-fade-up-3  { animation: landing-fade-up 0.5s 0.24s ease both; }
         .crest-pulse        { animation: crest-pulse 3s ease-in-out infinite; }
-        @keyframes landing-pulse-glow {
-          0%, 100% { box-shadow: 0 0 20px rgba(201,168,76,0.3); }
-          50% { box-shadow: 0 0 40px rgba(201,168,76,0.5); }
-        }
-        .landing-pulse-glow { animation: landing-pulse-glow 2s ease-in-out infinite; }
       `}</style>
 
       {/* Dark overlay */}
       <div className="absolute inset-0 bg-black/65 pointer-events-none" aria-hidden />
 
       <div className="relative min-h-screen flex items-start md:items-center justify-center px-4 py-6 md:py-10">
-        <div className="w-full max-w-2xl mx-auto flex flex-col gap-3">
-          {/* Founding member preview — same structure / styling as /preregister (compact for login column) */}
+        <div className="w-full max-w-md mx-auto flex flex-col gap-2">
+          {/* Founding member preview — compact; same width as login card; full detail on /preregister */}
           {launchStatus.showPreregisterBanner && !preregisteredSuccess && (
-            <div className="landing-fade-up w-full space-y-3" data-testid="preregister-mini-banner">
+            <div className="landing-fade-up w-full space-y-1.5" data-testid="preregister-mini-banner">
               {!launchStatus.loginLocked ? (
-                <p className="text-center text-[9px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
+                <p className="text-center text-[7px] font-heading uppercase tracking-wider leading-tight" style={{ color: 'var(--noir-muted)' }}>
                   <span
-                    className="inline-block px-2 py-0.5 rounded border"
+                    className="inline-block px-1.5 py-0.5 rounded border"
                     style={{
                       borderColor: 'rgba(56, 189, 248, 0.35)',
                       background: 'rgba(14, 116, 144, 0.2)',
                       color: 'var(--noir-foreground)',
                     }}
                   >
-                    Preview — logins are open; players see this before launch
+                    Preview — logins open
                   </span>
                 </p>
               ) : null}
 
               {launchStatus.loginLocked && launchStatus.lockUntil && (
                 <div className="text-center">
-                  <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-primary)' }}>
-                    Game launches in
+                  <p className="text-[8px] font-heading uppercase tracking-wider mb-1" style={{ color: 'var(--noir-primary)' }}>
+                    Launches in
                   </p>
-                  <div className="grid grid-cols-4 gap-1.5 max-w-xs mx-auto">
+                  <div className="grid grid-cols-4 gap-1 max-w-[220px] mx-auto">
                     {[
-                      { value: countdown.days, label: 'Days' },
-                      { value: countdown.hours, label: 'Hrs' },
-                      { value: countdown.minutes, label: 'Min' },
-                      { value: countdown.seconds, label: 'Sec' },
+                      { value: countdown.days, label: 'D' },
+                      { value: countdown.hours, label: 'H' },
+                      { value: countdown.minutes, label: 'M' },
+                      { value: countdown.seconds, label: 'S' },
                     ].map(({ value, label }) => (
                       <div
                         key={label}
-                        className="flex flex-col items-center py-2 rounded"
+                        className="flex flex-col items-center py-1 rounded"
                         style={{ backgroundColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.1)' }}
                       >
-                        <span className="text-lg font-heading font-bold tabular-nums" style={{ color: 'var(--noir-primary)' }}>
+                        <span className="text-sm font-heading font-bold tabular-nums leading-none" style={{ color: 'var(--noir-primary)' }}>
                           {String(value).padStart(2, '0')}
                         </span>
-                        <span className="text-[7px] font-heading uppercase tracking-wider mt-0.5" style={{ color: 'var(--noir-muted)' }}>
+                        <span className="text-[6px] font-heading uppercase mt-0.5" style={{ color: 'var(--noir-muted)' }}>
                           {label}
                         </span>
                       </div>
                     ))}
                   </div>
                   {launchStatus.lockMessage?.trim() ? (
-                    <p className="text-[10px] font-heading mt-2 px-1" style={{ color: 'var(--noir-muted)' }}>
+                    <p className="text-[8px] font-heading mt-1 px-1 line-clamp-2" style={{ color: 'var(--noir-muted)' }}>
                       {launchStatus.lockMessage.trim()}
                     </p>
                   ) : null}
                 </div>
               )}
 
-              <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20`}>
-                <div className="p-4 sm:p-5 text-center" style={{ background: 'linear-gradient(180deg, rgba(var(--noir-primary-rgb,201,168,76),0.15) 0%, transparent 100%)' }}>
-                  <h2 className="text-base sm:text-lg font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>
+              <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+                <div className="px-2.5 py-2.5 text-center" style={{ background: 'linear-gradient(180deg, rgba(var(--noir-primary-rgb,201,168,76),0.12) 0%, transparent 100%)' }}>
+                  <h2 className="text-[11px] font-heading font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--noir-primary)' }}>
                     Founding Member Rewards
                   </h2>
-                  <p className="text-[10px] sm:text-xs font-heading mb-3 sm:mb-4" style={{ color: 'var(--noir-muted)' }}>
-                    Register before launch to earn the{' '}
-                    <span className="text-primary/90 font-bold">Founding Member</span> badge on your profile, a launch-day bundle, and a permanent in-game earnings edge.
+                  <p className="text-[8px] font-heading mb-2 leading-snug line-clamp-3" style={{ color: 'var(--noir-muted)' }}>
+                    <span className="text-primary/90 font-bold">Founding Member</span> badge, launch bundle, and permanent earnings bonus if you register before go-live.
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 max-w-xl mx-auto">
-                    <div className="p-3 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
-                      <div className="text-xl mb-0.5">💎</div>
-                      <div className="text-base sm:text-lg font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
-                        {(preregisterRewards?.bonus_points ?? 500).toLocaleString()} Points
+                  <div className="grid grid-cols-3 gap-1">
+                    <div className="p-1.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
+                      <div className="text-sm leading-none mb-0.5">💎</div>
+                      <div className="text-[10px] font-heading font-bold leading-tight" style={{ color: 'var(--noir-primary)' }}>
+                        {(preregisterRewards?.bonus_points ?? 500).toLocaleString()} pts
                       </div>
-                      <div className="text-[9px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
-                        Premium Currency
+                      <div className="text-[6px] font-heading uppercase tracking-tighter leading-tight mt-0.5" style={{ color: 'var(--noir-muted)' }}>
+                        Premium
                       </div>
                     </div>
-                    <div className="p-3 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
-                      <div className="text-xl mb-0.5">💵</div>
-                      <div className="text-base sm:text-lg font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
+                    <div className="p-1.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
+                      <div className="text-sm leading-none mb-0.5">💵</div>
+                      <div className="text-[10px] font-heading font-bold leading-tight" style={{ color: 'var(--noir-primary)' }}>
                         ${(preregisterRewards?.bonus_cash ?? 5000).toLocaleString()}
                       </div>
-                      <div className="text-[9px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
-                        Starting Cash Boost
+                      <div className="text-[6px] font-heading uppercase tracking-tighter leading-tight mt-0.5" style={{ color: 'var(--noir-muted)' }}>
+                        Cash
                       </div>
                     </div>
-                    <div className="p-3 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
-                      <div className="text-xl mb-0.5">🏆</div>
-                      <div className="text-base sm:text-lg font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
-                        {preregisterRewards?.badge || 'Founding Member'}
+                    <div className="p-1.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
+                      <div className="text-sm leading-none mb-0.5">🏆</div>
+                      <div className="text-[9px] font-heading font-bold leading-tight line-clamp-2" style={{ color: 'var(--noir-primary)' }}>
+                        {preregisterRewards?.badge || 'Founding'}
                       </div>
-                      <div className="text-[9px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
-                        Profile badge &amp; bragging rights
+                      <div className="text-[6px] font-heading uppercase tracking-tighter leading-tight mt-0.5" style={{ color: 'var(--noir-muted)' }}>
+                        Badge
                       </div>
                     </div>
                   </div>
                   <div
-                    className="mt-3 max-w-xl mx-auto text-left p-2.5 sm:p-3 rounded-md border text-[9px] sm:text-[10px] font-heading leading-relaxed"
+                    className="mt-2 mx-auto text-left p-1.5 rounded border text-[7px] font-heading leading-snug max-h-[3.25rem] overflow-y-auto overscroll-contain"
                     style={{
                       backgroundColor: 'rgba(0,0,0,0.35)',
                       borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.25)',
                       color: 'var(--noir-muted)',
                     }}
                   >
-                    <p className="text-primary font-bold uppercase tracking-wider text-[8px] sm:text-[9px] mb-1">Founding Member — permanent bonus</p>
+                    <p className="text-primary font-bold uppercase tracking-wider text-[6px] mb-0.5">Permanent bonus</p>
                     <p>
                       {preregisterRewards?.founding_passive_blurb
-                        || `+${preregisterRewards?.founding_passive_bonus_pct ?? 2.5}% on crimes, GTA, OC, hitlist NPCs, properties, family rackets, and missions (with your founder badge).`}
+                        || `+${preregisterRewards?.founding_passive_bonus_pct ?? 2.5}% on crimes, GTA, OC, hitlist, properties, rackets & missions.`}
                     </p>
                   </div>
                 </div>
 
-                <div className="p-4 sm:p-5 border-t text-center" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.15)' }}>
-                  <h3 className="text-sm sm:text-base font-heading font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--noir-foreground)' }}>
-                    Secure Your Username
+                <div className="px-2.5 py-2 border-t text-center" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.15)' }}>
+                  <h3 className="text-[10px] font-heading font-bold uppercase tracking-wider mb-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                    Secure your username
                   </h3>
-                  <p className="text-[10px] sm:text-xs font-heading mb-1" style={{ color: 'var(--noir-muted)' }}>
-                    Create your account now to lock in your username and claim founding member rewards when we launch.
-                  </p>
-                  <p className="text-[9px] font-heading mb-3" style={{ color: 'var(--noir-muted)' }}>
-                    Add <span className="font-mono text-primary/90">?ref=FriendUsername</span> to the URL so referrals count.
+                  <p className="text-[7px] font-heading mb-1.5 leading-snug" style={{ color: 'var(--noir-muted)' }}>
+                    Register below. Referrals: <span className="font-mono text-primary/90">?ref=Username</span>
                   </p>
                   <button
                     type="button"
                     onClick={() => { setIsLogin(false); window.requestAnimationFrame(() => { document.getElementById('landing-auth-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); }}
-                    className={`${styles.btnPrimary} landing-pulse-glow w-full sm:w-auto px-6 py-3 sm:py-3.5 font-heading font-bold uppercase tracking-wider text-sm`}
+                    className={`${styles.btnPrimary} w-full px-3 py-2 font-heading font-bold uppercase tracking-wider text-[10px]`}
                   >
-                    Create Your Account
+                    Create account
                   </button>
-                  <p className="text-[9px] font-heading mt-2.5" style={{ color: 'var(--noir-muted)' }}>
-                    {launchStatus.loginLocked
-                      ? 'Login will be available when the game launches.'
-                      : 'Logins are open — use the form below to sign in, or register here.'}
+                  <p className="text-[7px] font-heading mt-1.5 leading-tight" style={{ color: 'var(--noir-muted)' }}>
+                    {launchStatus.loginLocked ? 'Login when we launch.' : 'Or sign in with the form below.'}
                   </p>
                   <Link
                     to="/preregister"
-                    className="inline-block mt-2 text-[9px] font-heading uppercase tracking-wider underline opacity-90 hover:opacity-100"
+                    className="inline-block mt-1 text-[7px] font-heading uppercase tracking-wider underline opacity-90 hover:opacity-100"
                     style={{ color: 'var(--noir-primary)' }}
                   >
-                    Open full pre-register page
+                    Full pre-register page
                   </Link>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-center text-[9px] sm:text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-primary)' }}>
-                  Game Features
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {PREREGISTER_FEATURE_CHIPS.map((feature) => (
-                    <div key={feature.title} className={`${styles.panel} p-2.5 sm:p-3 rounded-lg border border-primary/15`}>
-                      <div className="flex items-start gap-2">
-                        <span className="text-lg sm:text-xl shrink-0">{feature.icon}</span>
-                        <div className="min-w-0">
-                          <h4 className="font-heading font-bold text-[10px] sm:text-xs mb-0.5 leading-tight" style={{ color: 'var(--noir-foreground)' }}>
-                            {feature.title}
-                          </h4>
-                          <p className="text-[8px] sm:text-[9px] font-heading leading-snug" style={{ color: 'var(--noir-muted)' }}>
-                            {feature.desc}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
             </div>
