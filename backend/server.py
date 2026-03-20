@@ -106,22 +106,22 @@ api_router = APIRouter(prefix="/api")
 
 # Constants
 STATES = ["Chicago", "New York", "Las Vegas", "Atlantic City"]
-# Rank is based on rank_points only. Godfather is the top rank at 1.2M.
-# Rank 2 starts at 800; geometric progression (r ≈ 2.238) to 1,200,000.
+# Rank is based on rank_points only. Godfather is the top rank (~1.02M RP after 15% curve ease).
+# Thresholds scaled by 0.85 vs original ladder (15% fewer RP per tier).
 RANKS = [
     {"id": 1, "name": "Rat", "required_points": 0},
-    {"id": 2, "name": "Street Thug", "required_points": 800},
-    {"id": 3, "name": "Hustler", "required_points": 1800},
-    {"id": 4, "name": "Goon", "required_points": 4000},
-    {"id": 5, "name": "Made Man", "required_points": 9000},
-    {"id": 6, "name": "Capo", "required_points": 20000},
-    {"id": 7, "name": "Underboss", "required_points": 45000},
-    {"id": 8, "name": "Consigliere", "required_points": 101000},
-    {"id": 9, "name": "Boss", "required_points": 225000},
-    {"id": 10, "name": "Don", "required_points": 504000},
-    {"id": 11, "name": "Capo di tutti capi", "required_points": 1128000},
-    {"id": 12, "name": "Boss of Bosses", "required_points": 1164000},
-    {"id": 13, "name": "Godfather", "required_points": 1200000},
+    {"id": 2, "name": "Street Thug", "required_points": 680},
+    {"id": 3, "name": "Hustler", "required_points": 1530},
+    {"id": 4, "name": "Goon", "required_points": 3400},
+    {"id": 5, "name": "Made Man", "required_points": 7650},
+    {"id": 6, "name": "Capo", "required_points": 17000},
+    {"id": 7, "name": "Underboss", "required_points": 38250},
+    {"id": 8, "name": "Consigliere", "required_points": 85850},
+    {"id": 9, "name": "Boss", "required_points": 191250},
+    {"id": 10, "name": "Don", "required_points": 428400},
+    {"id": 11, "name": "Capo di tutti capi", "required_points": 958800},
+    {"id": 12, "name": "Boss of Bosses", "required_points": 989400},
+    {"id": 13, "name": "Godfather", "required_points": 1020000},
 ]
 GODFATHER_RANK_ID = RANKS[-1]["id"]  # Top rank (prestige requires this)
 CAPO_RANK_ID = 6  # Minimum rank to claim or hold casino/property; below-Capo owners have 3h grace then auto-relinquish
@@ -129,11 +129,11 @@ CAPO_RANK_ID = 6  # Minimum rank to claim or hold casino/property; below-Capo ow
 # Prestige: 5 levels unlocked after reaching Godfather. Each level harder to rank through.
 # mission_reward_mult: mission payouts/rewards scale 0.5x (P1) .. 2.5x (P5) when redoing missions after prestige.
 PRESTIGE_CONFIGS = {
-    1: {"threshold_mult": 1.0,  "crime_mult": 1.10, "oc_mult": 1.10, "gta_rare_boost": 0.5,  "npc_mult": 1.10, "name": "Made",             "godfather_req": 400_000, "mission_reward_mult": 0.5, "illegal_business_mult": 1.10},
-    2: {"threshold_mult": 1.5,  "crime_mult": 1.20, "oc_mult": 1.20, "gta_rare_boost": 1.0,  "npc_mult": 1.20, "name": "Earner",           "godfather_req": 600_000, "mission_reward_mult": 1.0, "illegal_business_mult": 1.20},
-    3: {"threshold_mult": 2.25, "crime_mult": 1.30, "oc_mult": 1.30, "gta_rare_boost": 1.5,  "npc_mult": 1.30, "name": "Capo di Capi",     "godfather_req": 900_000, "mission_reward_mult": 1.5, "illegal_business_mult": 1.30},
-    4: {"threshold_mult": 3.5,  "crime_mult": 1.40, "oc_mult": 1.40, "gta_rare_boost": 2.0,  "npc_mult": 1.40, "name": "The Don",          "godfather_req": 1_400_000, "mission_reward_mult": 2.0, "illegal_business_mult": 1.40},
-    5: {"threshold_mult": 5.0,  "crime_mult": 1.50, "oc_mult": 1.50, "gta_rare_boost": 2.5,  "npc_mult": 1.50, "name": "Godfather Legacy", "godfather_req": 2_000_000, "mission_reward_mult": 2.5, "illegal_business_mult": 1.50},
+    1: {"threshold_mult": 1.0,  "crime_mult": 1.10, "oc_mult": 1.10, "gta_rare_boost": 0.5,  "npc_mult": 1.10, "name": "Made",             "godfather_req": 340_000, "mission_reward_mult": 0.5, "illegal_business_mult": 1.10},
+    2: {"threshold_mult": 1.5,  "crime_mult": 1.20, "oc_mult": 1.20, "gta_rare_boost": 1.0,  "npc_mult": 1.20, "name": "Earner",           "godfather_req": 510_000, "mission_reward_mult": 1.0, "illegal_business_mult": 1.20},
+    3: {"threshold_mult": 2.25, "crime_mult": 1.30, "oc_mult": 1.30, "gta_rare_boost": 1.5,  "npc_mult": 1.30, "name": "Capo di Capi",     "godfather_req": 765_000, "mission_reward_mult": 1.5, "illegal_business_mult": 1.30},
+    4: {"threshold_mult": 3.5,  "crime_mult": 1.40, "oc_mult": 1.40, "gta_rare_boost": 2.0,  "npc_mult": 1.40, "name": "The Don",          "godfather_req": 1_190_000, "mission_reward_mult": 2.0, "illegal_business_mult": 1.40},
+    5: {"threshold_mult": 5.0,  "crime_mult": 1.50, "oc_mult": 1.50, "gta_rare_boost": 2.5,  "npc_mult": 1.50, "name": "Godfather Legacy", "godfather_req": 1_700_000, "mission_reward_mult": 2.5, "illegal_business_mult": 1.50},
 }
 
 def get_prestige_requirement(current_level: int) -> int:
@@ -161,7 +161,7 @@ def get_prestige_requirement(current_level: int) -> int:
     # of the requirement, and the extra needed at Godfather is a shorter stretch.
     blended = int((base_req + base_gf_req) / 2)
     # Always require at least a small amount above Godfather.
-    min_above_gf = base_gf_req + 25_000
+    min_above_gf = base_gf_req + 21_250
     return max(blended, min_above_gf)
 
 def get_prestige_bonus(user: dict) -> dict:

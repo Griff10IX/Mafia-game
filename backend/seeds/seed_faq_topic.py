@@ -30,7 +30,7 @@ FALLBACK_FAQ_CONTENT = """[b]NOTE:[/b] This text is only used if [i]FORUM_FAQ.md
 
 [b]Verified snapshot (still read code / in-game UI for live values):[/b]
 • Cities ([b]STATES[/b]): Chicago, New York, Las Vegas, Atlantic City.
-• Ranks / RP: see [b]backend/server.py[/b] → [b]RANKS[/b] (13 ranks; Godfather at 1.2M RP).
+• Ranks / RP: see [b]backend/server.py[/b] → [b]RANKS[/b] (13 ranks; Godfather at 1.02M RP).
 • Interest bank %: see [b]BANK_INTEREST_OPTIONS[/b] in [b]server.py[/b].
 • Personal OC cooldown: 6h → 4h after one-time store purchase ([b]oc.py[/b] / store).
 • GTA locations & cooldowns: [b]backend/routers/cars/gta.py[/b] → [b]GTA_OPTIONS[/b].
