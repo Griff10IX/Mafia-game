@@ -240,17 +240,17 @@ export default function Dice() {
   const sidesNum = Math.max(config.sides_min || 2, Math.min(config.sides_max || 5000, parseInt(String(sides || ''), 10) || 100));
   const bonusMult = typeof config.sides_bonus_mult === 'number' && config.sides_bonus_mult > 1 ? config.sides_bonus_mult : DICE_SIDES_BONUS_MULT_FALLBACK;
   const actualSidesNum = Math.min(config.sides_max || 5000, Math.ceil(sidesNum * bonusMult));
-  const chosenNum = Math.max(1, Math.min(sidesNum, parseInt(String(chosenNumber || ''), 10) || 1));
+  const chosenNum = Math.max(1, Math.min(actualSidesNum, parseInt(String(chosenNumber || ''), 10) || 1));
   const returnsAmount = stakeNum > 0 && sidesNum >= 2 ? Math.floor(stakeNum * sidesNum * (1 - DICE_HOUSE_EDGE)) : 0;
   const effectiveMaxBet = ownership?.max_bet ?? config.max_bet ?? 5_000_000;
-  const canBet = stakeNum > 0 && stakeNum <= effectiveMaxBet && sidesNum >= 2 && chosenNum >= 1 && chosenNum <= sidesNum;
+  const canBet = stakeNum > 0 && stakeNum <= effectiveMaxBet && sidesNum >= 2 && chosenNum >= 1 && chosenNum <= actualSidesNum;
 
   useEffect(() => {
     const n = parseInt(String(chosenNumber || ''), 10);
     if (chosenNumber === '' || Number.isNaN(n)) return;
     if (n < 1) setChosenNumber('1');
-    else if (n > sidesNum) setChosenNumber(String(sidesNum));
-  }, [sides, sidesNum, chosenNumber]);
+    else if (n > actualSidesNum) setChosenNumber(String(actualSidesNum));
+  }, [sides, sidesNum, actualSidesNum, chosenNumber]);
 
   useEffect(() => {
     if (!buyBackOffer?.expires_at) { setBuyBackSecondsLeft(null); return; }
@@ -304,7 +304,7 @@ export default function Dice() {
     if (!canBet || playing) {
       if (stakeNum <= 0) toast.error('Enter a stake amount');
       else if (stakeNum > effectiveMaxBet) toast.error(`Max bet is ${formatMoney(effectiveMaxBet)}`);
-      else if (chosenNum < 1 || chosenNum > sidesNum) toast.error(`Pick 1-${sidesNum}`);
+      else if (chosenNum < 1 || chosenNum > actualSidesNum) toast.error(`Pick 1–${actualSidesNum} (up to ${bonusMult}× sides, max ${config.sides_max || 5000})`);
       return;
     }
     setChosenNumber(String(chosenNum));
@@ -625,11 +625,11 @@ export default function Dice() {
 
                 {/* Odds info strip */}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px] font-heading">
-                  <span className="text-emerald-200/50">
-                    Your range: <span className="text-white font-bold">1–{sidesNum}</span>
+                  <span className="text-emerald-200/50" title="You may pick any integer the die can show (nominal sides × bonus, capped).">
+                    Pick: <span className="text-white font-bold">1–{actualSidesNum}</span>
                   </span>
-                  <span className="text-emerald-200/50" title="The physical roll uses this many faces (5% extra, rounded up; max table cap).">
-                    Die faces: <span className="text-white font-bold">{actualSidesNum}</span>
+                  <span className="text-emerald-200/50" title="Nominal sides sets payout multiplier; physical roll uses this many faces (5% extra, rounded up; max table cap).">
+                    Nominal / die faces: <span className="text-white font-bold">{sidesNum}</span> / <span className="text-white font-bold">{actualSidesNum}</span>
                   </span>
                   <span className="text-emerald-200/50">
                     True odds: <span className="text-primary font-bold">1 in {actualSidesNum}</span>
@@ -758,7 +758,7 @@ export default function Dice() {
         </div>
         <div className="p-3">
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Pick 1–{sidesNum}; win if the roll equals your number</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Pick 1–{actualSidesNum} (max face on the die); win if the roll equals your number</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Roll uses ⌈{bonusMult === 1.05 ? 'sides×1.05' : `${bonusMult}× sides`}⌉ faces (max {config.sides_max ?? 5000}) — e.g. 2→3, 1000→1050</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Payout ≈ sides × stake (minus 0.05% house edge)</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Max bet: {formatMoney(maxBet)}</li>

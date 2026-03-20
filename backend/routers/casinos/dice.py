@@ -39,7 +39,7 @@ DICE_SIDES_BONUS_MULT = 1.05  # physical die has 5% more faces (ceil), e.g. 2→
 
 
 def _actual_dice_sides(nominal: int) -> int:
-    """Roll range 1..N where N = min(max_sides, ceil(nominal * 1.05)). Player still picks 1..nominal."""
+    """Roll range 1..N where N = min(DICE_SIDES_MAX, ceil(nominal * 1.05)). Player may pick any integer in that range."""
     n = int(nominal)
     if n < DICE_SIDES_MIN:
         return DICE_SIDES_MIN
@@ -209,7 +209,7 @@ def register(router):
 
     @router.post("/casino/dice/play")
     async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depends(get_current_user_verified)):
-        """Place a dice bet. Win if roll == chosen_number; roll is 1..actual_sides (ceil(sides*1.05), capped). Payout = stake * sides * (1 - house_edge)."""
+        """Place a dice bet. Win if roll == chosen_number; roll is 1..actual_sides (ceil(sides*1.05), capped). chosen_number may be any value in that same range. Payout = stake * sides * (1 - house_edge)."""
         _invalidate_ownership_cache(current_user.get("id") or "")
         raw_city = (current_user.get("current_state") or STATES[0] if STATES else "").strip()
         city = _normalize_city_for_dice(raw_city) if raw_city else (STATES[0] if STATES else "")
@@ -217,9 +217,13 @@ def register(router):
             raise HTTPException(status_code=400, detail="No current city")
         stake = max(0, int(request.stake))
         sides = max(DICE_SIDES_MIN, min(DICE_SIDES_MAX, int(request.sides)))
+        actual_sides = _actual_dice_sides(sides)
         chosen_raw = int(request.chosen_number)
-        if chosen_raw < 1 or chosen_raw > sides:
-            raise HTTPException(status_code=400, detail=f"Chosen number must be between 1 and {sides}")
+        if chosen_raw < 1 or chosen_raw > actual_sides:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Prediction must be between 1 and {actual_sides} (max roll for {sides} sides including the {int((DICE_SIDES_BONUS_MULT - 1) * 100)}% extra faces)",
+            )
         chosen = chosen_raw
         if stake <= 0:
             raise HTTPException(status_code=400, detail="Stake must be positive")
@@ -243,7 +247,6 @@ def register(router):
             raise HTTPException(status_code=400, detail="Not enough cash")
         player_money = int((debit_result.get("money") or 0) or 0)
         payout_full = int(stake * sides * (1 - DICE_HOUSE_EDGE))
-        actual_sides = _actual_dice_sides(sides)
         roll = _rng.randint(1, actual_sides)
         win = roll == chosen
         head_family_id = await get_head_family_id_for_state(db_city)
