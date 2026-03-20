@@ -9,6 +9,7 @@ import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 
 const BUY_OFF_MULTIPLIER = 1.5;
+const HITLIST_PAGE_CACHE_KEY = 'mafia_hitlist_page_v1';
 
 // Enhanced animations for 1920s mafia theme
 const HITLIST_STYLES = `
