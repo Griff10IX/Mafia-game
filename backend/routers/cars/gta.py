@@ -704,13 +704,16 @@ async def get_recent_stolen(current_user: dict = Depends(get_current_user)):
 
 
 def _parse_melt_cooldown(iso_str):
+    """Parse cooldown / melt_until timestamps; always timezone-aware (UTC) for safe comparison with now."""
     if not iso_str:
         return None
     if hasattr(iso_str, "year"):
-        return iso_str
+        dt = iso_str
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
     try:
         s = str(iso_str).strip().replace("Z", "+00:00")
-        return datetime.fromisoformat(s)
+        dt = datetime.fromisoformat(s)
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
     except Exception:
         return None
 

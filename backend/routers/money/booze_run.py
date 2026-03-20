@@ -394,20 +394,31 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
     capacity_from_rank = BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK
     capacity = _booze_user_capacity(current_user)
+    booze_until = _parse_iso_datetime(current_user.get("booze_until"))
+    booze_boost_active = bool(booze_until and datetime.now(timezone.utc) < booze_until)
+
+    def _buy_price(listed: int) -> int:
+        return max(1, int(listed * 0.9)) if booze_boost_active else listed
+
     prices_at_location = []
     for i, bt in enumerate(BOOZE_TYPES):
-        price = prices_map.get((loc_index, i), 400)
+        listed = prices_map.get((loc_index, i), 400)
         prices_at_location.append({
             "booze_id": bt["id"],
             "name": bt["name"],
-            "buy_price": price,
-            "sell_price": price,
+            "buy_price": _buy_price(listed),
+            "sell_price": listed,
             "carrying": int(carrying.get(bt["id"], 0)),
         })
     all_prices = {}
     for loc_i, state in enumerate(STATES):
         all_prices[state] = [
-            {"booze_id": BOOZE_TYPES[b]["id"], "name": BOOZE_TYPES[b]["name"], "buy_price": prices_map.get((loc_i, b), 400), "sell_price": prices_map.get((loc_i, b), 400)}
+            {
+                "booze_id": BOOZE_TYPES[b]["id"],
+                "name": BOOZE_TYPES[b]["name"],
+                "buy_price": _buy_price(prices_map.get((loc_i, b), 400)),
+                "sell_price": prices_map.get((loc_i, b), 400),
+            }
             for b in range(len(BOOZE_TYPES))
         ]
     today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -443,6 +454,7 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
         "runs_count": runs_count,
         "history": history,
         "daily_estimate_rough": daily_estimate_rough,
+        "booze_boost_active": booze_boost_active,
     }
     if len(_config_cache) >= _CONFIG_MAX_ENTRIES:
         oldest = next(iter(_config_cache))

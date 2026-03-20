@@ -64,6 +64,26 @@ def _safe_int(val, default: int = 0) -> int:
         return default
 
 
+def _jailbust_bonus_active(user: dict) -> bool:
+    raw = user.get("jailbust_bonus_until")
+    if not raw:
+        return False
+    try:
+        until = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) < until
+    except Exception:
+        return False
+
+
+def _jailbust_failed_bust_avoids_jail(user: dict) -> bool:
+    """While jailbust token is active, a failed bust has a 50% chance to avoid the 30s jail penalty."""
+    if not _jailbust_bonus_active(user):
+        return False
+    return _rng.random() < 0.5
+
+
 # Varied success messages when bust succeeds
 JAIL_BUST_SUCCESS_MESSAGES = [
     "Successfully busted out {target_username}!",
@@ -281,16 +301,8 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         player_success_rate = min(0.95, player_success_rate + bb.get("jail_busts", 0) * 0.001 * bb.get("prestige_badge_mult", 1))
     except Exception:
         pass
-    jailbust_bonus_until = current_user.get("jailbust_bonus_until")
-    if jailbust_bonus_until:
-        try:
-            until = datetime.fromisoformat(jailbust_bonus_until.replace("Z", "+00:00"))
-            if until.tzinfo is None:
-                until = until.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) < until:
-                player_success_rate = min(0.95, player_success_rate + 0.10)
-        except Exception:
-            pass
+    if _jailbust_bonus_active(current_user):
+        player_success_rate = min(0.95, player_success_rate + 0.10)
 
     npc = await db.jail_npcs.find_one({"username": username_ci}, {"_id": 0})
     if npc:
@@ -458,12 +470,19 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": cash_to_pay, "respect_points": respect_earned}
     jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
     next_attempts = total_attempts + 1
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"jail_bust_attempts": next_attempts, "in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0, "snitch_attempted_this_term": False}},
-    )
+    go_to_jail = not _jailbust_failed_bust_avoids_jail(current_user)
+    if go_to_jail:
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"jail_bust_attempts": next_attempts, "in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0, "snitch_attempted_this_term": False}},
+        )
+    else:
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"jail_bust_attempts": next_attempts, "current_consecutive_busts": 0}},
+        )
     await _record_bust_event(current_user["id"], False, 0, target_username=target.get("username") or "", is_npc=False)
-    return {"success": False, "message": _rng.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30}
+    return {"success": False, "message": _rng.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30 if go_to_jail else 0}
 
 
 async def bust_out_of_jail(
