@@ -6,7 +6,7 @@ import os
 import sys
 import random
 import time
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Request, Body
@@ -105,6 +105,7 @@ class StateOptionalBody(BaseModel):
 
 class UseTokenRequest(BaseModel):
     token_type: str  # one of TOKEN_TYPES (xp_crimes, xp_gta, melt, oc_reduced, booze, racket, travel, properties, jailbust_bonus)
+    use_all: bool = False  # if True, use as many tokens as needed to reach max stack (or until count runs out)
 
 
 class ShootingRangeTrainRequest(BaseModel):
@@ -1600,8 +1601,36 @@ def _parse_until(iso_str):
     return dt
 
 
+def _tokens_to_reach_stack_cap(user_doc: dict, token_type: str) -> Tuple[int, Optional[datetime]]:
+    """How many tokens to consume and final until, without wasting tokens at stack cap."""
+    cfg = TOKEN_CONFIG[token_type]
+    count_field = cfg["count_field"]
+    until_field = cfg["until_field"]
+    max_stack_hours = cfg["max_stack_hours"]
+    count = int(user_doc.get(count_field) or 0)
+    if count < 1:
+        return 0, None
+    now = datetime.now(timezone.utc)
+    cap_until = now + timedelta(hours=max_stack_hours)
+    sim_until = _parse_until(user_doc.get(until_field))
+    to_use = 0
+    sim_count = count
+    while sim_count > 0:
+        if sim_until and sim_until > now:
+            add_until = sim_until + timedelta(hours=TOKEN_DURATION_HOURS)
+            new_until = min(add_until, cap_until)
+            if new_until <= sim_until:
+                break
+        else:
+            new_until = now + timedelta(hours=min(TOKEN_DURATION_HOURS, max_stack_hours))
+        sim_until = new_until
+        sim_count -= 1
+        to_use += 1
+    return to_use, sim_until
+
+
 async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depends(get_current_user)):
-    """Use one consumable token. Adds 1h effect (stackable up to max_stack_hours per type). Decrements count."""
+    """Use one consumable token, or many with use_all (stack up to max_stack_hours without wasting)."""
     if req.token_type not in TOKEN_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid token_type. Use one of: {list(TOKEN_TYPES)}")
     cfg = TOKEN_CONFIG[req.token_type]
@@ -1611,6 +1640,32 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
     count = int(current_user.get(count_field) or 0)
     if count < 1:
         raise HTTPException(status_code=400, detail="No tokens of this type available.")
+
+    if req.use_all:
+        n, new_until = _tokens_to_reach_stack_cap(current_user, req.token_type)
+        if n < 1 or new_until is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot extend this boost further — already at the maximum stack duration. Use tokens after it expires or wears down.",
+            )
+        new_until_iso = new_until.isoformat()
+        result = await db.users.update_one(
+            {"id": current_user["id"], count_field: {"$gte": n}},
+            {"$inc": {count_field: -n}, "$set": {until_field: new_until_iso}},
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="No tokens of this type available or race condition.")
+        new_count = count - n
+        tokens = _tokens_from_user({
+            **current_user,
+            count_field: new_count,
+            until_field: new_until_iso,
+        })
+        return {
+            "message": f"Used {n} token(s). Effect active until {new_until_iso} (up to {max_stack_hours}h stack).",
+            "tokens": tokens,
+        }
+
     now = datetime.now(timezone.utc)
     current_until = _parse_until(current_user.get(until_field))
     if current_until and current_until > now:

@@ -64,6 +64,21 @@ def _effective_car_travel_seconds(base_seconds: int, user: dict, now_utc: dateti
     return max(TRAVEL_TOKEN_CAR_TIME_MIN, int(base_seconds * TRAVEL_TOKEN_CAR_TIME_FACTOR))
 
 
+def _effective_airport_points(listed_price: int, user: dict, now_utc: datetime, user_owns_any_airport: bool) -> int:
+    """Points charged for airport travel; same order as _start_travel_impl (owner 5%, perk 10%, travel token 10%)."""
+    p = max(AIRPORT_PRICE_MIN, min(int(listed_price), AIRPORT_PRICE_MAX))
+    if user_owns_any_airport:
+        p = max(1, round(p * 0.95))
+    airport_perk_until = user.get("airport_cost_perk_until")
+    if airport_perk_until:
+        until = _parse_iso_datetime(airport_perk_until)
+        if until and now_utc < until:
+            p = max(1, round(p * 0.9))
+    if _travel_token_active(user, now_utc):
+        p = max(1, round(p * 0.9))
+    return p
+
+
 # Per-user cache for GET /travel/info
 _travel_info_cache: dict = {}
 _TRAVEL_INFO_TTL_SEC = 5
@@ -214,12 +229,18 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
             doc = await db.airport_ownership.find_one({"state": current_state, "slot": slot}, {"_id": 0})
         price = max(AIRPORT_PRICE_MIN, min(doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX))
         you_own = doc.get("owner_id") == uid
-        airports.append({"slot": slot, "owner_username": doc.get("owner_username") or "Unclaimed", "price_per_travel": price, "you_own": you_own})
+        effective_price = _effective_airport_points(price, current_user, now_utc, bool(user_owns_any_airport))
+        airports.append({
+            "slot": slot,
+            "owner_username": doc.get("owner_username") or "Unclaimed",
+            "price_per_travel": price,
+            "effective_price": effective_price,
+            "you_own": you_own,
+        })
 
-    airport_cost_display = AIRPORT_COST
+    airport_cost_display = _effective_airport_points(AIRPORT_COST, current_user, now_utc, bool(user_owns_any_airport))
     if airports:
-        first_price = airports[0].get("price_per_travel") or AIRPORT_COST
-        airport_cost_display = max(1, round(first_price * 0.95)) if user_owns_any_airport else first_price
+        airport_cost_display = airports[0].get("effective_price", airport_cost_display)
 
     payload = {
         "current_location": current_state,
@@ -295,20 +316,9 @@ async def _start_travel_impl(
         if not airport_doc:
             await db.airport_ownership.insert_one({"state": current_location, "slot": slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})
             airport_doc = await db.airport_ownership.find_one({"state": current_location, "slot": slot}, {"_id": 0})
-        airport_price = max(AIRPORT_PRICE_MIN, min(airport_doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX))
+        listed = max(AIRPORT_PRICE_MIN, min(airport_doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX))
         user_owns_any_airport = await db.airport_ownership.find_one({"owner_id": user["id"]}, {"_id": 1})
-        if user_owns_any_airport:
-            airport_price = max(1, round(airport_price * 0.95))
-        airport_perk_until = user.get("airport_cost_perk_until")
-        if airport_perk_until:
-            until = _parse_iso_datetime(airport_perk_until)
-            if until and now_utc < until:
-                airport_price = max(1, round(airport_price * 0.9))
-        travel_until = user.get("travel_until")
-        if travel_until:
-            until = _parse_iso_datetime(travel_until)
-            if until and now_utc < until:
-                airport_price = max(1, round(airport_price * 0.9))
+        airport_price = _effective_airport_points(listed, user, now_utc, bool(user_owns_any_airport))
         owner_id = airport_doc.get("owner_id")
         travel_time = TRAVEL_TIMES["airport"]
         method_name = f"Airport #{slot}"

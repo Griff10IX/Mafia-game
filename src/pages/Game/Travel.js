@@ -132,7 +132,9 @@ const DestinationCard = ({
   const airports = travelInfo.airports || [];
   const airport = airports.length > 0 ? airports[0] : null;
   const hasAirports = !!airport;
-  const canUse = !travelDisabled && !travelInfo.carrying_booze && (travelInfo.user_points ?? 0) >= (airport ? (airport.price_per_travel ?? 10) : (travelInfo.airport_cost ?? 10));
+  const listedAirport = airport ? (airport.price_per_travel ?? 10) : (travelInfo.airport_cost ?? 10);
+  const payAirport = airport ? (airport.effective_price ?? listedAirport) : (travelInfo.airport_cost ?? 10);
+  const canUse = !travelDisabled && !travelInfo.carrying_booze && (travelInfo.user_points ?? 0) >= payAirport;
 
   const destImgSrc = locationImageSrc(destination);
   return (
@@ -149,10 +151,20 @@ const DestinationCard = ({
       <div className="p-2 space-y-1">
         {/* One airport option per destination (city) */}
         {hasAirports ? (() => {
-          const fullPrice = airport.price_per_travel ?? 10;
-          const getsDiscount = !!travelInfo.user_gets_airport_discount;
-          const displayPrice = getsDiscount ? Math.max(1, Math.round(fullPrice * 0.95)) : fullPrice;
+          const listed = airport.price_per_travel ?? 10;
+          const displayPrice = airport.effective_price ?? listed;
+          const getsOwnerDiscount = !!travelInfo.user_gets_airport_discount;
+          const cheaperThanListed = displayPrice < listed;
           const canUseAirport = !travelDisabled && !travelInfo.carrying_booze && travelInfo.user_points >= displayPrice;
+          const discountHint = cheaperThanListed
+            ? (getsOwnerDiscount && travelInfo.travel_boost_applies_to_car_times
+                ? ' (owner + travel boost)'
+                : getsOwnerDiscount
+                  ? ' (5% off – you own an airport)'
+                  : travelInfo.travel_boost_applies_to_car_times
+                    ? ' (travel boost)'
+                    : ' (discount)')
+            : '';
           return (
             <button
               key={airport.slot}
@@ -164,7 +176,7 @@ const DestinationCard = ({
                   : 'bg-secondary/50 border-border opacity-50 cursor-not-allowed'
               }`}
               data-testid={`airport-${destination}-${airport.slot}`}
-              title={travelInfo.carrying_booze ? 'Car travel only while carrying booze' : `${airport.owner_username} · ${displayPrice} pts${getsDiscount ? ' (5% off – you own an airport)' : ''}`}
+              title={travelInfo.carrying_booze ? 'Car travel only while carrying booze' : `${airport.owner_username} · ${displayPrice} pts${cheaperThanListed ? ` · listed ${listed}` : ''}${discountHint}`}
             >
               <span className="flex items-center gap-1">
                 <Plane size={12} className="text-primary" />
@@ -173,7 +185,7 @@ const DestinationCard = ({
               </span>
               <span className="text-[9px] text-mutedForeground font-heading">
                 {travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant'} · {displayPrice}pts
-                {getsDiscount && <span className="text-emerald-400 ml-0.5">(5% off)</span>}
+                {cheaperThanListed && <span className="text-emerald-400 ml-0.5">{getsOwnerDiscount && travelInfo.travel_boost_applies_to_car_times ? '(off)' : getsOwnerDiscount ? '(5% off)' : '(boost)'}</span>}
               </span>
             </button>
           );

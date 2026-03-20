@@ -114,10 +114,10 @@ export default function MyInventory() {
     }
   };
 
-  const activateToken = async (tokenType) => {
-    setUsingToken(tokenType);
+  const activateToken = async (tokenType, useAll = false) => {
+    setUsingToken(useAll ? `${tokenType}:all` : tokenType);
     try {
-      const res = await api.post('/inventory/tokens/use', { token_type: tokenType });
+      const res = await api.post('/inventory/tokens/use', { token_type: tokenType, use_all: useAll });
       if (res?.data?.tokens) setData((d) => (d ? { ...d, tokens: res.data.tokens } : d));
       toast.success(res?.data?.message || 'Token used.');
       refreshUser();
@@ -273,6 +273,9 @@ export default function MyInventory() {
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Consumables</h2>
             </div>
             <div className="p-2.5 space-y-2">
+              <p className="text-[8px] text-mutedForeground font-heading leading-snug border-b border-zinc-700/30 pb-2 mb-1">
+                Use all spends every token needed to reach this row&apos;s max stack (or until you run out). Extra tokens stay in your inventory.
+              </p>
               {TOKEN_TYPES.filter((key) => (tokens[key]?.count ?? 0) > 0 || tokens[key]?.active_until).map((key) => {
                 const t = tokens[key] || { count: 0, active_until: null };
                 const { name, icon: Icon, desc } = tokenLabels[key] || { name: key, icon: Zap, desc: '' };
@@ -290,14 +293,24 @@ export default function MyInventory() {
                         <div className="text-[9px] text-primary mt-0.5">Active until {new Date(t.active_until).toLocaleString()}</div>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      disabled={t.count < 1 || usingToken !== null}
-                      onClick={() => activateToken(key)}
-                      className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 shrink-0"
-                    >
-                      {usingToken === key ? '...' : 'Use'}
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        disabled={t.count < 1 || usingToken !== null}
+                        onClick={() => activateToken(key, false)}
+                        className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50"
+                      >
+                        {usingToken === key ? '...' : 'Use'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={t.count < 1 || usingToken !== null}
+                        onClick={() => activateToken(key, true)}
+                        className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-teal-500/40 bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 disabled:opacity-50"
+                      >
+                        {usingToken === `${key}:all` ? '...' : 'Use all'}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
