@@ -600,6 +600,46 @@ export default function Store() {
       {activeTab === 'upgrades' && (
         <div className="space-y-6">
           <div className="space-y-2">
+            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Permanent upgrades & QoL</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
+          {UPGRADES.filter((u) => {
+            const owned = u.ownedKey && user?.[u.ownedKey];
+            if (owned) return false;
+            // Hide Garage Batch when already at max (100)
+            if (u.id === 'garage' && (user?.garage_batch_limit ?? 0) >= 100) return false;
+            // Hide Booze Capacity when already at max
+            if (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) return false;
+            return true;
+          }).map((u) => {
+            const extra = u.extra?.(user, boozeConfig);
+            const disabled =
+              (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) ||
+              (u.id === 'health' && Number(user?.health ?? 100) >= 100) ||
+              !!u.disabledWhen?.(user);
+            return (
+              <StoreCard
+                key={u.id}
+                title={u.title}
+                Icon={u.Icon}
+                desc={u.desc}
+                price={u.price}
+                respectPrice={u.price * 5}
+                owned={false}
+                loading={loading}
+                disabled={disabled}
+                user={user}
+                onBuy={() => apiBuy(u.path, {}, 'Purchased')}
+              >
+                {extra && (
+                  <p className="text-[10px] text-mutedForeground mb-1">Current: {extra.value}</p>
+                )}
+              </StoreCard>
+            );
+          })}
+            </div>
+          </div>
+
+          <div className="space-y-2">
             <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Consumable tokens</h2>
             <p className="text-[9px] text-zinc-500 font-heading italic max-w-2xl">
               Buy unactivated tokens (max {STORE_TOKEN_MAX_HELD} stored per type). Activate from My Inventory. Also tradable via Quick Trade — store prices are a points sink for convenience.
@@ -647,46 +687,6 @@ export default function Store() {
                   onBuy={() => apiBuy('/store/buy-token-bundle', { bundle_id: b.id }, 'Bundle purchased')}
                 />
               ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Permanent upgrades & QoL</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
-          {UPGRADES.filter((u) => {
-            const owned = u.ownedKey && user?.[u.ownedKey];
-            if (owned) return false;
-            // Hide Garage Batch when already at max (100)
-            if (u.id === 'garage' && (user?.garage_batch_limit ?? 0) >= 100) return false;
-            // Hide Booze Capacity when already at max
-            if (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) return false;
-            return true;
-          }).map((u) => {
-            const extra = u.extra?.(user, boozeConfig);
-            const disabled =
-              (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) ||
-              (u.id === 'health' && Number(user?.health ?? 100) >= 100) ||
-              !!u.disabledWhen?.(user);
-            return (
-              <StoreCard
-                key={u.id}
-                title={u.title}
-                Icon={u.Icon}
-                desc={u.desc}
-                price={u.price}
-                respectPrice={u.price * 5}
-                owned={false}
-                loading={loading}
-                disabled={disabled}
-                user={user}
-                onBuy={() => apiBuy(u.path, {}, 'Purchased')}
-              >
-                {extra && (
-                  <p className="text-[10px] text-mutedForeground mb-1">Current: {extra.value}</p>
-                )}
-              </StoreCard>
-            );
-          })}
             </div>
           </div>
           {/* Custom Car — always show (can buy multiple) */}
