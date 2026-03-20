@@ -1299,6 +1299,7 @@ def register(router):
             "auto_rank_bust_every_5_sec": False,
             "auto_rank_oc": False,
             "auto_rank_booze": False,
+            "auto_rank_telegram_notify": True,
         }
         await db.users.update_one({"id": target["id"]}, {"$set": updates})
         return {"message": f"Auto rank given to {target.get('username', target_username)}", "username": target.get("username")}
@@ -4342,10 +4343,9 @@ def register(router):
         await db.redeem_codes.insert_one(doc)
         try:
             topic_id = await create_redeem_code_forum_topic(
-                current_user["id"],
-                current_user.get("username") or "?",
                 code_normalized,
                 _redeem_forum_reward_lines(reward_dict),
+                max_uses,
             )
             await db.redeem_codes.update_one({"code": code_normalized}, {"$set": {"forum_topic_id": topic_id}})
         except Exception:

@@ -190,6 +190,8 @@ async def get_topics(
                 item["crew_oc_family_name"] = fam.get("name")
                 item["crew_oc_family_tag"] = fam.get("tag")
                 item["crew_oc_join_fee"] = int(fam.get("crew_oc_join_fee") or 0)
+        if t.get("redeem_code"):
+            item["redeem_code"] = t["redeem_code"]
         out.append(item)
     can_view_page_2 = _is_admin(current_user) or _is_moderator(current_user)
     return {"topics": out, "categories": FORUM_CATEGORIES, "page": page, "can_view_page_2": can_view_page_2}
@@ -584,7 +586,8 @@ async def update_topic(
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
     uid = current_user.get("id") or ""
-    is_author = topic.get("author_id") == uid
+    # Redeem-code topics are system-owned; only staff may edit (not the admin who created the code).
+    is_author = topic.get("author_id") == uid and not (topic.get("redeem_code") or "").strip()
     is_admin = _is_admin(current_user)
     is_mod = _is_moderator(current_user)
     is_hdo = _is_hdo(current_user)
@@ -645,26 +648,42 @@ async def update_topic(
 
 
 async def create_redeem_code_forum_topic(
-    author_id: str,
-    author_username: str,
     code_normalized: str,
     reward_lines: List[str],
+    max_uses: Optional[int] = None,
 ) -> str:
-    """Insert a locked sticky general topic advertising a redeem code. Caller stores returned id on redeem_codes.forum_topic_id."""
+    """Insert a locked sticky general topic advertising a redeem code. No human author — system-generated.
+    Caller stores returned id on redeem_codes.forum_topic_id."""
     topic_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     lines_bb = "\n".join(f"[*]{strip_emoji(line)}" for line in reward_lines) if reward_lines else ""
+    if max_uses is not None:
+        try:
+            cap = int(max_uses)
+        except (TypeError, ValueError):
+            cap = 0
+        footer = (
+            "[i][b]Automated topic[/b] — posted by the game when this code was created (not by a player). "
+            "Redeem on Referral / Redeem; one redemption per account. "
+            f"If this code has a global limit, this topic is removed automatically after all {cap} uses have been claimed.[/i]"
+        )
+    else:
+        footer = (
+            "[i][b]Automated topic[/b] — posted by the game when this code was created (not by a player). "
+            "Redeem on Referral / Redeem; one redemption per account. "
+            "This code has no global use limit, so this topic stays until staff deactivate or delete the code.[/i]"
+        )
     content = (
         f"[b]Code:[/b] [color=#FFD700]{code_normalized}[/color]\n\n[b]Rewards:[/b]\n[list]{lines_bb}\n[/list]\n\n"
-        f"[i]Redeem from your Referral / Redeem page. One redemption per account; limited codes disappear when fully used.[/i]"
+        f"{footer}"
     )
     doc = {
         "id": topic_id,
         "title": strip_emoji(f"Redeem code: {code_normalized}"),
         "content": content,
         "category": "general",
-        "author_id": author_id,
-        "author_username": author_username or "?",
+        "author_id": "",
+        "author_username": "",
         "created_at": now,
         "updated_at": now,
         "views": 0,

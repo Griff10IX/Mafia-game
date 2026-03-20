@@ -15,11 +15,16 @@ function formatMoney(n) {
 }
 
 const StatCard = ({ label, value, valueColor = 'text-foreground', icon: Icon }) => (
-  <div className={`${styles.surface} rounded border p-2 sm:p-3 text-center`}>
-    <div className={`text-base sm:text-lg font-heading font-bold ${valueColor}`}>{value}</div>
+  <div className={`${styles.surface} rounded border p-2 sm:p-3 text-center min-w-0 w-full overflow-hidden`}>
+    <div
+      className={`text-sm sm:text-base md:text-lg font-heading font-bold ${valueColor} leading-snug tabular-nums max-w-full [overflow-wrap:anywhere]`}
+      title={typeof value === 'string' ? value : undefined}
+    >
+      {value}
+    </div>
     <div className={`${styles.gmStatLabel} text-[9px] sm:text-[10px] font-heading uppercase tracking-wider flex items-center justify-center gap-1 mt-0.5`}>
-      {Icon && <Icon size={10} className="sm:w-3 sm:h-3" />}
-      {label}
+      {Icon && <Icon size={10} className="sm:w-3 sm:h-3 shrink-0" />}
+      <span className="min-w-0">{label}</span>
     </div>
   </div>
 );

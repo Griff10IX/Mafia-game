@@ -144,7 +144,7 @@ const StatCard = ({ label, value, valueColor = "text-foreground", icon: Icon }) 
 /* ═══════════════════════════════════════════════════════
    Setup & Status Card
    ═══════════════════════════════════════════════════════ */
-const SetupCard = ({ canEnable, hasTelegram }) => (
+const SetupCard = ({ canEnable, hasTelegram, telegramNotifyOn }) => (
   <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`}>
     <div className={`relative px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
       <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
@@ -184,12 +184,22 @@ const SetupCard = ({ canEnable, hasTelegram }) => (
         </div>
       )}
       
-      {canEnable && hasTelegram && (
+      {canEnable && hasTelegram && telegramNotifyOn && (
         <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 sm:p-2.5">
           <div className="flex items-start gap-2">
             <MessageSquare size={14} className="text-emerald-400 shrink-0 mt-0.5 sm:w-4 sm:h-4" />
             <p className="text-[10px] sm:text-xs font-heading text-zinc-300">
-              ✓ Telegram configured — you'll receive success notifications
+              ✓ Telegram configured — push notifications are on (turn off below anytime)
+            </p>
+          </div>
+        </div>
+      )}
+      {canEnable && hasTelegram && !telegramNotifyOn && (
+        <div className="rounded border border-zinc-600/50 bg-zinc-800/40 p-2 sm:p-2.5">
+          <div className="flex items-start gap-2">
+            <MessageSquare size={14} className="text-zinc-500 shrink-0 mt-0.5 sm:w-4 sm:h-4" />
+            <p className="text-[10px] sm:text-xs font-heading text-zinc-400">
+              Telegram is linked, but <strong className="text-zinc-300">push notifications are off</strong> — automation still runs. Use <strong className="text-primary">Telegram notifications</strong> below to turn them back on. Bot commands like /autorank still work.
             </p>
           </div>
         </div>
@@ -215,10 +225,19 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
       <ToggleRow
         icon={Bot}
         label="Enable Auto Rank"
-        description="Master switch. Sends Telegram notifications on success (when configured)"
+        description="Master switch for automation (Telegram alerts are separate below)"
         checked={p.auto_rank_enabled}
         disabled={savingPrefs || (p.auto_rank_enabled ? false : !canEnable)}
         onToggle={() => onUpdatePref('auto_rank_enabled', !p.auto_rank_enabled)}
+      />
+
+      <ToggleRow
+        icon={MessageSquare}
+        label="Telegram notifications"
+        description="Success summaries, busts, OC, booze/jail alerts. Requires chat ID in Profile. /autorank and other bot replies still work when off"
+        checked={p.auto_rank_telegram_notify !== false}
+        disabled={savingPrefs}
+        onToggle={() => onUpdatePref('auto_rank_telegram_notify', !(p.auto_rank_telegram_notify !== false))}
       />
       
       <div className="py-1.5 px-0">
@@ -1288,6 +1307,7 @@ export default function AutoRank() {
             auto_rank_gta_option_ids: meRes.data.auto_rank_gta_option_ids ?? [],
             auto_rank_melt: meRes.data.auto_rank_melt === true,
             auto_rank_scrap: meRes.data.auto_rank_scrap === true,
+            auto_rank_telegram_notify: meRes.data.auto_rank_telegram_notify !== false,
             auto_rank_melt_action_ids: meRes.data.auto_rank_melt_action_ids ?? [],
             auto_rank_melt_rarity_ids: meRes.data.auto_rank_melt_rarity_ids ?? [],
             auto_rank_scrap_rarity_ids: meRes.data.auto_rank_scrap_rarity_ids ?? [],
@@ -1396,6 +1416,7 @@ export default function AutoRank() {
         auto_rank_booze: res.data?.auto_rank_booze ?? p.auto_rank_booze,
         auto_rank_melt: res.data?.auto_rank_melt ?? p.auto_rank_melt,
         auto_rank_scrap: res.data?.auto_rank_scrap ?? p.auto_rank_scrap,
+        auto_rank_telegram_notify: res.data?.auto_rank_telegram_notify !== false,
         auto_rank_crime_ids: res.data?.auto_rank_crime_ids ?? p.auto_rank_crime_ids,
         auto_rank_gta_option_ids: res.data?.auto_rank_gta_option_ids ?? p.auto_rank_gta_option_ids,
         auto_rank_melt_action_ids: res.data?.auto_rank_melt_action_ids ?? p.auto_rank_melt_action_ids,
@@ -1659,7 +1680,7 @@ export default function AutoRank() {
         </p>
       </div>
 
-      <SetupCard canEnable={canEnable} hasTelegram={hasTelegram} />
+      <SetupCard canEnable={canEnable} hasTelegram={hasTelegram} telegramNotifyOn={prefs?.auto_rank_telegram_notify !== false} />
       
       {canEnable && (
         <AutoRankSummaryCard stats={stats} liveCountdown={liveCountdown} prefs={prefs} />

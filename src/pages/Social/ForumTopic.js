@@ -252,7 +252,7 @@ export default function ForumTopic() {
     }).catch(() => { setActiveGameIdeaSeason(null); setGameIdeaMyEntryCommentId(null); });
   }, [topic?.game_idea_season_id, user]);
 
-  const isAuthor = topic && user && topic.author_id === user.id;
+  const isAuthor = topic && user && topic.author_id === user.id && !topic.redeem_code;
 
   const updateTopicFlags = async (payload) => {
     setAdminBusy(true);
@@ -568,7 +568,11 @@ export default function ForumTopic() {
               {topic.is_locked && <Lock size={14} className="text-red-400" />}
             </div>
             <div className="flex items-center gap-3 mt-1 text-[10px] text-mutedForeground">
-              <Link to={`/profile/${encodeURIComponent(topic.author_username)}`} className="text-foreground font-bold hover:text-primary hover:underline" style={topic.author_online_color ? { color: topic.author_online_color } : undefined}>{topic.author_username}</Link>
+              {topic.redeem_code ? (
+                <span className="font-heading font-semibold text-mutedForeground uppercase tracking-wide" title="Posted automatically by the game">System</span>
+              ) : (
+                <Link to={`/profile/${encodeURIComponent(topic.author_username || '?')}`} className="text-foreground font-bold hover:text-primary hover:underline" style={topic.author_online_color ? { color: topic.author_online_color } : undefined}>{topic.author_username || '?'}</Link>
+              )}
               <span className="flex items-center gap-0.5"><Clock size={10} /> {getTimeAgo(topic.created_at)}</span>
               <span className="flex items-center gap-0.5"><Eye size={10} /> {topic.views ?? 0}</span>
               <span className="flex items-center gap-0.5"><MessageCircle size={10} /> {commentCount}</span>

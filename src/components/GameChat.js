@@ -259,12 +259,19 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
   return (
     <div className="game-chat-panel flex flex-col min-h-0 border-t mt-2 w-full" data-chat-surface="game" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}>
       <style>{`
+        /* Classic :lol: etc. are <img> bitmaps from parseForumContent, not Unicode.
+           Tailwind preflight sets img { max-width:100%; height:auto } — without a hard cap,
+           a small PNG can scale up to the full chat column (looks like a “big GIF”). */
         .game-chat-panel .game-chat-message-content .inline-smiley {
-          width: 1.75em !important;
-          height: 1.75em !important;
-          min-width: 22px;
-          min-height: 22px;
-          vertical-align: middle;
+          display: inline !important;
+          width: 1.25em !important;
+          height: 1.25em !important;
+          max-width: 22px !important;
+          max-height: 22px !important;
+          min-width: 0;
+          min-height: 0;
+          object-fit: contain;
+          vertical-align: -0.15em;
         }
         .game-chat-panel .game-chat-message-content .forum-content-media,
         .game-chat-panel .game-chat-message-content .forum-content-img,

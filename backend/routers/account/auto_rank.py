@@ -436,8 +436,23 @@ async def wake_auto_rank_if_idle(db, user_id: str):
 
 # ─── Telegram helper ──────────────────────────────────────────────
 
-async def _send_jail_notification(telegram_chat_id: str, username: str, reason: str, jail_seconds: int = 30, bot_token: Optional[str] = None):
-    if not (telegram_chat_id or "").strip():
+def _auto_rank_telegram_notify(user: Optional[dict]) -> bool:
+    """True unless the user explicitly turned off Auto Rank Telegram push notifications."""
+    if not user:
+        return True
+    return user.get("auto_rank_telegram_notify", True) is not False
+
+
+async def _send_jail_notification(
+    telegram_chat_id: str,
+    username: str,
+    reason: str,
+    jail_seconds: int = 30,
+    bot_token: Optional[str] = None,
+    *,
+    notify: bool = True,
+):
+    if not notify or not (telegram_chat_id or "").strip():
         return
     from middleware.security import send_telegram_to_chat
     msg = f"**Auto Rank** — {username}\n\n🔒 You're in jail ({reason}). {jail_seconds}s."
@@ -527,7 +542,9 @@ async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_
     try:
         out = await _booze_buy_impl(user, best_booze_id, amount)
         if out.get("caught"):
-            await _send_jail_notification(telegram_chat_id, username, "booze buy bust", 20, bot_token)
+            await _send_jail_notification(
+                telegram_chat_id, username, "booze buy bust", 20, bot_token, notify=_auto_rank_telegram_notify(user)
+            )
             return False
         user = await db.users.find_one({"id": user_id}, {"_id": 0})
         if not user:
@@ -675,7 +692,7 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
         if respect:
             parts.append(f"+{respect} respect")
         chat_id = (telegram_chat_id or "").strip()
-        if chat_id:
+        if chat_id and _auto_rank_telegram_notify(user):
             msg = f"**Auto Rank** — {username}\n\n**Bust** — " + ". ".join(parts) + "."
             try:
                 await send_telegram_to_chat(chat_id, msg, token, username=username)
@@ -1055,7 +1072,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         except Exception as e:
             logger.exception("Auto rank booze for %s: %s", user_id, e)
 
-    if has_success and chat_id:
+    if has_success and chat_id and _auto_rank_telegram_notify(user):
         user_after = await db.users.find_one({"id": user_id}, {"_id": 0, "respect_points": 1})
         respect_after = int((user_after or {}).get("respect_points") or 0)
         respect_gained = max(0, respect_after - respect_before)
@@ -1093,7 +1110,7 @@ async def run_booze_arrivals():
 
     cursor = db.users.find(
         {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_booze": True, "travel_arrives_at": {"$lte": now_iso}, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
-        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
+        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_telegram_notify": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
     )
     users = await cursor.to_list(200)
 
@@ -1112,7 +1129,7 @@ async def run_booze_arrivals():
         lines = [f"**Auto Rank** — {u.get('username', '?')}", ""]
         try:
             has_success = await _run_booze_for_user(db, u["id"], u.get("username", "?"), chat_id, bot_token, now, lines)
-            if has_success and len(lines) > 2 and chat_id:
+            if has_success and len(lines) > 2 and chat_id and _auto_rank_telegram_notify(u):
                 try:
                     await send_telegram_to_chat(chat_id, "\n".join(lines), bot_token, username=u.get("username", "?"))
                 except Exception as e:
@@ -1277,7 +1294,7 @@ async def run_auto_rank_oc_once():
     try:
         cursor = db.users.find(
             {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_oc": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
-            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_oc_retry_at": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_telegram_notify": 1, "auto_rank_oc_retry_at": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
         )
         users = await cursor.to_list(500)
         
@@ -1307,7 +1324,7 @@ async def run_auto_rank_oc_once():
                     retry_until = datetime.fromtimestamp(now.timestamp() + OC_RETRY_AFTER_AFFORD_SECONDS, tz=timezone.utc)
                     await db.users.update_one({"id": u["id"]}, {"$set": {"auto_rank_oc_retry_at": retry_until.isoformat()}})
                     return
-                if chat_id and result.get("ran") is True and result.get("success") is True:
+                if chat_id and _auto_rank_telegram_notify(u) and result.get("ran") is True and result.get("success") is True:
                     msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist done')}."
                     try:
                         await send_telegram_to_chat(chat_id, msg, bot_token, username=u.get("username", "?"))
@@ -1389,8 +1406,28 @@ async def run_auto_rank_cron_cycle():
 
 # ─── API routes ───────────────────────────────────────────────────
 
-_PREFERENCE_FIELDS = ["auto_rank_enabled", "auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze", "auto_rank_melt", "auto_rank_scrap"]
-_PREFERENCE_DEFAULTS = {"auto_rank_enabled": False, "auto_rank_crimes": True, "auto_rank_gta": True, "auto_rank_bust_every_5_sec": False, "auto_rank_oc": False, "auto_rank_booze": False, "auto_rank_melt": False, "auto_rank_scrap": False}
+_PREFERENCE_FIELDS = [
+    "auto_rank_enabled",
+    "auto_rank_crimes",
+    "auto_rank_gta",
+    "auto_rank_bust_every_5_sec",
+    "auto_rank_oc",
+    "auto_rank_booze",
+    "auto_rank_melt",
+    "auto_rank_scrap",
+    "auto_rank_telegram_notify",
+]
+_PREFERENCE_DEFAULTS = {
+    "auto_rank_enabled": False,
+    "auto_rank_crimes": True,
+    "auto_rank_gta": True,
+    "auto_rank_bust_every_5_sec": False,
+    "auto_rank_oc": False,
+    "auto_rank_booze": False,
+    "auto_rank_melt": False,
+    "auto_rank_scrap": False,
+    "auto_rank_telegram_notify": True,
+}
 
 MELT_OPTIONS = [
     {"id": "bullets", "name": "Melt for Bullets"},
@@ -1519,6 +1556,7 @@ def register(router):
                     "On" if user.get("auto_rank_enabled") else "Off",
                     f"Crimes: {'on' if user.get('auto_rank_crimes') else 'off'} · GTA: {'on' if user.get('auto_rank_gta') else 'off'} · Melt: {'on' if user.get('auto_rank_melt') else 'off'} · Scrap: {'on' if user.get('auto_rank_scrap') else 'off'}",
                     f"Bust 5s: {'on' if user.get('auto_rank_bust_every_5_sec') else 'off'} · OC: {'on' if user.get('auto_rank_oc') else 'off'} · Booze: {'on' if user.get('auto_rank_booze') else 'off'}",
+                    f"TG alerts: {'on' if _auto_rank_telegram_notify(user) else 'off'} (game → Auto Rank)",
                     "",
                     f"Total: {stats.get('total_crimes', 0)} crimes, {stats.get('total_gtas', 0)} GTAs, {stats.get('total_busts', 0)} busts",
                     f"Cash: ${stats.get('total_cash', 0):,} · Booze: {stats.get('total_booze_runs', 0)} runs (${stats.get('total_booze_profit', 0):,})",
@@ -1631,6 +1669,7 @@ def register(router):
         auto_rank_booze: Optional[bool] = None
         auto_rank_melt: Optional[bool] = None
         auto_rank_scrap: Optional[bool] = None
+        auto_rank_telegram_notify: Optional[bool] = None
         auto_rank_crime_ids: Optional[list] = None
         auto_rank_gta_option_ids: Optional[list] = None
         auto_rank_melt_action_ids: Optional[list] = None
@@ -1890,6 +1929,8 @@ def register(router):
             val = getattr(body, field, None)
             if val is not None:
                 updates[field] = val
+        if body.auto_rank_telegram_notify is not None:
+            updates["auto_rank_telegram_notify"] = bool(body.auto_rank_telegram_notify)
         if body.auto_rank_crime_ids is not None:
             updates["auto_rank_crime_ids"] = [str(x) for x in body.auto_rank_crime_ids] if body.auto_rank_crime_ids else []
         if body.auto_rank_gta_option_ids is not None:
