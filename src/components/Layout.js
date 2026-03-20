@@ -2020,7 +2020,8 @@ export default function Layout({ children }) {
       )}
 
       {/* ── TOUCH BALL ───────────────────────────────────────────────────────── */}
-      {user && notificationBallPosition && isMobileViewport && mobileStatsDisplay === 'touch_ball' && (
+      {user && notificationBallPosition && isMobileViewport && mobileStatsDisplay === 'touch_ball'
+        && !String(location.pathname || '').startsWith('/staffrole') && (
         <div ref={notificationBallRef} data-layout="touch-ball" className="fixed z-50 touch-none" style={{ left: notificationBallPosition.x, top: notificationBallPosition.y, width: 56, height: 56 }}>
           <button type="button"
             className="relative w-full h-full rounded-full flex items-center justify-center shadow-xl border-2 transition-transform active:scale-95 select-none"

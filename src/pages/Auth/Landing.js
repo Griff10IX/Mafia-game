@@ -17,6 +17,8 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     lockUntil: null,
     lockMessage: null,
     showPreregisterBanner: false,
+    preregisterLandingBannerEnabled: true,
+    preregisterBannerPreviewOpen: false,
   });
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
@@ -66,6 +68,11 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
           lockUntil: r.data?.lock_until || null,
           lockMessage: r.data?.lock_message || null,
           showPreregisterBanner: !!r.data?.show_preregister_banner,
+          preregisterLandingBannerEnabled:
+            r.data?.preregister_landing_banner_enabled !== undefined
+              ? !!r.data.preregister_landing_banner_enabled
+              : true,
+          preregisterBannerPreviewOpen: !!r.data?.preregister_landing_banner_preview_open,
         });
       })
       .catch(() => {});
@@ -78,11 +85,15 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     const now = Date.now();
     const diff = Math.max(0, target - now);
     if (diff <= 0) {
-      setLaunchStatus((prev) => ({
-        ...prev,
-        loginLocked: false,
-        showPreregisterBanner: false,
-      }));
+      setLaunchStatus((prev) => {
+        const stillShow =
+          !!prev.preregisterLandingBannerEnabled && !!prev.preregisterBannerPreviewOpen;
+        return {
+          ...prev,
+          loginLocked: false,
+          showPreregisterBanner: stillShow,
+        };
+      });
       return { days: 0, hours: 0, minutes: 0, seconds: 0 };
     }
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -303,7 +314,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
 
       <div className="relative min-h-screen flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-md flex flex-col gap-2">
-          {/* Pre-register strip: visible on Login + Register when login lock is on (admin can disable) */}
+          {/* Pre-register strip: when login lock is on, or admin "preview while open" */}
           {launchStatus.showPreregisterBanner && !preregisteredSuccess && (
             <div
               className="rounded-lg border px-3 py-2.5 flex gap-2 items-start landing-fade-up"
@@ -316,8 +327,20 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
             >
               <Info size={14} className="text-emerald-400 shrink-0 mt-0.5" aria-hidden />
               <div className="min-w-0 space-y-1">
-                <p className="text-[9px] font-heading font-bold uppercase tracking-wider text-emerald-400/95">
-                  Pre-register · Founding Member
+                <p className="text-[9px] font-heading font-bold uppercase tracking-wider text-emerald-400/95 flex flex-wrap items-center gap-2">
+                  <span>Pre-register · Founding Member</span>
+                  {!launchStatus.loginLocked ? (
+                    <span
+                      className="font-heading normal-case tracking-normal px-1.5 py-0.5 rounded border text-sky-300/95"
+                      style={{
+                        borderColor: 'rgba(56, 189, 248, 0.35)',
+                        background: 'rgba(14, 116, 144, 0.25)',
+                        fontSize: '8px',
+                      }}
+                    >
+                      Preview — logins open
+                    </span>
+                  ) : null}
                 </p>
                 <p className="text-[10px] font-heading leading-snug" style={{ color: 'var(--noir-foreground)' }}>
                   {(launchStatus.lockMessage && launchStatus.lockMessage.trim()) || PREREGISTER_STRIP_DEFAULT}

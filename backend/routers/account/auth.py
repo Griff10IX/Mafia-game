@@ -198,6 +198,7 @@ def register(router):
         banner_pref = settings.get("preregister_landing_banner_enabled") if settings else None
         if banner_pref is None:
             banner_pref = True
+        preview_open = bool(settings.get("preregister_landing_banner_preview_open")) if settings else False
         preorder_release = settings.get("preorder_points_release_date") if settings else None
         now = datetime.now(timezone.utc)
         login_locked = False
@@ -214,12 +215,14 @@ def register(router):
                 preorder_active = now < preorder_dt
             except (ValueError, TypeError):
                 pass
+        show_strip = bool(banner_pref) and (login_locked or preview_open)
         return {
             "login_locked": login_locked,
             "lock_until": lock_until,
             "lock_message": lock_message,
             "preregister_landing_banner_enabled": bool(banner_pref),
-            "show_preregister_banner": login_locked and bool(banner_pref),
+            "preregister_landing_banner_preview_open": preview_open,
+            "show_preregister_banner": show_strip,
             "preorder_active": preorder_active,
             "preorder_release_date": preorder_release,
         }

@@ -18,6 +18,23 @@ const ADMIN_STYLES = `
     border-top-width: 2px;
     box-shadow: 0 0 20px rgba(var(--noir-primary-rgb), 0.06);
   }
+  @media (max-width: 767px) {
+    /* Beat App.css .mobile-page-root { padding: 0 } so admin matches Store / dashboard gutters */
+    .admin-mobile-shell.mobile-page-root {
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+    .admin-module {
+      background-color: var(--noir-surface, #282828);
+      border: 1px solid var(--noir-border-mid, rgba(var(--noir-primary-rgb), 0.22));
+      border-top-width: 1px;
+      box-shadow: var(--app-card-shadow, none);
+    }
+    .admin-focus-block {
+      border-top-width: 1px;
+      box-shadow: var(--app-card-shadow, none);
+    }
+  }
   .admin-command-bar {
     border-bottom: 1px solid rgba(var(--noir-primary-rgb), 0.35);
     background: linear-gradient(180deg, rgba(var(--noir-primary-rgb), 0.06) 0%, transparent 100%);
@@ -505,6 +522,7 @@ export default function Admin() {
   const [loginLockUntil, setLoginLockUntil] = useState('');
   const [loginLockMessage, setLoginLockMessage] = useState('');
   const [preregisterLandingBannerEnabled, setPreregisterLandingBannerEnabled] = useState(true);
+  const [preregisterBannerPreviewOpen, setPreregisterBannerPreviewOpen] = useState(false);
   const [preorderReleaseDate, setPreorderReleaseDate] = useState('');
   const [launchSettingsSaving, setLaunchSettingsSaving] = useState(false);
   const [preorderReleaseLoading, setPreorderReleaseLoading] = useState(false);
@@ -822,6 +840,7 @@ export default function Admin() {
           ? !!res.data.preregister_landing_banner_enabled
           : true,
       );
+      setPreregisterBannerPreviewOpen(!!res.data?.preregister_landing_banner_preview_open);
       setPreorderReleaseDate(res.data?.preorder_points_release_date || '');
       setCasinoGlobalMaxBet(res.data?.casino_global_max_bet || 1000000000);
       setCasinoBuybackMaxPoints(res.data?.casino_buyback_max_points || 15000);
@@ -837,6 +856,7 @@ export default function Admin() {
       setLoginLockUntil('');
       setLoginLockMessage('');
       setPreregisterLandingBannerEnabled(true);
+      setPreregisterBannerPreviewOpen(false);
       setPreorderReleaseDate('');
       setCasinoGlobalMaxBet(1000000000);
       setCasinoBuybackMaxPoints(15000);
@@ -918,9 +938,32 @@ export default function Admin() {
         preregister_landing_banner_enabled: next,
       });
       setPreregisterLandingBannerEnabled(!!res.data?.preregister_landing_banner_enabled);
+      if (!next) {
+        setPreregisterBannerPreviewOpen(!!res.data?.preregister_landing_banner_preview_open);
+      }
       toast.success(next ? 'Pre-register banner on' : 'Pre-register banner off');
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to update banner');
+    } finally {
+      setLaunchSettingsSaving(false);
+    }
+  };
+
+  const handleTogglePreregisterBannerPreview = async () => {
+    setLaunchSettingsSaving(true);
+    const next = !preregisterBannerPreviewOpen;
+    try {
+      const res = await api.patch('/admin/settings', {
+        preregister_landing_banner_preview_open: next,
+      });
+      setPreregisterBannerPreviewOpen(!!res.data?.preregister_landing_banner_preview_open);
+      toast.success(
+        next
+          ? 'Mini banner preview on (visible on /login while logins are open)'
+          : 'Mini banner preview off',
+      );
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update preview');
     } finally {
       setLaunchSettingsSaving(false);
     }
@@ -2973,7 +3016,7 @@ export default function Admin() {
 
   if (loading) {
     return (
-      <div className={`${styles.pageContent} mobile-page-root`}>
+      <div className={`${styles.pageContent} mobile-page-root admin-mobile-shell pb-6 md:pb-0`}>
         <style>{ADMIN_STYLES}</style>
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
           <Settings size={28} className="text-primary/40 animate-pulse" />
@@ -2992,7 +3035,7 @@ export default function Admin() {
   const Select = AdminSelect;
 
   return (
-    <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="admin-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root admin-mobile-shell pb-6 md:pb-0`} data-testid="admin-page">
       <style>{ADMIN_STYLES}</style>
       <div className="relative admin-fade-in flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[10px] text-zinc-500 font-heading italic">Use with caution</p>
@@ -3096,7 +3139,7 @@ export default function Admin() {
         </aside>
 
         {/* Main: Target Username (sticky) + active category content only */}
-        <main className="flex-1 min-w-0 min-h-0 space-y-4 overflow-y-auto overflow-x-hidden">
+        <main className="flex-1 min-w-0 min-h-0 space-y-4 overflow-x-hidden md:overflow-y-auto md:max-h-[min(100vh-10rem,100dvh-10rem)]">
           {/* Target Username - sticky so it stays visible when scrolling */}
           <div className={`sticky top-0 z-10 relative admin-module admin-focus-block ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-background/95 backdrop-blur mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -3924,6 +3967,25 @@ export default function Admin() {
                   }`}
                 >
                   {preregisterLandingBannerEnabled ? 'Banner: on' : 'Banner: off'}
+                </button>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-zinc-700/20 mt-2 pt-3">
+                <p className="text-[10px] text-mutedForeground flex-1">
+                  <span className="text-amber-400/90 font-heading font-bold uppercase tracking-wider">Preview while logins open</span>
+                  {' — '}Show the same slim strip on <span className="font-mono text-[9px]">/</span> and <span className="font-mono text-[9px]">/login</span> even when the login lock is off (no countdown). Turn off before launch if you only want the strip during a real lock.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleTogglePreregisterBannerPreview}
+                  disabled={launchSettingsSaving || !preregisterLandingBannerEnabled}
+                  title={!preregisterLandingBannerEnabled ? 'Turn the banner on first' : undefined}
+                  className={`shrink-0 px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded border disabled:opacity-50 ${
+                    preregisterBannerPreviewOpen
+                      ? 'bg-sky-500/15 text-sky-300 border-sky-500/40 hover:bg-sky-500/25'
+                      : 'bg-zinc-800/80 text-mutedForeground border-zinc-600/50 hover:bg-zinc-700/80'
+                  }`}
+                >
+                  {preregisterBannerPreviewOpen ? 'Preview: on' : 'Preview: off'}
                 </button>
               </div>
             </div>
