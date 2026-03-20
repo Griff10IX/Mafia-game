@@ -195,6 +195,9 @@ def register(router):
         settings = await db.game_settings.find_one({"_id": "main"})
         lock_until = settings.get("login_lock_until") if settings else None
         lock_message = settings.get("login_lock_message") if settings else None
+        banner_pref = settings.get("preregister_landing_banner_enabled") if settings else None
+        if banner_pref is None:
+            banner_pref = True
         preorder_release = settings.get("preorder_points_release_date") if settings else None
         now = datetime.now(timezone.utc)
         login_locked = False
@@ -215,6 +218,8 @@ def register(router):
             "login_locked": login_locked,
             "lock_until": lock_until,
             "lock_message": lock_message,
+            "preregister_landing_banner_enabled": bool(banner_pref),
+            "show_preregister_banner": login_locked and bool(banner_pref),
             "preorder_active": preorder_active,
             "preorder_release_date": preorder_release,
         }

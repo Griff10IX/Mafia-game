@@ -97,6 +97,7 @@ def register(router):
             "mission_1_crimes_baseline": "",
             "mission_2_crimes_baseline": "",
             "mission_2_jail_busts_baseline": "",
+            "mission_2_cars_melted_baseline": "",
             "mission_3_crimes_baseline": "",
             "mission_3_jail_busts_baseline": "",
             "mission_3_gta_baseline": "",
@@ -104,6 +105,7 @@ def register(router):
             "mission_3_bullets_melted_baseline": "",
             "mission_3_bullets_purchased_armoury_baseline": "",
             "mission_3_uncommon_cars_scrapped_baseline": "",
+            "mission_baselines": "",
             "first_mission_notification_sent": "",
         }
 

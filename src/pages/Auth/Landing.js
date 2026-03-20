@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Copy } from 'lucide-react';
+import { Copy, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getBaseURL, AUTH_ERROR_KEY } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
@@ -16,6 +16,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     loginLocked: false,
     lockUntil: null,
     lockMessage: null,
+    showPreregisterBanner: false,
   });
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
@@ -64,6 +65,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
           loginLocked: !!r.data?.login_locked,
           lockUntil: r.data?.lock_until || null,
           lockMessage: r.data?.lock_message || null,
+          showPreregisterBanner: !!r.data?.show_preregister_banner,
         });
       })
       .catch(() => {});
@@ -76,7 +78,11 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     const now = Date.now();
     const diff = Math.max(0, target - now);
     if (diff <= 0) {
-      setLaunchStatus(prev => ({ ...prev, loginLocked: false }));
+      setLaunchStatus((prev) => ({
+        ...prev,
+        loginLocked: false,
+        showPreregisterBanner: false,
+      }));
       return { days: 0, hours: 0, minutes: 0, seconds: 0 };
     }
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -97,6 +103,14 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
   }, [launchStatus.loginLocked, launchStatus.lockUntil, calculateCountdown]);
 
   const DEFAULT_BANNER_MESSAGE = 'Beta round end: March 24 6pm. Full game release March 28th 6pm. This beta lets you try the game and features before launch.';
+
+  const PREREGISTER_STRIP_DEFAULT =
+    'Login opens after launch. Register now to become a Founding Member. After signup you get a referral link (?ref=YourUsername) to invite friends — they earn referral perks.';
+
+  const preregisterCompactCountdown =
+    launchStatus.loginLocked && launchStatus.lockUntil
+      ? `${countdown.days}d ${String(countdown.hours).padStart(2, '0')}h ${String(countdown.minutes).padStart(2, '0')}m ${String(countdown.seconds).padStart(2, '0')}s`
+      : null;
 
   // Read ?ref= from URL for referral (e.g. ?ref=Username)
   useEffect(() => {
@@ -288,7 +302,37 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       <div className="absolute inset-0 bg-black/65 pointer-events-none" aria-hidden />
 
       <div className="relative min-h-screen flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-md flex flex-col gap-0">
+        <div className="w-full max-w-md flex flex-col gap-2">
+          {/* Pre-register strip: visible on Login + Register when login lock is on (admin can disable) */}
+          {launchStatus.showPreregisterBanner && !preregisteredSuccess && (
+            <div
+              className="rounded-lg border px-3 py-2.5 flex gap-2 items-start landing-fade-up"
+              style={{
+                borderColor: 'rgba(52, 211, 153, 0.35)',
+                background: 'linear-gradient(135deg, rgba(6, 78, 59, 0.45) 0%, rgba(15, 23, 42, 0.85) 100%)',
+                boxShadow: '0 0 24px rgba(52, 211, 153, 0.08)',
+              }}
+              data-testid="preregister-mini-banner"
+            >
+              <Info size={14} className="text-emerald-400 shrink-0 mt-0.5" aria-hidden />
+              <div className="min-w-0 space-y-1">
+                <p className="text-[9px] font-heading font-bold uppercase tracking-wider text-emerald-400/95">
+                  Pre-register · Founding Member
+                </p>
+                <p className="text-[10px] font-heading leading-snug" style={{ color: 'var(--noir-foreground)' }}>
+                  {(launchStatus.lockMessage && launchStatus.lockMessage.trim()) || PREREGISTER_STRIP_DEFAULT}
+                </p>
+                <p className="text-[9px] font-heading text-emerald-200/80 leading-snug">
+                  Add <span className="font-mono text-emerald-300">?ref=FriendUsername</span> to the site URL so referrals count. Open the <span className="text-emerald-300">Login</span> tab for the full countdown.
+                </p>
+                {preregisterCompactCountdown && (
+                  <p className="text-[9px] font-heading font-bold tabular-nums text-amber-300/95 pt-0.5">
+                    Opens in {preregisterCompactCountdown}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ── HERO HEADER ─────────────────────────────────────── */}
           {/*   Gold radial glow + vertical shaft lines, no image   */}
@@ -650,8 +694,8 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
               style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.1)' }}
             >
               {[
-                { val: '11',  lbl: 'Ranks'    },
-                { val: '5',   lbl: 'Prestige' },
+                { val: '13',  lbl: 'Ranks'    },
+                { val: '5',   lbl: 'Prestiges' },
                 { val: '7+',  lbl: 'Casinos'  },
                 { val: '∞',   lbl: 'Ops'      },
               ].map(({ val, lbl }, i) => (

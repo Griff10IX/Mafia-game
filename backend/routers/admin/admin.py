@@ -98,6 +98,7 @@ class AdminSettingsUpdate(BaseModel):
     landing_banner_message: Optional[str] = None
     login_lock_until: Optional[str] = None  # ISO datetime - block logins until this date
     login_lock_message: Optional[str] = None  # Custom message shown on login page during lock
+    preregister_landing_banner_enabled: Optional[bool] = None  # Slim banner on / login when login lock active (founding / ref info)
     preorder_points_release_date: Optional[str] = None  # ISO datetime - points held until this date
     casino_global_max_bet: Optional[int] = None  # Max bet cap for all casinos (default 1B)
     casino_buyback_max_points: Optional[int] = None  # Max points for buy-back reward (default 15000)
@@ -2065,6 +2066,9 @@ def register(router):
         main_doc = await db.game_settings.find_one({"_id": "main"})
         login_lock_until = main_doc.get("login_lock_until") if main_doc else None
         login_lock_message = main_doc.get("login_lock_message") if main_doc else None
+        preregister_landing_banner_enabled = main_doc.get("preregister_landing_banner_enabled") if main_doc else None
+        if preregister_landing_banner_enabled is None:
+            preregister_landing_banner_enabled = True
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         casino_global_max_bet = int(main_doc.get("casino_global_max_bet") or 1_000_000_000) if main_doc else 1_000_000_000
         casino_buyback_max_points = int(main_doc.get("casino_buyback_max_points") or 15_000) if main_doc else 15_000
@@ -2083,6 +2087,7 @@ def register(router):
             "landing_banner_message": landing_banner_message,
             "login_lock_until": login_lock_until,
             "login_lock_message": login_lock_message,
+            "preregister_landing_banner_enabled": bool(preregister_landing_banner_enabled),
             "preorder_points_release_date": preorder_points_release_date,
             "casino_global_max_bet": casino_global_max_bet,
             "casino_buyback_max_points": casino_buyback_max_points,
@@ -2151,6 +2156,12 @@ def register(router):
                 {"$set": {"login_lock_message": body.login_lock_message if body.login_lock_message else None}},
                 upsert=True,
             )
+        if body.preregister_landing_banner_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"preregister_landing_banner_enabled": bool(body.preregister_landing_banner_enabled)}},
+                upsert=True,
+            )
         if body.preorder_points_release_date is not None:
             await db.game_settings.update_one(
                 {"_id": "main"},
@@ -2197,6 +2208,9 @@ def register(router):
         main_doc = await db.game_settings.find_one({"_id": "main"})
         login_lock_until = main_doc.get("login_lock_until") if main_doc else None
         login_lock_message = main_doc.get("login_lock_message") if main_doc else None
+        preregister_landing_banner_enabled = main_doc.get("preregister_landing_banner_enabled")
+        if preregister_landing_banner_enabled is None:
+            preregister_landing_banner_enabled = True
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         casino_global_max_bet = int(main_doc.get("casino_global_max_bet") or 1_000_000_000) if main_doc else 1_000_000_000
         casino_buyback_max_points = int(main_doc.get("casino_buyback_max_points") or 15_000) if main_doc else 15_000
@@ -2209,6 +2223,7 @@ def register(router):
             "landing_banner_message": landing_banner_message,
             "login_lock_until": login_lock_until,
             "login_lock_message": login_lock_message,
+            "preregister_landing_banner_enabled": bool(preregister_landing_banner_enabled),
             "preorder_points_release_date": preorder_points_release_date,
             "casino_global_max_bet": casino_global_max_bet,
             "casino_buyback_max_points": casino_buyback_max_points,

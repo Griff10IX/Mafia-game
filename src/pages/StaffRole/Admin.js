@@ -504,6 +504,7 @@ export default function Admin() {
   const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
   const [loginLockUntil, setLoginLockUntil] = useState('');
   const [loginLockMessage, setLoginLockMessage] = useState('');
+  const [preregisterLandingBannerEnabled, setPreregisterLandingBannerEnabled] = useState(true);
   const [preorderReleaseDate, setPreorderReleaseDate] = useState('');
   const [launchSettingsSaving, setLaunchSettingsSaving] = useState(false);
   const [preorderReleaseLoading, setPreorderReleaseLoading] = useState(false);
@@ -816,6 +817,11 @@ export default function Admin() {
       setStockMarketMaxPoints(Math.max(1, parseInt(res.data?.stock_market_max_points, 10) || 3000));
       setLoginLockUntil(res.data?.login_lock_until || '');
       setLoginLockMessage(res.data?.login_lock_message || '');
+      setPreregisterLandingBannerEnabled(
+        res.data?.preregister_landing_banner_enabled !== undefined
+          ? !!res.data.preregister_landing_banner_enabled
+          : true,
+      );
       setPreorderReleaseDate(res.data?.preorder_points_release_date || '');
       setCasinoGlobalMaxBet(res.data?.casino_global_max_bet || 1000000000);
       setCasinoBuybackMaxPoints(res.data?.casino_buyback_max_points || 15000);
@@ -830,6 +836,7 @@ export default function Admin() {
       setStockMarketMaxPoints(3000);
       setLoginLockUntil('');
       setLoginLockMessage('');
+      setPreregisterLandingBannerEnabled(true);
       setPreorderReleaseDate('');
       setCasinoGlobalMaxBet(1000000000);
       setCasinoBuybackMaxPoints(15000);
@@ -3839,6 +3846,9 @@ export default function Admin() {
           badge={
             <span className="text-[10px] font-heading">
               {loginLockUntil ? <span className="text-amber-400">Login locked</span> : null}
+              {loginLockUntil && !preregisterLandingBannerEnabled ? (
+                <span className="text-mutedForeground"> · Strip off</span>
+              ) : null}
               {loginLockUntil && preorderReleaseDate ? ' · ' : null}
               {preorderReleaseDate ? <span className="text-amber-400">Preorder active</span> : null}
               {!loginLockUntil && !preorderReleaseDate ? <span className="text-mutedForeground">Not set</span> : null}
@@ -3883,6 +3893,23 @@ export default function Admin() {
               >
                 {launchSettingsSaving ? 'Saving...' : 'Save Login Lock'}
               </button>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1">
+                <p className="text-[10px] text-mutedForeground flex-1">
+                  When login is locked, show the slim pre-register banner on the public login page (founding member + <span className="font-mono text-[9px]">?ref=</span> note + countdown).
+                </p>
+                <button
+                  type="button"
+                  onClick={handleTogglePreregisterBanner}
+                  disabled={launchSettingsSaving}
+                  className={`shrink-0 px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded border disabled:opacity-50 ${
+                    preregisterLandingBannerEnabled
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25'
+                      : 'bg-zinc-800/80 text-mutedForeground border-zinc-600/50 hover:bg-zinc-700/80'
+                  }`}
+                >
+                  {preregisterLandingBannerEnabled ? 'Banner: on' : 'Banner: off'}
+                </button>
+              </div>
             </div>
 
             <div className="h-px bg-zinc-700/30" />

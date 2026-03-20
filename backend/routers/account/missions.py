@@ -231,6 +231,59 @@ def _previous_mission(mission: dict):
     return max(candidates, key=lambda m: m.get("order", 0))
 
 
+def _next_mission_same_city(mission: dict):
+    """Next mission in same city (higher order), or None."""
+    city = mission.get("city")
+    order = mission.get("order", 0)
+    candidates = [m for m in MISSIONS if m.get("city") == city and m.get("order", 0) > order]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda m: m.get("order", 0))
+
+
+def _stat_requirement_keys(mission: dict) -> List[str]:
+    """Requirement keys that map to cumulative user stats (not location / meta)."""
+    return [
+        k
+        for k in (mission.get("requirements") or {})
+        if k not in ("in_state", "complete_missions")
+    ]
+
+
+def _baseline_snapshot_for_mission(user: dict, mission: dict) -> Dict[str, int]:
+    """Snapshot current stat totals when a mission unlocks (progress counts only new activity)."""
+    return {k: _get_user_progress_value(user, k) for k in _stat_requirement_keys(mission)}
+
+
+async def _ensure_extended_mission_baselines(user: dict) -> None:
+    """Persist mission_baselines.<id> for unlocked missions after m_third (lazy backfill / first visit)."""
+    completed = _user_completed_mission_ids(user)
+    uid = user.get("id")
+    if not uid:
+        return
+    mb = user.get("mission_baselines") or {}
+    to_set: Dict[str, Dict[str, int]] = {}
+    for m in MISSIONS:
+        mid = m["id"]
+        if mid in completed:
+            continue
+        if not _mission_unlocked_by_previous(m, completed):
+            continue
+        if mid in (FIRST_MISSION_ID, SECOND_MISSION_ID, THIRD_MISSION_ID):
+            continue
+        if mb.get(mid):
+            continue
+        snap = _baseline_snapshot_for_mission(user, m)
+        if snap:
+            to_set[mid] = snap
+    if not to_set:
+        return
+    set_payload = {f"mission_baselines.{mid}": snap for mid, snap in to_set.items()}
+    await db.users.update_one({"id": uid}, {"$set": set_payload})
+    user.setdefault("mission_baselines", {})
+    user["mission_baselines"].update(to_set)
+
+
 def _mission_unlocked_by_previous(mission: dict, completed_ids: set) -> bool:
     """True if this mission is unlocked by progression (previous mission in same city completed)."""
     prev = _previous_mission(mission)
@@ -343,6 +396,12 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
             if baseline is None:
                 baseline = total
             current = max(0, total - baseline)
+        elif key == "cars_melted" and mission.get("id") == SECOND_MISSION_ID:
+            total = int(user.get("cars_melted") or 0)
+            baseline = user.get("mission_2_cars_melted_baseline")
+            if baseline is None:
+                baseline = total
+            current = max(0, total - baseline)
         elif mission.get("id") == THIRD_MISSION_ID and key in (
             "crimes", "jail_busts", "gta", "booze_sells", "bullets_melted",
             "bullets_purchased_armoury", "uncommon_cars_scrapped",
@@ -370,6 +429,13 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
             if baseline is None:
                 baseline = total
             current = max(0, total - baseline)
+        elif mission.get("id") not in (FIRST_MISSION_ID, SECOND_MISSION_ID, THIRD_MISSION_ID):
+            total = _get_user_progress_value(user, key)
+            baselines_m = (user.get("mission_baselines") or {}).get(mission.get("id")) or {}
+            b = baselines_m.get(key)
+            if b is None:
+                b = total
+            current = max(0, total - int(b))
         else:
             current = _get_user_progress_value(user, key)
         met = current >= target
@@ -429,16 +495,22 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
         baseline = int(current_user.get("total_crimes") or 0)
         await db.users.update_one({"id": current_user["id"]}, {"$set": {"mission_1_crimes_baseline": baseline}})
         current_user["mission_1_crimes_baseline"] = baseline
-    # Ensure second mission baselines exist (crimes and jail_busts only count after mission 2 unlocks)
+    # Ensure second mission baselines exist (crimes, jail busts, cars melted count only after mission 2 unlocks)
     if FIRST_MISSION_ID in completed_ids and current_user.get("mission_2_crimes_baseline") is None:
         c_baseline = int(current_user.get("total_crimes") or 0)
         j_baseline = int(current_user.get("jail_busts") or 0)
+        melt_baseline = int(current_user.get("cars_melted") or 0)
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$set": {"mission_2_crimes_baseline": c_baseline, "mission_2_jail_busts_baseline": j_baseline}},
+            {"$set": {
+                "mission_2_crimes_baseline": c_baseline,
+                "mission_2_jail_busts_baseline": j_baseline,
+                "mission_2_cars_melted_baseline": melt_baseline,
+            }},
         )
         current_user["mission_2_crimes_baseline"] = c_baseline
         current_user["mission_2_jail_busts_baseline"] = j_baseline
+        current_user["mission_2_cars_melted_baseline"] = melt_baseline
     # Ensure third mission baselines exist (all counts from when mission 3 unlocks)
     if SECOND_MISSION_ID in completed_ids and current_user.get("mission_3_crimes_baseline") is None:
         m3_set = {
@@ -452,6 +524,7 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
         }
         await db.users.update_one({"id": current_user["id"]}, {"$set": m3_set})
         current_user.update(m3_set)
+    await _ensure_extended_mission_baselines(current_user)
     missions_out = []
     for m in MISSIONS:
         if m["city"] not in unlocked:
@@ -524,12 +597,18 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
     if FIRST_MISSION_ID in completed_ids and current_user.get("mission_2_crimes_baseline") is None:
         c_baseline = int(current_user.get("total_crimes") or 0)
         j_baseline = int(current_user.get("jail_busts") or 0)
+        melt_baseline = int(current_user.get("cars_melted") or 0)
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$set": {"mission_2_crimes_baseline": c_baseline, "mission_2_jail_busts_baseline": j_baseline}},
+            {"$set": {
+                "mission_2_crimes_baseline": c_baseline,
+                "mission_2_jail_busts_baseline": j_baseline,
+                "mission_2_cars_melted_baseline": melt_baseline,
+            }},
         )
         current_user["mission_2_crimes_baseline"] = c_baseline
         current_user["mission_2_jail_busts_baseline"] = j_baseline
+        current_user["mission_2_cars_melted_baseline"] = melt_baseline
     if SECOND_MISSION_ID in completed_ids and current_user.get("mission_3_crimes_baseline") is None:
         m3_set = {
             "mission_3_crimes_baseline": int(current_user.get("total_crimes") or 0),
@@ -542,6 +621,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         }
         await db.users.update_one({"id": current_user["id"]}, {"$set": m3_set})
         current_user.update(m3_set)
+    await _ensure_extended_mission_baselines(current_user)
     by_city = {}
     for m in MISSIONS:
         if m["city"] not in unlocked:
@@ -691,9 +771,15 @@ async def complete_mission(
 
     completion_doc = {"mission_id": mission_id, "completed_at": datetime.now(timezone.utc).isoformat()}
     update = {"$push": {"mission_completions": completion_doc}}
+    nxt = _next_mission_same_city(mission)
+    if nxt and nxt["id"] not in (FIRST_MISSION_ID, SECOND_MISSION_ID, THIRD_MISSION_ID):
+        snap = _baseline_snapshot_for_mission(current_user, nxt)
+        if snap:
+            update.setdefault("$set", {})[f"mission_baselines.{nxt['id']}"] = snap
     if mission_id == FIRST_MISSION_ID:
         update.setdefault("$set", {})["mission_2_crimes_baseline"] = int(current_user.get("total_crimes") or 0)
         update.setdefault("$set", {})["mission_2_jail_busts_baseline"] = int(current_user.get("jail_busts") or 0)
+        update.setdefault("$set", {})["mission_2_cars_melted_baseline"] = int(current_user.get("cars_melted") or 0)
     if mission_id == SECOND_MISSION_ID:
         update.setdefault("$set", {})["mission_3_crimes_baseline"] = int(current_user.get("total_crimes") or 0)
         update.setdefault("$set", {})["mission_3_jail_busts_baseline"] = int(current_user.get("jail_busts") or 0)
