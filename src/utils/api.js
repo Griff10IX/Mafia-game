@@ -80,9 +80,23 @@ export const SERVER_UNAVAILABLE_EVENT = 'app:server-unavailable';
 let _lastServerUnavailableDispatch = 0;
 const _SERVER_UNAVAILABLE_THROTTLE_MS = 30_000; // Only dispatch once per 30s to avoid overlay + toast spam
 
+function isRequestCanceled(error) {
+  if (!error) return false;
+  if (axios.isCancel?.(error)) return true;
+  if (error.code === 'ERR_CANCELED') return true;
+  if (error.name === 'CanceledError') return true;
+  const msg = typeof error.message === 'string' ? error.message.toLowerCase() : '';
+  return msg.includes('canceled') || msg.includes('cancelled');
+}
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Aborted in-flight requests (e.g. Attack page replaces poll) must not look like "server down"
+    if (isRequestCanceled(error)) {
+      return Promise.reject(error);
+    }
+
     // ── 429 Rate Limit → cooldown (NEVER log out) ──
     if (error.response?.status === 429) {
       const data = error.response.data || {};
