@@ -28,7 +28,7 @@ Combat is the heart of the game. Attack other players to steal their cash and ea
 
 [b]What Happens When You Kill Someone:[/b]
 [list]
-[*][color=#2ECC71]You gain a % of their cash on hand (10-25%)[/color]
+[*][color=#2ECC71]You gain 25% of their cash on hand (base; some game events can change kill cash rewards)[/color]
 [*][color=#2ECC71]You gain rank points (RP) based on their level[/color]
 [*][color=#2ECC71]You gain respect points[/color]
 [*][color=#2ECC71]Kill is logged and counts toward stats/objectives[/color]
@@ -46,21 +46,12 @@ Combat is the heart of the game. Attack other players to steal their cash and ea
 [/list]
 
 [color=#FFD700][b]Weapons[/b][/color]
-11 weapons from Brass Knuckles to Tommy Gun. Each weapon is stronger than the last. You MUST own the previous tier before buying the next one.
+Weapons are bought in tiers from the armoury: each step is stronger than the last, and you must own the previous tier before the next. Exact names, damage values, and how many bullets they save are shown in-game (catalog may be updated).
 
-[b]Weapon Progression & Damage:[/b]
+[b]Weapon tips:[/b]
 [list]
-[*][color=#666666]Brass Knuckles (Starting) - 1x damage[/color]
-[*][color=#666666]Knife - 1.2x damage[/color]
-[*][color=#777777]Baseball Bat - 1.4x damage[/color]
-[*][color=#777777]Crowbar - 1.6x damage[/color]
-[*][color=#888888]Pistol - 2x damage[/color]
-[*][color=#888888]Revolver - 2.3x damage[/color]
-[*][color=#999999]Shotgun - 2.7x damage[/color]
-[*][color=#AAAAAA]Rifle - 3x damage[/color]
-[*][color=#BBBBBB]SMG - 3.5x damage[/color]
-[*][color=#CCCCCC]AK-47 - 4x damage[/color]
-[*][color=#FFD700]Tommy Gun (Best) - 5x damage[/color]
+[*][color=#888888]Higher damage weapons reduce bullets needed to kill (see Attack / bullet calculator)[/color]
+[*][color=#888888]Loot boxes can drop special loot weapons[/color]
 [/list]
 
 [b]Weapon Mastery:[/b]
@@ -75,14 +66,11 @@ Train at the Shooting Range to increase mastery. Each weapon has its own mastery
 [color=#FFD700][b]Armour[/b][/color]
 Armour determines how many bullets are needed to kill you. Higher armour = more protection. Must be purchased in order.
 
-[b]Armour Levels:[/b]
+[b]Armour levels (0–6):[/b]
 [list]
-[*][color=#888888]Level 1 (Leather Jacket) - ~3 bullets to kill[/color]
-[*][color=#888888]Level 2 (Padded Vest) - ~5 bullets to kill[/color]
-[*][color=#888888]Level 3 (Chain Mail) - ~10 bullets to kill[/color]
-[*][color=#888888]Level 4 (Kevlar Vest) - ~15 bullets to kill[/color]
-[*][color=#888888]Level 5 (Tactical Armor) - ~25 bullets to kill[/color]
-[*][color=#FFD700]Level 6 (Steel Plate Vest) - ~40 bullets to kill (Loot Box Exclusive!)[/color]
+[*][color=#888888]Higher armour = more bullets needed to kill you — the exact count depends on your armour tier, both players' ranks, weapon damage, mastery, inflation, and perks (use the in-game attack / bullet calculator)[/color]
+[*][color=#888888]Levels 1–5: bought in order from the armoury[/color]
+[*][color=#FFD700]Level 6 (Steel Plate Vest) — loot-box exclusive, strongest tier[/color]
 [/list]
 
 [color=#FFD700][b]Hitlist (Bounties)[/b][/color]
@@ -126,7 +114,7 @@ Your health affects combat effectiveness.
 [*][color=#888888]Health ranges from 0% to 100%[/color]
 [*][color=#888888]Low health makes you easier to kill[/color]
 [*][color=#888888]Health regenerates slowly over time[/color]
-[*][color=#888888]Restore health instantly with points (15 pts)[/color]
+[*][color=#888888]Restore health instantly from the store: 15 points or 75 respect[/color]
 [*][color=#888888]Always check your health before attacking[/color]
 [/list]
 
@@ -147,21 +135,16 @@ When you attack or kill someone, witnesses may see it happen.
 
 [quote]
 [color=#2ECC71][b]Properties[/b][/color]
-Own properties that generate passive income every hour.
+Own properties that generate passive income every hour. Names, prices, and income per hour come from the in-game property catalog (may differ by round/balance).
 
-[b]Property Types (in order):[/b]
+[b]Property Types:[/b]
 [list]
-[*][color=#888888]Pawn Shop - $500/hr base[/color]
-[*][color=#888888]Liquor Store - $1,000/hr base[/color]
-[*][color=#888888]Restaurant - $2,500/hr base[/color]
-[*][color=#888888]Nightclub - $5,000/hr base[/color]
-[*][color=#888888]Casino - $10,000/hr base[/color]
-[*][color=#FFD700]Hotel - $25,000/hr base[/color]
+[*][color=#888888]Tiers unlock in order — open the Properties page to see current names, base $/hr, and buy order[/color]
 [/list]
 
 [b]Property Features:[/b]
 [list]
-[*][color=#888888]Upgrade each property to level 5 for max income (+100% at max)[/color]
+[*][color=#888888]Each property has its own max upgrade level — max it before unlocking the next tier[/color]
 [*][color=#888888]Must max current property before buying the next tier[/color]
 [*][color=#888888]Collect daily to build a streak bonus (up to +7%)[/color]
 [*][color=#888888]Reinvest option for +10% income boost per collection[/color]
@@ -193,12 +176,14 @@ Buy booze cheap in one city, travel to another, sell high.
 [color=#2ECC71][b]Banks[/b][/color]
 
 [b]Interest Bank:[/b]
-Lock cash for a period to earn interest:
+Lock cash for a fixed term; interest is a percentage of what you deposit (check the Bank UI for caps and limits):
 [list]
-[*][color=#888888]12 hours - 1% return[/color]
-[*][color=#888888]24 hours - 2% return[/color]
-[*][color=#888888]3 days - 5% return[/color]
-[*][color=#888888]7 days - 12% return[/color]
+[*][color=#888888]3 hours — 0.25%[/color]
+[*][color=#888888]6 hours — 0.6%[/color]
+[*][color=#888888]12 hours — 1.25%[/color]
+[*][color=#888888]24 hours — 2.5%[/color]
+[*][color=#888888]48 hours (2 days) — 6%[/color]
+[*][color=#888888]72 hours (3 days) — 10%[/color]
 [/list]
 
 [b]Swiss Bank:[/b]
@@ -274,38 +259,47 @@ Mini-game for instant rewards.
 
 [quote]
 [color=#E67E22][b]Car Rarities[/b][/color]
-Cars come in 6 rarity tiers:
+Rarities include (travel times below match the server):
 
 [list]
-[*][color=#AAAAAA]Common - Basic vehicles[/color]
-[*][color=#2ECC71]Uncommon - Better models[/color]
-[*][color=#3498DB]Rare - Sports cars[/color]
-[*][color=#9B59B6]Epic - Luxury vehicles[/color]
-[*][color=#F39C12]Legendary - Exotic supercars[/color]
-[*][color=#FFD700]Exclusive - Loot box only, rarest![/color]
+[*][color=#AAAAAA]Common — starter GTA cars[/color]
+[*][color=#2ECC71]Uncommon[/color]
+[*][color=#3498DB]Rare[/color]
+[*][color=#9B59B6]Epic (Ultra Rare in data)[/color]
+[*][color=#F39C12]Legendary[/color]
+[*][color=#FFD700]Exclusive — top admin/special drops[/color]
+[*][color=#FFD700]Loot-exclusive — rarest loot-box models[/color]
+[*][color=#888888]Custom — point-store car (own travel row below)[/color]
 [/list]
 
 [color=#E67E22][b]Travel Speed by Rarity[/b][/color]
-Better cars = faster travel between cities:
+Car travel between cities (seconds) — from [b]TRAVEL_TIMES[/b] in the live server config:
 [list]
-[*][color=#AAAAAA]Common: 45 seconds[/color]
-[*][color=#2ECC71]Uncommon: 35 seconds[/color]
-[*][color=#3498DB]Rare: 28 seconds[/color]
-[*][color=#9B59B6]Epic: 23 seconds[/color]
-[*][color=#F39C12]Legendary: 20 seconds[/color]
-[*][color=#FFD700]Exclusive: 15 seconds[/color]
+[*][color=#AAAAAA]Common — 45s[/color]
+[*][color=#2ECC71]Uncommon — 35s[/color]
+[*][color=#3498DB]Rare — 25s[/color]
+[*][color=#9B59B6]Epic / Ultra Rare — 18s[/color]
+[*][color=#F39C12]Legendary — 15s[/color]
+[*][color=#FFD700]Exclusive — 7s[/color]
+[*][color=#FFD700]Loot-exclusive — 5s[/color]
+[*][color=#888888]Custom (point-store car) — 12s[/color]
+[*][color=#888888]Airport — instant[/color]
 [/list]
 
 [color=#E67E22][b]Melting Cars for Bullets[/b][/color]
-Convert stolen cars into ammunition:
+Bullets are [b]not[/b] fixed per rarity: each car uses its [b]dollar value[/b] in the formula [b]bullets = floor(value ÷ $500)[/b] (per car). Check the [b]$ value[/b] on the car in your garage — same rarity can differ by model.
+
+[b]Typical results with the current car catalog:[/b]
 [list]
-[*][color=#AAAAAA]Common: ~500 bullets[/color]
-[*][color=#2ECC71]Uncommon: ~1,500 bullets[/color]
-[*][color=#3498DB]Rare: ~4,000 bullets[/color]
-[*][color=#9B59B6]Epic: ~10,000 bullets[/color]
-[*][color=#F39C12]Legendary: ~25,000 bullets[/color]
-[*][color=#FFD700]Exclusive: ~50,000 bullets[/color]
+[*][color=#AAAAAA]Common (~$125–$188) — often [b]0[/b] bullets per car[/color]
+[*][color=#2ECC71]Uncommon (~$300–$500) — usually [b]0–1[/b][/color]
+[*][color=#3498DB]Rare (~$875–$1,375) — about [b]1–2[/b][/color]
+[*][color=#9B59B6]Ultra Rare (~$2,500–$3,750) — about [b]5–7[/b][/color]
+[*][color=#F39C12]Legendary (~$6,250–$7,500) — about [b]12–15[/b][/color]
+[*][color=#888888]Custom (~$12,500) — about [b]25[/b][/color]
+[*][color=#FFD700]Exclusive / loot-exclusive — huge values, so huge bullet payouts (see in-game value)[/color]
 [/list]
+[i]Melt-for-bullets cooldown = [b]45 seconds × each car[/b] you melt in that action (22.5s × each while a Melt token is active). Badges can reduce the total further. Melt tokens do [b]not[/b] add a % to bullet yield.[/i]
 
 [color=#E67E22][b]Other Car Options[/b][/color]
 [list]
@@ -435,14 +429,17 @@ Each city has:
 [/list]
 
 [color=#3498DB][b]Travel Time[/b][/color]
-Based on your car rarity:
+Based on your car rarity ([b]TRAVEL_TIMES[/b] on server):
 [list]
-[*][color=#AAAAAA]Common: 45 seconds[/color]
-[*][color=#2ECC71]Uncommon: 35 seconds[/color]
-[*][color=#3498DB]Rare: 28 seconds[/color]
-[*][color=#9B59B6]Epic: 23 seconds[/color]
-[*][color=#F39C12]Legendary: 20 seconds[/color]
-[*][color=#FFD700]Exclusive: 15 seconds[/color]
+[*][color=#AAAAAA]Common — 45s[/color]
+[*][color=#2ECC71]Uncommon — 35s[/color]
+[*][color=#3498DB]Rare — 25s[/color]
+[*][color=#9B59B6]Epic / Ultra Rare — 18s[/color]
+[*][color=#F39C12]Legendary — 15s[/color]
+[*][color=#FFD700]Exclusive — 7s[/color]
+[*][color=#FFD700]Loot-exclusive — 5s[/color]
+[*][color=#888888]Custom (point-store car) — 12s[/color]
+[*][color=#888888]Airport — instant[/color]
 [/list]
 
 [color=#3498DB][b]Why Travel?[/b][/color]
@@ -585,6 +582,14 @@ Train weapon mastery by hitting targets:
 [*][color=#888888]Max mastery reduces bullet usage by 10%[/color]
 [/list]
 
+[color=#00BCD4][b]Shooting Range 3D[/b][/color]
+First-person range with per-weapon practice:
+[list]
+[*][color=#888888]Pick a weapon and shoot 3D targets[/color]
+[*][color=#888888]Same mastery progression as the classic range[/color]
+[*][color=#888888]From the mini-games menu under Shooting Range[/color]
+[/list]
+
 [color=#00BCD4][b]Snake (Package Run)[/b][/color]
 Classic snake game with rewards:
 [list]
@@ -604,12 +609,13 @@ Classic puzzle game:
 [/list]
 
 [color=#00BCD4][b]Racing[/b][/color]
-Compete in car races against other players:
+Circuit races and lobbies — top-down and team racing:
 [list]
 [*][color=#888888]Join or create race lobbies[/color]
 [*][color=#888888]Team-based racing system[/color]
 [*][color=#888888]Bet on races for extra rewards[/color]
 [*][color=#888888]Car rarity affects performance[/color]
+[*][color=#888888]Multiple real-world style tracks (Chicago board, Monza, Le Mans, etc.)[/color]
 [/list]
 
 [color=#00BCD4][b]Boxing[/b][/color]
@@ -628,6 +634,14 @@ Dodge obstacles and survive:
 [*][color=#888888]Avoid obstacles to earn points[/color]
 [*][color=#888888]Higher scores = better rewards[/color]
 [*][color=#888888]Compete on the leaderboard[/color]
+[/list]
+
+[color=#00BCD4][b]Whack-a-Copper[/b][/color]
+Fast reflex mini-game:
+[list]
+[*][color=#888888]Hit targets as they pop up[/color]
+[*][color=#888888]Higher tiers = faster pace and better payouts[/color]
+[*][color=#888888]Cash and RP rewards[/color]
 [/list]
 
 [color=#00BCD4][b]Rum Runner (Battleships)[/b][/color]
@@ -671,52 +685,44 @@ Compete for top rankings:
 [size=1.5][b][color=#FFD700]:trophy: PROGRESSION[/color][/b][/size]
 
 [quote]
-[color=#FFD700][b]Ranks (22 Total)[/b][/color]
-Progress from Rat to Godfather VI by earning rank points.
+[color=#FFD700][b]Ranks (13 total)[/b][/color]
+Progress by earning rank points (RP). You need [b]Capo[/b] (rank 6) to hold a casino or property long-term; lower ranks get a short grace period before auto-relinquish.
 
-[b]Early Ranks:[/b]
+[b]Full ladder (name — RP to reach this rank):[/b]
 [list]
-[*][color=#666666]Rat → Lookout → Pickpocket → Thief → Mugger → Dealer[/color]
-[/list]
-
-[b]Mid Ranks:[/b]
-[list]
-[*][color=#888888]Hitman → Assassin → Enforcer → Local Chief[/color]
-[/list]
-
-[b]High Ranks:[/b]
-[list]
-[*][color=#AAAAAA]Associate → Soldier → Capo → Boss[/color]
-[/list]
-
-[b]Elite Ranks:[/b]
-[list]
-[*][color=#CCCCCC]Kingpin → Don[/color]
-[/list]
-
-[b]Godfather Ranks:[/b]
-[list]
-[*][color=#FFD700]Godfather I → II → III → IV → V → VI[/color]
+[*][color=#666666]Rat — 0[/color]
+[*][color=#666666]Street Thug — 800[/color]
+[*][color=#666666]Hustler — 1,800[/color]
+[*][color=#666666]Goon — 4,000[/color]
+[*][color=#666666]Made Man — 9,000[/color]
+[*][color=#666666]Capo — 20,000[/color]
+[*][color=#888888]Underboss — 45,000[/color]
+[*][color=#888888]Consigliere — 101,000[/color]
+[*][color=#888888]Boss — 225,000[/color]
+[*][color=#AAAAAA]Don — 504,000[/color]
+[*][color=#AAAAAA]Capo di tutti capi — 1,128,000[/color]
+[*][color=#CCCCCC]Boss of Bosses — 1,164,000[/color]
+[*][color=#FFD700]Godfather — 1,200,000[/color]
 [/list]
 
 [color=#FFD700][b]Prestige System[/b][/color]
-Reached Godfather VI? Keep progressing with Prestige!
+After reaching [b]Godfather[/b], you can prestige up to [b]5 times[/b]. Each level has a title and applies [b]permanent in-game multipliers[/b] (crime payouts, organised crime, NPC/hitlist-style rewards, illegal business income, GTA rare-car luck, and how mission redo rewards scale). Exact numbers are shown on the prestige UI in-game.
 
-[b]Prestige Levels (1-5):[/b]
+[b]Prestige titles (levels 1–5):[/b]
 [list]
-[*][color=#C0C0C0]Prestige 1 - Reset rank, keep points, +10% RP multiplier[/color]
-[*][color=#C0C0C0]Prestige 2 - +20% RP multiplier, unlock Prestige Crime 2[/color]
-[*][color=#FFD700]Prestige 3 - +30% RP multiplier, unlock Prestige Crime 3[/color]
-[*][color=#FFD700]Prestige 4 - +40% RP multiplier, unlock Prestige Crime 4[/color]
-[*][color=#FF6B6B]Prestige 5 (MAX) - +50% RP multiplier, all Prestige Crimes unlocked[/color]
+[*][color=#C0C0C0]Made[/color]
+[*][color=#C0C0C0]Earner[/color]
+[*][color=#FFD700]Capo di Capi[/color]
+[*][color=#FFD700]The Don[/color]
+[*][color=#FF6B6B]Godfather Legacy (max prestige)[/color]
 [/list]
 
 [b]Prestige Benefits:[/b]
 [list]
-[*][color=#888888]Exclusive Prestige Crimes with higher rewards[/color]
-[*][color=#888888]Permanent RP multiplier that stacks[/color]
-[*][color=#888888]Prestige badge displayed on your profile[/color]
-[*][color=#888888]Bragging rights - show off your dedication![/color]
+[*][color=#888888]Exclusive Prestige Crimes unlocked at higher prestige levels[/color]
+[*][color=#888888]Stacking bonuses to crimes, OC, NPC rewards, illegal business, and GTA rare drops (per level)[/color]
+[*][color=#888888]Mission redo reward multiplier changes as you prestige (see in-game)[/color]
+[*][color=#888888]Prestige badge / bragging rights[/color]
 [/list]
 
 [color=#FFD700][b]Missions[/b][/color]
@@ -739,21 +745,11 @@ Story-based challenges with requirements and rewards.
 [/list]
 
 [color=#FFD700][b]Objectives[/b][/color]
-Complete objectives for bonus rewards:
-[list]
-[*][color=#888888]Daily objectives - Reset every 24h, easy targets[/color]
-[*][color=#888888]Weekly objectives - Higher targets, better rewards[/color]
-[*][color=#888888]Monthly objectives - Big challenges, big payouts[/color]
-[*][color=#FFD700]Lifetime objectives - Ultimate goals for massive rewards[/color]
-[/list]
+Complete objectives for bonus rewards. Which periods exist (daily, weekly, etc.) and exact targets are shown on the Objectives page in-game.
 
-[b]Objective Types:[/b]
 [list]
-[*][color=#888888]Commit X crimes[/color]
-[*][color=#888888]Steal X cars[/color]
-[*][color=#888888]Kill X players[/color]
-[*][color=#888888]Earn X cash[/color]
-[*][color=#888888]Complete X heists[/color]
+[*][color=#888888]Rotating tasks: crimes, GTA, kills, cash earned, heists, and more[/color]
+[*][color=#888888]Rewards and reset timers are listed per objective in the UI[/color]
 [/list]
 [/quote]
 
@@ -762,22 +758,17 @@ Complete objectives for bonus rewards:
 [size=1.5][b][color=#9C27B0]:gift: LOOT BOXES[/color][/b][/size]
 
 [quote]
-Collect 100 loot box pieces to open a loot box. Pieces drop from crimes and activities.
+Collect loot box pieces to open a box (piece cost is shown in-game). Pieces drop from crimes, GTA, heists, objectives, and other activities — amounts vary by action and balance.
 
 [b]How to Get Pieces:[/b]
 [list]
-[*][color=#888888]Crimes - 1-3 pieces per crime[/color]
-[*][color=#888888]GTA - 2-5 pieces per car stolen[/color]
-[*][color=#888888]Heists - 10-20 pieces on success[/color]
-[*][color=#888888]Objectives - Bonus pieces as rewards[/color]
+[*][color=#888888]Crimes, GTA, organised crime / heists, objectives, mini-games — check each screen for drop rates[/color]
+[*][color=#888888]Values change with game balance; use in-game tooltips and patch notes[/color]
 [/list]
 
 [color=#FFD700][b]Possible Rewards:[/b][/color]
 [list]
-[*][color=#888888]Points (50-500)[/color]
-[*][color=#888888]Rank points (100-1000)[/color]
-[*][color=#888888]Cash ($10K-$500K)[/color]
-[*][color=#888888]Bullets (1K-25K)[/color]
+[*][color=#888888]Points, rank points, cash, bullets — rolls depend on the loot table (see in-game when opening)[/color]
 [*][color=#888888]Cars (any rarity including Exclusive)[/color]
 [*][color=#888888]Tokens (various types)[/color]
 [*][color=#FFD700]Level 6 Armour (Steel Plate Vest) - ULTRA RARE[/color]
@@ -807,7 +798,7 @@ Collect 100 loot box pieces to open a loot box. Pieces drop from crimes and acti
 [list]
 [*][color=#888888]Silencer (150 pts)[/color] - Fewer witness statements when you kill
 [*][color=#888888]Anti-Snitch (120 pts)[/color] - Cannot be snitched on while in jail
-[*][color=#888888]Health Restore (15 pts)[/color] - Instantly restore to 100% health
+[*][color=#888888]Health Restore (15 pts or 75 respect)[/color] - Instantly restore to 100% health
 [/list]
 
 [color=#8E44AD][b]Bullets[/b][/color]
@@ -824,7 +815,7 @@ Consumable boosts that stack up to several hours:
 [list]
 [*][color=#888888]Crime XP Token - +25% crime rewards[/color]
 [*][color=#888888]GTA XP Token - +25% GTA rewards[/color]
-[*][color=#888888]Melt Bonus Token - +25% bullets from melting[/color]
+[*][color=#888888]Melt Token — shorter melt-for-bullets cooldown while active (stack up to 6h)[/color]
 [*][color=#888888]OC Cooldown Token - Reduce OC timer[/color]
 [*][color=#888888]Booze Bonus Token - +25% booze profits[/color]
 [*][color=#888888]Loot Token - +25% loot box pieces[/color]
@@ -1125,7 +1116,7 @@ If someone used your card without permission:
 [color=#AAAAAA]A: Contact support - UNUSED points can be transferred to a new character. Used items/purchases cannot be refunded.[/color]
 
 [color=#3498DB][b]Q: What's the Interest Bank vs Swiss Bank?[/b][/color]
-[color=#AAAAAA]A: Interest Bank pays interest but money is locked for a period. Swiss Bank protects money when you die but pays no interest. USE SWISS BANK![/color]
+[color=#AAAAAA]A: Interest Bank pays interest but locks cash for your chosen term (3h–72h — see the Banks section above). Swiss Bank protects money when you die but pays no interest. USE SWISS BANK for savings you can't afford to lose![/color]
 
 [color=#3498DB][b]Q: How do I report a bug?[/b][/color]
 [color=#AAAAAA]A: Use the Help Desk forum category or message a staff member directly. Include screenshots if possible.[/color]
@@ -1146,7 +1137,7 @@ If someone used your card without permission:
 [color=#AAAAAA]A: A feature that lets you resurrect a dead account. If someone you know died, you can bring their character back to life (with some restrictions). Check the Dead to Alive page in-game.[/color]
 
 [color=#3498DB][b]Q: What is Prestige?[/b][/color]
-[color=#AAAAAA]A: After reaching Godfather VI, you can Prestige to reset your rank but gain permanent RP multipliers and access to exclusive Prestige Crimes. There are 5 Prestige levels.[/color]
+[color=#AAAAAA]A: After reaching Godfather (top of the 13-rank ladder), you can Prestige up to 5 times for permanent bonuses — stronger crime/OC/NPC/illegal-business payouts, GTA rare-car luck, mission redo scaling, and exclusive Prestige Crimes. See the Prestige screen for exact numbers.[/color]
 
 [color=#3498DB][b]Q: What are Daily Rewards?[/b][/color]
 [color=#AAAAAA]A: Mini-games (Rock Paper Scissors, Noughts & Crosses) you can play every 6 hours for free cash and car rewards. Don't miss them![/color]
@@ -1167,7 +1158,7 @@ If someone used your card without permission:
 [*][color=#FFD700][b]Train weapon mastery[/b][/color] - Saves bullets in combat
 [*][color=#FFD700][b]Check booze prices[/b][/color] - They change every 3 hours
 [*][color=#FFD700][b]Don't skip armour tiers[/b][/color] - Must buy in order
-[*][color=#FFD700][b]Melt legendary cars[/b][/color] - Best bullet yield
+[*][color=#FFD700][b]Melt high-$ cars[/b][/color] - Bullets scale with car value (legendary/exclusive pay best)
 [*][color=#FFD700][b]Complete daily objectives[/b][/color] - Easy rewards
 [*][color=#FFD700][b]Use tokens wisely[/b][/color] - Stack them before a big crime spree
 [*][color=#FFD700][b]Never carry too much cash[/b][/color] - You drop it when killed
@@ -1180,7 +1171,7 @@ If someone used your card without permission:
 
 [quote]
 [size=1.4][color=#9B59B6][b]Classic Smileys[/b][/color][/size]
-Type these codes in your posts and messages:
+Type these codes in forum posts, topic bodies, and direct messages (same parser):
 
 :wink: [color=#666666]wink[/color] | :twisted: [color=#666666]evil[/color] | :tup: [color=#666666]thumbs up[/color] | :tdown: [color=#666666]thumbs down[/color] | :tongue: [color=#666666]tongue[/color]
 :surprised: [color=#666666]surprised[/color] | :happy: [color=#666666]happy[/color] | :sad: [color=#666666]sad[/color] | :rolleyes: [color=#666666]rolleyes[/color] | :redface: [color=#666666]blush[/color]
@@ -1195,6 +1186,12 @@ Special meme emotes:
 :kekw: [color=#666666]kekw[/color] | :kekl: [color=#666666]kekl[/color] | :kekleo: [color=#666666]kekleo[/color] | :kekwait: [color=#666666]kekwait[/color]
 :crazy: [color=#666666]crazy[/color] | :hackermans: [color=#666666]hackermans[/color] | :howdie: [color=#666666]howdie[/color] | :uzi: [color=#666666]uzi[/color] | :fu: [color=#666666]fu[/color]
 
+[size=1.4][color=#9B59B6][b]Unicode smileys & text faces[/b][/color][/size]
+Hundreds of extra codes work: classic faces like [b]:)[/b] [b]:D[/b] [b];)[/b], and long [b]:name:[/b] codes (e.g. [b]:skull:[/b] [b]:rocket:[/b]) — see [b]src/utils/forumContent.js[/b] in the game repo for the full list. Some short codes render as Unicode emoji; others use the small image smileys above.
+
+[size=1.4][color=#9B59B6][b]Direct messages[/b][/color][/size]
+In Scoop / DM chat, [b]:wink:[/b], [b];)[/b], and [b];-)[/b] may show as the Unicode wink for reliability; other codes behave like the forum.
+
 [size=1.4][color=#9B59B6][b]BBCode Formatting[/b][/color][/size]
 Use these tags to format your posts:
 
@@ -1204,29 +1201,30 @@ Use these tags to format your posts:
 [*][color=#888888][i]...[/i] - Italic text[/color]
 [*][color=#888888][u]...[/u] - Underlined text[/color]
 [*][color=#888888][s]...[/s] - Strikethrough text[/color]
-[*][color=#888888][center]...[/center] - Centered text[/color]
+[*][color=#888888][center]...[/center] - Centered block[/color]
 [/list]
 
 [b]Colors & Size:[/b]
 [list]
-[*][color=#888888][color=#FF0000]...[/color] - Colored text (hex codes)[/color]
-[*][color=#888888][size=1.5]...[/size] - Text size (0.5 to 3)[/color]
+[*][color=#888888][color=#FF0000]...[/color] — hex colour code; [colour=#FF0000]...[/colour] works too (British spelling)[/color]
+[*][color=#888888][size=1.5]...[/size] — size in em, clamped between [b]0.6[/b] and [b]2.5[/b][/color]
 [/list]
 
 [b]Structure:[/b]
 [list]
-[*][color=#888888][quote]...[/quote] - Quote box[/color]
-[*][color=#888888][spoiler]...[/spoiler] - Hidden spoiler[/color]
-[*][color=#888888][list][*]item[/list] - Bullet list[/color]
-[*][color=#888888][hr] - Horizontal line[/color]
+[*][color=#888888][quote]...[/quote] — quote box[/color]
+[*][color=#888888][quote=Name]...[/quote] — quote with attribution[/color]
+[*][color=#888888][spoiler]...[/spoiler] — collapsible spoiler[/color]
+[*][color=#888888][list][*]item[*]item[/list] — bullet list[/color]
+[*][color=#888888][list=1][*]first[*]second[/list] — numbered list[/color]
+[*][color=#888888][hr] or [/hr] — horizontal rule[/color]
 [/list]
 
-[b]Media:[/b]
+[b]Media & links:[/b]
 [list]
-[*][color=#888888][url=link]text[/url] - Clickable link[/color]
-[*][color=#888888][img]url[/img] - Image[/color]
-[*][color=#888888][gif]url[/gif] - GIF image[/color]
-[*][color=#888888][ytube]video_id[/ytube] - YouTube embed[/color]
+[*][color=#888888][url=https://...]label[/url] and [url]https://...[/url] — only [b]http://[/b] or [b]https://[/b] URLs work[/color]
+[*][color=#888888][img]https://...[/img] and [gif]https://...[/gif] — same rule[/color]
+[*][color=#888888][ytube]…[/ytube] — paste a YouTube link or an 11-character video ID[/color]
 [/list]
 [/quote]
 

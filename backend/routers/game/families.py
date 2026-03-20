@@ -600,14 +600,27 @@ async def _batch_resolve_family_ids(user_ids: list) -> dict:
     return out
 
 
+def _uid_str(uid) -> Optional[str]:
+    """Normalize user ids for Mongo lookups (family_members.user_id vs users.id type mismatches)."""
+    if uid is None:
+        return None
+    s = str(uid).strip()
+    return s or None
+
+
 async def _users_map_by_ids(user_ids: list, projection: Optional[dict] = None) -> dict:
-    """Return dict id -> user doc for non-empty unique ids."""
+    """Return dict id -> user doc for non-empty unique ids (keys are normalized string ids)."""
     if not user_ids:
         return {}
-    uids = list(dict.fromkeys([u for u in user_ids if u]))
+    uids = list(dict.fromkeys([s for u in user_ids if (s := _uid_str(u))]))
     proj = projection or {"_id": 0, "username": 1, "rank": 1, "is_dead": 1, "dead_at": 1}
     docs = await db.users.find({"id": {"$in": uids}}, proj).to_list(200)
-    return {d["id"]: d for d in docs if d.get("id")}
+    out = {}
+    for d in docs:
+        k = _uid_str(d.get("id"))
+        if k:
+            out[k] = d
+    return out
 
 
 async def family_qualifies_for_state_head(family_id: str) -> bool:
@@ -795,7 +808,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     members = []
     fallen = []
     for m in members_docs:
-        u = users_by_id.get(m["user_id"])
+        u = users_by_id.get(_uid_str(m["user_id"]))
         rank_name = "—"
         if u:
             rid = u.get("rank", 1)
@@ -894,7 +907,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     if returning_raw:
         rb_map = await _users_map_by_ids([r["user_id"] for r in returning_raw], {"_id": 0, "id": 1, "username": 1})
         for r in returning_raw:
-            u = rb_map.get(r["user_id"])
+            u = rb_map.get(_uid_str(r["user_id"]))
             returning_members_with_balance.append({
                 **r,
                 "username": (u or {}).get("username", "?"),
@@ -908,7 +921,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         ja_uids = [a["user_id"] for a in join_apps if a.get("user_id")]
         ja_users = await _users_map_by_ids(ja_uids, {"_id": 0, "id": 1, "username": 1, "rank": 1})
         for a in join_apps:
-            u = ja_users.get(a["user_id"])
+            u = ja_users.get(_uid_str(a["user_id"]))
             if u:
                 a["username"] = u.get("username") or a.get("username") or "?"
                 a["rank"] = u.get("rank", 1)
@@ -971,15 +984,22 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
         raise HTTPException(status_code=404, detail="Family not found")
     members_docs = await db.family_members.find({"family_id": fam["id"]}, {"_id": 0}).to_list(100)
     lookup_uids = [m["user_id"] for m in members_docs if m.get("user_id")]
+    bid = _uid_str(fam.get("boss_id"))
+    if bid and all(_uid_str(x) != bid for x in lookup_uids):
+        lookup_uids.append(bid)
     users_by_id = await _users_map_by_ids(lookup_uids)
     members = []
     fallen = []
     for m in members_docs:
-        u = users_by_id.get(m["user_id"])
+        u = users_by_id.get(_uid_str(m["user_id"]))
         rank_name = "—"
         if u and RANKS:
             rank_name = next((x["name"] for x in RANKS if x.get("id") == u.get("rank", 1)), str(u.get("rank", 1)))
-        entry = {"user_id": m["user_id"], "username": (u or {}).get("username", "?"), "role": m["role"], "rank_name": rank_name}
+        role_norm = str(m.get("role", "")).strip().lower() or "associate"
+        if role_norm == "don":
+            role_norm = "boss"
+        uname = ((u.get("username") if u else None) or "").strip() or "?"
+        entry = {"user_id": m["user_id"], "username": uname, "role": role_norm, "rank_name": rank_name}
         if (u or {}).get("is_dead"):
             entry["dead_at"] = (u or {}).get("dead_at")
             fallen.append(entry)
@@ -1182,7 +1202,7 @@ async def families_join_applications_list(current_user: dict = Depends(get_curre
     app_uids = [a["user_id"] for a in apps if a.get("user_id")]
     app_users = await _users_map_by_ids(app_uids, {"_id": 0, "id": 1, "username": 1, "rank": 1})
     for a in apps:
-        u = app_users.get(a["user_id"])
+        u = app_users.get(_uid_str(a["user_id"]))
         if u:
             a["username"] = u.get("username") or a.get("username") or "?"
             a["rank"] = u.get("rank", 1)
@@ -2626,7 +2646,8 @@ async def state_takeover_accept(current_user: dict = Depends(get_current_user)):
     member = await db.family_members.find_one({"user_id": current_user["id"]}, {"_id": 0, "family_id": 1, "role": 1})
     if not member:
         raise HTTPException(status_code=400, detail="You are not in a family")
-    if member.get("role") not in ("don", "underboss"):
+    _mr = str(member.get("role") or "").strip().lower()
+    if _mr not in ("boss", "don", "underboss"):
         raise HTTPException(status_code=403, detail="Only the Don or Underboss can accept state takeovers")
 
     family_id = member["family_id"]
@@ -2667,7 +2688,8 @@ async def state_takeover_reject(current_user: dict = Depends(get_current_user)):
     member = await db.family_members.find_one({"user_id": current_user["id"]}, {"_id": 0, "family_id": 1, "role": 1})
     if not member:
         raise HTTPException(status_code=400, detail="You are not in a family")
-    if member.get("role") not in ("don", "underboss"):
+    _mr = str(member.get("role") or "").strip().lower()
+    if _mr not in ("boss", "don", "underboss"):
         raise HTTPException(status_code=403, detail="Only the Don or Underboss can reject state takeovers")
 
     family_id = member["family_id"]

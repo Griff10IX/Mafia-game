@@ -20,7 +20,11 @@ const ROLE_CONFIG = {
   soldier:     { label: 'Soldier',     title: 'Made Man',           icon: '🔫', color: 'text-zinc-300',    dotColor: '#71717a', rank: 4 },
   associate:   { label: 'Associate',   title: 'Crew Member',        icon: '👤', color: 'text-zinc-400',    dotColor: '#52525b', rank: 5 },
 };
-const getRoleConfig = (role) => ROLE_CONFIG[role?.toLowerCase()] || ROLE_CONFIG.associate;
+const getRoleConfig = (role) => {
+  const raw = (role || '').toString().toLowerCase();
+  const k = raw === 'don' ? 'boss' : raw;
+  return ROLE_CONFIG[k] || ROLE_CONFIG.associate;
+};
 
 function formatTimeLeft(isoUntil) {
   if (!isoUntil) return null;
@@ -281,7 +285,8 @@ export default function FamilyProfilePage() {
   };
 
   const sorted      = [...members].sort((a, b) => (getRoleConfig(a.role).rank ?? 5) - (getRoleConfig(b.role).rank ?? 5));
-  const boss        = sorted.find(m => m.role === 'boss');
+  const isBossRole  = (r) => ['boss', 'don'].includes((r || '').toString().toLowerCase());
+  const boss        = sorted.find(m => isBossRole(m.role));
   const highCommand = sorted.filter(m => ['underboss', 'consigliere'].includes(m.role));
   const officers    = sorted.filter(m => m.role === 'capo');
   const rankAndFile = sorted.filter(m => ['soldier', 'associate'].includes(m.role));
