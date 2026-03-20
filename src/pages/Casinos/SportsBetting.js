@@ -153,7 +153,7 @@ export default function SportsBetting() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedOption, setSelectedOption] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [templates, setTemplates] = useState({ categories: [], templates: {} });
+  const [templates, setTemplates] = useState({ categories: [], templates: {}, odds_api_configured: null });
   const [adminCategory, setAdminCategory] = useState('Football');
   const [addingTemplateId, setAddingTemplateId] = useState(null);
   const [checkingEvents, setCheckingEvents] = useState(false);
@@ -202,7 +202,13 @@ export default function SportsBetting() {
         if (res.data?.is_admin) {
           setIsAdmin(true);
           const tRes = await api.get('/admin/sports-betting/templates');
-          if (!cancelled) setTemplates({ categories: tRes.data?.categories ?? [], templates: tRes.data?.templates ?? {} });
+          if (!cancelled) {
+            setTemplates({
+              categories: tRes.data?.categories ?? [],
+              templates: tRes.data?.templates ?? {},
+              odds_api_configured: tRes.data?.odds_api_configured ?? null,
+            });
+          }
         }
       } catch { if (!cancelled) setIsAdmin(false); }
     })();
@@ -229,7 +235,11 @@ export default function SportsBetting() {
     setCheckingEvents(true);
     try {
       const res = await api.post('/admin/sports-betting/refresh');
-      setTemplates({ categories: res.data?.categories ?? [], templates: res.data?.templates ?? {} });
+      setTemplates({
+        categories: res.data?.categories ?? [],
+        templates: res.data?.templates ?? {},
+        odds_api_configured: res.data?.odds_api_configured ?? null,
+      });
       toast.success('Events loaded');
     } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setCheckingEvents(false); }
@@ -306,6 +316,10 @@ export default function SportsBetting() {
 
   const openBetsTotalStake = (myBets.open || []).reduce((s, b) => s + Number(b.stake || 0), 0);
   const openBetsPotentialReturn = (myBets.open || []).reduce((s, b) => s + Math.floor(Number(b.stake || 0) * Number(b.odds || 1)), 0);
+
+  const templateMap = templates.templates || {};
+  const templateTotal = (templates.categories || []).reduce((s, c) => s + (templateMap[c]?.length || 0), 0);
+  const templatesInAdminTab = templateMap[adminCategory]?.length || 0;
 
   if (loading) {
     return (
@@ -400,16 +414,32 @@ export default function SportsBetting() {
                 <button onClick={checkForEvents} disabled={checkingEvents} className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50">
                   {checkingEvents ? 'Checking...' : 'Check for events'}
                 </button>
-                {(() => { const total = Object.values(templates.templates || {}).reduce((s, arr) => s + (arr?.length || 0), 0); return total > 0 ? <span className="text-[10px] text-zinc-500 font-heading">{total} loaded</span> : null; })()}
+                {templateTotal > 0 ? (
+                  <span
+                    className="text-[10px] text-zinc-500 font-heading"
+                    title="Total is every sport combined. Each tab only lists that sport."
+                  >
+                    {templateTotal} templates total · {templatesInAdminTab} in {adminCategory}
+                  </span>
+                ) : null}
               </div>
+
+              {templates.odds_api_configured === false ? (
+                <p className="text-[9px] text-amber-500/90 font-heading">
+                  THE_ODDS_API_KEY is not set on the API server — Football/UFC/Boxing use fallbacks; set the key and restart, then Check for events again.
+                </p>
+              ) : null}
 
               {/* Category tabs */}
               <div className="flex flex-wrap gap-1">
-                {(templates.categories || []).map((c) => (
-                  <button key={c} onClick={() => setAdminCategory(c)} className={`px-2 py-1 rounded text-[10px] font-heading font-bold transition-all ${adminCategory === c ? 'bg-primary/20 text-primary border border-primary/40' : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/30 hover:text-zinc-300'}`}>
-                    {c}
-                  </button>
-                ))}
+                {(templates.categories || []).map((c) => {
+                  const n = templateMap[c]?.length || 0;
+                  return (
+                    <button key={c} onClick={() => setAdminCategory(c)} className={`px-2 py-1 rounded text-[10px] font-heading font-bold transition-all ${adminCategory === c ? 'bg-primary/20 text-primary border border-primary/40' : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/30 hover:text-zinc-300'}`}>
+                      {c} ({n})
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Template list */}
