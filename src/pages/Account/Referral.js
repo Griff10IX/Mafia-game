@@ -14,11 +14,24 @@ function formatMoney(n) {
   return `$${Math.round(Number(n)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
-const StatCard = ({ label, value, valueColor = 'text-foreground', icon: Icon }) => (
+/** Fits tight stat tiles (matches Layout sidebar compact money). */
+function formatMoneyCompact(n) {
+  const num = Number(n ?? 0);
+  if (Number.isNaN(num)) return '$0';
+  const abs = Math.abs(num);
+  const sign = num < 0 ? '-' : '';
+  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(1).replace(/\.0$/, '')}T`;
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(1).replace(/\.0$/, '')}B`;
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(1).replace(/\.0$/, '')}K`;
+  return `$${Math.trunc(num).toLocaleString()}`;
+}
+
+const StatCard = ({ label, value, title, valueColor = 'text-foreground', icon: Icon }) => (
   <div className={`${styles.surface} rounded border p-2 sm:p-3 text-center min-w-0 w-full overflow-hidden`}>
     <div
-      className={`text-sm sm:text-base md:text-lg font-heading font-bold ${valueColor} leading-snug tabular-nums max-w-full [overflow-wrap:anywhere]`}
-      title={typeof value === 'string' ? value : undefined}
+      className={`text-sm sm:text-base md:text-lg font-heading font-bold ${valueColor} leading-snug tabular-nums w-full min-w-0 max-w-full whitespace-nowrap overflow-hidden text-ellipsis`}
+      title={title !== undefined && title !== '' ? title : typeof value === 'string' ? value : undefined}
     >
       {value}
     </div>
@@ -287,7 +300,7 @@ export default function Referral() {
           <div className="p-2.5 sm:p-3 space-y-3">
             <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>Lifetime totals from codes you have redeemed</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-              <StatCard label="Cash" value={formatMoney(data?.redeem_stats?.total_money || 0)} valueColor="text-emerald-400" icon={DollarSign} />
+              <StatCard label="Cash" value={formatMoneyCompact(data?.redeem_stats?.total_money || 0)} title={formatMoney(data?.redeem_stats?.total_money || 0)} valueColor="text-emerald-400" icon={DollarSign} />
               <StatCard label="Points" value={Number(data?.redeem_stats?.total_points || 0).toLocaleString()} valueColor="text-primary" icon={BarChart3} />
               <StatCard label="Respect" value={Number(data?.redeem_stats?.total_respect_points || 0).toLocaleString()} valueColor="text-amber-400" icon={UserPlus} />
               <StatCard label="Loot pieces" value={Number(data?.redeem_stats?.total_loot_box_pieces || 0).toLocaleString()} valueColor="text-foreground" icon={Gift} />

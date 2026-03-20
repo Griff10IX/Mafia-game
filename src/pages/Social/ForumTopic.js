@@ -874,17 +874,27 @@ export default function ForumTopic() {
           <div className="p-4 text-center text-xs text-mutedForeground">No comments yet. Be the first!</div>
         ) : (
           <div className="space-y-1.5">
-            {comments.map((c, idx) => (
+            {comments.map((c, idx) => {
+              const isGameIdeasLog = c.game_ideas_log === true;
+              return (
               <div
                 key={c.id}
-                className={`${styles.panel} border border-zinc-800/60 bg-zinc-900/70 rounded-md p-3 sm:p-3.5`}
+                className={`${styles.panel} border rounded-md p-3 sm:p-3.5 ${
+                  isGameIdeasLog
+                    ? 'border-amber-500/25 bg-amber-950/15'
+                    : 'border-zinc-800/60 bg-zinc-900/70'
+                }`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2 text-[10px] text-mutedForeground">
+                      {isGameIdeasLog ? (
+                        <span className="text-amber-400/90 font-bold font-heading">System</span>
+                      ) : (
                       <Link to={`/profile/${encodeURIComponent(c.author_username)}`} className="text-foreground font-bold hover:text-primary hover:underline" style={c.author_online_color ? { color: c.author_online_color } : undefined}>
                         {c.author_username}
                       </Link>
+                      )}
                       <span className="text-zinc-600">#{idx + 1}</span>
                     </div>
                     <div className="mt-0.5 text-[9px] text-zinc-500 font-heading">
@@ -910,16 +920,21 @@ export default function ForumTopic() {
                   const parent = comments.find((p) => p.id === c.reply_to_comment_id);
                   if (!parent) return null;
                   const parentIndex = comments.findIndex((p) => p.id === parent.id);
+                  const parentIsLog = parent.game_ideas_log === true;
                   return (
                     <div className="mt-2 mb-2 px-2.5 py-2 rounded-md bg-zinc-900/70 border border-zinc-800/80">
                       <div className="flex items-center gap-2 text-[9px] text-zinc-500 font-heading mb-1">
                         <span className="uppercase tracking-wider">Replying to</span>
+                        {parentIsLog ? (
+                          <span className="text-amber-400/90 font-bold">System</span>
+                        ) : (
                         <Link
                           to={`/profile/${encodeURIComponent(parent.author_username)}`}
                           className="text-foreground font-bold hover:text-primary hover:underline"
                         >
                           {parent.author_username}
                         </Link>
+                        )}
                         {parentIndex >= 0 && (
                           <span className="text-zinc-600">#{parentIndex + 1}</span>
                         )}
@@ -949,8 +964,10 @@ export default function ForumTopic() {
                   />
                 )}
                 
-                {/* Like + Dislike + Reply */}
+                {/* Like + Dislike + Reply (hidden for automated Game Ideas season logs) */}
                 <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  {!isGameIdeasLog && (
+                  <>
                   <button
                     onClick={() => likeComment(c.id)}
                     disabled={likingId === c.id || dislikingId === c.id}
@@ -983,6 +1000,8 @@ export default function ForumTopic() {
                   >
                     <MessageCircle size={10} /> Reply
                   </button>
+                  </>
+                  )}
                   {/* Staff: delete comment */}
                   {(isAdmin || isModerator || isHdo) && (
                     <button
@@ -1009,7 +1028,7 @@ export default function ForumTopic() {
                       </button>
                     ) : null
                   )}
-                  {topic?.game_idea_season_id && activeGameIdeaSeason?.status === 'primary' && user && c.author_id === user.id && (
+                  {!isGameIdeasLog && topic?.game_idea_season_id && activeGameIdeaSeason?.status === 'primary' && user && c.author_id === user.id && (
                     gameIdeaMyEntryCommentId === c.id ? (
                       <span className="text-[10px] font-heading font-bold text-emerald-400 px-2 py-1">Registered idea</span>
                     ) : !gameIdeaMyEntryCommentId ? (
@@ -1025,7 +1044,8 @@ export default function ForumTopic() {
                   )}
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>

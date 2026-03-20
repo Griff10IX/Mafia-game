@@ -1,7 +1,7 @@
 # Game Ideas: sticky hub topic, forum comments as submissions, primary/final voting, admin-configured rewards.
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-
+import logging
 import os
 import sys
 import uuid
@@ -12,6 +12,35 @@ from pydantic import BaseModel, field_validator
 
 from server import db, get_current_user, _is_admin, send_notification, send_notification_to_all
 from utils.text import strip_emoji
+
+logger = logging.getLogger(__name__)
+
+
+async def _post_game_ideas_hub_log(hub_topic_id: Optional[str], content: str) -> None:
+    """Append a read-only audit line on the season hub topic (bypasses lock; no user notifications)."""
+    tid = (hub_topic_id or "").strip()
+    text = (content or "").strip()
+    if not tid or not text:
+        return
+    try:
+        comment_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        await db.forum_comments.insert_one(
+            {
+                "id": comment_id,
+                "topic_id": tid,
+                "author_id": "",
+                "author_username": "System",
+                "content": text,
+                "created_at": now,
+                "likes": 0,
+                "dislikes": 0,
+                "game_ideas_log": True,
+            }
+        )
+        await db.forum_topics.update_one({"id": tid}, {"$set": {"updated_at": now}})
+    except Exception as exc:
+        logger.warning("game_ideas hub log comment failed: %s", exc)
 
 
 async def _is_forum_muted(user_id: str) -> bool:
@@ -236,6 +265,25 @@ def register(router):
                     "system",
                     category="game_ideas",
                 )
+        hub_id = season.get("hub_topic_id")
+        if hub_id:
+            fl_bits = []
+            for e in ranked[:n]:
+                un = (e.get("author_username") or "").strip()
+                fl_bits.append(f"@{un}" if un else "?")
+            reward_sentence = ""
+            if fm > 0 or fp > 0:
+                rp: List[str] = []
+                if fm:
+                    rp.append(f"${fm:,} cash")
+                if fp:
+                    rp.append(f"{fp:,} points")
+                reward_sentence = f" Each finalist received {' and '.join(rp)}."
+            await _post_game_ideas_hub_log(
+                hub_id,
+                f'[b]Game Ideas — season log[/b] "{season_title}": Primary voting ended — final round is open. '
+                f"Finalists: {', '.join(fl_bits)}.{reward_sentence}",
+            )
         try:
             await send_notification_to_all(
                 f'Game Ideas: "{season_title}" — final vote open',
@@ -279,6 +327,28 @@ def register(router):
             {"id": season_id},
             {"$set": {"status": "closed", "final_winner_entry_ids": winner_ids, "updated_at": now}},
         )
+        hub_cf = season.get("hub_topic_id")
+        if hub_cf and winner_ids:
+            season_title_cf = strip_emoji((season.get("title") or "Game Ideas").strip())
+            win_rows = await db.game_idea_entries.find(
+                {"id": {"$in": winner_ids}},
+                {"_id": 0, "id": 1, "author_username": 1},
+            ).to_list(50)
+            by_id_cf = {x["id"]: x for x in win_rows}
+            win_bits = []
+            for wid in winner_ids:
+                row = by_id_cf.get(wid) or {}
+                un = (row.get("author_username") or "").strip()
+                vc = int(sub.get(wid, 0) or 0)
+                label = f"@{un}" if un else "?"
+                win_bits.append(f"{label} ({vc} vote{'s' if vc != 1 else ''})")
+            tie_cf = len(winner_ids) > 1
+            await _post_game_ideas_hub_log(
+                hub_cf,
+                f'[b]Game Ideas — season log[/b] "{season_title_cf}": Final voting closed. '
+                f'Winner{"s" if tie_cf else ""}: {", ".join(win_bits)}. '
+                "Staff may grant implementation rewards when the idea ships.",
+            )
         season = await db.game_idea_seasons.find_one({"id": season_id}, {"_id": 0})
         return {"message": "Final vote closed", "winner_entry_ids": winner_ids, "season": _strip_mongo(season)}
 
@@ -331,6 +401,15 @@ def register(router):
             "system",
             category="game_ideas",
         )
+        hub_imp = season.get("hub_topic_id")
+        if hub_imp:
+            un_imp = (entry.get("author_username") or "").strip()
+            payee = f"@{un_imp}" if un_imp else "the winning author"
+            await _post_game_ideas_hub_log(
+                hub_imp,
+                f'[b]Game Ideas — season log[/b] "{strip_emoji((season.get("title") or "Game Ideas").strip())}": '
+                f"Implementation reward paid to {payee}: {' and '.join(parts)}.",
+            )
         return {"message": "Implementation reward granted", "entry_id": eid}
 
     @router.get("/admin/game-ideas/seasons/{season_id}/implementation-options")
