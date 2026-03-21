@@ -272,8 +272,9 @@ def _parse_odds_event(event: dict, category: str, three_way: bool, sport_key: st
                 options = options[:2]
         else:
             return None
-    elif len(options) != 2:
-        return None
+    else:
+        if len(options) != 2:
+            return None
     name = "%s vs %s" % (home, away)
     ct_raw = event.get("commence_time")
     if ct_raw is not None:
@@ -363,7 +364,8 @@ async def _fetch_odds_api_soccer() -> list:
         for sport_key, events in zip(SOCCER_LEAGUES, raw_lists):
             if not isinstance(events, list):
                 continue
-            for ev in events[:35]:
+            # Cap per league to control payload; parse fix above allows most fixtures through
+            for ev in events[:80]:
                 eid = (ev.get("id") or "").strip()
                 if not eid:
                     continue
@@ -900,6 +902,10 @@ async def _refresh_sports_live_cache(force: bool = False):
                 ],
             })
     _sports_live_cache["f1"] = f1_templates
+    try:
+        await _persist_sports_templates(_get_all_sports_templates())
+    except Exception as ex:
+        logger.warning("sports_betting_templates persist failed: %s", ex)
 
 
 def _get_all_sports_templates() -> list:
@@ -909,6 +915,104 @@ def _get_all_sports_templates() -> list:
         + (_sports_live_cache.get("boxing") or [])
         + (_sports_live_cache.get("f1") or [])
     )
+
+
+def _template_to_stored_doc(t: dict) -> dict:
+    """Shape for sports_betting_templates collection (upsert by id)."""
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": t["id"],
+        "name": t["name"],
+        "category": t["category"],
+        "options": t.get("options") or [],
+        "saved_at": now,
+    }
+    for k in ("start_time", "commence_time", "external_event_id", "external_sport_key"):
+        v = t.get(k)
+        if v is not None and v != "":
+            doc[k] = v
+    return doc
+
+
+async def _persist_sports_templates(templates: list) -> int:
+    """Upsert templates after an API refresh so admins can list/add without re-hitting the API."""
+    n = 0
+    for t in templates:
+        tid = (t.get("id") or "").strip()
+        if not tid or not t.get("name") or not t.get("category"):
+            continue
+        doc = _template_to_stored_doc(t)
+        await db.sports_betting_templates.update_one({"id": tid}, {"$set": doc}, upsert=True)
+        n += 1
+    return n
+
+
+async def _load_sports_templates_from_db() -> list:
+    """Templates saved from previous refreshes. Drops entries whose start_time is long past."""
+    cursor = db.sports_betting_templates.find({}, {"_id": 0}).sort("saved_at", -1).limit(5000)
+    docs = await cursor.to_list(5000)
+    now = datetime.now(timezone.utc)
+    out: list = []
+    for d in docs:
+        st = d.get("start_time")
+        if st:
+            try:
+                dt = datetime.fromisoformat(str(st).replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                if dt < now - timedelta(hours=48):
+                    continue
+            except Exception:
+                pass
+        t = {k: v for k, v in d.items() if k != "saved_at"}
+        if t.get("id") and t.get("name") and t.get("category"):
+            out.append(t)
+    return out
+
+
+async def _merged_sports_templates_for_admin() -> list:
+    """In-memory snapshot (last refresh) wins on id; DB fills gaps so the panel works without API calls."""
+    mem = _get_all_sports_templates()
+    try:
+        db_list = await _load_sports_templates_from_db()
+    except Exception as ex:
+        logger.warning("sports_betting_templates read failed: %s", ex)
+        db_list = []
+    by_id: dict = {}
+    for t in db_list:
+        tid = t.get("id")
+        if tid:
+            by_id[tid] = dict(t)
+    for t in mem:
+        tid = t.get("id")
+        if tid:
+            by_id[tid] = dict(t)
+    return list(by_id.values())
+
+
+def _admin_templates_json_from_list(templates: list, *, template_source: str) -> dict:
+    categories = ["Football", "UFC", "Boxing", "Formula 1"]
+    by_category = {c: [] for c in categories}
+    for t in templates:
+        cat = t.get("category")
+        if not cat:
+            continue
+        by_category.setdefault(cat, []).append(_sports_template_to_response(t))
+    return {
+        "categories": categories,
+        "templates": by_category,
+        "odds_api_configured": bool(_odds_api_key()),
+        "templates_total": len(templates),
+        "template_source": template_source,
+    }
+
+
+async def _admin_sports_templates_payload(*, templates_persisted: Optional[int] = None) -> dict:
+    merged = await _merged_sports_templates_for_admin()
+    payload = _admin_templates_json_from_list(merged, template_source="merged")
+    if templates_persisted is not None:
+        payload["templates_persisted"] = templates_persisted
+    return payload
 
 
 def _sports_template_to_response(t):
@@ -1135,29 +1239,31 @@ async def sports_betting_recent_results(current_user: dict = Depends(get_current
 async def admin_sports_templates(current_user: dict = Depends(get_current_user_verified)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
-    categories = ["Football", "UFC", "Boxing", "Formula 1"]
-    by_category = {c: [] for c in categories}
-    for t in _get_all_sports_templates():
-        by_category.setdefault(t["category"], []).append(_sports_template_to_response(t))
-    return {"categories": categories, "templates": by_category, "odds_api_configured": bool(_odds_api_key())}
+    return await _admin_sports_templates_payload()
 
 
 async def admin_sports_refresh(current_user: dict = Depends(get_current_user_verified)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     await _refresh_sports_live_cache(force=True)
-    categories = ["Football", "UFC", "Boxing", "Formula 1"]
-    by_category = {c: [] for c in categories}
-    for t in _get_all_sports_templates():
-        by_category.setdefault(t["category"], []).append(_sports_template_to_response(t))
-    return {"categories": categories, "templates": by_category, "odds_api_configured": bool(_odds_api_key())}
+    n = len(_get_all_sports_templates())
+    return await _admin_sports_templates_payload(templates_persisted=n)
+
+
+async def admin_sports_templates_load_db(current_user: dict = Depends(get_current_user_verified)):
+    """Admin: list templates from MongoDB only (no Odds API / no in-memory cache). Uses no API quota."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    db_list = await _load_sports_templates_from_db()
+    return _admin_templates_json_from_list(db_list, template_source="database")
 
 
 async def admin_sports_add_event(request: AdminAddSportsEventRequest, current_user: dict = Depends(get_current_user_verified)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     template_id = (request.template_id or "").strip()
-    template = next((t for t in _get_all_sports_templates() if t["id"] == template_id), None)
+    merged = await _merged_sports_templates_for_admin()
+    template = next((t for t in merged if t.get("id") == template_id), None)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     now = datetime.now(timezone.utc)
@@ -1323,6 +1429,7 @@ def register(router):
     router.add_api_route("/sports-betting/stats", sports_betting_stats, methods=["GET"])
     router.add_api_route("/sports-betting/recent-results", sports_betting_recent_results, methods=["GET"])
     router.add_api_route("/admin/sports-betting/templates", admin_sports_templates, methods=["GET"])
+    router.add_api_route("/admin/sports-betting/templates/load-db", admin_sports_templates_load_db, methods=["POST"])
     router.add_api_route("/admin/sports-betting/refresh", admin_sports_refresh, methods=["POST"])
     router.add_api_route("/admin/sports-betting/events", admin_sports_add_event, methods=["POST"])
     router.add_api_route("/admin/sports-betting/custom-event", admin_sports_add_custom_event, methods=["POST"])

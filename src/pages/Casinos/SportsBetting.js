@@ -161,7 +161,8 @@ export default function SportsBetting() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedOption, setSelectedOption] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [templates, setTemplates] = useState({ categories: [], templates: {}, odds_api_configured: null });
+  const [templates, setTemplates] = useState({ categories: [], templates: {}, odds_api_configured: null, templates_total: null, template_source: null });
+  const [loadingDbTemplates, setLoadingDbTemplates] = useState(false);
   const [adminCategory, setAdminCategory] = useState('Football');
   const [addingTemplateId, setAddingTemplateId] = useState(null);
   const [checkingEvents, setCheckingEvents] = useState(false);
@@ -215,6 +216,8 @@ export default function SportsBetting() {
               categories: tRes.data?.categories ?? [],
               templates: tRes.data?.templates ?? {},
               odds_api_configured: tRes.data?.odds_api_configured ?? null,
+              templates_total: tRes.data?.templates_total ?? null,
+              template_source: tRes.data?.template_source ?? null,
             });
           }
         }
@@ -247,10 +250,30 @@ export default function SportsBetting() {
         categories: res.data?.categories ?? [],
         templates: res.data?.templates ?? {},
         odds_api_configured: res.data?.odds_api_configured ?? null,
+        templates_total: res.data?.templates_total ?? null,
+        template_source: res.data?.template_source ?? 'merged',
       });
-      toast.success('Events loaded');
+      const n = res.data?.templates_persisted;
+      toast.success(typeof n === 'number' ? `Events loaded — ${n} saved to template library` : 'Events loaded');
     } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setCheckingEvents(false); }
+  };
+
+  const loadTemplatesFromDb = async () => {
+    setLoadingDbTemplates(true);
+    try {
+      const res = await api.post('/admin/sports-betting/templates/load-db');
+      setTemplates({
+        categories: res.data?.categories ?? [],
+        templates: res.data?.templates ?? {},
+        odds_api_configured: res.data?.odds_api_configured ?? null,
+        templates_total: res.data?.templates_total ?? null,
+        template_source: res.data?.template_source ?? 'database',
+      });
+      const n = res.data?.templates_total;
+      toast.success(typeof n === 'number' ? `Loaded ${n} saved template(s) from database` : 'Saved templates loaded');
+    } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
+    finally { setLoadingDbTemplates(false); }
   };
 
   const runSettle = async () => {
@@ -419,18 +442,34 @@ export default function SportsBetting() {
             </div>
             <div className="p-3 space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <button onClick={checkForEvents} disabled={checkingEvents} className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50">
+                <button onClick={checkForEvents} disabled={checkingEvents || loadingDbTemplates} className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50">
                   {checkingEvents ? 'Checking...' : 'Check for events'}
+                </button>
+                <button
+                  type="button"
+                  onClick={loadTemplatesFromDb}
+                  disabled={loadingDbTemplates || checkingEvents}
+                  className="bg-zinc-800/80 text-zinc-200 rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-zinc-600/50 hover:bg-zinc-700/80 hover:border-zinc-500/50 disabled:opacity-50"
+                  title="No API quota — lists templates last saved from Check for events"
+                >
+                  {loadingDbTemplates ? 'Loading...' : 'Load saved (DB)'}
                 </button>
                 {templateTotal > 0 ? (
                   <span
                     className="text-[10px] text-zinc-500 font-heading"
-                    title="Total is every sport combined. Each tab only lists that sport."
+                    title={templates.template_source === 'database' ? 'Showing database snapshot only.' : 'Merged: last API refresh + database.'}
                   >
                     {templateTotal} templates total · {templatesInAdminTab} in {adminCategory}
+                    {templates.template_source === 'database' ? (
+                      <span className="text-zinc-600"> · DB</span>
+                    ) : null}
                   </span>
                 ) : null}
               </div>
+              <p className="text-[9px] text-zinc-600 font-heading leading-snug">
+                <span className="font-bold text-zinc-500">Check for events</span> — fetch from the API, save to DB, show list (uses quota).{' '}
+                <span className="font-bold text-zinc-500">Load saved (DB)</span> — reload the list from the database only (no API).
+              </p>
 
               {templates.odds_api_configured === false ? (
                 <p className="text-[9px] text-amber-500/90 font-heading">
