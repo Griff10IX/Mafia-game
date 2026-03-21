@@ -718,7 +718,7 @@ function crossedStartFinishLineForward(p0raw, p1raw, sfLine) {
 }
 
 function buildSpeedProfile(track) {
-  const cacheKey = `${track.id}:${track.sfLine ?? 0}:sfv6`;
+  const cacheKey = `${track.id}:${track.sfLine ?? 0}:sfv7`;
   if (_profileCache.has(cacheKey)) return _profileCache.get(cacheKey);
   const N = PROFILE_N, raw = new Float32Array(N);
 
@@ -780,6 +780,39 @@ function buildSpeedProfile(track) {
     profile[i] = sfZone[i]
       ? Math.max(0.97, Math.min(1.0, raw[i]))
       : Math.max(0.54, Math.min(1.0, raw[i]));
+  }
+
+  // ── Pass 4: gradient blend at SF zone edges ──
+  // Without this, speed can cliff from 1.0 (SF zone) to ~0.6 (corner) in one cell.
+  // Blend over BLEND_STEPS at each boundary so the transition is smooth.
+  const BLEND_STEPS = 10;
+  for (let i = 0; i < N; i++) {
+    if (!sfZone[i]) continue;
+    const ni = (i + 1) % N;
+    if (sfZone[ni]) continue;
+    // i is the last SF cell; ni is the first non-SF cell (exit edge)
+    const exitVal = profile[ni];
+    for (let k = 0; k < BLEND_STEPS; k++) {
+      const ci = (ni + k) % N;
+      if (sfZone[ci]) break;
+      const t = (k + 1) / (BLEND_STEPS + 1);
+      const blended = 1.0 * (1 - t) + exitVal * t;
+      profile[ci] = Math.max(profile[ci], blended);
+    }
+  }
+  for (let i = 0; i < N; i++) {
+    if (!sfZone[i]) continue;
+    const pi = (i - 1 + N) % N;
+    if (sfZone[pi]) continue;
+    // i is the first SF cell; pi is the last non-SF cell (entry edge)
+    const entryVal = profile[pi];
+    for (let k = 0; k < BLEND_STEPS; k++) {
+      const ci = (pi - k + N) % N;
+      if (sfZone[ci]) break;
+      const t = (k + 1) / (BLEND_STEPS + 1);
+      const blended = 1.0 * (1 - t) + entryVal * t;
+      profile[ci] = Math.max(profile[ci], blended);
+    }
   }
 
   _profileCache.set(cacheKey, profile);
@@ -1816,9 +1849,10 @@ export default function CircuitRaceView({
     const wd=WEATHER_DEFS[cond]||WEATHER_DEFS.clear, ww=wd.wearMult||1;
     const pPs=pitDur(playerPitLevel,false), pPe=pitDur(playerPitLevel,true);
     const total=8, pRel=Math.max(0.7,1-playerPitLevel*0.05);
+    const sfL=track.sfLine??0;
     const racers=[{
       id:"player",name:"You",isPlayer:true,color:CAR_COLORS[0],carName:playerCarName,
-      trackPos:total*0.012,lapCount:1,totalLapsDone:0,
+      trackPos:((sfL+total*0.012)%1),lapCount:1,totalLapsDone:0,
       currentTyre:pTyre,tyreWear:100,pitStops:0,inPit:false,pitEndAt:0,
       pitDurationSeconds:pPs,pitDurationEmergencySeconds:pPe,
       baseSpeed:1.0,baseGrip:0.85,reliabilityWearMult:pRel,
@@ -1826,14 +1860,14 @@ export default function CircuitRaceView({
       finished:false,finishOrder:0,visible:true,position:1,carNumber:1,lapTimes:[],
       slideOffUntil:0,pitExitUntil:null,engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],
       fuelLoad:100,currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
-      inSlipstream:false,tyreBlister:false,strategyType:"normal",overtakingLevel:0,overtakeBoostUntil:0,currentSpeedMph:null,
+      inSlipstream:false,tyreBlister:false,strategyType:"normal",overtakingLevel:0,overtakeBoostUntil:0,currentSpeedMph:null,_justCrossedFrames:0,
     }];
     for (let i=0; i<7; i++) {
       const st=NPC_STATS[i%NPC_STATS.length], t=NPC_TYRES[i] in TYRE_DEFS?NPC_TYRES[i]:"medium";
       const ns=rollStrat(), po=Math.floor(Math.random()*3)-1, nr=0.8+Math.random()*0.2;
       racers.push({
         id:`npc_${i}`,name:NPC_NAMES[i],isPlayer:false,color:CAR_COLORS[i+1],carName:NPC_CARS[i%NPC_CARS.length],
-        trackPos:(total-(i+1))*0.012,lapCount:1,totalLapsDone:0,
+        trackPos:((sfL+(total-(i+1))*0.012)%1),lapCount:1,totalLapsDone:0,
         currentTyre:t,tyreWear:100,pitStops:0,inPit:false,pitEndAt:0,
         pitDurationSeconds:2.5+Math.random(),pitDurationEmergencySeconds:3.2+Math.random(),
         baseSpeed:st.bs+(Math.random()-0.5)*0.06, baseGrip:st.bg, reliabilityWearMult:nr,
@@ -1844,7 +1878,7 @@ export default function CircuitRaceView({
         inSlipstream:false,tyreBlister:false,strategyType:ns,
         // FIX B5: overtaking scales with car speed tier
         overtakingLevel:Math.max(0,Math.round((st.bs-0.88)*200)),
-        overtakeBoostUntil:0,currentSpeedMph:null,
+        overtakeBoostUntil:0,currentSpeedMph:null,_justCrossedFrames:0,
       });
     }
     return racers;
@@ -2170,10 +2204,11 @@ export default function CircuitRaceView({
       const pitLvl = p.pit_level!=null?p.pit_level:0;
       // FIX B3: pass entrant object so compound cycling is correct
       const rpStrat = buildReplayStrategy(id, pit_stops, p);
+      const rpSfL = track.sfLine ?? 0;
       return {
         id, name:p.username||p.car_name||`#${i+1}`, isPlayer,
         color:CAR_COLORS[i%CAR_COLORS.length], carName:p.car_name||"",
-        trackPos:(rawOrder.length-i)*0.012, lapCount:1, totalLapsDone:0,
+        trackPos:((rpSfL+(rawOrder.length-i)*0.012)%1), lapCount:1, totalLapsDone:0,
         currentTyre:resolved, tyreWear:Array.isArray(tire_wear_after_lap[id])?(tire_wear_after_lap[id][0]??100):100,
         pitStops:0, inPit:false, pitEndAt:0,
         pitDurationSeconds:pitDur(pitLvl,false), pitDurationEmergencySeconds:pitDur(pitLvl,true),
@@ -2241,10 +2276,11 @@ export default function CircuitRaceView({
       const po=isPlayer?0:Math.floor(Math.random()*3)-1;
       // FIX B5: NPC overtaking scales with car speed tier
       const ovt=isPlayer?(p.overtaking_level||0):Math.max(0,Math.round((bs-0.88)*200));
+      const liveSfL=track.sfLine??0;
       return{
         id,name:p.username||p.car_name||`#${i+1}`,isPlayer,
         color:CAR_COLORS[i%CAR_COLORS.length],carName:p.car_name||"",
-        trackPos:(order.length-i)*0.012,lapCount:1,totalLapsDone:0,
+        trackPos:((liveSfL+(order.length-i)*0.012)%1),lapCount:1,totalLapsDone:0,
         currentTyre:resolved,tyreWear:100,pitStops:0,inPit:false,pitEndAt:0,
         pitDurationSeconds:pitDur(pitLvl,false),pitDurationEmergencySeconds:pitDur(pitLvl,true),
         baseSpeed:bs,baseGrip:p.effective_grip!=null?p.effective_grip:0.85,reliabilityWearMult:relMult,
@@ -2253,7 +2289,7 @@ export default function CircuitRaceView({
         slideOffUntil:0,pitExitUntil:null,engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],
         fuelLoad:100,currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
         inSlipstream:false,tyreBlister:false,strategyType:ns,
-        overtakingLevel:ovt,overtakeBoostUntil:0,currentSpeedMph:null,
+        overtakingLevel:ovt,overtakeBoostUntil:0,currentSpeedMph:null,_justCrossedFrames:0,
       };
     });
     stateRef.current={racers,track,nLaps:totalLaps,wd};
@@ -2270,14 +2306,15 @@ export default function CircuitRaceView({
             startRaceLoop(pr.track,pr.cond,1,pr.racers,{
               onQualifyingComplete:(sortedRacers)=>{
                 const qWd=WEATHER_DEFS[pr.cond]||WEATHER_DEFS.clear;
+                const rSfL=pr.track.sfLine??0;
                 const gridRacers=sortedRacers.map((r,gi)=>({
-                  ...r,trackPos:(sortedRacers.length-gi)*0.012,totalLapsDone:0,lapCount:1,
+                  ...r,trackPos:((rSfL+(sortedRacers.length-gi)*0.012)%1),totalLapsDone:0,lapCount:1,
                   finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
                   inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:gi+1,carNumber:gi+1,
                   pitStrategy:buildStrategy(r.currentTyre,pr.totalLaps,qWd.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
                   engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
                   currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
-                  inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,
+                  inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,_justCrossedFrames:0,
                 }));
                 setCommentary("Grid set — race start!");
                 setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${pr.totalLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(pr.track,pr.cond,pr.totalLaps,gridRacers);},2200);
@@ -2336,7 +2373,8 @@ export default function CircuitRaceView({
       const carState = cs[id] || {};
       const tyreId = (carState.compound || p.tyre_compound || "medium").toLowerCase();
       const resolved = tyreId in TYRE_DEFS ? tyreId : "medium";
-      const startTrackPos = 1.0 - (i * 0.06);
+      const sfL = track.sfLine ?? 0;
+      const startTrackPos = ((sfL + (order.length - i) * 0.012) % 1);
       const pitLvl = p.pit_level != null ? p.pit_level : 0;
       const relMult = Math.max(0.7, 1 - pitLvl * 0.05);
       const po = isPlayer ? 0 : Math.floor(Math.random() * 3) - 1;
@@ -2360,6 +2398,7 @@ export default function CircuitRaceView({
         inSlipstream: false, tyreBlister: (carState.tyre_wear ?? 100) < 20,
         strategyType: "normal", reliabilityWearMult: relMult,
         overtakingLevel: Math.max(0, Math.round((bs - 0.88) * 200)), overtakeBoostUntil: 0, currentSpeedMph: null,
+        _justCrossedFrames: 0,
         _targetPos: carState.position ?? (i + 1),
         _smoothPos: carState.position ?? (i + 1),
         _prevPitCount: 0,
@@ -2709,9 +2748,10 @@ export default function CircuitRaceView({
         }
         const nRace = liveTotalLapsRef.current || 3;
         const wd2 = wd;
+        const trkSfL = track.sfLine ?? 0;
         const grid = sorted.map((r, i) => ({
           ...r,
-          trackPos: (sorted.length - i) * 0.012,
+          trackPos: ((trkSfL + (sorted.length - i) * 0.012) % 1),
           totalLapsDone: 0,
           lapCount: 1,
           finished: false,
@@ -2740,6 +2780,7 @@ export default function CircuitRaceView({
           tyreBlister: false,
           overtakeBoostUntil: 0,
           currentSpeedMph: null,
+          _justCrossedFrames: 0,
           _targetPos: i + 1,
           _smoothPos: i + 1,
         }));
@@ -2791,14 +2832,15 @@ export default function CircuitRaceView({
         startRaceLoop(track,cond,1,racers,{
           onQualifyingComplete:(sorted)=>{
             const wd2=WEATHER_DEFS[cond]||WEATHER_DEFS.clear;
+            const lSfL=track.sfLine??0;
             const grid=sorted.map((r,i)=>({
-              ...r,trackPos:(sorted.length-i)*0.012,totalLapsDone:0,lapCount:1,
+              ...r,trackPos:((lSfL+(sorted.length-i)*0.012)%1),totalLapsDone:0,lapCount:1,
               finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
               inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:i+1,carNumber:i+1,
               pitStrategy:buildStrategy(r.currentTyre,numLaps,wd2.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
               engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
               currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
-              inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,
+              inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,_justCrossedFrames:0,
             }));
             setCommentary("Grid set — race start!");
             setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${numLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(track,cond,numLaps,grid);},2200);
