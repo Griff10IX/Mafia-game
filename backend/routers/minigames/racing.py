@@ -3948,8 +3948,12 @@ async def _maybe_auto_green_interactive(race_id: str) -> None:
     await _open_interactive_lap1_decision_window(race_id)
 
 
-async def _maybe_advance_interactive_lap(race_id: str):
-    """Advance when lap deadline passed OR every living human entrant has submitted a decision."""
+async def _maybe_advance_interactive_lap(race_id: str, *, deadline_only: bool = False):
+    """Advance when lap deadline passed OR (if not deadline_only) all living humans have submitted.
+
+    GET /live polls must use deadline_only=True so auto-synced POST + poll does not advance once per
+    second; submission resolution stays on submit_race_decision.
+    """
     race = await db.racing_races.find_one(
         {"id": race_id, "mode": "interactive", "state": "running"}, {"_id": 0},
     )
@@ -3981,7 +3985,7 @@ async def _maybe_advance_interactive_lap(race_id: str):
         len(humans_alive) > 0 and all(hid in decisions for hid in humans_alive)
     )
 
-    if deadline_passed or all_humans_submitted:
+    if deadline_passed or (not deadline_only and all_humans_submitted):
         await _advance_one_lap(race)
 
 
@@ -4108,7 +4112,7 @@ async def get_race_live(
     tl_live = int(race.get("total_laps") or race.get("laps") or 3)
     if race.get("state") == "running":
         await _maybe_auto_green_interactive(race_id)
-        await _maybe_advance_interactive_lap(race_id)
+        await _maybe_advance_interactive_lap(race_id, deadline_only=True)
         race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
     cl_after = int((race or {}).get("current_lap") or 0)
     _agent_debug_log(
@@ -4122,6 +4126,7 @@ async def get_race_live(
             "delta": cl_after - cl_before,
             "total_laps": tl_live,
             "state": (race or {}).get("state"),
+            "deadline_only": True,
         },
     )
 
