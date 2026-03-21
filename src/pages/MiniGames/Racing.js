@@ -994,6 +994,11 @@ export default function Racing() {
         const _mergedQo = liveRace.qualifying_order?.length
           ? liveRace.qualifying_order
           : (activeRace.qualifying_order || []);
+        // [] is truthy — empty live participants must not override activeRace (effect sees length 0 → no qual / reset).
+        const _liveParts = liveRace.participants;
+        const _participantsForCanvas = (Array.isArray(_liveParts) && _liveParts.length > 0)
+          ? _liveParts
+          : (activeRace.participants || []);
         // Stable key: do not tie to car_states count or QO string — live polls change those and would
         // remount the canvas, cancel qualifying RAF, and strand the session on "Qualifying".
         const _circuitKey = activeRace.id;
@@ -1048,7 +1053,7 @@ export default function Racing() {
             mode="interactive-live"
             initialTrackId={circuitTrackId}
             weather={liveRace.weather || activeRace.weather || "clear"}
-            participants={liveRace.participants || activeRace.participants || []}
+            participants={_participantsForCanvas}
             qualifying_order={_mergedQo}
             currentUserId={profile?.user_id}
             laps={liveRace.total_laps || activeRace.laps || 3}
@@ -1093,7 +1098,7 @@ export default function Racing() {
                   interactiveTowerRows.length > 0 && (interactiveCanvasPhase === "racing" || interactiveCanvasPhase === "done") && !_preGreen
                     ? interactiveTowerRows.map((row) => {
                       const eid = row.id;
-                      const participant = (liveRace.participants || activeRace.participants || []).find(p => (p.user_id || p.id) === eid);
+                      const participant = _participantsForCanvas.find(p => (p.user_id || p.id) === eid);
                       const isMe = eid === profile?.user_id;
                       const idx = row.position - 1;
                       const gapStr = row.dnf ? "—" : idx === 0 ? "—" : (row.gapSec != null && !Number.isNaN(Number(row.gapSec)) ? `+${Number(row.gapSec).toFixed(2)}s` : "—");
@@ -1118,7 +1123,7 @@ export default function Racing() {
                       );
                     })
                     : _carEntries.map(([eid, cs], idx) => {
-                      const participant = (liveRace.participants || activeRace.participants || []).find(p => (p.user_id || p.id) === eid);
+                      const participant = _participantsForCanvas.find(p => (p.user_id || p.id) === eid);
                       const isMe = eid === profile?.user_id;
                       return (
                         <div key={eid} className={"flex items-center gap-2 px-3 py-1.5 text-xs" + (isMe ? " bg-amber-900/10" : "")}

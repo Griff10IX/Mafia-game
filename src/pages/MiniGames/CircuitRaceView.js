@@ -1144,6 +1144,10 @@ export default function CircuitRaceView({
   const stateRef   = useRef(null);
   const cdRef      = useRef(null);
   const rpStarted  = useRef(false);
+  const currentUserIdRef = useRef(currentUserId);
+  currentUserIdRef.current = currentUserId;
+  const weatherIdPropRef = useRef(weatherIdProp);
+  weatherIdPropRef.current = weatherIdProp;
 
   const [uiPhase,    setUiPhase]    = useState("setup");
   const [selTrack,   setSelTrack]   = useState(() => TRACKS.find(t=>t.id===initialTrackId)||TRACKS[0]);
@@ -1214,6 +1218,18 @@ export default function CircuitRaceView({
 
   const qualifyingOrderRef = useRef(qualifying_order);
   useEffect(() => { qualifyingOrderRef.current = qualifying_order; }, [qualifying_order]);
+
+  /** Profile can load after the live canvas mounts; do not restart qualifying — only fix isPlayer flags. */
+  useEffect(() => {
+    if (mode !== "interactive-live") return;
+    const uid = currentUserId;
+    if (uid == null) return;
+    const racers = stateRef.current?.racers;
+    if (!racers?.length) return;
+    for (const racer of racers) {
+      racer.isPlayer = racer.id === uid;
+    }
+  }, [mode, currentUserId]);
 
   const SKEY = raceId ? `rcv3_${raceId}` : null;
   const lastSave = useRef(0);
@@ -2636,7 +2652,7 @@ export default function CircuitRaceView({
     liveInitDone.current = false;
     resizeCanvas();
     const track = TRACKS.find(t => t.id === initialTrackId) || TRACKS[0];
-    const cond = WEATHER_MAP[weatherIdProp] || "clear";
+    const cond = WEATHER_MAP[weatherIdPropRef.current] || "clear";
     const wd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
     const ww = wd.wearMult || 1;
     const profile = buildSpeedProfile(track);
@@ -2662,10 +2678,11 @@ export default function CircuitRaceView({
     const seen = new Set();
     const order = ids.filter(id => { if (seen.has(id)) return false; seen.add(id); return true; });
 
-    const nRaceLaps = liveTotalLapsRef.current || liveTotalLaps || 3;
+    const nRaceLaps = Math.max(1, Number(liveTotalLapsRef.current) || 3);
     const qualRacers = order.map((id, i) => {
       const p = participants.find(x => (x.user_id || x.id) === id) || {};
-      const isPlayer = currentUserId != null && (id === currentUserId || p.user_id === currentUserId);
+      const uid = currentUserIdRef.current;
+      const isPlayer = uid != null && (id === uid || p.user_id === uid);
       const bs = (p.effective_speed != null ? p.effective_speed : 15) / 15;
       const carState = cs[id] || {};
       const tyreId = (carState.compound || p.tyre_compound || "medium").toLowerCase();
@@ -3299,9 +3316,10 @@ export default function CircuitRaceView({
       if (lightsAfterQualInterval) clearInterval(lightsAfterQualInterval);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-    // startRaceLoop omitted on purpose — use startRaceLoopRef so saveState/drawCanvas churn does not reset qualifying.
+    // startRaceLoop / weather / liveTotalLaps / currentUserId omitted: use refs + small isPlayer patch so live polls
+    // and profile load do not cancel qualifying RAF.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, currentUserId, participants.length, initialTrackId, weatherIdProp, liveTotalLaps]);
+  }, [mode, participants.length, initialTrackId]);
 
   // ─── LIVE MODE STANDALONE START ─────────────────────────────────────────
   const handleStart=useCallback(()=>{
