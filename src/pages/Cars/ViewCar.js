@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { Car, ArrowLeft, Clock, DollarSign, Shield, Sparkles, User, Wrench, UserCircle } from 'lucide-react';
+import { Car, ArrowLeft, Clock, DollarSign, Sparkles, User, Wrench, UserCircle, Image as ImageIcon } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import CustomCarImageModal from '../../components/CustomCarImageModal';
 
 const RARITY_COLORS = {
   common: 'text-gray-400',
@@ -22,6 +23,9 @@ export default function ViewCar() {
   const [loading, setLoading] = useState(true);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileCarIds, setProfileCarIds] = useState([]);
+  const [customPicOpen, setCustomPicOpen] = useState(false);
+  const [customPicUrl, setCustomPicUrl] = useState('');
+  const [savingCustomPic, setSavingCustomPic] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +101,25 @@ export default function ViewCar() {
 
   const isOnProfile = profileCarIds.includes(id);
   const profileFull = profileCarIds.length >= 5 && !isOnProfile;
+  const isCustomOwned = isOwner && car.id === 'car_custom';
+
+  const saveCustomCarPicture = async () => {
+    if (!car?.user_car_id) return;
+    setSavingCustomPic(true);
+    try {
+      await api.patch(`/gta/custom-car/${car.user_car_id}`, {
+        image_url: customPicUrl.trim() || null,
+      });
+      toast.success('Picture updated');
+      const carRes = await api.get('/gta/view-car', { params: { id } });
+      setCar(carRes.data);
+      setCustomPicOpen(false);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update picture');
+    } finally {
+      setSavingCustomPic(false);
+    }
+  };
 
   const toggleProfileCar = async () => {
     if (!id || !isOwner) return;
@@ -162,13 +185,26 @@ export default function ViewCar() {
         <div className="p-3">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="sm:w-48 shrink-0">
-              <div className="aspect-[4/3] rounded-md overflow-hidden bg-zinc-800/50 border border-zinc-700/50">
+              <div className="aspect-[4/3] rounded-md overflow-hidden bg-zinc-800/50 border border-zinc-700/50 relative group">
                 {car.image ? (
                   <img src={car.image} alt={car.name} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <Car className="text-primary/30" size={48} />
                   </div>
+                )}
+                {isCustomOwned && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomPicUrl(car.image || '');
+                      setCustomPicOpen(true);
+                    }}
+                    className="absolute inset-x-0 bottom-0 py-1.5 px-2 flex items-center justify-center gap-1.5 bg-black/75 text-primary text-[9px] font-heading font-bold uppercase tracking-wider border-t border-primary/30 hover:bg-black/90 transition-colors"
+                  >
+                    <ImageIcon size={12} className="shrink-0" />
+                    Change picture
+                  </button>
                 )}
               </div>
             </div>
@@ -251,6 +287,17 @@ export default function ViewCar() {
           </div>
         </div>
       </div>
+
+      {customPicOpen && (
+        <CustomCarImageModal
+          car={car}
+          imageUrl={customPicUrl}
+          setImageUrl={setCustomPicUrl}
+          onSave={saveCustomCarPicture}
+          onClose={() => setCustomPicOpen(false)}
+          saving={savingCustomPic}
+        />
+      )}
 
       <div className="flex justify-center">
         {backTo !== undefined ? (
