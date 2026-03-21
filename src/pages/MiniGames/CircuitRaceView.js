@@ -1076,6 +1076,7 @@ export default function CircuitRaceView({
   liveCarStates = null, liveIncidents = null, livePitStops = null,
   liveCurrentLap = 0, liveTotalLaps = 3,
   lapDeadline = null,
+  onInteractiveGreenFlag = null,
 }) {
   const canvasRef  = useRef(null);
   const rafRef     = useRef(null);
@@ -3058,10 +3059,15 @@ export default function CircuitRaceView({
           if (cdVal <= 0) {
             if (lightsAfterQualInterval) clearInterval(lightsAfterQualInterval);
             lightsAfterQualInterval = null;
-            setUiPhase("racing");
-            setLapDisp(nRace === 1 ? "Qualifying" : `1 / ${nRace}`);
-            setCommentary(rnd(COMMENTARY.start));
-            startRacing();
+            void (async () => {
+              if (onInteractiveGreenFlag) {
+                try { await onInteractiveGreenFlag(); } catch (_) { /* server fallback arms lap window */ }
+              }
+              setUiPhase("racing");
+              setLapDisp(nRace === 1 ? "Qualifying" : `1 / ${nRace}`);
+              setCommentary(rnd(COMMENTARY.start));
+              startRacing();
+            })();
           }
         }, 1000);
       },

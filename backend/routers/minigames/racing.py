@@ -351,6 +351,8 @@ FUEL_COST_BASE = 35000
 NUM_LAPS_MIN = 2
 NUM_LAPS_MAX = 20
 INTERACTIVE_LAP_DEADLINE_SEC = 30
+# If no client sends green-flag (crash/refresh), open lap-1 decision window automatically after this many seconds from race start.
+INTERACTIVE_PRE_GREEN_FALLBACK_SEC = 300
 TIRE_WEAR_PER_LAP = 18
 # Pit a lap before tires are gone: ~18 wear/lap → pit when below 50 so next lap wouldn't kill tires
 TIRE_PIT_THRESHOLD = 50
@@ -3554,7 +3556,6 @@ async def _start_interactive_race(
         }
 
     now = _now_iso()
-    deadline = (datetime.now(timezone.utc) + timedelta(seconds=INTERACTIVE_LAP_DEADLINE_SEC)).isoformat().replace("+00:00", "Z")
 
     safe_profiles = {}
     for k, v in profile_by_user.items():
@@ -3574,7 +3575,7 @@ async def _start_interactive_race(
         "laps": num_laps,
         "current_lap": 0,
         "total_laps": num_laps,
-        "lap_deadline": deadline,
+        "lap_deadline": None,
         "car_states": car_states,
         "decisions": {},
         "lap_results": [],
@@ -3980,6 +3981,56 @@ async def _advance_one_lap(race: dict) -> Optional[dict]:
         return await db.racing_races.find_one({"id": race_id}, {"_id": 0})
 
 
+def _seconds_since_started_utc(race: dict) -> Optional[float]:
+    sa = race.get("started_at")
+    if not sa:
+        return None
+    try:
+        s = str(sa).replace("Z", "+00:00")
+        t = datetime.fromisoformat(s)
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - t).total_seconds()
+    except (ValueError, TypeError, OSError):
+        return None
+
+
+async def _open_interactive_lap1_decision_window(race_id: str) -> bool:
+    """Arm lap-1 deadline (current_lap still 0). Clears decisions so nothing resolves before green."""
+    deadline = (
+        datetime.now(timezone.utc) + timedelta(seconds=INTERACTIVE_LAP_DEADLINE_SEC)
+    ).isoformat().replace("+00:00", "Z")
+    res = await db.racing_races.update_one(
+        {
+            "id": race_id,
+            "mode": "interactive",
+            "state": "running",
+            "current_lap": 0,
+            "lap_deadline": None,
+        },
+        {"$set": {"lap_deadline": deadline, "decisions": {}}},
+    )
+    return res.modified_count > 0
+
+
+async def _maybe_auto_green_interactive(race_id: str) -> None:
+    """After a timeout, open lap-1 window if clients never signaled green (disconnect / old client)."""
+    race = await db.racing_races.find_one(
+        {"id": race_id, "mode": "interactive", "state": "running"},
+        {"_id": 0, "current_lap": 1, "lap_deadline": 1, "started_at": 1},
+    )
+    if not race:
+        return
+    if int(race.get("current_lap") or 0) != 0:
+        return
+    if race.get("lap_deadline"):
+        return
+    age = _seconds_since_started_utc(race)
+    if age is None or age < INTERACTIVE_PRE_GREEN_FALLBACK_SEC:
+        return
+    await _open_interactive_lap1_decision_window(race_id)
+
+
 async def _maybe_advance_interactive_lap(race_id: str):
     """Advance when lap deadline passed OR every living human entrant has submitted a decision."""
     race = await db.racing_races.find_one(
@@ -4033,6 +4084,11 @@ async def submit_race_decision(
     total_laps = int(race.get("total_laps") or race.get("laps") or 3)
     if current_lap >= total_laps:
         raise HTTPException(status_code=400, detail="Race already finished")
+    if current_lap == 0 and not race.get("lap_deadline"):
+        raise HTTPException(
+            status_code=400,
+            detail="Lap decision window opens after lights out (green flag)",
+        )
 
     participants = race.get("participants") or []
     entrant_id = None
@@ -4063,6 +4119,40 @@ async def submit_race_decision(
     return {"message": "Decision submitted", "decision": decision}
 
 
+async def signal_interactive_green_flag(
+    race_id: str,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    """Client calls when formation + countdown finish so lap-1 decision timer starts (sync with canvas)."""
+    race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    if not race:
+        raise HTTPException(status_code=404, detail="Race not found")
+    if race.get("mode") != "interactive":
+        raise HTTPException(status_code=400, detail="Race is not interactive")
+    if race.get("state") != "running":
+        raise HTTPException(status_code=400, detail="Race is not in progress")
+
+    if int(race.get("current_lap") or 0) != 0:
+        race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+        return {"opened": False, "reason": "past_formation", "race": race}
+    if race.get("lap_deadline"):
+        race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+        return {"opened": False, "reason": "already_armed", "race": race}
+
+    participants = race.get("participants") or []
+    entrant_ok = any(
+        not p.get("is_npc") and (p.get("user_id") or p.get("id")) == current_user["id"]
+        for p in participants
+    )
+    if not entrant_ok:
+        raise HTTPException(status_code=403, detail="You are not a participant in this race")
+
+    opened = await _open_interactive_lap1_decision_window(race_id)
+    await _maybe_advance_interactive_lap(race_id)
+    race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    return {"opened": bool(opened), "reason": "armed" if opened else "already_armed", "race": race}
+
+
 async def advance_race_lap(
     race_id: str,
     current_user: dict = Depends(get_current_user_verified),
@@ -4075,6 +4165,7 @@ async def advance_race_lap(
     if race.get("state") != "running":
         raise HTTPException(status_code=400, detail="Race is not in progress")
 
+    await _maybe_auto_green_interactive(race_id)
     await _maybe_advance_interactive_lap(race_id)
     race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
     return {"race": race}
@@ -4091,6 +4182,7 @@ async def get_race_live(
         raise HTTPException(status_code=400, detail="Race is not interactive")
 
     if race.get("state") == "running":
+        await _maybe_auto_green_interactive(race_id)
         await _maybe_advance_interactive_lap(race_id)
         race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
 
@@ -4303,6 +4395,7 @@ def register(router):
     router.add_api_route("/racing/races/{race_id}/complete", complete_race, methods=["POST"])
     router.add_api_route("/racing/races/{race_id}/decision", submit_race_decision, methods=["POST"])
     router.add_api_route("/racing/races/{race_id}/advance-lap", advance_race_lap, methods=["POST"])
+    router.add_api_route("/racing/races/{race_id}/green-flag", signal_interactive_green_flag, methods=["POST"])
     router.add_api_route("/racing/races/{race_id}/live", get_race_live, methods=["GET"])
     router.add_api_route("/racing/leaderboard", get_racing_leaderboard, methods=["GET"])
     router.add_api_route("/racing/championship", get_championship, methods=["GET"])

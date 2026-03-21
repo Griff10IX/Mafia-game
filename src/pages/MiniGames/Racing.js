@@ -598,6 +598,7 @@ export default function Racing() {
     if (!liveRace || liveRace.status !== "running") return;
     const totalLaps = liveRace.total_laps ?? activeRace.laps ?? 3;
     if (liveRace.current_lap >= totalLaps) return;
+    if (!liveRace.lap_deadline) return;
 
     const t = setTimeout(async () => {
       const decision = myDecision;
@@ -625,6 +626,7 @@ export default function Racing() {
     liveRace?.status,
     liveRace?.current_lap,
     liveRace?.total_laps,
+    liveRace?.lap_deadline,
     activeRace?.id,
     activeRace?.mode,
     activeRace?.laps,
@@ -991,6 +993,13 @@ export default function Racing() {
             liveCurrentLap={liveRace.current_lap || 0}
             liveTotalLaps={liveRace.total_laps || activeRace.laps || 3}
             lapDeadline={liveRace.lap_deadline}
+            onInteractiveGreenFlag={async () => {
+              try {
+                await api.post(`/racing/races/${activeRace.id}/green-flag`);
+                const { data } = await api.get(`/racing/races/${activeRace.id}/live`);
+                setLiveRace(data);
+              } catch (_) {}
+            }}
             onVisualLapChange={(completed, _tot, prog01) => {
               setInteractiveLeaderLap(completed);
               if (prog01 != null) setInteractiveRaceProg(prog01);
