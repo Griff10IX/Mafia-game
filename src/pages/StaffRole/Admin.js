@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award } from 'lucide-react';
-import api from '../../utils/api';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image } from 'lucide-react';
+import api, { imageHostPublicUrl } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -134,6 +134,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Bulk User Action', categoryId: 'admin-quick', collapseKey: 'bulkAction', keywords: ['bulk', 'action', 'multiple', 'users'] },
   { label: 'Redeem Codes', categoryId: 'admin-quick', collapseKey: 'redeemCodes', keywords: ['redeem', 'code', 'reward', 'cash', 'points', 'cars'] },
   // Database
+  { label: 'Image host (user uploads)', categoryId: 'admin-database', collapseKey: 'imageHostAdmin', keywords: ['image', 'host', 'upload', 'picture', 'imgur', 'photo'] },
   { label: 'Wipe Database', categoryId: 'admin-database', collapseKey: 'wipe', keywords: ['wipe', 'database', 'reset', 'delete'] },
   { label: 'New Release', categoryId: 'admin-database', collapseKey: 'newRelease', keywords: ['new', 'release', 'season'] },
   { label: 'Delete User', categoryId: 'admin-database', collapseKey: 'deleteUser', keywords: ['delete', 'user', 'remove'] },
@@ -2095,6 +2096,49 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
     finally { setDbLoading(false); }
   };
+
+  const IMAGE_HOST_ADMIN_PAGE = 50;
+  const [imageHostAdminData, setImageHostAdminData] = useState({ items: [], total: 0 });
+  const [imageHostAdminLoading, setImageHostAdminLoading] = useState(false);
+  const [imageHostAdminUsername, setImageHostAdminUsername] = useState('');
+  const [imageHostAdminUserId, setImageHostAdminUserId] = useState('');
+  const [imageHostAdminSkip, setImageHostAdminSkip] = useState(0);
+
+  const fetchImageHostAdmin = useCallback(async (overrideSkip) => {
+    const skip = overrideSkip != null ? overrideSkip : imageHostAdminSkip;
+    setImageHostAdminLoading(true);
+    try {
+      const p = new URLSearchParams();
+      p.set('limit', String(IMAGE_HOST_ADMIN_PAGE));
+      p.set('skip', String(skip));
+      const uid = imageHostAdminUserId.trim();
+      const un = imageHostAdminUsername.trim();
+      if (uid) p.set('user_id', uid);
+      else if (un) p.set('username', un);
+      const res = await api.get(`/image-host/admin/uploads?${p}`);
+      setImageHostAdminData({ items: res.data.items || [], total: res.data.total ?? 0 });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load image host list');
+    } finally {
+      setImageHostAdminLoading(false);
+    }
+  }, [imageHostAdminSkip, imageHostAdminUserId, imageHostAdminUsername]);
+
+  const handleImageHostAdminDelete = async (publicId) => {
+    if (!window.confirm(`Delete hosted image ${publicId}? Links will stop working.`)) return;
+    try {
+      await api.delete(`/image-host/admin/item/${encodeURIComponent(publicId)}`);
+      toast.success('Deleted');
+      fetchImageHostAdmin();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Delete failed');
+    }
+  };
+
+  useEffect(() => {
+    if (!isAdmin || activeCategoryId !== 'admin-database' || collapsed.imageHostAdmin) return;
+    fetchImageHostAdmin();
+  }, [imageHostAdminSkip, collapsed.imageHostAdmin, activeCategoryId, isAdmin, fetchImageHostAdmin]);
 
   const handleFetchSameIp = async () => {
     setCheatLoading(true);
@@ -7827,6 +7871,97 @@ export default function Admin() {
           <Skull size={12} />
           Database
         </h2>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Image}
+            title="Image host (user uploads)"
+            badge={typeof imageHostAdminData.total === 'number' ? <span className="text-[10px] font-heading text-mutedForeground tabular-nums">{imageHostAdminData.total} active</span> : null}
+            isCollapsed={collapsed.imageHostAdmin}
+            onToggle={() => toggleSection('imageHostAdmin')}
+          />
+          {!collapsed.imageHostAdmin && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">List images players uploaded or imported on Image host. Filter by username or user ID. Deleting removes the file and breaks public links.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Username (optional)"
+                  value={imageHostAdminUsername}
+                  onChange={(e) => setImageHostAdminUsername(e.target.value)}
+                  className="w-36 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                />
+                <input
+                  type="text"
+                  placeholder="User ID (optional)"
+                  value={imageHostAdminUserId}
+                  onChange={(e) => setImageHostAdminUserId(e.target.value)}
+                  className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                />
+                <BtnPrimary
+                  type="button"
+                  onClick={() => {
+                    setImageHostAdminSkip(0);
+                    fetchImageHostAdmin(0);
+                  }}
+                  disabled={imageHostAdminLoading}
+                >
+                  {imageHostAdminLoading ? 'Loading…' : 'Refresh'}
+                </BtnPrimary>
+              </div>
+              <p className="text-[9px] text-mutedForeground font-heading">If user ID is set, it takes precedence over username.</p>
+              {imageHostAdminData.items.length === 0 && !imageHostAdminLoading ? (
+                <p className="text-[10px] text-mutedForeground font-heading">No rows. Open this section or click Refresh to load.</p>
+              ) : (
+                <div className="overflow-x-auto max-h-[min(70vh,520px)] overflow-y-auto rounded border border-zinc-700/40">
+                  <table className="w-full text-left border-collapse text-[9px] font-heading">
+                    <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                      <tr className="border-b border-zinc-700/50">
+                        <th className="py-1.5 px-1 font-bold text-mutedForeground uppercase">Preview</th>
+                        <th className="py-1.5 px-1 font-bold text-mutedForeground uppercase">User</th>
+                        <th className="py-1.5 px-1 font-bold text-mutedForeground uppercase">Public ID</th>
+                        <th className="py-1.5 px-1 font-bold text-mutedForeground uppercase">Size</th>
+                        <th className="py-1.5 px-1 font-bold text-mutedForeground uppercase">Created</th>
+                        <th className="py-1.5 px-1 font-bold text-mutedForeground uppercase">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {imageHostAdminData.items.map((row) => {
+                        const url = imageHostPublicUrl(row.public_id);
+                        return (
+                          <tr key={row.public_id} className="border-b border-zinc-700/30 align-top">
+                            <td className="py-1 px-1 w-20">
+                              <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+                                <img src={url} alt="" className="max-h-14 max-w-[72px] object-contain rounded border border-zinc-600/50 bg-black/40" loading="lazy" />
+                              </a>
+                            </td>
+                            <td className="py-1 px-1 max-w-[140px]">
+                              <div className="text-foreground truncate" title={row.username || row.user_id}>{row.username || '—'}</div>
+                              <div className="text-mutedForeground font-mono truncate text-[8px]" title={row.user_id}>{row.user_id}</div>
+                            </td>
+                            <td className="py-1 px-1 font-mono text-[8px] max-w-[100px] break-all">{row.public_id}</td>
+                            <td className="py-1 px-1 tabular-nums">{row.size_bytes != null ? `${Math.round(row.size_bytes / 1024)} KB` : '—'}</td>
+                            <td className="py-1 px-1 whitespace-nowrap text-mutedForeground">{row.created_at ? String(row.created_at).slice(0, 19).replace('T', ' ') : '—'}</td>
+                            <td className="py-1 px-1 whitespace-nowrap">
+                              <BtnDanger type="button" onClick={() => handleImageHostAdminDelete(row.public_id)}>Delete</BtnDanger>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {imageHostAdminData.total > IMAGE_HOST_ADMIN_PAGE && (
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading text-mutedForeground">
+                  <span>Page {Math.floor(imageHostAdminSkip / IMAGE_HOST_ADMIN_PAGE) + 1} · {imageHostAdminData.items.length} shown</span>
+                  <BtnSecondary type="button" disabled={imageHostAdminSkip <= 0 || imageHostAdminLoading} onClick={() => setImageHostAdminSkip((s) => Math.max(0, s - IMAGE_HOST_ADMIN_PAGE))}>Previous</BtnSecondary>
+                  <BtnSecondary type="button" disabled={imageHostAdminSkip + imageHostAdminData.items.length >= imageHostAdminData.total || imageHostAdminLoading} onClick={() => setImageHostAdminSkip((s) => s + IMAGE_HOST_ADMIN_PAGE)}>Next</BtnSecondary>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         <div className={`${styles.panel} rounded-md overflow-hidden border border-red-500/30 mobile-panel`}>
           <SectionHeader
             icon={Skull}
