@@ -579,10 +579,14 @@ export default function Racing() {
         }
       } catch {}
     };
+    const pollMs =
+      liveRace?.status === "running" && liveRace?.lap_deadline != null && liveRace?.lap_deadline !== ""
+        ? 1000
+        : 2000;
     poll();
-    liveRacePoll.current = setInterval(poll, 2000);
+    liveRacePoll.current = setInterval(poll, pollMs);
     return () => { if (liveRacePoll.current) clearInterval(liveRacePoll.current); };
-  }, [activeRace?.id, activeRace?.mode]);
+  }, [activeRace?.id, activeRace?.mode, liveRace?.status, liveRace?.lap_deadline]);
 
   useEffect(() => {
     lastSentDecisionKey.current = null;

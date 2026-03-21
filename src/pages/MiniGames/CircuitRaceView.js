@@ -2137,7 +2137,7 @@ export default function CircuitRaceView({
 
         racers.forEach(r => {
           if (r.finished && !r.dnf) {
-            const coastDur = 3.0;
+            const coastDur = nLaps === 1 ? 0 : 3.0;
             const t0 = r.finishedAtSec != null ? r.finishedAtSec : nowSec;
             const coastAge = nowSec - t0;
             if (coastAge < coastDur) {
@@ -2693,8 +2693,6 @@ export default function CircuitRaceView({
     let prevBackendLap = liveCurrentLapRef.current || 0;
     let lastReportedVisLap = -1;
     let lastReportedProg = -1;
-    const raceTotLaps = liveTotalLapsRef.current || 3;
-    const lapCrossAllowedAfterSec = raceTotLaps > 1 ? (performance.now() / 1000 + 1.75) : -Infinity;
 
     const addInc = (text) => {
       stateRef.current.incidents.push({ text, time: performance.now() });
@@ -2721,6 +2719,15 @@ export default function CircuitRaceView({
         prevBackendLap = curLap;
         r.forEach(x => { x.lastSectorCross = nowSec; x.currentSector = 0; });
       }
+
+      // Official lap count comes from API only — do not increment on canvas S/F crossings (orbit runs faster than server turns).
+      const serverCompleted = Math.min(totLaps, Math.max(0, curLap));
+      r.forEach((racer) => {
+        if (!racer.dnf) {
+          racer.totalLapsDone = serverCompleted;
+          racer.lapCount = Math.min(totLaps, serverCompleted + 1);
+        }
+      });
 
       const srvSc = Number(liveSafetyCarLapsRef.current || 0);
       if (prevSrvSc >= 0) {
@@ -2911,7 +2918,6 @@ export default function CircuitRaceView({
         };
 
         // Movement
-        const prevPos = racer.trackPos;
         if (racer.slideOffUntil > 0 && nowSec < racer.slideOffUntil) {
           racer.trackPos = (racer.trackPos + (1 / (trk.lapBase / effSpeed)) * dt * 0.18 + 1) % 1;
           racer.currentSpeedMph = 20;
@@ -2952,21 +2958,6 @@ export default function CircuitRaceView({
             racer.bestSectors[racer.currentSector] = Math.min(racer.bestSectors[racer.currentSector], el);
           }
           racer.currentSector = ns2; racer.lastSectorCross = nowSec;
-        }
-
-        // Lap crossing (same geometry test as main loop — works at x4 speed)
-        const sfL2 = trk.sfLine ?? 0;
-        const crossedSF = crossedStartFinishLineForward(prevPos, racer.trackPos, sfL2);
-        const canCountLap = raceTotLaps <= 1 || nowSec >= lapCrossAllowedAfterSec;
-        if (crossedSF && canCountLap && !(racer._justCrossedFrames > 0)) {
-          racer._justCrossedFrames = 4; // FIX: frame counter
-          racer.totalLapsDone = Math.min(totLaps, (racer.totalLapsDone || 0) + 1);
-          racer.lapCount = Math.min(totLaps, racer.totalLapsDone + 1);
-          const lt = trk.lapBase / (effSpeed * 0.97) + (Math.random() - 0.5) * 0.8;
-          racer.lapTimes.push(lt);
-          if (lt < fl.time) { fl.time = lt; fl.holderId = racer.id; stateRef.current.fastestLap = fl; addInc(`${racer.name} — fastest lap!`); }
-        } else {
-          if (racer._justCrossedFrames > 0) racer._justCrossedFrames--;
         }
 
         // Visual tyre wear (gentle degradation between backend updates)
@@ -3039,11 +3030,12 @@ export default function CircuitRaceView({
             if (aF && !bF) return -1; if (!aF && bF) return 1;
             return ((b.totalLapsDone ?? 0) + (b.trackPos ?? 0)) - ((a.totalLapsDone ?? 0) + (a.trackPos ?? 0));
           });
+          const fastest = st.fastestLap || { holderId: null, time: Infinity };
           setResults(fo.map((x, i) => ({
             pos: i + 1, id: x.id, name: x.name, isPlayer: x.isPlayer, color: x.color,
             carName: x.carName, pitStops: x.pitStops, lapTimes: x.lapTimes, dnf: x.dnf,
             bestLap: x.lapTimes.length ? Math.min(...x.lapTimes) : null,
-            hasFastestLap: fl.holderId === x.id,
+            hasFastestLap: fastest.holderId === x.id,
           })));
           const rOIds = fo.map(x => x.id), dIds = fo.filter(x => x.dnf).map(x => x.id);
           setTimeout(() => onComplete?.(rOIds, dIds), 1200);
