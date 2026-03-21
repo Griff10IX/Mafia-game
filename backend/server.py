@@ -737,6 +737,7 @@ JAIL_WHITELIST_PREFIXES = (
     "/api/boxing/",
     "/api/racing/",
     "/api/snake/",
+    "/api/stats/",
     "/api/gauntlet/",
     "/api/minigames/",
     "/api/minesweeper/",

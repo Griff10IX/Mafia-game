@@ -331,6 +331,8 @@ export default function IllegalBusiness() {
   const nextGuardSlotCostCash = data?.next_guard_slot_cost_cash ?? null;
   const guardHireCost = data?.guard_hire_cost ?? 2500;
   const vault = parseInt(business?.vault ?? 0, 10);
+  const minVaultWithdraw = 100;
+  const canWithdrawFromVault = vault >= minVaultWithdraw;
   const upgradesDone = business?.security_upgrades || [];
   const nextUpgradeIdx = upgradesDone.length;
   const nextUpgrade = nextUpgradeIdx < securityList.length ? securityList[nextUpgradeIdx] : null;
@@ -422,7 +424,12 @@ export default function IllegalBusiness() {
                 {saving ? 'Collecting…' : '⚑  Collect the Take'}
               </button>
             </div>
-            {vault > 0 && (
+            {vault > 0 && !canWithdrawFromVault && (
+              <p className="text-[10px] text-mutedForeground font-heading pt-2 border-t border-primary/10">
+                Pocket withdrawals unlock at {formatMoney(minVaultWithdraw)} in the vault (stops spam). Collect more into the vault first.
+              </p>
+            )}
+            {canWithdrawFromVault && (
               <div className="flex flex-wrap items-end gap-2 pt-2 border-t border-primary/10">
                 <div className="flex-1 min-w-[100px]">
                   <label className="block text-[9px] font-heading uppercase tracking-widest text-mutedForeground mb-1">Pocket Cash</label>

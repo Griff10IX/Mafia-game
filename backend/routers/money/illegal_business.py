@@ -130,6 +130,9 @@ ATTACKER_BASE_STRENGTH = 5
 GUARD_STRENGTH_PER_LEVEL = 4  # armour_level + weapon_level each contribute
 SECURITY_WEIGHT = 1.0  # defence = DEFENDER_BASE + sum(guard_strength) + security_level * weight per upgrade
 
+# Pocket withdraw: require this much in vault (reduces spam / micro-withdrawals)
+MIN_VAULT_WITHDRAW_CASH = 100
+
 # Collect anti-spam: extras only when at least 1 min accumulated
 MIN_COLLECT_HOURS_FOR_EXTRAS = 1 / 60
 # Extras (bullets, respect, points, loot pieces) cooldown: once every few hours
@@ -778,6 +781,11 @@ async def withdraw_illegal_business(req: WithdrawRequest, current_user: dict = D
     amount = int(req.amount)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive.")
+    if vault < MIN_VAULT_WITHDRAW_CASH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Need at least ${MIN_VAULT_WITHDRAW_CASH:,} in the vault to withdraw. Current: ${vault:,}.",
+        )
     if amount > vault:
         raise HTTPException(status_code=400, detail=f"Not enough in the vault. Available: ${vault:,}")
     result = await db.illegal_businesses.update_one(

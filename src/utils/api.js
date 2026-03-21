@@ -131,6 +131,7 @@ api.interceptors.response.use(
           '/game/users-online', '/account/profile', '/account/autorank',
           '/account/settings', '/social/forum', '/staffrole',
           '/game/daily-rewards', '/game/leaderboard', '/game/help-desk',
+          '/game/stats', '/account/stats',
         ];
         if (!jailAllowed.some(prefix => p === prefix || p.startsWith(prefix + '/'))) {
           window.location.replace('/crime/jail');
