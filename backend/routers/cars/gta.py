@@ -1527,7 +1527,7 @@ async def update_custom_car_image(
 
     if value is not None:
         # Size check for data URLs
-        if value.startswith("data:") and len(value) > CAR_IMAGE_MAX_DATA_URL_BYTES:
+        if value.lower().startswith("data:") and len(value) > CAR_IMAGE_MAX_DATA_URL_BYTES:
             raise HTTPException(status_code=400, detail="Image too large. Use a smaller image.")
         is_valid, error_msg = await validate_custom_car_image_value(value)
         if not is_valid:
