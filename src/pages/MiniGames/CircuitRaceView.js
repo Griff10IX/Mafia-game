@@ -2751,7 +2751,9 @@ export default function CircuitRaceView({
       }
       const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0), pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
       if (Math.abs(pb - pa) > 1e-9) return pb - pa;
-      return (a._targetPos ?? 99) - (b._targetPos ?? 99);
+      // Stable tie-break: canvas draw order used to use progress-only sort (ties = stable order in r),
+      // while standings used server _targetPos — live tower could show P1 while checkered/results used P5.
+      return String(a.id || "").localeCompare(String(b.id || ""));
     }
 
     const loop = (now) => {
@@ -3131,6 +3133,7 @@ export default function CircuitRaceView({
         const finisherFlag = atFlagSorted.filter(x => !x.dnf);
         const ppFlag = finisherFlag.findIndex(x => x.isPlayer);
         fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "CircuitRaceView.js:interactive_loop", message: "checkered_player_rank", data: { playerPos: ppFlag >= 0 ? ppFlag + 1 : null, nFinishers: finisherFlag.length, visualLapsComplete }, timestamp: Date.now(), hypothesisId: "H8" }) }).catch(() => {});
+        fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "CircuitRaceView.js:interactive_loop", message: "checkered_top_prog_tp", data: { top: finisherFlag.slice(0, 8).map((x) => ({ id: String(x.id).slice(0, 12), prog: +(((x.totalLapsDone ?? 0) + (x.trackPos ?? 0)).toFixed(6)), tp: x._targetPos })) }, timestamp: Date.now(), hypothesisId: "H9" }) }).catch(() => {});
         // #endregion
       }
 
@@ -3141,8 +3144,7 @@ export default function CircuitRaceView({
           st._resultsShown = true;
           setUiPhase("done");
           const allR = [...r];
-          // Use finishOrder from the checkered frame — do not re-sortInteractiveByProgress here: _targetPos
-          // still updates from live car_states every frame after finish and can flip tie-breaks vs what the player saw.
+          // Use finishOrder from the checkered frame; fallback branch uses sortInteractiveByProgress (id tie, not live _targetPos).
           const ordered = [...allR].sort((a, b) => {
             if (a.dnf && !b.dnf) return 1;
             if (!a.dnf && b.dnf) return -1;
@@ -3171,15 +3173,11 @@ export default function CircuitRaceView({
         }
       }
 
-      // Canvas draw order: by visual progress. Interactive-live leaderboard gaps from orbit (server gaps_to_ahead only updates per lap).
-      r.sort((a, b) => {
-        if (a.dnf && !b.dnf) return 1;
-        if (!a.dnf && b.dnf) return -1;
-        return ((b.totalLapsDone ?? 0) + (b.trackPos ?? 0)) - ((a.totalLapsDone ?? 0) + (a.trackPos ?? 0));
-      });
+      // Same comparator as standings / checkered so draw order and live tower never disagree on ties.
+      r.sort(sortInteractiveByProgress);
       r.forEach((x, i) => { x.position = i + 1; });
 
-      const standingsOrder = [...r].sort(sortInteractiveByProgress);
+      const standingsOrder = [...r];
 
       const ldrProg = standingsOrder.length && !standingsOrder[0].dnf
         ? (standingsOrder[0].totalLapsDone ?? 0) + (standingsOrder[0].trackPos ?? 0)
