@@ -422,6 +422,15 @@ export default function Racing() {
     } catch (e) { toast.error(apiDetail(e)); }
   };
 
+  const handleAdminClearCrewBankDebt = async () => {
+    if (!window.confirm("ADMIN: Set every negative crew bank to $0? (Positive balances unchanged.)")) return;
+    try {
+      const r = await api.post("/racing/admin/clear-crew-bank-debt");
+      toast.success(r.data?.message || `Updated ${r.data?.modified_count ?? 0} profile(s)`);
+      fetchAll();
+    } catch (e) { toast.error(apiDetail(e)); }
+  };
+
   const handleDeclineChallenge = useCallback(async (id) => {
     try {
       await api.post(`/racing/challenges/${id}/decline`);
@@ -895,10 +904,16 @@ export default function Racing() {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {isAdmin && (
-              <button type="button" onClick={handleAdminWipeTeams}
-                className="text-[8px] font-heading px-1.5 py-0.5 rounded border border-red-500/40 text-red-400 hover:bg-red-900/20 transition-colors">
-                Wipe All
-              </button>
+              <>
+                <button type="button" onClick={handleAdminClearCrewBankDebt}
+                  className="text-[9px] font-heading px-2 py-1 rounded border border-amber-500/40 text-amber-400 hover:bg-amber-900/20 transition-colors touch-manipulation min-h-[32px]">
+                  Clear crew debt
+                </button>
+                <button type="button" onClick={handleAdminWipeTeams}
+                  className="text-[8px] font-heading px-1.5 py-0.5 rounded border border-red-500/40 text-red-400 hover:bg-red-900/20 transition-colors">
+                  Wipe All
+                </button>
+              </>
             )}
             <div className="flex items-center gap-1.5">
               <span className="text-[9px] text-[var(--noir-muted)]">Bank</span>
@@ -1819,6 +1834,15 @@ export default function Racing() {
             } />
             <div className="p-3">
               <p className="text-[10px] text-[var(--noir-muted)] mb-3">+2% speed/level. Pit Crew also shortens pit time. Total levels capped.</p>
+              {isAdmin && (
+                <div className="mb-3 p-2 rounded border border-amber-500/30 bg-amber-950/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <span className="text-[9px] text-[var(--noir-muted)]">Admin: reset every team&apos;s negative crew bank to $0 (global).</span>
+                  <button type="button" onClick={handleAdminClearCrewBankDebt}
+                    className={styles.btnGoldDarkText + " text-[10px] font-heading px-3 py-1.5 whitespace-nowrap touch-manipulation shrink-0"}>
+                    Clear all crew bank debt
+                  </button>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {(() => {
                   const tradeoffs = profile?.crew_tradeoffs || {};

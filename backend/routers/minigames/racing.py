@@ -763,6 +763,23 @@ async def _deduct_crew_bank(user_id: str, cost: int, allow_debt: bool = False) -
     await db.racing_profiles.update_one({"user_id": user_id}, {"$inc": {"crew_bank": -cost}})
 
 
+async def _pay_driver_salary_from_user_then_crew(user_id: str, salary: int) -> int:
+    """Pay hired-driver salary from character cash first; remainder from crew bank (debt allowed).
+    Returns the amount taken from crew bank (0 if fully paid from cash)."""
+    salary = int(salary or 0)
+    if salary <= 0:
+        return 0
+    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0, "money": 1})
+    um = max(0, int((user_doc or {}).get("money") or 0))
+    from_cash = min(um, salary)
+    remainder = salary - from_cash
+    if from_cash > 0:
+        await db.users.update_one({"id": user_id}, {"$inc": {"money": -from_cash}})
+    if remainder > 0:
+        await _deduct_crew_bank(user_id, remainder, allow_debt=True)
+    return remainder
+
+
 async def _get_user_racing_car(user_id: str, instance_id: str) -> Optional[dict]:
     doc = await db.user_racing_cars.find_one({"user_id": user_id, "id": instance_id}, {"_id": 0})
     return doc
@@ -2650,22 +2667,23 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
         rep = 0 if is_dnf else (RACING_REP_BY_POSITION[i] if i < len(RACING_REP_BY_POSITION) else 0)
         sponsor_income = 0
         driver_salary = 0
+        net_crew_bank = 0
         if entrant and not entrant.get("is_npc"):
             uid = entrant.get("user_id")
             prof_for_sponsor = profile_by_user.get(uid) or {}
             sponsor = _get_sponsor(int(prof_for_sponsor.get("racing_rep") or 0))
-            sponsor_income = sponsor.get("income_per_race", 0) if not is_dnf else 0
+            sponsor_income = int(sponsor.get("income_per_race", 0) or 0) if not is_dnf else 0
             hired_drv_id = prof_for_sponsor.get("hired_driver_id")
             if hired_drv_id:
                 hired_drv = _get_driver(hired_drv_id)
                 if hired_drv:
-                    driver_salary = hired_drv.get("salary_per_race", 0)
-            total_crew_income = cash + sponsor_income - driver_salary
+                    driver_salary = int(hired_drv.get("salary_per_race", 0) or 0)
+            crew_credit = int(cash) + sponsor_income
             if not is_dnf:
                 await db.users.update_one({"id": uid}, {"$inc": {"rank_points": rp}})
                 await db.racing_profiles.update_one(
                     {"user_id": uid},
-                    {"$inc": {"racing_rep": rep, "races_completed": 1, "wins": 1 if position == 1 else 0, "crew_bank": total_crew_income}},
+                    {"$inc": {"racing_rep": rep, "races_completed": 1, "wins": 1 if position == 1 else 0, "crew_bank": crew_credit}},
                     upsert=True,
                 )
                 try:
@@ -2673,15 +2691,16 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
                     await maybe_process_rank_up(uid, rp_before, rp, entrant.get("username", ""))
                 except Exception:
                     pass
+                from_crew = await _pay_driver_salary_from_user_then_crew(uid, driver_salary)
+                net_crew_bank = crew_credit - from_crew
             else:
-                dnf_inc = {"races_completed": 1}
-                if driver_salary > 0:
-                    dnf_inc["crew_bank"] = -driver_salary
                 await db.racing_profiles.update_one(
                     {"user_id": uid},
-                    {"$inc": dnf_inc},
+                    {"$inc": {"races_completed": 1}},
                     upsert=True,
                 )
+                from_crew = await _pay_driver_salary_from_user_then_crew(uid, driver_salary)
+                net_crew_bank = -from_crew
             inst_id = entrant.get("racing_car_instance_id")
             if inst_id:
                 car = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0, "engine_wear": 1})
@@ -2702,7 +2721,17 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
                 {"$inc": {f"tyre_stock_{compound}": -1}},
                 upsert=True,
             )
-        rewards.append({"entrant_id": entrant_id, "position": position, "cash": cash, "rank_points": rp, "racing_rep": rep, "dnf": is_dnf, "sponsor_income": sponsor_income, "driver_salary": driver_salary})
+        rewards.append({
+            "entrant_id": entrant_id,
+            "position": position,
+            "cash": cash,
+            "rank_points": rp,
+            "racing_rep": rep,
+            "dnf": is_dnf,
+            "sponsor_income": sponsor_income,
+            "driver_salary": driver_salary,
+            "net_crew_bank": net_crew_bank,
+        })
     now = _now_iso()
     await db.racing_races.update_one(
         {"id": race_id},
@@ -4210,6 +4239,20 @@ async def get_rnd_status(current_user: dict = Depends(get_current_user_verified)
     }
 
 
+async def admin_clear_crew_bank_debt(current_user: dict = Depends(get_current_user_verified)):
+    """Admin: set every negative crew_bank to 0 (does not touch positive balances)."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    res = await db.racing_profiles.update_many(
+        {"crew_bank": {"$lt": 0}},
+        [{"$set": {"crew_bank": 0}}],
+    )
+    return {
+        "message": f"Cleared crew bank debt on {res.modified_count} racing profile(s).",
+        "modified_count": res.modified_count,
+    }
+
+
 async def admin_wipe_all_teams(current_user: dict = Depends(get_current_user_verified)):
     """Admin tool: wipe ALL racing teams, profiles, cars, upgrades, races, championships, and R&D. Full reset."""
     if not _is_admin(current_user):
@@ -4282,6 +4325,7 @@ def register(router):
     router.add_api_route("/racing/rnd/tree", get_rnd_tree, methods=["GET"])
     router.add_api_route("/racing/rnd/research", start_rnd_research, methods=["POST"])
     router.add_api_route("/racing/rnd/status", get_rnd_status, methods=["GET"])
+    router.add_api_route("/racing/admin/clear-crew-bank-debt", admin_clear_crew_bank_debt, methods=["POST"])
     router.add_api_route("/racing/admin/wipe-all-teams", admin_wipe_all_teams, methods=["POST"])
 
     # Cron: automated daily races (same X-Cron-Secret as Auto Rank)
