@@ -671,6 +671,17 @@ function getCurvature(track, t) {
   return Math.abs(delta) / ((l1+l2)/2);
 }
 
+/** Same geometry as buildSpeedProfile's SF zone — use for slide-off + corner-tier gating (no gap vs profile). */
+function inStartFinishSafeZone(track, t) {
+  const sfL = track.sfLine != null ? track.sfLine : 0;
+  const tt = ((t % 1) + 1) % 1;
+  const preZone = 0.18;
+  const postZone = 0.12;
+  const dBehind = ((sfL - tt + 1) % 1);
+  const dAhead = ((tt - sfL + 1) % 1);
+  return dBehind <= preZone || dAhead <= postZone;
+}
+
 function buildSpeedProfile(track) {
   const cacheKey = `${track.id}:${track.sfLine ?? 0}:sfv5`;
   if (_profileCache.has(cacheKey)) return _profileCache.get(cacheKey);
@@ -878,7 +889,7 @@ export default function CircuitRaceView({
   participants = [], lap_results = [], pit_stops = [], qualifying_order = [],
   tire_wear_after_lap = {}, laps: totalLaps = 3, resultOrder = [],
   weather: weatherIdProp = "clear", weather_name: weatherNameProp,
-  onComplete, onReset,
+  onComplete, onReset, onVisualLapChange = null,
   mode = "replay", raceId = null, initialTrackId = "chicago",
   initialCondition = "clear", playerCarName = "Stutz Bearcat",
   playerTyreId = "medium", playerPitLevel = 0, currentUserId = null,
@@ -918,6 +929,8 @@ export default function CircuitRaceView({
   useEffect(() => { spMultRef.current = spMult; },  [spMult]);
   useEffect(() => { pausedRef.current = paused; },  [paused]);
   useEffect(() => { manPitRef.current = manPit; },  [manPit]);
+  const onVisualLapChangeRef = useRef(onVisualLapChange);
+  useEffect(() => { onVisualLapChangeRef.current = onVisualLapChange; }, [onVisualLapChange]);
 
   const liveCarStatesRef = useRef(liveCarStates);
   const liveIncidentsRef = useRef(liveIncidents);
@@ -1939,20 +1952,19 @@ export default function CircuitRaceView({
           // High curvature = must slow down; grip determines how slow.
           // cornerGripMult gives the grip-based limit; profile gives the geometry limit.
           // Take the more conservative (minimum) of the two so physics are consistent.
-          const sfLP = track.sfLine ?? 0;
-          const dbSF = ((sfLP - trackT + 1) % 1), daSF = ((trackT - sfLP + 1) % 1);
-          const inSfStraight = dbSF <= 0.24 || daSF <= 0.18;
+          const inSF = inStartFinishSafeZone(track, trackT);
           const gripBasedMult = cornerGripMult(curvature, effGrip);
           const profileMult   = Math.max(0.50, Math.min(1.0, profile[pidx] + (effGrip-0.85)*0.55));
           // On the start/finish straight, ignore grip/curvature cap — it caused visible lift-off before the line
-          let cornerSM = inSfStraight
+          let cornerSM = inSF
             ? Math.min(1, Math.max(profileMult, 0.998))
             : Math.min(profileMult, gripBasedMult);
 
           // Curvature-aware brake/accel rates — sharper on straights, gentler in tight corners
           // In real cars: brake distance is short (0.2-0.4s), accel ramp is longer (0.5-1.2s)
-          const isTightCorner = curvature > 0.12;
-          const isMedCorner   = curvature > 0.055;
+          const effCurvSlide = inSF ? 0 : curvature;
+          const isTightCorner = !inSF && curvature > 0.12;
+          const isMedCorner   = !inSF && curvature > 0.055;
           // ABRAKE: how fast we reach the corner speed target. Higher = more instant.
           // At 60fps dt≈0.016: ABRAKE=5 → ~50% correction per frame = sharp, realistic braking
           const ABRAKE = isTightCorner ? 6.5 : isMedCorner ? 5.0 : 4.0;
@@ -1973,8 +1985,8 @@ export default function CircuitRaceView({
             const rawMph=track.km&&track.lapBase?SSCALE*(3600*track.km*cornerSM*effSpeed)/track.lapBase:null;
             const tMph=rawMph!=null?Math.max(0,Math.min(SCAP,rawMph)):null;
             r.currentSpeedMph=tMph!=null?(r.currentSpeedMph!=null?applyLerp(r.currentSpeedMph,tMph):tMph):null;
-            // Slide off — low grip + sharp corner
-            if(curvature>0.22&&effGrip<0.66&&Math.random()<dt*0.5*(0.66-effGrip)*Math.min(1,curvature/0.36)){
+            // Slide off — low grip + sharp corner (never in SF safe zone — seam curvature spikes)
+            if(!inSF&&effCurvSlide>0.22&&effGrip<0.66&&Math.random()<dt*0.5*(0.66-effGrip)*Math.min(1,effCurvSlide/0.36)){
               r.slideOffUntil=nowSec+0.5+Math.random()*0.65;addInc(`${r.name} off track!`);
               if(!scActive&&nowSec>sc.cooldownUntil&&Math.random()<0.15&&nLaps>1){sc.active=true;sc.endsAtSec=nowSec+6+Math.random()*4;sc.cooldownUntil=sc.endsAtSec+10;addInc("Safety car deployed!");setCommentary(rnd(COMMENTARY.safetyCar));}
             }
@@ -2351,7 +2363,7 @@ export default function CircuitRaceView({
       if (cdVal <= 0) {
         clearInterval(cdI);
         setUiPhase("racing");
-        setLapDisp(`${liveCurrentLap} / ${liveTotalLaps}`);
+        setLapDisp(`0 / ${liveTotalLaps}`);
         setCommentary(rnd(COMMENTARY.start));
         startRacing();
       }
@@ -2363,15 +2375,17 @@ export default function CircuitRaceView({
     let prevPitStopsLen = (livePitStopsRef.current || []).length;
     let prevIncidentsLen = (liveIncidentsRef.current || []).length;
     let prevBackendLap = liveCurrentLapRef.current || 0;
+    let lastReportedVisLap = -1;
 
     const addInc = (text) => {
       stateRef.current.incidents.push({ text, time: performance.now() });
     };
 
     const loop = (now) => {
+      if (pausedRef.current) { lastFrame = now; rafRef.current = requestAnimationFrame(loop); return; }
       let dt = (now - lastFrame) / 1000;
       if (firstFrame) { firstFrame = false; dt = 0; }
-      dt = Math.min(0.05, dt);
+      dt = Math.min(0.05, dt) * (spMultRef.current || 1);
       lastFrame = now;
       const nowSec = now / 1000;
 
@@ -2382,23 +2396,10 @@ export default function CircuitRaceView({
       const cs2 = liveCarStatesRef.current || {};
       const curLap = liveCurrentLapRef.current || 0;
       const totLaps = liveTotalLapsRef.current || 3;
-      setLapDisp(`${curLap} / ${totLaps}`);
 
       if (curLap !== prevBackendLap) {
         prevBackendLap = curLap;
         r.forEach(x => { x.lastSectorCross = nowSec; x.currentSector = 0; });
-      }
-
-      // Race completion detection: backend finished all laps
-      if (curLap >= totLaps && totLaps > 0 && !st._raceFinished) {
-        st._raceFinished = true;
-        st.finishFlash = nowSec + 3.0;
-        addInc("CHECKERED FLAG!");
-        setCommentary(rnd(COMMENTARY.done));
-        let fo = 1;
-        [...r].sort((a, b) => (a._targetPos ?? 99) - (b._targetPos ?? 99)).forEach(x => {
-          if (!x.dnf) { x.finished = true; x.finishOrder = fo++; }
-        });
       }
 
       const scActive = sc.active && nowSec < sc.endsAtSec;
@@ -2529,19 +2530,17 @@ export default function CircuitRaceView({
         const pidx = Math.round(trackT * (PROFILE_N - 1));
         const curvature = getCurvature(trk, trackT);
 
-        const sfLp = trk.sfLine ?? 0;
-        const dBehindSF = ((sfLp - trackT + 1) % 1);
-        const dAheadSF = ((trackT - sfLp + 1) % 1);
-        const inSfStraight = dBehindSF <= 0.24 || dAheadSF <= 0.18;
+        const inSF = inStartFinishSafeZone(trk, trackT);
         const gripBasedMult = cornerGripMult(curvature, effGrip);
         const profileMult = Math.max(0.50, Math.min(1.0, profile[pidx] + (effGrip - 0.85) * 0.55));
-        let cornerSM = inSfStraight
+        let cornerSM = inSF
           ? Math.min(1, Math.max(profileMult, 0.998))
           : Math.min(profileMult, gripBasedMult);
 
+        const effCurvSlide = inSF ? 0 : curvature;
         // Curvature-aware braking/acceleration rates
-        const isTightCorner = curvature > 0.12;
-        const isMedCorner = curvature > 0.055;
+        const isTightCorner = !inSF && curvature > 0.12;
+        const isMedCorner = !inSF && curvature > 0.055;
         const ABRAKE = isTightCorner ? 6.5 : isMedCorner ? 5.0 : 4.0;
         const AACCEL = isTightCorner ? 2.2 : isMedCorner ? 2.8 : 3.6;
         const SSCALE = 0.170, SCAP = 160;
@@ -2569,8 +2568,8 @@ export default function CircuitRaceView({
           racer.currentSpeedMph = tMph != null
             ? (racer.currentSpeedMph != null ? applyLerp(racer.currentSpeedMph, tMph) : tMph) : null;
 
-          // Slide-off on low grip + sharp corners
-          if (curvature > 0.22 && effGrip < 0.66 && Math.random() < dt * 0.5 * (0.66 - effGrip) * Math.min(1, curvature / 0.36)) {
+          // Slide-off on low grip + sharp corners (not in SF safe zone)
+          if (!inSF && effCurvSlide > 0.22 && effGrip < 0.66 && Math.random() < dt * 0.5 * (0.66 - effGrip) * Math.min(1, effCurvSlide / 0.36)) {
             racer.slideOffUntil = nowSec + 0.5 + Math.random() * 0.65;
             addInc(`${racer.name} off track!`);
             if (!sc.active && nowSec > sc.cooldownUntil && Math.random() < 0.15 && totLaps > 1) {
@@ -2580,9 +2579,6 @@ export default function CircuitRaceView({
             }
           }
         }
-
-        // Sync lap count from backend
-        racer.totalLapsDone = Math.max(racer.totalLapsDone, curLap);
 
         // Sector crossings
         const sfL = trk.sfLine ?? 0;
@@ -2635,7 +2631,7 @@ export default function CircuitRaceView({
         }
 
         // Tyre smoke in corners with worn tyres
-        if (curvature > 0.06 && racer.tyreWear < 40) {
+        if (!inSF && curvature > 0.06 && racer.tyreWear < 40) {
           const pt = trk.getPoint(racer.trackPos);
           addTireSmoke(pt.x, pt.y, 0.4 + (1 - racer.tyreWear / 100) * 0.6);
         }
@@ -2645,6 +2641,22 @@ export default function CircuitRaceView({
           addTireSmoke(pt.x, pt.y, 0.3);
         }
       });
+
+      let visLap = 0;
+      r.forEach(x => { if (!x.dnf) visLap = Math.max(visLap, x.totalLapsDone ?? 0); });
+      visLap = Math.min(visLap, totLaps);
+
+      // Race finished: backend lap count or leader completed final lap visually
+      if ((curLap >= totLaps || visLap >= totLaps) && totLaps > 0 && !st._raceFinished) {
+        st._raceFinished = true;
+        st.finishFlash = nowSec + 3.0;
+        addInc("CHECKERED FLAG!");
+        setCommentary(rnd(COMMENTARY.done));
+        let fo = 1;
+        [...r].sort((a, b) => (a._targetPos ?? 99) - (b._targetPos ?? 99)).forEach(x => {
+          if (!x.dnf) { x.finished = true; x.finishOrder = fo++; }
+        });
+      }
 
       // Sort standings by progress
       r.sort((a, b) => {
@@ -2661,7 +2673,13 @@ export default function CircuitRaceView({
         fuelLoad: Math.round(x.fuelLoad), currentSpeedMph: Math.round(x.currentSpeedMph || 0),
         tyreCliffWarning: x.tyreWear < ((TYRE_DEFS[x.currentTyre]?.cliffStart || 0.66) * 100 + 12),
       })));
-      setRaceProg(curLap / totLaps);
+      setLapDisp(`${visLap} / ${totLaps}`);
+      setRaceProg(totLaps > 0 ? visLap / totLaps : 0);
+      if (visLap !== lastReportedVisLap) {
+        lastReportedVisLap = visLap;
+        const cb = onVisualLapChangeRef.current;
+        if (cb) cb(visLap, totLaps);
+      }
 
       drawCanvas(trk, cond, r, nowSec);
       rafRef.current = requestAnimationFrame(loop);

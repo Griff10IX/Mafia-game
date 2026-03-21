@@ -213,6 +213,8 @@ export default function Racing() {
   const [myDriver, setMyDriver] = useState(null);
   const [driverLoading, setDriverLoading] = useState(false);
   const [liveRace, setLiveRace] = useState(null);
+  /** Leader completed laps from canvas SF crossings; null = not yet reported (show server lap). */
+  const [interactiveLeaderLap, setInteractiveLeaderLap] = useState(null);
   const [myDecision, setMyDecision] = useState({ push_level: 3, pit_this_lap: false, pit_compound: "medium", defend: false });
   const [decisionSubmitted, setDecisionSubmitted] = useState(false);
   const [rndTree, setRndTree] = useState(null);
@@ -563,6 +565,10 @@ export default function Racing() {
     return () => { if (liveRacePoll.current) clearInterval(liveRacePoll.current); };
   }, [activeRace?.id, activeRace?.mode]);
 
+  useEffect(() => {
+    setInteractiveLeaderLap(null);
+  }, [activeRace?.id]);
+
   const createRacePayload = () => ({
     track_id: createForm.track_id,
     entry_fee: Number(createForm.entry_fee) || 0,
@@ -872,7 +878,9 @@ export default function Racing() {
       {activeRace?.state === "running" && (activeRace?.mode === "interactive" || activeRace?.interactive) && liveRace && (() => {
         const _carEntries = Object.entries(liveRace.car_states || {}).sort((a, b) => (a[1].position ?? 99) - (b[1].position ?? 99));
         const _tColors = { soft: "#e82020", medium: "#e8d020", hard: "#c0c0b8", inter: "#20a840", full_wet: "#2080e8" };
-        const _lapProg = (liveRace.current_lap || 1) / (liveRace.total_laps || 3);
+        const _totLapsHud = liveRace.total_laps || activeRace.laps || 3;
+        const _dispLap = interactiveLeaderLap != null ? interactiveLeaderLap : (liveRace.current_lap || 0);
+        const _lapProg = _totLapsHud > 0 ? Math.min(1, _dispLap / _totLapsHud) : 0;
         return (
         <div className="px-4 py-3 md:px-3 md:py-3 space-y-3">
           {/* Race Header Bar */}
@@ -883,7 +891,7 @@ export default function Racing() {
                   <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                   <span className="text-[10px] font-heading uppercase tracking-wider text-red-400">LIVE</span>
                 </div>
-                <span className="text-xs font-heading text-[var(--noir-primary)]">LAP {liveRace.current_lap}/{liveRace.total_laps}</span>
+                <span className="text-xs font-heading text-[var(--noir-primary)]">LAP {_dispLap}/{_totLapsHud}</span>
                 <span className="text-[10px] text-[var(--noir-muted)]">{liveRace.track?.name}</span>
                 {liveRace.weather && liveRace.weather !== "clear" && (
                   <span className="text-[10px] text-blue-400">{liveRace.weather}</span>
@@ -910,6 +918,7 @@ export default function Racing() {
             liveCurrentLap={liveRace.current_lap || 0}
             liveTotalLaps={liveRace.total_laps || activeRace.laps || 3}
             lapDeadline={liveRace.lap_deadline}
+            onVisualLapChange={(lap) => setInteractiveLeaderLap(lap)}
           />
 
           {/* Timing Tower + Strategy side by side on desktop */}
