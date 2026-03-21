@@ -647,6 +647,10 @@ const TRACKS = [
 const PROFILE_N = 256;
 const _profileCache = new Map();
 
+/** Must match buildSpeedProfile `inSFZone` — wide approach so cars don’t brake before the gantry on any map. */
+const SF_PROFILE_PRE_ZONE = 0.28;
+const SF_PROFILE_POST_ZONE = 0.14;
+
 /** True if moving forward from cell i hits the start/finish zone within `maxSteps` samples. Stops braking/accel bleed into the run-up. */
 function forwardReachesSfZoneWithin(i, sfZone, N, maxSteps) {
   for (let k = 1; k <= maxSteps; k++) {
@@ -675,22 +679,19 @@ function getCurvature(track, t) {
 function inStartFinishSafeZone(track, t) {
   const sfL = track.sfLine != null ? track.sfLine : 0;
   const tt = ((t % 1) + 1) % 1;
-  const preZone = 0.18;
-  const postZone = 0.12;
   const dBehind = ((sfL - tt + 1) % 1);
   const dAhead = ((tt - sfL + 1) % 1);
-  return dBehind <= preZone || dAhead <= postZone;
+  return dBehind <= SF_PROFILE_PRE_ZONE || dAhead <= SF_PROFILE_POST_ZONE;
 }
 
 /** Wider zone after SF line only — damps seam curvature for brake/accel tiers (not profile / slide-off). */
 function inStartFinishCornerRelaxZone(track, t) {
   const sfL = track.sfLine != null ? track.sfLine : 0;
   const tt = ((t % 1) + 1) % 1;
-  const preZone = 0.18;
-  const postZone = 0.24;
+  const postTier = 0.26;
   const dBehind = ((sfL - tt + 1) % 1);
   const dAhead = ((tt - sfL + 1) % 1);
-  return dBehind <= preZone || dAhead <= postZone;
+  return dBehind <= SF_PROFILE_PRE_ZONE || dAhead <= postTier;
 }
 
 /**
@@ -717,18 +718,15 @@ function crossedStartFinishLineForward(p0raw, p1raw, sfLine) {
 }
 
 function buildSpeedProfile(track) {
-  const cacheKey = `${track.id}:${track.sfLine ?? 0}:sfv5`;
+  const cacheKey = `${track.id}:${track.sfLine ?? 0}:sfv6`;
   if (_profileCache.has(cacheKey)) return _profileCache.get(cacheKey);
   const N = PROFILE_N, raw = new Float32Array(N);
 
   const sfL = track.sfLine != null ? track.sfLine : 0;
-  // SF zone: wide enough that profile + runtime never dip before the gantry
-  const preZone  = 0.18;
-  const postZone = 0.12;
   const inSFZone = f => {
     const dBehind = ((sfL - f + 1) % 1);
     const dAhead  = ((f - sfL + 1) % 1);
-    return dBehind <= preZone || dAhead <= postZone;
+    return dBehind <= SF_PROFILE_PRE_ZONE || dAhead <= SF_PROFILE_POST_ZONE;
   };
   // Pre-compute a boolean array for speed in the hot loop
   const sfZone = new Uint8Array(N);
@@ -748,7 +746,7 @@ function buildSpeedProfile(track) {
   // CRITICAL: if cell i is in the SF zone, SKIP it — don't let braking reduce it.
   // Also: if cell (i+1) is in the SF zone, don't propagate from it backward
   // (cars don't brake because of a fast straight ahead of them).
-  const sfRunUpSteps = 52; // ~20% of lap — kill braking cascade into S/F approach
+  const sfRunUpSteps = 72; // ~28% @ N=256 — block braking bleed into S/F approach
   for (let iter = 0; iter < 5; iter++) {
     for (let i = N-1; i >= 0; i--) {
       if (sfZone[i]) continue;
@@ -767,6 +765,7 @@ function buildSpeedProfile(track) {
       if (sfZone[i]) continue;
       const pi = (i - 1 + N) % N;
       if (sfZone[pi]) continue;
+      if (forwardReachesSfZoneWithin(pi, sfZone, N, sfRunUpSteps)) continue;
       const lim = raw[pi] / 0.910;
       if (raw[i] > lim) raw[i] = lim;
     }
@@ -1883,6 +1882,7 @@ export default function CircuitRaceView({
     let finishFlash=0, nextFO=1;
     stateRef.current={racers:racerArr,track,nLaps,wd:curWd,safetyCar:sc,fastestLap:fl,finishFlash:0,incidents};
     const SM=()=>spMultRef.current||1;
+    const lapCrossAllowedAfterSec = nLaps > 1 ? (performance.now() / 1000 + 1.75) : -Infinity;
 
     const loop = now => {
       try {
@@ -2040,7 +2040,8 @@ export default function CircuitRaceView({
           // Lap crossing: forward arc from prevPos → trackPos crosses sfLine (OK at x4 / big dt)
           const sfL2 = track.sfLine ?? 0;
           const crossedSF = crossedStartFinishLineForward(prevPos, r.trackPos, sfL2);
-          if(crossedSF && !(r._justCrossedFrames > 0)){
+          const canCountLap = nLaps === 1 || nowSec >= lapCrossAllowedAfterSec;
+          if(crossedSF && canCountLap && !(r._justCrossedFrames > 0)){
             r._justCrossedFrames = 4; // FIX: frame counter, no async stutter
             r.totalLapsDone++;r.lapCount=Math.min(nLaps,r.totalLapsDone+1);
             const lt=track.lapBase/(effSpeed*0.97)+(Math.random()-0.5)*0.8;
@@ -2321,6 +2322,7 @@ export default function CircuitRaceView({
     const track = TRACKS.find(t => t.id === initialTrackId) || TRACKS[0];
     const cond = WEATHER_MAP[weatherIdProp] || "clear";
     const wd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
+    const ww = wd.wearMult || 1;
     const profile = buildSpeedProfile(track);
 
     // Pre-compute average corner speed multiplier so we can calibrate orbit speed
@@ -2338,7 +2340,8 @@ export default function CircuitRaceView({
     const seen = new Set();
     const order = ids.filter(id => { if (seen.has(id)) return false; seen.add(id); return true; });
 
-    const racers = order.map((id, i) => {
+    const nRaceLaps = liveTotalLapsRef.current || liveTotalLaps || 3;
+    const qualRacers = order.map((id, i) => {
       const p = participants.find(x => (x.user_id || x.id) === id) || {};
       const isPlayer = currentUserId != null && (id === currentUserId || p.user_id === currentUserId);
       const bs = (p.effective_speed != null ? p.effective_speed : 15) / 15;
@@ -2346,15 +2349,19 @@ export default function CircuitRaceView({
       const tyreId = (carState.compound || p.tyre_compound || "medium").toLowerCase();
       const resolved = tyreId in TYRE_DEFS ? tyreId : "medium";
       const startTrackPos = 1.0 - (i * 0.06);
+      const pitLvl = p.pit_level != null ? p.pit_level : 0;
+      const relMult = Math.max(0.7, 1 - pitLvl * 0.05);
+      const po = isPlayer ? 0 : Math.floor(Math.random() * 3) - 1;
       return {
         id, name: p.username || p.car_name || `#${i + 1}`, isPlayer,
         color: CAR_COLORS[i % CAR_COLORS.length], carName: p.car_name || "",
         trackPos: startTrackPos, lapCount: 1, totalLapsDone: 0,
         currentTyre: resolved, tyreWear: carState.tyre_wear ?? 100,
         pitStops: 0, inPit: false, pitEndAt: 0,
-        pitDurationSeconds: 3, pitDurationEmergencySeconds: 5,
+        pitDurationSeconds: pitDur(pitLvl, false), pitDurationEmergencySeconds: pitDur(pitLvl, true),
         baseSpeed: bs, baseGrip: p.effective_grip != null ? p.effective_grip : 0.85,
-        pitStrategy: [], finished: false, finishOrder: 0, visible: true,
+        pitStrategy: buildStrategy(resolved, nRaceLaps, ww, relMult, po, "normal"),
+        finished: false, finishOrder: 0, visible: true,
         position: carState.position ?? (i + 1), carNumber: i + 1, lapTimes: [],
         slideOffUntil: 0, pitExitUntil: null,
         engineHealth: 100 - (carState.engine_wear ?? 0),
@@ -2363,8 +2370,8 @@ export default function CircuitRaceView({
         currentSector: 0, lastSectorCross: 0,
         bestSectors: [Infinity, Infinity, Infinity], sectorDelta: null,
         inSlipstream: false, tyreBlister: (carState.tyre_wear ?? 100) < 20,
-        strategyType: "normal", reliabilityWearMult: 1,
-        overtakingLevel: 0, overtakeBoostUntil: 0, currentSpeedMph: null,
+        strategyType: "normal", reliabilityWearMult: relMult,
+        overtakingLevel: Math.max(0, Math.round((bs - 0.88) * 200)), overtakeBoostUntil: 0, currentSpeedMph: null,
         _targetPos: carState.position ?? (i + 1),
         _smoothPos: carState.position ?? (i + 1),
         _prevPitCount: 0,
@@ -2372,27 +2379,13 @@ export default function CircuitRaceView({
     });
 
     const sc = { active: false, endsAtSec: 0, cooldownUntil: 0 };
-    const fl = { holderId: null, time: Infinity };
-    stateRef.current = { racers, track, nLaps: liveTotalLaps, wd, safetyCar: sc, fastestLap: fl, finishFlash: 0, incidents: [] };
-    liveInitDone.current = true;
+    liveInitDone.current = false;
+    let lightsAfterQualInterval = null;
 
-    // Formation lap / countdown: draw the grid and count 3-2-1-GO
-    setUiPhase("countdown"); setCountdown(3);
-    setLapDisp(`0 / ${liveTotalLaps}`);
-    setCommentary("Cars on the grid — lights sequence...");
-    drawCanvas(track, cond, racers, 0);
-
-    let cdVal = 3;
-    const cdI = setInterval(() => {
-      cdVal--; setCountdown(cdVal);
-      if (cdVal <= 0) {
-        clearInterval(cdI);
-        setUiPhase("racing");
-        setLapDisp(liveTotalLaps === 1 ? "Qualifying" : `1 / ${liveTotalLaps}`);
-        setCommentary(rnd(COMMENTARY.start));
-        startRacing();
-      }
-    }, 1000);
+    setUiPhase("qualifying");
+    setLapDisp("Qualifying");
+    setCommentary("Qualifying lap — grid order set");
+    drawCanvas(track, cond, qualRacers, 0);
 
     function startRacing() {
     let lastFrame = performance.now();
@@ -2402,6 +2395,8 @@ export default function CircuitRaceView({
     let prevBackendLap = liveCurrentLapRef.current || 0;
     let lastReportedVisLap = -1;
     let lastReportedProg = -1;
+    const raceTotLaps = liveTotalLapsRef.current || 3;
+    const lapCrossAllowedAfterSec = raceTotLaps > 1 ? (performance.now() / 1000 + 1.75) : -Infinity;
 
     const addInc = (text) => {
       stateRef.current.incidents.push({ text, time: performance.now() });
@@ -2624,7 +2619,8 @@ export default function CircuitRaceView({
         // Lap crossing (same geometry test as main loop — works at x4 speed)
         const sfL2 = trk.sfLine ?? 0;
         const crossedSF = crossedStartFinishLineForward(prevPos, racer.trackPos, sfL2);
-        if (crossedSF && !(racer._justCrossedFrames > 0)) {
+        const canCountLap = raceTotLaps <= 1 || nowSec >= lapCrossAllowedAfterSec;
+        if (crossedSF && canCountLap && !(racer._justCrossedFrames > 0)) {
           racer._justCrossedFrames = 4; // FIX: frame counter
           racer.totalLapsDone = Math.min(totLaps, (racer.totalLapsDone || 0) + 1);
           racer.lapCount = Math.min(totLaps, racer.totalLapsDone + 1);
@@ -2717,9 +2713,79 @@ export default function CircuitRaceView({
     rafRef.current = requestAnimationFrame(loop);
     } // end startRacing()
 
-    return () => { clearInterval(cdI); if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+    startRaceLoop(track, cond, 1, qualRacers, {
+      onQualifyingComplete: (sorted) => {
+        if (rafRef.current) {
+          cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        }
+        const nRace = liveTotalLapsRef.current || 3;
+        const wd2 = wd;
+        const grid = sorted.map((r, i) => ({
+          ...r,
+          trackPos: (sorted.length - i) * 0.012,
+          totalLapsDone: 0,
+          lapCount: 1,
+          finished: false,
+          finishOrder: 0,
+          visible: true,
+          tyreWear: Math.min(100, r.tyreWear ?? 100),
+          lapTimes: [],
+          pitStops: 0,
+          inPit: false,
+          pitEndAt: 0,
+          slideOffUntil: 0,
+          pitExitUntil: null,
+          position: i + 1,
+          carNumber: i + 1,
+          pitStrategy: buildStrategy(r.currentTyre, nRace, wd2.wearMult || 1, r.reliabilityWearMult || 1, r.isPlayer ? 0 : Math.floor(Math.random() * 3) - 1, r.strategyType || "normal"),
+          engineHealth: r.engineHealth ?? 100,
+          dnf: false,
+          dnfAtSec: 0,
+          dnfSparks: [],
+          fuelLoad: r.fuelLoad ?? 100,
+          currentSector: 0,
+          lastSectorCross: 0,
+          bestSectors: [Infinity, Infinity, Infinity],
+          sectorDelta: null,
+          inSlipstream: false,
+          tyreBlister: false,
+          overtakeBoostUntil: 0,
+          currentSpeedMph: null,
+          _targetPos: i + 1,
+          _smoothPos: i + 1,
+        }));
+        stateRef.current = {
+          racers: grid, track, nLaps: nRace, wd: wd2, safetyCar: sc,
+          fastestLap: { holderId: null, time: Infinity }, finishFlash: 0, incidents: [],
+        };
+        liveInitDone.current = true;
+        drawCanvas(track, cond, grid, 0);
+        setCommentary("Grid set — race start!");
+        setUiPhase("countdown");
+        setCountdown(3);
+        let cdVal = 3;
+        lightsAfterQualInterval = setInterval(() => {
+          cdVal--;
+          setCountdown(cdVal);
+          if (cdVal <= 0) {
+            if (lightsAfterQualInterval) clearInterval(lightsAfterQualInterval);
+            lightsAfterQualInterval = null;
+            setUiPhase("racing");
+            setLapDisp(nRace === 1 ? "Qualifying" : `1 / ${nRace}`);
+            setCommentary(rnd(COMMENTARY.start));
+            startRacing();
+          }
+        }, 1000);
+      },
+    });
+
+    return () => {
+      if (lightsAfterQualInterval) clearInterval(lightsAfterQualInterval);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, currentUserId, participants.length, initialTrackId, weatherIdProp]);
+  }, [mode, currentUserId, participants.length, initialTrackId, weatherIdProp, liveTotalLaps, startRaceLoop]);
 
   // ─── LIVE MODE STANDALONE START ─────────────────────────────────────────
   const handleStart=useCallback(()=>{
