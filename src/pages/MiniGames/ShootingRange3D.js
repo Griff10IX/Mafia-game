@@ -596,7 +596,7 @@ export default function ShootingRange3D() {
       const H = Math.max(200, canvas.clientHeight || 400);
 
       renderer = new THREE.WebGLRenderer({ canvas, antialias: !mobile, powerPreference: "high-performance" });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.5 : 2.5));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.5 : 2));
       renderer.setSize(W, H, false);
       renderer.shadowMap.enabled = !mobile;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;

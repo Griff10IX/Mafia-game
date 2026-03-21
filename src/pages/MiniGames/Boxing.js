@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { applyCanvasHiDpi } from "../../utils/canvasHiDpi";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api, { getApiErrorMessage } from "../../utils/api";
 import styles from "../../styles/noir.module.css";
@@ -166,7 +165,6 @@ function drawBars(ctx, W, H, hpA, hpB, stamA, stamB, round, nameA, nameB) {
 
 function FightReplay({ fight, onClose }) {
   const canvasRef = useRef(null);
-  const canvasWrapRef = useRef(null);
   const animRef = useRef(null);
   const stateRef = useRef(null);
   const [speed, setSpeed] = useState(1);
@@ -208,9 +206,7 @@ function FightReplay({ fight, onClose }) {
       const canvas = canvasRef.current;
       if (!canvas) { animRef.current = requestAnimationFrame(render); return; }
       const ctx = canvas.getContext("2d");
-      const W = canvas.clientWidth;
-      const H = canvas.clientHeight;
-      if (W < 8 || H < 8) { animRef.current = requestAnimationFrame(render); return; }
+      const W = canvas.width, H = canvas.height;
       const now = performance.now();
       const st = stateRef.current;
       if (!st) { animRef.current = requestAnimationFrame(render); return; }
@@ -311,23 +307,6 @@ function FightReplay({ fight, onClose }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fight]);
 
-  useLayoutEffect(() => {
-    if (!fight || !rounds.length) return undefined;
-    const wrap = canvasWrapRef.current;
-    const canvas = canvasRef.current;
-    if (!wrap || !canvas) return undefined;
-    const sync = () => {
-      const w = wrap.clientWidth;
-      const h = wrap.clientHeight;
-      if (w < 8 || h < 8) return;
-      applyCanvasHiDpi(canvas, w, h, 2);
-    };
-    sync();
-    const ro = new ResizeObserver(sync);
-    ro.observe(wrap);
-    return () => ro.disconnect();
-  }, [fight, rounds.length]);
-
   useEffect(() => {
     commentEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [commentary]);
@@ -383,8 +362,8 @@ function FightReplay({ fight, onClose }) {
       </div>
 
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div ref={canvasWrapRef} style={{ position: "relative", width: "100%", maxWidth: 720, margin: "0 auto", aspectRatio: "16/9", flexShrink: 0 }}>
-          <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "100%", verticalAlign: "top" }} />
+        <div style={{ position: "relative", width: "100%", maxWidth: 720, margin: "0 auto", aspectRatio: "16/9", flexShrink: 0 }}>
+          <canvas ref={canvasRef} width={640} height={360} style={{ width: "100%", height: "100%", display: "block" }} />
         </div>
         <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-2 min-h-0" style={{ fontSize: 11, lineHeight: 1.7, color: "#e0d0b0", textAlign: "center", maxWidth: 720, margin: "0 auto", width: "100%" }}>
           {commentary.map((c, i) => (

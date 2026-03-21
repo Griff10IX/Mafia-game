@@ -1899,7 +1899,7 @@ export default function Layout({ children }) {
             if (!group || group.type !== 'group') return null;
             return (
               <div data-layout="bottom-nav-submenu" className="absolute bottom-full left-0 right-0 border-t border-primary/20 shadow-2xl max-h-[60vh] overflow-y-auto"
-                style={{ backgroundColor: 'var(--noir-content)', backdropFilter: 'blur(4px)', borderBottom: '1px solid var(--noir-border-mid)' }}
+                style={{ backgroundColor: 'var(--noir-content)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--noir-border-mid)' }}
                 role="menu">
                 {/* Group title */}
                 <div className="flex items-center justify-center gap-2 px-3 py-2 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.15)' }}>
