@@ -1491,7 +1491,8 @@ function FamigliaGameInner(){
       car.carSpd*=(CAR_FRIC+tireBoost*0.1);
       const maxSpd=CAR_MAX*d.speed*(1+(car.upgrades.engine||0)*0.15);
       car.carSpd=Math.max(-maxSpd*0.5,Math.min(maxSpd,car.carSpd));
-      if(Math.abs(car.carSpd)>0.2)car.heading+=rdx*CAR_STEER*Math.sign(car.carSpd);
+      // Screen-consistent turn: no sign(carSpd) — avoids reverse feeling like inverted stick
+      if(Math.abs(car.carSpd)>0.2)car.heading+=rdx*CAR_STEER;
       const R=18+(car.upgrades.armor||0)*2;
       const vx=Math.sin(car.heading)*car.carSpd,vy=-Math.cos(car.heading)*car.carSpd;
       // Solid-wall collision (buildings)
@@ -2367,9 +2368,14 @@ function FamigliaGameInner(){
     const canvas=canvasRef.current;if(!canvas)return;
     const xy=(t)=>{const r=canvas.getBoundingClientRect();return{x:(t.clientX-r.left)/r.width*NW,y:(t.clientY-r.top)/r.height*NH};};
     const onTS=(e)=>{e.preventDefault();Array.from(e.changedTouches).forEach(t=>{const{x,y}=xy(t);if(x<NW*.55){if(joyRef.current.id===null)joyRef.current={id:t.identifier,origin:{x,y},vec:{x:0,y:0},base:{x,y}};}else{doShoot();if(y>NH*.6)doInteract();}});};
-    const onTM=(e)=>{e.preventDefault();Array.from(e.changedTouches).forEach(t=>{if(t.identifier===joyRef.current.id){const{x,y}=xy(t);const o=joyRef.current.origin;
-      // Negate X so stick right = move right (matches world +X / screen coords on mobile)
-      let dx=-(x-o.x)/54,dy=(y-o.y)/54;const m=Math.sqrt(dx*dx+dy*dy);if(m>1){dx/=m;dy/=m;}joyRef.current.vec={x:dx,y:dy};joyRef.current.base={x:o.x,y:o.y};}});};
+    const onTM=(e)=>{e.preventDefault();
+      const j=joyRef.current;if(j.id==null||!j.origin)return;
+      for(let i=0;i<e.touches.length;i++){
+        const t=e.touches[i];if(t.identifier!==j.id)continue;
+        const{x,y}=xy(t);const o=j.origin;
+        let dx=(x-o.x)/54,dy=(y-o.y)/54;const m=Math.hypot(dx,dy);if(m>1){dx/=m;dy/=m;}
+        j.vec={x:dx,y:dy};j.base={x:o.x,y:o.y};break;
+      }};
     const onTE=(e)=>{e.preventDefault();Array.from(e.changedTouches).forEach(t=>{if(t.identifier===joyRef.current.id)joyRef.current={id:null,origin:null,vec:{x:0,y:0},base:null};});};
     canvas.addEventListener("touchstart",onTS,{passive:false});canvas.addEventListener("touchmove",onTM,{passive:false});
     canvas.addEventListener("touchend",onTE,{passive:false});canvas.addEventListener("touchcancel",onTE,{passive:false});
@@ -2406,21 +2412,33 @@ function FamigliaGameInner(){
   const gs=gsRef.current;
 
   return(
-    <div className="relative w-full max-w-[600px] max-lg:max-w-none mx-auto bg-[#0a0806] rounded-lg overflow-hidden max-lg:rounded-none" style={{touchAction:"none",userSelect:"none"}}>
-      <canvas ref={canvasRef} style={{display:"block",width:"100%",height:"auto",aspectRatio:`${NW} / ${NH}`,imageRendering:"pixelated"}}/>
-      <canvas ref={mmRef} width={88} height={88} style={{position:"absolute",top:8,right:8,width:88,height:88,border:"1px solid #b49650",background:"#0a0806",borderRadius:4,imageRendering:"pixelated"}}/>
+    <div
+      className="
+        relative mx-auto w-full max-w-[600px] bg-[#0a0806] rounded-lg overflow-hidden
+        max-xl:rounded-none max-xl:w-[min(100%,calc((100dvh-5.75rem)*600/460))]
+        max-xl:aspect-[600/460] max-xl:max-w-none
+        touch-none select-none
+      "
+      style={{ touchAction: "none", userSelect: "none" }}
+    >
+      <canvas
+        ref={canvasRef}
+        className="block w-full max-xl:absolute max-xl:inset-0 max-xl:h-full xl:h-auto"
+        style={{ display: "block", width: "100%", height: "auto", aspectRatio: `${NW} / ${NH}`, imageRendering: "pixelated" }}
+      />
+      <canvas ref={mmRef} width={88} height={88} className="absolute top-1.5 right-1.5 md:top-2 md:right-2 w-14 h-14 md:w-[88px] md:h-[88px] border border-[#b49650] bg-[#0a0806] rounded" style={{imageRendering:"pixelated"}}/>
 
-      {/* HUD */}
-      <div style={{position:"absolute",top:8,left:8,display:"flex",gap:5}}>
+      {/* HUD — compact on mobile (emoji/hearts scale with font-size) */}
+      <div className="absolute top-1.5 left-1.5 md:top-2 md:left-2 flex flex-wrap gap-1 md:gap-[5px] max-w-[calc(100%-5.5rem)] md:max-w-none">
         {[
-          {l:"CASH",  c:<span id="rpg-cash"   style={{fontSize:12,fontWeight:"bold",color:"#fff"}}>$2,400</span>},
-          {l:"WANTED",c:<><div style={{width:64,height:5,background:"#111",border:"1px solid #444",marginTop:2}}><div id="rpg-heat" style={{height:"100%",width:"8%",background:"#b49650",transition:"width .3s"}}/></div><div id="rpg-stars" style={{fontSize:10,color:"#b49650",marginTop:2,letterSpacing:1}}>☆☆☆☆☆</div></>},
-          {l:"HP",    c:<span id="rpg-hp"      style={{fontSize:10,color:"#fff"}}>❤❤❤❤❤</span>},
-          {l:"GUN",   c:<span id="rpg-weapon"  style={{fontSize:9,color:"#e8d5a0"}}>🔫Revolver</span>},
-          {l:"TIME",  c:<span style={{display:"flex",alignItems:"center",gap:3}}><span id="rpg-timeicon" style={{fontSize:11}}>☀️</span><span id="rpg-time" style={{fontSize:9,color:"#e8d5a0"}}>9:00AM</span></span>},
+          {l:"CASH",  c:<span id="rpg-cash" className="text-[10px] md:text-xs font-bold text-white leading-tight">$2,400</span>},
+          {l:"WANTED",c:<><div className="w-[52px] md:w-16 h-1 md:h-[5px] bg-[#111] border border-[#444] mt-0.5 md:mt-0.5"><div id="rpg-heat" className="h-full w-[8%] bg-[#b49650] transition-[width] duration-300"/></div><div id="rpg-stars" className="text-[8px] md:text-[10px] text-[#b49650] mt-0.5 tracking-wide leading-none">☆☆☆☆☆</div></>},
+          {l:"HP",    c:<span id="rpg-hp" className="text-[8px] md:text-[10px] text-white leading-none">❤❤❤❤❤</span>},
+          {l:"GUN",   c:<span id="rpg-weapon" className="text-[7px] md:text-[9px] text-[#e8d5a0] leading-tight block max-w-[4.5rem] md:max-w-none truncate">🔫Revolver</span>},
+          {l:"TIME",  c:<span className="flex items-center gap-0.5 md:gap-[3px]"><span id="rpg-timeicon" className="text-[9px] md:text-[11px] leading-none">☀️</span><span id="rpg-time" className="text-[7px] md:text-[9px] text-[#e8d5a0] leading-tight">9:00AM</span></span>},
         ].map(({l,c})=>(
-          <div key={l} style={{background:"rgba(0,0,0,0.84)",border:"1px solid #b49650",padding:"3px 6px",borderRadius:3}}>
-            <div style={{fontSize:7,color:"#b49650",letterSpacing:1,marginBottom:1}}>{l}</div>{c}
+          <div key={l} className="bg-black/84 border border-[#b49650] px-1 py-0.5 md:px-1.5 md:py-[3px] rounded-sm shrink-0">
+            <div className="text-[6px] md:text-[7px] text-[#b49650] tracking-wide mb-px leading-none">{l}</div>{c}
           </div>
         ))}
       </div>
@@ -2543,22 +2561,22 @@ function FamigliaGameInner(){
       </div>
 
       {/* Mobile buttons */}
-      <div style={{position:"absolute",bottom:10,right:10,display:"flex",flexDirection:"column",gap:8,pointerEvents:"all"}}>
-        <button onPointerDown={e=>{e.preventDefault();doShoot();}} style={{width:56,height:56,borderRadius:"50%",background:"rgba(160,20,20,0.78)",border:"2px solid #cc4040",color:"#fff",fontSize:20,cursor:"pointer",touchAction:"none"}}>🔫</button>
-        <button onPointerDown={e=>{e.preventDefault();doInteract();}} style={{width:56,height:56,borderRadius:"50%",background:"rgba(150,130,50,0.68)",border:"2px solid #b49650",color:"#fff",fontSize:9,fontWeight:"bold",cursor:"pointer",touchAction:"none",lineHeight:1.3}}>TALK<br/>/CAR</button>
+      <div className="absolute bottom-2 right-2 md:bottom-2.5 md:right-2.5 flex flex-col gap-1.5 md:gap-2 pointer-events-auto">
+        <button type="button" onPointerDown={e=>{e.preventDefault();doShoot();}} className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-[rgba(160,20,20,0.78)] border-2 border-[#cc4040] text-white text-base md:text-xl cursor-pointer touch-none">🔫</button>
+        <button type="button" onPointerDown={e=>{e.preventDefault();doInteract();}} className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-[rgba(150,130,50,0.68)] border-2 border-[#b49650] text-white text-[8px] md:text-[9px] font-bold cursor-pointer touch-none leading-tight">TALK<br/>/CAR</button>
       </div>
 
       {/* Objective panel */}
-      <div style={{position:"absolute",bottom:72,left:8,maxWidth:220,background:"rgba(0,0,0,0.78)",border:"1px solid #b4965055",borderRadius:4,padding:"6px 10px",pointerEvents:"none"}}>
-        <div style={{fontSize:7,color:"#b49650",letterSpacing:1,marginBottom:3}}>OBJECTIVE</div>
-        <div id="rpg-objective" style={{fontSize:9,color:"#e8d5a0",lineHeight:1.5}}>
-          <span style={{color:"#555",fontSize:9}}>No active mission</span>
+      <div className="absolute bottom-[6.5rem] left-1.5 md:bottom-[72px] md:left-2 max-w-[200px] md:max-w-[220px] bg-[rgba(0,0,0,0.78)] border border-[#b4965055] rounded p-1.5 md:p-2.5 pointer-events-none">
+        <div className="text-[6px] md:text-[7px] text-[#b49650] tracking-wide mb-0.5 md:mb-[3px]">OBJECTIVE</div>
+        <div id="rpg-objective" className="text-[8px] md:text-[9px] text-[#e8d5a0] leading-snug">
+          <span className="text-[#555] text-[8px] md:text-[9px]">No active mission</span>
         </div>
       </div>
 
-      {/* Phone button */}
-      <button id="rpg-phone-btn" onClick={()=>{const el=document.getElementById("rpg-phone");if(el)el.style.display=el.style.display==="flex"?"none":"flex";}}
-        style={{position:"absolute",top:8,right:104,background:"rgba(0,0,0,0.82)",border:"1px solid #b49650",borderRadius:4,padding:"4px 8px",color:"#b49650",fontSize:10,cursor:"pointer",pointerEvents:"all",zIndex:8}}>
+      {/* Phone button — offset clears minimap (smaller on mobile) */}
+      <button type="button" id="rpg-phone-btn" onClick={()=>{const el=document.getElementById("rpg-phone");if(el)el.style.display=el.style.display==="flex"?"none":"flex";}}
+        className="absolute top-1.5 right-[4.25rem] md:top-2 md:right-[104px] z-[8] pointer-events-auto bg-[rgba(0,0,0,0.82)] border border-[#b49650] rounded px-1.5 py-0.5 md:px-2 md:py-1 text-[#b49650] text-[8px] md:text-[10px] cursor-pointer">
         📱 PHONE
       </button>
 
@@ -2768,30 +2786,39 @@ export default function Famiglia(){
   useEffect(()=>{fetchLeaderboard();},[fetchLeaderboard]);
 
   return(
-    <div className={`${styles.pageContent} mobile-page-root space-y-3`}>
-      <header className="flex items-center gap-2 mb-2">
-        <Link to="/casino/mini-games/leaderboard" className="p-1 rounded hover:bg-primary/10 transition-colors" title="Mini games leaderboard">
+    <div
+      className={`
+        ${styles.pageContent} mobile-page-root space-y-3
+        max-xl:space-y-2
+        max-xl:w-[100dvw] max-xl:max-w-[100dvw] max-xl:box-border
+        max-xl:relative max-xl:left-1/2 max-xl:-translate-x-1/2
+        max-xl:px-2 max-xl:pt-1
+        max-xl:pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]
+        xl:w-full xl:left-0 xl:translate-x-0 xl:max-w-none xl:px-0
+      `}
+    >
+      <header className="flex items-center gap-2 mb-1 max-xl:mb-0 max-xl:min-h-0">
+        <Link to="/casino/mini-games/leaderboard" className="p-1 rounded hover:bg-primary/10 transition-colors shrink-0" title="Mini games leaderboard">
           <ArrowLeft size={16} className="text-primary" />
         </Link>
-        <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Famiglia</h1>
+        <h1 className="text-xs max-xl:text-[11px] font-heading font-bold text-primary uppercase tracking-wider truncate">Famiglia</h1>
       </header>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {/* Mobile: cancel main p-4 inset so the canvas can use full screen width */}
-        <div className="lg:col-span-2 flex justify-center w-[calc(100%+2rem)] max-w-[100vw] -mx-4 md:w-full md:max-w-none md:mx-0">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-2 max-xl:gap-2 xl:gap-3">
+        <div className="xl:col-span-2 flex justify-center w-full min-w-0">
           <FamigliaGameInner />
         </div>
-        <div className="space-y-3">
+        <div className="space-y-2 max-xl:space-y-2 xl:space-y-3 max-xl:px-0">
           <section className={`${styles.panel} mobile-panel rounded-lg overflow-hidden`}>
-            <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+            <div className="px-3 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Trophy size={14} className="text-primary" />
+                <Trophy size={14} className="text-primary shrink-0" />
                 <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Top 10</h2>
               </div>
               <button type="button" onClick={()=>fetchLeaderboard()} disabled={loadingLb} className="p-1 rounded hover:bg-primary/10">
                 <RefreshCw size={12} className={`text-primary ${loadingLb?"animate-spin":""}`} />
               </button>
             </div>
-            <div className="p-2 space-y-1 max-h-[360px] overflow-y-auto">
+            <div className="p-2 space-y-1 max-h-[200px] sm:max-h-[240px] md:max-h-[280px] xl:max-h-[360px] overflow-y-auto">
               {leaderboard.length===0?(
                 <p className="text-[10px] text-mutedForeground italic py-4 text-center font-heading">No scores yet</p>
               ):(
@@ -2817,9 +2844,9 @@ export default function Famiglia(){
               )}
             </div>
           </section>
-          <section className={`${styles.panel} mobile-panel rounded-lg p-3`}>
-            <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-2">Leaderboard</h3>
-            <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+          <section className={`${styles.panel} mobile-panel rounded-lg p-2.5 max-xl:p-2 xl:p-3`}>
+            <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-1 xl:mb-2">Leaderboard</h3>
+            <p className="text-[8px] max-xl:text-[8px] xl:text-[10px] text-mutedForeground font-heading leading-snug">
               Complete missions or save your game to sync stats (rate-limited). Score combines respect, missions finished, and career earnings. Earns weekly mini-game points and a small cash bonus.
             </p>
           </section>

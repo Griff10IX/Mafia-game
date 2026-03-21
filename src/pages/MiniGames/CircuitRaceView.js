@@ -1178,6 +1178,8 @@ export default function CircuitRaceView({
   useEffect(() => { onInteractiveLeaderLapCrossRef.current = onInteractiveLeaderLapCross; }, [onInteractiveLeaderLapCross]);
   const onInteractiveTimingUpdateRef = useRef(onInteractiveTimingUpdate);
   useEffect(() => { onInteractiveTimingUpdateRef.current = onInteractiveTimingUpdate; }, [onInteractiveTimingUpdate]);
+  const onInteractiveGreenFlagRef = useRef(onInteractiveGreenFlag);
+  useEffect(() => { onInteractiveGreenFlagRef.current = onInteractiveGreenFlag; }, [onInteractiveGreenFlag]);
   const onCompleteRef = useRef(onComplete);
   useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
   useEffect(() => {
@@ -2426,6 +2428,9 @@ export default function CircuitRaceView({
     raceStart.current=Date.now(); rafRef.current=requestAnimationFrame(loop);
   }, [drawCanvas, clearSaved, saveState]);
 
+  const startRaceLoopRef = useRef(startRaceLoop);
+  startRaceLoopRef.current = startRaceLoop;
+
   // ─── REPLAY MODE ────────────────────────────────────────────────────────
   useEffect(() => {
     if (mode !== "replay") return;
@@ -3212,7 +3217,7 @@ export default function CircuitRaceView({
     rafRef.current = requestAnimationFrame(loop);
     } // end startRacing()
 
-    startRaceLoop(track, cond, 1, qualRacers, {
+    startRaceLoopRef.current(track, cond, 1, qualRacers, {
       onQualifyingComplete: (sorted) => {
         if (rafRef.current) {
           cancelAnimationFrame(rafRef.current);
@@ -3278,7 +3283,8 @@ export default function CircuitRaceView({
             if (lightsAfterQualInterval) clearInterval(lightsAfterQualInterval);
             lightsAfterQualInterval = null;
             void (async () => {
-              if (onInteractiveGreenFlag) await onInteractiveGreenFlag();
+              const gf = onInteractiveGreenFlagRef.current;
+              if (gf) await gf();
               setUiPhase("racing");
               setLapDisp(nRace === 1 ? "Qualifying" : `1 / ${nRace}`);
               setCommentary(rnd(COMMENTARY.start));
@@ -3293,8 +3299,9 @@ export default function CircuitRaceView({
       if (lightsAfterQualInterval) clearInterval(lightsAfterQualInterval);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
+    // startRaceLoop omitted on purpose — use startRaceLoopRef so saveState/drawCanvas churn does not reset qualifying.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, currentUserId, participants.length, initialTrackId, weatherIdProp, liveTotalLaps, startRaceLoop]);
+  }, [mode, currentUserId, participants.length, initialTrackId, weatherIdProp, liveTotalLaps]);
 
   // ─── LIVE MODE STANDALONE START ─────────────────────────────────────────
   const handleStart=useCallback(()=>{
