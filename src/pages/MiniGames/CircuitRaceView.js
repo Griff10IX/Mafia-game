@@ -2792,6 +2792,9 @@ export default function CircuitRaceView({
               // totalLapsDone === totLaps — that erases per-car visual progress and re-sorts
               // the field by trackPos + _targetPos tie-break, scrambling P2 live → P6 results.
               x.lapCount = totLaps;
+              // #region agent log
+              if (x === r[0]) fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "CircuitRaceView.js:interactive_sync", message: "skip_totalLapsDone_flatten", data: { synced, totLaps }, timestamp: Date.now(), hypothesisId: "H7" }) }).catch(() => {});
+              // #endregion
             } else {
               x.totalLapsDone = synced;
               x.lapCount = Math.min(totLaps, synced + 1);
@@ -3114,8 +3117,9 @@ export default function CircuitRaceView({
         st.finishFlash = nowSec + 3.0;
         addInc("CHECKERED FLAG!");
         setCommentary(rnd(COMMENTARY.done));
+        const atFlagSorted = [...r].sort(sortInteractiveByProgress);
         let fo = 1;
-        [...r].sort(sortInteractiveByProgress).forEach(x => {
+        atFlagSorted.forEach(x => {
           if (!x.dnf) {
             const ord = fo++;
             x.finished = true;
@@ -3123,6 +3127,11 @@ export default function CircuitRaceView({
             x.finishedAtSec = nowSec + Math.min(0.5, (ord - 1) * 0.08);
           }
         });
+        // #region agent log
+        const finisherFlag = atFlagSorted.filter(x => !x.dnf);
+        const ppFlag = finisherFlag.findIndex(x => x.isPlayer);
+        fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "CircuitRaceView.js:interactive_loop", message: "checkered_player_rank", data: { playerPos: ppFlag >= 0 ? ppFlag + 1 : null, nFinishers: finisherFlag.length, visualLapsComplete }, timestamp: Date.now(), hypothesisId: "H8" }) }).catch(() => {});
+        // #endregion
       }
 
       // After race finishes, show results after a brief delay
@@ -3147,6 +3156,10 @@ export default function CircuitRaceView({
             return sortInteractiveByProgress(a, b);
           });
           const fastest = st.fastestLap || { holderId: null, time: Infinity };
+          // #region agent log
+          const ppRes = ordered.findIndex(x => x.isPlayer && !x.dnf);
+          fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "CircuitRaceView.js:interactive_loop", message: "results_player_rank", data: { playerPos: ppRes >= 0 ? ppRes + 1 : null, rowCount: ordered.length, playerDnf: !!ordered.find(x => x.isPlayer)?.dnf }, timestamp: Date.now(), hypothesisId: "H8" }) }).catch(() => {});
+          // #endregion
           setResults(ordered.map((x, i) => ({
             pos: i + 1, id: x.id, name: x.name, isPlayer: x.isPlayer, color: x.color,
             carName: x.carName, pitStops: x.pitStops, lapTimes: x.lapTimes, dnf: x.dnf,
