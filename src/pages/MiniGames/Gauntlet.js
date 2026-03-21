@@ -11,6 +11,9 @@ const BIRD_SIZE = 36;
 const VIEW_W = 420;
 const VIEW_H = 580;
 
+/** Score gates required for unlocks (themes, characters, insane mode) — tuned ~10× vs original easy curve */
+const GATE = (n) => n * 10;
+
 const SPEED_OPTIONS = [
   { id: "slow", label: "Slow", mult: 0.7 },
   { id: "normal", label: "Normal", mult: 1 },
@@ -21,7 +24,7 @@ const DIFFICULTY_OPTIONS = [
   { id: "easy", label: "Easy", gapOffset: 25, speedMult: 0.85 },
   { id: "normal", label: "Normal", gapOffset: 0, speedMult: 1 },
   { id: "hard", label: "Hard", gapOffset: -30, speedMult: 1.25 },
-  { id: "insane", label: "Insane", gapOffset: -55, speedMult: 1.65, unlockScore: 25 },
+  { id: "insane", label: "Insane", gapOffset: -55, speedMult: 1.65, unlockScore: GATE(25) },
 ];
 
 // ─── CHARACTERS ──────────────────────────────────────────────────────────────
@@ -57,7 +60,7 @@ const CHARACTERS = [
     desc: "Armed & dangerous. Spray and pray.",
     unlockType: "score",
     price: 0,
-    unlockScore: 10,
+    unlockScore: GATE(10),
     accentOverride: "#dc2626",
     render: ({ x, y, rotation, accent }) => {
       const col = accent || "#dc2626";
@@ -78,6 +81,30 @@ const CHARACTERS = [
           <ellipse cx="18" cy="8" rx="14" ry="4" fill={col} />
           <rect x="8" y="4" width="20" height="6" rx="2" fill="#111" />
           <rect x="4" y="7" width="8" height="2" rx="1" fill={col} />
+        </g>
+      );
+    },
+  },
+  {
+    id: "vinnie",
+    name: "Vinnie Lugs",
+    desc: "Enforcer. Ears everywhere, fists first.",
+    unlockType: "score",
+    price: 0,
+    unlockScore: GATE(12),
+    accentOverride: "#b45309",
+    render: ({ x, y, rotation, accent }) => {
+      const col = accent || "#b45309";
+      return (
+        <g transform={`translate(${x}, ${y}) rotate(${rotation}, 18, 18)`}>
+          <ellipse cx="18" cy="20" rx="14" ry="12" fill="#1c1917" />
+          <ellipse cx="18" cy="14" rx="11" ry="10" fill="#d4a574" />
+          <path d="M12 13 L14 11 L16 13" stroke="#7f1d1d" strokeWidth="1.2" fill="none" />
+          <circle cx="21" cy="12" r="1.8" fill="#333" />
+          <rect x="10" y="4" width="16" height="7" rx="2" fill="#292524" />
+          <rect x="8" y="9" width="20" height="3" rx="1" fill={col} />
+          <rect x="28" y="16" width="6" height="8" rx="1" fill="#444" />
+          <rect x="30" y="14" width="2" height="4" fill="#222" />
         </g>
       );
     },
@@ -124,7 +151,7 @@ const CHARACTERS = [
     desc: "Already dead. Nothing to fear.",
     unlockType: "score",
     price: 0,
-    unlockScore: 30,
+    unlockScore: GATE(30),
     accentOverride: "#94a3b8",
     render: ({ x, y, rotation, accent }) => {
       const col = accent || "#94a3b8";
@@ -149,6 +176,31 @@ const CHARACTERS = [
           <rect x="10" y="1" width="16" height="8" rx="1" fill="#111" />
           <rect x="7" y="9" width="22" height="2" rx="1" fill="#111" />
           <rect x="10" y="2" width="16" height="1" fill={col} opacity="0.4" />
+        </g>
+      );
+    },
+  },
+  {
+    id: "wheelman",
+    name: "The Wheelman",
+    desc: "Getaway driver. Never misses a gap.",
+    unlockType: "score",
+    price: 0,
+    unlockScore: GATE(35),
+    accentOverride: "#0ea5e9",
+    render: ({ x, y, rotation, accent }) => {
+      const col = accent || "#0ea5e9";
+      return (
+        <g transform={`translate(${x}, ${y}) rotate(${rotation}, 18, 18)`}>
+          <ellipse cx="18" cy="19" rx="12" ry="11" fill="#1e293b" />
+          <circle cx="18" cy="13" r="9" fill="#e7c8a8" />
+          <rect x="10" y="5" width="16" height="5" rx="2" fill="#0f172a" />
+          <rect x="7" y="8" width="22" height="2" rx="1" fill={col} />
+          <circle cx="15" cy="12" r="1.5" fill="#333" />
+          <circle cx="21" cy="12" r="1.5" fill="#333" />
+          <ellipse cx="18" cy="28" rx="10" ry="4" fill="#334155" opacity="0.9" />
+          <circle cx="18" cy="28" r="5" fill="none" stroke={col} strokeWidth="2" />
+          <rect x="16" y="26" width="4" height="5" fill="#64748b" />
         </g>
       );
     },
@@ -188,10 +240,10 @@ const CHARACTERS = [
   {
     id: "ghost",
     name: "The Ghost",
-    desc: "No one knows who he is. Highest score unlocks him.",
+    desc: "No one knows who he is. Elite gate count unlocks him.",
     unlockType: "score",
     price: 0,
-    unlockScore: 60,
+    unlockScore: GATE(60),
     accentOverride: "#00ffcc",
     render: ({ x, y, rotation, accent }) => {
       const col = accent || "#00ffcc";
@@ -213,6 +265,30 @@ const CHARACTERS = [
       );
     },
   },
+  {
+    id: "kingpin",
+    name: "The Kingpin",
+    desc: "Runs the whole city. Prove you're worthy.",
+    unlockType: "score",
+    price: 0,
+    unlockScore: GATE(70),
+    accentOverride: "#fbbf24",
+    render: ({ x, y, rotation, accent }) => {
+      const col = accent || "#fbbf24";
+      return (
+        <g transform={`translate(${x}, ${y}) rotate(${rotation}, 18, 18)`}>
+          <ellipse cx="18" cy="21" rx="13" ry="11" fill="#0c0a09" />
+          <ellipse cx="18" cy="13" rx="10" ry="9" fill="#c9a87c" />
+          <circle cx="15" cy="12" r="1.5" fill="#1a1a1a" />
+          <circle cx="21" cy="12" r="1.5" fill="#1a1a1a" />
+          <path d="M14 17 Q18 19 22 17" stroke="#3f2e1f" strokeWidth="1" fill="none" />
+          <path d="M8 6 L28 6 L26 2 L10 2 Z" fill="#1c1917" />
+          <ellipse cx="18" cy="5" rx="12" ry="3" fill={col} opacity="0.85" />
+          <rect x="14" y="20" width="8" height="2" fill={col} opacity="0.6" />
+        </g>
+      );
+    },
+  },
 ];
 
 // ─── THEMES ──────────────────────────────────────────────────────────────────
@@ -226,7 +302,7 @@ const THEMES = [
     bgElements: "buildings",
   },
   {
-    id: "neon", name: "Neon District", unlockType: "score", unlockScore: 5,
+    id: "neon", name: "Neon District", unlockType: "score", unlockScore: GATE(5),
     sky: ["#0a0a1a", "#050510", "#000"], pipe: "#1a1a2e",
     brick: "rgba(80,200,255,0.25)", accent: "#00ffcc",
     stripe: "rgba(0,255,200,0.08)", groundColor: "#0a0a1a",
@@ -242,7 +318,7 @@ const THEMES = [
     bgElements: "palms",
   },
   {
-    id: "graveyard", name: "Graveyard", unlockType: "score", unlockScore: 20,
+    id: "graveyard", name: "Graveyard", unlockType: "score", unlockScore: GATE(20),
     sky: ["#1a1e1a", "#0e120e", "#050805"], pipe: "#252a25",
     brick: "rgba(80,100,70,0.3)", accent: "#8a9a6a",
     stripe: "rgba(138,154,106,0.06)", groundColor: "#0d100d",
@@ -258,7 +334,7 @@ const THEMES = [
     bgElements: "bottles",
   },
   {
-    id: "casino", name: "Casino Royale", unlockType: "score", unlockScore: 40,
+    id: "casino", name: "Casino Royale", unlockType: "score", unlockScore: GATE(40),
     sky: ["#1a0808", "#100404", "#050000"], pipe: "#2a1414",
     brick: "rgba(200,30,30,0.28)", accent: "#ff2244",
     stripe: "rgba(255,34,68,0.07)", groundColor: "#100404",
@@ -266,12 +342,44 @@ const THEMES = [
     bgElements: "cards",
   },
   {
-    id: "arctic", name: "Arctic Run", unlockType: "score", unlockScore: 50,
+    id: "arctic", name: "Arctic Run", unlockType: "score", unlockScore: GATE(50),
     sky: ["#0d1a2a", "#061018", "#020608"], pipe: "#1a2a3a",
     brick: "rgba(120,180,240,0.22)", accent: "#88ccff",
     stripe: "rgba(136,204,255,0.07)", groundColor: "#061018",
     groundAccent: "rgba(136,204,255,0.3)",
     bgElements: "aurora",
+  },
+  {
+    id: "subway", name: "Subway Run", unlockType: "score", unlockScore: GATE(55),
+    sky: ["#1a1510", "#0f0c08", "#080604"], pipe: "#3d3428",
+    brick: "rgba(180,140,80,0.2)", accent: "#f59e0b",
+    stripe: "rgba(245,158,11,0.08)", groundColor: "#0c0a08",
+    groundAccent: "rgba(245,158,11,0.28)",
+    bgElements: "subway",
+  },
+  {
+    id: "harbor", name: "Harbor Night", unlockType: "score", unlockScore: GATE(65),
+    sky: ["#0a1520", "#050d18", "#020810"], pipe: "#1e3a4a",
+    brick: "rgba(60,100,140,0.28)", accent: "#38bdf8",
+    stripe: "rgba(56,189,248,0.07)", groundColor: "#050d12",
+    groundAccent: "rgba(56,189,248,0.25)",
+    bgElements: "harbor",
+  },
+  {
+    id: "hellfire", name: "Hellfire Row", unlockType: "score", unlockScore: GATE(75),
+    sky: ["#2a0a04", "#180502", "#0a0201"], pipe: "#3d1510",
+    brick: "rgba(220,60,30,0.3)", accent: "#f97316",
+    stripe: "rgba(249,115,22,0.09)", groundColor: "#120502",
+    groundAccent: "rgba(249,115,22,0.35)",
+    bgElements: "embers",
+  },
+  {
+    id: "penthouse", name: "Penthouse", unlockType: "cash", unlockCash: 100_000,
+    sky: ["#1e1b2e", "#12101c", "#08060c"], pipe: "#2d2840",
+    brick: "rgba(200,180,255,0.18)", accent: "#c4b5fd",
+    stripe: "rgba(196,181,253,0.08)", groundColor: "#100e18",
+    groundAccent: "rgba(196,181,253,0.3)",
+    bgElements: "penthouse",
   },
 ];
 
@@ -463,6 +571,70 @@ function BgElements({ theme, bgOffset, tick }) {
       </g>
     );
   }
+  if (theme.bgElements === "subway") {
+    return (
+      <g opacity="0.35">
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => {
+          const bx = i * 48 - ((bgOffset || 0) % 48);
+          return (
+            <g key={i}>
+              <rect x={bx} y={VIEW_H - 72} width={4} height={72} fill="#2a2418" />
+              <rect x={bx + 8} y={VIEW_H - 68} width={32} height={3} fill="#f59e0b" opacity={0.15 + (Math.sin(t * 0.06 + i) * 0.08 + 0.08)} />
+              <rect x={bx + 10} y={140 + (i % 3) * 40} width={20} height={12} rx={1} fill="none" stroke="#78716c" strokeWidth="0.5" opacity={0.4} />
+            </g>
+          );
+        })}
+        <text x={VIEW_W / 2} y={95} textAnchor="middle" fill="#f59e0b" fontSize="9" fontFamily="Cinzel,serif" opacity="0.25">LOCAL</text>
+      </g>
+    );
+  }
+  if (theme.bgElements === "harbor") {
+    return (
+      <g opacity="0.32">
+        <rect x={0} y={VIEW_H - 42} width={VIEW_W} height={8} fill="#0c4a6e" opacity="0.15" />
+        <path d={`M0 ${VIEW_H - 38} Q${VIEW_W * 0.25} ${VIEW_H - 42 - Math.sin(t * 0.04) * 3} ${VIEW_W * 0.5} ${VIEW_H - 38} T${VIEW_W} ${VIEW_H - 36}`}
+          fill="none" stroke="#38bdf8" strokeWidth="1" opacity="0.2" />
+        {[40, 120, 220, 320].map((hx, i) => (
+          <g key={i}>
+            <rect x={hx} y={VIEW_H - 200 - (i % 2) * 30} width={4} height={160 + (i % 2) * 30} fill="#1e293b" />
+            <line x1={hx - 20} y1={VIEW_H - 200 - (i % 2) * 30} x2={hx + 24} y2={VIEW_H - 200 - (i % 2) * 30} stroke="#334155" strokeWidth="2" />
+            <rect x={hx + 8} y={VIEW_H - 120} width={28} height={18} rx={1} fill="#0f172a" opacity="0.7" />
+            <rect x={hx + 10} y={VIEW_H - 100} width={24} height={16} rx={1} fill="#1e3a5f" opacity="0.5" />
+          </g>
+        ))}
+      </g>
+    );
+  }
+  if (theme.bgElements === "embers") {
+    return (
+      <g>
+        {[...Array(24)].map((_, i) => {
+          const ex = ((i * 97 + t * 0.4) % (VIEW_W + 20)) - 10;
+          const ey = 80 + (i * 41) % (VIEW_H - 160) + Math.sin(t * 0.05 + i) * 12;
+          const op = 0.15 + Math.sin(t * 0.08 + i * 0.9) * 0.12;
+          return <circle key={i} cx={ex} cy={ey} r={1.2 + (i % 3) * 0.6} fill="#f97316" opacity={op} />;
+        })}
+        <ellipse cx={VIEW_W * 0.3} cy={120} rx={80} ry={40} fill="#dc2626" opacity="0.04" />
+        <ellipse cx={VIEW_W * 0.75} cy={180} rx={60} ry={50} fill="#f97316" opacity="0.03" />
+      </g>
+    );
+  }
+  if (theme.bgElements === "penthouse") {
+    return (
+      <g opacity="0.28">
+        {[0, 55, 110, 165, 220, 275, 330].map((bx, i) => (
+          <g key={i}>
+            <rect x={bx} y={VIEW_H - 140 - (i % 4) * 25} width={40} height={140 + (i % 4) * 25} fill="#1a1628" />
+            {[0, 1, 2, 3].flatMap(row => [0, 1, 2].map(col => (
+              <rect key={`${i}-${row}-${col}`} x={bx + 6 + col * 10} y={VIEW_H - 130 - (i % 4) * 25 + row * 12} width={7} height={8} rx={0.5}
+                fill={Math.sin(t * 0.04 + i + row + col) > 0.2 ? "rgba(196,181,253,0.35)" : "rgba(30,24,50,0.9)"} />
+            )))}
+          </g>
+        ))}
+        <circle cx={VIEW_W - 50} cy={60} r={3} fill="#c4b5fd" opacity={0.2 + Math.sin(t * 0.07) * 0.1} />
+      </g>
+    );
+  }
   return null;
 }
 
@@ -512,8 +684,9 @@ function CharacterSelect({ characters, selected, onSelect, money, bestScore, onC
           {characters.map(char => {
             const isSelected = selected === char.id;
             const isScoreLocked = char.unlockType === "score" && bestScore < char.unlockScore;
-            const isCashLocked = char.unlockType === "cash" && money < char.price;
-            const isOwned = char.unlockType === "free" || (char.unlockType === "score" && bestScore >= char.unlockScore) || (char.unlockType === "cash" && money >= char.price);
+            const isOwned = char.unlockType === "free"
+              || (char.unlockType === "score" && bestScore >= char.unlockScore)
+              || (char.unlockType === "cash" && ownedChars.includes(char.id));
             const locked = isScoreLocked || (char.unlockType === "cash" && !isOwned);
 
             return (
@@ -897,7 +1070,7 @@ export default function Gauntlet() {
     <div className="mobile-page-root w-full max-w-[min(1240px,calc(100vw-1rem))] mx-auto px-1 sm:px-2">
       {showCharSelect && (
         <CharacterSelect
-          characters={CHARACTERS} selected={characterId} money={money} bestScore={bestScore}
+          characters={CHARACTERS} selected={characterId} money={money} bestScore={bestScore} ownedChars={ownedChars}
           onSelect={id => { setCharacterId(id); setShowCharSelect(false); }}
           onClose={() => setShowCharSelect(false)}
           onBuy={handleBuyCharacter}

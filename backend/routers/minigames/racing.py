@@ -3952,7 +3952,7 @@ async def _advance_one_lap(race: dict) -> Optional[dict]:
 
 
 async def _maybe_advance_interactive_lap(race_id: str):
-    """Check if lap deadline passed (or all players submitted) and advance if needed."""
+    """Advance when lap deadline passed OR every living human entrant has submitted a decision."""
     race = await db.racing_races.find_one(
         {"id": race_id, "mode": "interactive", "state": "running"}, {"_id": 0},
     )
@@ -3966,9 +3966,25 @@ async def _maybe_advance_interactive_lap(race_id: str):
     try:
         dl = datetime.fromisoformat(deadline.replace("Z", "+00:00"))
     except (ValueError, TypeError):
-        return
+        dl = None
 
-    if now >= dl:
+    deadline_passed = dl is not None and now >= dl
+
+    participants = race.get("participants") or []
+    decisions = race.get("decisions") or {}
+    dnf_ids = set(race.get("dnf_ids") or [])
+    humans_alive: List[str] = []
+    for p in participants:
+        if p.get("is_npc"):
+            continue
+        eid = p.get("user_id") or p.get("id")
+        if eid and eid not in dnf_ids:
+            humans_alive.append(eid)
+    all_humans_submitted = (
+        len(humans_alive) > 0 and all(hid in decisions for hid in humans_alive)
+    )
+
+    if deadline_passed or all_humans_submitted:
         await _advance_one_lap(race)
 
 

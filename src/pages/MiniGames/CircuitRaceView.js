@@ -429,21 +429,133 @@ function drawSFGantry(ctx, sx, sy, trackFn, sfLine) {
   ctx.restore();
 }
 
+/** Lap fraction: flat tarmac between slope bottom (grade art end) and timing/checkered line — keeps S/F off the ramp toe. */
+const SF_FLAT_RUN_AFTER_GRADE = 0.042;
+
+function sfGradeEndT(sfLine) {
+  const sf = sfLine != null ? (((sfLine % 1) + 1) % 1) : 0;
+  return ((sf - SF_FLAT_RUN_AFTER_GRADE + 1) % 1);
+}
+
+/** Legacy S/F (ramp toe / old line) → lap timing + checkered line, `SF_FLAT_RUN_AFTER_GRADE` later on the lap. */
+function timingLineAfterGrade(legacySf) {
+  const s = legacySf != null ? (((Number(legacySf) % 1) + 1) % 1) : 0;
+  return ((s + SF_FLAT_RUN_AFTER_GRADE) % 1 + 1) % 1;
+}
+
+/**
+ * Makes the approach to the start/finish read as a downhill grade. `gradeEndT` is the bottom of the slope;
+ * the real S/F (track.sfLine) sits `SF_FLAT_RUN_AFTER_GRADE` ahead on the lap.
+ */
+function drawSfGradeApproach(ctx, track, sx, sy, halfW, gradeEndT) {
+  const ge = gradeEndT != null ? (((gradeEndT % 1) + 1) % 1) : 0;
+  const zoneFrac = 0.09;
+  const strips = 16;
+  const trackEdge = (f, side) => {
+    const p = track.getPoint(f), p2 = track.getPoint((f + 0.003) % 1);
+    const a = Math.atan2(sy(p2.y) - sy(p.y), sx(p2.x) - sx(p.x)) + Math.PI / 2;
+    return { x: sx(p.x) + Math.cos(a) * halfW * side, y: sy(p.y) + Math.sin(a) * halfW * side, tang: Math.atan2(sy(p2.y) - sy(p.y), sx(p2.x) - sx(p.x)) };
+  };
+  ctx.save();
+  for (let k = 0; k < strips; k++) {
+    const u0 = (k + 1) / strips, u1 = k / strips;
+    const t0 = ((ge - u0 * zoneFrac) % 1 + 1) % 1;
+    const t1 = ((ge - u1 * zoneFrac) % 1 + 1) % 1;
+    const o0 = trackEdge(t0, 1), i0 = trackEdge(t0, -1);
+    const o1 = trackEdge(t1, 1), i1 = trackEdge(t1, -1);
+    const shade = 0.035 + (k / strips) * 0.11;
+    ctx.fillStyle = `rgba(0,0,0,${shade})`;
+    ctx.beginPath();
+    ctx.moveTo(o0.x, o0.y); ctx.lineTo(o1.x, o1.y); ctx.lineTo(i1.x, i1.y); ctx.lineTo(i0.x, i0.y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Diagonal hatch (suggests tilted plane)
+  ctx.globalAlpha = 0.14;
+  ctx.strokeStyle = "rgba(255,255,255,0.5)";
+  ctx.lineWidth = 0.6;
+  const hatchSteps = 7;
+  for (let h = 0; h < hatchSteps; h++) {
+    const u = 0.12 + (h / (hatchSteps - 1)) * 0.78;
+    const f = ((ge - u * zoneFrac) % 1 + 1) % 1;
+    const c = trackEdge(f, 0);
+    const tx = Math.cos(c.tang), ty = Math.sin(c.tang);
+    const px = -Math.sin(c.tang), py = Math.cos(c.tang);
+    const hw = halfW * 0.92;
+    ctx.beginPath();
+    ctx.moveTo(c.x - px * hw - tx * 10, c.y - py * hw - ty * 10);
+    ctx.lineTo(c.x + px * hw + tx * 10, c.y + py * hw + ty * 10);
+    ctx.stroke();
+  }
+  // Chevrons toward S/F (pavement paint)
+  ctx.globalAlpha = 0.42;
+  ctx.fillStyle = "rgba(255,190,70,0.85)";
+  for (const ku of [0.22, 0.48, 0.72]) {
+    const f = ((ge - ku * zoneFrac) % 1 + 1) % 1;
+    const c = trackEdge(f, 0);
+    const tx = Math.cos(c.tang), ty = Math.sin(c.tang);
+    const s = 4.2;
+    ctx.beginPath();
+    ctx.moveTo(c.x + tx * s, c.y + ty * s);
+    ctx.lineTo(c.x - tx * s + ty * 2.2, c.y - ty * s - tx * 2.2);
+    ctx.lineTo(c.x - tx * s - ty * 2.2, c.y - ty * s + tx * 2.2);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Lip / transition line just before the gantry (matches the visible “step” users notice)
+  ctx.globalAlpha = 0.55;
+  ctx.strokeStyle = "rgba(240,240,245,0.55)";
+  ctx.lineWidth = 1.1;
+  for (const delta of [0.018, 0.010]) {
+    const lf = ((ge - delta) % 1 + 1) % 1;
+    const L = trackEdge(lf, 1), R = trackEdge(lf, -1);
+    ctx.beginPath();
+    ctx.moveTo(L.x, L.y);
+    ctx.lineTo(R.x, R.y);
+    ctx.stroke();
+  }
+  // Pavement label (road marking style)
+  {
+    const midF = ((ge - zoneFrac * 0.5) % 1 + 1) % 1;
+    const mc = trackEdge(midF, 0);
+    const px = -Math.sin(mc.tang), py = Math.cos(mc.tang);
+    const ox = mc.x + px * (halfW * 0.34);
+    const oy = mc.y + py * (halfW * 0.34);
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.rotate(mc.tang);
+    ctx.globalAlpha = 0.88;
+    ctx.font = "bold 8px Cinzel, serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const label = "GRADE  \u2193";
+    ctx.strokeStyle = "rgba(0,0,0,0.55)";
+    ctx.lineWidth = 2.8;
+    ctx.lineJoin = "round";
+    ctx.strokeText(label, 0, 0);
+    ctx.fillStyle = "rgba(255,200,90,0.95)";
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 // ─── TRACK DEFINITIONS ─────────────────────────────────────────────────────
 // Each track: pitSide (-1=inside), pitOffset (px offset of pit lane from centreline)
 // Longer lapBase = slower lap = tracks feel bigger in real-time
+// sfLine: pass timingLineAfterGrade(legacy) — legacy = old ramp toe; physics + checkered use the bumped value.
 
 const TRACKS = [
   {
     id:"chicago", name:"Chicago Board Track", km:3.1, corners:10, lapBase:26, rewardMult:1.0, trackWidth:52,
     desc:"Tight banked wooden D-oval", getPoint:GP_CHICAGO,
-    pitEntry:0.60, pitExit:0.68, sfLine:0.01, pitSide:-1, pitOffset:28,
-    drawExtra:(ctx,sx,sy) => {
+    pitEntry:0.60, pitExit:0.68, sfLine:timingLineAfterGrade(0.01), pitSide:-1, pitOffset:28,
+    drawExtra:(ctx,sx,sy,trk) => {
       drawGrandstand(ctx,sx,sy,288,26,215,18,4);
       drawGrandstand(ctx,sx,sy,288,312,215,18,4);
       drawBankingLines(ctx,sx,sy,GP_CHICAGO,0.175,0.28,22);
       drawBankingLines(ctx,sx,sy,GP_CHICAGO,0.665,0.77,22);
-      drawSFGantry(ctx,sx,sy,GP_CHICAGO,0.01);
+      drawSFGantry(ctx,sx,sy,GP_CHICAGO,trk.sfLine);
       ctx.save(); ctx.globalAlpha=0.11; ctx.fillStyle="#c9a460"; ctx.font="bold 9px Cinzel,serif"; ctx.textAlign="center";
       ctx.fillText("CHICAGO BOARD TRACK",sx(400),sy(174)); ctx.restore();
     },
@@ -451,14 +563,14 @@ const TRACKS = [
   {
     id:"daytona", name:"Daytona Beach", km:4.2, corners:6, lapBase:30, rewardMult:1.2, trackWidth:55,
     desc:"High-speed banked oval, 31° banking", getPoint:GP_DAYTONA,
-    pitEntry:0.50, pitExit:0.58, sfLine:0.0, pitSide:-1, pitOffset:30,
-    drawExtra:(ctx,sx,sy) => {
+    pitEntry:0.50, pitExit:0.58, sfLine:timingLineAfterGrade(0), pitSide:-1, pitOffset:30,
+    drawExtra:(ctx,sx,sy,trk) => {
       drawGrandstand(ctx,sx,sy,312,22,265,20,5);
       drawGrandstand(ctx,sx,sy,312,322,250,16,3);
       drawTreeCluster(ctx,sx,sy,400,172,8,44);
       drawBankingLines(ctx,sx,sy,GP_DAYTONA,0.215,0.305,24);
       drawBankingLines(ctx,sx,sy,GP_DAYTONA,0.670,0.766,24);
-      drawSFGantry(ctx,sx,sy,GP_DAYTONA,0.0);
+      drawSFGantry(ctx,sx,sy,GP_DAYTONA,trk.sfLine);
       ctx.save(); ctx.globalAlpha=0.13; ctx.fillStyle="#c9a460"; ctx.font="bold 13px Cinzel,serif"; ctx.textAlign="center";
       ctx.fillText("DAYTONA BEACH",sx(400),sy(174)); ctx.restore();
     },
@@ -466,13 +578,13 @@ const TRACKS = [
   {
     id:"indianapolis", name:"Indianapolis", km:4.6, corners:4, lapBase:32, rewardMult:1.3, trackWidth:55,
     desc:"Superspeedway, Yard of Bricks", getPoint:GP_INDIANAPOLIS,
-    pitEntry:0.58, pitExit:0.66, sfLine:0.0, pitSide:-1, pitOffset:30,
-    drawExtra:(ctx,sx,sy) => {
+    pitEntry:0.58, pitExit:0.66, sfLine:timingLineAfterGrade(0), pitSide:-1, pitOffset:30,
+    drawExtra:(ctx,sx,sy,trk) => {
       drawGrandstand(ctx,sx,sy,282,22,248,22,6);
       drawGrandstand(ctx,sx,sy,282,320,248,16,4);
       drawTreeCluster(ctx,sx,sy,400,183,6,30);
       ctx.save(); ctx.globalAlpha=0.55; ctx.fillStyle="#c8a060"; ctx.fillRect(sx(390),sy(54),sx(412)-sx(390),sy(71)-sy(54)); ctx.restore();
-      drawSFGantry(ctx,sx,sy,GP_INDIANAPOLIS,0.0);
+      drawSFGantry(ctx,sx,sy,GP_INDIANAPOLIS,trk.sfLine);
       ctx.save(); ctx.globalAlpha=0.12; ctx.fillStyle="#c9a460"; ctx.font="bold 11px Cinzel,serif"; ctx.textAlign="center";
       ctx.fillText("INDIANAPOLIS",sx(400),sy(174)); ctx.restore();
     },
@@ -480,12 +592,12 @@ const TRACKS = [
   {
     id:"roosevelt", name:"Roosevelt Raceway", km:2.8, corners:18, lapBase:27, rewardMult:1.1, trackWidth:40,
     desc:"Technical twisty road course, NY", getPoint:GP_ROOSEVELT,
-    pitEntry:0.74, pitExit:0.81, sfLine:0.0, pitSide:-1, pitOffset:22,
-    drawExtra:(ctx,sx,sy) => {
+    pitEntry:0.74, pitExit:0.81, sfLine:timingLineAfterGrade(0), pitSide:-1, pitOffset:22,
+    drawExtra:(ctx,sx,sy,trk) => {
       drawGrandstand(ctx,sx,sy,345,24,124,14,3);
       drawTreeCluster(ctx,sx,sy,295,188,6,24);
       drawTreeCluster(ctx,sx,sy,186,86,4,18);
-      drawSFGantry(ctx,sx,sy,GP_ROOSEVELT,0.0);
+      drawSFGantry(ctx,sx,sy,GP_ROOSEVELT,trk.sfLine);
       ctx.save(); ctx.globalAlpha=0.10; ctx.fillStyle="#c9a460"; ctx.font="bold 9px Cinzel,serif"; ctx.textAlign="center";
       ctx.fillText("ROOSEVELT RACEWAY",sx(400),sy(175)); ctx.restore();
     },
@@ -493,14 +605,14 @@ const TRACKS = [
   {
     id:"boardwalk", name:"Boardwalk Circuit", km:3.4, corners:22, lapBase:28, rewardMult:1.15, trackWidth:27,
     desc:"Narrow street circuit, double chicane", getPoint: t => catmull(BOARDWALK_PTS, t),
-    pitEntry:0.66, pitExit:0.73, sfLine:0.0, pitSide:-1, pitOffset:16,
-    drawExtra:(ctx,sx,sy) => {
+    pitEntry:0.66, pitExit:0.73, sfLine:timingLineAfterGrade(0), pitSide:-1, pitOffset:16,
+    drawExtra:(ctx,sx,sy,trk) => {
       drawGrandstand(ctx,sx,sy,344,26,164,16,4);
       drawTreeCluster(ctx,sx,sy,398,180,5,20);
       ctx.save(); ctx.globalAlpha=0.10; ctx.strokeStyle="#a08050"; ctx.lineWidth=1;
       for(let i=0;i<16;i++){const x=sx(100+i*40),y1=sy(292),y2=sy(312);ctx.beginPath();ctx.moveTo(x,y1);ctx.lineTo(x,y2);ctx.stroke();}
       ctx.restore();
-      drawSFGantry(ctx,sx,sy,t=>catmull(BOARDWALK_PTS,t),0.0);
+      drawSFGantry(ctx,sx,sy,t=>catmull(BOARDWALK_PTS,t),trk.sfLine);
       ctx.save(); ctx.globalAlpha=0.12; ctx.fillStyle="#c9a460"; ctx.font="bold 9px Cinzel,serif"; ctx.textAlign="center";
       ctx.fillText("BOARDWALK CIRCUIT",sx(400),sy(178)); ctx.restore();
     },
@@ -508,8 +620,8 @@ const TRACKS = [
   {
     id:"lakeside", name:"Lakeside Park", km:3.8, corners:14, lapBase:29, rewardMult:1.1, trackWidth:43,
     desc:"Flowing sweepers around the lake", getPoint:GP_LAKESIDE,
-    pitEntry:0.62, pitExit:0.69, sfLine:0.0, pitSide:-1, pitOffset:22,
-    drawExtra:(ctx,sx,sy) => {
+    pitEntry:0.62, pitExit:0.69, sfLine:timingLineAfterGrade(0), pitSide:-1, pitOffset:22,
+    drawExtra:(ctx,sx,sy,trk) => {
       ctx.save(); ctx.globalAlpha=0.10; ctx.fillStyle="#2060a0";
       ctx.beginPath(); ctx.ellipse(sx(376),sy(177),sx(108)-sx(0),sy(60)-sy(0),0,0,Math.PI*2); ctx.fill();
       ctx.globalAlpha=0.06; ctx.fillStyle="#3080c0";
@@ -518,7 +630,7 @@ const TRACKS = [
       drawTreeCluster(ctx,sx,sy,282,110,8,28);
       drawTreeCluster(ctx,sx,sy,476,116,6,22);
       drawGrandstand(ctx,sx,sy,352,24,127,14,3);
-      drawSFGantry(ctx,sx,sy,GP_LAKESIDE,0.0);
+      drawSFGantry(ctx,sx,sy,GP_LAKESIDE,trk.sfLine);
       ctx.save(); ctx.globalAlpha=0.11; ctx.fillStyle="#c9a460"; ctx.font="8px Cinzel,serif"; ctx.textAlign="center";
       ctx.fillText("LAKESIDE PARK",sx(374),sy(197)); ctx.restore();
     },
@@ -526,8 +638,8 @@ const TRACKS = [
   {
     id:"harbor", name:"Harbor Front", km:3.0, corners:24, lapBase:26, rewardMult:1.05, trackWidth:31,
     desc:"Narrow dockside, two hairpins", getPoint:GP_HARBOR,
-    pitEntry:0.77, pitExit:0.84, sfLine:0.0, pitSide:-1, pitOffset:18,
-    drawExtra:(ctx,sx,sy) => {
+    pitEntry:0.77, pitExit:0.84, sfLine:timingLineAfterGrade(0), pitSide:-1, pitOffset:18,
+    drawExtra:(ctx,sx,sy,trk) => {
       ctx.save(); ctx.globalAlpha=0.08; ctx.fillStyle="#2060a0";
       ctx.fillRect(sx(272),sy(252),sx(535)-sx(272),sy(324)-sy(252)); ctx.restore();
       ctx.save(); ctx.globalAlpha=0.15; ctx.strokeStyle="#506070"; ctx.lineWidth=2;
@@ -537,7 +649,7 @@ const TRACKS = [
       });
       ctx.restore();
       drawGrandstand(ctx,sx,sy,346,24,124,16,4);
-      drawSFGantry(ctx,sx,sy,GP_HARBOR,0.0);
+      drawSFGantry(ctx,sx,sy,GP_HARBOR,trk.sfLine);
       ctx.save(); ctx.globalAlpha=0.12; ctx.fillStyle="#c9a460"; ctx.font="bold 9px Cinzel,serif"; ctx.textAlign="center";
       ctx.fillText("HARBOR FRONT",sx(400),sy(165)); ctx.restore();
     },
@@ -545,8 +657,8 @@ const TRACKS = [
   {
     id:"mountain", name:"Mountain Pass", km:4.8, corners:22, lapBase:34, rewardMult:1.25, trackWidth:41,
     desc:"Switchbacks and elevation changes", getPoint:GP_MOUNTAIN,
-    pitEntry:0.68, pitExit:0.75, sfLine:0.0, pitSide:-1, pitOffset:22,
-    drawExtra:(ctx,sx,sy) => {
+    pitEntry:0.68, pitExit:0.75, sfLine:timingLineAfterGrade(0), pitSide:-1, pitOffset:22,
+    drawExtra:(ctx,sx,sy,trk) => {
       ctx.save(); ctx.globalAlpha=0.06; ctx.strokeStyle="#705840"; ctx.lineWidth=0.8;
       for(let i=0;i<8;i++){ctx.beginPath();for(let j=0;j<=50;j++){const x=sx(100+j*12),y=sy(80+i*32+Math.sin(j*0.35+i)*14);j===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.stroke();}
       ctx.restore();
@@ -558,7 +670,7 @@ const TRACKS = [
       drawTreeCluster(ctx,sx,sy,316,168,6,22);
       drawTreeCluster(ctx,sx,sy,476,242,5,18);
       drawGrandstand(ctx,sx,sy,344,22,124,14,3);
-      drawSFGantry(ctx,sx,sy,GP_MOUNTAIN,0.0);
+      drawSFGantry(ctx,sx,sy,GP_MOUNTAIN,trk.sfLine);
       ctx.save(); ctx.globalAlpha=0.10; ctx.fillStyle="#c9a460"; ctx.font="bold 9px Cinzel,serif"; ctx.textAlign="center";
       ctx.fillText("MOUNTAIN PASS",sx(400),sy(173)); ctx.restore();
     },
@@ -566,15 +678,15 @@ const TRACKS = [
   {
     id:"brooklands", name:"Brooklands Banking", km:6.4, corners:8, lapBase:44, rewardMult:1.35, trackWidth:55,
     desc:"Members' Banking — Surrey 1907", getPoint:GP_BROOKLANDS,
-    pitEntry:0.56, pitExit:0.63, sfLine:0.0, pitSide:-1, pitOffset:28,
-    drawExtra:(ctx,sx,sy) => {
+    pitEntry:0.56, pitExit:0.63, sfLine:timingLineAfterGrade(0), pitSide:-1, pitOffset:28,
+    drawExtra:(ctx,sx,sy,trk) => {
       drawGrandstand(ctx,sx,sy,338,36,214,20,5);
       drawGrandstand(ctx,sx,sy,354,316,175,14,3);
       drawTreeCluster(ctx,sx,sy,398,188,10,54);
       drawTreeCluster(ctx,sx,sy,155,200,5,22);
       drawBankingLines(ctx,sx,sy,GP_BROOKLANDS,0.225,0.310,24);
       drawBankingLines(ctx,sx,sy,GP_BROOKLANDS,0.682,0.765,24);
-      drawSFGantry(ctx,sx,sy,GP_BROOKLANDS,0.0);
+      drawSFGantry(ctx,sx,sy,GP_BROOKLANDS,trk.sfLine);
       ctx.save(); ctx.globalAlpha=0.12; ctx.fillStyle="#c9a460"; ctx.font="bold 12px Cinzel,serif"; ctx.textAlign="center";
       ctx.fillText("BROOKLANDS",sx(400),sy(180)); ctx.font="8px Cinzel,serif"; ctx.fillText("BANKING",sx(400),sy(196)); ctx.restore();
     },
@@ -582,12 +694,12 @@ const TRACKS = [
   {
     id:"monza", name:"Monza Autodromo", km:8.0, corners:14, lapBase:54, rewardMult:1.4, trackWidth:34,
     desc:"Oval + road circuit — Italy 1922", getPoint:GP_MONZA,
-    pitEntry:0.60, pitExit:0.67, sfLine:0.0, pitSide:-1, pitOffset:20,
-    drawExtra:(ctx,sx,sy) => {
+    pitEntry:0.60, pitExit:0.67, sfLine:timingLineAfterGrade(0), pitSide:-1, pitOffset:20,
+    drawExtra:(ctx,sx,sy,trk) => {
       drawGrandstand(ctx,sx,sy,340,18,228,18,5);
       drawTreeCluster(ctx,sx,sy,372,148,8,36);
       drawTreeCluster(ctx,sx,sy,634,150,5,18);
-      drawSFGantry(ctx,sx,sy,GP_MONZA,0.0);
+      drawSFGantry(ctx,sx,sy,GP_MONZA,trk.sfLine);
       ctx.save(); ctx.globalAlpha=0.12; ctx.fillStyle="#c9a460"; ctx.font="bold 10px Cinzel,serif"; ctx.textAlign="center";
       ctx.fillText("MONZA AUTODROMO",sx(344),sy(168)); ctx.restore();
     },
@@ -595,14 +707,14 @@ const TRACKS = [
   {
     id:"lemans", name:"Le Mans Sarthe", km:10.7, corners:16, lapBase:67, rewardMult:1.5, trackWidth:45,
     desc:"Mulsanne straight — France 1923", getPoint:GP_LEMANS,
-    pitEntry:0.54, pitExit:0.61, sfLine:0.0, pitSide:-1, pitOffset:24,
-    drawExtra:(ctx,sx,sy) => {
+    pitEntry:0.54, pitExit:0.61, sfLine:timingLineAfterGrade(0), pitSide:-1, pitOffset:24,
+    drawExtra:(ctx,sx,sy,trk) => {
       drawGrandstand(ctx,sx,sy,312,38,210,18,5);
       drawTreeCluster(ctx,sx,sy,370,180,12,57);
       drawTreeCluster(ctx,sx,sy,608,188,5,18);
       ctx.save(); ctx.globalAlpha=0.08; ctx.fillStyle="#3a5a2a";
       ctx.fillRect(sx(296),sy(116),sx(520)-sx(296),sy(248)-sy(116)); ctx.restore();
-      drawSFGantry(ctx,sx,sy,GP_LEMANS,0.0);
+      drawSFGantry(ctx,sx,sy,GP_LEMANS,trk.sfLine);
       ctx.save(); ctx.globalAlpha=0.12; ctx.fillStyle="#c9a460"; ctx.font="bold 10px Cinzel,serif"; ctx.textAlign="center";
       ctx.fillText("LE MANS",sx(400),sy(167)); ctx.font="8px Cinzel,serif"; ctx.fillText("CIRCUIT DE LA SARTHE",sx(400),sy(182)); ctx.restore();
     },
@@ -610,14 +722,14 @@ const TRACKS = [
   {
     id:"avus", name:"AVUS Speedway", km:12.0, corners:4, lapBase:60, rewardMult:1.45, trackWidth:55,
     desc:"Two straights, banked hairpins — Berlin 1921", getPoint:GP_AVUS,
-    pitEntry:0.46, pitExit:0.53, sfLine:0.0, pitSide:-1, pitOffset:30,
-    drawExtra:(ctx,sx,sy) => {
+    pitEntry:0.46, pitExit:0.53, sfLine:timingLineAfterGrade(0), pitSide:-1, pitOffset:30,
+    drawExtra:(ctx,sx,sy,trk) => {
       drawGrandstand(ctx,sx,sy,338,22,224,20,5);
       drawGrandstand(ctx,sx,sy,338,274,224,16,4);
       drawTreeCluster(ctx,sx,sy,400,152,8,42);
       drawBankingLines(ctx,sx,sy,GP_AVUS,0.275,0.420,22);
       drawBankingLines(ctx,sx,sy,GP_AVUS,0.710,0.838,22);
-      drawSFGantry(ctx,sx,sy,GP_AVUS,0.0);
+      drawSFGantry(ctx,sx,sy,GP_AVUS,trk.sfLine);
       ctx.save(); ctx.globalAlpha=0.12; ctx.fillStyle="#c9a460"; ctx.font="bold 14px Cinzel,serif"; ctx.textAlign="center";
       ctx.fillText("AVUS",sx(400),sy(150)); ctx.font="8px Cinzel,serif"; ctx.fillText("SPEEDWAY",sx(400),sy(165)); ctx.restore();
     },
@@ -625,15 +737,15 @@ const TRACKS = [
   {
     id:"targa", name:"Targa Florio", km:14.5, corners:32, lapBase:82, rewardMult:1.6, trackWidth:34,
     desc:"Madonie mountains — Sicily 1906", getPoint:GP_TARGA,
-    pitEntry:0.73, pitExit:0.80, sfLine:0.865, pitSide:-1, pitOffset:20,
-    drawExtra:(ctx,sx,sy) => {
+    pitEntry:0.73, pitExit:0.80, sfLine:timingLineAfterGrade(0.865), pitSide:-1, pitOffset:20,
+    drawExtra:(ctx,sx,sy,trk) => {
       drawTreeCluster(ctx,sx,sy,398,187,14,63);
       drawTreeCluster(ctx,sx,sy,195,174,8,30);
       drawTreeCluster(ctx,sx,sy,576,220,6,26);
       drawGrandstand(ctx,sx,sy,370,323,114,12,3);
       ctx.save(); ctx.globalAlpha=0.06; ctx.fillStyle="#4a6a3a";
       ctx.beginPath();ctx.moveTo(sx(294),sy(96));ctx.lineTo(sx(544),sy(76));ctx.lineTo(sx(646),sy(196));ctx.lineTo(sx(498),sy(278));ctx.lineTo(sx(276),sy(249));ctx.closePath();ctx.fill();ctx.restore();
-      drawSFGantry(ctx,sx,sy,GP_TARGA,0.0);
+      drawSFGantry(ctx,sx,sy,GP_TARGA,trk.sfLine);
       ctx.save(); ctx.globalAlpha=0.12; ctx.fillStyle="#c9a460"; ctx.font="bold 9px Cinzel,serif"; ctx.textAlign="center";
       ctx.fillText("TARGA FLORIO",sx(400),sy(170)); ctx.font="7px Cinzel,serif"; ctx.fillText("MADONIE, SICILY",sx(400),sy(184)); ctx.restore();
     },
@@ -1416,6 +1528,9 @@ export default function CircuitRaceView({
       ctx.fillText("OUT", sx(outP.x), sy(outP.y)-10);
     }
 
+    // Downhill / grade ends before timing line — flat strip then checkered S/F
+    drawSfGradeApproach(ctx, track, sx, sy, halfW, sfGradeEndT(track.sfLine));
+
     // ── S/F Line ──
     const sfP = track.getPoint(track.sfLine), sfP2 = track.getPoint(track.sfLine+0.005);
     const sfA = Math.atan2(sy(sfP2.y)-sy(sfP.y), sx(sfP2.x)-sx(sfP.x)) + Math.PI/2;
@@ -1449,7 +1564,7 @@ export default function CircuitRaceView({
     // (Finish-line radial flash removed — large arcs at S/F read as a “zone” and cluttered the line.)
 
     // ── Track decorations ──
-    if (track.drawExtra) track.drawExtra(ctx, sx, sy);
+    if (track.drawExtra) track.drawExtra(ctx, sx, sy, track);
 
     // ── Cars ──
     if (!racerArr?.length) return;
@@ -2737,8 +2852,15 @@ export default function CircuitRaceView({
       r.forEach(x => { if (!x.dnf) visLap = Math.max(visLap, x.totalLapsDone ?? 0); });
       visLap = Math.min(visLap, totLaps);
 
-      // Race finished: backend lap count or leader completed final lap visually
-      if ((curLap >= totLaps || visLap >= totLaps) && totLaps > 0 && !st._raceFinished) {
+      // Interactive-live: client orbit can lap ahead of server; only end race when backend has processed all laps
+      const serverLapsComplete = curLap >= totLaps;
+      const visualLapsComplete = visLap >= totLaps;
+      const raceShouldEnd = mode === "interactive-live"
+        ? serverLapsComplete
+        : (serverLapsComplete || visualLapsComplete);
+
+      // Race finished: replay uses visual lap; interactive-live waits for server current_lap
+      if (raceShouldEnd && totLaps > 0 && !st._raceFinished) {
         st._raceFinished = true;
         st._raceFinishedAt = nowSec;
         st.finishFlash = nowSec + 3.0;
@@ -2779,23 +2901,36 @@ export default function CircuitRaceView({
         }
       }
 
-      // Sort standings by progress
+      // Canvas draw order: visual progress. Standings labels: backend position for interactive-live (matches results / timing tower).
       r.sort((a, b) => {
         if (a.dnf && !b.dnf) return 1;
         if (!a.dnf && b.dnf) return -1;
         return ((b.totalLapsDone ?? 0) + (b.trackPos ?? 0)) - ((a.totalLapsDone ?? 0) + (a.trackPos ?? 0));
       });
-      r.forEach((x, i) => { x.position = i + 1; });
+      r.forEach((x, i) => {
+        x.position = mode === "interactive-live"
+          ? Math.min(99, Math.max(1, x._targetPos ?? i + 1))
+          : i + 1;
+      });
 
-      setStandings(r.map(x => ({
+      const standingsOrder = mode === "interactive-live"
+        ? [...r].sort((a, b) => {
+            if (a.dnf && !b.dnf) return 1;
+            if (!a.dnf && b.dnf) return -1;
+            return (a._targetPos ?? 99) - (b._targetPos ?? 99);
+          })
+        : r;
+
+      setStandings(standingsOrder.map(x => ({
         id: x.id, name: x.name, isPlayer: x.isPlayer,
         position: x.position, tyre: x.currentTyre, tyreWear: x.tyreWear,
         pitStops: x.pitStops, dnf: x.dnf, engineHealth: x.engineHealth,
         fuelLoad: Math.round(x.fuelLoad), currentSpeedMph: Math.round(x.currentSpeedMph || 0),
         tyreCliffWarning: x.tyreWear < ((TYRE_DEFS[x.currentTyre]?.cliffStart || 0.66) * 100 + 12),
       })));
-      // Match startRaceLoop HUD: current lap = leader completed + 1 (not raw completed count)
-      const lapCur = totLaps <= 1 ? totLaps : Math.min(visLap + 1, totLaps);
+      // Interactive-live: HUD lap must follow server current_lap (client orbit can complete laps faster)
+      const visLapForHud = mode === "interactive-live" ? curLap : visLap;
+      const lapCur = totLaps <= 1 ? totLaps : Math.min(visLapForHud + 1, totLaps);
       setLapDisp(totLaps === 1 ? 'Qualifying' : `${lapCur} / ${totLaps}`);
       let mxFrac = 0;
       r.forEach(x => {
@@ -2804,10 +2939,10 @@ export default function CircuitRaceView({
       const prog01 = totLaps > 0 ? Math.min(1, mxFrac) : 0;
       setRaceProg(prog01);
       const cb = onVisualLapChangeRef.current;
-      if (cb && (visLap !== lastReportedVisLap || lastReportedProg < 0 || Math.abs(prog01 - lastReportedProg) >= 0.025)) {
-        lastReportedVisLap = visLap;
+      if (cb && (visLapForHud !== lastReportedVisLap || lastReportedProg < 0 || Math.abs(prog01 - lastReportedProg) >= 0.025)) {
+        lastReportedVisLap = visLapForHud;
         lastReportedProg = prog01;
-        cb(visLap, totLaps, prog01);
+        cb(visLapForHud, totLaps, prog01);
       }
 
       drawCanvas(trk, cond, r, nowSec);

@@ -157,7 +157,13 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         
         try:
             # 1. Check for request spam (10+ req/sec)
-            if await self.check_request_spam(user_id, username, self.db):
+            referer = request.headers.get("referer") or request.headers.get("referrer") or ""
+            if await self.check_request_spam(
+                user_id, username, self.db,
+                method=request.method,
+                path=path,
+                referer=referer,
+            ):
                 cooldown = _get_cooldown_seconds(user_id)
                 logger.warning(f"SPAM BLOCKED: {username} - {path} (cooldown {cooldown}s)")
                 return JSONResponse(

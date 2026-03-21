@@ -1,10 +1,12 @@
 # Anti-cheat and security monitoring system
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Tuple
 import logging
 import os
 import re
-from collections import defaultdict
+import time
+from collections import defaultdict, Counter
+from urllib.parse import urlparse
 import asyncio
 
 # Telegram bot token format: 8-10 digits, colon, ~35 alphanumeric chars. Reject BotFather message paste.
@@ -102,21 +104,25 @@ async def is_proxy_or_vpn(ip: str) -> bool:
         return False  # Fail open: don't block if API errors
 
 
-async def send_telegram_alert(message: str, alert_type: str = "warning"):
-    """Send alert to Telegram bot. Queues for batch sending."""
+async def send_telegram_alert(message: str, alert_type: str = "warning", use_markdown: bool = True):
+    """Send alert to Telegram bot. Queues for batch sending. use_markdown=False avoids broken parsing from paths/usernames."""
     if not TELEGRAM_ENABLED:
         logger.info(f"[SECURITY {alert_type.upper()}] {message}")
         return
-    
+
     emoji = {
         "critical": "🚨",
         "warning": "⚠️",
         "info": "ℹ️",
         "exploit": "💀",
     }.get(alert_type, "⚠️")
-    
-    formatted = f"{emoji} **{alert_type.upper()}**\n\n{message}\n\n🕐 {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
-    pending_alerts.append(formatted)
+
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    if use_markdown:
+        formatted = f"{emoji} **{alert_type.upper()}**\n\n{message}\n\n🕐 {ts}"
+    else:
+        formatted = f"{emoji} {alert_type.upper()}\n\n{message}\n\n🕐 {ts}"
+    pending_alerts.append((formatted, use_markdown))
 
 
 async def flush_telegram_alerts():
@@ -134,10 +140,15 @@ async def flush_telegram_alerts():
     batch = pending_alerts[:10]
     for _ in range(len(batch)):
         pending_alerts.pop(0)
-    combined_message = "\n\n---\n\n".join(batch)
+    texts = [b[0] if isinstance(b, tuple) else b for b in batch]
+    use_md_flags = [b[1] if isinstance(b, tuple) else True for b in batch]
+    combined_message = "\n\n────────\n\n".join(texts)
+    use_markdown = all(use_md_flags)
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            payload = {"chat_id": TELEGRAM_CHAT_ID, "text": combined_message[:4000], "parse_mode": "Markdown"}
+            payload = {"chat_id": TELEGRAM_CHAT_ID, "text": combined_message[:4000]}
+            if use_markdown:
+                payload["parse_mode"] = "Markdown"
             r = await client.post(
                 f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
                 json=payload,
@@ -278,9 +289,163 @@ async def set_telegram_bot_commands(bot_token: Optional[str] = None) -> bool:
         return False
 
 
+def _summarize_spam_paths(entries: List[Tuple], max_lines: int = 8) -> str:
+    if not entries:
+        return "  (no path detail)"
+    keys = [f"{m} {p}" for _, m, p, _ in entries]
+    c = Counter(keys)
+    lines = [f"  {n}×  {k}" for k, n in c.most_common(max_lines)]
+    if len(c) > max_lines:
+        lines.append(f"  … +{len(c) - max_lines} other endpoint(s)")
+    return "\n".join(lines)
+
+
+# (path_prefix, method or None for any, human label) — sorted longest-first for matching
+_SPAM_ACTIVITY_RULES_RAW: List[Tuple[str, Optional[str], str]] = [
+    ("/api/bank/interest/deposit", "POST", "Bank interest deposit"),
+    ("/api/bank/interest/claim", "POST", "Bank interest claim"),
+    ("/api/bank/swiss/deposit", "POST", "Swiss bank deposit"),
+    ("/api/bank/swiss/withdraw", "POST", "Swiss bank withdraw"),
+    ("/api/bank/transfer", "POST", "Bank transfer"),
+    ("/api/bank/overview", "GET", "Bank overview"),
+    ("/api/bank/meta", "GET", "Bank meta"),
+    ("/api/gauntlet/leaderboard", "GET", "Flappy Gangster leaderboard"),
+    ("/api/gauntlet/claim", "POST", "Flappy Gangster claim"),
+    ("/api/auth/me", "GET", "Auth session check"),
+    ("/api/auth/login", "POST", "Login"),
+    ("/api/auth/register", "POST", "Registration"),
+    ("/api/bank/", None, "Bank (other)"),
+]
+SPAM_ACTIVITY_RULES: List[Tuple[str, Optional[str], str]] = sorted(
+    _SPAM_ACTIVITY_RULES_RAW, key=lambda r: len(r[0]), reverse=True
+)
+
+
+def _normalize_spam_path(path: str) -> str:
+    if not path:
+        return ""
+    p = path.split("?", 1)[0].strip()
+    if not p.startswith("/"):
+        p = "/" + p
+    return p.lower()
+
+
+def _describe_api_activity(method: str, path: str) -> str:
+    p = _normalize_spam_path(path)
+    m = (method or "?").upper()[:16]
+    if not p:
+        return f"API {m} (no path)"
+    for prefix, rule_method, label in SPAM_ACTIVITY_RULES:
+        if not p.startswith(prefix):
+            continue
+        if rule_method is not None and m != rule_method.upper():
+            continue
+        return label
+    short = path.split("?", 1)[0].strip()
+    if len(short) > 140:
+        short = short[:137] + "..."
+    return f"API {m} {short}"
+
+
+def _spam_activity_extras(entries: List[Tuple], flag_type: str, max_lines: int = 10) -> Dict[str, str]:
+    """Human-readable activity breakdown; primary line if one label is >=50% of window."""
+    if not entries:
+        return {}
+    labels = [_describe_api_activity(m, p) for _, m, p, _ in entries]
+    c = Counter(labels)
+    n = len(labels)
+    lines = [f"  {cnt}×  {lab}" for lab, cnt in c.most_common(max_lines)]
+    if len(c) > max_lines:
+        lines.append(f"  … +{len(c) - max_lines} other kind(s)")
+    out: Dict[str, str] = {"activity_breakdown": "\n".join(lines)}
+    top_lab, top_n = c.most_common(1)[0]
+    if n and top_n / n >= 0.5:
+        out["primary_activity"] = (
+            f"Rapid-fire on: {top_lab}" if flag_type == "burst_spam" else f"Spamming: {top_lab}"
+        )
+    return out
+
+
+def _api_area_hint(path: str) -> str:
+    if not path:
+        return ""
+    p = path if path.startswith("/") else "/" + path
+    for prefix, label in (
+        ("/api/racing", "Racing / garage"),
+        ("/api/gauntlet", "Flappy Gangster"),
+        ("/api/auth/", "Auth"),
+        ("/api/casino/", "Casino"),
+        ("/api/game/", "Game / world"),
+        ("/api/kill/", "Combat / attacks"),
+        ("/api/money/", "Money / bank"),
+        ("/api/staff/", "Staff / admin UI"),
+        ("/api/news/", "News"),
+        ("/api/social/", "Social / inbox"),
+        ("/api/cars/", "Cars / garage"),
+        ("/api/store", "Store"),
+        ("/api/", "API (other)"),
+    ):
+        if p.startswith(prefix):
+            return f"Likely feature: {label}"
+    return ""
+
+
+def _referer_page_hint(referer: str) -> str:
+    r = (referer or "").strip()
+    if not r:
+        return "Browser page: not sent (direct API / missing Referer header)"
+    try:
+        p = urlparse(r)
+        host = (p.netloc or "")[:80]
+        path = (p.path or "/")[:140]
+        q = ("?" + p.query[:100]) if p.query else ""
+        return f"Browser page: {host}{path}{q}"
+    except Exception:
+        return f"Browser page: {r[:160]}"
+
+
+def _format_spam_flag_message(username: str, user_id: str, flag_type: str, reason: str, details: Dict) -> str:
+    title = "Burst spam (rapid-fire)" if flag_type == "burst_spam" else "Request spam (per-second)"
+    lines = [
+        title,
+        f"User: {username}",
+        f"User ID: {user_id}",
+    ]
+    pa = details.get("primary_activity")
+    if pa:
+        lines.append("")
+        lines.append(pa)
+    lines += ["", reason]
+    ab = details.get("activity_breakdown")
+    if ab:
+        lines += ["", "What they were doing:", ab]
+    lm, lp = details.get("last_method"), details.get("last_path")
+    if lp:
+        lines += ["", "Request that tripped it:", f"  {lm} {lp}"]
+    ps = details.get("path_summary")
+    if ps:
+        lines += ["", "All calls in this window:", ps]
+    rh = details.get("referer_hint")
+    if rh:
+        lines += ["", rh]
+    ah = details.get("api_area_hint")
+    if ah:
+        lines += ["", ah]
+    return "\n".join(lines)
+
+
+def _spam_telegram_in_cooldown(user_id: str) -> bool:
+    return (time.time() - _last_spam_telegram_at.get(user_id, 0)) < _SPAM_TELEGRAM_COOLDOWN_SEC
+
+
+def _mark_spam_telegram_sent(user_id: str) -> None:
+    _last_spam_telegram_at[user_id] = time.time()
+
+
 async def flag_user_suspicious(db, user_id: str, username: str, flag_type: str, reason: str, details: Dict = None):
     """Flag a user for suspicious activity. Stores in db.security_flags."""
     try:
+        details = details or {}
         flag_id = f"{user_id}_{flag_type}_{datetime.now(timezone.utc).timestamp()}"
         await db.security_flags.insert_one({
             "id": flag_id,
@@ -288,11 +453,11 @@ async def flag_user_suspicious(db, user_id: str, username: str, flag_type: str, 
             "username": username,
             "flag_type": flag_type,  # rate_limit, impossible_stat, rapid_transfer, exploit_attempt, etc.
             "reason": reason,
-            "details": details or {},
+            "details": details,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "resolved": False,
         })
-        
+
         # Send immediate alert for critical flags
         if flag_type in ("exploit_attempt", "impossible_stat"):
             msg = f"**User:** {username} (ID: {user_id[:8]}...)\n**Type:** {flag_type}\n**Reason:** {reason}"
@@ -300,49 +465,100 @@ async def flag_user_suspicious(db, user_id: str, username: str, flag_type: str, 
                 msg += f"\n**Details:** {str(details)[:200]}"
             await send_telegram_alert(msg, "exploit")
             await flush_telegram_alerts()  # Send immediately
+        elif flag_type in ("request_spam", "burst_spam"):
+            if _spam_telegram_in_cooldown(user_id):
+                logger.info(
+                    "Spam flag recorded for %s (%s); Telegram alert suppressed (cooldown %.0fs)",
+                    username, flag_type, _SPAM_TELEGRAM_COOLDOWN_SEC,
+                )
+            else:
+                _mark_spam_telegram_sent(user_id)
+                msg = _format_spam_flag_message(username, user_id, flag_type, reason, details)
+                await send_telegram_alert(msg, "warning", use_markdown=False)
         else:
             msg = f"**User:** {username}\n**Type:** {flag_type}\n**Reason:** {reason}"
             await send_telegram_alert(msg, "warning")
-            
+
     except Exception as e:
         logger.exception(f"Failed to flag user {username}: {e}")
 
 
 # Spam detection (not gameplay limits)
-async def check_request_spam(user_id: str, username: str, db) -> bool:
+async def check_request_spam(
+    user_id: str,
+    username: str,
+    db,
+    method: str = "",
+    path: str = "",
+    referer: Optional[str] = None,
+) -> bool:
     """Detect spam: 10+ requests in 1 second OR burst clicking (10+ in 0.5s). Returns True if spam detected."""
     now = datetime.now(timezone.utc)
-    
+    m = (method or "?").upper()[:16]
+    p = (path or "")[:400]
+    ref = (referer or "").strip()[:500]
+    entry: Tuple[datetime, str, str, str] = (now, m, p, ref)
+
     # Check 1: Standard spam detection (10+ requests in 1 second)
     cutoff_1s = now - timedelta(seconds=1)
-    user_request_counts[user_id] = [ts for ts in user_request_counts[user_id] if ts > cutoff_1s]
-    user_request_counts[user_id].append(now)
+    rq = user_request_counts[user_id]
+    rq[:] = [e for e in rq if e[0] > cutoff_1s]
+    rq.append(entry)
+    if len(rq) > _SPAM_LOG_MAX:
+        del rq[: len(rq) - _SPAM_LOG_MAX]
 
-    count_1s = len(user_request_counts[user_id])
+    count_1s = len(rq)
     if count_1s > MAX_REQUESTS_PER_SECOND:
+        win = list(rq)
+        details = {
+            "count": count_1s,
+            "threshold": MAX_REQUESTS_PER_SECOND,
+            "window_sec": 1,
+            "last_method": m,
+            "last_path": p,
+            "path_summary": _summarize_spam_paths(win),
+            "referer_hint": _referer_page_hint(ref),
+            "api_area_hint": _api_area_hint(p),
+        }
+        details.update(_spam_activity_extras(win, "request_spam"))
         await flag_user_suspicious(
             db, user_id, username,
             "request_spam",
-            f"Request spam detected: {count_1s} requests in 1 second",
-            {"count": count_1s, "threshold": MAX_REQUESTS_PER_SECOND}
+            f"{count_1s} API calls in 1 second (limit {MAX_REQUESTS_PER_SECOND}).",
+            details,
         )
         return True
-    
+
     # Check 2: Burst detection (rapid clicking - catches autoclickers/macros)
     cutoff_burst = now - timedelta(seconds=BURST_WINDOW_SECONDS)
-    user_burst_counts[user_id] = [ts for ts in user_burst_counts[user_id] if ts > cutoff_burst]
-    user_burst_counts[user_id].append(now)
-    
-    count_burst = len(user_burst_counts[user_id])
+    bq = user_burst_counts[user_id]
+    bq[:] = [e for e in bq if e[0] > cutoff_burst]
+    bq.append(entry)
+    if len(bq) > _SPAM_LOG_MAX:
+        del bq[: len(bq) - _SPAM_LOG_MAX]
+
+    count_burst = len(bq)
     if count_burst >= BURST_MAX_REQUESTS:
+        bwin = list(bq)
+        bdetails = {
+            "count": count_burst,
+            "threshold": BURST_MAX_REQUESTS,
+            "window_sec": BURST_WINDOW_SECONDS,
+            "last_method": m,
+            "last_path": p,
+            "path_summary": _summarize_spam_paths(bwin),
+            "referer_hint": _referer_page_hint(ref),
+            "api_area_hint": _api_area_hint(p),
+        }
+        bdetails.update(_spam_activity_extras(bwin, "burst_spam"))
         await flag_user_suspicious(
             db, user_id, username,
             "burst_spam",
-            f"Burst spam detected: {count_burst} requests in {BURST_WINDOW_SECONDS}s",
-            {"count": count_burst, "threshold": BURST_MAX_REQUESTS, "window": BURST_WINDOW_SECONDS}
+            f"{count_burst} API calls in {BURST_WINDOW_SECONDS}s burst (limit {BURST_MAX_REQUESTS}).",
+            bdetails,
         )
         return True
-    
+
     return False
 
 
