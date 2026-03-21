@@ -7921,6 +7921,7 @@ export default function Admin() {
                         <th className="py-1.5 px-1 font-bold text-mutedForeground uppercase">User</th>
                         <th className="py-1.5 px-1 font-bold text-mutedForeground uppercase">Public ID</th>
                         <th className="py-1.5 px-1 font-bold text-mutedForeground uppercase">Size</th>
+                        <th className="py-1.5 px-1 font-bold text-mutedForeground uppercase">Max side</th>
                         <th className="py-1.5 px-1 font-bold text-mutedForeground uppercase">Created</th>
                         <th className="py-1.5 px-1 font-bold text-mutedForeground uppercase">Actions</th>
                       </tr>
@@ -7941,6 +7942,7 @@ export default function Admin() {
                             </td>
                             <td className="py-1 px-1 font-mono text-[8px] max-w-[100px] break-all">{row.public_id}</td>
                             <td className="py-1 px-1 tabular-nums">{row.size_bytes != null ? `${Math.round(row.size_bytes / 1024)} KB` : '—'}</td>
+                            <td className="py-1 px-1 tabular-nums text-mutedForeground">{row.resize_max_edge != null ? `${row.resize_max_edge}px` : '—'}</td>
                             <td className="py-1 px-1 whitespace-nowrap text-mutedForeground">{row.created_at ? String(row.created_at).slice(0, 19).replace('T', ' ') : '—'}</td>
                             <td className="py-1 px-1 whitespace-nowrap">
                               <BtnDanger type="button" onClick={() => handleImageHostAdminDelete(row.public_id)}>Delete</BtnDanger>

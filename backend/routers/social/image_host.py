@@ -7,10 +7,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import Depends, File, HTTPException, Query, UploadFile
+from fastapi import Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from utils.image_host_resize import maybe_resize_for_host, normalize_max_edge
 from utils.image_upload_security import (
     MIME_TO_FILE_EXT,
     download_remote_image_full,
@@ -24,6 +25,24 @@ IMAGE_HOST_MAX_PER_USER = 10
 
 class ImageHostImportRequest(BaseModel):
     url: str = Field(..., min_length=8, max_length=2048)
+    max_edge: Optional[int] = None  # longest side px; optional preset
+
+    @field_validator("max_edge", mode="before")
+    @classmethod
+    def _empty_max_edge(cls, v):
+        if v in ("", None, False):
+            return None
+        return v
+
+    @field_validator("max_edge")
+    @classmethod
+    def _valid_max_edge(cls, v):
+        if v is None:
+            return None
+        try:
+            return normalize_max_edge(int(v))
+        except (TypeError, ValueError) as e:
+            raise ValueError(str(e)) from e
 
 
 def register(r) -> None:
@@ -64,7 +83,7 @@ def register(r) -> None:
         uid = current_user.get("id") or ""
         cur = db.image_host_uploads.find(
             {"user_id": uid, "deleted_at": None},
-            {"_id": 0, "public_id": 1, "mime": 1, "size_bytes": 1, "original_filename": 1, "created_at": 1},
+            {"_id": 0, "public_id": 1, "mime": 1, "size_bytes": 1, "original_filename": 1, "created_at": 1, "resize_max_edge": 1},
         ).sort("created_at", -1)
         items: List[dict] = []
         async for doc in cur:
@@ -73,6 +92,7 @@ def register(r) -> None:
 
     async def upload_image(
         file: UploadFile = File(...),
+        max_edge: Optional[int] = Form(default=None),
         current_user: dict = Depends(get_current_user_verified),
     ):
         _ensure_upload_root()
@@ -83,10 +103,22 @@ def register(r) -> None:
                 detail=f"Maximum {IMAGE_HOST_MAX_PER_USER} hosted images. Delete one to upload more.",
             )
 
+        max_edge_opt: Optional[int] = None
+        if max_edge is not None:
+            try:
+                max_edge_opt = normalize_max_edge(int(max_edge))
+            except (TypeError, ValueError) as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+
         raw = await file.read()
         mime, err = verify_uploaded_file_bytes(raw, file.content_type)
         if not mime or err:
             raise HTTPException(status_code=400, detail=err or "Invalid image file")
+
+        try:
+            raw, mime, resize_meta = maybe_resize_for_host(raw, mime, max_edge_opt)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
         ext = MIME_TO_FILE_EXT.get(mime)
         if not ext:
@@ -111,6 +143,7 @@ def register(r) -> None:
             "rel_path": str(path.relative_to(ROOT_DIR)).replace("\\", "/"),
             "created_at": now,
             "deleted_at": None,
+            "resize_max_edge": resize_meta,
         }
         await db.image_host_uploads.insert_one(doc)
         return {"public_id": public_id, "message": "Uploaded"}
@@ -134,6 +167,11 @@ def register(r) -> None:
         mime, verr = verify_uploaded_file_bytes(data, None)
         if not mime or verr:
             raise HTTPException(status_code=400, detail=verr or "Invalid image")
+
+        try:
+            data, mime, resize_meta = maybe_resize_for_host(data, mime, body.max_edge)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
         ext = MIME_TO_FILE_EXT.get(mime)
         if not ext:
@@ -159,6 +197,7 @@ def register(r) -> None:
             "rel_path": str(path.relative_to(ROOT_DIR)).replace("\\", "/"),
             "created_at": now,
             "deleted_at": None,
+            "resize_max_edge": resize_meta,
         }
         await db.image_host_uploads.insert_one(doc)
         return {"public_id": public_id, "message": "Imported"}
@@ -247,6 +286,7 @@ def register(r) -> None:
                     "original_filename": 1,
                     "source_url": 1,
                     "created_at": 1,
+                    "resize_max_edge": 1,
                 },
             )
             .sort("created_at", -1)

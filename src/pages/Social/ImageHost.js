@@ -7,6 +7,18 @@ import styles from '../../styles/noir.module.css';
 
 const ACCEPT = 'image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp';
 
+/** Optional max length of longest side (px); server scales down, keeps aspect ratio. */
+const MAX_EDGE_OPTIONS = [
+  { value: '', label: 'Original size' },
+  { value: '400', label: 'Max 400px' },
+  { value: '640', label: 'Max 640px' },
+  { value: '800', label: 'Max 800px' },
+  { value: '1024', label: 'Max 1024px' },
+  { value: '1280', label: 'Max 1280px' },
+  { value: '1600', label: 'Max 1600px' },
+  { value: '1920', label: 'Max 1920px' },
+];
+
 export default function ImageHost() {
   const fileRef = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -14,6 +26,7 @@ export default function ImageHost() {
   const [count, setCount] = useState(0);
   const [max, setMax] = useState(10);
   const [importUrl, setImportUrl] = useState('');
+  const [maxEdge, setMaxEdge] = useState('');
   const [uploading, setUploading] = useState(false);
   const [importing, setImporting] = useState(false);
 
@@ -47,6 +60,7 @@ export default function ImageHost() {
     try {
       const fd = new FormData();
       fd.append('file', f);
+      if (maxEdge) fd.append('max_edge', maxEdge);
       await api.post('/image-host/upload', fd);
       toast.success('Image uploaded');
       await load();
@@ -67,7 +81,9 @@ export default function ImageHost() {
     }
     setImporting(true);
     try {
-      await api.post('/image-host/import-url', { url: u });
+      const body = { url: u };
+      if (maxEdge) body.max_edge = Number(maxEdge);
+      await api.post('/image-host/import-url', body);
       toast.success('Image imported');
       setImportUrl('');
       await load();
@@ -111,7 +127,7 @@ export default function ImageHost() {
               Image host
             </h1>
             <p className="text-[10px] font-heading text-mutedForeground mt-0.5">
-              Host up to {max} pictures (JPEG, PNG, GIF, WebP). Copy direct links for forums, custom cars, etc.
+              Host up to {max} pictures (JPEG, PNG, GIF, WebP). Copy direct links for forums, custom cars, etc. Optional resize limits the longest side; animated GIFs keep the original file if you pick a size.
             </p>
           </div>
         </div>
@@ -119,6 +135,19 @@ export default function ImageHost() {
       </div>
 
       <div className={`${styles.panel} rounded-md border border-primary/20 p-4 space-y-4 mobile-panel`}>
+        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center">
+          <label className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider shrink-0">Save size</label>
+          <select
+            value={maxEdge}
+            onChange={(e) => setMaxEdge(e.target.value)}
+            disabled={uploading || importing || count >= max}
+            className={`min-w-[140px] max-w-full h-9 px-2 ${styles.input} text-[11px] font-heading`}
+          >
+            {MAX_EDGE_OPTIONS.map((o) => (
+              <option key={o.value || 'orig'} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
         <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <input ref={fileRef} type="file" accept={ACCEPT} className="hidden" onChange={onFile} />
           <button
@@ -173,6 +202,9 @@ export default function ImageHost() {
                   />
                 </div>
                 <div className="p-3 space-y-2 border-t border-primary/10">
+                  {img.resize_max_edge != null && (
+                    <p className="text-[9px] font-heading text-primary/90">Saved max side {img.resize_max_edge}px</p>
+                  )}
                   <p className="text-[9px] font-mono text-mutedForeground break-all line-clamp-2">{src}</p>
                   <div className="flex flex-wrap gap-2">
                     <button
