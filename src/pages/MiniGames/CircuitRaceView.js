@@ -1453,6 +1453,33 @@ export default function CircuitRaceView({
     if (!racerArr?.length) return;
     const drawOrder = [...racerArr].reverse();
     const trkPos = drawOrder.map(r => r.inPit ? -1 : ((((r.totalLapsDone??0)+r.trackPos)%1)+1)%1);
+    const lapFracDist = (a, b) => { const d = Math.abs(a - b); return Math.min(d, 1 - d); };
+    const laneSpacing = halfW * 0.42;
+    const latOffPre = new Float32Array(drawOrder.length);
+    for (let di = 0; di < drawOrder.length; di++) {
+      const rc = drawOrder[di];
+      if (!rc.visible || rc.inPit || trkPos[di] < 0) continue;
+      const tRawC = ((((rc.totalLapsDone ?? 0) + rc.trackPos) % 1) + 1) % 1;
+      const thresh = inStartFinishSafeZone(track, tRawC) ? 0.038 : 0.022;
+      const myPos = trkPos[di];
+      const cluster = [];
+      for (let oj = 0; oj < drawOrder.length; oj++) {
+        const r2 = drawOrder[oj];
+        if (!r2.visible || r2.inPit || trkPos[oj] < 0) continue;
+        if (lapFracDist(trkPos[oj], myPos) < thresh) cluster.push(oj);
+      }
+      cluster.sort((a, b) => {
+        const ra = drawOrder[a], rb = drawOrder[b];
+        const ca = ra.carNumber ?? 99, cb = rb.carNumber ?? 99;
+        if (ca !== cb) return ca - cb;
+        const fa = ra.finishOrder ?? 999, fb = rb.finishOrder ?? 999;
+        if (fa !== fb) return fa - fb;
+        return a - b;
+      });
+      const lane = cluster.indexOf(di);
+      const n = cluster.length;
+      if (lane >= 0 && n > 0) latOffPre[di] = (lane - (n - 1) / 2) * laneSpacing;
+    }
 
     drawOrder.forEach((r, di) => {
       if (!r.visible) return;
@@ -1469,11 +1496,7 @@ export default function CircuitRaceView({
         const tRaw=((prog%1)+1)%1, t=(tRaw+0.006*di)%1;
         const p=track.getPoint(t), p2=track.getPoint((t+0.006)%1);
         angle=Math.atan2(sy(p2.y)-sy(p.y), sx(p2.x)-sx(p.x));
-        let latOff = 0;
-        const myPos = trkPos[di];
-        if (!(r.slideOffUntil>0&&nowSec<r.slideOffUntil)) {
-          trkPos.forEach((op,oi) => { if (oi!==di&&op>=0&&Math.abs(op-myPos)<0.02) latOff=((di%3)-1)*(halfW*0.60); });
-        }
+        const latOff = (!(r.slideOffUntil>0&&nowSec<r.slideOffUntil)) ? latOffPre[di] : 0;
         const offs = (r.slideOffUntil>0&&nowSec<r.slideOffUntil) ? (halfW+9) : latOff;
         px = sx(p.x)+Math.cos(angle+Math.PI/2)*offs;
         py = sy(p.y)+Math.sin(angle+Math.PI/2)*offs;
@@ -1510,8 +1533,8 @@ export default function CircuitRaceView({
         }
       }
 
-      // Exhaust trail
-      if (!r.inPit && !(r.slideOffUntil>0&&nowSec<r.slideOffUntil)) {
+      // Exhaust trail (skip when finished / coasting — stacked arcs read as a blob at S/F)
+      if (!r.inPit && !(r.slideOffUntil>0&&nowSec<r.slideOffUntil) && !r.finished && (r.currentSpeedMph ?? 99) >= 10) {
         const td2 = TYRE_DEFS[r.currentTyre]||TYRE_DEFS.medium;
         for (let ei=1; ei<=6; ei++) {
           const et=((tt-0.004*ei)%1+1)%1, ep=track.getPoint(et);
@@ -2077,7 +2100,12 @@ export default function CircuitRaceView({
               const tw=r.tireWearByLap[idx];
               if(!r.inPit&&!(r.tyreWear>92&&tw<20))r.tyreWear=tw;
             }
-            if(r.totalLapsDone>=nLaps){r.finished=true;r.finishOrder=nextFO++;r.finishedAtSec=nowSec;r.finishVisibleUntil=nowSec+9999;if(r.finishOrder===1&&nLaps>1){finishFlash=nowSec+2.0;stateRef.current.finishFlash=finishFlash;}}
+            if(r.totalLapsDone>=nLaps){
+              r.finished=true;r.finishOrder=nextFO++;
+              r.finishedAtSec=nowSec+Math.min(0.5,(r.finishOrder-1)*0.08);
+              r.finishVisibleUntil=nowSec+9999;
+              if(r.finishOrder===1&&nLaps>1){finishFlash=nowSec+2.0;stateRef.current.finishFlash=finishFlash;}
+            }
           } else {
             // FIX: decrement each frame
             if (r._justCrossedFrames > 0) r._justCrossedFrames--;
@@ -2716,7 +2744,12 @@ export default function CircuitRaceView({
         setCommentary(rnd(COMMENTARY.done));
         let fo = 1;
         [...r].sort((a, b) => (a._targetPos ?? 99) - (b._targetPos ?? 99)).forEach(x => {
-          if (!x.dnf) { x.finished = true; x.finishOrder = fo++; x.finishedAtSec = nowSec; }
+          if (!x.dnf) {
+            const ord = fo++;
+            x.finished = true;
+            x.finishOrder = ord;
+            x.finishedAtSec = nowSec + Math.min(0.5, (ord - 1) * 0.08);
+          }
         });
       }
 
