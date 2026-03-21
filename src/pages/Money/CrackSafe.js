@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Lock, Trophy, Info, ChevronUp, ChevronDown, KeyRound, Infinity } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
@@ -73,6 +73,14 @@ function formatDate(iso) {
   try {
     return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
   } catch { return iso; }
+}
+
+function formatDuration(totalSec) {
+  const s = Math.max(0, Math.floor(totalSec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${h}h ${m}m ${sec}s`;
 }
 
 /* ─── SVG Combination Dial ─── */
@@ -403,7 +411,22 @@ export default function CrackSafe() {
   const [dialAngle, setDialAngle] = useState(0);
   const [shaking, setShaking] = useState(false);
   const [skipAnim, setSkipAnim] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
+  const [lockTick, setLockTick] = useState(0);
   const spinRef = useRef(null);
+
+  useEffect(() => {
+    if (!info?.win_locked || !info?.win_lock_until) return undefined;
+    const t = setInterval(() => setLockTick((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [info?.win_locked, info?.win_lock_until]);
+
+  const lockSecondsLeft = useMemo(() => {
+    if (!info?.win_lock_until) return 0;
+    const end = new Date(info.win_lock_until).getTime();
+    if (Number.isNaN(end)) return 0;
+    return Math.max(0, Math.ceil((end - Date.now()) / 1000));
+  }, [info?.win_lock_until, lockTick]);
 
   const fetchInfo = useCallback(async () => {
     try {
@@ -416,6 +439,22 @@ export default function CrackSafe() {
       setLoading(false);
     }
   }, []);
+
+  const handleUnlockReplay = async () => {
+    if (unlocking) return;
+    setUnlocking(true);
+    try {
+      const res = await api.post('/crack-safe/unlock-replay');
+      toast.success(res.data?.message || 'Cooldown cleared — you can play again.');
+      await refreshUser();
+      await fetchInfo();
+    } catch (e) {
+      const detail = e.response?.data?.detail || 'Could not buy replay';
+      toast.error(typeof detail === 'string' ? detail : 'Could not buy replay');
+    } finally {
+      setUnlocking(false);
+    }
+  };
 
   useEffect(() => { fetchInfo(); }, [fetchInfo]);
 
@@ -498,6 +537,7 @@ export default function CrackSafe() {
       <div className="cs-fade-in">
         <p className="text-[9px] text-zinc-500 font-heading italic">
           Enter 5 numbers between 1 and 9 to crack the safe. Each attempt costs {formatMoney(info?.entry_cost ?? 1_000_000)}.
+          After you crack it, wait 24h to play again or pay {formatMoney(info?.replay_cost ?? 15_000_000)} (max {info?.replay_max_per_day ?? 3} per UTC day).
         </p>
       </div>
 
@@ -584,7 +624,7 @@ export default function CrackSafe() {
             </label>
 
             {/* Guess button */}
-            {info?.can_guess && (
+            {info?.can_guess && !info?.win_locked && (
               <button
                 onClick={handleGuess}
                 disabled={guessing}
@@ -624,7 +664,8 @@ export default function CrackSafe() {
             </div>
             <div className="p-2.5 space-y-1 text-xs font-heading" style={{ lineHeight: 1.6 }}>
               <p className="text-zinc-400">Enter 5 numbers between 1 and 9 to crack the safe!</p>
-              <p className="text-zinc-400">Each attempt costs <span className="text-primary font-semibold">{formatMoney(info?.entry_cost ?? 1_000_000)}</span>. As many attempts as you can afford.</p>
+              <p className="text-zinc-400">Each attempt costs <span className="text-primary font-semibold">{formatMoney(info?.entry_cost ?? 1_000_000)}</span>. As many attempts as you can afford until you win.</p>
+              <p className="text-zinc-400">After a jackpot win: <span className="text-amber-400 font-semibold">24h cooldown</span>, or pay <span className="text-amber-400 font-semibold">{formatMoney(info?.replay_cost ?? 15_000_000)}</span> to skip (max <span className="text-amber-400 font-semibold">{info?.replay_max_per_day ?? 3}</span> paid skips per UTC day). Entry fee still applies each guess.</p>
               <p className="text-zinc-400">Current Jackpot: <span className="text-yellow-400 font-bold">{formatMoney(info?.jackpot ?? 0)}</span></p>
               <p className="text-zinc-400">Total attempts: <span className="text-primary font-semibold">{(info?.total_attempts ?? 0).toLocaleString()}</span></p>
               <p className="text-zinc-400">Previous Winner: <span className="text-primary font-semibold">{info?.last_winner_username ?? 'None yet'}</span></p>

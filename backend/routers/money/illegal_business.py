@@ -299,6 +299,78 @@ def _is_moderately_upgraded(business: dict) -> bool:
     return level >= MODERATELY_UPGRADED_LEVEL and (security_level >= MODERATELY_UPGRADED_SECURITY or upgrade_count >= 1)
 
 
+def _ordered_ibm_missions():
+    return sorted(ILLEGAL_BUSINESS_MISSIONS, key=lambda x: x["order"])
+
+
+def _ibm_mission_after(completed_id: str):
+    ordered = _ordered_ibm_missions()
+    for i, m in enumerate(ordered):
+        if m["id"] == completed_id and i + 1 < len(ordered):
+            return ordered[i + 1]
+    return None
+
+
+def _ibm_baselines_map(user: dict) -> Dict[str, Any]:
+    return user.get("illegal_business_mission_baselines") or {}
+
+
+def _ibm_baseline_int(user: dict, mission_id: str, key: str) -> int:
+    block = _ibm_baselines_map(user).get(mission_id) or {}
+    return int(block.get(key) or 0)
+
+
+def _ibm_requirement_current(user: dict, business: Optional[dict], mission: dict, key: str) -> int:
+    """Progress for one requirement. crimes_in_state / collections count only since baselines set when the prior mission completed."""
+    if key == "crimes":
+        return int(user.get("total_crimes") or 0)
+    if key == "rank_id":
+        return _user_rank_id(user)
+    if key == "security_level":
+        if not business:
+            return 0
+        return len(business.get("security_upgrades") or [])
+    if key == "crimes_in_state":
+        raw = int(user.get("illegal_business_crimes_in_state") or 0)
+        base = _ibm_baseline_int(user, mission["id"], "crimes_in_state")
+        return max(0, raw - base)
+    if key == "collections":
+        raw = int(user.get("illegal_business_collections") or 0)
+        base = _ibm_baseline_int(user, mission["id"], "collections")
+        return max(0, raw - base)
+    return 0
+
+
+def _ibm_mission_progress_row(user: dict, business: Optional[dict], mission: dict, completed_ids: set) -> Dict[str, Any]:
+    req = mission.get("requirements") or {}
+    cur = {key: _ibm_requirement_current(user, business, mission, key) for key in req}
+    return {"mission": mission, "completed": mission["id"] in completed_ids, "current": cur, "target": req}
+
+
+async def _ibm_set_baselines_for_next_mission(user_id: str, completed_mission_id: str):
+    nxt = _ibm_mission_after(completed_mission_id)
+    if not nxt:
+        return
+    u = await db.users.find_one(
+        {"id": user_id},
+        {"illegal_business_crimes_in_state": 1, "illegal_business_collections": 1},
+    )
+    if not u:
+        return
+    req = nxt.get("requirements") or {}
+    snap: Dict[str, int] = {}
+    if "crimes_in_state" in req:
+        snap["crimes_in_state"] = int(u.get("illegal_business_crimes_in_state") or 0)
+    if "collections" in req:
+        snap["collections"] = int(u.get("illegal_business_collections") or 0)
+    if not snap:
+        return
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {f"illegal_business_mission_baselines.{nxt['id']}": snap}},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
@@ -348,21 +420,10 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
     completed_ids = {c.get("mission_id") for c in completions if c.get("mission_id")}
     pending_rewards = current_user.get("pending_illegal_business_rewards") or []
     type_info = next((t for t in ILLEGAL_BUSINESS_TYPES if t["id"] == business.get("type_id")), {})
-    missions_progress = []
-    for m in sorted(ILLEGAL_BUSINESS_MISSIONS, key=lambda x: x["order"]):
-        req = m.get("requirements") or {}
-        cur = {}
-        if "crimes" in req:
-            cur["crimes"] = int(current_user.get("total_crimes") or 0)
-        if "rank_id" in req:
-            cur["rank_id"] = _user_rank_id(current_user)
-        if "security_level" in req and business:
-            cur["security_level"] = len(business.get("security_upgrades") or [])
-        if "crimes_in_state" in req:
-            cur["crimes_in_state"] = int(current_user.get("illegal_business_crimes_in_state") or 0)
-        if "collections" in req:
-            cur["collections"] = int(current_user.get("illegal_business_collections") or 0)
-        missions_progress.append({"mission": m, "completed": m["id"] in completed_ids, "current": cur, "target": req})
+    missions_progress = [
+        _ibm_mission_progress_row(current_user, business, m, completed_ids)
+        for m in _ordered_ibm_missions()
+    ]
     # Build security upgrades list (no mission locks; cost computed by index)
     security_upgrades_with_lock = []
     for i, u in enumerate(SECURITY_UPGRADES):
@@ -619,21 +680,10 @@ async def get_illegal_business_missions(current_user: dict = Depends(get_current
     business = await db.illegal_businesses.find_one({"user_id": current_user["id"]}, {"_id": 0})
     completions = current_user.get("illegal_business_mission_completions") or []
     completed_ids = {c.get("mission_id") for c in completions if c.get("mission_id")}
-    progress = []
-    for m in sorted(ILLEGAL_BUSINESS_MISSIONS, key=lambda x: x["order"]):
-        req = m.get("requirements") or {}
-        cur = {}
-        if "crimes" in req:
-            cur["crimes"] = int(current_user.get("total_crimes") or 0)
-        if "rank_id" in req:
-            cur["rank_id"] = _user_rank_id(current_user)
-        if "security_level" in req and business:
-            cur["security_level"] = len(business.get("security_upgrades") or [])
-        if "crimes_in_state" in req:
-            cur["crimes_in_state"] = int(current_user.get("illegal_business_crimes_in_state") or 0)
-        if "collections" in req:
-            cur["collections"] = int(current_user.get("illegal_business_collections") or 0)
-        progress.append({"mission": m, "completed": m["id"] in completed_ids, "current": cur, "target": req})
+    progress = [
+        _ibm_mission_progress_row(current_user, business, m, completed_ids)
+        for m in _ordered_ibm_missions()
+    ]
     return {"missions": progress}
 
 
@@ -650,18 +700,7 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
     req = mission.get("requirements") or {}
     met = True
     for key, target in req.items():
-        if key == "crimes":
-            cur = int(current_user.get("total_crimes") or 0)
-        elif key == "rank_id":
-            cur = _user_rank_id(current_user)
-        elif key == "security_level":
-            cur = len(business.get("security_upgrades") or [])
-        elif key == "crimes_in_state":
-            cur = int(current_user.get("illegal_business_crimes_in_state") or 0)
-        elif key == "collections":
-            cur = int(current_user.get("illegal_business_collections") or 0)
-        else:
-            cur = 0
+        cur = _ibm_requirement_current(current_user, business, mission, key)
         if cur < target:
             met = False
             break
@@ -681,6 +720,7 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Mission already completed.")
+    await _ibm_set_baselines_for_next_mission(current_user["id"], mission_id)
     update_business_set = {}
     update_business_inc = {}
     if "income_mult" in rewards:

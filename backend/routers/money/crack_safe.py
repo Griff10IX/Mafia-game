@@ -1,9 +1,10 @@
-# Crack the Safe: jackpot game. Every attempt costs 1M. No free entries, no purchasable extra. Admins unlimited.
+# Crack the Safe: jackpot game. Each attempt costs SAFE_ENTRY_COST. After a win, 24h lock unless you pay
+# SAFE_REPLAY_COST (max SAFE_REPLAY_MAX_PER_DAY per UTC day). Admins unlimited / no win lock.
 # Reward pool: cash jackpot (always) + 25% chance for 1 bonus token (Crimes XP, GTA XP, Melt, etc.)
 from datetime import datetime, timedelta, timezone
 import secrets
 _rng = secrets.SystemRandom()
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException
@@ -28,6 +29,28 @@ SAFE_DIGITS = 5
 SAFE_MIN = 1
 SAFE_MAX = 9
 SAFE_GUESS_COOLDOWN_SECONDS = 10
+SAFE_WIN_LOCK_HOURS = 24
+SAFE_REPLAY_COST = 15_000_000
+SAFE_REPLAY_MAX_PER_DAY = 3
+
+
+def _as_utc_dt(v) -> Optional[datetime]:
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v.astimezone(timezone.utc)
+    if isinstance(v, str):
+        s = v.replace("Z", "+00:00")
+        try:
+            d = datetime.fromisoformat(s)
+        except ValueError:
+            return None
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        return d.astimezone(timezone.utc)
+    return None
 
 
 class SafeGuessRequest(BaseModel):
@@ -125,8 +148,21 @@ def register(router):
         cd = user.get("crack_safe_cooldown_until")
         now = datetime.now(timezone.utc)
         next_guess_at = None
-        if not is_admin and cd and isinstance(cd, datetime) and cd > now:
-            next_guess_at = cd.isoformat()
+        cd_dt = _as_utc_dt(cd)
+        if not is_admin and cd_dt and cd_dt > now:
+            next_guess_at = cd_dt.isoformat()
+
+        win_lock_dt = _as_utc_dt(user.get("crack_safe_win_lock_until"))
+        win_locked = bool(not is_admin and win_lock_dt and win_lock_dt > now)
+        win_lock_until_iso = win_lock_dt.isoformat() if win_locked else None
+
+        day_key = now.strftime("%Y-%m-%d")
+        replay_day = user.get("crack_safe_replay_day")
+        replay_count_stored = int(user.get("crack_safe_replay_count") or 0)
+        replays_today = replay_count_stored if replay_day == day_key else 0
+        replay_slots_remaining = max(0, SAFE_REPLAY_MAX_PER_DAY - replays_today)
+
+        can_guess = is_admin or (user_money >= SAFE_ENTRY_COST and not win_locked)
 
         base = {
             "jackpot": safe.get("jackpot", SAFE_JACKPOT_SEED),
@@ -140,10 +176,94 @@ def register(router):
             "clues": clues,
             "is_admin": is_admin,
             "possible_rewards": possible_rewards,
+            "win_locked": win_locked,
+            "win_lock_until": win_lock_until_iso,
+            "replay_cost": SAFE_REPLAY_COST,
+            "replay_max_per_day": SAFE_REPLAY_MAX_PER_DAY,
+            "replays_used_today": replays_today,
+            "replay_slots_remaining": replay_slots_remaining,
+            "can_afford_replay": user_money >= SAFE_REPLAY_COST,
         }
         if is_admin:
             base["admin_combination"] = combo
         return base
+
+    @router.post("/crack-safe/unlock-replay")
+    async def crack_safe_unlock_replay(user: dict = Depends(get_current_user_verified)):
+        """Pay SAFE_REPLAY_COST to clear post-win 24h lock. Max SAFE_REPLAY_MAX_PER_DAY per UTC day."""
+        if _is_admin(user):
+            return {"ok": True, "message": "Admins are not locked out."}
+        uid = user.get("id") or ""
+        now = datetime.now(timezone.utc)
+        day_key = now.strftime("%Y-%m-%d")
+        # Atomic: money, active win lock, replay cap (UTC day) — avoids double-spend / over-count races
+        replay_filter = {
+            "id": uid,
+            "money": {"$gte": SAFE_REPLAY_COST},
+            "crack_safe_win_lock_until": {"$gt": now},
+            "$expr": {
+                "$lt": [
+                    {
+                        "$cond": {
+                            "if": {"$eq": ["$crack_safe_replay_day", day_key]},
+                            "then": {"$ifNull": ["$crack_safe_replay_count", 0]},
+                            "else": 0,
+                        }
+                    },
+                    SAFE_REPLAY_MAX_PER_DAY,
+                ]
+            },
+        }
+        pipeline = [
+            {
+                "$set": {
+                    "money": {"$subtract": ["$money", SAFE_REPLAY_COST]},
+                    "crack_safe_win_lock_until": None,
+                    "crack_safe_replay_day": day_key,
+                    "crack_safe_replay_count": {
+                        "$cond": {
+                            "if": {"$eq": ["$crack_safe_replay_day", day_key]},
+                            "then": {"$add": [{"$ifNull": ["$crack_safe_replay_count", 0]}, 1]},
+                            "else": 1,
+                        }
+                    },
+                }
+            }
+        ]
+        res = await db.users.update_one(replay_filter, pipeline)
+        if res.modified_count == 0:
+            udoc = await db.users.find_one({"id": uid}, {"money": 1, "crack_safe_win_lock_until": 1, "crack_safe_replay_day": 1, "crack_safe_replay_count": 1})
+            if not udoc:
+                raise HTTPException(status_code=400, detail="User not found.")
+            if int(udoc.get("money") or 0) < SAFE_REPLAY_COST:
+                raise HTTPException(status_code=400, detail=f"You need ${SAFE_REPLAY_COST:,} to buy another attempt.")
+            wld = _as_utc_dt(udoc.get("crack_safe_win_lock_until"))
+            if not wld or wld <= now:
+                raise HTTPException(status_code=400, detail="You don't have an active post-win cooldown. Play normally.")
+            prev_day = udoc.get("crack_safe_replay_day")
+            cnt = int(udoc.get("crack_safe_replay_count") or 0)
+            used = cnt if prev_day == day_key else 0
+            if used >= SAFE_REPLAY_MAX_PER_DAY:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"You've used all {SAFE_REPLAY_MAX_PER_DAY} paid replays today (UTC). Wait until tomorrow or until your free timer ends.",
+                )
+            raise HTTPException(status_code=400, detail="Could not process replay purchase. Try again.")
+
+        fresh = await db.users.find_one({"id": uid}, {"crack_safe_replay_count": 1, "crack_safe_replay_day": 1})
+        cnt_after = int((fresh or {}).get("crack_safe_replay_count") or 0)
+        await log_activity(
+            uid,
+            user.get("username") or "?",
+            "crack_safe_replay_purchase",
+            {"cost": SAFE_REPLAY_COST, "replays_today_after": cnt_after},
+        )
+        return {
+            "ok": True,
+            "message": f"Cooldown cleared for ${SAFE_REPLAY_COST:,}. You can crack the safe again (entry fee still applies).",
+            "replays_used_today": cnt_after,
+            "replay_slots_remaining": max(0, SAFE_REPLAY_MAX_PER_DAY - cnt_after),
+        }
 
     @router.post("/crack-safe/guess")
     async def crack_safe_guess(req: SafeGuessRequest, user: dict = Depends(get_current_user_verified)):
@@ -151,16 +271,28 @@ def register(router):
         combo = safe.get("combination") or []
         now = datetime.now(timezone.utc)
         is_admin = _is_admin(user)
+        uid = user.get("id") or ""
+        fresh = await db.users.find_one({"id": uid}) or user
 
         if not is_admin:
-            cd = user.get("crack_safe_cooldown_until")
-            if cd and isinstance(cd, datetime) and cd > now:
-                remaining = int((cd - now).total_seconds()) + 1
+            wld = _as_utc_dt(fresh.get("crack_safe_win_lock_until"))
+            if wld and wld > now:
+                remaining = int((wld - now).total_seconds()) + 1
+                h, rem = divmod(remaining, 3600)
+                m, s = divmod(rem, 60)
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"You cracked the safe recently. Wait {h}h {m}m {s}s or pay ${SAFE_REPLAY_COST:,} to play again (max {SAFE_REPLAY_MAX_PER_DAY}/day).",
+                )
+            cd = fresh.get("crack_safe_cooldown_until")
+            cd_dt = _as_utc_dt(cd)
+            if cd_dt and cd_dt > now:
+                remaining = int((cd_dt - now).total_seconds()) + 1
                 raise HTTPException(status_code=400, detail=f"Wait {remaining}s before your next guess.")
 
         cooldown_until = now + timedelta(seconds=SAFE_GUESS_COOLDOWN_SECONDS)
         result = await db.users.update_one(
-            {"id": user.get("id") or "", "money": {"$gte": SAFE_ENTRY_COST}},
+            {"id": uid, "money": {"$gte": SAFE_ENTRY_COST}},
             {"$inc": {"money": -SAFE_ENTRY_COST}, "$set": {"crack_safe_cooldown_until": cooldown_until}},
         )
         if result.modified_count == 0:
@@ -205,7 +337,16 @@ def register(router):
                     "message": "Safe was cracked by someone else just before you!",
                 }
             jackpot_amount = won_safe.get("jackpot", SAFE_JACKPOT_SEED)
-            await db.users.update_one({"id": uid}, {"$inc": {"money": jackpot_amount}})
+            if is_admin:
+                await db.users.update_one({"id": uid}, {"$inc": {"money": jackpot_amount}})
+            else:
+                await db.users.update_one(
+                    {"id": uid},
+                    {
+                        "$inc": {"money": jackpot_amount},
+                        "$set": {"crack_safe_win_lock_until": now + timedelta(hours=SAFE_WIN_LOCK_HOURS)},
+                    },
+                )
 
             bonus_tokens = []
             if _rng.random() < SAFE_TOKEN_REWARD_CHANCE:
