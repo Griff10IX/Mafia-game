@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Spade, MessageSquare, XCircle, CheckCircle2, Swords, Skull } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
+import { FAVICON_PNG, APP_ICON_192_PNG } from '../../utils/publicAssets';
 import styles from '../../styles/noir.module.css';
 
 const TURN_SECONDS = 60;
@@ -429,7 +430,11 @@ export default function MPBlackjackGamePage() {
       if (typeof Notification !== 'undefined' && document.hidden) {
         if (Notification.permission === 'granted') {
           try {
-            new Notification('Multiplayer Blackjack', { body: "It's your turn — hit or stand!", icon: '/favicon.png' });
+            new Notification('Multiplayer Blackjack', {
+              body: "It's your turn — hit or stand!",
+              icon: FAVICON_PNG,
+              badge: APP_ICON_192_PNG,
+            });
           } catch (_) {}
         } else if (Notification.permission === 'default') {
           Notification.requestPermission();
