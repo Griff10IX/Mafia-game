@@ -986,6 +986,9 @@ export default function Racing() {
         // Lap display must follow server current_lap (completed laps 0…N); canvas orbit is not authoritative.
         const _dispLap = _fromSrv ?? 1;
         const _serverProg = _totLapsHud > 0 ? Math.min(1, (_serverLap || 0) / _totLapsHud) : 0;
+        // Canvas orbit can run ahead of poll / current_lap; max(visual, server) alone made the bar
+        // look "almost finished" while the lap label still said 2/3 (misleading).
+        const _progCap = _totLapsHud > 0 ? Math.min(1, ((_serverLap || 0) + 1) / _totLapsHud) : 0;
         const _inQualOrGrid =
           interactiveCanvasPhase === "qualifying"
           || interactiveCanvasPhase === "countdown"
@@ -996,7 +999,7 @@ export default function Racing() {
             : _inQualOrGrid
               ? 0
               : interactiveRaceProg != null && _totLapsHud > 0
-                ? Math.min(1, Math.max(_serverProg, interactiveRaceProg))
+                ? Math.min(_progCap, Math.max(_serverProg, interactiveRaceProg))
                 : _serverProg;
         const _mergedQo = liveRace.qualifying_order?.length
           ? liveRace.qualifying_order
