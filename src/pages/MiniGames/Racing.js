@@ -223,7 +223,6 @@ export default function Racing() {
   });
   const [decisionSyncPending, setDecisionSyncPending] = useState(false);
   const lastSentDecisionKey = useRef(null);
-  const prevLiveLapRef = useRef(undefined);
   const [rndTree, setRndTree] = useState(null);
   const [rndActive, setRndActive] = useState(null);
   const [rndResearching, setRndResearching] = useState(false);
@@ -592,19 +591,10 @@ export default function Racing() {
 
   useEffect(() => {
     lastSentDecisionKey.current = null;
-    prevLiveLapRef.current = undefined;
     interactiveDoneLiveFetchedRef.current = false;
     setInteractiveRaceProg(null);
     setInteractiveCanvasPhase(null);
   }, [activeRace?.id]);
-
-  useEffect(() => {
-    const cl = liveRace?.current_lap;
-    if (prevLiveLapRef.current !== cl) {
-      prevLiveLapRef.current = cl;
-      lastSentDecisionKey.current = null;
-    }
-  }, [liveRace?.current_lap]);
 
   /** Push strategy to server on change (debounced). No separate confirm — matches live controls. */
   useEffect(() => {
@@ -616,7 +606,10 @@ export default function Racing() {
 
     const t = setTimeout(async () => {
       const decision = myDecision;
+      // Dedupe per open strategy window — NOT per lap number. Clearing on lap change forced a re-POST
+      // every poll tick and each POST advances the race (submit_race_decision → _maybe_advance_interactive_lap).
       const key = JSON.stringify({
+        deadline: liveRace.lap_deadline || null,
         push_level: decision.push_level,
         pit_this_lap: decision.pit_this_lap,
         pit_compound: decision.pit_compound,
