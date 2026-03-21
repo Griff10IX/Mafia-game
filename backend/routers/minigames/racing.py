@@ -11,8 +11,16 @@ import os
 import random
 import re
 import uuid
+import hashlib
 from typing import Optional, List, Dict, Any
 from fastapi import Depends, HTTPException, Header
+
+from .racing_lap_engine import (
+    LapEngineConfig,
+    InteractiveLapResult,
+    qual_lap_time,
+    run_interactive_lap_turn,
+)
 from pydantic import BaseModel
 from pymongo import UpdateOne
 
@@ -33,7 +41,12 @@ RACING_CARS: List[dict] = [
 
 TRACKS: List[dict] = [
     {"id": "chicago_board", "name": "Chicago Board Track", "reward_mult": 1.0,
-     "lap_base": 24, "km": 3.1, "corners": 10, "corner_severity": 0.3, "track_width": 1.0},
+     "lap_base": 24, "km": 3.1, "corners": 10, "corner_severity": 0.3, "track_width": 1.0,
+     "sectors": [
+         {"kind": "straight", "weight": 0.38, "drs": True},
+         {"kind": "corner", "weight": 0.34, "drs": False},
+         {"kind": "straight", "weight": 0.28, "drs": True},
+     ]},
     {"id": "daytona_beach", "name": "Daytona Beach Road Course", "reward_mult": 1.2,
      "lap_base": 28, "km": 4.2, "corners": 6, "corner_severity": 0.35, "track_width": 1.1},
     {"id": "roosevelt", "name": "Roosevelt Raceway", "reward_mult": 1.1,
@@ -378,11 +391,11 @@ TYRE_COMPOUNDS = [
 
 # Weather: affects tire wear and grip/speed. Set when race starts (random).
 WEATHER_TYPES = [
-    {"id": "clear", "name": "Clear", "tire_wear_mult": 1.0, "speed_mult": 1.0},
-    {"id": "rain", "name": "Rain", "tire_wear_mult": 1.55, "speed_mult": 0.90},
-    {"id": "snow", "name": "Snow", "tire_wear_mult": 2.0, "speed_mult": 0.82},
-    {"id": "very_hot", "name": "Very hot", "tire_wear_mult": 1.45, "speed_mult": 0.95},
-    {"id": "night", "name": "Night", "tire_wear_mult": 1.05, "speed_mult": 0.97},
+    {"id": "clear", "name": "Clear", "tire_wear_mult": 1.0, "speed_mult": 1.0, "grip_mult": 1.0},
+    {"id": "rain", "name": "Rain", "tire_wear_mult": 1.55, "speed_mult": 0.90, "grip_mult": 0.88},
+    {"id": "snow", "name": "Snow", "tire_wear_mult": 2.0, "speed_mult": 0.82, "grip_mult": 0.78},
+    {"id": "very_hot", "name": "Very hot", "tire_wear_mult": 1.45, "speed_mult": 0.95, "grip_mult": 0.95},
+    {"id": "night", "name": "Night", "tire_wear_mult": 1.05, "speed_mult": 0.97, "grip_mult": 0.98},
 ]
 
 def _get_weather(weather_id: str) -> dict:
@@ -448,6 +461,42 @@ PHYSIO_VARIANCE_REDUCTION_PER_LEVEL = 0.0001  # physio (was 0.005 * 2 / 100)
 DATA_ANALYST_QUALLI_PER_LEVEL = 0.00024  # data_analyst quali (was 0.012 * 2 / 100)
 
 
+def _build_lap_engine_config() -> LapEngineConfig:
+    return LapEngineConfig(
+        tire_wear_per_lap=TIRE_WEAR_PER_LAP,
+        tire_pit_threshold=TIRE_PIT_THRESHOLD,
+        pit_threshold_per_level=PIT_THRESHOLD_PER_LEVEL,
+        strategist_pit_offset_per_level=STRATEGIST_PIT_OFFSET_PER_LEVEL,
+        pit_random_threshold_per_level=PIT_RANDOM_THRESHOLD_PER_LEVEL,
+        pit_penalty_factor_base=PIT_PENALTY_FACTOR_BASE,
+        pit_penalty_improvement_per_level=PIT_PENALTY_IMPROVEMENT_PER_LEVEL,
+        fuel_weight_penalty_per_level=FUEL_WEIGHT_PENALTY_PER_LEVEL,
+        fuel_tech_weight_per_level=FUEL_TECH_WEIGHT_PER_LEVEL,
+        corner_grip_brakes_per_level=CORNER_GRIP_BRAKES_PER_LEVEL,
+        corner_grip_aero_per_level=CORNER_GRIP_AERO_PER_LEVEL,
+        corner_grip_susp_per_level=CORNER_GRIP_SUSP_PER_LEVEL,
+        cooling_speed_penalty_at_risk_per_level=COOLING_SPEED_PENALTY_AT_RISK_PER_LEVEL,
+        cooling_dnf_risk_reduction_per_level=COOLING_DNF_RISK_REDUCTION_PER_LEVEL,
+        tactician_wet_pace_per_level=TACTICIAN_WET_PACE_PER_LEVEL,
+        morale_top_half_pace_per_level=MORALE_TOP_HALF_PACE_PER_LEVEL,
+        spotter_dodge_chance_per_level=SPOTTER_DODGE_CHANCE_PER_LEVEL,
+        tyre_tech_wear_reduction_per_level=TYRE_TECH_WEAR_REDUCTION_PER_LEVEL,
+        logistics_wear_reduction_per_level=LOGISTICS_WEAR_REDUCTION_PER_LEVEL,
+        acceleration_bonus_per_level=ACCELERATION_BONUS_PER_LEVEL,
+        overtaking_chance_per_level=OVERTAKING_CHANCE_PER_LEVEL,
+        reliability_wear_reduction_per_level=RELIABILITY_WEAR_REDUCTION_PER_LEVEL,
+        cooling_wear_reduction_per_level=COOLING_WEAR_REDUCTION_PER_LEVEL,
+        engine_wear_per_race_divisor=ENGINE_WEAR_PER_RACE,
+        engine_risk_threshold=ENGINE_RISK_THRESHOLD,
+        engine_wear_max=ENGINE_WEAR_MAX,
+        engine_dnf_chance_per_lap_at_100=ENGINE_DNF_CHANCE_PER_LAP_AT_100,
+        engine_speed_penalty_at_risk=ENGINE_SPEED_PENALTY_AT_RISK,
+        max_crew_level=MAX_CREW_LEVEL,
+        tire_compounds=TYRE_COMPOUNDS,
+        get_weather=_get_weather,
+    )
+
+
 # ---------- Pydantic ----------
 class CreateRaceRequest(BaseModel):
     track_id: str
@@ -469,6 +518,8 @@ class RaceDecisionRequest(BaseModel):
     pit_this_lap: bool = False
     pit_compound: str = "medium"
     defend: bool = False
+    pace_mode: Optional[str] = None  # push | normal | conserve
+    reaction_ms: Optional[int] = None  # lap 1 launch; lower = better
 
 
 class UpgradeCrewRequest(BaseModel):
@@ -1190,22 +1241,17 @@ def _run_qualifying(
     track: Optional[dict] = None,
     weather_id: str = "clear",
 ) -> tuple:
-    """One-lap qualifying: order by single-lap performance (no tire wear).
-    Returns grid order (pole first). Uses split straight/corner formula matching race simulation."""
-    weather = _get_weather(weather_id)
-    speed_mult = float(weather.get("speed_mult", 1.0))
+    """One-lap qualifying: sector-weighted pace + tyre compound + seeded variance."""
+    cfg = _build_lap_engine_config()
     lap_times = []
     track = track or {}
     lap_base = float(track.get("lap_base") or 90.0)
-    corners = int(track.get("corners") or 10)
-    corner_severity = float(track.get("corner_severity") or 0.4)
     is_wet = weather_id in ("rain", "snow")
-    corner_weight = min(0.6, corners * corner_severity * 0.015)
-    if is_wet:
-        corner_weight = min(0.75, corner_weight * 1.35)
     for e in entrants:
         eid = e.get("user_id") or e.get("id")
-        speed_val, grip_val = _effective_speed_and_grip(e, profile_by_user.get(eid) or {}, upgrades_map)
+        speed_val, grip_val = _effective_speed_and_grip_display(
+            e, profile_by_user.get(eid) or {}, upgrades_map
+        )
         compound_mult = 1.0
         for c in TYRE_COMPOUNDS:
             if c.get("id") == (e.get("tyre_compound") or "medium"):
@@ -1217,20 +1263,32 @@ def _run_qualifying(
         brakes = int(up.get("brakes_level") or 0)
         aero = int(up.get("aero_level") or 0)
         susp = int(up.get("suspension_level") or 0)
-        straight_perf = speed_val * speed_mult
-        corner_grip_bonus = compound_mult + brakes * CORNER_GRIP_BRAKES_PER_LEVEL + aero * CORNER_GRIP_AERO_PER_LEVEL + susp * CORNER_GRIP_SUSP_PER_LEVEL
-        corner_perf = grip_val * corner_grip_bonus * speed_mult
-        combined = straight_perf * (1.0 - corner_weight) + corner_perf * corner_weight
+        corner_grip_bonus = (
+            compound_mult
+            + brakes * CORNER_GRIP_BRAKES_PER_LEVEL
+            + aero * CORNER_GRIP_AERO_PER_LEVEL
+            + susp * CORNER_GRIP_SUSP_PER_LEVEL
+        )
         prof = profile_by_user.get(eid) or {}
         data_analyst = int(prof.get("data_analyst_level") or 0)
         if data_analyst > 0 and not e.get("is_npc"):
-            combined *= 1.0 + data_analyst * DATA_ANALYST_QUALLI_PER_LEVEL
+            speed_val *= 1.0 + data_analyst * DATA_ANALYST_QUALLI_PER_LEVEL
         tactician_q = int(prof.get("tactician_level") or 0)
         if is_wet and tactician_q > 0 and not e.get("is_npc"):
-            combined *= 1.0 + tactician_q * TACTICIAN_WET_PACE_PER_LEVEL
-        combined = max(0.01, float(combined))
-        lap_time = lap_base / combined
-        lap_time = max(20.0, min(300.0, lap_time))
+            grip_val *= 1.0 + tactician_q * TACTICIAN_WET_PACE_PER_LEVEL
+        grip_val = max(0.5, min(1.0, grip_val))
+        qual_noise = random.uniform(-0.45, 0.45)
+        lap_time = qual_lap_time(
+            cfg,
+            lap_base,
+            speed_val,
+            grip_val,
+            compound_mult,
+            corner_grip_bonus,
+            weather_id,
+            track,
+            qual_noise,
+        )
         lap_times.append((eid, lap_time))
     random.shuffle(lap_times)
     lap_times.sort(key=lambda x: (x[1], x[0]))
@@ -3588,6 +3646,10 @@ async def _start_interactive_race(
         "result_order": None,
         "rewards": None,
         "completed_at": None,
+        "race_events": [],
+        "gaps_to_ahead": {},
+        "safety_car_laps_remaining": 0,
+        "lap_times_by_lap": [],
     }
 
     await db.racing_races.update_one({"id": race_id}, {"$set": update_fields})
@@ -3597,288 +3659,80 @@ async def _start_interactive_race(
 
 
 def _run_one_interactive_lap(
-    lap_num: int, total_laps: int,
-    entrants: List[dict], profile_by_user: Dict[str, dict],
-    upgrades_map: Dict[str, dict], car_states: Dict[str, dict],
-    decisions: Dict[str, dict], weather_id: str,
-    track: Optional[dict], crew_cache: Dict[str, dict],
-    driver_cache: Dict[str, dict], prior_lap_results: List[List[str]],
-) -> tuple:
-    """Run one interactive lap.  Returns (lap_order, new_pit_stops, new_incidents, car_states, new_dnf_ids)."""
-    weather = _get_weather(weather_id)
-    tire_wear_mult = float(weather.get("tire_wear_mult", 1.0))
-    speed_mult = float(weather.get("speed_mult", 1.0))
-
-    ids = [e.get("user_id") or e.get("id") for e in entrants]
-    dnf_ids = [eid for eid in ids if car_states.get(eid, {}).get("dnf")]
-
-    track = track or {}
-    corners = int(track.get("corners") or 10)
-    corner_severity = float(track.get("corner_severity") or 0.4)
-    is_wet = weather_id in ("rain", "snow")
-    corner_weight = min(0.6, corners * corner_severity * 0.015)
-    if is_wet:
-        corner_weight = min(0.75, corner_weight * 1.35)
-
-    new_pit_stops: List[Dict[str, Any]] = []
-    new_incidents: List[Dict[str, Any]] = []
-    new_dnfs: List[str] = []
-    engine_wear_per_lap = ENGINE_WEAR_PER_RACE / max(1, total_laps)
+    lap_num: int,
+    total_laps: int,
+    entrants: List[dict],
+    profile_by_user: Dict[str, dict],
+    upgrades_map: Dict[str, dict],
+    car_states: Dict[str, dict],
+    decisions: Dict[str, dict],
+    weather_id: str,
+    track: Optional[dict],
+    crew_cache: Dict[str, dict],
+    driver_cache: Dict[str, dict],
+    prior_lap_results: List[List[str]],
+    race_id: str,
+    prev_gaps_to_ahead: Dict[str, float],
+    safety_car_laps_remaining: int,
+) -> InteractiveLapResult:
+    cfg = _build_lap_engine_config()
+    cfg.engine_wear_per_race_divisor = ENGINE_WEAR_PER_RACE / max(1, total_laps)
 
     rnd_cache: Dict[str, dict] = {}
     for e in entrants:
         eid = e.get("user_id") or e.get("id")
-        if not e.get("is_npc"):
-            rnd_cache[eid] = _get_rnd_bonuses(profile_by_user.get(eid) or {})
-        else:
-            rnd_cache[eid] = _get_rnd_bonuses({})
+        rnd_cache[eid] = (
+            _get_rnd_bonuses({}) if e.get("is_npc") else _get_rnd_bonuses(profile_by_user.get(eid) or {})
+        )
 
-    # --- Engine DNF check ---
-    for eid in ids:
-        if eid in dnf_ids:
-            continue
-        cs = car_states.get(eid, {})
-        wear = float(cs.get("engine_wear") or 0)
-        if wear < ENGINE_RISK_THRESHOLD:
-            continue
-        entrant = next((e for e in entrants if (e.get("user_id") or e.get("id")) == eid), None)
-        up = upgrades_map.get((entrant or {}).get("racing_car_instance_id") or (entrant or {}).get("id") or "") or {}
-        cooling = int(up.get("cooling_level") or 0)
-        cooling_risk_mult = max(0.4, 1.0 - cooling * COOLING_DNF_RISK_REDUCTION_PER_LEVEL)
-        rnd_b = rnd_cache.get(eid, {})
-        dnf_chance = (wear - ENGINE_RISK_THRESHOLD) / (ENGINE_WEAR_MAX - ENGINE_RISK_THRESHOLD) * ENGINE_DNF_CHANCE_PER_LAP_AT_100
-        dnf_chance *= (1.0 - rnd_b.get("dnf_reduction", 0))
-        if random.random() < (dnf_chance * cooling_risk_mult):
-            dnf_ids.append(eid)
-            new_dnfs.append(eid)
-            car_states[eid]["dnf"] = True
-
-    # --- Pit stop decisions ---
-    pitting = set()
-    for eid in ids:
-        if eid in dnf_ids:
-            continue
-        decision = decisions.get(eid, {})
-        entrant = next((e for e in entrants if (e.get("user_id") or e.get("id")) == eid), None)
-        is_npc = (entrant or {}).get("is_npc")
-        if not is_npc and eid in decisions and decision.get("pit_this_lap"):
-            pitting.add(eid)
-            new_compound = (decision.get("pit_compound") or "medium").lower()
-            if new_compound not in ("soft", "medium", "hard", "inter", "full_wet"):
-                new_compound = "medium"
-            car_states[eid]["compound"] = new_compound
-        elif is_npc or eid not in decisions:
-            cs = car_states.get(eid, {})
-            prof = profile_by_user.get(eid) or {}
-            pit_level = min(MAX_CREW_LEVEL, int(prof.get("pit_level") or 0))
-            strategist = crew_cache.get(eid, {}).get("strategist", 0)
-            pit_threshold = min(65, TIRE_PIT_THRESHOLD + pit_level * PIT_THRESHOLD_PER_LEVEL - strategist * STRATEGIST_PIT_OFFSET_PER_LEVEL)
-            tw = float(cs.get("tyre_wear") or 100)
-            if tw < pit_threshold:
-                pitting.add(eid)
-            elif lap_num > 1 and lap_num < total_laps and random.random() < 0.12 and tw < (55 + pit_level * PIT_RANDOM_THRESHOLD_PER_LEVEL):
-                pitting.add(eid)
-    for eid in pitting:
-        new_pit_stops.append({"lap": lap_num, "entrant_id": eid})
-
-    # --- Lap speed calculation ---
-    lap_speeds: List[tuple] = []
     for e in entrants:
         eid = e.get("user_id") or e.get("id")
-        if eid in dnf_ids:
-            lap_speeds.append((eid, 0.0))
+        if car_states.get(eid, {}).get("dnf"):
             continue
-
-        cs = car_states.get(eid, {})
-        decision = decisions.get(eid, {})
-        is_npc = e.get("is_npc")
-
-        if is_npc or eid not in decisions:
-            drv = driver_cache.get(eid, {})
-            push_level = max(1, min(5, 2 + int(drv.get("aggression", 40) / 30)))
-            defend = random.random() < 0.1
-        else:
-            push_level = max(1, min(5, int(decision.get("push_level") or 3)))
-            defend = bool(decision.get("defend"))
-
-        car_states[eid]["push_level"] = push_level
-
         speed_val, grip_val = _effective_speed_and_grip(e, profile_by_user.get(eid) or {}, upgrades_map)
-        rnd_b = rnd_cache.get(eid, {})
-        speed_val *= (1.0 + rnd_b.get("speed_pct", 0))
-        grip_val *= (1.0 + rnd_b.get("grip_pct", 0) - rnd_b.get("grip_penalty", 0))
+        rnd_b = rnd_cache[eid]
+        speed_val *= 1.0 + rnd_b.get("speed_pct", 0)
+        grip_val *= 1.0 + rnd_b.get("grip_pct", 0) - rnd_b.get("grip_penalty", 0)
         grip_val = max(0.5, min(1.0, grip_val))
+        car_states[eid]["_lap_speed_base"] = speed_val
+        car_states[eid]["_lap_grip_base"] = grip_val
+        car_states[eid]["_rnd"] = rnd_b
 
-        eng_wear = float(cs.get("engine_wear") or 0)
-        if eng_wear >= ENGINE_RISK_THRESHOLD:
-            up = upgrades_map.get(e.get("racing_car_instance_id") or e.get("id") or "") or {}
-            cooling_lvl = int(up.get("cooling_level") or 0)
-            penalty = min(1.0, ENGINE_SPEED_PENALTY_AT_RISK + cooling_lvl * COOLING_SPEED_PENALTY_AT_RISK_PER_LEVEL)
-            speed_val *= penalty
+    seed = int(hashlib.sha256(f"{race_id}:{lap_num}:interactive_lap".encode()).hexdigest()[:16], 16)
+    rng = random.Random(seed)
 
-        speed_val *= (0.92 + push_level * 0.04)
-        if defend:
-            speed_val *= 0.97
-
-        up_fuel = upgrades_map.get(e.get("racing_car_instance_id") or e.get("id") or "") or {}
-        fuel_lvl = int(up_fuel.get("fuel_level") or 0)
-        crew = crew_cache.get(eid, {})
-        fuel_tech = crew.get("fuel_tech", 0)
-        base_weight_penalty = 0.03 * ((total_laps - lap_num + 1) / max(1, total_laps))
-        weight_penalty = max(0.0, base_weight_penalty - fuel_lvl * FUEL_WEIGHT_PENALTY_PER_LEVEL - fuel_tech * FUEL_TECH_WEIGHT_PER_LEVEL)
-        fuel_weight_mult = 1.0 + weight_penalty
-
-        tw = float(cs.get("tyre_wear") or 100)
-        tire_factor = max(0.3, (tw / 100.0) ** 1.2)
-
-        compound = (cs.get("compound") or "medium").lower()
-        compound_mult = 1.0
-        for c in TYRE_COMPOUNDS:
-            if c.get("id") == compound:
-                compound_mult = float(c.get("grip_mult", 1.0))
-                if is_wet and c.get("wet_grip_bonus"):
-                    compound_mult += float(c.get("wet_grip_bonus", 0))
-                break
-
-        up = upgrades_map.get(e.get("racing_car_instance_id") or e.get("id") or "") or {}
-        brakes = int(up.get("brakes_level") or 0)
-        aero = int(up.get("aero_level") or 0)
-        susp = int(up.get("suspension_level") or 0)
-        accel_lvl = int(up.get("acceleration_level") or 0)
-
-        straight_perf = (speed_val * tire_factor * speed_mult) / fuel_weight_mult
-        corner_grip_bonus = compound_mult + brakes * CORNER_GRIP_BRAKES_PER_LEVEL + aero * CORNER_GRIP_AERO_PER_LEVEL + susp * CORNER_GRIP_SUSP_PER_LEVEL
-        corner_perf = (grip_val * tire_factor * corner_grip_bonus * speed_mult) / fuel_weight_mult
-
-        combined = straight_perf * (1.0 - corner_weight) + corner_perf * corner_weight
-        accel_bonus = accel_lvl * ACCELERATION_BONUS_PER_LEVEL + rnd_b.get("acceleration_pct", 0)
-        if accel_lvl > 0 and random.random() < 0.15:
-            combined *= 1.0 + accel_bonus
-
-        drv_stats = driver_cache.get(eid, {})
-        combined *= 1.0 + (drv_stats.get("skill", 50) - 50) * 0.002
-        variance_scale = max(0.2, 1.0 - drv_stats.get("consistency", 50) * 0.008)
-        combined += random.uniform(-0.5, 0.5) * variance_scale
-        if is_wet:
-            combined *= 1.0 + (drv_stats.get("wet_ability", 50) - 50) * 0.003
-            combined *= (1.0 + rnd_b.get("wet_grip_pct", 0))
-
-        tactician = crew.get("tactician", 0)
-        if is_wet and tactician > 0:
-            combined *= 1.0 + tactician * TACTICIAN_WET_PACE_PER_LEVEL
-
-        morale = crew.get("morale", 0)
-        if morale > 0 and prior_lap_results:
-            last_lap = prior_lap_results[-1]
-            pos_idx = last_lap.index(eid) if eid in last_lap else len(last_lap)
-            if pos_idx < len(ids) // 2:
-                combined *= 1.0 + morale * MORALE_TOP_HALF_PACE_PER_LEVEL
-
-        dmg = float(cs.get("damage") or 0)
-        if dmg > 0:
-            combined *= (1.0 - dmg)
-
-        if eid in pitting:
-            ent_prof = profile_by_user.get(eid) or {}
-            ent_pit_level = min(MAX_CREW_LEVEL, int(ent_prof.get("pit_level") or 0))
-            pit_factor = PIT_PENALTY_FACTOR_BASE + ent_pit_level * PIT_PENALTY_IMPROVEMENT_PER_LEVEL
-            combined *= pit_factor
-
-        lap_speeds.append((eid, combined))
-
-    # --- Sort + overtaking ---
-    random.shuffle(lap_speeds)
-    lap_speeds.sort(key=lambda x: -x[1])
-    order = [x[0] for x in lap_speeds]
-    speed_by_id = {eid: s for eid, s in lap_speeds}
-
-    for i in range(len(order) - 1):
-        car_ahead, car_behind = order[i], order[i + 1]
-        entrant_behind = next((e for e in entrants if (e.get("user_id") or e.get("id")) == car_behind), None)
-        up_behind = upgrades_map.get((entrant_behind or {}).get("racing_car_instance_id") or (entrant_behind or {}).get("id") or "") or {}
-        ovt = int(up_behind.get("overtaking_level") or 0)
-        if ovt <= 0:
-            continue
-        sa, sb = speed_by_id.get(car_ahead, 0), speed_by_id.get(car_behind, 0)
-        if sa <= 0 or sb <= 0:
-            continue
-        closeness = abs(sa - sb) / max(sa, sb)
-        behind_drv = driver_cache.get(car_behind, {})
-        rnd_b_behind = rnd_cache.get(car_behind, {})
-        overtake_prob = ovt * OVERTAKING_CHANCE_PER_LEVEL + behind_drv.get("racecraft", 50) * 0.0008 + behind_drv.get("aggression", 40) * 0.0003 + rnd_b_behind.get("overtaking_pct", 0)
-        ahead_decision = decisions.get(car_ahead, {})
-        if ahead_decision.get("defend"):
-            overtake_prob *= 0.5
-        if closeness < 0.04 and random.random() < overtake_prob:
-            order[i], order[i + 1] = order[i + 1], order[i]
-
-    # --- Contact incidents ---
-    active_ids = [eid for eid in ids if eid not in dnf_ids]
-    for i in range(len(active_ids)):
-        for j in range(i + 1, len(active_ids)):
-            eid_a, eid_b = active_ids[i], active_ids[j]
-            score_a, score_b = speed_by_id.get(eid_a, 0), speed_by_id.get(eid_b, 0)
-            if score_a <= 0 or score_b <= 0:
-                continue
-            closeness = abs(score_a - score_b) / max(score_a, score_b)
-            if closeness > 0.05:
-                continue
-            aggr_a = driver_cache.get(eid_a, {}).get("aggression", 40)
-            aggr_b = driver_cache.get(eid_b, {}).get("aggression", 40)
-            contact_chance = corner_severity * 0.08 * (1.0 + ((aggr_a + aggr_b) / 2) * 0.005)
-            if random.random() < contact_chance:
-                victim = random.choice([eid_a, eid_b])
-                spotter = crew_cache.get(victim, {}).get("spotter", 0)
-                if spotter > 0 and random.random() < spotter * SPOTTER_DODGE_CHANCE_PER_LEVEL:
-                    continue
-                dmg_val = random.uniform(0.02, 0.08)
-                old_dmg = float(car_states.get(victim, {}).get("damage") or 0)
-                car_states[victim]["damage"] = min(0.25, old_dmg + dmg_val)
-                new_incidents.append({"lap": lap_num, "entrant_ids": [eid_a, eid_b], "damaged": victim, "damage_pct": round(dmg_val * 100, 1)})
-
-    # --- Update tyre wear + engine wear ---
+    dec_copy: Dict[str, Any] = {}
+    for k, v in (decisions or {}).items():
+        dec_copy[k] = dict(v) if isinstance(v, dict) else v
     for e in entrants:
         eid = e.get("user_id") or e.get("id")
-        if eid in dnf_ids:
+        if e.get("is_npc"):
             continue
-        cs = car_states.get(eid, {})
-        up = upgrades_map.get(e.get("racing_car_instance_id") or e.get("id") or "") or {}
-        rel = int(up.get("reliability_level") or 0)
-        rnd_b = rnd_cache.get(eid, {})
-        wear_mult_rel = max(0.5, 1.0 - rel * RELIABILITY_WEAR_REDUCTION_PER_LEVEL)
+        d = dec_copy.get(eid)
+        if isinstance(d, dict) and d.get("pace_mode"):
+            pm = str(d["pace_mode"]).strip().lower()
+            if pm in ("push", "normal", "conserve"):
+                d["pace_mode"] = pm
 
-        if eid in pitting:
-            cs["tyre_wear"] = 100.0
-        else:
-            crew = crew_cache.get(eid, {})
-            tyre_tech = crew.get("tyre_tech", 0)
-            logistics = crew.get("logistics", 0)
-            compound = (cs.get("compound") or "medium").lower()
-            comp_wear = 1.0
-            for c in TYRE_COMPOUNDS:
-                if c.get("id") == compound:
-                    comp_wear = float(c.get("wear_mult", 1.0))
-                    break
-            crew_wear_reduction = 1.0 - tyre_tech * TYRE_TECH_WEAR_REDUCTION_PER_LEVEL - logistics * LOGISTICS_WEAR_REDUCTION_PER_LEVEL
-            push = int(cs.get("push_level") or 3)
-            push_wear_mult = 0.7 + push * 0.15
-            wear_this_lap = (TIRE_WEAR_PER_LAP + random.uniform(-2, 2)) * tire_wear_mult * comp_wear * wear_mult_rel * max(0.7, crew_wear_reduction) * push_wear_mult
-            wear_this_lap *= (1.0 - rnd_b.get("tyre_wear_reduction", 0))
-            drv_tire_mgmt = driver_cache.get(eid, {}).get("tire_management", 50)
-            wear_this_lap *= max(0.7, 1.0 - drv_tire_mgmt * 0.003)
-            cs["tyre_wear"] = max(0, float(cs.get("tyre_wear") or 100) - wear_this_lap)
-
-        cooling = int(up.get("cooling_level") or 0)
-        eng_wear_mult = max(0, 1.0 - cooling * COOLING_WEAR_REDUCTION_PER_LEVEL)
-        eng_wear_increment = engine_wear_per_lap * eng_wear_mult * (1.0 - rnd_b.get("engine_wear_reduction", 0))
-        cs["engine_wear"] = min(ENGINE_WEAR_MAX, float(cs.get("engine_wear") or 0) + eng_wear_increment)
-        cs["fuel_pct"] = max(0, 100.0 * (total_laps - lap_num) / max(1, total_laps))
-
-    for i, eid in enumerate(order):
-        if eid in car_states:
-            car_states[eid]["position"] = i + 1
-
-    return order, new_pit_stops, new_incidents, car_states, new_dnfs
+    return run_interactive_lap_turn(
+        cfg,
+        lap_num,
+        total_laps,
+        entrants,
+        profile_by_user,
+        upgrades_map,
+        car_states,
+        dec_copy,
+        weather_id,
+        track,
+        crew_cache,
+        driver_cache,
+        prior_lap_results,
+        race_id,
+        prev_gaps_to_ahead or {},
+        int(safety_car_laps_remaining or 0),
+        rng,
+    )
 
 
 async def _advance_one_lap(race: dict) -> Optional[dict]:
@@ -3902,10 +3756,39 @@ async def _advance_one_lap(race: dict) -> Optional[dict]:
     driver_cache = race.get("driver_snapshot") or {}
     prior_lap_results = list(race.get("lap_results") or [])
 
-    lap_order, new_pit_stops, new_incidents, updated_cs, new_dnfs = _run_one_interactive_lap(
-        new_lap, total_laps, participants, profile_by_user, upgrades_map,
-        car_states, decisions_raw, weather_id, track, crew_cache, driver_cache, prior_lap_results,
+    prev_gaps = dict(race.get("gaps_to_ahead") or {})
+    sc_rem = int(race.get("safety_car_laps_remaining") or 0)
+    lap_res = _run_one_interactive_lap(
+        new_lap,
+        total_laps,
+        participants,
+        profile_by_user,
+        upgrades_map,
+        car_states,
+        decisions_raw,
+        weather_id,
+        track,
+        crew_cache,
+        driver_cache,
+        prior_lap_results,
+        race_id,
+        prev_gaps,
+        sc_rem,
     )
+    lap_order = lap_res.order
+    new_pit_stops = lap_res.new_pit_stops
+    new_incidents = lap_res.new_incidents
+    updated_cs = lap_res.car_states
+    new_dnfs = lap_res.new_dnfs
+
+    w = _get_weather(lap_res.weather_id)
+    race_events = list(race.get("race_events") or [])
+    for ev in lap_res.lap_events:
+        ev2 = dict(ev)
+        ev2["lap"] = new_lap
+        race_events.append(ev2)
+    lap_times_by_lap = list(race.get("lap_times_by_lap") or [])
+    lap_times_by_lap.append(lap_res.lap_time_sec)
 
     all_lap_results = prior_lap_results + [lap_order]
     all_pit_stops = list(race.get("pit_stops") or []) + new_pit_stops
@@ -3928,6 +3811,12 @@ async def _advance_one_lap(race: dict) -> Optional[dict]:
             "dnf_ids": all_dnf_ids,
             "result_order": result_order,
             "lap_deadline": None,
+            "weather": lap_res.weather_id,
+            "weather_name": w.get("name", "Clear"),
+            "gaps_to_ahead": lap_res.gaps_to_ahead,
+            "safety_car_laps_remaining": lap_res.safety_car_laps_remaining,
+            "race_events": race_events,
+            "lap_times_by_lap": lap_times_by_lap,
         }
 
         res = await db.racing_races.update_one(
@@ -3969,6 +3858,12 @@ async def _advance_one_lap(race: dict) -> Optional[dict]:
             "incidents": all_incidents,
             "dnf_ids": all_dnf_ids,
             "lap_deadline": deadline,
+            "weather": lap_res.weather_id,
+            "weather_name": w.get("name", "Clear"),
+            "gaps_to_ahead": lap_res.gaps_to_ahead,
+            "safety_car_laps_remaining": lap_res.safety_car_laps_remaining,
+            "race_events": race_events,
+            "lap_times_by_lap": lap_times_by_lap,
         }
 
         res = await db.racing_races.update_one(
@@ -4103,11 +3998,16 @@ async def submit_race_decision(
     if cs.get("dnf"):
         raise HTTPException(status_code=400, detail="Your car has DNF'd")
 
+    pm = (body.pace_mode or "").strip().lower() or None
+    if pm is not None and pm not in ("push", "normal", "conserve"):
+        pm = None
     decision = {
         "push_level": max(1, min(5, int(body.push_level or 3))),
         "pit_this_lap": bool(body.pit_this_lap),
         "pit_compound": (body.pit_compound or "medium").strip().lower(),
         "defend": bool(body.defend),
+        "pace_mode": pm,
+        "reaction_ms": int(body.reaction_ms) if body.reaction_ms is not None else None,
     }
 
     await db.racing_races.update_one(

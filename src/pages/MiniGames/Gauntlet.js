@@ -661,7 +661,7 @@ function Pipe({ x, topHeight, gap, theme }) {
 }
 
 // ─── CHARACTER SELECT SCREEN ─────────────────────────────────────────────────
-function CharacterSelect({ characters, selected, onSelect, money, bestScore, onClose, onBuy }) {
+function CharacterSelect({ characters, selected, onSelect, money, bestScore, onClose, onBuy, ownedChars = [] }) {
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.92)",

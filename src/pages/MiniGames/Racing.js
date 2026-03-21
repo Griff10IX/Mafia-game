@@ -219,7 +219,10 @@ export default function Racing() {
   const [interactiveRaceProg, setInteractiveRaceProg] = useState(null);
   /** Canvas session phase for interactive-live (qualifying → countdown → racing → done). */
   const [interactiveCanvasPhase, setInteractiveCanvasPhase] = useState(null);
-  const [myDecision, setMyDecision] = useState({ push_level: 3, pit_this_lap: false, pit_compound: "medium", defend: false });
+  const [myDecision, setMyDecision] = useState({
+    push_level: 3, pit_this_lap: false, pit_compound: "medium", defend: false,
+    pace_mode: "normal", reaction_ms: null,
+  });
   const [decisionSyncPending, setDecisionSyncPending] = useState(false);
   const lastSentDecisionKey = useRef(null);
   const prevLiveLapRef = useRef(undefined);
@@ -609,6 +612,8 @@ export default function Racing() {
         pit_this_lap: decision.pit_this_lap,
         pit_compound: decision.pit_compound,
         defend: decision.defend,
+        pace_mode: decision.pace_mode || null,
+        reaction_ms: decision.reaction_ms,
       });
       if (lastSentDecisionKey.current === key) return;
       try {
@@ -1036,6 +1041,9 @@ export default function Racing() {
             liveCurrentLap={liveRace.current_lap || 0}
             liveTotalLaps={liveRace.total_laps || activeRace.laps || 3}
             lapDeadline={liveRace.lap_deadline}
+            liveRaceEvents={liveRace.race_events}
+            liveGapsToAhead={liveRace.gaps_to_ahead}
+            liveSafetyCarLaps={liveRace.safety_car_laps_remaining || 0}
             onSessionPhaseChange={onInteractiveSessionPhase}
             onInteractiveGreenFlag={async () => {
               try {
@@ -1077,6 +1085,9 @@ export default function Racing() {
                       <span className="text-[9px] tabular-nums w-10 text-right" style={{ color: (cs.engine_wear ?? 0) > 75 ? "#f59e0b" : "var(--noir-muted)" }}>
                         E:{Math.round(cs.engine_wear ?? 0)}%
                       </span>
+                      <span className="text-[9px] tabular-nums w-14 text-right text-[var(--noir-muted)]">
+                        {idx === 0 ? "—" : (liveRace.gaps_to_ahead?.[eid] != null ? `+${Number(liveRace.gaps_to_ahead[eid]).toFixed(2)}s` : "—")}
+                      </span>
                     </div>
                   );
                 })}
@@ -1094,23 +1105,27 @@ export default function Racing() {
                 <div className="p-3 space-y-3">
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[9px] font-heading uppercase text-[var(--noir-muted)]">Push Level</span>
-                      <span className="text-xs font-heading" style={{ color: myDecision.push_level >= 4 ? "#ef4444" : myDecision.push_level <= 2 ? "#22c55e" : "var(--noir-primary)" }}>
-                        {["", "Conserve", "Steady", "Normal", "Push", "Max Attack"][myDecision.push_level]}
+                      <span className="text-[9px] font-heading uppercase text-[var(--noir-muted)]">Pace mode</span>
+                      <span className="text-xs font-heading capitalize" style={{ color: myDecision.pace_mode === "push" ? "#ef4444" : myDecision.pace_mode === "conserve" ? "#22c55e" : "var(--noir-primary)" }}>
+                        {myDecision.pace_mode || "normal"}
                       </span>
                     </div>
                     <div className="flex gap-1">
-                      {[1,2,3,4,5].map(lv => (
-                        <button key={lv} type="button"
+                      {[
+                        { id: "conserve", label: "Conserve", pl: 1 },
+                        { id: "normal", label: "Normal", pl: 3 },
+                        { id: "push", label: "Push", pl: 5 },
+                      ].map(({ id, label, pl }) => (
+                        <button key={id} type="button"
                           className={"flex-1 py-1.5 text-[10px] font-heading rounded border transition-all " +
-                            (myDecision.push_level === lv ? "border-[var(--noir-primary)] bg-amber-900/30 text-[var(--noir-primary)]" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
-                          onClick={() => setMyDecision(d => ({...d, push_level: lv}))}>
-                          {lv}
+                            (myDecision.pace_mode === id ? "border-[var(--noir-primary)] bg-amber-900/30 text-[var(--noir-primary)]" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
+                          onClick={() => setMyDecision(d => ({ ...d, pace_mode: id, push_level: pl }))}>
+                          {label}
                         </button>
                       ))}
                     </div>
                     <div className="flex justify-between text-[7px] text-[var(--noir-muted)] mt-0.5 px-1">
-                      <span>Save tyres</span><span>Max speed</span>
+                      <span>Tyre life</span><span>Raw pace</span>
                     </div>
                   </div>
                   <div className="flex gap-2">
