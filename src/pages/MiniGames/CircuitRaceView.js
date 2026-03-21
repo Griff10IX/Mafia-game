@@ -1925,15 +1925,17 @@ export default function CircuitRaceView({
         const wd=curWd;
 
         racers.forEach(r => {
-          // Finished cars coast forward for ~2s — avoids dead freeze at SF line (number badge cluster)
           if (r.finished && !r.dnf) {
-            const coastDur = 2.2;
+            const coastDur = 3.0;
             const t0 = r.finishedAtSec != null ? r.finishedAtSec : nowSec;
             const coastAge = nowSec - t0;
             if (coastAge < coastDur) {
-              const coastSpeed = Math.max(0, 1 - coastAge / coastDur) * 0.18;
+              const coastSpeed = Math.max(0, 1 - coastAge / coastDur) * 0.28;
               r.trackPos = (r.trackPos + coastSpeed * dt + 1) % 1;
             }
+            r.currentSpeedMph = coastAge < coastDur
+              ? Math.max(0, (r.currentSpeedMph ?? 40) * 0.97)
+              : 0;
             return;
           }
           if(r.dnf){if(r.visible&&nowSec>r.dnfAtSec+30)r.visible=false;if(r.visible){r.trackPos=(r.trackPos+0.001+1)%1;r.currentSpeedMph=2;}return;}
@@ -2523,6 +2525,20 @@ export default function CircuitRaceView({
           return;
         }
 
+        if (racer.finished && !racer.dnf) {
+          const coastDur = 2.5;
+          const t0 = racer.finishedAtSec != null ? racer.finishedAtSec : nowSec;
+          const coastAge = nowSec - t0;
+          if (coastAge < coastDur) {
+            const coastSpeed = Math.max(0, 1 - coastAge / coastDur) * 0.22;
+            racer.trackPos = (racer.trackPos + coastSpeed * dt + 1) % 1;
+            racer.currentSpeedMph = Math.max(0, racer.currentSpeedMph != null ? racer.currentSpeedMph * 0.97 : 40);
+          } else {
+            racer.currentSpeedMph = 0;
+          }
+          return;
+        }
+
         if (racer.inPit) {
           if (nowSec >= racer.pitEndAt) {
             racer.inPit = false;
@@ -2694,13 +2710,38 @@ export default function CircuitRaceView({
       // Race finished: backend lap count or leader completed final lap visually
       if ((curLap >= totLaps || visLap >= totLaps) && totLaps > 0 && !st._raceFinished) {
         st._raceFinished = true;
+        st._raceFinishedAt = nowSec;
         st.finishFlash = nowSec + 3.0;
         addInc("CHECKERED FLAG!");
         setCommentary(rnd(COMMENTARY.done));
         let fo = 1;
         [...r].sort((a, b) => (a._targetPos ?? 99) - (b._targetPos ?? 99)).forEach(x => {
-          if (!x.dnf) { x.finished = true; x.finishOrder = fo++; }
+          if (!x.dnf) { x.finished = true; x.finishOrder = fo++; x.finishedAtSec = nowSec; }
         });
+      }
+
+      // After race finishes, show results after a brief delay
+      if (st._raceFinished && st._raceFinishedAt && !st._resultsShown) {
+        const sinceFinish = nowSec - st._raceFinishedAt;
+        if (sinceFinish >= 3.0) {
+          st._resultsShown = true;
+          setUiPhase("done");
+          const fo = [...r].sort((a, b) => {
+            if (a.dnf && !b.dnf) return 1; if (!a.dnf && b.dnf) return -1;
+            const aF = a.finished && a.finishOrder > 0, bF = b.finished && b.finishOrder > 0;
+            if (aF && bF) return a.finishOrder - b.finishOrder;
+            if (aF && !bF) return -1; if (!aF && bF) return 1;
+            return ((b.totalLapsDone ?? 0) + (b.trackPos ?? 0)) - ((a.totalLapsDone ?? 0) + (a.trackPos ?? 0));
+          });
+          setResults(fo.map((x, i) => ({
+            pos: i + 1, id: x.id, name: x.name, isPlayer: x.isPlayer, color: x.color,
+            carName: x.carName, pitStops: x.pitStops, lapTimes: x.lapTimes, dnf: x.dnf,
+            bestLap: x.lapTimes.length ? Math.min(...x.lapTimes) : null,
+            hasFastestLap: fl.holderId === x.id,
+          })));
+          const rOIds = fo.map(x => x.id), dIds = fo.filter(x => x.dnf).map(x => x.id);
+          setTimeout(() => onComplete?.(rOIds, dIds), 1200);
+        }
       }
 
       // Sort standings by progress
