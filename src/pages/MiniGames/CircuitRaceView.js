@@ -2700,6 +2700,7 @@ export default function CircuitRaceView({
         _targetPos: carState.position ?? (i + 1),
         _smoothPos: carState.position ?? (i + 1),
         _prevPitCount: 0,
+        _interactiveSfArmed: false,
       };
     });
 
@@ -2763,6 +2764,7 @@ export default function CircuitRaceView({
         r.forEach(x => {
           x.lastSectorCross = nowSec;
           x.currentSector = 0;
+          x._interactiveSfArmed = false;
           if (!x.dnf) {
             x.totalLapsDone = synced;
             x.lapCount = Math.min(totLaps, synced + 1);
@@ -3023,8 +3025,14 @@ export default function CircuitRaceView({
       });
 
       const leaderSf = [...r].filter(x => !x.dnf && !x.inPit).sort((a, b) => (a._targetPos || 99) - (b._targetPos || 99))[0];
+      const sfLx = trk.sfLine ?? 0;
+      if (leaderSf) {
+        const relFromSf = ((leaderSf.trackPos - sfLx + 1) % 1);
+        if (!leaderSf._interactiveSfArmed && relFromSf > 0.075) leaderSf._interactiveSfArmed = true;
+      }
       if (
         leaderSf
+        && leaderSf._interactiveSfArmed
         && lapDeadlineRef.current
         && onInteractiveLeaderLapCrossRef.current
         && curLap < totLaps
@@ -3032,7 +3040,6 @@ export default function CircuitRaceView({
         && leaderSf.totalLapsDone === curLap
       ) {
         const prevT = leaderSf._interactiveLapPrevPos;
-        const sfLx = trk.sfLine ?? 0;
         if (prevT !== undefined && crossedStartFinishLineForward(prevT, leaderSf.trackPos, sfLx)) {
           postedCrossForServerLap = curLap;
           const hold = curLap;
@@ -3213,6 +3220,7 @@ export default function CircuitRaceView({
           _justCrossedFrames: 0,
           _targetPos: i + 1,
           _smoothPos: i + 1,
+          _interactiveSfArmed: false,
         });
         });
         stateRef.current = {

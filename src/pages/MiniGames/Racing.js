@@ -1070,13 +1070,9 @@ export default function Racing() {
               if (prog01 != null) setInteractiveRaceProg(prog01);
             }}
             onInteractiveLeaderLapCross={async (serverLap) => {
-              try {
-                await api.post(`/racing/races/${activeRace.id}/interactive-lap-cross`, { server_lap: serverLap });
-                const { data } = await api.get(`/racing/races/${activeRace.id}/live`);
-                setLiveRace(data);
-              } catch (e) {
-                if (e?.response?.status !== 429) console.warn("interactive-lap-cross", e);
-              }
+              await api.post(`/racing/races/${activeRace.id}/interactive-lap-cross`, { server_lap: serverLap });
+              const { data } = await api.get(`/racing/races/${activeRace.id}/live`);
+              setLiveRace(data);
             }}
           />
 
