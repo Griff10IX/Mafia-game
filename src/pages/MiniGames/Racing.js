@@ -539,9 +539,6 @@ export default function Racing() {
     const poll = async () => {
       try {
         const { data } = await api.get(`/racing/races/${activeRace.id}/live`);
-        // #region agent log
-        fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "Racing.js:live_poll", message: "poll_response", data: { raceId: activeRace.id, current_lap: data.current_lap, total_laps: data.total_laps, status: data.status, lap_results_len: (data.lap_results || []).length, result_order_len: (data.result_order || []).length, has_deadline: !!data.lap_deadline }, timestamp: Date.now(), hypothesisId: "H1-H2-H4" }) }).catch(() => {});
-        // #endregion
         setLiveRace(data);
         if (data.status === "completed" || data.status === "finished") {
           clearInterval(liveRacePoll.current);
@@ -573,7 +570,11 @@ export default function Racing() {
   }, [activeRace?.id]);
 
   useEffect(() => {
-    if (interactiveCanvasPhase !== "racing") setInteractiveTowerRows([]);
+    // Keep last orbit-sorted rows through "done" so the tower does not swap to server car_states.position
+    // (which disagrees with client sim / results). Only reset when starting a new session phase.
+    if (interactiveCanvasPhase === "qualifying" || interactiveCanvasPhase === "countdown" || interactiveCanvasPhase == null) {
+      setInteractiveTowerRows([]);
+    }
   }, [interactiveCanvasPhase]);
 
   const onInteractiveTimingFrame = useCallback((rows) => {
@@ -1058,9 +1059,6 @@ export default function Racing() {
               try {
                 await api.post(`/racing/races/${activeRace.id}/green-flag`);
                 const { data } = await api.get(`/racing/races/${activeRace.id}/live`);
-                // #region agent log
-                fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "Racing.js:green_flag", message: "after_green_live", data: { raceId: activeRace.id, current_lap: data.current_lap, total_laps: data.total_laps, has_deadline: !!data.lap_deadline }, timestamp: Date.now(), hypothesisId: "H1" }) }).catch(() => {});
-                // #endregion
                 setLiveRace(data);
               } catch (e) {
                 toast.error(apiDetail(e));
@@ -1075,6 +1073,7 @@ export default function Racing() {
               setLiveRace(data);
             }}
             onInteractiveTimingUpdate={onInteractiveTimingFrame}
+            onComplete={(resultOrderIds, dnfIds) => handleCompleteRace(activeRace.id, resultOrderIds, dnfIds)}
           />
 
           {/* Timing Tower + Strategy side by side on desktop */}
@@ -1084,7 +1083,7 @@ export default function Racing() {
               <CardHead title="Timing Tower" />
               <div className="divide-y divide-[var(--noir-border)]">
                 {(
-                  interactiveTowerRows.length > 0 && interactiveCanvasPhase === "racing" && !_preGreen
+                  interactiveTowerRows.length > 0 && (interactiveCanvasPhase === "racing" || interactiveCanvasPhase === "done") && !_preGreen
                     ? interactiveTowerRows.map((row) => {
                       const eid = row.id;
                       const participant = (liveRace.participants || activeRace.participants || []).find(p => (p.user_id || p.id) === eid);

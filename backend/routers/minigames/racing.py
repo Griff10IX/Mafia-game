@@ -3852,11 +3852,8 @@ async def _advance_one_lap(race: dict) -> Optional[dict]:
         if res.modified_count == 0:
             return None
 
-        creator = next((p for p in participants if not p.get("is_npc")), participants[0] if participants else None)
-        if creator:
-            mock_user = {"id": creator.get("user_id") or creator.get("id"), "username": creator.get("username", "?")}
-            body = CompleteRaceRequest(result_order=result_order, dnf_ids=all_dnf_ids)
-            await complete_race(race_id, body, mock_user)
+        # Do not call complete_race here: lap-engine order can disagree with the client orbit (what the player saw).
+        # Stay state=running until a participant POST /complete with body.result_order from CircuitRaceView.
 
         for p in participants:
             if p.get("is_npc"):
