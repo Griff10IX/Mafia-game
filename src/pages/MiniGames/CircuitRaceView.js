@@ -649,7 +649,8 @@ const _profileCache = new Map();
 
 /** Must match buildSpeedProfile `inSFZone` — wide approach so cars don’t brake before the gantry on any map. */
 const SF_PROFILE_PRE_ZONE = 0.28;
-const SF_PROFILE_POST_ZONE = 0.14;
+/** Past S/F: wider so cars don’t hit a speed “step” right after the gantry every lap (was 0.14). */
+const SF_PROFILE_POST_ZONE = 0.24;
 
 /** True if moving forward from cell i hits the start/finish zone within `maxSteps` samples. Stops braking/accel bleed into the run-up. */
 function forwardReachesSfZoneWithin(i, sfZone, N, maxSteps) {
@@ -688,7 +689,7 @@ function inStartFinishSafeZone(track, t) {
 function inStartFinishCornerRelaxZone(track, t) {
   const sfL = track.sfLine != null ? track.sfLine : 0;
   const tt = ((t % 1) + 1) % 1;
-  const postTier = 0.26;
+  const postTier = Math.max(0.30, SF_PROFILE_POST_ZONE + 0.06);
   const dBehind = ((sfL - tt + 1) % 1);
   const dAhead = ((tt - sfL + 1) % 1);
   return dBehind <= SF_PROFILE_PRE_ZONE || dAhead <= postTier;
@@ -718,7 +719,7 @@ function crossedStartFinishLineForward(p0raw, p1raw, sfLine) {
 }
 
 function buildSpeedProfile(track) {
-  const cacheKey = `${track.id}:${track.sfLine ?? 0}:sfv7`;
+  const cacheKey = `${track.id}:${track.sfLine ?? 0}:sfv8`;
   if (_profileCache.has(cacheKey)) return _profileCache.get(cacheKey);
   const N = PROFILE_N, raw = new Float32Array(N);
 
@@ -1249,9 +1250,10 @@ export default function CircuitRaceView({
     buildBand(ctx,0);
     ctx.fillStyle = cond==="rain"?"#2c2a24":cond==="snow"?"#3e4055":cond==="night"?"#1e1c18":"#352e28"; ctx.fill();
 
-    // Rubber-darkened corners (racing line deposits)
+    // Rubber-darkened corners (racing line deposits) — skip S/F zone; seam curvature reads as a fake “corner” blob on the straight
     for (let i = 0; i < STEPS; i++) {
       const f = i / STEPS;
+      if (inStartFinishSafeZone(track, f)) continue;
       const curv = getCurvature(track, f);
       if (curv > 0.05) {
         const p = track.getPoint(f);
@@ -1503,7 +1505,7 @@ export default function CircuitRaceView({
       }
 
       const tt = r.inPit ? ((track.pitEntry+track.pitExit)/2) : ((prog%1)+1)%1;
-      const curv = getCurvature(track, r.inPit?0:tt);
+      const curv = r.inPit ? 0 : (inStartFinishSafeZone(track, tt) ? 0 : getCurvature(track, tt));
 
       // ── Live SKID MARKS ──
       if (!r.inPit && !r.dnf) {

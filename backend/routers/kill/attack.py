@@ -1759,7 +1759,7 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
     docs = await db.attack_attempts.find(
         {"$or": [{"attacker_id": current_user["id"]}, {"target_id": current_user["id"]}]},
         {"_id": 0}
-    ).sort("created_at", -1).to_list(200)
+    ).sort("created_at", -1).to_list(500)
     filtered = []
     for d in docs:
         if not d.get("id"):
@@ -1774,6 +1774,9 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
                     continue
             if outcome == "error":
                 continue
+        # No real combat spend — hide validation/error spam and bodyguard blocks (0 bullets) from history UI
+        if int(d.get("bullets_used") or 0) <= 0:
+            continue
         filtered.append(d)
     return {"attempts": filtered}
 

@@ -16,6 +16,7 @@ from bson.objectid import ObjectId
 from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS
 from routers.game.store import _store_cost_inc
 from routers.minigames.minigame_leaderboard import log_minigame_play
+import middleware.security as _security_mod
 
 # 5k bullets per 24h, effectively delivered every 20 mins (72 ticks per day)
 BULLET_FACTORY_TOTAL_PER_24H = 5000
@@ -60,7 +61,7 @@ TOKEN_CONFIG = {
 # Shooting range: weapon mastery 0-100%; at 100% = up to MASTERY_MAX_BULLET_REDUCTION_PCT fewer bullets in attack.
 MASTERY_MAX_BULLET_REDUCTION_PCT = 10
 MASTERY_AUTO_SIM_PCT_PER_CHUNK = 5  # +5% per "Train 5 min" chunk
-MASTERY_COOLDOWN_MINUTES = 5  # min time between auto_sim trains per weapon
+MASTERY_COOLDOWN_MINUTES = 5  # min time between auto_sim trains per weapon (only when GLOBAL_RATE_LIMITS_ENABLED)
 BRASS_KNUCKLES_WEAPON_ID = "weapon1"  # exclude from shooting range (no bullets)
 # Playing the 3D range: grant more mastery per hit than auto_sim (quicker mastery when you play)
 MASTERY_PCT_PER_LIVE_HIT = 1  # 1% per hit when playing the 3D game (max 30 hits per submit)
@@ -1430,25 +1431,29 @@ async def train_shooting_range(request: ShootingRangeTrainRequest, current_user:
     doc = await db.user_weapon_mastery.find_one({"user_id": current_user["id"], "weapon_id": weapon_id}, {"_id": 0, "mastery_pct": 1, "last_trained_at": 1})
     current_pct = min(100, max(0, int(doc.get("mastery_pct", 0) or 0))) if doc else 0
 
+    # When global rate limits are off (dev / admin toggle), skip mastery 5-min cooldown too — same 429 was showing as "clicking too fast"
+    enforce_mastery_cooldown = bool(getattr(_security_mod, "GLOBAL_RATE_LIMITS_ENABLED", False))
+
     if request.mode == "live":
         hits = request.hits if request.hits is not None else 0
         if not (1 <= hits <= MASTERY_LIVE_HITS_MAX_PER_REQUEST):
             raise HTTPException(status_code=400, detail=f"hits must be 1–{MASTERY_LIVE_HITS_MAX_PER_REQUEST} for live mode.")
-        # Same 5-min cooldown as auto_sim (one 3D round per weapon per 5 min)
-        last_raw = doc.get("last_trained_at") if doc else None
-        if last_raw:
-            last_dt = _parse_utc(last_raw)
-            if last_dt and (now - last_dt).total_seconds() < MASTERY_COOLDOWN_MINUTES * 60:
-                wait_sec = MASTERY_COOLDOWN_MINUTES * 60 - int((now - last_dt).total_seconds())
-                raise HTTPException(status_code=429, detail=f"Wait {max(1, wait_sec // 60)} min before playing the 3D range again (same as Train 5 min).")
+        if enforce_mastery_cooldown:
+            last_raw = doc.get("last_trained_at") if doc else None
+            if last_raw:
+                last_dt = _parse_utc(last_raw)
+                if last_dt and (now - last_dt).total_seconds() < MASTERY_COOLDOWN_MINUTES * 60:
+                    wait_sec = MASTERY_COOLDOWN_MINUTES * 60 - int((now - last_dt).total_seconds())
+                    raise HTTPException(status_code=429, detail=f"Wait {max(1, wait_sec // 60)} min before playing the 3D range again (same as Train 5 min).")
         add_pct = min(hits * MASTERY_PCT_PER_LIVE_HIT, 100 - current_pct)
     else:
-        last_raw = doc.get("last_trained_at") if doc else None
-        if last_raw:
-            last_dt = _parse_utc(last_raw)
-            if last_dt and (now - last_dt).total_seconds() < MASTERY_COOLDOWN_MINUTES * 60:
-                wait_sec = MASTERY_COOLDOWN_MINUTES * 60 - int((now - last_dt).total_seconds())
-                raise HTTPException(status_code=429, detail=f"Wait {max(1, wait_sec // 60)} min before training this weapon again.")
+        if enforce_mastery_cooldown:
+            last_raw = doc.get("last_trained_at") if doc else None
+            if last_raw:
+                last_dt = _parse_utc(last_raw)
+                if last_dt and (now - last_dt).total_seconds() < MASTERY_COOLDOWN_MINUTES * 60:
+                    wait_sec = MASTERY_COOLDOWN_MINUTES * 60 - int((now - last_dt).total_seconds())
+                    raise HTTPException(status_code=429, detail=f"Wait {max(1, wait_sec // 60)} min before training this weapon again.")
         add_pct = min(MASTERY_AUTO_SIM_PCT_PER_CHUNK, 100 - current_pct)
 
     if add_pct <= 0:
@@ -1459,7 +1464,11 @@ async def train_shooting_range(request: ShootingRangeTrainRequest, current_user:
         {"$set": {"mastery_pct": current_pct + add_pct, "last_trained_at": now_iso}, "$setOnInsert": {"user_id": current_user["id"], "weapon_id": weapon_id}},
         upsert=True,
     )
-    next_train_at = (now + timedelta(minutes=MASTERY_COOLDOWN_MINUTES)).isoformat() if request.mode in ("auto_sim", "live") else None
+    next_train_at = (
+        (now + timedelta(minutes=MASTERY_COOLDOWN_MINUTES)).isoformat()
+        if enforce_mastery_cooldown and request.mode in ("auto_sim", "live")
+        else None
+    )
     msg = f"+{add_pct}% mastery ({weapon.get('name', weapon_id)})." if request.mode == "auto_sim" else f"+{add_pct}% mastery from {request.hits} hits ({weapon.get('name', weapon_id)})."
     return {"message": msg, "mastery_pct": current_pct + add_pct, "next_train_at": next_train_at}
 

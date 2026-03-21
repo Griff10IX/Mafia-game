@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart } from 'lucide-react';
 import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache } from '../utils/api';
 import { setCrimesPrefetch, getCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -1000,23 +1000,25 @@ export default function Layout({ children }) {
       {casinoOpen && (
         <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
           {[
-            { to: '/casino/dice', label: 'Dice', testId: 'nav-dice' },
-            { to: '/casino/rlt', label: 'Roulette', testId: 'nav-roulette' },
-            { to: '/casino/blackjack', label: 'Blackjack', testId: 'nav-blackjack' },
-            { to: '/casino/horseracing', label: 'Horse Racing', testId: 'nav-horseracing' },
-            { to: '/casino/slots', label: 'Slots', testId: 'nav-slots' },
-            { to: '/casino/videopoker', label: 'Video Poker', testId: 'nav-videopoker' },
-            { to: '/casino/mdg', label: 'MDG', testId: 'nav-mdg' },
-            { to: '/casino/mp-blackjack', label: 'MP Blackjack', testId: 'nav-mp-blackjack', matchPrefix: true },
-            { to: '/casino/mp-poker', label: 'Poker', testId: 'nav-mp-poker', matchPrefix: true },
-            { to: '/sports-betting', label: 'Sports Betting', testId: 'nav-sports-betting' },
-            { to: '/my-properties', label: 'My Properties', testId: 'nav-my-properties' },
+            { to: '/casino/dice', label: 'Dice', testId: 'nav-dice', Icon: Dice5 },
+            { to: '/casino/rlt', label: 'Roulette', testId: 'nav-roulette', Icon: CircleDot },
+            { to: '/casino/blackjack', label: 'Blackjack', testId: 'nav-blackjack', Icon: Spade },
+            { to: '/casino/horseracing', label: 'Horse Racing', testId: 'nav-horseracing', Icon: Flag },
+            { to: '/casino/slots', label: 'Slots', testId: 'nav-slots', Icon: SquareStack },
+            { to: '/casino/videopoker', label: 'Video Poker', testId: 'nav-videopoker', Icon: Video },
+            { to: '/casino/mdg', label: 'MDG', testId: 'nav-mdg', Icon: Sparkles },
+            { to: '/casino/mp-blackjack', label: 'MP Blackjack', testId: 'nav-mp-blackjack', matchPrefix: true, Icon: Users },
+            { to: '/casino/mp-poker', label: 'Poker', testId: 'nav-mp-poker', matchPrefix: true, Icon: Crown },
+            { to: '/sports-betting', label: 'Sports Betting', testId: 'nav-sports-betting', Icon: LineChart },
+            { to: '/my-properties', label: 'My Properties', testId: 'nav-my-properties', Icon: Building2 },
           ].map((item, idx) => {
             const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;
+            const IconComp = item.Icon;
             return (
               <Fragment key={item.to}>
                 {showSidebarDividers && idx > 0 && navDividerEl(`cd${idx}`)}
                 <Link to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
+                  {IconComp && <IconComp size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />}
                   <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
                 </Link>
               </Fragment>

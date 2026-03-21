@@ -609,7 +609,7 @@ export default function CrackSafe() {
           </div>
         </div>
 
-        {/* Right: Info + clues + winners */}
+        {/* Right: Info + clues + rewards + winners */}
         <div className="space-y-2 min-w-0">
 
           {/* Rules / info */}
@@ -631,41 +631,10 @@ export default function CrackSafe() {
             </div>
           </div>
 
-          {/* Possible Rewards */}
-          <div
-            className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-600/25 cs-fade-in mobile-panel`}
-            style={{ animationDelay: '0.14s' }}
-          >
-            <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
-            <div className="px-3 py-2.5 bg-amber-950/20 border-b border-amber-600/20 flex items-center gap-2">
-              <Trophy size={11} className="text-amber-400" />
-              <h2 className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">Possible Rewards</h2>
-            </div>
-            <div className="p-2.5 space-y-1.5">
-              {(info?.possible_rewards ?? [
-                { id: 'cash', name: 'Cash Jackpot', desc: 'Full jackpot amount (always)' },
-                { id: 'xp_crimes', name: 'Crimes XP Token', desc: '2x XP from crimes, 1h — 1–3 types, 1–2 each (25% chance)' },
-                { id: 'xp_gta', name: 'GTA XP Token', desc: '2x XP from GTA, 1h — 1–3 types, 1–2 each (25% chance)' },
-                { id: 'melt', name: 'Melt Token', desc: 'Reduced melt cooldown, 1h — 1–3 types, 1–2 each (25% chance)' },
-                { id: 'oc_reduced', name: 'OC Token', desc: 'Reduced OC cost, 1h — 1–3 types, 1–2 each (25% chance)' },
-                { id: 'booze', name: 'Booze Token', desc: 'Cheaper booze, 1h — 1–3 types, 1–2 each (25% chance)' },
-                { id: 'racket', name: 'Racket Token', desc: 'Increased racket profit, 1h — 1–3 types, 1–2 each (25% chance)' },
-                { id: 'travel', name: 'Travel Token', desc: 'Cheaper airport (~10% off) & faster car travel (~10%), 1h — 1–3 types, 1–2 each (25% chance)' },
-                { id: 'properties', name: 'Property Token', desc: '3x property income, 1h — 1–3 types, 1–2 each (25% chance)' },
-                { id: 'jailbust_bonus', name: 'Jailbust Token', desc: '+10% bust success, 1h — 1–3 types, 1–2 each (25% chance)' },
-              ]).map((r) => (
-                <div key={r.id} className="flex items-start gap-2 px-2 py-1 rounded border border-amber-500/10 bg-amber-950/10 min-w-0">
-                  <span className="text-[10px] font-heading font-bold text-amber-400 shrink-0">{r.name}</span>
-                  <span className="text-[9px] text-zinc-400 font-heading flex-1 min-w-0 truncate" title={r.desc}>{r.desc}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Clues */}
           <div
             className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cs-fade-in mobile-panel`}
-            style={{ animationDelay: '0.16s' }}
+            style={{ animationDelay: '0.14s' }}
           >
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
@@ -691,6 +660,37 @@ export default function CrackSafe() {
                   {clue.unlocked && (
                     <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
                   )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Possible Rewards */}
+          <div
+            className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-600/25 cs-fade-in mobile-panel`}
+            style={{ animationDelay: '0.16s' }}
+          >
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-amber-950/20 border-b border-amber-600/20 flex items-center gap-2">
+              <Trophy size={11} className="text-amber-400" />
+              <h2 className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">Possible Rewards</h2>
+            </div>
+            <div className="p-2.5 space-y-1.5">
+              {(info?.possible_rewards ?? [
+                { id: 'cash', name: 'Cash Jackpot', desc: 'Full jackpot amount (always)' },
+                { id: 'xp_crimes', name: 'Crimes XP Token', desc: '2x XP from crimes, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'xp_gta', name: 'GTA XP Token', desc: '2x XP from GTA, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'melt', name: 'Melt Token', desc: 'Reduced melt cooldown, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'oc_reduced', name: 'OC Token', desc: 'Reduced OC cost, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'booze', name: 'Booze Token', desc: 'Cheaper booze, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'racket', name: 'Racket Token', desc: 'Increased racket profit, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'travel', name: 'Travel Token', desc: 'Cheaper airport (~10% off) & faster car travel (~10%), 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'properties', name: 'Property Token', desc: '3x property income, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'jailbust_bonus', name: 'Jailbust Token', desc: '+10% bust success, 1h — 1–3 types, 1–2 each (25% chance)' },
+              ]).map((r) => (
+                <div key={r.id} className="flex items-start gap-2 px-2 py-1 rounded border border-amber-500/10 bg-amber-950/10 min-w-0">
+                  <span className="text-[10px] font-heading font-bold text-amber-400 shrink-0">{r.name}</span>
+                  <span className="text-[9px] text-zinc-400 font-heading flex-1 min-w-0 truncate" title={r.desc}>{r.desc}</span>
                 </div>
               ))}
             </div>
