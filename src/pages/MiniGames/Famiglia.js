@@ -2367,7 +2367,9 @@ function FamigliaGameInner(){
     const canvas=canvasRef.current;if(!canvas)return;
     const xy=(t)=>{const r=canvas.getBoundingClientRect();return{x:(t.clientX-r.left)/r.width*NW,y:(t.clientY-r.top)/r.height*NH};};
     const onTS=(e)=>{e.preventDefault();Array.from(e.changedTouches).forEach(t=>{const{x,y}=xy(t);if(x<NW*.55){if(joyRef.current.id===null)joyRef.current={id:t.identifier,origin:{x,y},vec:{x:0,y:0},base:{x,y}};}else{doShoot();if(y>NH*.6)doInteract();}});};
-    const onTM=(e)=>{e.preventDefault();Array.from(e.changedTouches).forEach(t=>{if(t.identifier===joyRef.current.id){const{x,y}=xy(t);const o=joyRef.current.origin;let dx=(x-o.x)/54,dy=(y-o.y)/54;const m=Math.sqrt(dx*dx+dy*dy);if(m>1){dx/=m;dy/=m;}joyRef.current.vec={x:dx,y:dy};joyRef.current.base={x:o.x,y:o.y};}});};
+    const onTM=(e)=>{e.preventDefault();Array.from(e.changedTouches).forEach(t=>{if(t.identifier===joyRef.current.id){const{x,y}=xy(t);const o=joyRef.current.origin;
+      // Negate X so stick right = move right (matches world +X / screen coords on mobile)
+      let dx=-(x-o.x)/54,dy=(y-o.y)/54;const m=Math.sqrt(dx*dx+dy*dy);if(m>1){dx/=m;dy/=m;}joyRef.current.vec={x:dx,y:dy};joyRef.current.base={x:o.x,y:o.y};}});};
     const onTE=(e)=>{e.preventDefault();Array.from(e.changedTouches).forEach(t=>{if(t.identifier===joyRef.current.id)joyRef.current={id:null,origin:null,vec:{x:0,y:0},base:null};});};
     canvas.addEventListener("touchstart",onTS,{passive:false});canvas.addEventListener("touchmove",onTM,{passive:false});
     canvas.addEventListener("touchend",onTE,{passive:false});canvas.addEventListener("touchcancel",onTE,{passive:false});
@@ -2404,8 +2406,8 @@ function FamigliaGameInner(){
   const gs=gsRef.current;
 
   return(
-    <div style={{position:"relative",width:"100%",maxWidth:600,margin:"0 auto",background:"#0a0806",borderRadius:8,overflow:"hidden",touchAction:"none",userSelect:"none"}}>
-      <canvas ref={canvasRef} style={{display:"block",width:"100%",imageRendering:"pixelated"}}/>
+    <div className="relative w-full max-w-[600px] max-lg:max-w-none mx-auto bg-[#0a0806] rounded-lg overflow-hidden max-lg:rounded-none" style={{touchAction:"none",userSelect:"none"}}>
+      <canvas ref={canvasRef} style={{display:"block",width:"100%",height:"auto",aspectRatio:`${NW} / ${NH}`,imageRendering:"pixelated"}}/>
       <canvas ref={mmRef} width={88} height={88} style={{position:"absolute",top:8,right:8,width:88,height:88,border:"1px solid #b49650",background:"#0a0806",borderRadius:4,imageRendering:"pixelated"}}/>
 
       {/* HUD */}
@@ -2774,7 +2776,8 @@ export default function Famiglia(){
         <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Famiglia</h1>
       </header>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <div className="lg:col-span-2 flex justify-center">
+        {/* Mobile: cancel main p-4 inset so the canvas can use full screen width */}
+        <div className="lg:col-span-2 flex justify-center w-[calc(100%+2rem)] max-w-[100vw] -mx-4 md:w-full md:max-w-none md:mx-0">
           <FamigliaGameInner />
         </div>
         <div className="space-y-3">

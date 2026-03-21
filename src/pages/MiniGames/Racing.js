@@ -736,7 +736,7 @@ export default function Racing() {
     } catch (e) { toast.error(apiDetail(e)); }
   };
 
-  const handleCompleteRace = async (raceId, liveResultOrder = null, liveDnfIds = null) => {
+  const handleCompleteRace = useCallback(async (raceId, liveResultOrder = null, liveDnfIds = null) => {
     try {
       const body = {};
       if (Array.isArray(liveResultOrder) && liveResultOrder.length > 0) body.result_order = liveResultOrder;
@@ -748,7 +748,12 @@ export default function Racing() {
       fetchProfile();
       toast.success("Race completed");
     } catch (e) { toast.error(apiDetail(e)); }
-  };
+  }, [fetchProfile]);
+
+  const onInteractiveCircuitComplete = useCallback((resultOrderIds, dnfIds) => {
+    if (!activeRace?.id) return;
+    void handleCompleteRace(activeRace.id, resultOrderIds, dnfIds);
+  }, [activeRace?.id, handleCompleteRace]);
 
   const handleCreateTeam = async (e) => {
     e?.preventDefault();
@@ -989,7 +994,9 @@ export default function Racing() {
         const _mergedQo = liveRace.qualifying_order?.length
           ? liveRace.qualifying_order
           : (activeRace.qualifying_order || []);
-        const _circuitKey = `${activeRace.id}_qo_${_mergedQo.length ? _mergedQo.join("|") : `cs${Object.keys(liveRace.car_states || {}).length}`}`;
+        // Stable key: do not tie to car_states count or QO string — live polls change those and would
+        // remount the canvas, cancel qualifying RAF, and strand the session on "Qualifying".
+        const _circuitKey = activeRace.id;
         const _phaseChip = { qualifying: "QUALIFYING", countdown: "GRID", racing: "RACE", done: "FINISHED" }[interactiveCanvasPhase];
         let _sessionTitle;
         if (interactiveCanvasPhase === "countdown") {
@@ -1073,7 +1080,7 @@ export default function Racing() {
               setLiveRace(data);
             }}
             onInteractiveTimingUpdate={onInteractiveTimingFrame}
-            onComplete={(resultOrderIds, dnfIds) => handleCompleteRace(activeRace.id, resultOrderIds, dnfIds)}
+            onComplete={onInteractiveCircuitComplete}
           />
 
           {/* Timing Tower + Strategy side by side on desktop */}
@@ -1294,7 +1301,7 @@ export default function Racing() {
             playerPitLevel={profile?.pit_level ?? 0}
             currentUserId={profile?.user_id}
             rewards={activeRace.rewards || null}
-            onComplete={(resultOrderIds, dnfIds) => handleCompleteRace(activeRace.id, resultOrderIds, dnfIds)}
+            onComplete={onInteractiveCircuitComplete}
             onReset={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); localStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); fetchOpenRaces(); }}
           />
         </div>
