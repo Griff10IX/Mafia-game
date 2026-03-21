@@ -1637,7 +1637,11 @@ def _ownership_display_profit(doc: dict) -> int:
 
 
 async def _get_casino_property_profit(user_id: str):
-    """Return (casino_profit_cash, property_profit_points, has_casino, has_property) for header display and menu visibility. Uses parallel DB reads."""
+    """Return (casino_profit_cash, property_profit_points, has_casino, has_property, casino_lifetime_earnings).
+
+    casino_profit_cash uses resettable `profit` (sidebar / holdings). casino_lifetime_earnings is `total_earnings`
+    on the same doc (My Stats lifetime row; not cleared by reset profit).
+    """
     casino_colls = [
         ("dice", db.dice_ownership),
         ("roulette", db.roulette_ownership),
@@ -1658,6 +1662,7 @@ async def _get_casino_property_profit(user_id: str):
     airport_doc, bullet_doc = results[6], results[7]
 
     casino_cash = 0
+    casino_lifetime = 0
     has_casino = False
     for (game_type, _), doc in zip(casino_colls, casino_docs):
         if not doc:
@@ -1665,6 +1670,7 @@ async def _get_casino_property_profit(user_id: str):
         if game_type == "slots" and _slots_expired(doc):
             continue
         casino_cash = _ownership_display_profit(doc)
+        casino_lifetime = int(doc.get("total_earnings") or 0)
         has_casino = True
         break
 
@@ -1676,7 +1682,28 @@ async def _get_casino_property_profit(user_id: str):
         prop = None
     property_pts = int(prop.get("total_earnings") or 0) if prop else 0
     has_property = prop is not None
-    return (casino_cash, property_pts, has_casino, has_property)
+    return (casino_cash, property_pts, has_casino, has_property, casino_lifetime)
+
+
+async def bump_user_biggest_casino_payout(owner_id: str, payout_amount: int) -> None:
+    """Set users.biggest_casino_payout to max(existing, payout_amount). Works when the field was never set (unlike $lt filter updates)."""
+    if not owner_id:
+        return
+    amt = int(payout_amount or 0)
+    if amt <= 0:
+        return
+    await db.users.update_one(
+        {"id": owner_id},
+        [
+            {
+                "$set": {
+                    "biggest_casino_payout": {
+                        "$max": [{"$ifNull": ["$biggest_casino_payout", 0]}, amt],
+                    }
+                }
+            }
+        ],
+    )
 
 
 async def get_casino_caps():

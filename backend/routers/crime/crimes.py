@@ -594,12 +594,28 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         if current_user.get("referred_by"):
             reward = int(reward * 1.02)
         rp_before = int(current_user.get("rank_points") or 0)
+        # Racket / illegal-business missions: crimes in the business's state (doc.state set at start)
+        ib_crimes_in_state_inc = 0
+        try:
+            biz = await db.illegal_businesses.find_one(
+                {"user_id": current_user["id"]},
+                {"_id": 0, "state": 1},
+            )
+            if biz:
+                bstate = (biz.get("state") or "").strip()
+                here = (current_user.get("current_state") or "").strip()
+                if bstate and here and bstate == here:
+                    ib_crimes_in_state_inc = 1
+        except Exception:
+            pass
         inc = {
             "money": reward,
             "rank_points": rank_points,
             "total_crimes": 1,
             "crime_profit": reward,
         }
+        if ib_crimes_in_state_inc:
+            inc["illegal_business_crimes_in_state"] = ib_crimes_in_state_inc
         respect_drop = maybe_respect_points_drop()
         if respect_drop:
             inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_CRIMES_MULT * _fm_cr))

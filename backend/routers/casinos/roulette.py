@@ -25,6 +25,7 @@ from server import (
     get_head_family_id_for_state,
     get_casino_caps,
     _ownership_display_profit,
+    bump_user_biggest_casino_payout,
 )
 from routers.casinos.dice import DiceSellOnTradeRequest
 
@@ -516,7 +517,7 @@ def register(router):
             if actual_net_cost > 0:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_net_cost, "total_casino_payouts": actual_net_cost}})
                 # Track biggest payout for owner
-                await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": actual_net_cost}}, {"$set": {"biggest_casino_payout": actual_net_cost}})
+                await bump_user_biggest_casino_payout(owner_id, actual_net_cost)
             await db.roulette_ownership.update_one(
                 {"city": stored_city or city},
                 {"$inc": {"total_earnings": -actual_net_cost, "profit": -(actual_net_cost + (edge if head_family_id else 0))}}

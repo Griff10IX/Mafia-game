@@ -446,8 +446,8 @@ def register(router):
         except Exception:
             pass
 
-        casino_cash, property_pts, has_casino, has_property = await _get_casino_property_profit(uid)
-        casino_profit = int(casino_cash or 0)
+        _sidebar_cash, property_pts, has_casino, has_property, casino_profit = await _get_casino_property_profit(uid)
+        # casino_profit for My Stats = cumulative `total_earnings` (5th tuple value); not cleared by reset profit
         property_profit = int(property_pts or 0)
         from server import _user_owns_any_casino, _user_owns_any_property
         owned_casino = await _user_owns_any_casino(uid)

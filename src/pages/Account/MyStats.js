@@ -204,7 +204,7 @@ export default function MyStats() {
   const casinoRows = [
     { label: 'Casino Owned', value: casinos.owned_casino ? `${casinoTypeLabel(casinos.owned_casino.type)} (${casinos.owned_casino?.location ?? '—'})` : '—', valueColor: casinos.owned_casino ? 'text-emerald-400' : 'text-mutedForeground' },
     { label: 'Property Owned', value: casinos.owned_property ? `${propertyTypeLabel(casinos.owned_property.type)} (${casinos.owned_property?.location ?? '—'})` : '—', valueColor: casinos.owned_property ? 'text-emerald-400' : 'text-mutedForeground' },
-    { label: 'Profit from Casino', value: formatMoney(casinos.casino_profit), valueColor: casinos.casino_profit > 0 ? 'text-emerald-400' : 'text-foreground' },
+    { label: 'Profit from Casino (lifetime)', value: formatMoney(casinos.casino_profit), valueColor: casinos.casino_profit > 0 ? 'text-emerald-400' : 'text-foreground' },
     { label: 'Profit from Property', value: formatNumber(casinos.property_profit), valueColor: casinos.property_profit > 0 ? 'text-emerald-400' : 'text-foreground' },
     { label: 'Casinos Won', value: formatNumber(casinos.casinos_seized), valueColor: casinos.casinos_seized > 0 ? 'text-amber-400' : 'text-foreground' },
     { label: 'Casinos Lost', value: formatNumber(casinos.casinos_lost), valueColor: casinos.casinos_lost > 0 ? 'text-rose-400' : 'text-foreground' },

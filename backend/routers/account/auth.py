@@ -1503,7 +1503,7 @@ def register(router):
     @router.get("/user/casino-property")
     async def get_casino_property(current_user: dict = Depends(get_current_user)):
         """Lightweight endpoint for casino/property profit and menu flag. Called after first paint so auth/me stays fast."""
-        casino_cash, property_pts, has_casino, has_property = await _get_casino_property_profit(current_user["id"])
+        casino_cash, property_pts, has_casino, has_property, _lifetime = await _get_casino_property_profit(current_user["id"])
         return {
             "casino_profit": int(casino_cash) if casino_cash is not None else 0,
             "property_profit": int(property_pts) if property_pts is not None else 0,

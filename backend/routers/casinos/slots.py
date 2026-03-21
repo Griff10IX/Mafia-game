@@ -23,6 +23,7 @@ from server import (
     get_head_family_id_for_state,
     get_casino_caps,
     _ownership_display_profit,
+    bump_user_biggest_casino_payout,
 )
 
 # ----- Constants -----
@@ -646,7 +647,7 @@ def register(router):
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
         await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout, "total_casino_payouts": actual_payout}})
         # Track biggest payout for owner
-        await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": actual_payout}}, {"$set": {"biggest_casino_payout": actual_payout}})
+        await bump_user_biggest_casino_payout(owner_id, actual_payout)
         ownership_transferred = False
         buy_back_offer = None
         points_offered = int((doc or {}).get("buy_back_reward") or 0)

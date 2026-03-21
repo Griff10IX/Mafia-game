@@ -24,6 +24,7 @@ from server import (
     get_head_family_id_for_state,
     get_casino_caps,
     _ownership_display_profit,
+    bump_user_biggest_casino_payout,
 )
 from routers.casinos.roulette import RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest
 from routers.casinos.dice import DiceSellOnTradeRequest
@@ -485,7 +486,7 @@ def register(router):
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout, "total_casino_payouts": actual_payout}})
                 # Track biggest payout for owner
-                await db.users.update_one({"id": owner_id, "biggest_casino_payout": {"$lt": actual_payout}}, {"$set": {"biggest_casino_payout": actual_payout}})
+                await bump_user_biggest_casino_payout(owner_id, actual_payout)
                 edge = int(bet * (1 + horse["odds"]) * HORSERACING_HOUSE_EDGE) if head_family_id else 0
                 if head_family_id and edge > 0:
                     await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.horseracing": edge}})
