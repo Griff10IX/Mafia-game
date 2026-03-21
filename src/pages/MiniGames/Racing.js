@@ -945,9 +945,14 @@ export default function Racing() {
         const _tColors = { soft: "#e82020", medium: "#e8d020", hard: "#c0c0b8", inter: "#20a840", full_wet: "#2080e8" };
         const _totLapsHud = liveRace.total_laps || activeRace.laps || 3;
         const _serverLap = liveRace.current_lap ?? 0;
+        const _liveDeadline = liveRace.lap_deadline;
+        const _preGreen = !_liveDeadline && _serverLap === 0;
+        const _fromSrv = _preGreen
+          ? null
+          : Math.min(_serverLap + 1, _totLapsHud);
         const _dispLap = interactiveLeaderLap != null
-          ? Math.min(interactiveLeaderLap + 1, _totLapsHud)
-          : (_serverLap === 0 ? 0 : Math.min(_serverLap + 1, _totLapsHud));
+          ? Math.min(interactiveLeaderLap, _totLapsHud)
+          : (_fromSrv ?? 1);
         const _lapProg = interactiveRaceProg != null && _totLapsHud > 0
           ? interactiveRaceProg
           : (_totLapsHud > 0 ? Math.min(1, (liveRace.current_lap || 0) / _totLapsHud) : 0);
@@ -962,7 +967,7 @@ export default function Racing() {
                   <span className="text-[10px] font-heading uppercase tracking-wider text-red-400">LIVE</span>
                 </div>
                 <span className="text-xs font-heading text-[var(--noir-primary)]">
-                  {_serverLap === 0
+                  {_preGreen
                     ? <>Formation <span className="text-[var(--noir-muted)] font-normal">·</span> Q</>
                     : `LAP ${_dispLap}/${_totLapsHud}`}
                 </span>

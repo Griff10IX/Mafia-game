@@ -2974,10 +2974,10 @@ export default function CircuitRaceView({
         fuelLoad: Math.round(x.fuelLoad), currentSpeedMph: Math.round(x.currentSpeedMph || 0),
         tyreCliffWarning: x.tyreWear < ((TYRE_DEFS[x.currentTyre]?.cliffStart || 0.66) * 100 + 12),
       })));
-      // Interactive-live: HUD lap must follow server current_lap (client orbit can complete laps faster)
-      const visLapForHud = mode === "interactive-live" ? curLap : visLap;
-      const lapCur = totLaps <= 1 ? totLaps : Math.min(visLapForHud + 1, totLaps);
-      setLapDisp(totLaps === 1 ? 'Qualifying' : `${lapCur} / ${totLaps}`);
+      // Interactive-live: lap label = min(visual, server)+1 so backend cannot read "lap 2" before the first orbit,
+      // and the client cannot read "lap 3" before the server has resolved enough laps.
+      const lapDisp1 = totLaps <= 1 ? totLaps : Math.min(visLap + 1, curLap + 1, totLaps);
+      setLapDisp(totLaps === 1 ? 'Qualifying' : `${lapDisp1} / ${totLaps}`);
       let mxFrac = 0;
       r.forEach(x => {
         if (!x.dnf) mxFrac = Math.max(mxFrac, ((x.totalLapsDone ?? 0) + (x.trackPos ?? 0)) / totLaps);
@@ -2985,10 +2985,10 @@ export default function CircuitRaceView({
       const prog01 = totLaps > 0 ? Math.min(1, mxFrac) : 0;
       setRaceProg(prog01);
       const cb = onVisualLapChangeRef.current;
-      if (cb && (visLapForHud !== lastReportedVisLap || lastReportedProg < 0 || Math.abs(prog01 - lastReportedProg) >= 0.025)) {
-        lastReportedVisLap = visLapForHud;
+      if (cb && (lapDisp1 !== lastReportedVisLap || lastReportedProg < 0 || Math.abs(prog01 - lastReportedProg) >= 0.025)) {
+        lastReportedVisLap = lapDisp1;
         lastReportedProg = prog01;
-        cb(visLapForHud, totLaps, prog01);
+        cb(lapDisp1, totLaps, prog01);
       }
 
       drawCanvas(trk, cond, r, nowSec);
