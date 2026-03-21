@@ -1136,6 +1136,7 @@ export default function CircuitRaceView({
   liveSafetyCarLaps = 0,
   onInteractiveGreenFlag = null,
   onSessionPhaseChange = null,
+  onInteractiveLeaderLapCross = null,
 }) {
   const canvasRef  = useRef(null);
   const rafRef     = useRef(null);
@@ -1172,6 +1173,8 @@ export default function CircuitRaceView({
   useEffect(() => { onVisualLapChangeRef.current = onVisualLapChange; }, [onVisualLapChange]);
   const onSessionPhaseChangeRef = useRef(onSessionPhaseChange);
   useEffect(() => { onSessionPhaseChangeRef.current = onSessionPhaseChange; }, [onSessionPhaseChange]);
+  const onInteractiveLeaderLapCrossRef = useRef(onInteractiveLeaderLapCross);
+  useEffect(() => { onInteractiveLeaderLapCrossRef.current = onInteractiveLeaderLapCross; }, [onInteractiveLeaderLapCross]);
 
   useEffect(() => {
     if (mode !== "interactive-live") return;
@@ -2721,7 +2724,8 @@ export default function CircuitRaceView({
       const id = p.user_id || p.id;
       if (id) nameById[id] = p.username || p.team_name || p.car_name || id;
     });
-    let prevBackendLap = liveCurrentLapRef.current || 0;
+    let prevBackendLap = null;
+    let postedCrossForServerLap = null;
     let lastReportedVisLap = -1;
     let lastReportedProg = -1;
     let agentCheckeredLogged = false;
@@ -2747,22 +2751,24 @@ export default function CircuitRaceView({
       const curLap = liveCurrentLapRef.current || 0;
       const totLaps = liveTotalLapsRef.current || 3;
 
-      if (curLap !== prevBackendLap) {
-        // #region agent log
-        fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "CircuitRaceView.js:interactive_loop", message: "liveCurrentLap_ref_changed", data: { from: prevBackendLap, to: curLap, totLaps }, timestamp: Date.now(), hypothesisId: "H3-H5" }) }).catch(() => {});
-        // #endregion
-        prevBackendLap = curLap;
-        r.forEach(x => { x.lastSectorCross = nowSec; x.currentSector = 0; });
-      }
-
-      // Official lap count comes from API only — do not increment on canvas S/F crossings (orbit runs faster than server turns).
-      const serverCompleted = Math.min(totLaps, Math.max(0, curLap));
-      r.forEach((racer) => {
-        if (!racer.dnf) {
-          racer.totalLapsDone = serverCompleted;
-          racer.lapCount = Math.min(totLaps, serverCompleted + 1);
+      if (prevBackendLap === null || curLap !== prevBackendLap) {
+        if (prevBackendLap !== null) {
+          // #region agent log
+          fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "CircuitRaceView.js:interactive_loop", message: "liveCurrentLap_ref_changed", data: { from: prevBackendLap, to: curLap, totLaps }, timestamp: Date.now(), hypothesisId: "H3-H5" }) }).catch(() => {});
+          // #endregion
         }
-      });
+        prevBackendLap = curLap;
+        postedCrossForServerLap = null;
+        const synced = Math.min(totLaps, Math.max(0, curLap));
+        r.forEach(x => {
+          x.lastSectorCross = nowSec;
+          x.currentSector = 0;
+          if (!x.dnf) {
+            x.totalLapsDone = synced;
+            x.lapCount = Math.min(totLaps, synced + 1);
+          }
+        });
+      }
 
       const srvSc = Number(liveSafetyCarLapsRef.current || 0);
       if (prevSrvSc >= 0) {
@@ -2831,6 +2837,7 @@ export default function CircuitRaceView({
 
       // --- Per-car physics update ---
       r.forEach(racer => {
+        racer._interactiveLapPrevPos = racer.trackPos;
         const carState = cs2[racer.id];
         if (carState) {
           racer._targetPos = carState.position ?? racer._targetPos;
@@ -3014,6 +3021,30 @@ export default function CircuitRaceView({
           addTireSmoke(pt.x, pt.y, 0.3);
         }
       });
+
+      const leaderSf = [...r].filter(x => !x.dnf && !x.inPit).sort((a, b) => (a._targetPos || 99) - (b._targetPos || 99))[0];
+      if (
+        leaderSf
+        && lapDeadlineRef.current
+        && onInteractiveLeaderLapCrossRef.current
+        && curLap < totLaps
+        && postedCrossForServerLap !== curLap
+        && leaderSf.totalLapsDone === curLap
+      ) {
+        const prevT = leaderSf._interactiveLapPrevPos;
+        const sfLx = trk.sfLine ?? 0;
+        if (prevT !== undefined && crossedStartFinishLineForward(prevT, leaderSf.trackPos, sfLx)) {
+          postedCrossForServerLap = curLap;
+          const hold = curLap;
+          const cb = onInteractiveLeaderLapCrossRef.current;
+          // #region agent log
+          fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "CircuitRaceView.js:interactive_loop", message: "leader_sf_lap_cross", data: { serverLap: hold }, timestamp: Date.now(), hypothesisId: "H6" }) }).catch(() => {});
+          // #endregion
+          Promise.resolve(cb(hold)).catch(() => {
+            if (postedCrossForServerLap === hold) postedCrossForServerLap = null;
+          });
+        }
+      }
 
       let visLap = 0;
       r.forEach(x => { if (!x.dnf) visLap = Math.max(visLap, x.totalLapsDone ?? 0); });

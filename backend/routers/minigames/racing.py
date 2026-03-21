@@ -386,6 +386,8 @@ FUEL_COST_BASE = 35000
 NUM_LAPS_MIN = 2
 NUM_LAPS_MAX = 20
 INTERACTIVE_LAP_DEADLINE_SEC = 30
+# Wall-clock floor between canvas-triggered lap resolves (leader S/F cross); ~TARGET_LAP_SEC/4 at 4× playback.
+INTERACTIVE_MIN_LAP_RESOLVE_INTERVAL_SEC = 5.0
 # If no client sends green-flag (crash/refresh), open lap-1 decision window automatically after this many seconds from race start.
 INTERACTIVE_PRE_GREEN_FALLBACK_SEC = 300
 TIRE_WEAR_PER_LAP = 18
@@ -542,6 +544,10 @@ class RaceDecisionRequest(BaseModel):
     defend: bool = False
     pace_mode: Optional[str] = None  # push | normal | conserve
     reaction_ms: Optional[int] = None  # lap 1 launch; lower = better
+
+
+class InteractiveLapCrossRequest(BaseModel):
+    server_lap: int
 
 
 class UpgradeCrewRequest(BaseModel):
@@ -3951,8 +3957,8 @@ async def _maybe_auto_green_interactive(race_id: str) -> None:
 async def _maybe_advance_interactive_lap(race_id: str, *, deadline_only: bool = False):
     """Advance when lap deadline passed OR (if not deadline_only) all living humans have submitted.
 
-    GET /live polls must use deadline_only=True so auto-synced POST + poll does not advance once per
-    second; submission resolution stays on submit_race_decision.
+    GET /live uses deadline_only=True as a fallback if the canvas never signals a lap. Primary
+    interactive resolve is POST .../interactive-lap-cross when the race leader crosses the S/F line.
     """
     race = await db.racing_races.find_one(
         {"id": race_id, "mode": "interactive", "state": "running"}, {"_id": 0},
@@ -4041,10 +4047,65 @@ async def submit_race_decision(
         {"$set": {f"decisions.{entrant_id}": decision}},
     )
 
-    # Do not advance here: the client auto-sync POSTs once per lap window when the deadline string
-    # changes; calling _maybe_advance_interactive_lap on every POST chained 3 advances in ~3s (one per
-    # poll). Resolution runs from GET /live (deadline or all humans submitted).
+    # Do not advance here: auto-sync POSTs would chain advances. Resolution: leader S/F POST
+    # interactive-lap-cross, or GET /live when lap_deadline passes.
     return {"message": "Decision submitted", "decision": decision}
+
+
+async def interactive_lap_cross(
+    race_id: str,
+    body: InteractiveLapCrossRequest,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    """Advance one interactive lap when the client reports the race leader crossed the start/finish."""
+    race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    if not race:
+        raise HTTPException(status_code=404, detail="Race not found")
+    if race.get("mode") != "interactive":
+        raise HTTPException(status_code=400, detail="Race is not interactive")
+    if race.get("state") != "running":
+        raise HTTPException(status_code=400, detail="Race is not in progress")
+
+    cl = int(race.get("current_lap") or 0)
+    total_laps = int(race.get("total_laps") or race.get("laps") or 3)
+    if body.server_lap != cl:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Stale lap: server {cl}, client {body.server_lap}",
+        )
+    if cl >= total_laps:
+        raise HTTPException(status_code=400, detail="Race already finished")
+    if not race.get("lap_deadline"):
+        raise HTTPException(status_code=400, detail="No active strategy window")
+
+    participants = race.get("participants") or []
+    entrant_ok = any(
+        not p.get("is_npc") and (p.get("user_id") or p.get("id")) == current_user["id"]
+        for p in participants
+    )
+    if not entrant_ok:
+        raise HTTPException(status_code=403, detail="You are not a participant in this race")
+
+    now = datetime.now(timezone.utc)
+    last_iso = race.get("interactive_last_resolve_utc")
+    if last_iso:
+        try:
+            lt = datetime.fromisoformat(str(last_iso).replace("Z", "+00:00"))
+            if (now - lt).total_seconds() < INTERACTIVE_MIN_LAP_RESOLVE_INTERVAL_SEC:
+                raise HTTPException(status_code=429, detail="Lap resolve too soon")
+        except (ValueError, TypeError, OSError):
+            pass
+
+    updated = await _advance_one_lap(dict(race))
+    if not updated:
+        raise HTTPException(status_code=409, detail="Could not advance lap")
+
+    await db.racing_races.update_one(
+        {"id": race_id},
+        {"$set": {"interactive_last_resolve_utc": now.isoformat().replace("+00:00", "Z")}},
+    )
+    race_out = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    return {"ok": True, "race": race_out}
 
 
 async def signal_interactive_green_flag(
@@ -4113,8 +4174,7 @@ async def get_race_live(
     tl_live = int(race.get("total_laps") or race.get("laps") or 3)
     if race.get("state") == "running":
         await _maybe_auto_green_interactive(race_id)
-        # Only advance on wall-clock deadline here. Advancing when "all submitted" on each poll still
-        # stepped laps ~once per second with auto-sync POST + 1s polling (see debug-a98925 NDJSON).
+        # Fallback if canvas never signals S/F (AFK / stuck). Primary resolve: interactive-lap-cross.
         await _maybe_advance_interactive_lap(race_id, deadline_only=True)
         race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
     cl_after = int((race or {}).get("current_lap") or 0)
@@ -4346,6 +4406,7 @@ def register(router):
     router.add_api_route("/racing/races/{race_id}/decision", submit_race_decision, methods=["POST"])
     router.add_api_route("/racing/races/{race_id}/advance-lap", advance_race_lap, methods=["POST"])
     router.add_api_route("/racing/races/{race_id}/green-flag", signal_interactive_green_flag, methods=["POST"])
+    router.add_api_route("/racing/races/{race_id}/interactive-lap-cross", interactive_lap_cross, methods=["POST"])
     router.add_api_route("/racing/races/{race_id}/live", get_race_live, methods=["GET"])
     router.add_api_route("/racing/leaderboard", get_racing_leaderboard, methods=["GET"])
     router.add_api_route("/racing/championship", get_championship, methods=["GET"])
