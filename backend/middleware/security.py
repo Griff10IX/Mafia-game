@@ -314,11 +314,120 @@ _SPAM_ACTIVITY_RULES_RAW: List[Tuple[str, Optional[str], str]] = [
     ("/api/auth/me", "GET", "Auth session check"),
     ("/api/auth/login", "POST", "Login"),
     ("/api/auth/register", "POST", "Registration"),
-    ("/api/bank/", None, "Bank (other)"),
 ]
 SPAM_ACTIVITY_RULES: List[Tuple[str, Optional[str], str]] = sorted(
     _SPAM_ACTIVITY_RULES_RAW, key=lambda r: len(r[0]), reverse=True
 )
+
+# First URL segment after /api/ → human name (fallback when no SPAM_ACTIVITY_RULES match).
+API_SEGMENT_LABELS: Dict[str, str] = {
+    "achievements": "Achievements",
+    "admin": "Admin",
+    "airport": "Airport / travel",
+    "armour": "Armoury",
+    "attack": "Attacks",
+    "auth": "Auth",
+    "auto-rank": "Auto Rank",
+    "bank": "Bank",
+    "battleships": "Battleships",
+    "blackjack": "Blackjack",
+    "bodyguards": "Bodyguards",
+    "booze-run": "Booze run",
+    "boxing": "Boxing",
+    "bullet-factory": "Bullet factory",
+    "crack-safe": "Crack the safe",
+    "crimes": "Crimes",
+    "daily-rewards": "Daily rewards",
+    "dead-alive": "Dead or alive",
+    "dice": "Dice",
+    "events": "Events",
+    "families": "Families",
+    "family-run": "Family run",
+    "forum": "Forum",
+    "game-chat": "Game chat",
+    "giphy": "Giphy",
+    "gta": "GTA / cars",
+    "help-desk": "Help desk",
+    "hitlist": "Hitlist",
+    "horseracing": "Horse racing",
+    "illegal-business": "Illegal business",
+    "inventory": "Inventory / consumables",
+    "jail": "Jail",
+    "leaderboard": "Leaderboard",
+    "loot-box": "Loot box",
+    "mdg": "Mafia dice game",
+    "meta": "Meta / app config",
+    "minesweeper": "Minesweeper",
+    "minigames": "Mini games leaderboard",
+    "missions": "Missions",
+    "mp-blackjack": "Multiplayer blackjack",
+    "mp-poker": "Multiplayer poker",
+    "my-properties": "My properties",
+    "news": "News",
+    "notifications": "Notifications",
+    "npcs": "NPCs",
+    "objectives": "Objectives",
+    "oc": "Organised crime (OC)",
+    "organised-crime": "Organised crime (heists)",
+    "payments": "Payments",
+    "prestige": "Prestige",
+    "profile": "Profile",
+    "properties": "Properties",
+    "racket": "Racket",
+    "racing": "Racing / garage",
+    "roulette": "Roulette",
+    "shooting-range": "Shooting range",
+    "slots": "Slots",
+    "snake": "Snake",
+    "sports-betting": "Sports betting",
+    "stats": "Stats",
+    "stock-market": "Stock market",
+    "store": "Store",
+    "the-getaway": "The Getaway",
+    "trade": "Quick trade",
+    "user": "User / rank progress",
+    "users": "Users",
+    "video-poker": "Video poker",
+    "wealth-ranks": "Wealth ranks",
+    "weapons": "Weapons",
+    "whack-a-copper": "Whack-a-copper",
+    "gauntlet": "Flappy Gangster",
+}
+
+# Longer prefixes where the first segment alone is misleading (sorted with segment rows by length desc).
+API_AREA_PREFIX_EXTRA: List[Tuple[str, str]] = [
+    ("/api/families/compound/", "Family compound"),
+    ("/api/families/crew-oc/", "Crew organised crime"),
+    ("/api/families/rackets/", "Family rackets"),
+    ("/api/families/war/", "Family war"),
+    ("/api/racing/races/", "Circuit races"),
+    ("/api/racing/bets/", "Racing bets"),
+    ("/api/forum/designer/", "Designer competitions"),
+    ("/api/forum/entertainer/", "Entertainer"),
+    ("/api/admin/game-ideas/", "Game ideas (admin)"),
+    ("/api/admin/security/", "Security admin"),
+    ("/api/store/buy-bullets", "Armoury (buy bullets)"),
+    ("/api/admin/add-bullets", "Admin — add bullets"),
+]
+
+_API_LABEL_PREFIX_CACHE: Optional[List[Tuple[str, str]]] = None
+
+
+def _build_api_label_prefix_rows() -> List[Tuple[str, str]]:
+    rows: List[Tuple[str, str]] = []
+    rows.extend(API_AREA_PREFIX_EXTRA)
+    for seg, lab in API_SEGMENT_LABELS.items():
+        rows.append((f"/api/{seg}/", lab))
+        rows.append((f"/api/{seg}", lab))
+    rows.sort(key=lambda x: len(x[0]), reverse=True)
+    return rows
+
+
+def _get_api_label_prefix_rows() -> List[Tuple[str, str]]:
+    global _API_LABEL_PREFIX_CACHE
+    if _API_LABEL_PREFIX_CACHE is None:
+        _API_LABEL_PREFIX_CACHE = _build_api_label_prefix_rows()
+    return _API_LABEL_PREFIX_CACHE
 
 
 def _normalize_spam_path(path: str) -> str:
@@ -341,6 +450,10 @@ def _describe_api_activity(method: str, path: str) -> str:
         if rule_method is not None and m != rule_method.upper():
             continue
         return label
+    if p.startswith("/api/"):
+        for prefix, lab in _get_api_label_prefix_rows():
+            if p.startswith(prefix):
+                return f"{lab} — {m}"
     short = path.split("?", 1)[0].strip()
     if len(short) > 140:
         short = short[:137] + "..."
@@ -367,27 +480,13 @@ def _spam_activity_extras(entries: List[Tuple], flag_type: str, max_lines: int =
 
 
 def _api_area_hint(path: str) -> str:
-    if not path:
+    p = _normalize_spam_path(path)
+    if not p.startswith("/api/"):
         return ""
-    p = path if path.startswith("/") else "/" + path
-    for prefix, label in (
-        ("/api/racing", "Racing / garage"),
-        ("/api/gauntlet", "Flappy Gangster"),
-        ("/api/auth/", "Auth"),
-        ("/api/casino/", "Casino"),
-        ("/api/game/", "Game / world"),
-        ("/api/kill/", "Combat / attacks"),
-        ("/api/money/", "Money / bank"),
-        ("/api/staff/", "Staff / admin UI"),
-        ("/api/news/", "News"),
-        ("/api/social/", "Social / inbox"),
-        ("/api/cars/", "Cars / garage"),
-        ("/api/store", "Store"),
-        ("/api/", "API (other)"),
-    ):
+    for prefix, label in _get_api_label_prefix_rows():
         if p.startswith(prefix):
             return f"Likely feature: {label}"
-    return ""
+    return "Likely feature: API (unknown route prefix)"
 
 
 def _referer_page_hint(referer: str) -> str:

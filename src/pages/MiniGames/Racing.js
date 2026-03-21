@@ -218,7 +218,9 @@ export default function Racing() {
   /** Fractional race distance from canvas (matches CircuitRaceView race bar). */
   const [interactiveRaceProg, setInteractiveRaceProg] = useState(null);
   const [myDecision, setMyDecision] = useState({ push_level: 3, pit_this_lap: false, pit_compound: "medium", defend: false });
-  const [decisionSubmitted, setDecisionSubmitted] = useState(false);
+  const [decisionSyncPending, setDecisionSyncPending] = useState(false);
+  const lastSentDecisionKey = useRef(null);
+  const prevLiveLapRef = useRef(undefined);
   const [rndTree, setRndTree] = useState(null);
   const [rndActive, setRndActive] = useState(null);
   const [rndResearching, setRndResearching] = useState(false);
@@ -560,13 +562,63 @@ export default function Racing() {
             } catch {}
           }, 4000);
         }
-        if (data.my_decision === null) setDecisionSubmitted(false);
       } catch {}
     };
     poll();
     liveRacePoll.current = setInterval(poll, 2000);
     return () => { if (liveRacePoll.current) clearInterval(liveRacePoll.current); };
   }, [activeRace?.id, activeRace?.mode]);
+
+  useEffect(() => {
+    lastSentDecisionKey.current = null;
+    prevLiveLapRef.current = undefined;
+  }, [activeRace?.id]);
+
+  useEffect(() => {
+    const cl = liveRace?.current_lap;
+    if (prevLiveLapRef.current !== cl) {
+      prevLiveLapRef.current = cl;
+      lastSentDecisionKey.current = null;
+    }
+  }, [liveRace?.current_lap]);
+
+  /** Push strategy to server on change (debounced). No separate confirm — matches live controls. */
+  useEffect(() => {
+    if (!activeRace?.id || activeRace.mode !== "interactive") return;
+    if (!liveRace || liveRace.status !== "running") return;
+    const totalLaps = liveRace.total_laps ?? activeRace.laps ?? 3;
+    if (liveRace.current_lap >= totalLaps) return;
+
+    const t = setTimeout(async () => {
+      const decision = myDecision;
+      const key = JSON.stringify({
+        push_level: decision.push_level,
+        pit_this_lap: decision.pit_this_lap,
+        pit_compound: decision.pit_compound,
+        defend: decision.defend,
+      });
+      if (lastSentDecisionKey.current === key) return;
+      try {
+        setDecisionSyncPending(true);
+        await api.post(`/racing/races/${activeRace.id}/decision`, decision);
+        lastSentDecisionKey.current = key;
+      } catch (e) {
+        toast.error(apiDetail(e));
+        lastSentDecisionKey.current = null;
+      } finally {
+        setDecisionSyncPending(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [
+    myDecision,
+    liveRace?.status,
+    liveRace?.current_lap,
+    liveRace?.total_laps,
+    activeRace?.id,
+    activeRace?.mode,
+    activeRace?.laps,
+  ]);
 
   useEffect(() => {
     setInteractiveLeaderLap(null);
@@ -665,15 +717,6 @@ export default function Racing() {
       refreshUser();
       fetchProfile();
       toast.success("Race completed");
-    } catch (e) { toast.error(apiDetail(e)); }
-  };
-
-  const handleSubmitDecision = async () => {
-    if (!activeRace?.id) return;
-    try {
-      await api.post(`/racing/races/${activeRace.id}/decision`, myDecision);
-      setDecisionSubmitted(true);
-      toast.success("Strategy submitted");
     } catch (e) { toast.error(apiDetail(e)); }
   };
 
@@ -967,8 +1010,9 @@ export default function Racing() {
             {liveRace.status === "running" && liveRace.current_lap < liveRace.total_laps ? (
               <div className={styles.panel + " mobile-panel overflow-hidden"}>
                 <CardHead title="Strategy" right={
-                  decisionSubmitted ? <span className="text-[9px] text-green-400 font-heading">LOCKED IN</span> :
-                  <span className="text-[9px] text-amber-400 font-heading animate-pulse">AWAITING DECISION</span>
+                  <span className={"text-[9px] font-heading " + (decisionSyncPending ? "text-amber-400 animate-pulse" : "text-green-400")}>
+                    {decisionSyncPending ? "SYNCING…" : "LIVE"}
+                  </span>
                 } />
                 <div className="p-3 space-y-3">
                   <div>
@@ -983,7 +1027,6 @@ export default function Racing() {
                         <button key={lv} type="button"
                           className={"flex-1 py-1.5 text-[10px] font-heading rounded border transition-all " +
                             (myDecision.push_level === lv ? "border-[var(--noir-primary)] bg-amber-900/30 text-[var(--noir-primary)]" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
-                          disabled={decisionSubmitted}
                           onClick={() => setMyDecision(d => ({...d, push_level: lv}))}>
                           {lv}
                         </button>
@@ -997,14 +1040,12 @@ export default function Racing() {
                     <button type="button"
                       className={"flex-1 py-2 text-[10px] font-heading rounded border transition-all " +
                         (myDecision.pit_this_lap ? "border-blue-500 bg-blue-900/30 text-blue-300" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
-                      disabled={decisionSubmitted}
                       onClick={() => setMyDecision(d => ({...d, pit_this_lap: !d.pit_this_lap}))}>
                       {myDecision.pit_this_lap ? "PIT THIS LAP" : "No Pit"}
                     </button>
                     <button type="button"
                       className={"flex-1 py-2 text-[10px] font-heading rounded border transition-all " +
                         (myDecision.defend ? "border-red-500 bg-red-900/30 text-red-300" : "border-[var(--noir-border)] text-[var(--noir-muted)] hover:bg-[var(--noir-surface)]")}
-                      disabled={decisionSubmitted}
                       onClick={() => setMyDecision(d => ({...d, defend: !d.defend}))}>
                       {myDecision.defend ? "DEFENDING" : "No Defend"}
                     </button>
@@ -1018,7 +1059,6 @@ export default function Racing() {
                             className={"flex-1 py-1 text-[10px] font-heading rounded border transition-all " +
                               (myDecision.pit_compound === c ? "border-[var(--noir-primary)]" : "border-[var(--noir-border)] hover:bg-[var(--noir-surface)]")}
                             style={{ color: _tColors[c], borderColor: myDecision.pit_compound === c ? _tColors[c] : undefined }}
-                            disabled={decisionSubmitted}
                             onClick={() => setMyDecision(d => ({...d, pit_compound: c}))}>
                             {labels[c]}
                           </button>
@@ -1026,12 +1066,6 @@ export default function Racing() {
                       })}
                     </div>
                   )}
-                  <button type="button"
-                    className={styles.btnGoldDarkText + " w-full py-2 text-xs font-heading"}
-                    disabled={decisionSubmitted}
-                    onClick={handleSubmitDecision}>
-                    {decisionSubmitted ? "Decision Locked" : "Confirm Strategy"}
-                  </button>
                 </div>
               </div>
             ) : (
