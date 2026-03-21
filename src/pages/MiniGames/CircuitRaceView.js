@@ -1077,6 +1077,7 @@ export default function CircuitRaceView({
   liveCurrentLap = 0, liveTotalLaps = 3,
   lapDeadline = null,
   onInteractiveGreenFlag = null,
+  onSessionPhaseChange = null,
 }) {
   const canvasRef  = useRef(null);
   const rafRef     = useRef(null);
@@ -1111,6 +1112,16 @@ export default function CircuitRaceView({
   useEffect(() => { manPitRef.current = manPit; },  [manPit]);
   const onVisualLapChangeRef = useRef(onVisualLapChange);
   useEffect(() => { onVisualLapChangeRef.current = onVisualLapChange; }, [onVisualLapChange]);
+  const onSessionPhaseChangeRef = useRef(onSessionPhaseChange);
+  useEffect(() => { onSessionPhaseChangeRef.current = onSessionPhaseChange; }, [onSessionPhaseChange]);
+
+  useEffect(() => {
+    if (mode !== "interactive-live") return;
+    const cb = onSessionPhaseChangeRef.current;
+    if (!cb) return;
+    if (uiPhase === "setup") return;
+    cb(uiPhase);
+  }, [mode, uiPhase]);
 
   const liveCarStatesRef = useRef(liveCarStates);
   const liveIncidentsRef = useRef(liveIncidents);
@@ -2604,7 +2615,7 @@ export default function CircuitRaceView({
 
     setUiPhase("qualifying");
     setLapDisp("Qualifying");
-    setCommentary("Qualifying lap — grid order set");
+    setCommentary("Qualifying — this lap sets the grid.");
     drawCanvas(track, cond, qualRacers, 0);
 
     function startRacing() {
@@ -3049,7 +3060,7 @@ export default function CircuitRaceView({
         };
         liveInitDone.current = true;
         drawCanvas(track, cond, grid, 0);
-        setCommentary("Grid set — race start!");
+        setCommentary("Grid set — lights out next.");
         setUiPhase("countdown");
         setCountdown(3);
         let cdVal = 3;
@@ -3060,9 +3071,7 @@ export default function CircuitRaceView({
             if (lightsAfterQualInterval) clearInterval(lightsAfterQualInterval);
             lightsAfterQualInterval = null;
             void (async () => {
-              if (onInteractiveGreenFlag) {
-                try { await onInteractiveGreenFlag(); } catch (_) { /* server fallback arms lap window */ }
-              }
+              if (onInteractiveGreenFlag) await onInteractiveGreenFlag();
               setUiPhase("racing");
               setLapDisp(nRace === 1 ? "Qualifying" : `1 / ${nRace}`);
               setCommentary(rnd(COMMENTARY.start));

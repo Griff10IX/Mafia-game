@@ -217,6 +217,8 @@ export default function Racing() {
   const [interactiveLeaderLap, setInteractiveLeaderLap] = useState(null);
   /** Fractional race distance from canvas (matches CircuitRaceView race bar). */
   const [interactiveRaceProg, setInteractiveRaceProg] = useState(null);
+  /** Canvas session phase for interactive-live (qualifying → countdown → racing → done). */
+  const [interactiveCanvasPhase, setInteractiveCanvasPhase] = useState(null);
   const [myDecision, setMyDecision] = useState({ push_level: 3, pit_this_lap: false, pit_compound: "medium", defend: false });
   const [decisionSyncPending, setDecisionSyncPending] = useState(false);
   const lastSentDecisionKey = useRef(null);
@@ -635,7 +637,12 @@ export default function Racing() {
   useEffect(() => {
     setInteractiveLeaderLap(null);
     setInteractiveRaceProg(null);
+    setInteractiveCanvasPhase(null);
   }, [activeRace?.id]);
+
+  const onInteractiveSessionPhase = useCallback((phase) => {
+    setInteractiveCanvasPhase(phase);
+  }, []);
 
   const createRacePayload = () => ({
     track_id: createForm.track_id,
@@ -684,7 +691,7 @@ export default function Racing() {
         setActiveRace(startedRace);
         navigate(`/casino/mini-games/racing?race=${race.id}`, { replace: true });
         window.scrollTo({ top: 0, behavior: "smooth" });
-        toast.success("Race started — run it live");
+        toast.success("Session started — qualifying runs on the track first, then lights out.");
         fetchOpenRaces();
         fetchProfile();
         refreshUser();
@@ -712,9 +719,15 @@ export default function Racing() {
   const handleStartRace = async (race) => {
     try {
       const r = await api.post(`/racing/races/${race.id}/start`);
-      setActiveRace(r.data?.race);
+      const started = r.data?.race;
+      setActiveRace(started);
       refreshUser();
-      toast.success("Race started — run it live");
+      const isInteractive = started?.mode === "interactive" || started?.interactive;
+      toast.success(
+        isInteractive
+          ? "Session started — qualifying on the track, then lights out before green."
+          : "Race started — run it live",
+      );
     } catch (e) { toast.error(apiDetail(e)); }
   };
 
@@ -956,27 +969,51 @@ export default function Racing() {
         const _lapProg = interactiveRaceProg != null && _totLapsHud > 0
           ? interactiveRaceProg
           : (_totLapsHud > 0 ? Math.min(1, (liveRace.current_lap || 0) / _totLapsHud) : 0);
+        const _mergedQo = liveRace.qualifying_order?.length
+          ? liveRace.qualifying_order
+          : (activeRace.qualifying_order || []);
+        const _circuitKey = `${activeRace.id}_qo_${_mergedQo.length ? _mergedQo.join("|") : `cs${Object.keys(liveRace.car_states || {}).length}`}`;
+        const _phaseChip = { qualifying: "QUALIFYING", countdown: "GRID", racing: "RACE", done: "FINISHED" }[interactiveCanvasPhase];
+        let _sessionTitle;
+        if (interactiveCanvasPhase === "countdown") {
+          _sessionTitle = <>Grid <span className="text-[var(--noir-muted)] font-normal">·</span> lights</>;
+        } else if (interactiveCanvasPhase === "qualifying") {
+          _sessionTitle = "Qualifying";
+        } else if (interactiveCanvasPhase === "racing") {
+          _sessionTitle = `LAP ${_dispLap}/${_totLapsHud}`;
+        } else if (interactiveCanvasPhase === "done") {
+          _sessionTitle = "Finished";
+        } else if (_preGreen) {
+          _sessionTitle = <>Formation <span className="text-[var(--noir-muted)] font-normal">·</span> Q</>;
+        } else {
+          _sessionTitle = `LAP ${_dispLap}/${_totLapsHud}`;
+        }
         return (
         <div className="px-4 py-3 md:px-3 md:py-3 space-y-3">
           {/* Race Header Bar */}
           <div className={styles.panel + " mobile-panel overflow-hidden"}>
             <div className="flex items-center justify-between px-3 py-2" style={{ background: "linear-gradient(90deg, rgba(212,175,55,0.08), transparent)" }}>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                   <span className="text-[10px] font-heading uppercase tracking-wider text-red-400">LIVE</span>
                 </div>
-                <span className="text-xs font-heading text-[var(--noir-primary)]">
-                  {_preGreen
-                    ? <>Formation <span className="text-[var(--noir-muted)] font-normal">·</span> Q</>
-                    : `LAP ${_dispLap}/${_totLapsHud}`}
-                </span>
+                {_phaseChip && (
+                  <span className="text-[9px] font-heading uppercase tracking-widest px-1.5 py-0.5 rounded border border-[rgba(201,164,96,.35)] text-[var(--noir-primary)] bg-[rgba(201,164,96,.08)]">
+                    {_phaseChip}
+                  </span>
+                )}
+                <span className="text-xs font-heading text-[var(--noir-primary)]">{_sessionTitle}</span>
                 <span className="text-[10px] text-[var(--noir-muted)]">{liveRace.track?.name}</span>
                 {liveRace.weather && liveRace.weather !== "clear" && (
                   <span className="text-[10px] text-blue-400">{liveRace.weather}</span>
                 )}
               </div>
-              {liveRace.lap_deadline && <LiveCountdown deadline={liveRace.lap_deadline} />}
+              {liveRace.lap_deadline ? (
+                <LiveCountdown deadline={liveRace.lap_deadline} />
+              ) : _preGreen ? (
+                <span className="text-[10px] text-[var(--noir-muted)] tabular-nums shrink-0">Strategy clock starts at lights out</span>
+              ) : null}
             </div>
             <div className="h-1 bg-[var(--noir-border)]">
               <div className="h-full bg-[var(--noir-primary)] transition-all duration-1000" style={{ width: `${Math.min(100, _lapProg * 100)}%` }} />
@@ -985,11 +1022,12 @@ export default function Racing() {
 
           {/* Live Race Canvas */}
           <CircuitRaceView
+            key={_circuitKey}
             mode="interactive-live"
             initialTrackId={circuitTrackId}
             weather={liveRace.weather || activeRace.weather || "clear"}
             participants={liveRace.participants || activeRace.participants || []}
-            qualifying_order={liveRace.qualifying_order?.length ? liveRace.qualifying_order : (activeRace.qualifying_order || [])}
+            qualifying_order={_mergedQo}
             currentUserId={profile?.user_id}
             laps={liveRace.total_laps || activeRace.laps || 3}
             liveCarStates={liveRace.car_states}
@@ -998,12 +1036,15 @@ export default function Racing() {
             liveCurrentLap={liveRace.current_lap || 0}
             liveTotalLaps={liveRace.total_laps || activeRace.laps || 3}
             lapDeadline={liveRace.lap_deadline}
+            onSessionPhaseChange={onInteractiveSessionPhase}
             onInteractiveGreenFlag={async () => {
               try {
                 await api.post(`/racing/races/${activeRace.id}/green-flag`);
                 const { data } = await api.get(`/racing/races/${activeRace.id}/live`);
                 setLiveRace(data);
-              } catch (_) {}
+              } catch (e) {
+                toast.error(apiDetail(e));
+              }
             }}
             onVisualLapChange={(completed, _tot, prog01) => {
               setInteractiveLeaderLap(completed);
