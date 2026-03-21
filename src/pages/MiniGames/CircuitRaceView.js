@@ -2727,6 +2727,9 @@ export default function CircuitRaceView({
     });
     let prevBackendLap = null;
     let postedCrossForServerLap = null;
+    /** After server lap bumps, ignore S/F resolves for this many rAF ticks (~35 ≈ 580ms @ 60Hz) to kill double-fire. */
+    let framesSinceServerLapSync = 999;
+    let interactiveLapCrossInFlight = false;
     let lastReportedVisLap = -1;
     let lastReportedProg = -1;
     let agentCheckeredLogged = false;
@@ -2758,8 +2761,10 @@ export default function CircuitRaceView({
           fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "CircuitRaceView.js:interactive_loop", message: "liveCurrentLap_ref_changed", data: { from: prevBackendLap, to: curLap, totLaps }, timestamp: Date.now(), hypothesisId: "H3-H5" }) }).catch(() => {});
           // #endregion
         }
+        const hadPriorLap = prevBackendLap !== null;
         prevBackendLap = curLap;
         postedCrossForServerLap = null;
+        if (hadPriorLap) framesSinceServerLapSync = 0;
         const synced = Math.min(totLaps, Math.max(0, curLap));
         r.forEach(x => {
           x.lastSectorCross = nowSec;
@@ -2770,6 +2775,8 @@ export default function CircuitRaceView({
             x.lapCount = Math.min(totLaps, synced + 1);
           }
         });
+      } else {
+        framesSinceServerLapSync = Math.min(framesSinceServerLapSync + 1, 1_000_000);
       }
 
       const srvSc = Number(liveSafetyCarLapsRef.current || 0);
@@ -3038,18 +3045,25 @@ export default function CircuitRaceView({
         && curLap < totLaps
         && postedCrossForServerLap !== curLap
         && leaderSf.totalLapsDone === curLap
+        && framesSinceServerLapSync >= 35
+        && !interactiveLapCrossInFlight
       ) {
         const prevT = leaderSf._interactiveLapPrevPos;
         if (prevT !== undefined && crossedStartFinishLineForward(prevT, leaderSf.trackPos, sfLx)) {
           postedCrossForServerLap = curLap;
           const hold = curLap;
           const cb = onInteractiveLeaderLapCrossRef.current;
+          interactiveLapCrossInFlight = true;
           // #region agent log
           fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "CircuitRaceView.js:interactive_loop", message: "leader_sf_lap_cross", data: { serverLap: hold }, timestamp: Date.now(), hypothesisId: "H6" }) }).catch(() => {});
           // #endregion
-          Promise.resolve(cb(hold)).catch(() => {
-            if (postedCrossForServerLap === hold) postedCrossForServerLap = null;
-          });
+          Promise.resolve(cb(hold))
+            .catch(() => {
+              if (postedCrossForServerLap === hold) postedCrossForServerLap = null;
+            })
+            .finally(() => {
+              interactiveLapCrossInFlight = false;
+            });
         }
       }
 
