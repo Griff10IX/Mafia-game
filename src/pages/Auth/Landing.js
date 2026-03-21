@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import api, { getBaseURL, AUTH_ERROR_KEY } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
+const landingGangsterImg = `${process.env.PUBLIC_URL || ''}/images/landing-gangster.png`;
+
 export default function Landing({ setIsAuthenticated, defaultTab }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -516,14 +518,19 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
 
             {/* Crest seal — overlaps hero/panel boundary */}
             <div
-              className="crest-pulse relative z-20 mt-6 w-12 h-12 rounded-full flex items-center justify-center text-xl"
+              className="crest-pulse relative z-20 mt-6 w-14 h-14 rounded-full overflow-hidden flex items-center justify-center shrink-0"
               style={{
                 background: 'var(--noir-background, #0d0d0d)',
                 border: '2px solid var(--noir-primary)',
-                marginBottom: '-24px',
+                marginBottom: '-28px',
               }}
             >
-              🤝
+              <img
+                src={landingGangsterImg}
+                alt=""
+                className="w-full h-full object-cover object-[center_15%]"
+                decoding="async"
+              />
             </div>
           </div>
 
@@ -848,7 +855,21 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
           </p>
 
           {/* ── COPYRIGHT ───────────────────────────────────────────────── */}
-          <div className="mt-6 text-center landing-fade-up-3">
+          <div className="mt-6 flex flex-col items-center gap-2 text-center landing-fade-up-3">
+            <div
+              className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2"
+              style={{
+                borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.35)',
+                opacity: 0.85,
+              }}
+            >
+              <img
+                src={landingGangsterImg}
+                alt=""
+                className="w-full h-full object-cover object-[center_15%]"
+                decoding="async"
+              />
+            </div>
             <p
               className="font-heading text-[9px] uppercase tracking-[0.15em]"
               style={{ color: 'var(--noir-primary)', opacity: 0.5 }}
