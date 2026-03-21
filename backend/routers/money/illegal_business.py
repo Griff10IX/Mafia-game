@@ -130,8 +130,8 @@ ATTACKER_BASE_STRENGTH = 5
 GUARD_STRENGTH_PER_LEVEL = 4  # armour_level + weapon_level each contribute
 SECURITY_WEIGHT = 1.0  # defence = DEFENDER_BASE + sum(guard_strength) + security_level * weight per upgrade
 
-# Pocket withdraw: require this much in vault (reduces spam / micro-withdrawals)
-MIN_VAULT_WITHDRAW_CASH = 100
+# Min till to "collect the take"; min vault balance to pocket withdraw (anti-spam)
+MIN_IBM_CASH_ACTION = 100
 
 # Collect anti-spam: extras only when at least 1 min accumulated
 MIN_COLLECT_HOURS_FOR_EXTRAS = 1 / 60
@@ -377,8 +377,11 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
         next_guard_slot_cash = int(GUARD_SLOT_BASE_CASH * (GUARD_SLOT_MULT ** exp))
     else:
         next_guard_slot_cash = None
+    now = datetime.now(timezone.utc)
+    pending_take, _ = await _illegal_business_pending_take_and_hours(business, current_user, now)
     return {
         "business": business,
+        "pending_take": round(pending_take, 2),
         "guards": guards,
         "type_info": type_info,
         "missions_completed": list(completed_ids),
@@ -443,17 +446,10 @@ async def start_illegal_business(req: StartBusinessRequest, current_user: dict =
     return {"message": f"You've taken over a joint in {state}.", "business_id": business_id}
 
 
-async def collect_illegal_business(current_user: dict = Depends(get_current_user)):
-    now = datetime.now(timezone.utc)
-    # Atomically swap last_collected_at — returns the pre-update document so
-    # a concurrent request sees the already-advanced timestamp and computes ~0 income.
-    business = await db.illegal_businesses.find_one_and_update(
-        {"user_id": current_user["id"]},
-        {"$set": {"last_collected_at": now.isoformat()}},
-        projection={"_id": 0},
-    )
-    if not business:
-        raise HTTPException(status_code=404, detail="You don't have an illegal business.")
+async def _illegal_business_pending_take_and_hours(
+    business: dict, current_user: dict, now: datetime
+) -> tuple[float, float]:
+    """Uncollected till (cash) and hours since last collect, from a business document."""
     last_raw = business.get("last_collected_at")
     try:
         last = datetime.fromisoformat(last_raw.replace("Z", "+00:00")) if last_raw else now
@@ -483,8 +479,44 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
                 income = round(income * 1.2, 2)
         except Exception:
             pass
+    return income, hours
+
+
+async def _restore_illegal_business_collect_time(business_id: str, previous_last_collected_at: Optional[str]) -> None:
+    """Undo last_collected_at bump when collect is rejected (timer must keep accruing)."""
+    if previous_last_collected_at:
+        await db.illegal_businesses.update_one(
+            {"id": business_id},
+            {"$set": {"last_collected_at": previous_last_collected_at}},
+        )
+    else:
+        await db.illegal_businesses.update_one({"id": business_id}, {"$unset": {"last_collected_at": ""}})
+
+
+async def collect_illegal_business(current_user: dict = Depends(get_current_user)):
+    now = datetime.now(timezone.utc)
+    # Atomically swap last_collected_at — returns the pre-update document so
+    # a concurrent request sees the already-advanced timestamp and computes ~0 income.
+    business = await db.illegal_businesses.find_one_and_update(
+        {"user_id": current_user["id"]},
+        {"$set": {"last_collected_at": now.isoformat()}},
+        projection={"_id": 0},
+    )
+    if not business:
+        raise HTTPException(status_code=404, detail="You don't have an illegal business.")
+    prev_last = business.get("last_collected_at")
+    income, hours = await _illegal_business_pending_take_and_hours(business, current_user, now)
     if income < 0.01:
+        await _restore_illegal_business_collect_time(business["id"], prev_last)
         raise HTTPException(status_code=400, detail="No take to collect yet.")
+    if income < MIN_IBM_CASH_ACTION:
+        await _restore_illegal_business_collect_time(business["id"], prev_last)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Need at least ${MIN_IBM_CASH_ACTION:,} in the till to collect. Current take: ${income:,.2f}.",
+        )
+    prestige = get_prestige_bonus(current_user)
+    level = int(business.get("level") or 1)
     updates = {}
     security_level = len(business.get("security_upgrades") or []) or int(business.get("security_level") or 0)
     ib_mult = float(prestige.get("illegal_business_mult", 1.0))
@@ -524,9 +556,15 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
     if business.get("type_id") == "booze_making" and business.get("booze_per_hour"):
         last_booze = business.get("last_collected_booze_at")
         try:
-            last_b = datetime.fromisoformat(last_booze.replace("Z", "+00:00")) if last_booze else last
+            last_collect_dt = datetime.fromisoformat(prev_last.replace("Z", "+00:00")) if prev_last else now
         except Exception:
-            last_b = last
+            last_collect_dt = now
+        if last_collect_dt.tzinfo is None:
+            last_collect_dt = last_collect_dt.replace(tzinfo=timezone.utc)
+        try:
+            last_b = datetime.fromisoformat(last_booze.replace("Z", "+00:00")) if last_booze else last_collect_dt
+        except Exception:
+            last_b = last_collect_dt
         if last_b.tzinfo is None:
             last_b = last_b.replace(tzinfo=timezone.utc)
         hours_booze = max(0.0, (now - last_b).total_seconds() / 3600)
@@ -781,10 +819,10 @@ async def withdraw_illegal_business(req: WithdrawRequest, current_user: dict = D
     amount = int(req.amount)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive.")
-    if vault < MIN_VAULT_WITHDRAW_CASH:
+    if vault < MIN_IBM_CASH_ACTION:
         raise HTTPException(
             status_code=400,
-            detail=f"Need at least ${MIN_VAULT_WITHDRAW_CASH:,} in the vault to withdraw. Current: ${vault:,}.",
+            detail=f"Need at least ${MIN_IBM_CASH_ACTION:,} in the vault to withdraw. Current: ${vault:,}.",
         )
     if amount > vault:
         raise HTTPException(status_code=400, detail=f"Not enough in the vault. Available: ${vault:,}")
@@ -914,24 +952,45 @@ async def raid_random_illegal_business(current_user: dict = Depends(get_current_
         raid_count_today = 0
     if raid_count_today >= RAID_DAILY_LIMIT:
         raise HTTPException(status_code=400, detail=f"Daily raid limit ({RAID_DAILY_LIMIT}) reached.")
-    # Random business other than current user
+    # Sample only businesses whose owner still exists with a usable username (avoids orphaned
+    # illegal_businesses rows → intermittent "Target not found" on $sample + lookup mismatch).
+    me_id = current_user["id"]
     pipeline = [
-        {"$match": {"user_id": {"$ne": current_user["id"]}}},
+        {"$match": {"user_id": {"$ne": me_id}}},
+        {
+            "$lookup": {
+                "from": "users",
+                "let": {"uid": "$user_id"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$id", "$$uid"]}}},
+                    {
+                        "$match": {
+                            "$expr": {
+                                "$gt": [
+                                    {"$strLenCP": {"$trim": {"input": {"$ifNull": ["$username", ""]}}}},
+                                    0,
+                                ]
+                            }
+                        }
+                    },
+                    {"$project": {"_id": 0, "id": 1, "username": 1}},
+                ],
+                "as": "_raid_owner",
+            }
+        },
+        {"$match": {"_raid_owner.0": {"$exists": True}}},
         {"$sample": {"size": 1}},
     ]
     cursor = db.illegal_businesses.aggregate(pipeline)
     result = await cursor.to_list(1)
     if not result:
         raise HTTPException(status_code=404, detail="No other players with a business to raid.")
-    business = result[0]
-    target_id = business["user_id"]
-    target_user = await db.users.find_one({"id": target_id}, {"_id": 0, "id": 1, "username": 1})
-    if not target_user:
-        raise HTTPException(status_code=404, detail="Target not found.")
-    username = target_user.get("username")
-    if not username or not str(username).strip():
-        raise HTTPException(status_code=404, detail="Target not found.")
-    req = RaidRequest(target_username=str(username).strip(), state=business.get("state"))
+    row = result[0]
+    owner = row["_raid_owner"][0]
+    username = str(owner.get("username") or "").strip()
+    if not username:
+        raise HTTPException(status_code=404, detail="No other players with a business to raid.")
+    req = RaidRequest(target_username=username, state=row.get("state"))
     return await raid_illegal_business(req, current_user)
 
 

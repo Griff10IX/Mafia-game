@@ -16,6 +16,12 @@ function formatMoney(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
+function formatTillDollars(n) {
+  const num = Number(n ?? 0);
+  if (Number.isNaN(num)) return '$0.00';
+  return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function formatMissionRewards(rewards) {
   if (!rewards || typeof rewards !== 'object') return null;
   const parts = [];
@@ -331,8 +337,10 @@ export default function IllegalBusiness() {
   const nextGuardSlotCostCash = data?.next_guard_slot_cost_cash ?? null;
   const guardHireCost = data?.guard_hire_cost ?? 2500;
   const vault = parseInt(business?.vault ?? 0, 10);
-  const minVaultWithdraw = 100;
-  const canWithdrawFromVault = vault >= minVaultWithdraw;
+  const minIbmCash = 100;
+  const pendingTake = Number(data?.pending_take ?? 0);
+  const canCollectTake = pendingTake >= minIbmCash;
+  const canWithdrawFromVault = vault >= minIbmCash;
   const upgradesDone = business?.security_upgrades || [];
   const nextUpgradeIdx = upgradesDone.length;
   const nextUpgrade = nextUpgradeIdx < securityList.length ? securityList[nextUpgradeIdx] : null;
@@ -418,15 +426,23 @@ export default function IllegalBusiness() {
                 <div className="text-3xl font-heading font-bold text-primary leading-none">
                   {formatMoney(vault)}
                 </div>
+                <div className="text-[10px] text-zinc-500 font-heading mt-1">
+                  Till ready: {formatTillDollars(pendingTake)}
+                </div>
               </div>
-              <button onClick={handleCollect} disabled={saving}
+              <button onClick={handleCollect} disabled={saving || !canCollectTake}
                 className="collect-btn px-6 py-3 bg-primary/20 text-primary font-heading font-bold uppercase tracking-widest text-xs rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-40 transition-all">
                 {saving ? 'Collecting…' : '⚑  Collect the Take'}
               </button>
             </div>
+            {!canCollectTake && pendingTake >= 0.01 && (
+              <p className="text-[10px] text-mutedForeground font-heading">
+                Collect unlocks at {formatMoney(minIbmCash)} in the till (currently {formatTillDollars(pendingTake)}).
+              </p>
+            )}
             {vault > 0 && !canWithdrawFromVault && (
               <p className="text-[10px] text-mutedForeground font-heading pt-2 border-t border-primary/10">
-                Pocket withdrawals unlock at {formatMoney(minVaultWithdraw)} in the vault (stops spam). Collect more into the vault first.
+                Pocket withdrawals unlock at {formatMoney(minIbmCash)} in the vault (stops spam). Collect more into the vault first.
               </p>
             )}
             {canWithdrawFromVault && (
