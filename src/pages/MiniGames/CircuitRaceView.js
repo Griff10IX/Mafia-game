@@ -2792,9 +2792,6 @@ export default function CircuitRaceView({
               // totalLapsDone === totLaps — that erases per-car visual progress and re-sorts
               // the field by trackPos + _targetPos tie-break, scrambling P2 live → P6 results.
               x.lapCount = totLaps;
-              // #region agent log
-              if (x === r[0]) fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "CircuitRaceView.js:interactive_sync", message: "skip_totalLapsDone_flatten", data: { synced, totLaps }, timestamp: Date.now(), hypothesisId: "H7" }) }).catch(() => {});
-              // #endregion
             } else {
               x.totalLapsDone = synced;
               x.lapCount = Math.min(totLaps, synced + 1);
