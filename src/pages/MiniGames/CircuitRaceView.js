@@ -1178,6 +1178,8 @@ export default function CircuitRaceView({
   useEffect(() => { onInteractiveLeaderLapCrossRef.current = onInteractiveLeaderLapCross; }, [onInteractiveLeaderLapCross]);
   const onInteractiveTimingUpdateRef = useRef(onInteractiveTimingUpdate);
   useEffect(() => { onInteractiveTimingUpdateRef.current = onInteractiveTimingUpdate; }, [onInteractiveTimingUpdate]);
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
   useEffect(() => {
     if (mode !== "interactive-live") return;
     const cb = onSessionPhaseChangeRef.current;
@@ -2415,14 +2417,14 @@ export default function CircuitRaceView({
           const fo=[...racers].sort((a,b)=>{if(a.dnf&&!b.dnf)return 1;if(!a.dnf&&b.dnf)return-1;if(a.dnf&&b.dnf){const pa=(a.totalLapsDone??0)+(a.trackPos??0),pb=(b.totalLapsDone??0)+(b.trackPos??0);if(Math.abs(pb-pa)>1e-9)return pb-pa;return(b.dnfAtSec??0)-(a.dnfAtSec??0);}const aF=a.finished&&a.finishOrder>0,bF=b.finished&&b.finishOrder>0;if(aF&&bF)return a.finishOrder-b.finishOrder;if(aF&&!bF)return-1;if(!aF&&bF)return 1;return((b.totalLapsDone??0)+(b.trackPos??0))-((a.totalLapsDone??0)+(a.trackPos??0));});
           setResults(fo.map((r,i)=>({pos:i+1,id:r.id,name:r.name,isPlayer:r.isPlayer,color:r.color,carName:r.carName,pitStops:r.pitStops,lapTimes:r.lapTimes,dnf:r.dnf,bestLap:r.lapTimes.length?Math.min(...r.lapTimes):null,hasFastestLap:fl.holderId===r.id})));
           const rOIds=fo.map(r=>r.id),dIds=fo.filter(r=>r.dnf).map(r=>r.id);
-          clearSaved();setTimeout(()=>onComplete?.(rOIds,dIds),1200);return;
+          clearSaved();setTimeout(()=>onCompleteRef.current?.(rOIds,dIds),1200);return;
         }
         rafRef.current=requestAnimationFrame(loop);
       } catch(err){ console.error("Race loop error",err); rafRef.current=requestAnimationFrame(loop); }
     };
 
     raceStart.current=Date.now(); rafRef.current=requestAnimationFrame(loop);
-  }, [drawCanvas, onComplete, clearSaved, saveState]);
+  }, [drawCanvas, clearSaved, saveState]);
 
   // ─── REPLAY MODE ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -3131,7 +3133,7 @@ export default function CircuitRaceView({
             hasFastestLap: fastest.holderId === x.id,
           })));
           const rOIds = ordered.map(x => x.id), dIds = ordered.filter(x => x.dnf).map(x => x.id);
-          setTimeout(() => onComplete?.(rOIds, dIds), 1200);
+          setTimeout(() => onCompleteRef.current?.(rOIds, dIds), 1200);
         }
       }
 
