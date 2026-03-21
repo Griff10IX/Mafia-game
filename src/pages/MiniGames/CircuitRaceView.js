@@ -1104,6 +1104,19 @@ function drawConfetti(ctx, W, H, elapsed) {
   ctx.restore();
 }
 
+/** Prefer server qualifying_order for post-qual grid; append any ids missing from QO (cosmetic qual only). */
+function gridIdsFromQualifyingOrder(serverQo, sortedRacers) {
+  const byId = Object.fromEntries(sortedRacers.map((r) => [r.id, r]));
+  if (Array.isArray(serverQo) && serverQo.length > 0) {
+    const out = serverQo.filter((id) => byId[id]);
+    for (const r of sortedRacers) {
+      if (!out.includes(r.id)) out.push(r.id);
+    }
+    return out;
+  }
+  return sortedRacers.map((r) => r.id);
+}
+
 // ─── COMPONENT ─────────────────────────────────────────────────────────────
 
 export default function CircuitRaceView({
@@ -1189,6 +1202,9 @@ export default function CircuitRaceView({
   useEffect(() => { liveRaceEventsRef.current = liveRaceEvents; }, [liveRaceEvents]);
   useEffect(() => { liveGapsToAheadRef.current = liveGapsToAhead; }, [liveGapsToAhead]);
   useEffect(() => { liveSafetyCarLapsRef.current = liveSafetyCarLaps; }, [liveSafetyCarLaps]);
+
+  const qualifyingOrderRef = useRef(qualifying_order);
+  useEffect(() => { qualifyingOrderRef.current = qualifying_order; }, [qualifying_order]);
 
   const SKEY = raceId ? `rcv3_${raceId}` : null;
   const lastSave = useRef(0);
@@ -2452,13 +2468,14 @@ export default function CircuitRaceView({
     startRaceLoop(track, cond, 1, racers, {
       onQualifyingComplete: (sortedRacers) => {
         const rSfL = track.sfLine ?? 0;
-        const gridRacers = sortedRacers.map((r, gi) => {
-          const id = r.id;
+        const poleOrder = gridIdsFromQualifyingOrder(qualifyingOrderRef.current, sortedRacers);
+        const gridRacers = poleOrder.map((id, gi) => {
+          const r = sortedRacers.find(x => x.id === id) || sortedRacers[gi];
           const p = participants.find(x => (x.user_id || x.id) === id) || {};
           const rpStrat = buildReplayStrategy(id, pit_stops, p);
           return {
             ...r,
-            trackPos: ((rSfL + (sortedRacers.length - gi) * 0.012) % 1),
+            trackPos: ((rSfL + (poleOrder.length - gi) * 0.012) % 1),
             totalLapsDone: 0, lapCount: 1,
             finished: false, finishOrder: 0, visible: true,
             tyreWear: Array.isArray(tire_wear_after_lap[id]) ? (tire_wear_after_lap[id][0] ?? 100) : 100,
@@ -2557,15 +2574,19 @@ export default function CircuitRaceView({
         if(!pr)return;
         const qWd=WEATHER_DEFS[pr.cond]||WEATHER_DEFS.clear;
         const rSfL=pr.track.sfLine??0;
-        const gridRacers=sortedRacers.map((r,gi)=>({
-          ...r,trackPos:((rSfL+(sortedRacers.length-gi)*0.012)%1),totalLapsDone:0,lapCount:1,
+        const poleOrder = gridIdsFromQualifyingOrder(qualifyingOrderRef.current, sortedRacers);
+        const gridRacers=poleOrder.map((id,gi)=>{
+          const r=sortedRacers.find(x=>x.id===id)||sortedRacers[gi];
+          return({
+          ...r,trackPos:((rSfL+(poleOrder.length-gi)*0.012)%1),totalLapsDone:0,lapCount:1,
           finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
           inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:gi+1,carNumber:gi+1,
           pitStrategy:buildStrategy(r.currentTyre,pr.totalLaps,qWd.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
           engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
           currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
           inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,_justCrossedFrames:0,
-        }));
+        });
+        });
         stateRef.current.pendingReplay={...pr,racers:gridRacers};
         stateRef.current.racers=gridRacers;
         setCommentary("Grid set — lights out next");
@@ -3112,9 +3133,12 @@ export default function CircuitRaceView({
         const nRace = liveTotalLapsRef.current || 3;
         const wd2 = wd;
         const trkSfL = track.sfLine ?? 0;
-        const grid = sorted.map((r, i) => ({
+        const poleOrder = gridIdsFromQualifyingOrder(qualifyingOrderRef.current, sorted);
+        const grid = poleOrder.map((id, i) => {
+          const r = sorted.find(x => x.id === id) || sorted[i];
+          return ({
           ...r,
-          trackPos: ((trkSfL + (sorted.length - i) * 0.012) % 1),
+          trackPos: ((trkSfL + (poleOrder.length - i) * 0.012) % 1),
           totalLapsDone: 0,
           lapCount: 1,
           finished: false,
@@ -3146,7 +3170,8 @@ export default function CircuitRaceView({
           _justCrossedFrames: 0,
           _targetPos: i + 1,
           _smoothPos: i + 1,
-        }));
+        });
+        });
         stateRef.current = {
           racers: grid, track, nLaps: nRace, wd: wd2, safetyCar: sc,
           fastestLap: { holderId: null, time: Infinity }, finishFlash: 0, incidents: [],

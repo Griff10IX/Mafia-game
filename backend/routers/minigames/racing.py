@@ -4075,6 +4075,7 @@ async def get_race_live(
     race_id: str,
     current_user: dict = Depends(get_current_user_verified),
 ):
+    """Poll interactive race state. Any email-verified user may call (entrants and spectators)."""
     race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
     if not race:
         raise HTTPException(status_code=404, detail="Race not found")
