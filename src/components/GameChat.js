@@ -82,6 +82,39 @@ function formatChatTime(iso) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+/** True when the message is only Unicode emoji / modifiers / ZWJ (no real text) — layout under username like GIFs. */
+function isUnicodeEmojiOnlyMessage(raw) {
+  if (!raw || typeof raw !== 'string') return false;
+  const t = raw.trim();
+  if (!t) return false;
+  const withoutEmoji = t
+    .replace(/[\p{Extended_Pictographic}\uFE0F\u200D\u{1F3FB}-\u{1F3FF}\u{1F9B0}-\u{1F9B3}]/gu, '')
+    .replace(/\s/g, '');
+  return withoutEmoji.length === 0;
+}
+
+/** True when the message is only classic :code: smileys (and whitespace) — same stacked layout as GIFs. */
+function isClassicSmileyOnlyMessage(raw) {
+  if (!raw || typeof raw !== 'string') return false;
+  const t = raw.trim();
+  if (!t || t === '(GIF)') return false;
+  let rest = t.replace(/\s/g, '');
+  const codes = [...CLASSIC_SMILEYS].sort((a, b) => b.code.length - a.code.length);
+  for (const { code } of codes) {
+    if (!rest) break;
+    rest = rest.split(code).join('');
+  }
+  return rest.length === 0;
+}
+
+function isStackedGameChatBody(raw) {
+  if (!raw || typeof raw !== 'string') return false;
+  if (raw.trim() === '(GIF)') return false;
+  if (raw.includes('[') && raw.includes(']')) return false;
+  if (/https?:\/\//i.test(raw)) return false;
+  return isUnicodeEmojiOnlyMessage(raw) || isClassicSmileyOnlyMessage(raw);
+}
+
 export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = false, canClearChat = false }) {
   const [messages, setMessages] = useState([]);
   const [prefs, setPrefs] = useState({ family_only: false, blocked_user_ids: [], block_list_with_names: [], in_family: false, muted: false, muted_until: null });
@@ -425,6 +458,10 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
         ) : (
           [...messages].reverse().map((m) => {
             const isOwn = m.user_id === myUserId;
+            const hasGif = !!m.gif_url;
+            const hasTextMsg = !!(m.message && m.message !== '(GIF)');
+            const stackBody = hasGif || (hasTextMsg && isStackedGameChatBody(m.message));
+            const parsedHtml = hasTextMsg ? parseForumContent(m.message, { censorProfanity }) : '';
             return (
               <div
                 key={m.id}
@@ -433,17 +470,28 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
                 className="group relative px-2 sm:px-3 py-1.5 sm:py-1"
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
               >
-                {/* Inline name + message */}
                 <div className="text-[11px] sm:text-[11px] leading-snug break-words pr-12 sm:pr-10">
-                  <Link
-                    to={`/profile/${encodeURIComponent(m.username)}`}
-                    className="font-heading text-[9.5px] font-bold mr-1 shrink-0 hover:underline"
-                    style={{ color: isOwn ? 'var(--noir-primary)' : 'rgba(var(--noir-primary-rgb), 0.75)' }}
-                  >
-                    {m.username}
-                  </Link>
-                  <span className="text-[9px] mr-1.5" style={{ color: 'rgba(255,255,255,0.18)' }}>·</span>
-                  {m.gif_url && (
+                  <div className="flex flex-wrap items-baseline gap-x-1">
+                    <Link
+                      to={`/profile/${encodeURIComponent(m.username)}`}
+                      className="font-heading text-[9.5px] font-bold shrink-0 hover:underline"
+                      style={{ color: isOwn ? 'var(--noir-primary)' : 'rgba(var(--noir-primary-rgb), 0.75)' }}
+                    >
+                      {m.username}
+                    </Link>
+                    {hasTextMsg && !stackBody && (
+                      <>
+                        <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.18)' }}>·</span>
+                        <span
+                          data-chat-part="message-text"
+                          className="game-chat-message-content inline break-words min-w-0"
+                          style={{ color: 'rgba(255,255,255,0.68)' }}
+                          dangerouslySetInnerHTML={{ __html: parsedHtml }}
+                        />
+                      </>
+                    )}
+                  </div>
+                  {hasGif && (
                     <span className="block mt-1">
                       <img
                         src={m.gif_url}
@@ -454,14 +502,12 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
                       />
                     </span>
                   )}
-                  {m.message && m.message !== '(GIF)' && (
+                  {hasTextMsg && stackBody && !hasGif && (
                     <span
                       data-chat-part="message-text"
-                      className="game-chat-message-content inline break-words"
+                      className="game-chat-message-content block mt-1 break-words"
                       style={{ color: 'rgba(255,255,255,0.68)' }}
-                      dangerouslySetInnerHTML={{
-                        __html: parseForumContent(m.message, { censorProfanity }),
-                      }}
+                      dangerouslySetInnerHTML={{ __html: parsedHtml }}
                     />
                   )}
                 </div>

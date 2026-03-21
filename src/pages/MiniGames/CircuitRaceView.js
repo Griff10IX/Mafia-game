@@ -682,6 +682,40 @@ function inStartFinishSafeZone(track, t) {
   return dBehind <= preZone || dAhead <= postZone;
 }
 
+/** Wider zone after SF line only — damps seam curvature for brake/accel tiers (not profile / slide-off). */
+function inStartFinishCornerRelaxZone(track, t) {
+  const sfL = track.sfLine != null ? track.sfLine : 0;
+  const tt = ((t % 1) + 1) % 1;
+  const preZone = 0.18;
+  const postZone = 0.24;
+  const dBehind = ((sfL - tt + 1) % 1);
+  const dAhead = ((tt - sfL + 1) % 1);
+  return dBehind <= preZone || dAhead <= postZone;
+}
+
+/**
+ * Forward move from p0 → p1 crosses sfLine (lap timing line). Works with large dt (x4 / frame gaps);
+ * the old “both points within 8% of line” test often missed laps.
+ */
+function crossedStartFinishLineForward(p0raw, p1raw, sfLine) {
+  const EPS = 1e-7;
+  const sf = sfLine != null ? (((sfLine % 1) + 1) % 1) : 0;
+  const p0 = ((p0raw % 1) + 1) % 1;
+  const p1 = ((p1raw % 1) + 1) % 1;
+  let d = p1 - p0;
+  if (d < 0) d += 1;
+  if (d < EPS) return false;
+  if (sf <= EPS) {
+    return p1 < p0 - EPS;
+  }
+  if (p0 < sf - EPS) {
+    return p0 + d >= sf - EPS;
+  }
+  const end = p0 + d;
+  if (end < 1 - EPS) return false;
+  return end - 1 >= sf - EPS;
+}
+
 function buildSpeedProfile(track) {
   const cacheKey = `${track.id}:${track.sfLine ?? 0}:sfv5`;
   if (_profileCache.has(cacheKey)) return _profileCache.get(cacheKey);
@@ -1953,6 +1987,7 @@ export default function CircuitRaceView({
           // cornerGripMult gives the grip-based limit; profile gives the geometry limit.
           // Take the more conservative (minimum) of the two so physics are consistent.
           const inSF = inStartFinishSafeZone(track, trackT);
+          const inSFRelax = inStartFinishCornerRelaxZone(track, trackT);
           const gripBasedMult = cornerGripMult(curvature, effGrip);
           const profileMult   = Math.max(0.50, Math.min(1.0, profile[pidx] + (effGrip-0.85)*0.55));
           // On the start/finish straight, ignore grip/curvature cap — it caused visible lift-off before the line
@@ -1963,8 +1998,8 @@ export default function CircuitRaceView({
           // Curvature-aware brake/accel rates — sharper on straights, gentler in tight corners
           // In real cars: brake distance is short (0.2-0.4s), accel ramp is longer (0.5-1.2s)
           const effCurvSlide = inSF ? 0 : curvature;
-          const isTightCorner = !inSF && curvature > 0.12;
-          const isMedCorner   = !inSF && curvature > 0.055;
+          const isTightCorner = !inSFRelax && curvature > 0.12;
+          const isMedCorner   = !inSFRelax && curvature > 0.055;
           // ABRAKE: how fast we reach the corner speed target. Higher = more instant.
           // At 60fps dt≈0.016: ABRAKE=5 → ~50% correction per frame = sharp, realistic braking
           const ABRAKE = isTightCorner ? 6.5 : isMedCorner ? 5.0 : 4.0;
@@ -2002,19 +2037,9 @@ export default function CircuitRaceView({
             r.currentSector=ns2;r.lastSectorCross=nowSec;
           }
 
-          // Lap crossing: detect when car passes through sfLine
-          // Use wrap-aware check: prevPos was before sfLine, trackPos is after (or vice versa wrapping)
+          // Lap crossing: forward arc from prevPos → trackPos crosses sfLine (OK at x4 / big dt)
           const sfL2 = track.sfLine ?? 0;
-          const crossedSF = (() => {
-            // FIX: tight window — car must have been behind sfLine last frame
-            // and be ahead this frame, within 8% either side.
-            // Fixes false-positives on sfLine=0 tracks (was firing every wrap).
-            const CROSS_WIN = 0.08;
-            const p0 = prevPos, p1 = r.trackPos;
-            const dBehind = ((sfL2 - p0 + 1) % 1); // how far behind sfL2 we were
-            const dAhead  = ((p1 - sfL2 + 1) % 1); // how far ahead of sfL2 we are
-            return dBehind <= CROSS_WIN && dAhead <= CROSS_WIN;
-          })();
+          const crossedSF = crossedStartFinishLineForward(prevPos, r.trackPos, sfL2);
           if(crossedSF && !(r._justCrossedFrames > 0)){
             r._justCrossedFrames = 4; // FIX: frame counter, no async stutter
             r.totalLapsDone++;r.lapCount=Math.min(nLaps,r.totalLapsDone+1);
@@ -2363,7 +2388,7 @@ export default function CircuitRaceView({
       if (cdVal <= 0) {
         clearInterval(cdI);
         setUiPhase("racing");
-        setLapDisp(`0 / ${liveTotalLaps}`);
+        setLapDisp(liveTotalLaps === 1 ? "Qualifying" : `1 / ${liveTotalLaps}`);
         setCommentary(rnd(COMMENTARY.start));
         startRacing();
       }
@@ -2376,6 +2401,7 @@ export default function CircuitRaceView({
     let prevIncidentsLen = (liveIncidentsRef.current || []).length;
     let prevBackendLap = liveCurrentLapRef.current || 0;
     let lastReportedVisLap = -1;
+    let lastReportedProg = -1;
 
     const addInc = (text) => {
       stateRef.current.incidents.push({ text, time: performance.now() });
@@ -2531,6 +2557,7 @@ export default function CircuitRaceView({
         const curvature = getCurvature(trk, trackT);
 
         const inSF = inStartFinishSafeZone(trk, trackT);
+        const inSFRelax = inStartFinishCornerRelaxZone(trk, trackT);
         const gripBasedMult = cornerGripMult(curvature, effGrip);
         const profileMult = Math.max(0.50, Math.min(1.0, profile[pidx] + (effGrip - 0.85) * 0.55));
         let cornerSM = inSF
@@ -2539,8 +2566,8 @@ export default function CircuitRaceView({
 
         const effCurvSlide = inSF ? 0 : curvature;
         // Curvature-aware braking/acceleration rates
-        const isTightCorner = !inSF && curvature > 0.12;
-        const isMedCorner = !inSF && curvature > 0.055;
+        const isTightCorner = !inSFRelax && curvature > 0.12;
+        const isMedCorner = !inSFRelax && curvature > 0.055;
         const ABRAKE = isTightCorner ? 6.5 : isMedCorner ? 5.0 : 4.0;
         const AACCEL = isTightCorner ? 2.2 : isMedCorner ? 2.8 : 3.6;
         const SSCALE = 0.170, SCAP = 160;
@@ -2594,19 +2621,13 @@ export default function CircuitRaceView({
           racer.currentSector = ns2; racer.lastSectorCross = nowSec;
         }
 
-        // Visual lap crossing
+        // Lap crossing (same geometry test as main loop — works at x4 speed)
         const sfL2 = trk.sfLine ?? 0;
-        const crossedSF = (() => {
-          // FIX: tight window check — same as race loop fix
-          const CROSS_WIN = 0.08;
-          const p0 = prevPos, p1 = racer.trackPos;
-          const dBehind = ((sfL2 - p0 + 1) % 1);
-          const dAhead  = ((p1 - sfL2 + 1) % 1);
-          return dBehind <= CROSS_WIN && dAhead <= CROSS_WIN;
-        })();
+        const crossedSF = crossedStartFinishLineForward(prevPos, racer.trackPos, sfL2);
         if (crossedSF && !(racer._justCrossedFrames > 0)) {
           racer._justCrossedFrames = 4; // FIX: frame counter
-          racer.lapCount++;
+          racer.totalLapsDone = Math.min(totLaps, (racer.totalLapsDone || 0) + 1);
+          racer.lapCount = Math.min(totLaps, racer.totalLapsDone + 1);
           const lt = trk.lapBase / (effSpeed * 0.97) + (Math.random() - 0.5) * 0.8;
           racer.lapTimes.push(lt);
           if (lt < fl.time) { fl.time = lt; fl.holderId = racer.id; stateRef.current.fastestLap = fl; addInc(`${racer.name} — fastest lap!`); }
@@ -2673,12 +2694,20 @@ export default function CircuitRaceView({
         fuelLoad: Math.round(x.fuelLoad), currentSpeedMph: Math.round(x.currentSpeedMph || 0),
         tyreCliffWarning: x.tyreWear < ((TYRE_DEFS[x.currentTyre]?.cliffStart || 0.66) * 100 + 12),
       })));
-      setLapDisp(`${visLap} / ${totLaps}`);
-      setRaceProg(totLaps > 0 ? visLap / totLaps : 0);
-      if (visLap !== lastReportedVisLap) {
+      // Match startRaceLoop HUD: current lap = leader completed + 1 (not raw completed count)
+      const lapCur = totLaps <= 1 ? totLaps : Math.min(visLap + 1, totLaps);
+      setLapDisp(totLaps === 1 ? 'Qualifying' : `${lapCur} / ${totLaps}`);
+      let mxFrac = 0;
+      r.forEach(x => {
+        if (!x.dnf) mxFrac = Math.max(mxFrac, ((x.totalLapsDone ?? 0) + (x.trackPos ?? 0)) / totLaps);
+      });
+      const prog01 = totLaps > 0 ? Math.min(1, mxFrac) : 0;
+      setRaceProg(prog01);
+      const cb = onVisualLapChangeRef.current;
+      if (cb && (visLap !== lastReportedVisLap || lastReportedProg < 0 || Math.abs(prog01 - lastReportedProg) >= 0.025)) {
         lastReportedVisLap = visLap;
-        const cb = onVisualLapChangeRef.current;
-        if (cb) cb(visLap, totLaps);
+        lastReportedProg = prog01;
+        cb(visLap, totLaps, prog01);
       }
 
       drawCanvas(trk, cond, r, nowSec);
