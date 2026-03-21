@@ -24,6 +24,7 @@ from server import (
     _username_pattern,
     get_head_family_id_for_state,
     get_casino_caps,
+    _ownership_display_profit,
 )
 from routers.casinos.dice import DiceSellOnTradeRequest
 
@@ -205,7 +206,7 @@ def register(router):
         is_owner = owner_id == current_user.get("id") or ""
         max_bet = doc.get("max_bet", ROULETTE_DEFAULT_MAX_BET)
         total_earnings = doc.get("total_earnings", 0)
-        profit = int((doc.get("profit") or total_earnings or 0) or 0)
+        profit = _ownership_display_profit(doc)
         buy_back_reward = doc.get("buy_back_reward")
         # Check for active buy-back offer for this user
         active_offer = await db.roulette_buy_back_offers.find_one(

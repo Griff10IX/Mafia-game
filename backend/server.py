@@ -1626,6 +1626,16 @@ def _slots_expired(doc) -> bool:
         return True
 
 
+def _ownership_display_profit(doc: dict) -> int:
+    """Cash profit shown to owner/sidebar. `profit` may be 0 after reset — must not fall back to lifetime total_earnings."""
+    if not doc:
+        return 0
+    p = doc.get("profit")
+    if p is not None:
+        return int(p)
+    return int(doc.get("total_earnings") or 0)
+
+
 async def _get_casino_property_profit(user_id: str):
     """Return (casino_profit_cash, property_profit_points, has_casino, has_property) for header display and menu visibility. Uses parallel DB reads."""
     casino_colls = [
@@ -1654,7 +1664,7 @@ async def _get_casino_property_profit(user_id: str):
             continue
         if game_type == "slots" and _slots_expired(doc):
             continue
-        casino_cash = int(doc.get("profit") or doc.get("total_earnings") or 0)
+        casino_cash = _ownership_display_profit(doc)
         has_casino = True
         break
 

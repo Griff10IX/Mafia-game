@@ -9,7 +9,8 @@ import random
 import re
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional
+from collections import defaultdict
+from typing import Dict, List, Optional, Set, Tuple
 
 import httpx
 from fastapi import Body, Depends, HTTPException, Query
@@ -24,6 +25,9 @@ from utils.cheat_detection_utils import (
     group_by_similar_email,
     group_by_same_day_same_ip,
     group_by_same_subnet,
+    group_by_registration_ip_burst,
+    group_by_referral_same_ip,
+    user_ip_union,
     compute_dupe_risk_score,
 )
 from routers.kill.armoury import TOKEN_CONFIG
@@ -3297,56 +3301,60 @@ def register(router):
             "by_fuzzy_username": fuzzy_groups[:30],
         }
 
-    def _all_ips(u: dict) -> tuple:
-        """Return (sorted_ips, sources_dict) for a user."""
-        reg = (u.get("registration_ip") or "").strip()
-        last_login = (u.get("last_login_ip") or "").strip()
-        last_req = (u.get("last_request_ip") or "").strip()
-        logins = [(x or "").strip() for x in (u.get("login_ips") or []) if (x or "").strip()]
-        ips = set()
-        if reg:
-            ips.add(reg)
-        if last_login:
-            ips.add(last_login)
-        if last_req:
-            ips.add(last_req)
-        ips.update(logins)
-        sources = {"registration": reg or None, "login_ips": logins, "last_login_ip": last_login or None, "last_request_ip": last_req or None}
-        return sorted(ips), sources
-
     @router.get("/admin/cheat-detection/dupe-check-intelligent")
     async def admin_cheat_dupe_check_intelligent(
         username: str = Query(None, description="Optional: filter by username contains"),
         check_vpn: bool = Query(True, description="Check shared IPs for VPN/proxy (rate-limited)"),
         max_vpn_checks: int = Query(50, ge=0, le=100),
+        include_dead_ip: bool = Query(True, description="Alive vs dead accounts sharing an IP"),
+        include_dead_fingerprint: bool = Query(True, description="Alive vs dead sharing device_fingerprint"),
+        suspicious_days: int = Query(30, ge=1, le=365, description="Window for suspicious_logins aggregation"),
+        suspicious_limit: int = Query(3000, ge=100, le=8000, description="Max suspicious_logins docs to scan"),
+        transfer_days: int = Query(14, ge=1, le=90, description="Window for heavy money_transfers"),
+        transfer_min_count: int = Query(3, ge=2, le=50, description="Min transfers per ordered pair"),
+        transfer_limit: int = Query(50, ge=1, le=150),
+        registration_burst_hours: float = Query(2.0, ge=0.5, le=24, description="Registration burst time bucket (hours)"),
+        include_session_ips: bool = Query(True, description="Include JWT session IPs in IP union"),
+        include_prereg_cross: bool = Query(True, description="Prereg IP overlapping other accounts"),
+        include_security_flags: bool = Query(True, description="Unresolved security_flags for batch users"),
+        include_password_resets: bool = Query(True, description="Frequent password reset requests"),
+        flags_days: int = Query(30, ge=1, le=365),
+        password_reset_days: int = Query(7, ge=1, le=90),
+        password_reset_min: int = Query(3, ge=2, le=30),
         current_user: dict = Depends(get_current_user),
     ):
         """
         Single report: same IP (full IP history), same user-agent, device fingerprint,
         same subnet, domain/similar-username/fuzzy-username/similar-email/same-day-same-IP,
-        risk scores, and optional VPN/proxy flags on IPs.
+        risk scores, optional VPN/proxy flags, alive/dead overlap, suspicious-login hotspots,
+        registration bursts, referral+IP, heavy transfers, and optional wave-2 signals.
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+
+        def _all_ips(u: dict) -> Tuple[List[str], dict]:
+            return user_ip_union(u, include_session_ips=include_session_ips)
+
         query = {"is_dead": {"$ne": True}}
         if username and username.strip():
             query["username"] = re.compile(re.escape(username.strip()), re.IGNORECASE)
-        users = await db.users.find(
-            query,
-            {
-                "_id": 0,
-                "id": 1,
-                "username": 1,
-                "email": 1,
-                "registration_ip": 1,
-                "login_ips": 1,
-                "last_login_ip": 1,
-                "last_request_ip": 1,
-                "last_user_agent": 1,
-                "device_fingerprint": 1,
-                "created_at": 1,
-            },
-        ).to_list(5000)
+        proj = {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "email": 1,
+            "registration_ip": 1,
+            "login_ips": 1,
+            "last_login_ip": 1,
+            "last_request_ip": 1,
+            "last_user_agent": 1,
+            "device_fingerprint": 1,
+            "created_at": 1,
+            "referred_by": 1,
+        }
+        if include_session_ips:
+            proj["sessions"] = 1
+        users = await db.users.find(query, proj).to_list(5000)
 
         ip_to_accounts = {}
         for u in users:
@@ -3362,7 +3370,14 @@ def register(router):
                 "sources": sources,
             }
             for ip in ips:
-                role = "registration" if sources.get("registration") == ip else ("login" if ip in (sources.get("login_ips") or []) else "request")
+                if sources.get("registration") == ip:
+                    role = "registration"
+                elif ip in (sources.get("login_ips") or []):
+                    role = "login"
+                elif ip in (sources.get("session_ips") or []):
+                    role = "session"
+                else:
+                    role = "request"
                 ip_to_accounts.setdefault(ip, []).append({**summary, "role_at_this_ip": role})
         same_ip_groups = []
         seen_ip = set()
@@ -3395,7 +3410,7 @@ def register(router):
             })
         same_ip_groups.sort(key=lambda g: (-g["risk_score"], -g["count"]))
 
-        same_subnet_groups = group_by_same_subnet(users)
+        same_subnet_groups = group_by_same_subnet(users, include_session_ips=include_session_ips)
 
         fp_to_users = {}
         for u in users:
@@ -3480,6 +3495,24 @@ def register(router):
         for g in same_day_ip_groups:
             g["risk_score"] = compute_dupe_risk_score("same_day_ip", g["count"])
 
+        registration_burst_groups = group_by_registration_ip_burst(users, max_hours=registration_burst_hours)
+        for g in registration_burst_groups:
+            g["risk_score"] = compute_dupe_risk_score("registration_burst", g["count"])
+        referral_same_ip_groups = group_by_referral_same_ip(users)
+        id_to_user = {u["id"]: u for u in users}
+        need_ref_ids = {g["referred_by"] for g in referral_same_ip_groups if g.get("referred_by") and g["referred_by"] not in id_to_user}
+        ref_username_map: Dict[str, str] = {}
+        if need_ref_ids:
+            ref_docs = await db.users.find(
+                {"id": {"$in": list(need_ref_ids)}},
+                {"_id": 0, "id": 1, "username": 1},
+            ).to_list(len(need_ref_ids))
+            ref_username_map = {r["id"]: (r.get("username") or "") for r in ref_docs}
+        for g in referral_same_ip_groups:
+            rid = g.get("referred_by")
+            g["referred_by_username"] = (id_to_user.get(rid) or {}).get("username") or ref_username_map.get(rid) or None
+            g["risk_score"] = compute_dupe_risk_score("referral_same_ip", g["count"])
+
         ip_vpn: Dict[str, bool] = {}
         if check_vpn and same_ip_groups:
             unique_ips = set()
@@ -3528,6 +3561,308 @@ def register(router):
                     })
         proxy_users_list.sort(key=lambda x: (-int(x.get("registration_from_vpn", False)), x.get("created_at") or ""))
 
+        now_utc = datetime.now(timezone.utc)
+        user_ids = [u["id"] for u in users]
+        living_ip_set: Set[str] = set()
+        for u in users:
+            ips, _ = _all_ips(u)
+            living_ip_set.update(ips)
+
+        alive_dead_ip_groups: List[dict] = []
+        if include_dead_ip and living_ip_set:
+            dead_pair_seen: Set[Tuple[str, str]] = set()
+            dead_by_ip: Dict[str, List[dict]] = defaultdict(list)
+            ip_list = sorted(living_ip_set)
+            for i in range(0, len(ip_list), 400):
+                chunk = ip_list[i : i + 400]
+                dead_docs = await db.users.find(
+                    {
+                        "is_dead": True,
+                        "$or": [{"registration_ip": {"$in": chunk}}, {"login_ips": {"$in": chunk}}],
+                    },
+                    {"_id": 0, "id": 1, "username": 1, "registration_ip": 1, "login_ips": 1, "dead_at": 1, "created_at": 1},
+                ).to_list(2500)
+                for d in dead_docs:
+                    d_ips: Set[str] = set()
+                    ri = (d.get("registration_ip") or "").strip()
+                    if ri:
+                        d_ips.add(ri)
+                    for x in d.get("login_ips") or []:
+                        xs = (x or "").strip()
+                        if xs:
+                            d_ips.add(xs)
+                    for ip in d_ips:
+                        if ip not in living_ip_set:
+                            continue
+                        key = (ip, d["id"])
+                        if key in dead_pair_seen:
+                            continue
+                        dead_pair_seen.add(key)
+                        dead_by_ip[ip].append({
+                            "id": d["id"],
+                            "username": d.get("username"),
+                            "dead_at": d.get("dead_at"),
+                            "created_at": d.get("created_at"),
+                        })
+            for ip, dead_accs in dead_by_ip.items():
+                raw_alive = ip_to_accounts.get(ip) or []
+                by_aid = {}
+                for a in raw_alive:
+                    uid = a.get("id")
+                    if uid and uid not in by_aid:
+                        by_aid[uid] = {
+                            "id": a["id"],
+                            "username": a["username"],
+                            "email": a["email"],
+                            "created_at": a["created_at"],
+                            "all_ips": a["all_ips"],
+                            "role_at_this_ip": a.get("role_at_this_ip"),
+                        }
+                alive_accs = list(by_aid.values())
+                if len(alive_accs) < 1 or len(dead_accs) < 1:
+                    continue
+                n = len(alive_accs) + len(dead_accs)
+                alive_dead_ip_groups.append({
+                    "ip": ip,
+                    "alive_accounts": alive_accs,
+                    "dead_accounts": dead_accs[:25],
+                    "alive_count": len(alive_accs),
+                    "dead_count": len(dead_accs),
+                    "risk_score": compute_dupe_risk_score("dead_ip_overlap", n),
+                })
+            alive_dead_ip_groups.sort(key=lambda g: (-g["risk_score"], -g["alive_count"], -g["dead_count"]))
+
+        susp_cut = (now_utc - timedelta(days=suspicious_days)).isoformat()
+        sl_docs = await db.suspicious_logins.find(
+            {"at": {"$gte": susp_cut}},
+            {"_id": 0, "ip": 1, "at": 1, "reason": 1, "login_input": 1, "username": 1, "user_id": 1},
+        ).sort("at", -1).limit(suspicious_limit).to_list(suspicious_limit)
+        high_reasons = frozenset({"no_account_same_ip_alive", "wrong_password_same_ip_other_alive"})
+        ip_events: Dict[str, List[dict]] = defaultdict(list)
+        for doc in sl_docs:
+            sip = (doc.get("ip") or "").strip()
+            if sip:
+                ip_events[sip].append(doc)
+        suspicious_ip_correlations: List[dict] = []
+        for sip, events in ip_events.items():
+            if len(events) < 2 and not any(e.get("reason") in high_reasons for e in events):
+                continue
+            raw_alive = ip_to_accounts.get(sip) or []
+            by_aid = {}
+            for a in raw_alive:
+                uid = a.get("id")
+                if uid and uid not in by_aid:
+                    by_aid[uid] = {
+                        "id": a["id"],
+                        "username": a["username"],
+                        "email": a["email"],
+                        "created_at": a["created_at"],
+                        "all_ips": a["all_ips"],
+                        "role_at_this_ip": a.get("role_at_this_ip"),
+                    }
+            alive_accs = list(by_aid.values())
+            if not alive_accs:
+                continue
+            sample = events[:8]
+            suspicious_ip_correlations.append({
+                "ip": sip,
+                "event_count": len(events),
+                "sample_events": [
+                    {"at": e.get("at"), "reason": e.get("reason"), "login_input": e.get("login_input"), "username": e.get("username")}
+                    for e in sample
+                ],
+                "correlated_alive_accounts": alive_accs[:12],
+                "risk_score": compute_dupe_risk_score("suspicious_ip", len(events)),
+            })
+        suspicious_ip_correlations.sort(key=lambda g: (-g["risk_score"], -g["event_count"]))
+
+        transfer_cut = (now_utc - timedelta(days=transfer_days)).isoformat()
+        xfer_pipe = [
+            {"$match": {"created_at": {"$gte": transfer_cut}}},
+            {"$group": {"_id": {"from": "$from_user_id", "to": "$to_user_id"}, "transfer_count": {"$sum": 1}}},
+            {"$match": {"transfer_count": {"$gte": transfer_min_count}}},
+            {"$sort": {"transfer_count": -1}},
+            {"$limit": transfer_limit},
+        ]
+        xfer_agg = await db.money_transfers.aggregate(xfer_pipe).to_list(transfer_limit)
+        uid_ips: Dict[str, Set[str]] = {}
+        for u in users:
+            ips, _ = _all_ips(u)
+            uid_ips[u["id"]] = set(ips)
+        heavy_transfer_pairs: List[dict] = []
+        for row in xfer_agg:
+            ids = row.get("_id") or {}
+            fid = ids.get("from")
+            tid = ids.get("to")
+            if not fid or not tid or fid == tid:
+                continue
+            cnt = int(row.get("transfer_count") or 0)
+            s1 = uid_ips.get(fid, set())
+            s2 = uid_ips.get(tid, set())
+            overlap = sorted(s1 & s2)[:15]
+            u1 = id_to_user.get(fid) or {}
+            u2 = id_to_user.get(tid) or {}
+            heavy_transfer_pairs.append({
+                "from_user_id": fid,
+                "to_user_id": tid,
+                "from_username": u1.get("username"),
+                "to_username": u2.get("username"),
+                "transfer_count": cnt,
+                "shared_ips": overlap,
+                "shared_ip_count": len(s1 & s2),
+                "risk_score": compute_dupe_risk_score("heavy_transfers", cnt),
+            })
+
+        prereg_ip_cross_accounts: List[dict] = []
+        if include_prereg_cross and users:
+            emails_lower = []
+            for u in users:
+                em = (u.get("email") or "").strip().lower()
+                if em:
+                    emails_lower.append(em)
+            emails_lower = list(dict.fromkeys(emails_lower))
+            if emails_lower:
+                email_prereg_ip: Dict[str, str] = {}
+                for j in range(0, len(emails_lower), 400):
+                    ch = emails_lower[j : j + 400]
+                    prs = await db.preregistrations.find(
+                        {"email": {"$in": ch}},
+                        {"_id": 0, "email": 1, "ip": 1, "created_at": 1},
+                    ).to_list(800)
+                    for pr in prs:
+                        e = (pr.get("email") or "").strip().lower()
+                        p = (pr.get("ip") or "").strip()
+                        if e and p:
+                            email_prereg_ip[e] = p
+                ip_to_uids: Dict[str, Set[str]] = defaultdict(set)
+                for u in users:
+                    uid = u["id"]
+                    ips, _ = _all_ips(u)
+                    for ip in ips:
+                        ip_to_uids[ip].add(uid)
+                for u in users:
+                    em = (u.get("email") or "").strip().lower()
+                    if not em or em not in email_prereg_ip:
+                        continue
+                    pr_ip = email_prereg_ip[em]
+                    others = ip_to_uids.get(pr_ip, set()) - {u["id"]}
+                    if others:
+                        olist = list(others)[:15]
+                        prereg_ip_cross_accounts.append({
+                            "user_id": u["id"],
+                            "username": u.get("username"),
+                            "email": em,
+                            "prereg_ip": pr_ip,
+                            "other_user_ids": olist,
+                            "risk_score": compute_dupe_risk_score("prereg_ip_cross", 1 + len(olist)),
+                        })
+                prereg_ip_cross_accounts.sort(key=lambda g: (-g["risk_score"], g.get("username") or ""))
+
+        alive_dead_fingerprint_groups: List[dict] = []
+        if include_dead_fingerprint:
+            living_fp_set: Set[str] = set()
+            fp_to_living: Dict[str, List[dict]] = defaultdict(list)
+            for u in users:
+                fp = (u.get("device_fingerprint") or "").strip()
+                if not fp:
+                    continue
+                living_fp_set.add(fp)
+                ips, _ = _all_ips(u)
+                fp_to_living[fp].append({
+                    "id": u["id"],
+                    "username": u.get("username"),
+                    "email": u.get("email"),
+                    "created_at": u.get("created_at"),
+                    "all_ips": sorted(ips),
+                })
+            fp_list = sorted(living_fp_set)
+            dead_fp_seen: Set[Tuple[str, str]] = set()
+            dead_by_fp: Dict[str, List[dict]] = defaultdict(list)
+            for i in range(0, len(fp_list), 200):
+                chunk = fp_list[i : i + 200]
+                ddocs = await db.users.find(
+                    {"is_dead": True, "device_fingerprint": {"$in": chunk}},
+                    {"_id": 0, "id": 1, "username": 1, "device_fingerprint": 1, "dead_at": 1, "created_at": 1},
+                ).to_list(1500)
+                for d in ddocs:
+                    fp = (d.get("device_fingerprint") or "").strip()
+                    if fp not in living_fp_set:
+                        continue
+                    key = (fp, d["id"])
+                    if key in dead_fp_seen:
+                        continue
+                    dead_fp_seen.add(key)
+                    dead_by_fp[fp].append({
+                        "id": d["id"],
+                        "username": d.get("username"),
+                        "dead_at": d.get("dead_at"),
+                        "created_at": d.get("created_at"),
+                        "device_fingerprint": fp[:24] + ("..." if len(fp) > 24 else ""),
+                    })
+            for fp, dead_accs in dead_by_fp.items():
+                live_accs = fp_to_living.get(fp) or []
+                if len(live_accs) < 1 or len(dead_accs) < 1:
+                    continue
+                n = len(live_accs) + len(dead_accs)
+                alive_dead_fingerprint_groups.append({
+                    "device_fingerprint": fp[:32] + ("..." if len(fp) > 32 else ""),
+                    "alive_accounts": live_accs[:15],
+                    "dead_accounts": dead_accs[:20],
+                    "risk_score": compute_dupe_risk_score("dead_fingerprint_overlap", n, has_same_device=True),
+                })
+            alive_dead_fingerprint_groups.sort(key=lambda g: (-g["risk_score"], -len(g["alive_accounts"])))
+
+        users_with_security_flags: List[dict] = []
+        if include_security_flags and user_ids:
+            fc = (now_utc - timedelta(days=flags_days)).isoformat()
+            fl_docs = await db.security_flags.find(
+                {"user_id": {"$in": user_ids}, "created_at": {"$gte": fc}, "resolved": {"$ne": True}},
+                {"_id": 0, "user_id": 1, "flag_type": 1, "reason": 1, "created_at": 1},
+            ).limit(8000).to_list(8000)
+            by_uid: Dict[str, List[dict]] = defaultdict(list)
+            for f in fl_docs:
+                uid = f.get("user_id")
+                if uid:
+                    by_uid[uid].append({
+                        "flag_type": f.get("flag_type"),
+                        "reason": f.get("reason"),
+                        "created_at": f.get("created_at"),
+                    })
+            for uid, items in by_uid.items():
+                u0 = id_to_user.get(uid) or {}
+                users_with_security_flags.append({
+                    "user_id": uid,
+                    "username": u0.get("username"),
+                    "flag_count": len(items),
+                    "flags": items[:12],
+                    "risk_score": compute_dupe_risk_score("security_flag_user", len(items)),
+                })
+            users_with_security_flags.sort(key=lambda g: (-g["risk_score"], -g["flag_count"]))
+
+        password_reset_heavy_users: List[dict] = []
+        if include_password_resets and user_ids:
+            pr_cut = (now_utc - timedelta(days=password_reset_days)).isoformat()
+            pr_docs = await db.password_resets.find(
+                {"user_id": {"$in": user_ids}, "created_at": {"$gte": pr_cut}},
+                {"_id": 0, "user_id": 1},
+            ).limit(20000).to_list(20000)
+            pr_count: Dict[str, int] = defaultdict(int)
+            for p in pr_docs:
+                uid = p.get("user_id")
+                if uid:
+                    pr_count[uid] += 1
+            for uid, c in pr_count.items():
+                if c < password_reset_min:
+                    continue
+                u0 = id_to_user.get(uid) or {}
+                password_reset_heavy_users.append({
+                    "user_id": uid,
+                    "username": u0.get("username"),
+                    "reset_count": c,
+                    "risk_score": compute_dupe_risk_score("password_reset_heavy", c),
+                })
+            password_reset_heavy_users.sort(key=lambda g: (-g["risk_score"], -g["reset_count"]))
+
         return {
             "same_ip_groups": same_ip_groups[:80],
             "total_same_ip_groups": len(same_ip_groups),
@@ -3545,6 +3880,25 @@ def register(router):
             "ip_vpn": ip_vpn,
             "proxy_users": proxy_users_list[:100],
             "total_proxy_users": len(proxy_users_list),
+            "ip_union_includes_sessions": include_session_ips,
+            "alive_dead_ip_groups": alive_dead_ip_groups[:40],
+            "total_alive_dead_ip_groups": len(alive_dead_ip_groups),
+            "suspicious_ip_correlations": suspicious_ip_correlations[:45],
+            "total_suspicious_ip_correlations": len(suspicious_ip_correlations),
+            "registration_burst_groups": registration_burst_groups[:35],
+            "total_registration_burst_groups": len(registration_burst_groups),
+            "referral_same_ip_groups": referral_same_ip_groups[:40],
+            "total_referral_same_ip_groups": len(referral_same_ip_groups),
+            "heavy_transfer_pairs": heavy_transfer_pairs[:transfer_limit],
+            "total_heavy_transfer_pairs": len(heavy_transfer_pairs),
+            "prereg_ip_cross_accounts": prereg_ip_cross_accounts[:80],
+            "total_prereg_ip_cross_accounts": len(prereg_ip_cross_accounts),
+            "alive_dead_fingerprint_groups": alive_dead_fingerprint_groups[:35],
+            "total_alive_dead_fingerprint_groups": len(alive_dead_fingerprint_groups),
+            "users_with_security_flags": users_with_security_flags[:80],
+            "total_users_with_security_flags": len(users_with_security_flags),
+            "password_reset_heavy_users": password_reset_heavy_users[:60],
+            "total_password_reset_heavy_users": len(password_reset_heavy_users),
         }
 
     def _normalize_user_agent(ua: str) -> str:

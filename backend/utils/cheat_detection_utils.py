@@ -1,7 +1,8 @@
 # Cheat detection utilities: shared logic for dupe check and duplicate suspects
 import re
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Tuple, Any, Optional, Set
 import ipaddress
 
 # Common email domains: exclude from domain-based dupe grouping (too many unrelated users)
@@ -112,6 +113,108 @@ def group_by_similar_email(users: List[dict]) -> List[dict]:
     return groups
 
 
+def user_ip_union(u: dict, include_session_ips: bool = False) -> Tuple[List[str], Dict[str, Any]]:
+    """Union of IPs for a user: registration, login history, last request/login, optional JWT session IPs."""
+    reg = (u.get("registration_ip") or "").strip()
+    last_login = (u.get("last_login_ip") or "").strip()
+    last_req = (u.get("last_request_ip") or "").strip()
+    logins = [(x or "").strip() for x in (u.get("login_ips") or []) if (x or "").strip()]
+    ips: Set[str] = set()
+    if reg:
+        ips.add(reg)
+    if last_login:
+        ips.add(last_login)
+    if last_req:
+        ips.add(last_req)
+    ips.update(logins)
+    session_ips: List[str] = []
+    if include_session_ips:
+        for s in u.get("sessions") or []:
+            if not isinstance(s, dict):
+                continue
+            sip = (s.get("ip") or "").strip()
+            if sip:
+                ips.add(sip)
+                session_ips.append(sip)
+    sources: Dict[str, Any] = {
+        "registration": reg or None,
+        "login_ips": logins,
+        "last_login_ip": last_login or None,
+        "last_request_ip": last_req or None,
+    }
+    if include_session_ips:
+        sources["session_ips"] = session_ips
+    return sorted(ips), sources
+
+
+def _parse_user_created_at(u: dict) -> Optional[datetime]:
+    c = u.get("created_at")
+    if isinstance(c, datetime):
+        return c if c.tzinfo else c.replace(tzinfo=timezone.utc)
+    if isinstance(c, str) and c.strip():
+        try:
+            return datetime.fromisoformat(c.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return None
+
+
+def group_by_registration_ip_burst(users: List[dict], max_hours: float = 2.0) -> List[dict]:
+    """Multiple registrations from the same registration_ip within a fixed time window (bucketed by max_hours)."""
+    if max_hours <= 0:
+        max_hours = 2.0
+    span_sec = int(max_hours * 3600)
+    key_to_users: Dict[Tuple[str, int], List[dict]] = {}
+    for u in users:
+        reg_ip = (u.get("registration_ip") or "").strip()
+        if not reg_ip:
+            continue
+        dt = _parse_user_created_at(u)
+        if not dt:
+            continue
+        b = int(dt.timestamp() // span_sec)
+        key = (reg_ip, b)
+        key_to_users.setdefault(key, []).append(u)
+    groups = []
+    for (reg_ip, b), accs in key_to_users.items():
+        if len(accs) < 2:
+            continue
+        groups.append({
+            "registration_ip": reg_ip,
+            "time_bucket": b,
+            "count": len(accs),
+            "accounts": accs,
+        })
+    groups.sort(key=lambda g: (-g["count"], g["registration_ip"]))
+    return groups
+
+
+def group_by_referral_same_ip(users: List[dict]) -> List[dict]:
+    """Living accounts with the same referred_by and same registration_ip (≥2 accounts)."""
+    key_to_users: Dict[Tuple[Any, str], List[dict]] = {}
+    for u in users:
+        ref = u.get("referred_by")
+        if not ref:
+            continue
+        reg_ip = (u.get("registration_ip") or "").strip()
+        if not reg_ip:
+            continue
+        key = (ref, reg_ip)
+        key_to_users.setdefault(key, []).append(u)
+    groups = []
+    for (ref_id, reg_ip), accs in key_to_users.items():
+        if len(accs) < 2:
+            continue
+        groups.append({
+            "referred_by": ref_id,
+            "registration_ip": reg_ip,
+            "count": len(accs),
+            "accounts": accs,
+        })
+    groups.sort(key=lambda g: -g["count"])
+    return groups
+
+
 def group_by_same_day_same_ip(users: List[dict]) -> List[dict]:
     """Group users by registration IP + created_at day."""
     same_day_ip_to_users: Dict[Tuple[str, str], List[dict]] = {}
@@ -144,26 +247,11 @@ def _ip_to_subnet(ip_str: str) -> Optional[str]:
         return None
 
 
-def group_by_same_subnet(users: List[dict], min_accounts: int = 2) -> List[dict]:
+def group_by_same_subnet(users: List[dict], min_accounts: int = 2, include_session_ips: bool = False) -> List[dict]:
     """Group users by /24 IPv4 subnet (e.g. 192.168.1.x). Lower risk than exact IP."""
-    def _all_ips(u: dict) -> List[str]:
-        reg = (u.get("registration_ip") or "").strip()
-        last_login = (u.get("last_login_ip") or "").strip()
-        last_req = (u.get("last_request_ip") or "").strip()
-        logins = [(x or "").strip() for x in (u.get("login_ips") or []) if (x or "").strip()]
-        ips = set()
-        if reg:
-            ips.add(reg)
-        if last_login:
-            ips.add(last_login)
-        if last_req:
-            ips.add(last_req)
-        ips.update(logins)
-        return list(ips)
-
     subnet_to_accounts: Dict[str, Dict[str, dict]] = {}  # subnet -> {user_id: summary}
     for u in users:
-        ips = _all_ips(u)
+        ips, _ = user_ip_union(u, include_session_ips=include_session_ips)
         uid = u.get("id")
         if not uid:
             continue
@@ -203,7 +291,9 @@ def compute_dupe_risk_score(
 ) -> int:
     """
     Compute risk score 0-100 for a dupe group.
-    group_type: "same_ip" | "same_subnet" | "same_ua" | "domain" | "similar_username" | "similar_email" | "same_day_ip"
+    group_type: same_ip, same_subnet, same_ua, domain, similar_username, similar_email, same_day_ip,
+    dead_ip_overlap, dead_fingerprint_overlap, suspicious_ip, registration_burst, referral_same_ip,
+    heavy_transfers, prereg_ip_cross, security_flag_user, password_reset_heavy.
     """
     base = 0
     if group_type == "same_ip":
@@ -220,6 +310,24 @@ def compute_dupe_risk_score(
         base = 40
     elif group_type == "similar_email":
         base = 50
+    elif group_type == "dead_ip_overlap":
+        base = 82
+    elif group_type == "dead_fingerprint_overlap":
+        base = 78
+    elif group_type == "suspicious_ip":
+        base = 62
+    elif group_type == "registration_burst":
+        base = 74
+    elif group_type == "referral_same_ip":
+        base = 72
+    elif group_type == "heavy_transfers":
+        base = 66
+    elif group_type == "prereg_ip_cross":
+        base = 56
+    elif group_type == "security_flag_user":
+        base = 42
+    elif group_type == "password_reset_heavy":
+        base = 36
     else:
         base = 30
 

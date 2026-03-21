@@ -26,6 +26,7 @@ from server import (
     _username_pattern,
     get_head_family_id_for_state,
     get_casino_caps,
+    _ownership_display_profit,
 )
 
 # ----- Constants -----
@@ -175,7 +176,7 @@ def register(router):
                 _, wealth_rank_name = get_wealth_rank(int((u.get("money") or 0) or 0))
                 # Public casino ownership view: expose owner username + wealth rank only, never raw user_id
                 owner = {"username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name}
-        profit = int((doc.get("profit") or 0) or 0)
+        profit = _ownership_display_profit(doc)
         active_offer = await db.dice_buy_back_offers.find_one(
             {"to_user_id": current_user.get("id") or ""},
             {"_id": 0, "id": 1, "points_offered": 1, "amount_shortfall": 1, "owner_paid": 1, "expires_at": 1}

@@ -22,6 +22,7 @@ from server import (
     log_gambling,
     get_head_family_id_for_state,
     get_casino_caps,
+    _ownership_display_profit,
 )
 
 # ----- Constants -----
@@ -371,7 +372,7 @@ def register(router):
             "can_enter": can_enter,
             "has_entered": has_entered,
             "entries_count": entries_count,
-            "profit": doc.get("profit") if is_owner and doc else None,
+            "profit": _ownership_display_profit(doc) if is_owner and doc else None,
         }
 
     @router.post("/casino/slots/enter")

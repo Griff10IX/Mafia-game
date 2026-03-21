@@ -2168,7 +2168,12 @@ export default function Admin() {
       setCheatDupeIntelligent(res.data);
       const ipGroups = res.data?.total_same_ip_groups ?? 0;
       const uaGroups = res.data?.total_same_ua_groups ?? 0;
-      toast.success(`Loaded: ${ipGroups} same-IP group(s), ${uaGroups} same-device group(s)` + (Object.keys(res.data?.ip_vpn || {}).length ? ', VPN flags checked' : ''));
+      const ad = res.data?.total_alive_dead_ip_groups ?? 0;
+      const susp = res.data?.total_suspicious_ip_correlations ?? 0;
+      toast.success(
+        `Loaded: ${ipGroups} same-IP, ${uaGroups} same-UA, ${ad} alive/dead IP, ${susp} suspicious-IP correlation(s)` +
+          (Object.keys(res.data?.ip_vpn || {}).length ? ', VPN checked' : '')
+      );
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
@@ -5507,6 +5512,11 @@ export default function Admin() {
             ((cheatDupeIntelligent?.total_same_ip_groups ?? 0) > 0 || (cheatDupeIntelligent?.total_same_ua_groups ?? 0) > 0 ||
              (cheatDupeIntelligent?.total_same_subnet_groups ?? 0) > 0 || (cheatDupeIntelligent?.total_same_fingerprint_groups ?? 0) > 0 ||
              (cheatDupeIntelligent?.total_proxy_users ?? 0) > 0 ||
+             (cheatDupeIntelligent?.total_alive_dead_ip_groups ?? 0) > 0 || (cheatDupeIntelligent?.total_suspicious_ip_correlations ?? 0) > 0 ||
+             (cheatDupeIntelligent?.total_registration_burst_groups ?? 0) > 0 || (cheatDupeIntelligent?.total_referral_same_ip_groups ?? 0) > 0 ||
+             (cheatDupeIntelligent?.total_heavy_transfer_pairs ?? 0) > 0 || (cheatDupeIntelligent?.total_prereg_ip_cross_accounts ?? 0) > 0 ||
+             (cheatDupeIntelligent?.total_alive_dead_fingerprint_groups ?? 0) > 0 || (cheatDupeIntelligent?.total_users_with_security_flags ?? 0) > 0 ||
+             (cheatDupeIntelligent?.total_password_reset_heavy_users ?? 0) > 0 ||
              (cheatSameIp?.total_groups ?? 0) > 0 || (cheatSameDeviceIps?.total_groups ?? 0) > 0 ||
              ((cheatDuplicates?.by_domain?.length ?? 0) + (cheatDuplicates?.by_similar_username?.length ?? 0) + (cheatDuplicates?.by_similar_email?.length ?? 0) + (cheatDuplicates?.by_same_day_same_ip?.length ?? 0) + (cheatDuplicates?.by_fuzzy_username?.length ?? 0)) > 0) && (
               <span className="text-[10px] font-heading text-amber-400">Review below</span>
@@ -5519,7 +5529,7 @@ export default function Admin() {
           <div className="p-3 space-y-4">
             <div>
               <div className="text-[10px] font-heading text-primary uppercase mb-2">Intelligent dupe check</div>
-              <p className="text-xs text-mutedForeground mb-2">One report: shared IPs (with full IP history + VPN/proxy check), same user-agent, email domain, similar usernames, same-day same-IP.</p>
+              <p className="text-xs text-mutedForeground mb-2">One report: shared IPs (full history + optional session IPs + VPN check), alive/dead IP overlap, suspicious-login hotspots, registration bursts, referral+IP, heavy transfers, plus domain/username/email signals.</p>
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <input
                   type="text"
@@ -5556,6 +5566,143 @@ export default function Admin() {
                                   <div className="w-full text-[9px] font-mono text-mutedForeground mt-0.5">IPs: {(a.all_ips || []).join(', ') || '—'}</div>
                                 </div>
                               ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {cheatDupeIntelligent.ip_union_includes_sessions && (
+                    <p className="text-[10px] text-mutedForeground font-heading">IP union includes recent JWT session IPs (same-IP / subnet / VPN / correlations).</p>
+                  )}
+                  {(cheatDupeIntelligent.alive_dead_ip_groups?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-red-400 uppercase mb-2">Alive + dead same IP ({cheatDupeIntelligent.total_alive_dead_ip_groups} group(s))</div>
+                      <div className="max-h-72 overflow-y-auto space-y-2">
+                        {(cheatDupeIntelligent.alive_dead_ip_groups || []).slice(0, 30).map((g, i) => (
+                          <div key={i} className="p-2 rounded bg-zinc-900/50 border border-red-500/25">
+                            <div className="text-[10px] font-heading text-red-400 mb-1 flex flex-wrap items-center gap-x-2">
+                              <span>IP: {g.ip}</span>
+                              <span>— {g.alive_count ?? (g.alive_accounts || []).length} alive · {g.dead_count ?? (g.dead_accounts || []).length} dead</span>
+                              {typeof g.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50">Score: {g.risk_score}</span>}
+                              <button type="button" onClick={() => handleBanIpQuick(g.ip)} className="ml-auto shrink-0 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded px-2 py-0.5 text-[9px] font-bold border border-red-500/40">Ban IP</button>
+                            </div>
+                            <div className="text-[9px] text-zinc-500 uppercase mb-0.5">Living</div>
+                            <div className="space-y-0.5 mb-2">
+                              {(g.alive_accounts || []).slice(0, 8).map((a, j) => (
+                                <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2">
+                                  <span className="font-bold">{a.username}</span>
+                                  <span className="text-mutedForeground">{a.email}</span>
+                                  {a.role_at_this_ip && <span className="text-zinc-500 text-[9px]">({a.role_at_this_ip})</span>}
+                                  <button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="text-[9px] text-zinc-500 uppercase mb-0.5">Dead</div>
+                            <div className="space-y-0.5">
+                              {(g.dead_accounts || []).slice(0, 8).map((d, j) => (
+                                <div key={j} className="text-[10px] pl-1 text-mutedForeground">
+                                  {d.username ?? d.id}{d.dead_at && <span className="text-zinc-500"> · {new Date(d.dead_at).toLocaleString()}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(cheatDupeIntelligent.suspicious_ip_correlations?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-amber-400 uppercase mb-2">Suspicious logins vs living IPs ({cheatDupeIntelligent.total_suspicious_ip_correlations} hotspot(s))</div>
+                      <div className="max-h-64 overflow-y-auto space-y-2">
+                        {(cheatDupeIntelligent.suspicious_ip_correlations || []).slice(0, 25).map((g, i) => (
+                          <div key={i} className="p-2 rounded bg-zinc-900/50 border border-amber-500/20">
+                            <div className="text-[10px] font-heading text-amber-400 mb-1 flex flex-wrap gap-x-2">
+                              <span>{g.ip}</span>
+                              <span>— {g.event_count} event(s)</span>
+                              {typeof g.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50">Score: {g.risk_score}</span>}
+                            </div>
+                            <div className="text-[9px] text-mutedForeground mb-1">
+                              {(g.sample_events || []).slice(0, 4).map((e, k) => (
+                                <span key={k} className="mr-2 inline-block">{e.reason}{e.login_input ? ` · ${e.login_input}` : ''}</span>
+                              ))}
+                            </div>
+                            <div className="space-y-0.5">
+                              {(g.correlated_alive_accounts || []).slice(0, 6).map((a, j) => (
+                                <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2">
+                                  <span className="font-bold">{a.username}</span>
+                                  <button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(cheatDupeIntelligent.registration_burst_groups?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-primary uppercase mb-2">Registration burst (same reg IP, tight window) ({cheatDupeIntelligent.total_registration_burst_groups} group(s))</div>
+                      <div className="max-h-56 overflow-y-auto space-y-2">
+                        {(cheatDupeIntelligent.registration_burst_groups || []).slice(0, 20).map((g, i) => (
+                          <div key={i} className="p-2 rounded bg-zinc-900/50 border border-zinc-700/30">
+                            <div className="text-[10px] text-amber-400 font-heading mb-0.5 flex flex-wrap gap-x-2">
+                              <span className="font-mono">{g.registration_ip}</span>
+                              <span>— {g.count} account(s)</span>
+                              {typeof g.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50">Score: {g.risk_score}</span>}
+                            </div>
+                            {(g.accounts || []).slice(0, 6).map((a, j) => (
+                              <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2">
+                                <span className="font-bold">{a.username}</span>
+                                <span className="text-mutedForeground">{a.created_at && new Date(a.created_at).toLocaleString()}</span>
+                                <button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(cheatDupeIntelligent.referral_same_ip_groups?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-primary uppercase mb-2">Same referrer + same registration IP ({cheatDupeIntelligent.total_referral_same_ip_groups} group(s))</div>
+                      <div className="max-h-56 overflow-y-auto space-y-2">
+                        {(cheatDupeIntelligent.referral_same_ip_groups || []).slice(0, 20).map((g, i) => (
+                          <div key={i} className="p-2 rounded bg-zinc-900/50 border border-zinc-700/30">
+                            <div className="text-[10px] text-amber-400 font-heading mb-0.5 flex flex-wrap gap-x-2">
+                              <span>Referrer: {g.referred_by_username || g.referred_by || '—'}</span>
+                              <span className="font-mono">{g.registration_ip}</span>
+                              <span>— {g.count} account(s)</span>
+                              {typeof g.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50">Score: {g.risk_score}</span>}
+                            </div>
+                            {(g.accounts || []).slice(0, 6).map((a, j) => (
+                              <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2">
+                                <span className="font-bold">{a.username}</span>
+                                <button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(cheatDupeIntelligent.heavy_transfer_pairs?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-primary uppercase mb-2">Heavy money transfers (recent) ({cheatDupeIntelligent.total_heavy_transfer_pairs} pair(s))</div>
+                      <div className="max-h-56 overflow-y-auto space-y-2">
+                        {(cheatDupeIntelligent.heavy_transfer_pairs || []).slice(0, 25).map((g, i) => (
+                          <div key={i} className="p-2 rounded bg-zinc-900/50 border border-zinc-700/30">
+                            <div className="text-[10px] text-amber-400 font-heading mb-0.5 flex flex-wrap gap-x-2">
+                              <span>{g.from_username || g.from_user_id} → {g.to_username || g.to_user_id}</span>
+                              <span>— {g.transfer_count} transfer(s)</span>
+                              {typeof g.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50">Score: {g.risk_score}</span>}
+                            </div>
+                            <div className="text-[9px] font-mono text-mutedForeground">
+                              Shared IPs ({g.shared_ip_count ?? (g.shared_ips || []).length}): {(g.shared_ips || []).join(', ') || '—'}
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {g.from_username && <button type="button" onClick={() => handleViewUserFromCheat(g.from_username)} className="bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View sender</button>}
+                              {g.to_username && <button type="button" onClick={() => handleViewUserFromCheat(g.to_username)} className="bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View recipient</button>}
                             </div>
                           </div>
                         ))}
@@ -5645,6 +5792,85 @@ export default function Admin() {
                       </div>
                     </div>
                   )}
+                  {(cheatDupeIntelligent.prereg_ip_cross_accounts?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-primary uppercase mb-2">Prereg IP overlaps another account ({cheatDupeIntelligent.total_prereg_ip_cross_accounts} row(s))</div>
+                      <div className="max-h-48 overflow-y-auto space-y-1.5">
+                        {(cheatDupeIntelligent.prereg_ip_cross_accounts || []).slice(0, 25).map((r, i) => (
+                          <div key={i} className="p-2 rounded bg-zinc-900/50 border border-zinc-700/30 text-[10px] font-heading flex flex-wrap items-center gap-x-2">
+                            <span className="font-bold">{r.username}</span>
+                            <span className="text-mutedForeground font-mono">{r.prereg_ip}</span>
+                            <span className="text-zinc-500 text-[9px]">others: {(r.other_user_ids || []).length}</span>
+                            {typeof r.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50">Score: {r.risk_score}</span>}
+                            <button type="button" onClick={() => handleViewUserFromCheat(r.username)} className="ml-auto shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(cheatDupeIntelligent.alive_dead_fingerprint_groups?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-red-400 uppercase mb-2">Alive + dead same fingerprint ({cheatDupeIntelligent.total_alive_dead_fingerprint_groups} group(s))</div>
+                      <div className="max-h-56 overflow-y-auto space-y-2">
+                        {(cheatDupeIntelligent.alive_dead_fingerprint_groups || []).slice(0, 15).map((g, i) => (
+                          <div key={i} className="p-2 rounded bg-zinc-900/50 border border-red-500/20">
+                            <div className="text-[10px] text-amber-400 font-heading mb-0.5 flex flex-wrap gap-x-2">
+                              <span className="font-mono truncate max-w-[200px]" title={g.device_fingerprint}>{g.device_fingerprint}</span>
+                              {typeof g.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50">Score: {g.risk_score}</span>}
+                            </div>
+                            <div className="text-[9px] text-zinc-500 mb-0.5">Living</div>
+                            {(g.alive_accounts || []).slice(0, 4).map((a, j) => (
+                              <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2">
+                                <span className="font-bold">{a.username}</span>
+                                <button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>
+                              </div>
+                            ))}
+                            <div className="text-[9px] text-zinc-500 mt-1 mb-0.5">Dead</div>
+                            {(g.dead_accounts || []).slice(0, 4).map((d, j) => (
+                              <div key={j} className="text-[10px] pl-1 text-mutedForeground">{d.username ?? d.id}</div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(cheatDupeIntelligent.users_with_security_flags?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-orange-400 uppercase mb-2">Security flags (batch users, recent) ({cheatDupeIntelligent.total_users_with_security_flags})</div>
+                      <div className="max-h-48 overflow-y-auto space-y-1.5">
+                        {(cheatDupeIntelligent.users_with_security_flags || []).slice(0, 30).map((r, i) => (
+                          <div key={i} className="p-2 rounded bg-orange-500/10 border border-orange-500/25 text-[10px]">
+                            <div className="font-heading flex flex-wrap items-center gap-x-2 mb-0.5">
+                              <span className="font-bold">{r.username}</span>
+                              <span className="text-mutedForeground">{r.flag_count} flag(s)</span>
+                              {typeof r.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50">Score: {r.risk_score}</span>}
+                              {r.username && <button type="button" onClick={() => handleViewUserFromCheat(r.username)} className="ml-auto shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>}
+                            </div>
+                            <div className="text-[9px] text-mutedForeground space-y-0.5">
+                              {(r.flags || []).slice(0, 4).map((f, k) => (
+                                <div key={k}>{f.flag_type}: {f.reason}</div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(cheatDupeIntelligent.password_reset_heavy_users?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-primary uppercase mb-2">Frequent password resets (batch, recent) ({cheatDupeIntelligent.total_password_reset_heavy_users})</div>
+                      <div className="max-h-40 overflow-y-auto space-y-1">
+                        {(cheatDupeIntelligent.password_reset_heavy_users || []).slice(0, 25).map((r, i) => (
+                          <div key={i} className="p-2 rounded bg-zinc-900/50 border border-zinc-700/30 text-[10px] font-heading flex flex-wrap items-center gap-x-2">
+                            <span className="font-bold">{r.username}</span>
+                            <span className="text-mutedForeground">{r.reset_count} request(s)</span>
+                            {typeof r.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50">Score: {r.risk_score}</span>}
+                            {r.username && <button type="button" onClick={() => handleViewUserFromCheat(r.username)} className="ml-auto shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {(cheatDupeIntelligent.by_domain?.length ?? 0) > 0 && (
                       <div>
@@ -5712,7 +5938,7 @@ export default function Admin() {
                       </div>
                     )}
                   </div>
-                  {!(cheatDupeIntelligent.same_ip_groups?.length || cheatDupeIntelligent.same_user_agent_groups?.length || cheatDupeIntelligent.same_subnet_groups?.length || cheatDupeIntelligent.same_fingerprint_groups?.length || cheatDupeIntelligent.proxy_users?.length || cheatDupeIntelligent.by_domain?.length || cheatDupeIntelligent.by_similar_username?.length || cheatDupeIntelligent.by_similar_email?.length || cheatDupeIntelligent.by_same_day_same_ip?.length || cheatDupeIntelligent.by_fuzzy_username?.length) && (
+                  {!(cheatDupeIntelligent.same_ip_groups?.length || cheatDupeIntelligent.same_user_agent_groups?.length || cheatDupeIntelligent.same_subnet_groups?.length || cheatDupeIntelligent.same_fingerprint_groups?.length || cheatDupeIntelligent.proxy_users?.length || cheatDupeIntelligent.alive_dead_ip_groups?.length || cheatDupeIntelligent.suspicious_ip_correlations?.length || cheatDupeIntelligent.registration_burst_groups?.length || cheatDupeIntelligent.referral_same_ip_groups?.length || cheatDupeIntelligent.heavy_transfer_pairs?.length || cheatDupeIntelligent.prereg_ip_cross_accounts?.length || cheatDupeIntelligent.alive_dead_fingerprint_groups?.length || cheatDupeIntelligent.users_with_security_flags?.length || cheatDupeIntelligent.password_reset_heavy_users?.length || cheatDupeIntelligent.by_domain?.length || cheatDupeIntelligent.by_similar_username?.length || cheatDupeIntelligent.by_similar_email?.length || cheatDupeIntelligent.by_same_day_same_ip?.length || cheatDupeIntelligent.by_fuzzy_username?.length) && (
                     <p className="text-xs text-mutedForeground">No duplicate suspects in this report (try without username filter).</p>
                   )}
                 </div>
