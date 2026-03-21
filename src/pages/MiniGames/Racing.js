@@ -606,8 +606,8 @@ export default function Racing() {
 
     const t = setTimeout(async () => {
       const decision = myDecision;
-      // Dedupe per open strategy window — NOT per lap number. Clearing on lap change forced a re-POST
-      // every poll tick and each POST advances the race (submit_race_decision → _maybe_advance_interactive_lap).
+      // Dedupe per open strategy window (deadline ISO changes each lap). POST only stores decisions;
+      // lap resolution runs on GET /live when the deadline passes.
       const key = JSON.stringify({
         deadline: liveRace.lap_deadline || null,
         push_level: decision.push_level,

@@ -4041,7 +4041,9 @@ async def submit_race_decision(
         {"$set": {f"decisions.{entrant_id}": decision}},
     )
 
-    await _maybe_advance_interactive_lap(race_id)
+    # Do not advance here: the client auto-sync POSTs once per lap window when the deadline string
+    # changes; calling _maybe_advance_interactive_lap on every POST chained 3 advances in ~3s (one per
+    # poll). Resolution runs from GET /live (deadline or all humans submitted).
     return {"message": "Decision submitted", "decision": decision}
 
 
@@ -4074,7 +4076,6 @@ async def signal_interactive_green_flag(
         raise HTTPException(status_code=403, detail="You are not a participant in this race")
 
     opened = await _open_interactive_lap1_decision_window(race_id)
-    await _maybe_advance_interactive_lap(race_id)
     race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
     return {"opened": bool(opened), "reason": "armed" if opened else "already_armed", "race": race}
 
@@ -4112,6 +4113,8 @@ async def get_race_live(
     tl_live = int(race.get("total_laps") or race.get("laps") or 3)
     if race.get("state") == "running":
         await _maybe_auto_green_interactive(race_id)
+        # Only advance on wall-clock deadline here. Advancing when "all submitted" on each poll still
+        # stepped laps ~once per second with auto-sync POST + 1s polling (see debug-a98925 NDJSON).
         await _maybe_advance_interactive_lap(race_id, deadline_only=True)
         race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
     cl_after = int((race or {}).get("current_lap") or 0)
