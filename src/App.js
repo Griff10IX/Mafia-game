@@ -78,6 +78,7 @@ const Snake = lazy(() => import("./pages/MiniGames/Snake"));
 const TheGetaway = lazy(() => import("./pages/MiniGames/TheGetaway"));
 const FamilyRun = lazy(() => import("./pages/MiniGames/FamilyRun"));
 const WhackACopper = lazy(() => import("./pages/MiniGames/WhackACopper"));
+const Famiglia = lazy(() => import("./pages/MiniGames/Famiglia"));
 
 // Money pages
 const Bank = lazy(() => import("./pages/Money/Bank"));
@@ -951,6 +952,18 @@ function App() {
             }
           />
           <Route
+            path="/casino/mini-games/famiglia"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Famiglia />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
             path="/casino/mini-games/minesweeper"
             element={
               isAuthenticated ? (
@@ -1051,6 +1064,7 @@ function App() {
           <Route path="/battleships" element={<Navigate to="/casino/mini-games/battleships" replace />} />
           <Route path="/the-getaway" element={<Navigate to="/casino/mini-games/the-getaway" replace />} />
           <Route path="/family-run" element={<Navigate to="/casino/mini-games/family-run" replace />} />
+          <Route path="/famiglia" element={<Navigate to="/casino/mini-games/famiglia" replace />} />
           <Route path="/minesweeper" element={<Navigate to="/casino/mini-games/minesweeper" replace />} />
           <Route path="/flappygangster" element={<Navigate to="/casino/mini-games/flappy" replace />} />
           <Route path="/gauntlet" element={<Navigate to="/casino/mini-games/flappy" replace />} />

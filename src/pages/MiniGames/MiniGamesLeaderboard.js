@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Trophy, Medal, Award, RefreshCw, Gamepad2, Clock, Gift, DollarSign, Heart, Package, Crosshair, Bomb, Ship, Car, PersonStanding, Shield } from 'lucide-react';
+import { Trophy, Medal, Award, RefreshCw, Gamepad2, Clock, Gift, DollarSign, Heart, Package, Crosshair, Bomb, Ship, Car, PersonStanding, Shield, Landmark } from 'lucide-react';
 import api from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -27,6 +27,7 @@ const GAME_ICONS = {
   the_getaway: Car,
   family_run: PersonStanding,
   whack_a_copper: Shield,
+  mafia_rpg: Landmark,
 };
 
 const GAME_LABELS = {
@@ -38,6 +39,7 @@ const GAME_LABELS = {
   the_getaway: 'The Getaway',
   family_run: 'Family Run',
   whack_a_copper: 'Whack-A-Copper',
+  mafia_rpg: 'Famiglia',
 };
 
 function formatTimeUntil(isoDate) {
@@ -408,6 +410,13 @@ export default function MiniGamesLeaderboard() {
           >
             <PersonStanding size={12} className="text-primary" />
             Family Run
+          </Link>
+          <Link
+            to="/casino/mini-games/famiglia"
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20 hover:border-primary/40`}
+          >
+            <Landmark size={12} className="text-primary" />
+            Famiglia
           </Link>
         </div>
       </section>
