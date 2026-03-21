@@ -213,9 +213,7 @@ export default function Racing() {
   const [myDriver, setMyDriver] = useState(null);
   const [driverLoading, setDriverLoading] = useState(false);
   const [liveRace, setLiveRace] = useState(null);
-  /** Leader completed laps from canvas SF crossings; null = not yet reported (show server lap). */
-  const [interactiveLeaderLap, setInteractiveLeaderLap] = useState(null);
-  /** Fractional race distance from canvas (matches CircuitRaceView race bar). */
+  /** Fractional race distance from canvas (within-lap motion); lap number comes from server liveRace. */
   const [interactiveRaceProg, setInteractiveRaceProg] = useState(null);
   /** Canvas session phase for interactive-live (qualifying → countdown → racing → done). */
   const [interactiveCanvasPhase, setInteractiveCanvasPhase] = useState(null);
@@ -591,6 +589,8 @@ export default function Racing() {
   useEffect(() => {
     lastSentDecisionKey.current = null;
     prevLiveLapRef.current = undefined;
+    setInteractiveRaceProg(null);
+    setInteractiveCanvasPhase(null);
   }, [activeRace?.id]);
 
   useEffect(() => {
@@ -972,12 +972,13 @@ export default function Racing() {
         const _fromSrv = _preGreen
           ? null
           : Math.min(_serverLap + 1, _totLapsHud);
-        const _dispLap = interactiveLeaderLap != null
-          ? Math.min(interactiveLeaderLap, _totLapsHud)
-          : (_fromSrv ?? 1);
-        const _lapProg = interactiveRaceProg != null && _totLapsHud > 0
-          ? interactiveRaceProg
-          : (_totLapsHud > 0 ? Math.min(1, (liveRace.current_lap || 0) / _totLapsHud) : 0);
+        // Lap display must follow server current_lap (completed laps 0…N); canvas orbit is not authoritative.
+        const _dispLap = _fromSrv ?? 1;
+        const _serverProg = _totLapsHud > 0 ? Math.min(1, (_serverLap || 0) / _totLapsHud) : 0;
+        const _lapProg =
+          interactiveRaceProg != null && _totLapsHud > 0
+            ? Math.min(1, Math.max(_serverProg, interactiveRaceProg))
+            : _serverProg;
         const _mergedQo = liveRace.qualifying_order?.length
           ? liveRace.qualifying_order
           : (activeRace.qualifying_order || []);
@@ -1058,8 +1059,7 @@ export default function Racing() {
                 toast.error(apiDetail(e));
               }
             }}
-            onVisualLapChange={(completed, _tot, prog01) => {
-              setInteractiveLeaderLap(completed);
+            onVisualLapChange={(_completed, _tot, prog01) => {
               if (prog01 != null) setInteractiveRaceProg(prog01);
             }}
           />
