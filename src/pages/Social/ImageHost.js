@@ -164,8 +164,13 @@ export default function ImageHost() {
                 key={img.public_id}
                 className={`${styles.panel} rounded-md border border-primary/20 overflow-hidden mobile-panel`}
               >
-                <div className="aspect-video bg-zinc-950/90 flex items-center justify-center">
-                  <img src={src} alt="" className="max-w-full max-h-full object-contain" />
+                <div className="bg-zinc-950/90 flex items-center justify-center p-2 min-h-[120px] max-h-[min(42vh,360px)]">
+                  <img
+                    src={src}
+                    alt=""
+                    className="max-w-full max-h-[min(42vh,360px)] w-auto h-auto object-contain"
+                    loading="lazy"
+                  />
                 </div>
                 <div className="p-3 space-y-2 border-t border-primary/10">
                   <p className="text-[9px] font-mono text-mutedForeground break-all line-clamp-2">{src}</p>

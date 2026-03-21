@@ -37,8 +37,9 @@ body {
   font-family: var(--font-body), 'Inter', sans-serif;
   font-weight: var(--app-font-weight, 400);
   font-style: var(--app-font-style, normal);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* Default engine smoothing: subpixel/ClearType on Windows reads sharper than forced grayscale antialiasing */
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
   background-color: #1a1a1a;
   color: #f5f5f5;
   overflow-x: hidden;
