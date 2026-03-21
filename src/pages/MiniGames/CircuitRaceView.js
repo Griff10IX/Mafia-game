@@ -2430,6 +2430,7 @@ export default function CircuitRaceView({
     };
 
     const loop = (now) => {
+      try {
       if (pausedRef.current) { lastFrame = now; rafRef.current = requestAnimationFrame(loop); return; }
       let dt = (now - lastFrame) / 1000;
       if (firstFrame) { firstFrame = false; dt = 0; }
@@ -2735,6 +2736,7 @@ export default function CircuitRaceView({
 
       drawCanvas(trk, cond, r, nowSec);
       rafRef.current = requestAnimationFrame(loop);
+      } catch (err) { console.error("Interactive-live race loop error", err); rafRef.current = requestAnimationFrame(loop); }
     };
 
     rafRef.current = requestAnimationFrame(loop);
