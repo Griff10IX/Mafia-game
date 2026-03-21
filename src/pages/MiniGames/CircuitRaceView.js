@@ -8,6 +8,9 @@ import {
 import { formatRaceEventMessage } from "./racing/raceEvents";
 import { sectorSpeedVisualMult } from "./racing/trackSectors";
 
+/** Seconds clock; set at the start of each `drawCanvas` pass for crowd / pit ambience animation */
+let _drawPassNowSec = 0;
+
 function drawPitAtmosphere(ctx, sx, sy, track, W, H) {
   const pe = track.pitEntry ?? 0.55, pitEx = track.pitExit ?? 0.65;
   const mid = (pe + pitEx) / 2;
@@ -18,36 +21,45 @@ function drawPitAtmosphere(ctx, sx, sy, track, W, H) {
   const pitOffPx = Math.cos(ang + Math.PI / 2) * (track.pitOffset ?? 24) * side;
   const pitCy = p0.y + pitOffPx * Math.sin(ang) * 0.15, pitCx = p0.x + pitOffPx;
   const gx = sx(pitCx), gy = sy(pitCy);
+  const t = _drawPassNowSec;
   ctx.save();
   ctx.translate(gx, gy);
   ctx.rotate(ang);
   const boxW = Math.min(120, W * 0.14), boxH = 22;
-  ctx.fillStyle = "rgba(35,40,48,0.92)";
-  ctx.strokeStyle = "rgba(201,164,96,0.35)";
-  ctx.lineWidth = 1;
+  ctx.fillStyle = "rgba(28,32,40,0.96)";
+  ctx.strokeStyle = "rgba(201,164,96,0.55)";
+  ctx.lineWidth = 1.2;
   for (let i = 0; i < 5; i++) {
     ctx.fillRect(-boxW / 2 + i * (boxW / 4.5), -boxH / 2, boxW / 5.2, boxH);
     ctx.strokeRect(-boxW / 2 + i * (boxW / 4.5), -boxH / 2, boxW / 5.2, boxH);
   }
-  ctx.fillStyle = "rgba(180,190,205,0.9)";
+  // Pit crew / officials along the garage front
   for (let i = 0; i < 8; i++) {
-    const cx = -boxW * 0.42 + i * 12, cy = boxH * 0.55;
+    const cx = -boxW * 0.42 + i * 12;
+    const cy = boxH * 0.55;
+    const bob = Math.sin(t * 2.4 + i * 0.7) * 0.6;
+    ctx.fillStyle = "rgba(215,210,218,0.98)";
     ctx.beginPath();
-    ctx.arc(cx, cy, 3.2, 0, Math.PI * 2);
+    ctx.arc(cx, cy + bob, 3.6, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillRect(cx - 2, cy + 2, 4, 7);
+    ctx.fillStyle = i % 3 === 0 ? "rgba(55,62,88,0.96)" : "rgba(42,48,64,0.96)";
+    ctx.fillRect(cx - 2.8, cy + 2 + bob, 5.6, 8);
+    ctx.fillStyle = "rgba(201,164,96,0.5)";
+    ctx.fillRect(cx - 2.2, cy + 5 + bob, 4.4, 1.8);
   }
   ctx.restore();
   const grad = ctx.createLinearGradient(0, H * 0.15, 0, H * 0.42);
   grad.addColorStop(0, "rgba(60,55,70,0)");
-  grad.addColorStop(0.5, "rgba(45,42,58,0.22)");
-  grad.addColorStop(1, "rgba(35,32,48,0.35)");
+  grad.addColorStop(0.5, "rgba(45,42,58,0.38)");
+  grad.addColorStop(1, "rgba(35,32,48,0.52)");
   ctx.fillStyle = grad;
   ctx.fillRect(W * 0.02, H * 0.12, W * 0.22, H * 0.32);
   for (let i = 0; i < 28; i++) {
-    const rx = W * 0.03 + (i % 7) * (W * 0.028), ry = H * 0.14 + Math.floor(i / 7) * 9;
-    ctx.fillStyle = `rgba(${140 + (i * 3) % 40},${130 + (i * 5) % 35},${160 + (i * 7) % 30},${0.12 + (i % 5) * 0.02})`;
-    ctx.fillRect(rx, ry, 4, 7);
+    const rx = W * 0.03 + (i % 7) * (W * 0.028);
+    const ry = H * 0.14 + Math.floor(i / 7) * 9;
+    const sway = Math.sin(t * 1.8 + i * 0.35) * 1.1;
+    ctx.fillStyle = `rgba(${120 + (i * 3) % 50},${105 + (i * 5) % 45},${145 + (i * 7) % 40},${0.38 + (i % 5) * 0.05})`;
+    ctx.fillRect(rx + sway, ry, 4.5, 7.5);
   }
 }
 
@@ -330,12 +342,41 @@ const GP_TARGA       = t => catmull(TARGA_PTS, t);
 // ─── SCENE DRAWING HELPERS ─────────────────────────────────────────────────
 
 function drawGrandstand(ctx, sx, sy, x, y, w, h, rows) {
-  ctx.save(); ctx.globalAlpha = 0.18; ctx.fillStyle = "#6a6050";
-  ctx.fillRect(sx(x), sy(y), sx(x+w)-sx(x), sy(y+h)-sy(y));
-  ctx.globalAlpha = 0.12; ctx.strokeStyle = "#a09070"; ctx.lineWidth = 0.6;
+  const animT = _drawPassNowSec;
+  const x0 = sx(x), y0 = sy(y), x1 = sx(x + w), y1 = sy(y + h);
+  const rw = x1 - x0, rh = y1 - y0;
+  ctx.save();
+  ctx.globalAlpha = 0.48;
+  ctx.fillStyle = "#4a433c";
+  ctx.fillRect(x0, y0, rw, rh);
+  ctx.globalAlpha = 0.32;
+  ctx.strokeStyle = "#b8a890";
+  ctx.lineWidth = 0.85;
   for (let r = 0; r < rows; r++) {
-    const ry = y + (h/rows)*r;
-    ctx.beginPath(); ctx.moveTo(sx(x), sy(ry)); ctx.lineTo(sx(x+w), sy(ry)); ctx.stroke();
+    const ry = y + (h / rows) * r;
+    ctx.beginPath();
+    ctx.moveTo(sx(x), sy(ry));
+    ctx.lineTo(sx(x + w), sy(ry));
+    ctx.stroke();
+  }
+  const stepX = Math.max(5, w / 24);
+  const maxCols = Math.min(40, Math.ceil(w / stepX));
+  for (let r = 0; r < rows; r++) {
+    const bandTop = y + (h / rows) * r + 1.5;
+    const bandH = Math.max(4, h / rows - 3);
+    for (let sub = 0; sub < 2; sub++) {
+      const yy = bandTop + bandH * (0.28 + sub * 0.42);
+      for (let c = 0; c < maxCols; c++) {
+        const cx = x + 5 + (c / Math.max(1, maxCols - 1)) * (w - 10);
+        const wave = Math.sin(animT * 2.1 + cx * 0.055 + r * 1.1 + sub * 0.8) * 1.4;
+        const lum = 42 + ((c + r * 3 + sub * 5) % 18);
+        ctx.fillStyle = `rgba(${200 - lum},${175 - lum},${160 - lum * 0.5},0.78)`;
+        ctx.globalAlpha = 0.62;
+        ctx.beginPath();
+        ctx.arc(sx(cx + wave), sy(yy), 2.25, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
   ctx.restore();
 }
@@ -910,6 +951,60 @@ function getPitLanePoint(track, frac) {
   return { x: pp.x + Math.cos(ang)*blend*off*side, y: pp.y + Math.sin(ang)*blend*off*side };
 }
 
+/** Mechanics + jack beside a car during a pit stop (screen px / rad) */
+function drawPitCrewAroundCar(ctx, px, py, angleRad, nowSec, teamHexColor) {
+  const perp = angleRad + Math.PI / 2;
+  const busy = Math.sin(nowSec * 9);
+  const col = typeof teamHexColor === "string" && teamHexColor.startsWith("#") ? teamHexColor : "#6688aa";
+
+  const jackAlong = -12;
+  const jackPerp = -20;
+  const jx = px + Math.cos(angleRad) * jackAlong + Math.cos(perp) * jackPerp;
+  const jy = py + Math.sin(angleRad) * jackAlong + Math.sin(perp) * jackPerp;
+  ctx.save();
+  ctx.translate(jx, jy);
+  ctx.rotate(angleRad);
+  ctx.fillStyle = "rgba(48,50,58,0.95)";
+  ctx.beginPath();
+  ctx.moveTo(0, -11);
+  ctx.lineTo(-5, 7);
+  ctx.lineTo(5, 7);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(201,164,96,0.5)";
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+  ctx.restore();
+
+  const mechanics = [
+    { al: 5, pr: -17 },
+    { al: -3, pr: 19 },
+    { al: -14, pr: 12 },
+  ];
+  mechanics.forEach((sp, idx) => {
+    const bob = Math.sin(nowSec * 2.8 + idx * 1.4) * 1.2;
+    const cx = px + Math.cos(angleRad) * sp.al + Math.cos(perp) * sp.pr;
+    const cy = py + Math.sin(angleRad) * sp.al + Math.sin(perp) * sp.pr + bob;
+    ctx.fillStyle = "rgba(218,208,214,0.96)";
+    ctx.beginPath();
+    ctx.arc(cx, cy - 6, 3.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(38,44,62,0.96)";
+    ctx.fillRect(cx - 2.8, cy - 2, 5.6, 9);
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = col;
+    ctx.fillRect(cx - 2.4, cy + 1, 4.8, 3);
+    ctx.globalAlpha = 1;
+  });
+
+  const gunX = px + Math.cos(angleRad) * -8 + Math.cos(perp) * 17;
+  const gunY = py + Math.sin(angleRad) * -8 + Math.sin(perp) * 17;
+  ctx.fillStyle = `rgba(255,210,120,${0.35 + Math.abs(busy) * 0.25})`;
+  ctx.beginPath();
+  ctx.arc(gunX, gunY, 3.5 + Math.abs(busy) * 2.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 // ─── SKID MARKS ────────────────────────────────────────────────────────────
 
 class SkidMarks {
@@ -1136,6 +1231,7 @@ export default function CircuitRaceView({
   const drawCanvas = useCallback((track, cond, racerArr, nowSec = 0) => {
     const canvas = canvasRef.current; if (!canvas) return;
     const ctx = canvas.getContext("2d");
+    _drawPassNowSec = nowSec;
     const { sx, sy, W, H } = getScale();
     const wd = WEATHER_DEFS[cond] || WEATHER_DEFS.clear;
 
@@ -1680,6 +1776,10 @@ export default function CircuitRaceView({
         ctx.beginPath(); ctx.arc(-12,-3,2.5,0,Math.PI*2); ctx.fill();
         ctx.beginPath(); ctx.arc(-12,3,2.5,0,Math.PI*2);  ctx.fill();
         ctx.restore();
+      }
+
+      if (r.inPit && !r.dnf) {
+        drawPitCrewAroundCar(ctx, px, py, angle, nowSec, r.color);
       }
 
       // Car body — detailed F1 top-down
