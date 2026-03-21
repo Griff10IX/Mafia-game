@@ -233,6 +233,7 @@ export default function Racing() {
   const [isAdmin, setIsAdmin] = useState(false);
   const liveRacePoll = useRef(null);
   const refreshTimer = useRef(null);
+  const interactiveDoneLiveFetchedRef = useRef(false);
 
   const applyProfile = useCallback((d) => {
     const p = {
@@ -589,6 +590,7 @@ export default function Racing() {
   useEffect(() => {
     lastSentDecisionKey.current = null;
     prevLiveLapRef.current = undefined;
+    interactiveDoneLiveFetchedRef.current = false;
     setInteractiveRaceProg(null);
     setInteractiveCanvasPhase(null);
   }, [activeRace?.id]);
@@ -643,11 +645,24 @@ export default function Racing() {
     activeRace?.laps,
   ]);
 
+  /** Canvas hit checkered before interval poll; refresh live + race doc so header leaves LAP N/N. */
   useEffect(() => {
-    setInteractiveLeaderLap(null);
-    setInteractiveRaceProg(null);
-    setInteractiveCanvasPhase(null);
-  }, [activeRace?.id]);
+    if (interactiveCanvasPhase !== "done" || !activeRace?.id) return;
+    if (interactiveDoneLiveFetchedRef.current) return;
+    interactiveDoneLiveFetchedRef.current = true;
+    (async () => {
+      try {
+        const { data } = await api.get(`/racing/races/${activeRace.id}/live`);
+        setLiveRace(data);
+        if (data.status === "completed" || data.status === "finished") {
+          try {
+            const r = await api.get(`/racing/races/${activeRace.id}`);
+            if (r.data?.race) setActiveRace(r.data.race);
+          } catch {}
+        }
+      } catch {}
+    })();
+  }, [interactiveCanvasPhase, activeRace?.id]);
 
   const onInteractiveSessionPhase = useCallback((phase) => {
     setInteractiveCanvasPhase(phase);
@@ -975,10 +990,18 @@ export default function Racing() {
         // Lap display must follow server current_lap (completed laps 0…N); canvas orbit is not authoritative.
         const _dispLap = _fromSrv ?? 1;
         const _serverProg = _totLapsHud > 0 ? Math.min(1, (_serverLap || 0) / _totLapsHud) : 0;
+        const _inQualOrGrid =
+          interactiveCanvasPhase === "qualifying"
+          || interactiveCanvasPhase === "countdown"
+          || (_preGreen && interactiveCanvasPhase !== "racing");
         const _lapProg =
-          interactiveRaceProg != null && _totLapsHud > 0
-            ? Math.min(1, Math.max(_serverProg, interactiveRaceProg))
-            : _serverProg;
+          interactiveCanvasPhase === "done" || liveRace.status === "completed"
+            ? 1
+            : _inQualOrGrid
+              ? 0
+              : interactiveRaceProg != null && _totLapsHud > 0
+                ? Math.min(1, Math.max(_serverProg, interactiveRaceProg))
+                : _serverProg;
         const _mergedQo = liveRace.qualifying_order?.length
           ? liveRace.qualifying_order
           : (activeRace.qualifying_order || []);
@@ -988,15 +1011,15 @@ export default function Racing() {
         if (interactiveCanvasPhase === "countdown") {
           _sessionTitle = <>Grid <span className="text-[var(--noir-muted)] font-normal">·</span> lights</>;
         } else if (interactiveCanvasPhase === "qualifying") {
-          _sessionTitle = "Qualifying";
+          _sessionTitle = <>Qualifying <span className="text-[var(--noir-muted)] font-normal text-[9px]">· not a race lap</span></>;
         } else if (interactiveCanvasPhase === "racing") {
-          _sessionTitle = `LAP ${_dispLap}/${_totLapsHud}`;
+          _sessionTitle = `Race lap ${_dispLap} / ${_totLapsHud}`;
         } else if (interactiveCanvasPhase === "done") {
-          _sessionTitle = "Finished";
+          _sessionTitle = "Checkered — results";
         } else if (_preGreen) {
           _sessionTitle = <>Formation <span className="text-[var(--noir-muted)] font-normal">·</span> Q</>;
         } else {
-          _sessionTitle = `LAP ${_dispLap}/${_totLapsHud}`;
+          _sessionTitle = `Race lap ${_dispLap} / ${_totLapsHud}`;
         }
         return (
         <div className="px-4 py-3 md:px-3 md:py-3 space-y-3">

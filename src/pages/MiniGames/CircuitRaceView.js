@@ -2847,16 +2847,8 @@ export default function CircuitRaceView({
         }
 
         if (racer.finished && !racer.dnf) {
-          const coastDur = 2.5;
-          const t0 = racer.finishedAtSec != null ? racer.finishedAtSec : nowSec;
-          const coastAge = nowSec - t0;
-          if (coastAge < coastDur) {
-            const coastSpeed = Math.max(0, 1 - coastAge / coastDur) * 0.22;
-            racer.trackPos = (racer.trackPos + coastSpeed * dt + 1) % 1;
-            racer.currentSpeedMph = Math.max(0, racer.currentSpeedMph != null ? racer.currentSpeedMph * 0.97 : 40);
-          } else {
-            racer.currentSpeedMph = 0;
-          }
+          // Interactive-live: no post-checkered coast — cars stop so the session reads as finished, not crawling at ~1 mph.
+          racer.currentSpeedMph = 0;
           return;
         }
 
@@ -3102,7 +3094,7 @@ export default function CircuitRaceView({
       if (totLaps <= 1) lapDisp1 = totLaps;
       else if (curLap >= totLaps) lapDisp1 = totLaps;
       else lapDisp1 = Math.min(visHud, srvHud);
-      setLapDisp(totLaps === 1 ? 'Qualifying' : `${lapDisp1} / ${totLaps}`);
+      setLapDisp(totLaps === 1 ? 'Qualifying' : `Race ${lapDisp1} / ${totLaps}`);
       let mxFrac = 0;
       r.forEach(x => {
         if (!x.dnf) mxFrac = Math.max(mxFrac, ((x.totalLapsDone ?? 0) + (x.trackPos ?? 0)) / totLaps);
