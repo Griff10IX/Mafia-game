@@ -259,6 +259,9 @@
   overflow: hidden;
   cursor: pointer;
   clip-path: ellipse(50% 45% at 50% 55%);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .holeClipHit { animation: hit-flash 0.4s ease-out; }

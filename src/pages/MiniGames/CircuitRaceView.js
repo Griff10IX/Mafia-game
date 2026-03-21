@@ -2979,9 +2979,16 @@ export default function CircuitRaceView({
         gapToAhead: gapsM[x.id] != null ? Number(gapsM[x.id]) : null,
         tyreCliffWarning: x.tyreWear < ((TYRE_DEFS[x.currentTyre]?.cliffStart || 0.66) * 100 + 12),
       })));
-      // Interactive-live: lap label = min(visual, server)+1 so backend cannot read "lap 2" before the first orbit,
-      // and the client cannot read "lap 3" before the server has resolved enough laps.
-      const lapDisp1 = totLaps <= 1 ? totLaps : Math.min(visLap + 1, curLap + 1, totLaps);
+      // Interactive-live: API current_lap = laps *completed* (0…total_laps). HUD "lap x / N" is the lap index
+      // we show to the player. Use min(visual, server) so neither stream reads ahead — except when the server
+      // has already completed all laps: orbit can still be on lap 0, and min(vis+1, curLap+1, totLaps) became
+      // min(1, 4, 3) → wrongly showed "1 / 3" with checkered flag.
+      const srvHud = Math.min(Math.max(0, curLap) + 1, totLaps);
+      const visHud = Math.min(Math.max(0, visLap) + 1, totLaps);
+      let lapDisp1;
+      if (totLaps <= 1) lapDisp1 = totLaps;
+      else if (curLap >= totLaps) lapDisp1 = totLaps;
+      else lapDisp1 = Math.min(visHud, srvHud);
       setLapDisp(totLaps === 1 ? 'Qualifying' : `${lapDisp1} / ${totLaps}`);
       let mxFrac = 0;
       r.forEach(x => {

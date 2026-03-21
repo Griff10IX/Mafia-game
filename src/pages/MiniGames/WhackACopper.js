@@ -80,7 +80,10 @@ function getGrade(score) {
 }
 
 const Hole = ({ holeId, isUp, isBonked, onWhack, flashType }) => {
-  const handleInteraction = useCallback((e) => {
+  // Pointer down (press), not click/touchend: if the player touches while the cop is up but
+  // lifts after the escape timer, touchend/click would miss and they lose a life — feels like a double tap.
+  const handlePointerDown = useCallback((e) => {
+    if (e.button != null && e.button !== 0) return;
     e.preventDefault();
     onWhack(holeId);
   }, [holeId, onWhack]);
@@ -89,8 +92,7 @@ const Hole = ({ holeId, isUp, isBonked, onWhack, flashType }) => {
     <div className={styles.hole}>
       <div
         className={`${styles.holeClip} ${flashType === "hit" ? styles.holeClipHit : flashType === "miss" ? styles.holeClipMiss : ""}`}
-        onClick={handleInteraction}
-        onTouchEnd={handleInteraction}
+        onPointerDown={handlePointerDown}
       >
         <div className={styles.holeBg} />
         <div className={`${styles.copMover} ${isUp ? styles.copUp : ""} ${isBonked ? styles.copBonked : ""}`}>
