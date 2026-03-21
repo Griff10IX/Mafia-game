@@ -103,8 +103,6 @@ const UPGRADE_META = [
 
 // ─── Module-level cache ───
 let _cached = null;
-let _racingLastFetch = 0;
-const RACING_REFRESH = 30_000;
 
 function CardHead({ title, right }) {
   return (
@@ -215,7 +213,6 @@ export default function Racing() {
   const [champView, setChampView] = useState("calendar");
   const [isAdmin, setIsAdmin] = useState(false);
   const liveRacePoll = useRef(null);
-  const refreshTimer = useRef(null);
   const interactiveDoneLiveFetchedRef = useRef(false);
 
   const applyProfile = useCallback((d) => {
@@ -331,7 +328,6 @@ export default function Racing() {
         tracks: trks, openRaces: or, leaderboard: lb, comps: cp,
         latestAutomated: la, nextAutoRaceUtc: nau,
       };
-      _racingLastFetch = Date.now();
     } catch (e) {
       if (!silent) toast.error(apiDetail(e));
     } finally {
@@ -463,14 +459,7 @@ export default function Racing() {
   };
 
   useEffect(() => {
-    if (_cached && Date.now() - _racingLastFetch < RACING_REFRESH) {
-      setLoading(false);
-      fetchAll(true);
-    } else {
-      fetchAll(false);
-    }
-    refreshTimer.current = setInterval(() => fetchAll(true), RACING_REFRESH);
-    return () => { if (refreshTimer.current) clearInterval(refreshTimer.current); };
+    fetchAll(false);
   }, [fetchAll]);
 
   const RACING_ACTIVE_RACE_KEY = "racing_active_race_id";

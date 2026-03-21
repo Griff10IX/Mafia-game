@@ -386,8 +386,6 @@ FUEL_COST_BASE = 35000
 NUM_LAPS_MIN = 2
 NUM_LAPS_MAX = 20
 INTERACTIVE_LAP_DEADLINE_SEC = 30
-# Wall-clock floor between canvas-triggered lap resolves (leader S/F cross); ~TARGET_LAP_SEC/4 at 4× playback.
-INTERACTIVE_MIN_LAP_RESOLVE_INTERVAL_SEC = 5.0
 # If no client sends green-flag (crash/refresh), open lap-1 decision window automatically after this many seconds from race start.
 INTERACTIVE_PRE_GREEN_FALLBACK_SEC = 300
 TIRE_WEAR_PER_LAP = 18
@@ -4073,24 +4071,10 @@ async def interactive_lap_cross(
     if not entrant_ok:
         raise HTTPException(status_code=403, detail="You are not a participant in this race")
 
-    now = datetime.now(timezone.utc)
-    last_iso = race.get("interactive_last_resolve_utc")
-    if last_iso:
-        try:
-            lt = datetime.fromisoformat(str(last_iso).replace("Z", "+00:00"))
-            if (now - lt).total_seconds() < INTERACTIVE_MIN_LAP_RESOLVE_INTERVAL_SEC:
-                raise HTTPException(status_code=429, detail="Lap resolve too soon")
-        except (ValueError, TypeError, OSError):
-            pass
-
     updated = await _advance_one_lap(dict(race))
     if not updated:
         raise HTTPException(status_code=409, detail="Could not advance lap")
 
-    await db.racing_races.update_one(
-        {"id": race_id},
-        {"$set": {"interactive_last_resolve_utc": now.isoformat().replace("+00:00", "Z")}},
-    )
     race_out = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
     return {"ok": True, "race": race_out}
 
