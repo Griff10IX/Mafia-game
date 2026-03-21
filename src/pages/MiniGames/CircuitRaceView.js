@@ -2373,21 +2373,57 @@ export default function CircuitRaceView({
 
     stateRef.current = { racers, track, nLaps:totalLaps, wd:WEATHER_DEFS[cond]||WEATHER_DEFS.clear };
     stateRef.current.pendingReplay = { racers, track, cond, totalLaps };
-    setUiPhase("countdown"); setCountdown(3); setCommentary(rnd(COMMENTARY.start));
+    setUiPhase("qualifying");
+    setLapDisp("Qualifying");
+    setCommentary("Qualifying lap — grid order set");
 
-    cdRef.current = setInterval(() => {
-      setCountdown(prev => {
-        const next = prev-1;
-        if (next <= 0) {
-          clearInterval(cdRef.current); cdRef.current=null;
-          setUiPhase("racing");
-          const pr = stateRef.current?.pendingReplay;
-          if (pr?.racers?.length) { rpStarted.current=true; startRaceLoop(pr.track,pr.cond,pr.totalLaps,pr.racers); }
-          return 0;
-        }
-        return next;
-      });
-    }, 1000);
+    startRaceLoop(track, cond, 1, racers, {
+      onQualifyingComplete: (sortedRacers) => {
+        const rSfL = track.sfLine ?? 0;
+        const gridRacers = sortedRacers.map((r, gi) => {
+          const id = r.id;
+          const p = participants.find(x => (x.user_id || x.id) === id) || {};
+          const rpStrat = buildReplayStrategy(id, pit_stops, p);
+          return {
+            ...r,
+            trackPos: ((rSfL + (sortedRacers.length - gi) * 0.012) % 1),
+            totalLapsDone: 0, lapCount: 1,
+            finished: false, finishOrder: 0, visible: true,
+            tyreWear: Array.isArray(tire_wear_after_lap[id]) ? (tire_wear_after_lap[id][0] ?? 100) : 100,
+            lapTimes: [], pitStops: 0,
+            inPit: false, pitEndAt: 0, slideOffUntil: 0, pitExitUntil: null,
+            position: gi + 1, carNumber: gi + 1,
+            pitStrategy: rpStrat,
+            tireWearByLap: tire_wear_after_lap[id],
+            engineHealth: 100, dnf: false, dnfAtSec: 0, dnfSparks: [],
+            fuelLoad: 100, currentSector: 0, lastSectorCross: 0,
+            bestSectors: [Infinity, Infinity, Infinity], sectorDelta: null,
+            inSlipstream: false, tyreBlister: false,
+            overtakeBoostUntil: 0, currentSpeedMph: null,
+          };
+        });
+        stateRef.current.pendingReplay = { racers: gridRacers, track, cond, totalLaps };
+        stateRef.current.racers = gridRacers;
+        setCommentary("Grid set — lights out next");
+        setUiPhase("countdown");
+        setCountdown(3);
+        cdRef.current = setInterval(() => {
+          setCountdown(prev => {
+            const next = prev - 1;
+            if (next <= 0) {
+              clearInterval(cdRef.current); cdRef.current = null;
+              setUiPhase("racing");
+              setLapDisp(`1 / ${totalLaps}`);
+              setCommentary(rnd(COMMENTARY.start));
+              rpStarted.current = true;
+              startRaceLoop(track, cond, totalLaps, gridRacers);
+              return 0;
+            }
+            return next;
+          });
+        }, 1000);
+      },
+    });
     return () => { clearInterval(cdRef.current); if(rafRef.current)cancelAnimationFrame(rafRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, currentUserId, raceId, participants.length, resultOrder.length]);
@@ -2403,9 +2439,10 @@ export default function CircuitRaceView({
   // ─── LIVE MODE ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (mode !== "live") return;
-    if (!participants.length || !qualifying_order?.length) return;
+    if (!participants.length) return;
     const seen=new Set();
-    const order=qualifying_order.filter(id=>{if(seen.has(id))return false;seen.add(id);return true;});
+    const rawOrder = (qualifying_order?.length) ? qualifying_order : participants.map(p => p.user_id || p.id);
+    const order=rawOrder.filter(id=>{if(seen.has(id))return false;seen.add(id);return participants.some(p=>(p.user_id||p.id)===id);});
     resizeCanvas();
     const track=TRACKS.find(t=>t.id===initialTrackId)||TRACKS[0];
     const cond=WEATHER_MAP[weatherIdProp]||"clear";
@@ -2441,38 +2478,40 @@ export default function CircuitRaceView({
     });
     stateRef.current={racers,track,nLaps:totalLaps,wd};
     stateRef.current.pendingReplay={racers,track,cond,totalLaps};
-    setUiPhase("countdown");setCountdown(3);setCommentary(rnd(COMMENTARY.start));
-    cdRef.current=setInterval(()=>{
-      setCountdown(prev=>{
-        const next=prev-1;
-        if(next<=0){
-          clearInterval(cdRef.current);cdRef.current=null;
-          const pr=stateRef.current?.pendingReplay;
-          if(pr){
-            setUiPhase("qualifying");setLapDisp("Qualifying");setCommentary("Qualifying lap — grid set by this lap");
-            startRaceLoop(pr.track,pr.cond,1,pr.racers,{
-              onQualifyingComplete:(sortedRacers)=>{
-                const qWd=WEATHER_DEFS[pr.cond]||WEATHER_DEFS.clear;
-                const rSfL=pr.track.sfLine??0;
-                const gridRacers=sortedRacers.map((r,gi)=>({
-                  ...r,trackPos:((rSfL+(sortedRacers.length-gi)*0.012)%1),totalLapsDone:0,lapCount:1,
-                  finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
-                  inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:gi+1,carNumber:gi+1,
-                  pitStrategy:buildStrategy(r.currentTyre,pr.totalLaps,qWd.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
-                  engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
-                  currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
-                  inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,_justCrossedFrames:0,
-                }));
-                setCommentary("Grid set — race start!");
-                setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${pr.totalLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(pr.track,pr.cond,pr.totalLaps,gridRacers);},2200);
-              },
-            });
-          }
-          return 0;
-        }
-        return next;
-      });
-    },1000);
+    setUiPhase("qualifying");setLapDisp("Qualifying");setCommentary("Qualifying lap — grid set by this lap");
+    startRaceLoop(track,cond,1,racers,{
+      onQualifyingComplete:(sortedRacers)=>{
+        const pr=stateRef.current?.pendingReplay;
+        if(!pr)return;
+        const qWd=WEATHER_DEFS[pr.cond]||WEATHER_DEFS.clear;
+        const rSfL=pr.track.sfLine??0;
+        const gridRacers=sortedRacers.map((r,gi)=>({
+          ...r,trackPos:((rSfL+(sortedRacers.length-gi)*0.012)%1),totalLapsDone:0,lapCount:1,
+          finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
+          inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:gi+1,carNumber:gi+1,
+          pitStrategy:buildStrategy(r.currentTyre,pr.totalLaps,qWd.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
+          engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
+          currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
+          inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,_justCrossedFrames:0,
+        }));
+        stateRef.current.pendingReplay={...pr,racers:gridRacers};
+        stateRef.current.racers=gridRacers;
+        setCommentary("Grid set — lights out next");
+        setUiPhase("countdown");setCountdown(3);
+        cdRef.current=setInterval(()=>{
+          setCountdown(prev=>{
+            const next=prev-1;
+            if(next<=0){
+              clearInterval(cdRef.current);cdRef.current=null;
+              setUiPhase("racing");setLapDisp(`1 / ${pr.totalLaps}`);setCommentary(rnd(COMMENTARY.start));
+              startRaceLoop(pr.track,pr.cond,pr.totalLaps,gridRacers);
+              return 0;
+            }
+            return next;
+          });
+        },1000);
+      },
+    });
     return()=>{clearInterval(cdRef.current);if(rafRef.current)cancelAnimationFrame(rafRef.current);};
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[mode,currentUserId]);
@@ -2506,9 +2545,15 @@ export default function CircuitRaceView({
     const TARGET_LAP_SEC = 28;
 
     const cs = liveCarStatesRef.current || {};
-    const ids = Object.keys(cs).length
-      ? Object.entries(cs).sort((a, b) => (a[1].position ?? 99) - (b[1].position ?? 99)).map(([k]) => k)
-      : participants.map(p => p.user_id || p.id);
+    const rawQo = Array.isArray(qualifying_order) && qualifying_order.length > 0 ? qualifying_order : null;
+    let ids;
+    if (rawQo) {
+      ids = rawQo.filter(id => participants.some(p => (p.user_id || p.id) === id));
+    } else if (Object.keys(cs).length) {
+      ids = Object.entries(cs).sort((a, b) => (a[1].position ?? 99) - (b[1].position ?? 99)).map(([k]) => k);
+    } else {
+      ids = participants.map(p => p.user_id || p.id);
+    }
     const seen = new Set();
     const order = ids.filter(id => { if (seen.has(id)) return false; seen.add(id); return true; });
 
@@ -3035,32 +3080,33 @@ export default function CircuitRaceView({
     resizeCanvas();
     const track=selTrack, cond=effCond;
     const racers=buildRacers(track,cond,numLaps,chosenTyre);
-    setUiPhase("countdown");setCountdown(3);
-    let c=3;
-    const cdI=setInterval(()=>{
-      c--;setCountdown(c);
-      if(c<=0){
-        clearInterval(cdI);
-        setUiPhase("qualifying");setLapDisp("Qualifying");setCommentary("Qualifying lap — grid order set");
-        startRaceLoop(track,cond,1,racers,{
-          onQualifyingComplete:(sorted)=>{
-            const wd2=WEATHER_DEFS[cond]||WEATHER_DEFS.clear;
-            const lSfL=track.sfLine??0;
-            const grid=sorted.map((r,i)=>({
-              ...r,trackPos:((lSfL+(sorted.length-i)*0.012)%1),totalLapsDone:0,lapCount:1,
-              finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
-              inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:i+1,carNumber:i+1,
-              pitStrategy:buildStrategy(r.currentTyre,numLaps,wd2.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
-              engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
-              currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
-              inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,_justCrossedFrames:0,
-            }));
-            setCommentary("Grid set — race start!");
-            setTimeout(()=>{setUiPhase("racing");setLapDisp(`1 / ${numLaps}`);setCommentary(rnd(COMMENTARY.start));startRaceLoop(track,cond,numLaps,grid);},2200);
-          },
-        });
-      }
-    },1000);
+    setUiPhase("qualifying");setLapDisp("Qualifying");setCommentary("Qualifying lap — grid order set");
+    startRaceLoop(track,cond,1,racers,{
+      onQualifyingComplete:(sorted)=>{
+        const wd2=WEATHER_DEFS[cond]||WEATHER_DEFS.clear;
+        const lSfL=track.sfLine??0;
+        const grid=sorted.map((r,i)=>({
+          ...r,trackPos:((lSfL+(sorted.length-i)*0.012)%1),totalLapsDone:0,lapCount:1,
+          finished:false,finishOrder:0,visible:true,tyreWear:100,lapTimes:[],pitStops:0,
+          inPit:false,pitEndAt:0,slideOffUntil:0,pitExitUntil:null,position:i+1,carNumber:i+1,
+          pitStrategy:buildStrategy(r.currentTyre,numLaps,wd2.wearMult||1,r.reliabilityWearMult||1,r.isPlayer?0:Math.floor(Math.random()*3)-1,r.strategyType||"normal"),
+          engineHealth:100,dnf:false,dnfAtSec:0,dnfSparks:[],fuelLoad:100,
+          currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
+          inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,_justCrossedFrames:0,
+        }));
+        setCommentary("Grid set — lights out next");
+        setUiPhase("countdown");setCountdown(3);
+        let c=3;
+        const cdI=setInterval(()=>{
+          c--;setCountdown(c);
+          if(c<=0){
+            clearInterval(cdI);
+            setUiPhase("racing");setLapDisp(`1 / ${numLaps}`);setCommentary(rnd(COMMENTARY.start));
+            startRaceLoop(track,cond,numLaps,grid);
+          }
+        },1000);
+      },
+    });
   },[uiPhase,selTrack,effCond,numLaps,chosenTyre,buildRacers,resizeCanvas,startRaceLoop]);
 
   const handleReset=useCallback(()=>{

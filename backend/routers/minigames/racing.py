@@ -4103,6 +4103,8 @@ async def get_race_live(
         "current_lap": race.get("current_lap"),
         "total_laps": race.get("total_laps") or race.get("laps"),
         "lap_deadline": race.get("lap_deadline"),
+        "qualifying_order": race.get("qualifying_order") or [],
+        "qualifying_results": race.get("qualifying_results") or [],
         "car_states": race.get("car_states"),
         "lap_results": race.get("lap_results"),
         "pit_stops": race.get("pit_stops"),

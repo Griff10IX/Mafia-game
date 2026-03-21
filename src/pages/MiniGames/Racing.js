@@ -942,9 +942,10 @@ export default function Racing() {
         const _carEntries = Object.entries(liveRace.car_states || {}).sort((a, b) => (a[1].position ?? 99) - (b[1].position ?? 99));
         const _tColors = { soft: "#e82020", medium: "#e8d020", hard: "#c0c0b8", inter: "#20a840", full_wet: "#2080e8" };
         const _totLapsHud = liveRace.total_laps || activeRace.laps || 3;
+        const _serverLap = liveRace.current_lap ?? 0;
         const _dispLap = interactiveLeaderLap != null
           ? Math.min(interactiveLeaderLap + 1, _totLapsHud)
-          : Math.max(1, liveRace.current_lap || 0);
+          : (_serverLap === 0 ? 0 : Math.min(_serverLap + 1, _totLapsHud));
         const _lapProg = interactiveRaceProg != null && _totLapsHud > 0
           ? interactiveRaceProg
           : (_totLapsHud > 0 ? Math.min(1, (liveRace.current_lap || 0) / _totLapsHud) : 0);
@@ -958,7 +959,11 @@ export default function Racing() {
                   <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                   <span className="text-[10px] font-heading uppercase tracking-wider text-red-400">LIVE</span>
                 </div>
-                <span className="text-xs font-heading text-[var(--noir-primary)]">LAP {_dispLap}/{_totLapsHud}</span>
+                <span className="text-xs font-heading text-[var(--noir-primary)]">
+                  {_serverLap === 0
+                    ? <>Formation <span className="text-[var(--noir-muted)] font-normal">·</span> Q</>
+                    : `LAP ${_dispLap}/${_totLapsHud}`}
+                </span>
                 <span className="text-[10px] text-[var(--noir-muted)]">{liveRace.track?.name}</span>
                 {liveRace.weather && liveRace.weather !== "clear" && (
                   <span className="text-[10px] text-blue-400">{liveRace.weather}</span>
@@ -977,6 +982,7 @@ export default function Racing() {
             initialTrackId={circuitTrackId}
             weather={liveRace.weather || activeRace.weather || "clear"}
             participants={liveRace.participants || activeRace.participants || []}
+            qualifying_order={liveRace.qualifying_order?.length ? liveRace.qualifying_order : (activeRace.qualifying_order || [])}
             currentUserId={profile?.user_id}
             laps={liveRace.total_laps || activeRace.laps || 3}
             liveCarStates={liveRace.car_states}
