@@ -249,6 +249,7 @@ export default function Racing() {
       racing_season_ends_utc: d.racing_season_ends_utc,
       global_upgrade_cap: d.global_upgrade_cap ?? 26,
       free_engine_repair_available: !!d.free_engine_repair_available,
+      crew_bank_debt_limit: d.crew_bank_debt_limit ?? -50000,
       crew_levels_used: d.crew_levels_used ?? 0,
       crew_global_cap: d.crew_global_cap ?? 24,
       crew_tradeoffs: d.crew_tradeoffs || null,
@@ -1672,6 +1673,10 @@ export default function Racing() {
 
                 const nextETCost = carUpgradeCosts[engine + tires + 1] ?? carUpgradeCosts[carUpgradeCosts.length - 1];
                 const repairCost = Math.round((c.engine_wear ?? 0) * (profile?.engine_repair_cost_per_pct ?? 400));
+                const replaceCost = profile?.engine_replace_cost ?? 75000;
+                const debtFloor = profile?.crew_bank_debt_limit ?? -50000;
+                const canRepairWithDebt = profile?.free_engine_repair_available || (bank - repairCost >= debtFloor);
+                const canReplaceWithDebt = bank - replaceCost >= debtFloor;
 
                 const getUpgradeCost = (key) => {
                   if (key === "engine" || key === "tires") return nextETCost ?? 0;
@@ -1719,14 +1724,14 @@ export default function Racing() {
                           {(c.engine_wear ?? 0) > 0 && (
                             <div className="flex gap-1 mt-1">
                               <button type="button" className={styles.btnGoldDarkText + " text-[8px] px-1 py-0.5"}
-                                disabled={!profile?.free_engine_repair_available && bank < repairCost}
+                                disabled={!canRepairWithDebt}
                                 onClick={() => handleRepairEngine(c.id)}>
                                 {profile?.free_engine_repair_available ? "Free fix" : `Fix ${formatMoney(repairCost)}`}
                               </button>
                               <button type="button" className={styles.btnGoldDarkText + " text-[8px] px-1 py-0.5"}
-                                disabled={bank < (profile?.engine_replace_cost ?? 75000)}
+                                disabled={!canReplaceWithDebt}
                                 onClick={() => handleReplaceEngine(c.id)}>
-                                New {formatMoney(profile?.engine_replace_cost ?? 75000)}
+                                New {formatMoney(replaceCost)}
                               </button>
                             </div>
                           )}
