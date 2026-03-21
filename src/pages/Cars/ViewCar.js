@@ -184,10 +184,16 @@ export default function ViewCar() {
         </div>
         <div className="p-3">
           <div className="flex flex-col sm:flex-row gap-4">
-            <div className="sm:w-48 shrink-0">
-              <div className="aspect-[4/3] rounded-md overflow-hidden bg-zinc-800/50 border border-zinc-700/50 relative group">
+            <div className="w-full max-w-[min(100%,20rem)] sm:w-80 sm:max-w-none shrink-0 mx-auto sm:mx-0">
+              <div className="aspect-[4/3] rounded-md overflow-hidden bg-zinc-950/90 border border-zinc-700/50 relative group">
                 {car.image ? (
-                  <img src={car.image} alt={car.name} className="w-full h-full object-cover" />
+                  <img
+                    src={car.image}
+                    alt={car.name}
+                    className="w-full h-full object-contain object-center"
+                    decoding="async"
+                    fetchPriority="high"
+                  />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <Car className="text-primary/30" size={48} />

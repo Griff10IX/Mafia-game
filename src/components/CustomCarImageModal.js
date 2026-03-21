@@ -71,9 +71,14 @@ export default function CustomCarImageModal({
             </p>
           </div>
 
-          <div className="aspect-video rounded overflow-hidden bg-secondary border border-border">
+          <div className="aspect-video rounded overflow-hidden bg-zinc-950/90 border border-border">
             {imageUrl ? (
-              <img src={imageUrl} alt={displayName} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+              <img
+                src={imageUrl}
+                alt={displayName}
+                className="w-full h-full object-contain object-center"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <Car size={32} className="text-primary/30" />
