@@ -1137,7 +1137,6 @@ export default function CircuitRaceView({
   onInteractiveGreenFlag = null,
   onSessionPhaseChange = null,
   onInteractiveLeaderLapCross = null,
-  liveResultOrder = null,
   onInteractiveTimingUpdate = null,
 }) {
   const canvasRef  = useRef(null);
@@ -1179,24 +1178,6 @@ export default function CircuitRaceView({
   useEffect(() => { onInteractiveLeaderLapCrossRef.current = onInteractiveLeaderLapCross; }, [onInteractiveLeaderLapCross]);
   const onInteractiveTimingUpdateRef = useRef(onInteractiveTimingUpdate);
   useEffect(() => { onInteractiveTimingUpdateRef.current = onInteractiveTimingUpdate; }, [onInteractiveTimingUpdate]);
-  const liveResultOrderRef = useRef([]);
-  useEffect(() => {
-    liveResultOrderRef.current = Array.isArray(liveResultOrder) && liveResultOrder.length > 0 ? liveResultOrder : [];
-  }, [liveResultOrder]);
-
-  useEffect(() => {
-    if (mode !== "interactive-live" || !Array.isArray(liveResultOrder) || liveResultOrder.length === 0) return;
-    setResults((prev) => {
-      if (!prev?.length) return prev;
-      const want = liveResultOrder.join(",");
-      const have = prev.map((row) => row.id).join(",");
-      if (have === want) return prev;
-      const byId = Object.fromEntries(prev.map((row) => [row.id, row]));
-      if (!liveResultOrder.every((id) => byId[id])) return prev;
-      return liveResultOrder.map((id, i) => ({ ...byId[id], pos: i + 1 }));
-    });
-  }, [mode, liveResultOrder, results]);
-
   useEffect(() => {
     if (mode !== "interactive-live") return;
     const cb = onSessionPhaseChangeRef.current;
@@ -3144,14 +3125,9 @@ export default function CircuitRaceView({
           st._resultsShown = true;
           setUiPhase("done");
           const allR = [...r];
-          const srvOrd = liveResultOrderRef.current;
-          const idSet = new Set(allR.map(x => x.id));
-          let ordered;
-          if (srvOrd.length > 0 && srvOrd.length === allR.length && srvOrd.every((id) => idSet.has(id))) {
-            ordered = srvOrd.map((id) => allR.find((x) => x.id === id)).filter(Boolean);
-          } else {
-            ordered = [...allR].sort(sortInteractiveByProgress);
-          }
+          // Same ordering as live leaderboard / orbit (sortInteractiveByProgress). Server lap-engine
+          // result_order can differ from the client sim the player watched — do not replace this list with it.
+          const ordered = [...allR].sort(sortInteractiveByProgress);
           const fastest = st.fastestLap || { holderId: null, time: Infinity };
           setResults(ordered.map((x, i) => ({
             pos: i + 1, id: x.id, name: x.name, isPlayer: x.isPlayer, color: x.color,

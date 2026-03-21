@@ -1074,7 +1074,6 @@ export default function Racing() {
               const { data } = await api.get(`/racing/races/${activeRace.id}/live`);
               setLiveRace(data);
             }}
-            liveResultOrder={Array.isArray(liveRace.result_order) && liveRace.result_order.length > 0 ? liveRace.result_order : null}
             onInteractiveTimingUpdate={onInteractiveTimingFrame}
           />
 
