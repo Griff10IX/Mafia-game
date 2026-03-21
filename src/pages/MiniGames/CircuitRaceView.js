@@ -3125,9 +3125,20 @@ export default function CircuitRaceView({
           st._resultsShown = true;
           setUiPhase("done");
           const allR = [...r];
-          // Same ordering as live leaderboard / orbit (sortInteractiveByProgress). Server lap-engine
-          // result_order can differ from the client sim the player watched — do not replace this list with it.
-          const ordered = [...allR].sort(sortInteractiveByProgress);
+          // Use finishOrder from the checkered frame — do not re-sortInteractiveByProgress here: _targetPos
+          // still updates from live car_states every frame after finish and can flip tie-breaks vs what the player saw.
+          const ordered = [...allR].sort((a, b) => {
+            if (a.dnf && !b.dnf) return 1;
+            if (!a.dnf && b.dnf) return -1;
+            if (a.dnf && b.dnf) {
+              const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0), pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+              if (Math.abs(pb - pa) > 1e-9) return pb - pa;
+              return (b.dnfAtSec ?? 0) - (a.dnfAtSec ?? 0);
+            }
+            const aF = a.finished && a.finishOrder > 0, bF = b.finished && b.finishOrder > 0;
+            if (aF && bF) return a.finishOrder - b.finishOrder;
+            return sortInteractiveByProgress(a, b);
+          });
           const fastest = st.fastestLap || { holderId: null, time: Infinity };
           setResults(ordered.map((x, i) => ({
             pos: i + 1, id: x.id, name: x.name, isPlayer: x.isPlayer, color: x.color,
