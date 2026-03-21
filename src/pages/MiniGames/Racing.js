@@ -199,6 +199,8 @@ export default function Racing() {
   const [interactiveRaceProg, setInteractiveRaceProg] = useState(null);
   /** Canvas session phase for interactive-live (qualifying → countdown → racing → done). */
   const [interactiveCanvasPhase, setInteractiveCanvasPhase] = useState(null);
+  /** In-race timing tower rows from canvas orbit (progress order + live gaps); stale server gaps_to_ahead only updates per lap. */
+  const [interactiveTowerRows, setInteractiveTowerRows] = useState([]);
   const [myDecision, setMyDecision] = useState({
     push_level: 3, pit_this_lap: false, pit_compound: "medium", defend: false,
     pace_mode: "normal", reaction_ms: null,
@@ -567,7 +569,16 @@ export default function Racing() {
     interactiveDoneLiveFetchedRef.current = false;
     setInteractiveRaceProg(null);
     setInteractiveCanvasPhase(null);
+    setInteractiveTowerRows([]);
   }, [activeRace?.id]);
+
+  useEffect(() => {
+    if (interactiveCanvasPhase !== "racing") setInteractiveTowerRows([]);
+  }, [interactiveCanvasPhase]);
+
+  const onInteractiveTimingFrame = useCallback((rows) => {
+    setInteractiveTowerRows(rows);
+  }, []);
 
   /** Push strategy to server on change (debounced). No separate confirm — matches live controls. */
   useEffect(() => {
@@ -1063,6 +1074,8 @@ export default function Racing() {
               const { data } = await api.get(`/racing/races/${activeRace.id}/live`);
               setLiveRace(data);
             }}
+            liveResultOrder={Array.isArray(liveRace.result_order) && liveRace.result_order.length > 0 ? liveRace.result_order : null}
+            onInteractiveTimingUpdate={onInteractiveTimingFrame}
           />
 
           {/* Timing Tower + Strategy side by side on desktop */}
@@ -1071,31 +1084,60 @@ export default function Racing() {
             <div className={styles.panel + " mobile-panel overflow-hidden"}>
               <CardHead title="Timing Tower" />
               <div className="divide-y divide-[var(--noir-border)]">
-                {_carEntries.map(([eid, cs], idx) => {
-                  const participant = (liveRace.participants || activeRace.participants || []).find(p => (p.user_id || p.id) === eid);
-                  const isMe = eid === profile?.user_id;
-                  return (
-                    <div key={eid} className={"flex items-center gap-2 px-3 py-1.5 text-xs" + (isMe ? " bg-amber-900/10" : "")}
-                      style={isMe ? { borderLeft: "2px solid var(--noir-primary)" } : {}}>
-                      <span className="w-5 font-heading text-center" style={{ color: idx === 0 ? "#e8c870" : idx === 1 ? "#bbb" : idx === 2 ? "#c07a30" : "var(--noir-muted)" }}>
-                        {cs.dnf ? "DNF" : `P${idx + 1}`}
-                      </span>
-                      <span className="flex-1 truncate" style={{ color: isMe ? "var(--noir-primary)" : "var(--noir-foreground)" }}>
-                        {participant?.team_name || participant?.username || eid.slice(0, 8)}
-                      </span>
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: _tColors[cs.compound] || "#ccc" }} title={cs.compound} />
-                      <span className="text-[9px] tabular-nums w-10 text-right" style={{ color: (cs.tyre_wear ?? 100) < 30 ? "#e74c3c" : "var(--noir-muted)" }}>
-                        {Math.round(cs.tyre_wear ?? 100)}%
-                      </span>
-                      <span className="text-[9px] tabular-nums w-10 text-right" style={{ color: (cs.engine_wear ?? 0) > 75 ? "#f59e0b" : "var(--noir-muted)" }}>
-                        E:{Math.round(cs.engine_wear ?? 0)}%
-                      </span>
-                      <span className="text-[9px] tabular-nums w-14 text-right text-[var(--noir-muted)]">
-                        {idx === 0 ? "—" : (liveRace.gaps_to_ahead?.[eid] != null ? `+${Number(liveRace.gaps_to_ahead[eid]).toFixed(2)}s` : "—")}
-                      </span>
-                    </div>
-                  );
-                })}
+                {(
+                  interactiveTowerRows.length > 0 && interactiveCanvasPhase === "racing" && !_preGreen
+                    ? interactiveTowerRows.map((row) => {
+                      const eid = row.id;
+                      const participant = (liveRace.participants || activeRace.participants || []).find(p => (p.user_id || p.id) === eid);
+                      const isMe = eid === profile?.user_id;
+                      const idx = row.position - 1;
+                      const gapStr = row.dnf ? "—" : idx === 0 ? "—" : (row.gapSec != null && !Number.isNaN(Number(row.gapSec)) ? `+${Number(row.gapSec).toFixed(2)}s` : "—");
+                      return (
+                        <div key={eid} className={"flex items-center gap-2 px-3 py-1.5 text-xs" + (isMe ? " bg-amber-900/10" : "")}
+                          style={isMe ? { borderLeft: "2px solid var(--noir-primary)" } : {}}>
+                          <span className="w-5 font-heading text-center" style={{ color: idx === 0 ? "#e8c870" : idx === 1 ? "#bbb" : idx === 2 ? "#c07a30" : "var(--noir-muted)" }}>
+                            {row.dnf ? "DNF" : `P${row.position}`}
+                          </span>
+                          <span className="flex-1 truncate" style={{ color: isMe ? "var(--noir-primary)" : "var(--noir-foreground)" }}>
+                            {participant?.team_name || participant?.username || eid.slice(0, 8)}
+                          </span>
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: _tColors[row.compound] || "#ccc" }} title={row.compound} />
+                          <span className="text-[9px] tabular-nums w-10 text-right" style={{ color: (row.tyre_wear ?? 100) < 30 ? "#e74c3c" : "var(--noir-muted)" }}>
+                            {Math.round(row.tyre_wear ?? 100)}%
+                          </span>
+                          <span className="text-[9px] tabular-nums w-10 text-right" style={{ color: (row.engine_wear ?? 0) > 75 ? "#f59e0b" : "var(--noir-muted)" }}>
+                            E:{Math.round(row.engine_wear ?? 0)}%
+                          </span>
+                          <span className="text-[9px] tabular-nums w-14 text-right text-[var(--noir-muted)]">{gapStr}</span>
+                        </div>
+                      );
+                    })
+                    : _carEntries.map(([eid, cs], idx) => {
+                      const participant = (liveRace.participants || activeRace.participants || []).find(p => (p.user_id || p.id) === eid);
+                      const isMe = eid === profile?.user_id;
+                      return (
+                        <div key={eid} className={"flex items-center gap-2 px-3 py-1.5 text-xs" + (isMe ? " bg-amber-900/10" : "")}
+                          style={isMe ? { borderLeft: "2px solid var(--noir-primary)" } : {}}>
+                          <span className="w-5 font-heading text-center" style={{ color: idx === 0 ? "#e8c870" : idx === 1 ? "#bbb" : idx === 2 ? "#c07a30" : "var(--noir-muted)" }}>
+                            {cs.dnf ? "DNF" : `P${idx + 1}`}
+                          </span>
+                          <span className="flex-1 truncate" style={{ color: isMe ? "var(--noir-primary)" : "var(--noir-foreground)" }}>
+                            {participant?.team_name || participant?.username || eid.slice(0, 8)}
+                          </span>
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: _tColors[cs.compound] || "#ccc" }} title={cs.compound} />
+                          <span className="text-[9px] tabular-nums w-10 text-right" style={{ color: (cs.tyre_wear ?? 100) < 30 ? "#e74c3c" : "var(--noir-muted)" }}>
+                            {Math.round(cs.tyre_wear ?? 100)}%
+                          </span>
+                          <span className="text-[9px] tabular-nums w-10 text-right" style={{ color: (cs.engine_wear ?? 0) > 75 ? "#f59e0b" : "var(--noir-muted)" }}>
+                            E:{Math.round(cs.engine_wear ?? 0)}%
+                          </span>
+                          <span className="text-[9px] tabular-nums w-14 text-right text-[var(--noir-muted)]">
+                            {idx === 0 ? "—" : (liveRace.gaps_to_ahead?.[eid] != null ? `+${Number(liveRace.gaps_to_ahead[eid]).toFixed(2)}s` : "—")}
+                          </span>
+                        </div>
+                      );
+                    })
+                )}
               </div>
             </div>
 

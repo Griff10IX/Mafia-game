@@ -1137,6 +1137,8 @@ export default function CircuitRaceView({
   onInteractiveGreenFlag = null,
   onSessionPhaseChange = null,
   onInteractiveLeaderLapCross = null,
+  liveResultOrder = null,
+  onInteractiveTimingUpdate = null,
 }) {
   const canvasRef  = useRef(null);
   const rafRef     = useRef(null);
@@ -1175,6 +1177,22 @@ export default function CircuitRaceView({
   useEffect(() => { onSessionPhaseChangeRef.current = onSessionPhaseChange; }, [onSessionPhaseChange]);
   const onInteractiveLeaderLapCrossRef = useRef(onInteractiveLeaderLapCross);
   useEffect(() => { onInteractiveLeaderLapCrossRef.current = onInteractiveLeaderLapCross; }, [onInteractiveLeaderLapCross]);
+  const onInteractiveTimingUpdateRef = useRef(onInteractiveTimingUpdate);
+  useEffect(() => { onInteractiveTimingUpdateRef.current = onInteractiveTimingUpdate; }, [onInteractiveTimingUpdate]);
+  const liveResultOrderRef = useRef([]);
+  useEffect(() => {
+    liveResultOrderRef.current = Array.isArray(liveResultOrder) && liveResultOrder.length > 0 ? liveResultOrder : [];
+  }, [liveResultOrder]);
+
+  useEffect(() => {
+    if (mode !== "interactive-live" || !Array.isArray(liveResultOrder) || liveResultOrder.length === 0 || !results?.length) return;
+    const want = liveResultOrder.join(",");
+    const have = results.map((row) => row.id).join(",");
+    if (have === want) return;
+    const byId = Object.fromEntries(results.map((row) => [row.id, row]));
+    if (!liveResultOrder.every((id) => byId[id])) return;
+    setResults(liveResultOrder.map((id, i) => ({ ...byId[id], pos: i + 1 })));
+  }, [mode, liveResultOrder, results]);
 
   useEffect(() => {
     if (mode !== "interactive-live") return;
@@ -2730,6 +2748,7 @@ export default function CircuitRaceView({
     /** After server lap bumps, ignore S/F resolves for this many rAF ticks (~35 ≈ 580ms @ 60Hz) to kill double-fire. */
     let framesSinceServerLapSync = 999;
     let interactiveLapCrossInFlight = false;
+    let lastTowerEmitMs = 0;
     let lastReportedVisLap = -1;
     let lastReportedProg = -1;
     let agentCheckeredLogged = false;
@@ -2737,6 +2756,19 @@ export default function CircuitRaceView({
     const addInc = (text) => {
       stateRef.current.incidents.push({ text, time: performance.now() });
     };
+
+    function sortInteractiveByProgress(a, b) {
+      if (a.dnf && !b.dnf) return 1;
+      if (!a.dnf && b.dnf) return -1;
+      if (a.dnf && b.dnf) {
+        const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0), pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+        if (Math.abs(pb - pa) > 1e-9) return pb - pa;
+        return (b.dnfAtSec ?? 0) - (a.dnfAtSec ?? 0);
+      }
+      const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0), pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+      if (Math.abs(pb - pa) > 1e-9) return pb - pa;
+      return (a._targetPos ?? 99) - (b._targetPos ?? 99);
+    }
 
     const loop = (now) => {
       try {
@@ -3092,7 +3124,7 @@ export default function CircuitRaceView({
         addInc("CHECKERED FLAG!");
         setCommentary(rnd(COMMENTARY.done));
         let fo = 1;
-        [...r].sort((a, b) => (a._targetPos ?? 99) - (b._targetPos ?? 99)).forEach(x => {
+        [...r].sort(sortInteractiveByProgress).forEach(x => {
           if (!x.dnf) {
             const ord = fo++;
             x.finished = true;
@@ -3108,54 +3140,74 @@ export default function CircuitRaceView({
         if (sinceFinish >= 3.0) {
           st._resultsShown = true;
           setUiPhase("done");
-          const fo = [...r].sort((a, b) => {
-            if (a.dnf && !b.dnf) return 1; if (!a.dnf && b.dnf) return -1;
-            const aF = a.finished && a.finishOrder > 0, bF = b.finished && b.finishOrder > 0;
-            if (aF && bF) return a.finishOrder - b.finishOrder;
-            if (aF && !bF) return -1; if (!aF && bF) return 1;
-            return ((b.totalLapsDone ?? 0) + (b.trackPos ?? 0)) - ((a.totalLapsDone ?? 0) + (a.trackPos ?? 0));
-          });
+          const allR = [...r];
+          const srvOrd = liveResultOrderRef.current;
+          const idSet = new Set(allR.map(x => x.id));
+          let ordered;
+          if (srvOrd.length > 0 && srvOrd.length === allR.length && srvOrd.every((id) => idSet.has(id))) {
+            ordered = srvOrd.map((id) => allR.find((x) => x.id === id)).filter(Boolean);
+          } else {
+            ordered = [...allR].sort(sortInteractiveByProgress);
+          }
           const fastest = st.fastestLap || { holderId: null, time: Infinity };
-          setResults(fo.map((x, i) => ({
+          setResults(ordered.map((x, i) => ({
             pos: i + 1, id: x.id, name: x.name, isPlayer: x.isPlayer, color: x.color,
             carName: x.carName, pitStops: x.pitStops, lapTimes: x.lapTimes, dnf: x.dnf,
             bestLap: x.lapTimes.length ? Math.min(...x.lapTimes) : null,
             hasFastestLap: fastest.holderId === x.id,
           })));
-          const rOIds = fo.map(x => x.id), dIds = fo.filter(x => x.dnf).map(x => x.id);
+          const rOIds = ordered.map(x => x.id), dIds = ordered.filter(x => x.dnf).map(x => x.id);
           setTimeout(() => onComplete?.(rOIds, dIds), 1200);
         }
       }
 
-      // Canvas draw order: visual progress. Standings labels: backend position for interactive-live (matches results / timing tower).
+      // Canvas draw order: by visual progress. Interactive-live leaderboard gaps from orbit (server gaps_to_ahead only updates per lap).
       r.sort((a, b) => {
         if (a.dnf && !b.dnf) return 1;
         if (!a.dnf && b.dnf) return -1;
         return ((b.totalLapsDone ?? 0) + (b.trackPos ?? 0)) - ((a.totalLapsDone ?? 0) + (a.trackPos ?? 0));
       });
-      r.forEach((x, i) => {
-        x.position = mode === "interactive-live"
-          ? Math.min(99, Math.max(1, x._targetPos ?? i + 1))
-          : i + 1;
-      });
+      r.forEach((x, i) => { x.position = i + 1; });
 
-      const standingsOrder = mode === "interactive-live"
-        ? [...r].sort((a, b) => {
-            if (a.dnf && !b.dnf) return 1;
-            if (!a.dnf && b.dnf) return -1;
-            return (a._targetPos ?? 99) - (b._targetPos ?? 99);
-          })
-        : r;
+      const standingsOrder = [...r].sort(sortInteractiveByProgress);
 
-      const gapsM = liveGapsToAheadRef.current || {};
-      setStandings(standingsOrder.map(x => ({
-        id: x.id, name: x.name, isPlayer: x.isPlayer,
-        position: x.position, tyre: x.currentTyre, tyreWear: x.tyreWear,
-        pitStops: x.pitStops, dnf: x.dnf, engineHealth: x.engineHealth,
-        fuelLoad: Math.round(x.fuelLoad), currentSpeedMph: Math.round(x.currentSpeedMph || 0),
-        gapToAhead: gapsM[x.id] != null ? Number(gapsM[x.id]) : null,
-        tyreCliffWarning: x.tyreWear < ((TYRE_DEFS[x.currentTyre]?.cliffStart || 0.66) * 100 + 12),
-      })));
+      const ldrProg = standingsOrder.length && !standingsOrder[0].dnf
+        ? (standingsOrder[0].totalLapsDone ?? 0) + (standingsOrder[0].trackPos ?? 0)
+        : 0;
+      setStandings(standingsOrder.map((x, i) => {
+        const prog = (x.totalLapsDone ?? 0) + (x.trackPos ?? 0);
+        const gapLaps = ldrProg - prog;
+        const gapSec = !x.dnf && gapLaps > 0.05 ? gapLaps * trk.lapBase / (x.baseSpeed || 1) : 0;
+        return {
+          id: x.id, name: x.name, isPlayer: x.isPlayer,
+          position: i + 1, tyre: x.currentTyre, tyreWear: x.tyreWear,
+          pitStops: x.pitStops, dnf: x.dnf, engineHealth: x.engineHealth,
+          fuelLoad: Math.round(x.fuelLoad), currentSpeedMph: Math.round(x.currentSpeedMph || 0),
+          gapToAhead: null,
+          gapSec,
+          lapsDown: Math.floor(gapLaps),
+          tyreCliffWarning: x.tyreWear < ((TYRE_DEFS[x.currentTyre]?.cliffStart || 0.66) * 100 + 12),
+        };
+      }));
+
+      const cbTower = onInteractiveTimingUpdateRef.current;
+      if (cbTower && performance.now() - lastTowerEmitMs >= 80) {
+        lastTowerEmitMs = performance.now();
+        cbTower(standingsOrder.map((x, i) => {
+          const prog = (x.totalLapsDone ?? 0) + (x.trackPos ?? 0);
+          const gapLaps = ldrProg - prog;
+          const gSec = x.dnf || i === 0 ? null : (gapLaps > 0.05 ? gapLaps * trk.lapBase / (x.baseSpeed || 1) : 0);
+          return {
+            id: x.id,
+            position: i + 1,
+            gapSec: gSec,
+            dnf: x.dnf,
+            tyre_wear: x.tyreWear,
+            compound: x.currentTyre,
+            engine_wear: Math.max(0, Math.min(100, 100 - (x.engineHealth ?? 100))),
+          };
+        }));
+      }
       // Interactive-live: API current_lap = laps *completed* (0…total_laps). HUD "lap x / N" is the lap index
       // we show to the player. Use min(visual, server) so neither stream reads ahead — except when the server
       // has already completed all laps: orbit can still be on lap 0, and min(vis+1, curLap+1, totLaps) became

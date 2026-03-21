@@ -4177,6 +4177,7 @@ async def get_race_live(
         "pit_stops": race.get("pit_stops"),
         "incidents": race.get("incidents"),
         "dnf_ids": race.get("dnf_ids"),
+        "result_order": race.get("result_order") or [],
         "race_events": race.get("race_events") or [],
         "gaps_to_ahead": race.get("gaps_to_ahead") or {},
         "safety_car_laps_remaining": race.get("safety_car_laps_remaining") or 0,
