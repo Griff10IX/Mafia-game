@@ -346,7 +346,7 @@ def register(router):
                 "auto_rank_enabled": False,
                 "mission_completions": [],
                 "unlocked_maps_up_to": "Chicago",
-                "theme_preferences": {"sidebarLayout": "categorized"},
+                "theme_preferences": {"sidebarLayout": "categorized_classic"},
                 "founding_member": False,
                 "founding_rewards_claimed": False,
                 "badges": [],
