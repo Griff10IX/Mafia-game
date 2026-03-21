@@ -132,22 +132,6 @@ function Collapsible({ label, count, children, defaultOpen = false }) {
   );
 }
 
-function LiveCountdown({ deadline }) {
-  const [remaining, setRemaining] = useState("");
-  useEffect(() => {
-    const tick = () => {
-      const dl = new Date(deadline);
-      const now = new Date();
-      const diff = Math.max(0, Math.ceil((dl - now) / 1000));
-      setRemaining(diff > 0 ? `${diff}s` : "Advancing...");
-    };
-    tick();
-    const iv = setInterval(tick, 500);
-    return () => clearInterval(iv);
-  }, [deadline]);
-  return <span className="text-xs font-heading tabular-nums px-2 py-1 rounded bg-black/30 border border-[var(--noir-border)]" style={{ color: "var(--noir-primary)" }}>{remaining}</span>;
-}
-
 function RndCountdown({ completes_at, onComplete }) {
   const [remaining, setRemaining] = useState("");
   useEffect(() => {
@@ -1041,10 +1025,8 @@ export default function Racing() {
                   <span className="text-[10px] text-blue-400">{liveRace.weather}</span>
                 )}
               </div>
-              {liveRace.lap_deadline ? (
-                <LiveCountdown deadline={liveRace.lap_deadline} />
-              ) : _preGreen ? (
-                <span className="text-[10px] text-[var(--noir-muted)] tabular-nums shrink-0">Strategy clock starts at lights out</span>
+              {_preGreen ? (
+                <span className="text-[10px] text-[var(--noir-muted)] shrink-0">Waiting for lights out</span>
               ) : null}
             </div>
             <div className="h-1 bg-[var(--noir-border)]">

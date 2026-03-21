@@ -3954,28 +3954,15 @@ async def _maybe_auto_green_interactive(race_id: str) -> None:
     await _open_interactive_lap1_decision_window(race_id)
 
 
-async def _maybe_advance_interactive_lap(race_id: str, *, deadline_only: bool = False):
-    """Advance when lap deadline passed OR (if not deadline_only) all living humans have submitted.
-
-    GET /live uses deadline_only=True as a fallback if the canvas never signals a lap. Primary
-    interactive resolve is POST .../interactive-lap-cross when the race leader crosses the S/F line.
-    """
+async def _maybe_advance_interactive_lap(race_id: str) -> None:
+    """Advance only when every living human has submitted (POST /advance-lap). No wall-clock deadline."""
     race = await db.racing_races.find_one(
         {"id": race_id, "mode": "interactive", "state": "running"}, {"_id": 0},
     )
     if not race:
         return
-    deadline = race.get("lap_deadline")
-    if not deadline:
+    if not race.get("lap_deadline"):
         return
-
-    now = datetime.now(timezone.utc)
-    try:
-        dl = datetime.fromisoformat(deadline.replace("Z", "+00:00"))
-    except (ValueError, TypeError):
-        dl = None
-
-    deadline_passed = dl is not None and now >= dl
 
     participants = race.get("participants") or []
     decisions = race.get("decisions") or {}
@@ -3991,7 +3978,7 @@ async def _maybe_advance_interactive_lap(race_id: str, *, deadline_only: bool = 
         len(humans_alive) > 0 and all(hid in decisions for hid in humans_alive)
     )
 
-    if deadline_passed or (not deadline_only and all_humans_submitted):
+    if all_humans_submitted:
         await _advance_one_lap(race)
 
 
@@ -4047,8 +4034,8 @@ async def submit_race_decision(
         {"$set": {f"decisions.{entrant_id}": decision}},
     )
 
-    # Do not advance here: auto-sync POSTs would chain advances. Resolution: leader S/F POST
-    # interactive-lap-cross, or GET /live when lap_deadline passes.
+    # Do not advance here: auto-sync POSTs would chain advances. Resolution: POST
+    # .../interactive-lap-cross (leader S/F) or POST .../advance-lap when all humans submitted.
     return {"message": "Decision submitted", "decision": decision}
 
 
@@ -4170,26 +4157,23 @@ async def get_race_live(
     if race.get("mode") != "interactive":
         raise HTTPException(status_code=400, detail="Race is not interactive")
 
-    cl_before = int(race.get("current_lap") or 0)
+    cl_now = int(race.get("current_lap") or 0)
     tl_live = int(race.get("total_laps") or race.get("laps") or 3)
     if race.get("state") == "running":
         await _maybe_auto_green_interactive(race_id)
-        # Fallback if canvas never signals S/F (AFK / stuck). Primary resolve: interactive-lap-cross.
-        await _maybe_advance_interactive_lap(race_id, deadline_only=True)
         race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
     cl_after = int((race or {}).get("current_lap") or 0)
     _agent_debug_log(
         "racing.py:get_race_live",
         "H1-H2",
-        "live_after_maybe_advance",
+        "live_poll",
         {
             "race_id": race_id,
-            "cl_before": cl_before,
-            "cl_after": cl_after,
-            "delta": cl_after - cl_before,
+            "current_lap": cl_now,
+            "cl_after_auto_green": cl_after,
+            "delta": cl_after - cl_now,
             "total_laps": tl_live,
             "state": (race or {}).get("state"),
-            "deadline_only": True,
         },
     )
 
