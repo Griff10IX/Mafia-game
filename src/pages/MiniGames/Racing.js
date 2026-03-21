@@ -565,6 +565,9 @@ export default function Racing() {
     const poll = async () => {
       try {
         const { data } = await api.get(`/racing/races/${activeRace.id}/live`);
+        // #region agent log
+        fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "Racing.js:live_poll", message: "poll_response", data: { raceId: activeRace.id, current_lap: data.current_lap, total_laps: data.total_laps, status: data.status, lap_results_len: (data.lap_results || []).length, has_deadline: !!data.lap_deadline }, timestamp: Date.now(), hypothesisId: "H1-H2-H4" }) }).catch(() => {});
+        // #endregion
         setLiveRace(data);
         if (data.status === "completed" || data.status === "finished") {
           clearInterval(liveRacePoll.current);
@@ -1077,6 +1080,9 @@ export default function Racing() {
               try {
                 await api.post(`/racing/races/${activeRace.id}/green-flag`);
                 const { data } = await api.get(`/racing/races/${activeRace.id}/live`);
+                // #region agent log
+                fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "Racing.js:green_flag", message: "after_green_live", data: { raceId: activeRace.id, current_lap: data.current_lap, total_laps: data.total_laps, has_deadline: !!data.lap_deadline }, timestamp: Date.now(), hypothesisId: "H1" }) }).catch(() => {});
+                // #endregion
                 setLiveRace(data);
               } catch (e) {
                 toast.error(apiDetail(e));

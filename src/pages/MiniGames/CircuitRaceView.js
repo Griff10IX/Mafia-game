@@ -1196,6 +1196,16 @@ export default function CircuitRaceView({
   useEffect(() => { liveTotalLapsRef.current = liveTotalLaps; }, [liveTotalLaps]);
   useEffect(() => { lapDeadlineRef.current = lapDeadline; }, [lapDeadline]);
 
+  const debugPrevPropLap = useRef(liveCurrentLap);
+  useEffect(() => {
+    if (mode !== "interactive-live") return;
+    if (debugPrevPropLap.current === liveCurrentLap) return;
+    // #region agent log
+    fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "CircuitRaceView.js:props", message: "liveCurrentLap_prop_change", data: { from: debugPrevPropLap.current, to: liveCurrentLap, liveTotalLaps }, timestamp: Date.now(), hypothesisId: "H5" }) }).catch(() => {});
+    // #endregion
+    debugPrevPropLap.current = liveCurrentLap;
+  }, [mode, liveCurrentLap, liveTotalLaps]);
+
   const liveRaceEventsRef = useRef(liveRaceEvents);
   const liveGapsToAheadRef = useRef(liveGapsToAhead);
   const liveSafetyCarLapsRef = useRef(liveSafetyCarLaps);
@@ -2714,6 +2724,7 @@ export default function CircuitRaceView({
     let prevBackendLap = liveCurrentLapRef.current || 0;
     let lastReportedVisLap = -1;
     let lastReportedProg = -1;
+    let agentCheckeredLogged = false;
 
     const addInc = (text) => {
       stateRef.current.incidents.push({ text, time: performance.now() });
@@ -2737,6 +2748,9 @@ export default function CircuitRaceView({
       const totLaps = liveTotalLapsRef.current || 3;
 
       if (curLap !== prevBackendLap) {
+        // #region agent log
+        fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "CircuitRaceView.js:interactive_loop", message: "liveCurrentLap_ref_changed", data: { from: prevBackendLap, to: curLap, totLaps }, timestamp: Date.now(), hypothesisId: "H3-H5" }) }).catch(() => {});
+        // #endregion
         prevBackendLap = curLap;
         r.forEach(x => { x.lastSectorCross = nowSec; x.currentSector = 0; });
       }
@@ -3014,6 +3028,12 @@ export default function CircuitRaceView({
 
       // Race finished: replay uses visual lap; interactive-live waits for server current_lap
       if (raceShouldEnd && totLaps > 0 && !st._raceFinished) {
+        if (!agentCheckeredLogged) {
+          agentCheckeredLogged = true;
+          // #region agent log
+          fetch("http://127.0.0.1:7258/ingest/609248f0-1675-4861-90ee-f3b15ff725d4", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a98925" }, body: JSON.stringify({ sessionId: "a98925", location: "CircuitRaceView.js:interactive_loop", message: "checkered_triggered", data: { curLap, totLaps, serverLapsComplete, visualLapsComplete }, timestamp: Date.now(), hypothesisId: "H2-H5" }) }).catch(() => {});
+          // #endregion
+        }
         st._raceFinished = true;
         st._raceFinishedAt = nowSec;
         st.finishFlash = nowSec + 3.0;

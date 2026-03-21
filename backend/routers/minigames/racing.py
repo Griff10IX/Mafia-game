@@ -6,12 +6,15 @@
 # - 7-day weeks: after 7 days, top 5 teams get good rewards, rest get lesser; then full reset (upgrades, crew bank). Leaderboard winner gets +5% bonus per repeat win, capped at 20%.
 # - Seasons last 2 months: after a season, total reset of everything racing (teams cleared, all progress reset).
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 import asyncio
+import json
 import os
 import random
 import re
 import uuid
 import hashlib
+import time
 from typing import Optional, List, Dict, Any
 from fastapi import Depends, HTTPException, Header
 
@@ -29,6 +32,25 @@ from server import db, get_current_user_verified, get_current_user, maybe_proces
 # ---------- Constants ----------
 def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _agent_debug_log(location: str, hypothesis_id: str, message: str, data: dict) -> None:
+    try:
+        log_path = Path(__file__).resolve().parents[3] / "debug-a98925.log"
+        line = json.dumps(
+            {
+                "sessionId": "a98925",
+                "location": location,
+                "hypothesisId": hypothesis_id,
+                "message": message,
+                "data": data,
+                "timestamp": int(time.time() * 1000),
+            }
+        )
+        with log_path.open("a", encoding="utf-8") as _f:
+            _f.write(line + "\n")
+    except Exception:
+        pass
 
 # Racing cars: 4–5 historically accurate (1920s–30s). Choose one, no purchase. id, name, base_speed, base_grip, image
 RACING_CARS: List[dict] = [
@@ -4082,10 +4104,26 @@ async def get_race_live(
     if race.get("mode") != "interactive":
         raise HTTPException(status_code=400, detail="Race is not interactive")
 
+    cl_before = int(race.get("current_lap") or 0)
+    tl_live = int(race.get("total_laps") or race.get("laps") or 3)
     if race.get("state") == "running":
         await _maybe_auto_green_interactive(race_id)
         await _maybe_advance_interactive_lap(race_id)
         race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    cl_after = int((race or {}).get("current_lap") or 0)
+    _agent_debug_log(
+        "racing.py:get_race_live",
+        "H1-H2",
+        "live_after_maybe_advance",
+        {
+            "race_id": race_id,
+            "cl_before": cl_before,
+            "cl_after": cl_after,
+            "delta": cl_after - cl_before,
+            "total_laps": tl_live,
+            "state": (race or {}).get("state"),
+        },
+    )
 
     my_decision = (race.get("decisions") or {}).get(current_user["id"])
     track = _get_track(race.get("track_id") or "")
