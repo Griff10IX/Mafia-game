@@ -1411,19 +1411,7 @@ export default function CircuitRaceView({
       ctx.fillText("SAFETY CAR",W/2,18);
     }
 
-    // ── Finish flash ──
-    const ff = stateRef.current?.finishFlash||0;
-    if (nowSec < ff) {
-      const el = 1-(ff-nowSec)/2;
-      ctx.save(); ctx.globalCompositeOperation="screen";
-      for (let ri=0; ri<3; ri++) {
-        const rr=el*60+ri*25, a=Math.max(0,0.5*(1-el)-ri*0.1);
-        ctx.strokeStyle=`rgba(232,200,112,${a})`; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.arc(sx(sfP.x),sy(sfP.y),rr,0,Math.PI*2); ctx.stroke();
-      }
-      ctx.globalAlpha=Math.max(0,0.15*(1-el)); ctx.fillStyle="#e8c870"; ctx.fillRect(0,0,W,H);
-      ctx.restore();
-    }
+    // (Finish-line radial flash removed — large arcs at S/F read as a “zone” and cluttered the line.)
 
     // ── Track decorations ──
     if (track.drawExtra) track.drawExtra(ctx, sx, sy);
@@ -2053,7 +2041,7 @@ export default function CircuitRaceView({
               const tw=r.tireWearByLap[idx];
               if(!r.inPit&&!(r.tyreWear>92&&tw<20))r.tyreWear=tw;
             }
-            if(r.totalLapsDone>=nLaps){r.finished=true;r.finishOrder=nextFO++;r.finishedAtSec=nowSec;r.finishVisibleUntil=nowSec+9999;if(r.finishOrder===1){finishFlash=nowSec+2.0;stateRef.current.finishFlash=finishFlash;}}
+            if(r.totalLapsDone>=nLaps){r.finished=true;r.finishOrder=nextFO++;r.finishedAtSec=nowSec;r.finishVisibleUntil=nowSec+9999;if(r.finishOrder===1&&nLaps>1){finishFlash=nowSec+2.0;stateRef.current.finishFlash=finishFlash;}}
           } else {
             // FIX: decrement each frame
             if (r._justCrossedFrames > 0) r._justCrossedFrames--;
