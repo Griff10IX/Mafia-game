@@ -199,6 +199,19 @@ export function getBaseURL() {
   return API || '/api';
 }
 
+/** Public URL for a hosted image (same origin or full backend URL). */
+export function imageHostPublicUrl(publicId) {
+  if (!publicId) return '';
+  const base = (getBaseURL() || '/api').replace(/\/$/, '');
+  const path = `${base}/image-host/i/${encodeURIComponent(publicId)}`;
+  if (path.startsWith('http')) return path;
+  if (typeof window !== 'undefined') {
+    const origin = window.location.origin;
+    return `${origin}${path.startsWith('/') ? '' : '/'}${path}`;
+  }
+  return path;
+}
+
 /** Dispatch to refresh top bar / user data in Layout (money, points, rank, etc.). Pass newMoney to update cash immediately. */
 export function refreshUser(newMoney) {
   if (typeof window !== 'undefined') {

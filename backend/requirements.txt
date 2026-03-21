@@ -1,5 +1,6 @@
 # Minimal production deps (no google/openai/litellm to avoid pip conflicts)
 fastapi>=0.100.0
+python-multipart>=0.0.6
 uvicorn>=0.22.0
 python-dotenv>=1.0.0
 motor>=3.3.0

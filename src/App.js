@@ -97,6 +97,7 @@ const ForumTopic = lazy(() => import("./pages/Social/ForumTopic"));
 const GameIdeas = lazy(() => import("./pages/Social/GameIdeas"));
 const Inbox = lazy(() => import("./pages/Social/Inbox"));
 const InboxChat = lazy(() => import("./pages/Social/InboxChat"));
+const ImageHost = lazy(() => import("./pages/Social/ImageHost"));
 
 // StaffRole pages
 const Admin = lazy(() => import("./pages/StaffRole/Admin"));
@@ -1220,6 +1221,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <ForumTopic />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/social/image-host"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <ImageHost />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

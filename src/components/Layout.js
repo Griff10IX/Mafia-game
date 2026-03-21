@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image } from 'lucide-react';
 import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache } from '../utils/api';
 import { setCrimesPrefetch, getCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -134,6 +134,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/social/forum', label: 'Entertainer Forum', search: '?tab=entertainer' },
         { path: '/social/forum', label: 'Designer Forum', search: '?tab=designer' },
         { path: '/social/inbox', label: 'Inbox' },
+        { path: '/social/image-host', label: 'Image host' },
         { path: '/game/help-desk', label: 'Help Desk' },
         { path: '/money/booze-run', label: 'Booze Run' },
         { path: '/money/racket', label: 'Racket' },
@@ -788,7 +789,7 @@ export default function Layout({ children }) {
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
         '__combat__': 'combat', '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
-        '/social/forum': 'messaging', '/social/inbox': 'messaging',
+        '/social/forum': 'messaging', '/social/inbox': 'messaging', '/social/image-host': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game/daily-rewards': 'money',
         '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/casino': 'money', '/money/loot-box': 'money',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
@@ -801,7 +802,7 @@ export default function Layout({ children }) {
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
         '__combat__': 'combat', '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
-        '/social/forum': 'messaging', '/social/inbox': 'messaging',
+        '/social/forum': 'messaging', '/social/inbox': 'messaging', '/social/image-host': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game/daily-rewards': 'money', '/casino/mini-games/flappy': 'money',
         '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/casino': 'money', '/game/leaderboard': 'money',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
@@ -842,6 +843,7 @@ export default function Layout({ children }) {
     { path: '/game/users-online', icon: Users, label: 'Users Online' },
     { path: '/social/forum', icon: MessageSquare, label: 'Forum' },
     { path: '/social/inbox', icon: Mail, label: 'Inbox', badge: unreadCount },
+    { path: '/social/image-host', icon: Image, label: 'Image host' },
     { path: '/game/help-desk', icon: HelpCircle, label: 'Help Desk', badge: helpDeskOpenCount },
     { path: '/game/ranking', icon: Target, label: 'Ranking' },
     { path: '/cars/garage', icon: Car, label: 'Garage' },

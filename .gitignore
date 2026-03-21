@@ -34,3 +34,6 @@ backup_*/
 
 # MongoDB dumps
 dump/
+
+# User-uploaded files (image host, etc.)
+backend/uploads/
