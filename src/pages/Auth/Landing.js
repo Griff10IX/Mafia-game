@@ -847,13 +847,13 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
             Omertà — silence is the first rule
           </p>
 
-          {/* ── TRADEMARK & WARNING ─────────────────────────────────────── */}
+          {/* ── COPYRIGHT ───────────────────────────────────────────────── */}
           <div className="mt-6 text-center landing-fade-up-3">
             <p
               className="font-heading text-[9px] uppercase tracking-[0.15em]"
               style={{ color: 'var(--noir-primary)', opacity: 0.5 }}
             >
-              MafiaWars.co.uk™
+              MafiaWars.co.uk©
             </p>
           </div>
 

@@ -1185,13 +1185,16 @@ export default function CircuitRaceView({
   }, [liveResultOrder]);
 
   useEffect(() => {
-    if (mode !== "interactive-live" || !Array.isArray(liveResultOrder) || liveResultOrder.length === 0 || !results?.length) return;
-    const want = liveResultOrder.join(",");
-    const have = results.map((row) => row.id).join(",");
-    if (have === want) return;
-    const byId = Object.fromEntries(results.map((row) => [row.id, row]));
-    if (!liveResultOrder.every((id) => byId[id])) return;
-    setResults(liveResultOrder.map((id, i) => ({ ...byId[id], pos: i + 1 })));
+    if (mode !== "interactive-live" || !Array.isArray(liveResultOrder) || liveResultOrder.length === 0) return;
+    setResults((prev) => {
+      if (!prev?.length) return prev;
+      const want = liveResultOrder.join(",");
+      const have = prev.map((row) => row.id).join(",");
+      if (have === want) return prev;
+      const byId = Object.fromEntries(prev.map((row) => [row.id, row]));
+      if (!liveResultOrder.every((id) => byId[id])) return prev;
+      return liveResultOrder.map((id, i) => ({ ...byId[id], pos: i + 1 }));
+    });
   }, [mode, liveResultOrder, results]);
 
   useEffect(() => {
@@ -2745,7 +2748,7 @@ export default function CircuitRaceView({
     });
     let prevBackendLap = null;
     let postedCrossForServerLap = null;
-    /** After server lap bumps, ignore S/F resolves for this many rAF ticks (~35 ≈ 580ms @ 60Hz) to kill double-fire. */
+    /** After server lap bumps, ignore S/F resolves for this many rAF ticks (~50 ≈ 830ms @ 60Hz) to kill double-fire. */
     let framesSinceServerLapSync = 999;
     let interactiveLapCrossInFlight = false;
     let lastTowerEmitMs = 0;
@@ -3077,7 +3080,7 @@ export default function CircuitRaceView({
         && curLap < totLaps
         && postedCrossForServerLap !== curLap
         && leaderSf.totalLapsDone === curLap
-        && framesSinceServerLapSync >= 35
+        && framesSinceServerLapSync >= 50
         && !interactiveLapCrossInFlight
       ) {
         const prevT = leaderSf._interactiveLapPrevPos;
