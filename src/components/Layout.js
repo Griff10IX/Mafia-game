@@ -1131,7 +1131,7 @@ export default function Layout({ children }) {
     const propertyProfit = user?.property_profit ?? 0;
     const chipBase = isMobile
       ? `flex items-center gap-1 rounded-lg shrink-0 cursor-grab active:cursor-grabbing touch-manipulation transition-all duration-150 bg-white/[0.05] hover:bg-white/[0.08]`
-      : `flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm shrink-0 cursor-grab active:cursor-grabbing touch-manipulation transition-all duration-150 hover:border-primary/40`;
+      : `flex items-center gap-1 rounded-md shrink-0 cursor-grab active:cursor-grabbing touch-manipulation transition-colors duration-150 border-0 bg-white/[0.04] hover:bg-white/[0.08]`;
 
     if (statId === 'rank') {
       const pct = rankProgress ? Number(rankProgress.rank_points_progress) : 0;
@@ -1169,8 +1169,8 @@ export default function Layout({ children }) {
       return (
         <div className={`${chipBase} flex min-w-0`} style={{
           ...topBarChipStyle, minHeight: topBarChipMinHeight,
-          ...(isMobile ? {} : { borderColor: healthNum <= 25 ? 'rgba(248,113,113,0.3)' : healthNum <= 50 ? 'rgba(251,191,36,0.25)' : undefined }),
           ...(isMobile && healthNum <= 50 ? { backgroundColor: healthNum <= 25 ? 'rgba(248,113,113,0.12)' : 'rgba(251,191,36,0.1)' } : {}),
+          ...(!isMobile && healthNum <= 25 ? { boxShadow: 'inset 0 0 0 1px rgba(248,113,113,0.22)' } : !isMobile && healthNum <= 50 ? { boxShadow: 'inset 0 0 0 1px rgba(251,191,36,0.18)' } : {}),
         }} title={`Health: ${healthStr}%`}>
           <Heart size={topBarIconSizeEffectiveMobile} style={{ color: heartColor, flexShrink: 0 }} aria-hidden />
           <span className={`font-heading ${topBarTextClass} ${healthColor} tabular-nums truncate max-w-[4rem]`} data-testid="topbar-health">{healthStr}%</span>
@@ -1535,10 +1535,10 @@ export default function Layout({ children }) {
             const topBarIconSizeEffective = Math.max(8, Math.min(20, Math.round(topBarIconSize * chipScaleAvg)));
             const topBarIconSizeEffectiveMobile = isMobileViewport ? Math.min(12, topBarIconSizeEffective) : topBarIconSizeEffective;
             const topBarChipStyle = {
-              paddingTop: isMobileViewport ? Math.round(3 * chipHeightScale) : Math.round(6 * chipHeightScale),
-              paddingBottom: isMobileViewport ? Math.round(3 * chipHeightScale) : Math.round(6 * chipHeightScale),
-              paddingLeft: isMobileViewport ? Math.round(6 * chipWidthScale) : Math.round(8 * chipWidthScale),
-              paddingRight: isMobileViewport ? Math.round(6 * chipWidthScale) : Math.round(8 * chipWidthScale),
+              paddingTop: isMobileViewport ? Math.round(3 * chipHeightScale) : Math.round(3 * chipHeightScale),
+              paddingBottom: isMobileViewport ? Math.round(3 * chipHeightScale) : Math.round(3 * chipHeightScale),
+              paddingLeft: isMobileViewport ? Math.round(6 * chipWidthScale) : Math.round(5 * chipWidthScale),
+              paddingRight: isMobileViewport ? Math.round(6 * chipWidthScale) : Math.round(5 * chipWidthScale),
             };
             // Mobile: slimmer chips (32px min); desktop: use scale
             const topBarChipMinHeight = isMobileViewport ? Math.max(32, Math.round(30 * chipHeightScale)) : undefined;
@@ -1556,13 +1556,13 @@ export default function Layout({ children }) {
                   style={isMobileViewport ? { WebkitMaskImage: 'linear-gradient(to right, transparent 0, black 8px, black 90%, transparent 100%)', maskImage: 'linear-gradient(to right, transparent 0, black 8px, black 90%, transparent 100%)' } : undefined}
                 >
                   {(!isMobileViewport || mobileStatsDisplay === 'top_bar') && mobileStatsDisplay !== 'right_sidebar' && (
-                    <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
+                    <div className="flex items-center gap-0.5 md:gap-2 shrink-0">
                       {/* Search — IMPROVEMENT 1: always-visible compact search on mobile too */}
                       <div className="relative shrink-0 z-10" ref={userSearchRef}>
                         {!userSearchExpanded ? (
                           <button type="button" draggable={false}
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setUserSearchExpanded(true); setUserSearchOpen(true); setTimeout(() => userSearchInputRef.current?.focus(), 0); }}
-                            className={`flex items-center justify-center gap-1 text-primary active:scale-95 transition-all cursor-pointer touch-manipulation ${isMobileViewport ? 'rounded-lg bg-white/[0.06] hover:bg-white/[0.1]' : 'bg-noir-surface/90 border border-primary/20 rounded-sm hover:bg-noir-raised/90 hover:border-primary/40'}`}
+                            className={`flex items-center justify-center gap-1 text-primary active:scale-95 transition-colors cursor-pointer touch-manipulation ${isMobileViewport ? 'rounded-lg bg-white/[0.06] hover:bg-white/[0.1]' : 'rounded-md border-0 bg-white/[0.04] hover:bg-white/[0.08]'}`}
                             style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }}
                             aria-label="Search user" title="Find any made man">
                             <Search size={topBarIconSizeEffectiveMobile} strokeWidth={2} />
