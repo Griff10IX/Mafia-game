@@ -1555,7 +1555,8 @@ export default function Layout({ children }) {
                 >
                   {(!isMobileViewport || mobileStatsDisplay === 'top_bar') && mobileStatsDisplay !== 'right_sidebar' && (
                     <div className="flex items-center gap-1 md:gap-2 shrink-0">
-                      {/* Search — IMPROVEMENT 1: always-visible compact search on mobile too */}
+                      {/* Search — desktop only (mobile: find users elsewhere, e.g. social) */}
+                      {!isMobileViewport && (
                       <div className="relative shrink-0 z-10" ref={userSearchRef}>
                         {!userSearchExpanded ? (
                           <button type="button" draggable={false}
@@ -1609,8 +1610,9 @@ export default function Layout({ children }) {
                           </div>
                         )}
                       </div>
+                      )}
 
-                      {statOrder.filter((statId) => statId !== 'notifications' && statId !== 'property').map((statId) => {
+                      {statOrder.filter((statId) => statId !== 'notifications' && statId !== 'property' && (!isMobileViewport || statId !== 'kills')).map((statId) => {
                         const content = renderTopBarStat(statId, statRenderProps);
                         if (!content) return null;
                         return (
@@ -1620,15 +1622,6 @@ export default function Layout({ children }) {
                           </div>
                         );
                       })}
-
-                      {isMobileViewport && (
-                        <button type="button" onClick={() => setTopBarCustomizeOpen(true)}
-                          className="shrink-0 flex items-center justify-center gap-1 rounded-md border-0 bg-white/[0.04] text-primary hover:bg-white/[0.08] transition-colors touch-manipulation"
-                          style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }}
-                          aria-label="Customize top bar" title="Reorder, size & spacing">
-                          <Settings size={topBarIconSizeEffectiveMobile} strokeWidth={2} />
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>
