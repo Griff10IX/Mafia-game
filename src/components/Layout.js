@@ -1554,7 +1554,7 @@ export default function Layout({ children }) {
                   style={isMobileViewport ? { WebkitMaskImage: 'linear-gradient(to right, transparent 0, black 8px, black 90%, transparent 100%)', maskImage: 'linear-gradient(to right, transparent 0, black 8px, black 90%, transparent 100%)' } : undefined}
                 >
                   {(!isMobileViewport || mobileStatsDisplay === 'top_bar') && mobileStatsDisplay !== 'right_sidebar' && (
-                    <div className="flex items-center gap-1 md:gap-2 shrink-0">
+                    <div className="flex items-center gap-0.5 md:gap-2 min-w-full w-max justify-evenly md:min-w-0 md:w-auto md:justify-start md:shrink-0">
                       {/* Search — desktop only (mobile: find users elsewhere, e.g. social) */}
                       {!isMobileViewport && (
                       <div className="relative shrink-0 z-10" ref={userSearchRef}>
