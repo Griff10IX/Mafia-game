@@ -165,6 +165,16 @@ const SIDEBAR_SPACING_KEY = 'sidebar_spacing';
 const SIDEBAR_LAYOUT_KEY = 'sidebar_layout';
 const BOTTOM_NAV_SHOW_DIVIDERS_KEY = 'bottom_nav_show_dividers';
 
+const TOPBAR_STAT_ORDER_PATCH_MS = 450;
+let topBarStatOrderPatchTimer = null;
+function schedulePatchTopBarStatOrder(order) {
+  if (topBarStatOrderPatchTimer) clearTimeout(topBarStatOrderPatchTimer);
+  topBarStatOrderPatchTimer = setTimeout(() => {
+    topBarStatOrderPatchTimer = null;
+    api.patch('/profile/theme', { top_bar_stat_order: order }).catch(() => {});
+  }, TOPBAR_STAT_ORDER_PATCH_MS);
+}
+
 function loadSidebarShowDividers() {
   try { const v = localStorage.getItem(SIDEBAR_SHOW_DIVIDERS_KEY); if (v === 'true') return true; } catch (_) {}
   return false;
@@ -431,12 +441,26 @@ export default function Layout({ children }) {
     window.addEventListener('sidebar-dividers-changed', onSidebarDividers);
     window.addEventListener('sidebar-layout-changed', onSidebarLayout);
     window.addEventListener('bottom-nav-dividers-changed', onBottomNavDividers);
+    const onStatOrderSync = () => setStatOrder(loadStatOrder());
+    const onNotificationBallSync = () => {
+      const saved = loadNotificationBallPosition();
+      if (!saved) return;
+      const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+      setNotificationBallPosition({
+        x: clamp(saved.x, 0, typeof window !== 'undefined' ? window.innerWidth - 56 : 300),
+        y: clamp(saved.y, 0, typeof window !== 'undefined' ? window.innerHeight - 56 : 400),
+      });
+    };
+    window.addEventListener('topbar-stat-order-changed', onStatOrderSync);
+    window.addEventListener('notification-ball-changed', onNotificationBallSync);
     return () => {
       window.removeEventListener('topbar-prefs-changed', onTopBarPrefs);
       window.removeEventListener('mobile-stats-display-changed', onMobileStatsDisplay);
       window.removeEventListener('sidebar-dividers-changed', onSidebarDividers);
       window.removeEventListener('sidebar-layout-changed', onSidebarLayout);
       window.removeEventListener('bottom-nav-dividers-changed', onBottomNavDividers);
+      window.removeEventListener('topbar-stat-order-changed', onStatOrderSync);
+      window.removeEventListener('notification-ball-changed', onNotificationBallSync);
     };
   }, []);
 
@@ -1462,6 +1486,7 @@ export default function Layout({ children }) {
                 const idx = next.indexOf(targetId);
                 next.splice(idx < 0 ? next.length : idx, 0, draggedId);
                 try { localStorage.setItem(TOPBAR_STAT_ORDER_KEY, JSON.stringify(next)); } catch (_) {}
+                schedulePatchTopBarStatOrder(next);
                 return next;
               });
               setDraggingStatId(null);
@@ -1473,13 +1498,34 @@ export default function Layout({ children }) {
                 const next = [...prev];
                 [next[fromIndex], next[toIndex]] = [next[toIndex], next[fromIndex]];
                 try { localStorage.setItem(TOPBAR_STAT_ORDER_KEY, JSON.stringify(next)); } catch (_) {}
+                schedulePatchTopBarStatOrder(next);
                 return next;
               });
             };
-            const setTopBarGapPersist = (v) => { try { localStorage.setItem(TOPBAR_GAP_KEY, v); } catch (_) {} window.dispatchEvent(new Event('topbar-prefs-changed')); };
-            const setTopBarSizePersist = (v) => { try { localStorage.setItem(TOPBAR_SIZE_KEY, v); } catch (_) {} window.dispatchEvent(new Event('topbar-prefs-changed')); };
-            const setTopBarChipWidthScalePersist = (v) => { const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v))); try { localStorage.setItem(TOPBAR_CHIP_WIDTH_SCALE_KEY, String(n)); } catch (_) {} setTopBarChipWidthScale(n); window.dispatchEvent(new Event('topbar-prefs-changed')); };
-            const setTopBarChipHeightScalePersist = (v) => { const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v))); try { localStorage.setItem(TOPBAR_CHIP_HEIGHT_SCALE_KEY, String(n)); } catch (_) {} setTopBarChipHeightScale(n); window.dispatchEvent(new Event('topbar-prefs-changed')); };
+            const setTopBarGapPersist = (v) => {
+              try { localStorage.setItem(TOPBAR_GAP_KEY, v); } catch (_) {}
+              window.dispatchEvent(new Event('topbar-prefs-changed'));
+              api.patch('/profile/theme', { top_bar_gap: v }).catch(() => {});
+            };
+            const setTopBarSizePersist = (v) => {
+              try { localStorage.setItem(TOPBAR_SIZE_KEY, v); } catch (_) {}
+              window.dispatchEvent(new Event('topbar-prefs-changed'));
+              api.patch('/profile/theme', { top_bar_size: v }).catch(() => {});
+            };
+            const setTopBarChipWidthScalePersist = (v) => {
+              const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v)));
+              try { localStorage.setItem(TOPBAR_CHIP_WIDTH_SCALE_KEY, String(n)); } catch (_) {}
+              setTopBarChipWidthScale(n);
+              window.dispatchEvent(new Event('topbar-prefs-changed'));
+              api.patch('/profile/theme', { top_bar_chip_width_scale: n }).catch(() => {});
+            };
+            const setTopBarChipHeightScalePersist = (v) => {
+              const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v)));
+              try { localStorage.setItem(TOPBAR_CHIP_HEIGHT_SCALE_KEY, String(n)); } catch (_) {}
+              setTopBarChipHeightScale(n);
+              window.dispatchEvent(new Event('topbar-prefs-changed'));
+              api.patch('/profile/theme', { top_bar_chip_height_scale: n }).catch(() => {});
+            };
 
             const topBarGapClass = topBarGap === 'compact' ? 'gap-1 md:gap-2' : topBarGap === 'spread' ? 'gap-2 md:gap-4' : 'gap-1 md:gap-2';
             const topBarIconSize = topBarSize === 'small' ? 12 : topBarSize === 'large' ? 20 : 16;
@@ -2060,7 +2106,12 @@ export default function Layout({ children }) {
                 document.removeEventListener('pointermove', onMove);
                 document.removeEventListener('pointerup', onUp);
                 document.removeEventListener('pointercancel', onUp);
-                if (r.isDragging) { try { localStorage.setItem(NOTIFICATION_BALL_POSITION_KEY, JSON.stringify({ x: r.lastX, y: r.lastY })); } catch (_) {} }
+                if (r.isDragging) {
+                  try { localStorage.setItem(NOTIFICATION_BALL_POSITION_KEY, JSON.stringify({ x: r.lastX, y: r.lastY })); } catch (_) {}
+                  api.patch('/profile/theme', {
+                    notification_ball_position: { x: Math.round(r.lastX), y: Math.round(r.lastY) },
+                  }).catch(() => {});
+                }
                 else { openNotificationPanel(); }
                 notificationDragRef.current = null;
               };

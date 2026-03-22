@@ -274,25 +274,62 @@ export default function ThemePicker({ open, onClose }) {
     return () => window.removeEventListener('theme-saved', onSaved);
   }, []);
 
-  const setChipWP = v => { const n = Math.max(CHIP_MIN,Math.min(CHIP_MAX,v)); setChipW(n); lsSet(KEYS.chipW,n,'topbar-prefs-changed'); };
-  const setChipHP = v => { const n = Math.max(CHIP_MIN,Math.min(CHIP_MAX,v)); setChipH(n); lsSet(KEYS.chipH,n,'topbar-prefs-changed'); };
-  const setGap = v => lsSet(KEYS.gap,v,'topbar-prefs-changed');
-  const setSize = v => lsSet(KEYS.size,v,'topbar-prefs-changed');
+  const setChipWP = (v) => {
+    const n = Math.max(CHIP_MIN, Math.min(CHIP_MAX, v));
+    setChipW(n);
+    lsSet(KEYS.chipW, n, 'topbar-prefs-changed');
+    api.patch('/profile/theme', { top_bar_chip_width_scale: n }).catch(() => {});
+  };
+  const setChipHP = (v) => {
+    const n = Math.max(CHIP_MIN, Math.min(CHIP_MAX, v));
+    setChipH(n);
+    lsSet(KEYS.chipH, n, 'topbar-prefs-changed');
+    api.patch('/profile/theme', { top_bar_chip_height_scale: n }).catch(() => {});
+  };
+  const setGap = (v) => {
+    lsSet(KEYS.gap, v, 'topbar-prefs-changed');
+    api.patch('/profile/theme', { top_bar_gap: v }).catch(() => {});
+  };
+  const setSize = (v) => {
+    lsSet(KEYS.size, v, 'topbar-prefs-changed');
+    api.patch('/profile/theme', { top_bar_size: v }).catch(() => {});
+  };
   const setStatsDisplay = (v) => {
     lsSet(KEYS.statsDisplay, v, 'mobile-stats-display-changed');
     api.patch('/profile/theme', { mobile_stats_display: v }).catch(() => {});
   };
-  const setSidebarDividers = v => lsSet(KEYS.sidebarDividers,v?'true':'false','sidebar-dividers-changed');
-  const setDividerStyle = v => lsSet(KEYS.dividerStyle,v,'sidebar-layout-changed');
-  const setSidebarSpacing = v => lsSet(KEYS.sidebarSpacing,v,'sidebar-layout-changed');
+  const setSidebarDividers = (v) => {
+    lsSet(KEYS.sidebarDividers, v ? 'true' : 'false', 'sidebar-dividers-changed');
+    api.patch('/profile/theme', { sidebar_show_dividers: v }).catch(() => {});
+  };
+  const setDividerStyle = (v) => {
+    lsSet(KEYS.dividerStyle, v, 'sidebar-layout-changed');
+    api.patch('/profile/theme', { sidebar_divider_style: v }).catch(() => {});
+  };
+  const setSidebarSpacing = (v) => {
+    lsSet(KEYS.sidebarSpacing, v, 'sidebar-layout-changed');
+    api.patch('/profile/theme', { sidebar_spacing: v }).catch(() => {});
+  };
   const setSidebarLayout = (v) => {
     lsSet(KEYS.sidebarLayout, v, 'sidebar-layout-changed');
     api.patch('/profile/theme', { sidebar_layout: v }).catch(() => {});
   };
-  const setToastPosition = v => lsSet(KEYS.toastPosition,v,'toast-prefs-changed');
-  const setToastCloseButton = v => lsSet(KEYS.toastCloseButton,v?'true':'false','toast-prefs-changed');
-  const setKillToastStyle = v => lsSet(KEYS.killToastStyle, v, 'kill-toast-style-changed');
-  const setBottomDividers = v => lsSet(KEYS.bottomDividers,v?'true':'false','bottom-nav-dividers-changed');
+  const setToastPosition = (v) => {
+    lsSet(KEYS.toastPosition, v, 'toast-prefs-changed');
+    api.patch('/profile/theme', { toast_position: v }).catch(() => {});
+  };
+  const setToastCloseButton = (v) => {
+    lsSet(KEYS.toastCloseButton, v ? 'true' : 'false', 'toast-prefs-changed');
+    api.patch('/profile/theme', { toast_close_button: v }).catch(() => {});
+  };
+  const setKillToastStyle = (v) => {
+    lsSet(KEYS.killToastStyle, v, 'kill-toast-style-changed');
+    api.patch('/profile/theme', { kill_toast_style: v }).catch(() => {});
+  };
+  const setBottomDividers = (v) => {
+    lsSet(KEYS.bottomDividers, v ? 'true' : 'false', 'bottom-nav-dividers-changed');
+    api.patch('/profile/theme', { bottom_nav_show_dividers: v }).catch(() => {});
+  };
 
   /* ── data ── */
   const allColours = [...customThemes.map(customToColourEntry), ...THEME_COLOURS];

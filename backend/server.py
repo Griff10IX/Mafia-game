@@ -609,6 +609,12 @@ class DeadAliveReviveRequest(BaseModel):
 class AvatarUpdateRequest(BaseModel):
     avatar_data: str  # data URL: data:image/...;base64,...
 
+class NotificationBallPositionRequest(BaseModel):
+    """Pixel position for draggable notification ball (synced across devices)."""
+    x: int
+    y: int
+
+
 class ThemePreferencesRequest(BaseModel):
     """Theme preferences (all optional). Omitted keys are left unchanged; send full object to replace."""
     colour_id: Optional[str] = None
@@ -627,6 +633,21 @@ class ThemePreferencesRequest(BaseModel):
     mobile_nav_style: Optional[str] = None
     mobile_stats_display: Optional[str] = None
     button_shape_id: Optional[str] = None
+    top_bar_gap: Optional[str] = None
+    top_bar_size: Optional[str] = None
+    top_bar_chip_width_scale: Optional[int] = None
+    top_bar_chip_height_scale: Optional[int] = None
+    sidebar_show_dividers: Optional[bool] = None
+    bottom_nav_show_dividers: Optional[bool] = None
+    sidebar_divider_style: Optional[str] = None
+    sidebar_spacing: Optional[str] = None
+    toast_position: Optional[str] = None
+    toast_close_button: Optional[bool] = None
+    kill_toast_style: Optional[str] = None
+    toast_custom_x: Optional[int] = None
+    toast_custom_y: Optional[int] = None
+    top_bar_stat_order: Optional[List[str]] = None
+    notification_ball_position: Optional[NotificationBallPositionRequest] = None
 
 
 class DashboardPreferencesRequest(BaseModel):

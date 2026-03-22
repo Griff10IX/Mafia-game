@@ -18,6 +18,153 @@ const MOBILE_STATS_DISPLAY_LS = 'mobile_stats_display';
 const STORAGE_KEY_BUTTON_SHAPE = 'app_theme_button_shape';
 const STORAGE_KEY_THEME_VARIANT = 'app_theme_variant';
 
+const LS_TOPBAR_GAP = 'topbar_gap';
+const LS_TOPBAR_SIZE = 'topbar_size';
+const LS_TOPBAR_CHIP_W = 'topbar_chip_width_scale';
+const LS_TOPBAR_CHIP_H = 'topbar_chip_height_scale';
+const LS_SIDEBAR_DIVIDERS = 'sidebar_show_dividers';
+const LS_BOTTOM_NAV_DIVIDERS = 'bottom_nav_show_dividers';
+const LS_SIDEBAR_DIV_STYLE = 'sidebar_divider_style';
+const LS_SIDEBAR_SPACING = 'sidebar_spacing';
+const LS_TOAST_POS = 'toast_position';
+const LS_TOAST_CLOSE = 'toast_close_button';
+const LS_KILL_TOAST = 'kill_toast_style';
+const LS_TOAST_X = 'toast_custom_x';
+const LS_TOAST_Y = 'toast_custom_y';
+const LS_STAT_ORDER = 'topbar_stat_order';
+const LS_NOTIF_BALL = 'notification_ball_position';
+const CHIP_LS_MIN = 20;
+const CHIP_LS_MAX = 100;
+const VALID_TOPBAR_STAT_IDS = new Set(['rank', 'health', 'bullets', 'kills', 'money', 'points', 'respect_points', 'notifications', 'property']);
+
+/** Apply layout prefs returned from GET /profile/theme to localStorage. Returns event names to dispatch. */
+function applyLayoutPrefsFromServerToLS(prefs) {
+  const events = new Set();
+  try {
+    if (prefs.topBarGap === 'compact' || prefs.topBarGap === 'normal' || prefs.topBarGap === 'spread') {
+      localStorage.setItem(LS_TOPBAR_GAP, prefs.topBarGap);
+      events.add('topbar-prefs-changed');
+    }
+    if (prefs.topBarSize === 'small' || prefs.topBarSize === 'medium' || prefs.topBarSize === 'large') {
+      localStorage.setItem(LS_TOPBAR_SIZE, prefs.topBarSize);
+      events.add('topbar-prefs-changed');
+    }
+    const cw = prefs.topBarChipWidthScale;
+    if (typeof cw === 'number' && Number.isFinite(cw) && cw >= CHIP_LS_MIN && cw <= CHIP_LS_MAX) {
+      localStorage.setItem(LS_TOPBAR_CHIP_W, String(Math.round(cw)));
+      events.add('topbar-prefs-changed');
+    }
+    const ch = prefs.topBarChipHeightScale;
+    if (typeof ch === 'number' && Number.isFinite(ch) && ch >= CHIP_LS_MIN && ch <= CHIP_LS_MAX) {
+      localStorage.setItem(LS_TOPBAR_CHIP_H, String(Math.round(ch)));
+      events.add('topbar-prefs-changed');
+    }
+    if (typeof prefs.sidebarShowDividers === 'boolean') {
+      localStorage.setItem(LS_SIDEBAR_DIVIDERS, prefs.sidebarShowDividers ? 'true' : 'false');
+      events.add('sidebar-dividers-changed');
+    }
+    if (typeof prefs.bottomNavShowDividers === 'boolean') {
+      localStorage.setItem(LS_BOTTOM_NAV_DIVIDERS, prefs.bottomNavShowDividers ? 'true' : 'false');
+      events.add('bottom-nav-dividers-changed');
+    }
+    if (prefs.sidebarDividerStyle === 'solid' || prefs.sidebarDividerStyle === 'dotted' || prefs.sidebarDividerStyle === 'dashed') {
+      localStorage.setItem(LS_SIDEBAR_DIV_STYLE, prefs.sidebarDividerStyle);
+      events.add('sidebar-layout-changed');
+    }
+    if (prefs.sidebarSpacing === 'compact' || prefs.sidebarSpacing === 'normal' || prefs.sidebarSpacing === 'relaxed') {
+      localStorage.setItem(LS_SIDEBAR_SPACING, prefs.sidebarSpacing);
+      events.add('sidebar-layout-changed');
+    }
+    const tp = prefs.toastPosition;
+    if (['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right', 'custom'].includes(tp)) {
+      localStorage.setItem(LS_TOAST_POS, tp);
+      events.add('toast-prefs-changed');
+    }
+    if (typeof prefs.toastCloseButton === 'boolean') {
+      localStorage.setItem(LS_TOAST_CLOSE, prefs.toastCloseButton ? 'true' : 'false');
+      events.add('toast-prefs-changed');
+    }
+    if (prefs.killToastStyle === 'banner' || prefs.killToastStyle === 'popup') {
+      localStorage.setItem(LS_KILL_TOAST, prefs.killToastStyle);
+      events.add('kill-toast-style-changed');
+    }
+    const tcx = prefs.toastCustomX;
+    const tcy = prefs.toastCustomY;
+    if (typeof tcx === 'number' && Number.isFinite(tcx)) {
+      localStorage.setItem(LS_TOAST_X, String(Math.round(tcx)));
+      events.add('toast-prefs-changed');
+    }
+    if (typeof tcy === 'number' && Number.isFinite(tcy)) {
+      localStorage.setItem(LS_TOAST_Y, String(Math.round(tcy)));
+      events.add('toast-prefs-changed');
+    }
+    if (Array.isArray(prefs.topBarStatOrder) && prefs.topBarStatOrder.length
+        && prefs.topBarStatOrder.every((id) => typeof id === 'string' && VALID_TOPBAR_STAT_IDS.has(id))) {
+      localStorage.setItem(LS_STAT_ORDER, JSON.stringify(prefs.topBarStatOrder));
+      events.add('topbar-stat-order-changed');
+    }
+    const nbp = prefs.notificationBallPosition;
+    if (nbp && typeof nbp.x === 'number' && typeof nbp.y === 'number' && Number.isFinite(nbp.x) && Number.isFinite(nbp.y)) {
+      localStorage.setItem(LS_NOTIF_BALL, JSON.stringify({ x: Math.round(nbp.x), y: Math.round(nbp.y) }));
+      events.add('notification-ball-changed');
+    }
+  } catch (_) {}
+  return [...events];
+}
+
+/** Read layout-related keys from localStorage for PATCH /profile/theme snapshot. */
+function readLayoutSnapshotForPatch() {
+  const o = {};
+  try {
+    if (typeof localStorage === 'undefined') return o;
+    const g = localStorage.getItem(LS_TOPBAR_GAP);
+    if (g === 'compact' || g === 'normal' || g === 'spread') o.top_bar_gap = g;
+    const sz = localStorage.getItem(LS_TOPBAR_SIZE);
+    if (sz === 'small' || sz === 'medium' || sz === 'large') o.top_bar_size = sz;
+    const cw = parseInt(localStorage.getItem(LS_TOPBAR_CHIP_W), 10);
+    if (Number.isFinite(cw) && cw >= CHIP_LS_MIN && cw <= CHIP_LS_MAX) o.top_bar_chip_width_scale = cw;
+    const ch = parseInt(localStorage.getItem(LS_TOPBAR_CHIP_H), 10);
+    if (Number.isFinite(ch) && ch >= CHIP_LS_MIN && ch <= CHIP_LS_MAX) o.top_bar_chip_height_scale = ch;
+    const sd = localStorage.getItem(LS_SIDEBAR_DIVIDERS);
+    if (sd === 'true') o.sidebar_show_dividers = true;
+    else if (sd === 'false') o.sidebar_show_dividers = false;
+    const bd = localStorage.getItem(LS_BOTTOM_NAV_DIVIDERS);
+    if (bd === 'true') o.bottom_nav_show_dividers = true;
+    else if (bd === 'false') o.bottom_nav_show_dividers = false;
+    const dstyle = localStorage.getItem(LS_SIDEBAR_DIV_STYLE);
+    if (dstyle === 'solid' || dstyle === 'dotted' || dstyle === 'dashed') o.sidebar_divider_style = dstyle;
+    const ssp = localStorage.getItem(LS_SIDEBAR_SPACING);
+    if (ssp === 'compact' || ssp === 'normal' || ssp === 'relaxed') o.sidebar_spacing = ssp;
+    const tp = localStorage.getItem(LS_TOAST_POS);
+    if (['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right', 'custom'].includes(tp)) o.toast_position = tp;
+    const tc = localStorage.getItem(LS_TOAST_CLOSE);
+    if (tc === 'true') o.toast_close_button = true;
+    else if (tc === 'false') o.toast_close_button = false;
+    const kts = localStorage.getItem(LS_KILL_TOAST);
+    if (kts === 'banner' || kts === 'popup') o.kill_toast_style = kts;
+    const tx = parseInt(localStorage.getItem(LS_TOAST_X), 10);
+    if (Number.isFinite(tx)) o.toast_custom_x = tx;
+    const ty = parseInt(localStorage.getItem(LS_TOAST_Y), 10);
+    if (Number.isFinite(ty)) o.toast_custom_y = ty;
+    const rawOrder = localStorage.getItem(LS_STAT_ORDER);
+    if (rawOrder) {
+      const parsed = JSON.parse(rawOrder);
+      if (Array.isArray(parsed) && parsed.length
+          && parsed.every((id) => typeof id === 'string' && VALID_TOPBAR_STAT_IDS.has(id))) {
+        o.top_bar_stat_order = parsed;
+      }
+    }
+    const rawBall = localStorage.getItem(LS_NOTIF_BALL);
+    if (rawBall) {
+      const p = JSON.parse(rawBall);
+      if (typeof p?.x === 'number' && typeof p?.y === 'number' && Number.isFinite(p.x) && Number.isFinite(p.y)) {
+        o.notification_ball_position = { x: Math.round(p.x), y: Math.round(p.y) };
+      }
+    }
+  } catch (_) {}
+  return o;
+}
+
 /** Convert saved custom theme to colour shape used by applyColourToDocument */
 function customToColour(custom) {
   if (!custom || !custom.stops || custom.stops.length < 1) return null;
@@ -481,6 +628,9 @@ export function ThemeProvider({ children }) {
           } catch (_) {}
         }
         if (prefs.buttonShapeId != null) { localStorage.setItem(STORAGE_KEY_BUTTON_SHAPE, prefs.buttonShapeId); setButtonShapeIdState(prefs.buttonShapeId); }
+        applyLayoutPrefsFromServerToLS(prefs).forEach((ev) => {
+          try { window.dispatchEvent(new Event(ev)); } catch (_) {}
+        });
         if (prefs.colourId != null || prefs.theme_variant != null || prefs.themeVariant != null) {
           try {
             localStorage.setItem('app_initial_theme_chosen', '1');
@@ -519,6 +669,7 @@ export function ThemeProvider({ children }) {
       mobile_nav_style: mobileNavStyle || null,
       mobile_stats_display,
       button_shape_id: buttonShapeId || null,
+      ...readLayoutSnapshotForPatch(),
     };
     api.patch('/profile/theme', payload).then(() => {
       try { window.dispatchEvent(new CustomEvent('theme-saved')); } catch (_) {}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Toaster } from './ui/sonner';
 import { GripVertical } from 'lucide-react';
+import api from '../utils/api';
 
 const TOAST_POSITION_KEY = 'toast_position';
 const TOAST_CLOSE_KEY = 'toast_close_button';
@@ -35,11 +36,14 @@ function loadToastCustomXY() {
 }
 
 function saveToastCustomXY(x, y) {
+  const rx = Math.round(x);
+  const ry = Math.round(y);
   try {
-    localStorage.setItem(TOAST_CUSTOM_X_KEY, String(Math.round(x)));
-    localStorage.setItem(TOAST_CUSTOM_Y_KEY, String(Math.round(y)));
+    localStorage.setItem(TOAST_CUSTOM_X_KEY, String(rx));
+    localStorage.setItem(TOAST_CUSTOM_Y_KEY, String(ry));
     window.dispatchEvent(new Event('toast-prefs-changed'));
   } catch (_) {}
+  api.patch('/profile/theme', { toast_custom_x: rx, toast_custom_y: ry }).catch(() => {});
 }
 
 function loadToastStyle() {

@@ -4,6 +4,14 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+_VALID_TOAST_POSITIONS = frozenset(
+    ("top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right", "custom")
+)
+_VALID_TOPBAR_STAT_IDS = frozenset(
+    ("rank", "health", "bullets", "kills", "money", "points", "respect_points", "notifications", "property")
+)
+_CHIP_SCALE_MIN, _CHIP_SCALE_MAX = 20, 100
+
 from fastapi import Body, Depends, HTTPException
 
 logger = logging.getLogger(__name__)
@@ -718,8 +726,65 @@ def register(router):
             "mobile_nav_style": "mobileNavStyle",
             "mobile_stats_display": "mobileStatsDisplay",
             "button_shape_id": "buttonShapeId",
+            "top_bar_gap": "topBarGap",
+            "top_bar_size": "topBarSize",
+            "top_bar_chip_width_scale": "topBarChipWidthScale",
+            "top_bar_chip_height_scale": "topBarChipHeightScale",
+            "sidebar_show_dividers": "sidebarShowDividers",
+            "bottom_nav_show_dividers": "bottomNavShowDividers",
+            "sidebar_divider_style": "sidebarDividerStyle",
+            "sidebar_spacing": "sidebarSpacing",
+            "toast_position": "toastPosition",
+            "toast_close_button": "toastCloseButton",
+            "kill_toast_style": "killToastStyle",
+            "toast_custom_x": "toastCustomX",
+            "toast_custom_y": "toastCustomY",
+            "top_bar_stat_order": "topBarStatOrder",
+            "notification_ball_position": "notificationBallPosition",
         }
         stored = {key_map.get(k, k): v for k, v in updates.items()}
+        tbg = stored.get("topBarGap")
+        if tbg is not None and tbg not in ("compact", "normal", "spread"):
+            raise HTTPException(status_code=400, detail="Invalid top_bar_gap")
+        tbs = stored.get("topBarSize")
+        if tbs is not None and tbs not in ("small", "medium", "large"):
+            raise HTTPException(status_code=400, detail="Invalid top_bar_size")
+        for chip_key in ("topBarChipWidthScale", "topBarChipHeightScale"):
+            cv = stored.get(chip_key)
+            if cv is not None and (not isinstance(cv, int) or cv < _CHIP_SCALE_MIN or cv > _CHIP_SCALE_MAX):
+                raise HTTPException(status_code=400, detail=f"Invalid {chip_key}")
+        sds = stored.get("sidebarDividerStyle")
+        if sds is not None and sds not in ("solid", "dotted", "dashed"):
+            raise HTTPException(status_code=400, detail="Invalid sidebar_divider_style")
+        ssp = stored.get("sidebarSpacing")
+        if ssp is not None and ssp not in ("compact", "normal", "relaxed"):
+            raise HTTPException(status_code=400, detail="Invalid sidebar_spacing")
+        tp = stored.get("toastPosition")
+        if tp is not None and tp not in _VALID_TOAST_POSITIONS:
+            raise HTTPException(status_code=400, detail="Invalid toast_position")
+        kts = stored.get("killToastStyle")
+        if kts is not None and kts not in ("banner", "popup"):
+            raise HTTPException(status_code=400, detail="Invalid kill_toast_style")
+        tcx, tcy = stored.get("toastCustomX"), stored.get("toastCustomY")
+        if tcx is not None and not isinstance(tcx, int):
+            raise HTTPException(status_code=400, detail="Invalid toast_custom_x")
+        if tcy is not None and not isinstance(tcy, int):
+            raise HTTPException(status_code=400, detail="Invalid toast_custom_y")
+        tso = stored.get("topBarStatOrder")
+        if tso is not None:
+            if not isinstance(tso, list) or not tso or not all(isinstance(s, str) and s in _VALID_TOPBAR_STAT_IDS for s in tso):
+                raise HTTPException(status_code=400, detail="Invalid top_bar_stat_order")
+            if len(tso) != len(set(tso)):
+                raise HTTPException(status_code=400, detail="Invalid top_bar_stat_order")
+        nbp = stored.get("notificationBallPosition")
+        if nbp is not None:
+            if not isinstance(nbp, dict):
+                raise HTTPException(status_code=400, detail="Invalid notification_ball_position")
+            nx, ny = nbp.get("x"), nbp.get("y")
+            if not isinstance(nx, int) or not isinstance(ny, int):
+                raise HTTPException(status_code=400, detail="Invalid notification_ball_position")
+            if nx < 0 or ny < 0 or nx > 32000 or ny > 32000:
+                raise HTTPException(status_code=400, detail="Invalid notification_ball_position")
         mns = stored.get("mobileNavStyle")
         if mns is not None and mns not in ("bottom", "sidebar"):
             raise HTTPException(status_code=400, detail="Invalid mobile_nav_style")
