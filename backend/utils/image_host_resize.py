@@ -5,11 +5,22 @@ import logging
 from io import BytesIO
 from typing import Optional, Tuple
 
-from PIL import Image
-
 from utils.image_upload_security import CAR_IMAGE_MAX_REMOTE_BYTES, verify_image_magic_bytes
 
 logger = logging.getLogger(__name__)
+
+
+def _require_pil():
+    """Lazy import so the API can start without Pillow; resize paths fail with a clear message."""
+    try:
+        from PIL import Image
+
+        return Image
+    except ImportError as e:
+        raise ValueError(
+            "Image resize requires Pillow. On the server run: pip install Pillow"
+            " (or pip install -r requirements.txt) then restart the backend."
+        ) from e
 
 # Longest side (px); keeps aspect ratio. User-selectable presets only.
 ALLOWED_MAX_EDGES = frozenset({400, 640, 800, 1024, 1280, 1600, 1920})
@@ -30,6 +41,8 @@ def apply_max_edge_resize(data: bytes, mime: str, max_edge: int) -> Tuple[bytes,
     """
     if max_edge not in ALLOWED_MAX_EDGES:
         raise ValueError("Invalid max_edge")
+
+    Image = _require_pil()
 
     try:
         im = Image.open(BytesIO(data))
@@ -100,6 +113,8 @@ def maybe_resize_for_host(data: bytes, mime: str, max_edge: Optional[int]) -> Tu
     if max_edge is None:
         return data, mime, None
     max_edge = normalize_max_edge(max_edge)
+
+    Image = _require_pil()
 
     if mime == "image/gif":
         try:

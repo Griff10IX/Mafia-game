@@ -716,9 +716,16 @@ def register(router):
             "custom_themes": "customThemes",
             "sidebar_layout": "sidebarLayout",
             "mobile_nav_style": "mobileNavStyle",
+            "mobile_stats_display": "mobileStatsDisplay",
             "button_shape_id": "buttonShapeId",
         }
         stored = {key_map.get(k, k): v for k, v in updates.items()}
+        mns = stored.get("mobileNavStyle")
+        if mns is not None and mns not in ("bottom", "sidebar"):
+            raise HTTPException(status_code=400, detail="Invalid mobile_nav_style")
+        msd = stored.get("mobileStatsDisplay")
+        if msd is not None and msd not in ("top_bar", "touch_ball", "right_sidebar"):
+            raise HTTPException(status_code=400, detail="Invalid mobile_stats_display")
         new_prefs = {**(current_user.get("theme_preferences") or {}), **stored}
         await db.users.update_one(
             {"id": current_user["id"]},

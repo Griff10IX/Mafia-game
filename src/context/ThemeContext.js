@@ -14,6 +14,7 @@ const STORAGE_KEY_TOAST_TEXT = 'app_theme_toast_text_colour';
 const STORAGE_KEY_TEXT_STYLE = 'app_theme_text_style';
 const STORAGE_KEY_CUSTOM_THEMES = 'app_theme_custom_themes';
 const STORAGE_KEY_MOBILE_NAV = 'app_theme_mobile_nav';
+const MOBILE_STATS_DISPLAY_LS = 'mobile_stats_display';
 const STORAGE_KEY_BUTTON_SHAPE = 'app_theme_button_shape';
 const STORAGE_KEY_THEME_VARIANT = 'app_theme_variant';
 
@@ -327,9 +328,11 @@ export function ThemeProvider({ children }) {
   const [mobileNavStyle, setMobileNavStyleState] = useState(() => {
     try {
       const v = localStorage.getItem(STORAGE_KEY_MOBILE_NAV);
-      return v === 'bottom' ? 'bottom' : 'sidebar';
+      if (v === 'bottom') return 'bottom';
+      if (v === 'sidebar') return 'sidebar';
+      return 'bottom';
     } catch {
-      return 'sidebar';
+      return 'bottom';
     }
   });
   const [buttonShapeId, setButtonShapeIdState] = useState(() => {
@@ -467,7 +470,16 @@ export function ThemeProvider({ children }) {
         localStorage.setItem(STORAGE_KEY_THEME_VARIANT, loadedThemeVariant);
         setThemeVariantState(loadedThemeVariant);
         if (Array.isArray(prefs.customThemes)) { localStorage.setItem(STORAGE_KEY_CUSTOM_THEMES, JSON.stringify(prefs.customThemes)); setCustomThemesState(prefs.customThemes); }
-        if (prefs.mobileNavStyle != null) { localStorage.setItem(STORAGE_KEY_MOBILE_NAV, prefs.mobileNavStyle); setMobileNavStyleState(prefs.mobileNavStyle); }
+        if (prefs.mobileNavStyle === 'bottom' || prefs.mobileNavStyle === 'sidebar') {
+          localStorage.setItem(STORAGE_KEY_MOBILE_NAV, prefs.mobileNavStyle);
+          setMobileNavStyleState(prefs.mobileNavStyle);
+        }
+        if (prefs.mobileStatsDisplay != null && ['top_bar', 'touch_ball', 'right_sidebar'].includes(prefs.mobileStatsDisplay)) {
+          try {
+            localStorage.setItem(MOBILE_STATS_DISPLAY_LS, prefs.mobileStatsDisplay);
+            window.dispatchEvent(new Event('mobile-stats-display-changed'));
+          } catch (_) {}
+        }
         if (prefs.buttonShapeId != null) { localStorage.setItem(STORAGE_KEY_BUTTON_SHAPE, prefs.buttonShapeId); setButtonShapeIdState(prefs.buttonShapeId); }
         if (prefs.colourId != null || prefs.theme_variant != null || prefs.themeVariant != null) {
           try {
@@ -485,6 +497,11 @@ export function ThemeProvider({ children }) {
       themeSourceRef.current = 'local';
       return;
     }
+    let mobile_stats_display = null;
+    try {
+      const msd = typeof localStorage !== 'undefined' ? localStorage.getItem(MOBILE_STATS_DISPLAY_LS) : null;
+      if (msd === 'top_bar' || msd === 'touch_ball' || msd === 'right_sidebar') mobile_stats_display = msd;
+    } catch (_) {}
     const payload = {
       colour_id: colourId,
       texture_id: textureId,
@@ -500,6 +517,7 @@ export function ThemeProvider({ children }) {
       theme_variant: themeVariant,
       sidebar_layout: (typeof localStorage !== 'undefined' && localStorage.getItem('sidebar_layout')) || null,
       mobile_nav_style: mobileNavStyle || null,
+      mobile_stats_display,
       button_shape_id: buttonShapeId || null,
     };
     api.patch('/profile/theme', payload).then(() => {

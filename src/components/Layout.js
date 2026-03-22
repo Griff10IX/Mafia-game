@@ -187,7 +187,7 @@ function loadBottomNavShowDividers() {
 }
 function loadMobileStatsDisplay() {
   try { const v = localStorage.getItem(MOBILE_STATS_DISPLAY_KEY); if (v === 'top_bar' || v === 'touch_ball' || v === 'right_sidebar') return v; } catch (_) {}
-  return 'right_sidebar';
+  return 'top_bar';
 }
 function loadNotificationBallPosition() {
   try {

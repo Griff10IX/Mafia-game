@@ -249,7 +249,7 @@ export default function ThemePicker({ open, onClose }) {
 
   const topBarGap = ls(KEYS.gap, 'normal');
   const topBarSize = ls(KEYS.size, 'medium');
-  const mobileStatsDisplay = ls(KEYS.statsDisplay, 'right_sidebar');
+  const mobileStatsDisplay = ls(KEYS.statsDisplay, 'top_bar');
   const sidebarShowDividers = ls(KEYS.sidebarDividers) === 'true';
   const bottomNavShowDividers = ls(KEYS.bottomDividers) === 'true';
   const sidebarDividerStyle = ls(KEYS.dividerStyle, 'solid');
@@ -278,7 +278,10 @@ export default function ThemePicker({ open, onClose }) {
   const setChipHP = v => { const n = Math.max(CHIP_MIN,Math.min(CHIP_MAX,v)); setChipH(n); lsSet(KEYS.chipH,n,'topbar-prefs-changed'); };
   const setGap = v => lsSet(KEYS.gap,v,'topbar-prefs-changed');
   const setSize = v => lsSet(KEYS.size,v,'topbar-prefs-changed');
-  const setStatsDisplay = v => lsSet(KEYS.statsDisplay,v,'mobile-stats-display-changed');
+  const setStatsDisplay = (v) => {
+    lsSet(KEYS.statsDisplay, v, 'mobile-stats-display-changed');
+    api.patch('/profile/theme', { mobile_stats_display: v }).catch(() => {});
+  };
   const setSidebarDividers = v => lsSet(KEYS.sidebarDividers,v?'true':'false','sidebar-dividers-changed');
   const setDividerStyle = v => lsSet(KEYS.dividerStyle,v,'sidebar-layout-changed');
   const setSidebarSpacing = v => lsSet(KEYS.sidebarSpacing,v,'sidebar-layout-changed');

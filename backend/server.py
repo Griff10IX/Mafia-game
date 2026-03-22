@@ -625,6 +625,7 @@ class ThemePreferencesRequest(BaseModel):
     custom_themes: Optional[List[Dict]] = None
     sidebar_layout: Optional[str] = None
     mobile_nav_style: Optional[str] = None
+    mobile_stats_display: Optional[str] = None
     button_shape_id: Optional[str] = None
 
 
