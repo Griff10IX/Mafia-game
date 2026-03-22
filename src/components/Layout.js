@@ -1129,9 +1129,7 @@ export default function Layout({ children }) {
   const renderTopBarStat = (statId, { topBarChipStyle, topBarChipMinHeight, topBarIconSizeEffectiveMobile, topBarTextClass, rankBarWidthPx, rankColMinWidthPx, chipWidthScale, chipHeightScale, isMobileViewport: isMobile }) => {
     const casinoProfit = user?.casino_profit ?? 0;
     const propertyProfit = user?.property_profit ?? 0;
-    const chipBase = isMobile
-      ? `flex items-center gap-1 rounded-lg shrink-0 cursor-grab active:cursor-grabbing touch-manipulation transition-all duration-150 bg-white/[0.05] hover:bg-white/[0.08]`
-      : `flex items-center gap-1 rounded-md shrink-0 cursor-grab active:cursor-grabbing touch-manipulation transition-colors duration-150 border-0 bg-white/[0.04] hover:bg-white/[0.08]`;
+    const chipBase = `flex items-center gap-1 rounded-md shrink-0 touch-manipulation transition-colors duration-150 border-0 bg-white/[0.04] hover:bg-white/[0.08]${isMobile ? '' : ' cursor-grab active:cursor-grabbing'}`;
 
     if (statId === 'rank') {
       const pct = rankProgress ? Number(rankProgress.rank_points_progress) : 0;
@@ -1421,7 +1419,7 @@ export default function Layout({ children }) {
       )}
 
       {/* ── TOP BAR ─────────────────────────────────────────────────────────── */}
-      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 ${themeVariant === 'modern' ? 'md:left-40' : 'md:left-48'} min-h-[38px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-2 py-1.5 md:px-3 md:py-0 gap-1 md:gap-2 ${mobileStatsDisplay === 'right_sidebar' ? 'md:right-52' : ''}`}>
+      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 ${themeVariant === 'modern' ? 'md:left-40' : 'md:left-48'} min-h-[36px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-2 py-1 md:px-3 md:py-0 gap-1 md:gap-2 ${mobileStatsDisplay === 'right_sidebar' ? 'md:right-52' : ''}`}>
         <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0 overflow-hidden md:justify-end">
           {mobileNavStyle !== 'bottom' && (
             <button onClick={() => setSidebarOpen(!sidebarOpen)} data-testid="mobile-menu-toggle"
@@ -1535,13 +1533,13 @@ export default function Layout({ children }) {
             const topBarIconSizeEffective = Math.max(8, Math.min(20, Math.round(topBarIconSize * chipScaleAvg)));
             const topBarIconSizeEffectiveMobile = isMobileViewport ? Math.min(12, topBarIconSizeEffective) : topBarIconSizeEffective;
             const topBarChipStyle = {
-              paddingTop: isMobileViewport ? Math.round(3 * chipHeightScale) : Math.round(3 * chipHeightScale),
-              paddingBottom: isMobileViewport ? Math.round(3 * chipHeightScale) : Math.round(3 * chipHeightScale),
-              paddingLeft: isMobileViewport ? Math.round(6 * chipWidthScale) : Math.round(5 * chipWidthScale),
-              paddingRight: isMobileViewport ? Math.round(6 * chipWidthScale) : Math.round(5 * chipWidthScale),
+              paddingTop: Math.round((isMobileViewport ? 2 : 3) * chipHeightScale),
+              paddingBottom: Math.round((isMobileViewport ? 2 : 3) * chipHeightScale),
+              paddingLeft: Math.round((isMobileViewport ? 4 : 5) * chipWidthScale),
+              paddingRight: Math.round((isMobileViewport ? 4 : 5) * chipWidthScale),
             };
-            // Mobile: slimmer chips (32px min); desktop: use scale
-            const topBarChipMinHeight = isMobileViewport ? Math.max(32, Math.round(30 * chipHeightScale)) : undefined;
+            // Mobile: slimmer row but keep ≥32px for tap targets; desktop: no fixed min
+            const topBarChipMinHeight = isMobileViewport ? Math.max(32, Math.round(28 * chipHeightScale)) : undefined;
             const rankBarWidthPx = Math.max(isMobileViewport ? 18 : 20, Math.round((isMobileViewport ? 24 : 44) * chipWidthScale));
             const rankColMinWidthPx = Math.max(isMobileViewport ? 28 : 36, Math.round((isMobileViewport ? 44 : 52) * chipWidthScale));
             const topBarTextClass = topBarSize === 'small' ? 'text-[11px] md:text-[10px]' : topBarSize === 'large' ? 'text-sm' : (isMobileViewport ? 'text-[11px]' : 'text-xs');
@@ -1552,23 +1550,26 @@ export default function Layout({ children }) {
               <>
                 {/* IMPROVEMENT 6: scroll fade mask on mobile */}
                 <div
-                  className={`${(isMobileViewport && mobileStatsDisplay === 'touch_ball') || mobileStatsDisplay === 'right_sidebar' ? 'hidden' : 'flex'} md:flex items-center ${topBarGapClass} flex-1 min-w-0 py-0.5 md:py-0 md:mx-0 md:px-0 overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth touch-pan-x min-h-0`}
+                  className={`${(isMobileViewport && mobileStatsDisplay === 'touch_ball') || mobileStatsDisplay === 'right_sidebar' ? 'hidden' : 'flex'} md:flex items-center ${topBarGapClass} flex-1 min-w-0 py-0 md:py-0 md:mx-0 md:px-0 overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth touch-pan-x min-h-0`}
                   style={isMobileViewport ? { WebkitMaskImage: 'linear-gradient(to right, transparent 0, black 8px, black 90%, transparent 100%)', maskImage: 'linear-gradient(to right, transparent 0, black 8px, black 90%, transparent 100%)' } : undefined}
                 >
                   {(!isMobileViewport || mobileStatsDisplay === 'top_bar') && mobileStatsDisplay !== 'right_sidebar' && (
-                    <div className="flex items-center gap-0.5 md:gap-2 shrink-0">
+                    <div className="flex items-center gap-1 md:gap-2 shrink-0">
                       {/* Search — IMPROVEMENT 1: always-visible compact search on mobile too */}
                       <div className="relative shrink-0 z-10" ref={userSearchRef}>
                         {!userSearchExpanded ? (
                           <button type="button" draggable={false}
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setUserSearchExpanded(true); setUserSearchOpen(true); setTimeout(() => userSearchInputRef.current?.focus(), 0); }}
-                            className={`flex items-center justify-center gap-1 text-primary active:scale-95 transition-colors cursor-pointer touch-manipulation ${isMobileViewport ? 'rounded-lg bg-white/[0.06] hover:bg-white/[0.1]' : 'rounded-md border-0 bg-white/[0.04] hover:bg-white/[0.08]'}`}
+                            className="flex items-center justify-center gap-1 text-primary active:scale-95 transition-colors cursor-pointer touch-manipulation rounded-md border-0 bg-white/[0.04] hover:bg-white/[0.08]"
                             style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }}
                             aria-label="Search user" title="Find any made man">
                             <Search size={topBarIconSizeEffectiveMobile} strokeWidth={2} />
                           </button>
                         ) : (
-                          <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/30 rounded-sm px-2 py-1.5 min-w-[140px] max-w-[180px] md:min-w-[120px] md:py-0.5 md:px-1.5" style={{ boxShadow: '0 0 0 2px rgba(var(--noir-primary-rgb), 0.08)' }}>
+                          <div
+                            className={`flex items-center gap-1 rounded-md px-2 py-1 min-w-[140px] max-w-[180px] md:min-w-[120px] md:py-0.5 md:px-1.5 ${isMobileViewport ? 'bg-white/[0.06] border border-white/12' : 'bg-noir-surface/90 border border-primary/30'}`}
+                            style={isMobileViewport ? undefined : { boxShadow: '0 0 0 2px rgba(var(--noir-primary-rgb), 0.08)' }}
+                          >
                             <Search size={14} className="text-primary/50 shrink-0 md:w-3 md:h-3" aria-hidden />
                             <input ref={userSearchInputRef} type="text" value={userSearchQuery}
                               onChange={(e) => { setUserSearchQuery(e.target.value); setUserSearchOpen(true); }}
@@ -1622,7 +1623,7 @@ export default function Layout({ children }) {
 
                       {isMobileViewport && (
                         <button type="button" onClick={() => setTopBarCustomizeOpen(true)}
-                          className="shrink-0 flex items-center justify-center gap-1 rounded-lg bg-white/[0.06] text-primary hover:bg-white/[0.1] transition-colors touch-manipulation"
+                          className="shrink-0 flex items-center justify-center gap-1 rounded-md border-0 bg-white/[0.04] text-primary hover:bg-white/[0.08] transition-colors touch-manipulation"
                           style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }}
                           aria-label="Customize top bar" title="Reorder, size & spacing">
                           <Settings size={topBarIconSizeEffectiveMobile} strokeWidth={2} />
