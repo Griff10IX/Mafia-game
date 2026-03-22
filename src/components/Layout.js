@@ -1906,26 +1906,26 @@ export default function Layout({ children }) {
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex flex-col-reverse">
           {/* News + casino bar — above nav when top bar stats selected */}
           {mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && (
-            <div data-layout="mobile-bottom-bar" className="flex items-center gap-2 px-3 py-2 safe-area-pb"
+            <div data-layout="mobile-bottom-bar" className="flex items-stretch gap-2 px-3 py-2 safe-area-pb"
               style={{ backgroundColor: 'var(--noir-content)', borderTop: '1px solid var(--noir-border-mid)' }}>
               {flashNews.length > 0 && (
-                <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden rounded px-2 py-1.5 border border-primary/15 bg-primary/5">
+                <div className="flex min-w-0 flex-1 basis-0 items-center gap-1 overflow-hidden rounded px-2 py-1.5 border border-primary/15 bg-primary/5">
                   <Newspaper className="shrink-0 text-primary/70 self-center w-3 h-3" aria-hidden />
-                  <div className="flex items-baseline gap-1 min-w-0 flex-1 overflow-hidden">
-                    <span className="flash-marquee text-[10px] text-mutedForeground font-heading leading-none min-w-0" title={flashNews[flashIndex]?.message}>{flashNews[flashIndex]?.message}</span>
-                    {flashNews.length > 1 && <span className="text-[9px] text-primary/50 shrink-0 font-heading leading-none tabular-nums">{flashIndex + 1}/{flashNews.length}</span>}
+                  <div className="flex min-w-0 flex-1 items-baseline gap-1 overflow-hidden">
+                    <span className="flash-marquee min-w-0 text-[10px] font-heading leading-none text-mutedForeground" title={flashNews[flashIndex]?.message}>{flashNews[flashIndex]?.message}</span>
+                    {flashNews.length > 1 && <span className="shrink-0 font-heading text-[9px] tabular-nums leading-none text-primary/50">{flashIndex + 1}/{flashNews.length}</span>}
                   </div>
                 </div>
               )}
               {user && hasCasinoOrProperty && (
                 <Link
                   to="/my-properties"
-                  className="flex items-center gap-1 min-h-[1.5rem] rounded px-2 py-1.5 border border-primary/15 bg-primary/5 shrink-0 hover:bg-primary/10 hover:border-primary/25 transition-colors"
+                  className="flex min-h-[1.5rem] min-w-0 flex-1 basis-0 items-center justify-start gap-1 rounded border border-primary/15 bg-primary/5 px-2 py-1.5 font-heading text-[10px] tabular-nums transition-colors hover:border-primary/25 hover:bg-primary/10"
                 >
-                  <Building2 className="shrink-0 text-primary/70 self-center w-3 h-3" aria-hidden />
-                  <span className={`font-heading text-[10px] tabular-nums ${(user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>C {formatMoneyCompact(user.casino_profit ?? 0)}</span>
-                  <span className="text-primary/50 text-[9px]">·</span>
-                  <span className="font-heading text-[10px] text-mutedForeground tabular-nums">P {formatCompact(user.property_profit ?? 0)} pts</span>
+                  <Building2 className="h-3 w-3 shrink-0 self-center text-primary/70" aria-hidden />
+                  <span className={`min-w-0 truncate ${(user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>C {formatMoneyCompact(user.casino_profit ?? 0)}</span>
+                  <span className="shrink-0 text-[9px] text-primary/50">·</span>
+                  <span className="min-w-0 truncate text-mutedForeground">P {formatCompact(user.property_profit ?? 0)} pts</span>
                 </Link>
               )}
             </div>
