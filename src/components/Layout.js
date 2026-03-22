@@ -1612,7 +1612,7 @@ export default function Layout({ children }) {
                       </div>
                       )}
 
-                      {statOrder.filter((statId) => statId !== 'notifications' && statId !== 'property' && (!isMobileViewport || statId !== 'kills')).map((statId) => {
+                      {statOrder.filter((statId) => statId !== 'notifications' && statId !== 'property' && (!isMobileViewport || (statId !== 'kills' && statId !== 'respect_points'))).map((statId) => {
                         const content = renderTopBarStat(statId, statRenderProps);
                         if (!content) return null;
                         return (
