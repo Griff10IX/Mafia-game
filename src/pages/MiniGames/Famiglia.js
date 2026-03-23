@@ -863,6 +863,10 @@ const MISSIONS=[
 function FamigliaGameInner(){
   const canvasRef=useRef(null),mmRef=useRef(null),gsRef=useRef(null);
   const rafRef=useRef(null),keysRef=useRef({});
+  const execNPCRef=useRef(null);
+  const advanceMissionStepRef=useRef(null);
+  const saveGameRef=useRef(null);
+  const toggleRadioRef=useRef(null);
   const joyRef=useRef({id:null,origin:null,vec:{x:0,y:0},base:null});
   const uiRef=useRef({showShop:false,showMissions:false,activeMission:null,missionProgress:{}});
   const lastFamigliaSubmitRef=useRef(0);
@@ -1078,6 +1082,7 @@ function FamigliaGameInner(){
     }
     refreshObjective(gs);
   };
+  advanceMissionStepRef.current=advanceMissionStep;
 
   const showMsg=(txt,dur=260)=>{
     if(!gsRef.current)return;gsRef.current.msgTimer=dur;
@@ -1148,7 +1153,7 @@ function FamigliaGameInner(){
       }
     }
     for(const n of gs.npcs){
-      if(Math.hypot(p.x-n.x,p.y-n.y)<32){execNPC(gs,n);return;}
+      if(Math.hypot(p.x-n.x,p.y-n.y)<32){execNPCRef.current?.(gs,n);return;}
     }
     showMsg("Get closer to a person, car, or garage");
   },[]);
@@ -1173,6 +1178,7 @@ function FamigliaGameInner(){
     try{localStorage.setItem("famiglia_save",JSON.stringify(save));showMsg("💾 Game saved.");submitFamigliaSession();}
     catch(e){showMsg("Save failed.");}
   };
+  saveGameRef.current=saveGame;
 
   const loadGame=()=>{
     const gs=gsRef.current; if(!gs)return;
@@ -1293,6 +1299,7 @@ function FamigliaGameInner(){
     const btn=document.getElementById("rpg-radio-btn");
     if(btn)btn.textContent=gs.radioOn?"🎷 ON":"🎷 OFF";
   };
+  toggleRadioRef.current=toggleRadio;
   const nextStation=()=>{
     const gs=gsRef.current; if(!gs)return;
     const R=radioRef.current;
@@ -1463,6 +1470,7 @@ function FamigliaGameInner(){
     if(m?.id===3 && gs.missionStepIdx===2 && p.wanted===0) advanceMissionStep(gs);
     refreshHUD(gs);refreshObjective(gs);
   };
+  execNPCRef.current=execNPC;
 
   const spawnPts=(gs,x,y,col,n=6)=>{
     for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=1.5+Math.random()*3;gs.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:24,col,sz:1+Math.random()*2});}
@@ -1959,7 +1967,7 @@ function FamigliaGameInner(){
       setTimeout(()=>{gs._dead=false;},3000);
     }
     const emid=gs.activeMissionId;
-    if(emid===3&&gs.missionStepIdx===2&&p.wanted===0){advanceMissionStep(gs);}
+    if(emid===3&&gs.missionStepIdx===2&&p.wanted===0){advanceMissionStepRef.current?.(gs);}
     if(gs.msgTimer>0){gs.msgTimer--;if(gs.msgTimer===0)hideMsg();}
     gs.timeOfDay=(gs.timeOfDay+gs.daySpeed)%1;
   },[]);
@@ -2391,8 +2399,8 @@ function FamigliaGameInner(){
       if(e.code==="KeyE"||e.code==="KeyF")doInteract();
       if(e.code==="KeyQ"){const gs=gsRef.current;if(gs){const p=gs.player;const wi=p.weapons.indexOf(p.weapon);p.weapon=p.weapons[(wi+1)%p.weapons.length];refreshHUD(gs);showMsg("Weapon: "+WEAPONS[p.weapon].name);}}
       if(e.code==="KeyP"){const el=document.getElementById("rpg-phone");if(el){const vis=el.style.display==="flex";el.style.display=vis?"none":"flex";}}
-      if(e.code==="KeyR"){toggleRadio();}
-      if(e.code==="KeyS"&&(e.ctrlKey||e.metaKey)){e.preventDefault();saveGame();}
+      if(e.code==="KeyR"){toggleRadioRef.current?.();}
+      if(e.code==="KeyS"&&(e.ctrlKey||e.metaKey)){e.preventDefault();saveGameRef.current?.();}
     };
     const ku=(e)=>{keysRef.current[e.code]=false;};
     window.addEventListener("keydown",kd);window.addEventListener("keyup",ku);

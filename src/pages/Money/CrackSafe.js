@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Lock, Trophy, Info, ChevronUp, ChevronDown, KeyRound, Infinity } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
@@ -412,7 +412,7 @@ export default function CrackSafe() {
   const [shaking, setShaking] = useState(false);
   const [skipAnim, setSkipAnim] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
-  const [lockTick, setLockTick] = useState(0);
+  const [, setLockTick] = useState(0);
   const spinRef = useRef(null);
 
   useEffect(() => {
@@ -421,12 +421,11 @@ export default function CrackSafe() {
     return () => clearInterval(t);
   }, [info?.win_locked, info?.win_lock_until]);
 
-  const lockSecondsLeft = useMemo(() => {
-    if (!info?.win_lock_until) return 0;
+  let lockSecondsLeft = 0;
+  if (info?.win_lock_until) {
     const end = new Date(info.win_lock_until).getTime();
-    if (Number.isNaN(end)) return 0;
-    return Math.max(0, Math.ceil((end - Date.now()) / 1000));
-  }, [info?.win_lock_until, lockTick]);
+    if (!Number.isNaN(end)) lockSecondsLeft = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+  }
 
   const fetchInfo = useCallback(async () => {
     try {

@@ -617,10 +617,7 @@ export default function Racing() {
     return () => clearTimeout(t);
   }, [
     myDecision,
-    liveRace?.status,
-    liveRace?.current_lap,
-    liveRace?.total_laps,
-    liveRace?.lap_deadline,
+    liveRace,
     activeRace?.id,
     activeRace?.mode,
     activeRace?.laps,
