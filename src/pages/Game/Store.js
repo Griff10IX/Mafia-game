@@ -34,9 +34,6 @@ const VALID_TABS = ['points', 'sendpts', 'upgrades', 'bullets'];
 const bulletCost = (bullets) => bullets < 5000 ? Math.max(1, Math.floor(bullets * 0.02)) : 100 + Math.ceil((bullets - 5000) * 75 / 5000);
 
 const STORE_TOKEN_MAX_HELD = 15;
-const SHOOTING_RANGE_BASE_PLAYS = 10;
-const SHOOTING_RANGE_BONUS_MAX = 10;
-const SHOOTING_RANGE_BONUS_COST = 85;
 
 /** Single consumable tokens (armoury); activate from My Inventory */
 const TOKEN_STORE_ITEMS = [
@@ -67,20 +64,6 @@ const UPGRADES = [
   { id: 'crew-oc-timer', title: 'Crew OC Timer', Icon: Clock, price: 350, path: '/store/buy-crew-oc-timer', ownedKey: 'crew_oc_timer_reduced', desc: 'Family Crew OC 6h when you commit' },
   { id: 'garage', title: 'Garage Batch', Icon: Zap, price: 25, path: '/store/upgrade-garage-batch', ownedKey: null, desc: '+10 melt/scrap at once', extra: (u) => ({ line: 'Limit', value: u?.garage_batch_limit ?? 6 }) },
   { id: 'booze', title: 'Booze Capacity', Icon: ShoppingBag, price: 30, path: '/store/buy-booze-capacity', ownedKey: null, desc: '+100 capacity (max 1000)', extra: (u, cfg) => cfg && ({ line: 'Capacity', value: cfg.capacity ?? '—' }) },
-  {
-    id: 'shooting-range-bonus',
-    title: 'Shooting Range Bandwidth',
-    Icon: Crosshair,
-    price: SHOOTING_RANGE_BONUS_COST,
-    path: '/store/buy-shooting-range-bonus',
-    ownedKey: null,
-    desc: `+2 plays per hour on the 3D range (max +${SHOOTING_RANGE_BONUS_MAX} from store, stacks with base ${SHOOTING_RANGE_BASE_PLAYS}).`,
-    extra: (u) => {
-      const b = Math.min(SHOOTING_RANGE_BONUS_MAX, Number(u?.shooting_range_bonus_plays ?? 0));
-      return { line: 'Plays/hour', value: `${SHOOTING_RANGE_BASE_PLAYS + b} now · max ${SHOOTING_RANGE_BASE_PLAYS + SHOOTING_RANGE_BONUS_MAX}` };
-    },
-    disabledWhen: (u) => Math.min(SHOOTING_RANGE_BONUS_MAX, Number(u?.shooting_range_bonus_plays ?? 0)) >= SHOOTING_RANGE_BONUS_MAX,
-  },
 ];
 
 const Tab = ({ active, onClick, children, disabled, className = '' }) => (
