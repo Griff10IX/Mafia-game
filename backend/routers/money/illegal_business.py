@@ -39,7 +39,7 @@ ILLEGAL_BUSINESS_TYPES = [
 
 START_COST_CASH = 12_500  # 75% reduction for beta
 START_COST_POINTS = 0
-INCOME_PER_HOUR_BASE = 500  # 75% reduction for beta
+INCOME_PER_HOUR_BASE = 700  # passive till rate; mission income_mult stacks on stored value
 INCOME_CAP_HOURS_BASE = 24
 BOOZE_PER_HOUR_BASE = 5
 BOOZE_CAP_HOURS_BASE = 24
@@ -150,81 +150,81 @@ ILLEGAL_BUSINESS_MISSIONS = [
      "story": "The Commissioner wants a cut — prove you can run the block.",
      "how_to_complete": "Reach Capo rank and complete 100 crimes in total.",
      "requirements": {"crimes": 100, "rank_id": CAPO_RANK_ID},
-     "rewards": {"vault_cash": 5_000, "income_mult": 1.05}},
+     "rewards": {"vault_cash": 5_000, "income_mult": 1.44}},
     {"id": "ibm_2", "order": 2, "title": "Steady income",
      "story": "Show you can keep the lights on.",
      "how_to_complete": "Collect from your business 5 times.",
      "requirements": {"collections": 5},
-     "rewards": {"vault_cash": 3_000, "guard_slots": 1}},
+     "rewards": {"vault_cash": 3_000, "income_mult": 1.38, "guard_slots": 1}},
     {"id": "ibm_3", "order": 3, "title": "Lock the door",
      "story": "Any fool can make money. Smart ones keep it.",
      "how_to_complete": "Install 1 security upgrade.",
      "requirements": {"security_level": 1},
-     "rewards": {"vault_cash": 5_000, "income_mult": 1.05}},
+     "rewards": {"vault_cash": 5_000, "income_mult": 1.44}},
     # Tier 2 — Building Up
     {"id": "ibm_4", "order": 4, "title": "Running the block",
      "story": "Work your territory. Own every corner.",
      "how_to_complete": "Complete 200 crimes in your business state.",
      "requirements": {"crimes_in_state": 200},
-     "rewards": {"vault_cash": 10_000, "guard_weapon_max": 1}},
+     "rewards": {"vault_cash": 10_000, "income_mult": 1.48, "guard_weapon_max": 1}},
     {"id": "ibm_5", "order": 5, "title": "Fortified",
      "story": "Five locks on the door. They'll think twice.",
      "how_to_complete": "Install 5 security upgrades.",
      "requirements": {"security_level": 5},
-     "rewards": {"vault_cash": 15_000, "income_mult": 1.1, "guard_slots": 1}},
+     "rewards": {"vault_cash": 15_000, "income_mult": 1.53, "guard_slots": 1}},
     {"id": "ibm_6", "order": 6, "title": "Crime wave",
      "story": "Five hundred jobs and counting. The family notices.",
      "how_to_complete": "Complete 500 crimes in total.",
      "requirements": {"crimes": 500},
-     "rewards": {"vault_cash": 15_000, "guard_weapon_max": 1}},
+     "rewards": {"vault_cash": 15_000, "income_mult": 1.50, "guard_weapon_max": 1}},
     # Tier 3 — Established
     {"id": "ibm_7", "order": 7, "title": "Cash flow",
      "story": "The books look good. Real good.",
      "how_to_complete": "Collect from your business 15 times.",
      "requirements": {"collections": 15},
-     "rewards": {"vault_cash": 20_000, "income_mult": 1.1, "xp_crimes_tokens": 1}},
+     "rewards": {"vault_cash": 20_000, "income_mult": 1.53, "xp_crimes_tokens": 1}},
     {"id": "ibm_8", "order": 8, "title": "Iron curtain",
      "story": "Ten upgrades deep. Fort Knox would be jealous.",
      "how_to_complete": "Install 10 security upgrades.",
      "requirements": {"security_level": 10},
-     "rewards": {"vault_cash": 25_000, "guard_weapon_max": 1}},
+     "rewards": {"vault_cash": 25_000, "income_mult": 1.58, "guard_weapon_max": 1}},
     {"id": "ibm_9", "order": 9, "title": "Territory boss",
      "story": "Seven-fifty in your state. They know your name.",
      "how_to_complete": "Complete 750 crimes in your business state.",
      "requirements": {"crimes_in_state": 750},
-     "rewards": {"vault_cash": 30_000, "income_mult": 1.15}},
+     "rewards": {"vault_cash": 30_000, "income_mult": 1.63}},
     # Tier 4 — Major Player
     {"id": "ibm_10", "order": 10, "title": "The machine",
      "story": "Thirty collections, fifteen upgrades. Like clockwork.",
      "how_to_complete": "Collect 30 times and install 15 security upgrades.",
      "requirements": {"collections": 30, "security_level": 15},
-     "rewards": {"vault_cash": 40_000, "income_mult": 1.15}},
+     "rewards": {"vault_cash": 40_000, "income_mult": 1.63}},
     {"id": "ibm_11", "order": 11, "title": "Crime lord",
      "story": "A thousand jobs. You're in the history books.",
      "how_to_complete": "Complete 1,000 crimes in total.",
      "requirements": {"crimes": 1000},
-     "rewards": {"vault_cash": 40_000, "income_mult": 1.1, "jailbust_tokens": 1}},
+     "rewards": {"vault_cash": 40_000, "income_mult": 1.53, "jailbust_tokens": 1}},
     {"id": "ibm_12", "order": 12, "title": "State kingpin",
      "story": "Fifteen hundred crimes in your state. You ARE the law.",
      "how_to_complete": "Complete 1,500 crimes in your business state.",
      "requirements": {"crimes_in_state": 1500},
-     "rewards": {"vault_cash": 50_000, "income_mult": 1.2, "xp_crimes_tokens": 1}},
+     "rewards": {"vault_cash": 50_000, "income_mult": 1.73, "xp_crimes_tokens": 1}},
     # Tier 5 — Empire
     {"id": "ibm_13", "order": 13, "title": "Maximum security",
      "story": "Twenty-five upgrades. Nobody gets in unless you say so.",
      "how_to_complete": "Install 25 security upgrades.",
      "requirements": {"security_level": 25},
-     "rewards": {"vault_cash": 50_000, "guard_weapon_max": 1, "income_mult": 1.1}},
+     "rewards": {"vault_cash": 50_000, "guard_weapon_max": 1, "income_mult": 1.53}},
     {"id": "ibm_14", "order": 14, "title": "Veteran operator",
      "story": "Fifty collections, two thousand crimes on your turf.",
      "how_to_complete": "Collect 50 times and complete 2,000 crimes in your business state.",
      "requirements": {"collections": 50, "crimes_in_state": 2000},
-     "rewards": {"vault_cash": 75_000, "income_mult": 1.2, "jailbust_tokens": 1}},
+     "rewards": {"vault_cash": 75_000, "income_mult": 1.73, "jailbust_tokens": 1}},
     {"id": "ibm_15", "order": 15, "title": "Empire",
      "story": "You built it from nothing. Now it runs the city.",
      "how_to_complete": "Collect 100 times, complete 5,000 crimes, and install 35 security upgrades.",
      "requirements": {"collections": 100, "crimes": 5000, "security_level": 35},
-     "rewards": {"vault_cash": 100_000, "income_mult": 1.25}},
+     "rewards": {"vault_cash": 100_000, "income_mult": 1.85}},
 ]
 
 # Default booze type for booze_making passive output (first BOOZE_TYPES id)
@@ -522,7 +522,7 @@ async def _illegal_business_pending_take_and_hours(
     income_per_hour = int(business.get("income_per_hour") or INCOME_PER_HOUR_BASE)
     cap_hours = int(business.get("income_cap_hours") or INCOME_CAP_HOURS_BASE)
     level = int(business.get("level") or 1)
-    level_mult = 1.0 + 0.02 * max(0, level - 1)
+    level_mult = 1.0 + 0.04 * max(0, level - 1)
     boost_pct = int(current_user.get("illegal_business_income_boost_percent") or 0)
     income_per_hour_eff = income_per_hour * level_mult * (1.0 + boost_pct / 100.0)
     income = min(hours * income_per_hour_eff, income_per_hour_eff * cap_hours)
