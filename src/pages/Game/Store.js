@@ -14,12 +14,12 @@ const STORE_STYLES = `
 `;
 
 const PACKAGES = [
-  { id: 'starter', name: '2,500 pts', points: 2500, price: 4.99, popular: false },
-  { id: 'bronze', name: '5,000 pts', points: 5000, price: 8.99, popular: false },
-  { id: 'silver', name: '10,000 pts', points: 10000, price: 15.99, popular: true },
-  { id: 'gold', name: '25,000 pts', points: 25000, price: 36.99, popular: false },
-  { id: 'platinum', name: '50,000 pts', points: 50000, price: 67.99, popular: false },
-  { id: 'diamond', name: '100,000 pts', points: 100000, price: 135.98, popular: false },
+  { id: 'starter', name: '2,500 pts', points: 2500, price: 5.99, popular: false },
+  { id: 'bronze', name: '5,000 pts', points: 5000, price: 11.99, popular: false },
+  { id: 'silver', name: '10,000 pts', points: 10000, price: 21.99, popular: true },
+  { id: 'gold', name: '25,000 pts', points: 25000, price: 52.99, popular: false },
+  { id: 'platinum', name: '50,000 pts', points: 50000, price: 99.99, popular: false },
+  { id: 'diamond', name: '100,000 pts', points: 100000, price: 189.99, popular: false },
 ];
 
 const BULLET_PACKS = [
@@ -405,6 +405,7 @@ export default function Store() {
               <p className="text-[9px] text-mutedForeground mt-1">Points purchase is temporarily unavailable. Upgrades, bullets, and send pts remain available.</p>
             </div>
           ) : (
+          <>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3">
             {PACKAGES.map((pkg) => (
               <div
@@ -444,6 +445,10 @@ export default function Store() {
               </div>
             ))}
           </div>
+          <p className="text-[9px] text-mutedForeground font-heading text-center px-2">
+            Base ~£2.50 per 1k pts; larger packs include a volume discount.
+          </p>
+          </>
           )}
         </div>
       )}

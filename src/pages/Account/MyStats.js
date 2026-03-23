@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BarChart3, Target, Sword, Dice5, Trophy, DollarSign, TrendingUp, Wine, Bot } from 'lucide-react';
+import { BarChart3, Target, Sword, Dice5, Trophy, DollarSign, TrendingUp, Wine, Bot, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../utils/api';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -123,11 +123,12 @@ const REFRESH_INTERVAL = 30_000;
 
 export default function MyStats() {
   const [stats, setStats] = useState(() => readMyStatsCache() ?? EMPTY_MY_STATS);
+  const [resetGamblingLoading, setResetGamblingLoading] = useState(false);
 
   const fetchStats = useCallback((silentError = false) => {
     const cached = readMyStatsCache();
     if (cached) setStats(cached);
-    api
+    return api
       .get('/stats/me')
       .then((res) => {
         if (res?.data) {
@@ -139,6 +140,26 @@ export default function MyStats() {
         if (!silentError) toast.error(e.response?.data?.detail || 'Failed to load your stats');
       });
   }, []);
+
+  const resetGamblingDisplay = useCallback(async () => {
+    if (
+      !window.confirm(
+        'Reset your gambling & sports stats display to zero? Your all-time totals stay on record and will still show as “Lifetime”.',
+      )
+    ) {
+      return;
+    }
+    setResetGamblingLoading(true);
+    try {
+      await api.post('/stats/me/reset-gambling-display');
+      toast.success('Gambling stats display reset. Lifetime totals unchanged.');
+      await fetchStats(true);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not reset stats');
+    } finally {
+      setResetGamblingLoading(false);
+    }
+  }, [fetchStats]);
 
   useEffect(() => {
     fetchStats(false);
@@ -244,11 +265,22 @@ export default function MyStats() {
 
   const gamblingByGame = gambling.by_game || {};
   const totalProfit = gambling.total_profit ?? 0;
+  const lifetimeGamblingProfit = gambling.lifetime_total_profit;
+  const gamblingHadReset = Boolean(gambling.display_reset_at);
   const gamblingRows = [
+    ...(gamblingHadReset && lifetimeGamblingProfit != null
+      ? [
+          {
+            label: 'Lifetime net (all-time)',
+            value: formatMoney(lifetimeGamblingProfit),
+            valueColor: lifetimeGamblingProfit >= 0 ? 'text-amber-400' : 'text-rose-400',
+          },
+        ]
+      : []),
     {
-      label: 'Total',
+      label: gamblingHadReset ? 'Since reset (net)' : 'Total',
       value: formatMoney(totalProfit),
-      valueColor: (totalProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'),
+      valueColor: totalProfit >= 0 ? 'text-emerald-400' : 'text-rose-400',
     },
     ...ALL_CASINO_GAMES.map((gt) => {
       const profit = gamblingByGame[gt] ?? 0;
@@ -262,17 +294,33 @@ export default function MyStats() {
 
   const totalBets = (sports.total_bets_won || 0) + (sports.total_bets_lost || 0);
   const sportsAvgReturn = totalBets > 0 ? Math.round((sports.profit_loss || 0) / totalBets) : 0;
+  const sportsHadReset = Boolean(sports.display_since);
   const sportsRows = [
-    { label: 'Total Bets Placed', value: formatNumber(sports.total_bets_placed || totalBets) },
+    ...(sportsHadReset && sports.lifetime_profit_loss != null
+      ? [
+          { label: 'Lifetime P/L (all-time)', value: formatMoney(sports.lifetime_profit_loss), valueColor: (sports.lifetime_profit_loss || 0) >= 0 ? 'text-amber-400' : 'text-rose-400' },
+          { label: 'Lifetime bets W / L', value: `${formatNumber(sports.lifetime_total_bets_won)} / ${formatNumber(sports.lifetime_total_bets_lost)}`, valueColor: 'text-mutedForeground' },
+          { label: 'Lifetime win rate', value: sports.lifetime_win_pct != null ? `${sports.lifetime_win_pct}%` : '—', valueColor: (sports.lifetime_win_pct || 0) >= 50 ? 'text-emerald-400' : 'text-rose-400' },
+        ]
+      : []),
+    { label: sportsHadReset ? 'Bets placed (since reset)' : 'Total Bets Placed', value: formatNumber(sports.total_bets_placed || totalBets) },
     { label: 'Bets Won', value: formatNumber(sports.total_bets_won), valueColor: (sports.total_bets_won || 0) > 0 ? 'text-emerald-400' : 'text-foreground' },
     { label: 'Bets Lost', value: formatNumber(sports.total_bets_lost), valueColor: (sports.total_bets_lost || 0) > 0 ? 'text-rose-400' : 'text-foreground' },
     { label: 'Win Rate', value: sports.win_pct != null ? `${sports.win_pct}%` : '—', valueColor: (sports.win_pct || 0) >= 50 ? 'text-emerald-400' : 'text-rose-400' },
-    { label: 'Profit / Loss', value: formatMoney(sports.profit_loss), valueColor: (sports.profit_loss || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400' },
+    { label: sportsHadReset ? 'P/L (since reset)' : 'Profit / Loss', value: formatMoney(sports.profit_loss), valueColor: (sports.profit_loss || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400' },
     { label: 'Avg Return/Bet', value: formatMoney(sportsAvgReturn), valueColor: sportsAvgReturn >= 0 ? 'text-emerald-400' : 'text-rose-400' },
-    { label: 'Biggest Win', value: formatMoney(sports.biggest_win || 0), valueColor: (sports.biggest_win || 0) > 0 ? 'text-amber-400' : 'text-foreground' },
-    { label: 'Biggest Loss', value: formatMoney(sports.biggest_loss || 0), valueColor: (sports.biggest_loss || 0) > 0 ? 'text-rose-400' : 'text-foreground' },
-    { label: 'Current Win Streak', value: formatNumber(sports.current_win_streak || 0), valueColor: (sports.current_win_streak || 0) > 0 ? 'text-cyan-400' : 'text-foreground' },
-    { label: 'Best Win Streak', value: formatNumber(sports.best_win_streak || 0), valueColor: (sports.best_win_streak || 0) > 0 ? 'text-amber-400' : 'text-foreground' },
+    { label: sportsHadReset ? 'Biggest win (since reset)' : 'Biggest Win', value: formatMoney(sports.biggest_win || 0), valueColor: (sports.biggest_win || 0) > 0 ? 'text-amber-400' : 'text-foreground' },
+    { label: sportsHadReset ? 'Biggest loss (since reset)' : 'Biggest Loss', value: formatMoney(sports.biggest_loss || 0), valueColor: (sports.biggest_loss || 0) > 0 ? 'text-rose-400' : 'text-foreground' },
+    {
+      label: sportsHadReset ? 'Current win streak (all-time)' : 'Current Win Streak',
+      value: formatNumber(sports.current_win_streak || 0),
+      valueColor: (sports.current_win_streak || 0) > 0 ? 'text-cyan-400' : 'text-foreground',
+    },
+    {
+      label: sportsHadReset ? 'Best win streak (all-time)' : 'Best Win Streak',
+      value: formatNumber(sports.best_win_streak || 0),
+      valueColor: (sports.best_win_streak || 0) > 0 ? 'text-amber-400' : 'text-foreground',
+    },
   ];
 
   return (
@@ -289,7 +337,7 @@ export default function MyStats() {
           </Link>
         </div>
         <p className="text-[10px] sm:text-xs text-mutedForeground font-heading">
-          Lifetime totals: bodyguards bought, casino profit/loss, gambling profit, booze, auto rank, stock market, bank interest, and more.
+          Lifetime totals: bodyguards bought, casino profit/loss, booze, auto rank, stock market, bank interest, and more. Gambling and sports can be reset to a fresh window; all-time nets stay as “Lifetime”.
         </p>
         <AutoRefreshNote seconds={30} />
 
@@ -298,12 +346,25 @@ export default function MyStats() {
           <StatCard title="Rank & Activities" icon={Target} rows={rankRows} delay={0.05} />
           <StatCard title="Economy & Points" icon={TrendingUp} rows={economyRows} delay={0.1} />
           <StatCard title="Casino & Property (Owning)" icon={DollarSign} rows={casinoRows} delay={0.15} />
-          <StatCard
-            title="Gambling (Playing)"
-            icon={Dice5}
-            rows={gamblingRows.length ? gamblingRows : [{ label: 'Total', value: formatMoney(0), valueColor: 'text-mutedForeground' }]}
-            delay={0.2}
-          />
+          <div className="stat-fade-in space-y-2" style={{ animationDelay: '0.2s' }}>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={resetGamblingDisplay}
+                disabled={resetGamblingLoading}
+                className="inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/10 px-2 py-1 text-[9px] font-heading text-primary hover:bg-primary/15 disabled:opacity-50"
+              >
+                <RotateCcw size={10} />
+                {resetGamblingLoading ? '…' : 'Reset gambling display'}
+              </button>
+            </div>
+            <StatCard
+              title="Gambling (Playing)"
+              icon={Dice5}
+              rows={gamblingRows.length ? gamblingRows : [{ label: 'Total', value: formatMoney(0), valueColor: 'text-mutedForeground' }]}
+              delay={0}
+            />
+          </div>
           <StatCard
             title="Sports Betting"
             icon={Trophy}

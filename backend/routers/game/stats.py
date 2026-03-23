@@ -2,8 +2,9 @@
 # My Stats: per-user aggregated lifetime stats (combat, rank, bodyguards, gambling, casinos)
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 
 
 def _gambling_profit_from_details(game_type: str, details: dict) -> int:
@@ -59,6 +60,15 @@ def _gambling_profit_from_details(game_type: str, details: dict) -> int:
     return payout - stake
 
 
+def _stats_parse_iso(s: Optional[str]) -> Optional[datetime]:
+    if not s or not isinstance(s, str):
+        return None
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
 def _booze_stats(u: dict) -> dict:
     """Build booze stats dict. Uses get_rank_info and booze_run capacity logic."""
     from routers.money.booze_run import BOOZE_TYPES, BOOZE_CAPACITY_BASE_RANK1, BOOZE_CAPACITY_EXTRA_PER_RANK, BOOZE_CAPACITY_BONUS_MAX
@@ -94,6 +104,7 @@ def register(router):
 
     db = srv.db
     get_current_user = srv.get_current_user
+    get_current_user_verified = srv.get_current_user_verified
     get_rank_info = srv.get_rank_info
     _is_admin = srv._is_admin
     _is_moderator = srv._is_moderator
@@ -388,12 +399,11 @@ def register(router):
     @router.get("/stats/me")
     async def get_my_stats(current_user: dict = Depends(get_current_user)):
         """Aggregate per-user lifetime stats: combat, rank, bodyguards, gambling, casinos, etc."""
-        import asyncio
         from routers.kill.bodyguards import get_bodyguards_stats
         from routers.cars.gta import get_gta_stats
         from routers.crime.crimes import get_crime_stats
         from routers.crime.jail import get_jail_stats
-        from routers.casinos.sports_betting import sports_betting_stats
+        from routers.casinos.sports_betting import compute_sports_betting_stats
         from server import _get_casino_property_profit
 
         uid = current_user["id"]
@@ -422,9 +432,17 @@ def register(router):
                 "auto_rank_total_cars_scrapped": 1, "auto_rank_total_cash_from_scrap": 1,
                 "casinos_seized": 1, "casinos_lost": 1, "properties_seized": 1, "properties_lost": 1,
                 "total_casino_payouts": 1, "biggest_casino_payout": 1,
+                "stats_gambling_reset_at": 1,
             },
         )
         u = u or {}
+        _raw_gambling_reset = u.get("stats_gambling_reset_at")
+        stats_gambling_reset_at = (
+            _raw_gambling_reset.strip()
+            if isinstance(_raw_gambling_reset, str) and _raw_gambling_reset.strip()
+            else None
+        )
+        stats_gambling_reset_dt = _stats_parse_iso(stats_gambling_reset_at)
 
         stock_trades = 0
         stock_profit = 0
@@ -475,7 +493,23 @@ def register(router):
         except Exception:
             pass
         try:
-            sports_stats = await sports_betting_stats(current_user)
+            sports_lifetime = await compute_sports_betting_stats(uid, None)
+            if stats_gambling_reset_at:
+                sports_period = await compute_sports_betting_stats(uid, stats_gambling_reset_at)
+                sports_stats = {
+                    **sports_period,
+                    "display_since": stats_gambling_reset_at,
+                    "streaks_all_time": True,
+                    "lifetime_total_bets_placed": sports_lifetime["total_bets_placed"],
+                    "lifetime_total_bets_won": sports_lifetime["total_bets_won"],
+                    "lifetime_total_bets_lost": sports_lifetime["total_bets_lost"],
+                    "lifetime_win_pct": sports_lifetime["win_pct"],
+                    "lifetime_profit_loss": sports_lifetime["profit_loss"],
+                    "lifetime_biggest_win": sports_lifetime["biggest_win"],
+                    "lifetime_biggest_loss": sports_lifetime["biggest_loss"],
+                }
+            else:
+                sports_stats = sports_lifetime
         except Exception:
             pass
 
@@ -484,11 +518,13 @@ def register(router):
         total_kills = int(u.get("total_kills") or 0)
         user_kills = max(0, total_kills - hitlist_npc_kills - robot_bodyguard_kills)
 
-        gambling_by_game = {}
-        gambling_total_profit = 0
+        gambling_by_game_lt: dict = {}
+        gambling_total_lt = 0
+        gambling_by_game_period: dict = {}
+        gambling_total_period = 0
         cursor = db.gambling_log.find(
             {"user_id": uid},
-            {"_id": 0, "game_type": 1, "details": 1},
+            {"_id": 0, "game_type": 1, "details": 1, "created_at": 1},
         ).limit(5000)
         async for entry in cursor:
             gt = (entry.get("game_type") or "").strip()
@@ -496,9 +532,14 @@ def register(router):
                 continue
             details = entry.get("details") or {}
             profit = _gambling_profit_from_details(gt, details)
-            if profit != 0:
-                gambling_by_game[gt] = gambling_by_game.get(gt, 0) + profit
-                gambling_total_profit += profit
+            if profit == 0:
+                continue
+            gambling_by_game_lt[gt] = gambling_by_game_lt.get(gt, 0) + profit
+            gambling_total_lt += profit
+            entry_dt = _stats_parse_iso(entry.get("created_at") if isinstance(entry.get("created_at"), str) else None)
+            if stats_gambling_reset_dt is None or (entry_dt is not None and entry_dt >= stats_gambling_reset_dt):
+                gambling_by_game_period[gt] = gambling_by_game_period.get(gt, 0) + profit
+                gambling_total_period += profit
 
         return {
             "combat": {
@@ -553,8 +594,11 @@ def register(router):
                 "biggest_casino_payout": int(u.get("biggest_casino_payout") or 0),
             },
             "gambling": {
-                "total_profit": gambling_total_profit,
-                "by_game": gambling_by_game,
+                "total_profit": gambling_total_period,
+                "by_game": gambling_by_game_period,
+                "lifetime_total_profit": gambling_total_lt,
+                "lifetime_by_game": gambling_by_game_lt,
+                "display_reset_at": stats_gambling_reset_at,
             },
             "sports_betting": sports_stats,
             "booze": _booze_stats(u),
@@ -581,3 +625,13 @@ def register(router):
                 "level": int(u.get("prestige_level") or 0),
             },
         }
+
+    @router.post("/stats/me/reset-gambling-display")
+    async def reset_my_gambling_stats_display(current_user: dict = Depends(get_current_user_verified)):
+        """Start a fresh gambling/sports stats window on My Stats. Lifetime totals stay in API as lifetime_* / gambling_log."""
+        uid = current_user["id"]
+        now = datetime.now(timezone.utc).isoformat()
+        r = await db.users.update_one({"id": uid}, {"$set": {"stats_gambling_reset_at": now}})
+        if r.matched_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {"ok": True, "reset_at": now}

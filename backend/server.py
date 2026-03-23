@@ -435,14 +435,14 @@ GARAGE_BATCH_LIMIT_MAX = 100
 # Bullet storage cap: melt (and other sources) cannot push bullets above this
 BULLET_STORAGE_CAP = 250_000
 
-# Points store: GBP prices; larger packs slightly cheaper per point than 2× smaller
+# Points store: list ~£2.50/1k; larger packs add volume discount (£x.99); 100k < 2×50k
 POINT_PACKAGES = {
-    "starter": {"points": 2500, "price_gbp": 4.99},
-    "bronze": {"points": 5000, "price_gbp": 8.99},
-    "silver": {"points": 10000, "price_gbp": 15.99},
-    "gold": {"points": 25000, "price_gbp": 36.99},
-    "platinum": {"points": 50000, "price_gbp": 67.99},
-    "diamond": {"points": 100000, "price_gbp": 135.98},
+    "starter": {"points": 2500, "price_gbp": 5.99},
+    "bronze": {"points": 5000, "price_gbp": 11.99},
+    "silver": {"points": 10000, "price_gbp": 21.99},
+    "gold": {"points": 25000, "price_gbp": 52.99},
+    "platinum": {"points": 50000, "price_gbp": 99.99},
+    "diamond": {"points": 100000, "price_gbp": 189.99},
 }
 
 # Travel times based on car rarity (in seconds)

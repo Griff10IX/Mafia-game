@@ -1164,41 +1164,50 @@ async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_curren
     return {"message": f"All {cancelled_count} bet(s) cancelled. ${total_refund:,} refunded.", "refunded": total_refund, "cancelled_count": cancelled_count}
 
 
-async def sports_betting_stats(current_user: dict = Depends(get_current_user_verified)):
-    uid = current_user.get("id") or ""
+async def compute_sports_betting_stats(uid: str, settled_after_iso: Optional[str] = None) -> dict:
+    """Aggregate sports bet stats. If settled_after_iso is set, only settled won/lost with settled_at >= that ISO string."""
+    base_settled: dict = {"user_id": uid}
+    if settled_after_iso:
+        base_settled["settled_at"] = {"$gte": settled_after_iso}
+    settled_match = {**base_settled, "status": {"$in": ["won", "lost"]}}
+    won_match = {**base_settled, "status": "won"}
+    lost_match = {**base_settled, "status": "lost"}
     pipeline = [
-        {"$match": {"user_id": uid, "status": {"$in": ["won", "lost"]}}},
+        {"$match": settled_match},
         {"$group": {"_id": None, "total_stake": {"$sum": "$stake"}, "won_count": {"$sum": {"$cond": [{"$eq": ["$status", "won"]}, 1, 0]}}, "lost_count": {"$sum": {"$cond": [{"$eq": ["$status", "lost"]}, 1, 0]}}}},
     ]
     agg = await db.sports_bets.aggregate(pipeline).to_list(1)
     doc = agg[0] if agg else {}
-    total_stake = int(doc.get("total_stake", 0) or 0)
     won_count = int(doc.get("won_count", 0) or 0)
     lost_count = int(doc.get("lost_count", 0) or 0)
-    total_placed = won_count + lost_count
+    total_placed_settled = won_count + lost_count
     won_stake = await db.sports_bets.aggregate([
-        {"$match": {"user_id": uid, "status": "won"}},
+        {"$match": won_match},
         {"$group": {"_id": None, "sum": {"$sum": {"$multiply": ["$stake", "$odds"]}}}},
     ]).to_list(1)
     lost_stake = await db.sports_bets.aggregate([
-        {"$match": {"user_id": uid, "status": "lost"}},
+        {"$match": lost_match},
         {"$group": {"_id": None, "sum": {"$sum": "$stake"}}},
     ]).to_list(1)
     winnings = int((won_stake[0].get("sum", 0) or 0)) if won_stake else 0
     losses = int((lost_stake[0].get("sum", 0) or 0)) if lost_stake else 0
     profit_loss = winnings - losses
-    win_pct = round(100 * won_count / total_placed, 1) if total_placed else 0
-    all_placed = await db.sports_bets.count_documents({"user_id": uid})
+    win_pct = round(100 * won_count / total_placed_settled, 1) if total_placed_settled else 0
+
+    placed_q: dict = {"user_id": uid}
+    if settled_after_iso:
+        placed_q["created_at"] = {"$gte": settled_after_iso}
+    bets_placed_count = await db.sports_bets.count_documents(placed_q)
 
     biggest_win_doc = await db.sports_bets.find_one(
-        {"user_id": uid, "status": "won"},
+        won_match,
         {"stake": 1, "odds": 1},
         sort=[("stake", -1)],
     )
     biggest_win = int((biggest_win_doc.get("stake", 0) * biggest_win_doc.get("odds", 1))) if biggest_win_doc else 0
 
     biggest_loss_doc = await db.sports_bets.find_one(
-        {"user_id": uid, "status": "lost"},
+        lost_match,
         {"stake": 1},
         sort=[("stake", -1)],
     )
@@ -1209,7 +1218,7 @@ async def sports_betting_stats(current_user: dict = Depends(get_current_user_ver
     best_win_streak = int((u or {}).get("sports_best_win_streak", 0))
 
     return {
-        "total_bets_placed": all_placed,
+        "total_bets_placed": bets_placed_count,
         "total_bets_won": won_count,
         "total_bets_lost": lost_count,
         "win_pct": win_pct,
@@ -1219,6 +1228,11 @@ async def sports_betting_stats(current_user: dict = Depends(get_current_user_ver
         "current_win_streak": current_win_streak,
         "best_win_streak": best_win_streak,
     }
+
+
+async def sports_betting_stats(current_user: dict = Depends(get_current_user_verified)):
+    uid = current_user.get("id") or ""
+    return await compute_sports_betting_stats(uid, None)
 
 
 async def sports_betting_recent_results(current_user: dict = Depends(get_current_user_verified)):
