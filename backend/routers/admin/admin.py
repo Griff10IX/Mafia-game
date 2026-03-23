@@ -105,6 +105,8 @@ class AdminSettingsUpdate(BaseModel):
     preregister_landing_banner_enabled: Optional[bool] = None  # Slim banner on / login when login lock active (founding / ref info)
     preregister_landing_banner_preview_open: Optional[bool] = None  # Show same strip while logins are open (staff preview)
     preorder_points_release_date: Optional[str] = None  # ISO datetime - points held until this date
+    store_points_auto_credit: Optional[bool] = None  # False = staff credits store points manually after payment
+    store_points_manual_credit_eta: Optional[str] = None  # ISO datetime shown to users (informational)
     casino_global_max_bet: Optional[int] = None  # Max bet cap for all casinos (default 1B)
     casino_buyback_max_points: Optional[int] = None  # Max points for buy-back reward (default 15000)
     mod_visible_category_ids: Optional[List[str]] = None  # Admin Tool category ids visible to moderators
@@ -2076,6 +2078,10 @@ def register(router):
             preregister_landing_banner_enabled = True
         preregister_landing_banner_preview_open = bool(main_doc.get("preregister_landing_banner_preview_open")) if main_doc else False
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
+        store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
+        if store_points_auto_credit is None:
+            store_points_auto_credit = True
+        store_points_manual_credit_eta = main_doc.get("store_points_manual_credit_eta") if main_doc else None
         casino_global_max_bet = int(main_doc.get("casino_global_max_bet") or 1_000_000_000) if main_doc else 1_000_000_000
         casino_buyback_max_points = int(main_doc.get("casino_buyback_max_points") or 15_000) if main_doc else 15_000
         mod_cat_doc = await db.game_settings.find_one({"key": "mod_visible_category_ids"}, {"_id": 0, "value": 1})
@@ -2096,6 +2102,8 @@ def register(router):
             "preregister_landing_banner_enabled": bool(preregister_landing_banner_enabled),
             "preregister_landing_banner_preview_open": preregister_landing_banner_preview_open,
             "preorder_points_release_date": preorder_points_release_date,
+            "store_points_auto_credit": bool(store_points_auto_credit),
+            "store_points_manual_credit_eta": store_points_manual_credit_eta,
             "casino_global_max_bet": casino_global_max_bet,
             "casino_buyback_max_points": casino_buyback_max_points,
             "mod_visible_category_ids": mod_visible_category_ids,
@@ -2181,6 +2189,19 @@ def register(router):
                 {"$set": {"preorder_points_release_date": body.preorder_points_release_date if body.preorder_points_release_date else None}},
                 upsert=True,
             )
+        if body.store_points_auto_credit is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"store_points_auto_credit": bool(body.store_points_auto_credit)}},
+                upsert=True,
+            )
+        if body.store_points_manual_credit_eta is not None:
+            eta = (body.store_points_manual_credit_eta or "").strip() or None
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"store_points_manual_credit_eta": eta}},
+                upsert=True,
+            )
         if body.casino_global_max_bet is not None:
             await db.game_settings.update_one(
                 {"_id": "main"},
@@ -2226,6 +2247,10 @@ def register(router):
             preregister_landing_banner_enabled = True
         preregister_landing_banner_preview_open = bool(main_doc.get("preregister_landing_banner_preview_open")) if main_doc else False
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
+        store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
+        if store_points_auto_credit is None:
+            store_points_auto_credit = True
+        store_points_manual_credit_eta = main_doc.get("store_points_manual_credit_eta") if main_doc else None
         casino_global_max_bet = int(main_doc.get("casino_global_max_bet") or 1_000_000_000) if main_doc else 1_000_000_000
         casino_buyback_max_points = int(main_doc.get("casino_buyback_max_points") or 15_000) if main_doc else 15_000
         return {
@@ -2240,6 +2265,8 @@ def register(router):
             "preregister_landing_banner_enabled": bool(preregister_landing_banner_enabled),
             "preregister_landing_banner_preview_open": preregister_landing_banner_preview_open,
             "preorder_points_release_date": preorder_points_release_date,
+            "store_points_auto_credit": bool(store_points_auto_credit),
+            "store_points_manual_credit_eta": store_points_manual_credit_eta,
             "casino_global_max_bet": casino_global_max_bet,
             "casino_buyback_max_points": casino_buyback_max_points,
         }

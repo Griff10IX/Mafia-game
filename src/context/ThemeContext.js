@@ -590,6 +590,10 @@ export function ThemeProvider({ children }) {
     api.get('/profile/theme').then((res) => {
       const prefs = res.data?.theme_preferences;
       if (!prefs || typeof prefs !== 'object' || Object.keys(prefs).length === 0) {
+        try {
+          localStorage.setItem(STORAGE_KEY_FONT, DEFAULT_FONT_ID);
+          setFontIdState(DEFAULT_FONT_ID);
+        } catch (_) {}
         themeLoadedRef.current = true;
         return;
       }
@@ -603,7 +607,13 @@ export function ThemeProvider({ children }) {
         if (prefs.textureId != null) { localStorage.setItem(STORAGE_KEY_TEXTURE, prefs.textureId); setTextureIdState(prefs.textureId); }
         if (prefs.buttonColourId !== undefined) { localStorage.setItem(STORAGE_KEY_BUTTON, prefs.buttonColourId || ''); setButtonColourIdState(prefs.buttonColourId || null); }
         if (prefs.accentLineColourId !== undefined) { localStorage.setItem(STORAGE_KEY_ACCENT_LINE, prefs.accentLineColourId || ''); setAccentLineColourIdState(prefs.accentLineColourId || null); }
-        if (prefs.fontId != null) { localStorage.setItem(STORAGE_KEY_FONT, prefs.fontId); setFontIdState(prefs.fontId); }
+        if (prefs.fontId != null && prefs.fontId !== '') {
+          localStorage.setItem(STORAGE_KEY_FONT, prefs.fontId);
+          setFontIdState(prefs.fontId);
+        } else {
+          localStorage.setItem(STORAGE_KEY_FONT, DEFAULT_FONT_ID);
+          setFontIdState(DEFAULT_FONT_ID);
+        }
         if (prefs.buttonStyleId != null) { localStorage.setItem(STORAGE_KEY_BUTTON_STYLE, prefs.buttonStyleId); setButtonStyleIdState(prefs.buttonStyleId); }
         if (prefs.writingColourId != null) { localStorage.setItem(STORAGE_KEY_WRITING, prefs.writingColourId); setWritingColourIdState(prefs.writingColourId); }
         if (prefs.mutedWritingColourId !== undefined) { localStorage.setItem(STORAGE_KEY_MUTED_WRITING, prefs.mutedWritingColourId || ''); setMutedWritingColourIdState(prefs.mutedWritingColourId || null); }

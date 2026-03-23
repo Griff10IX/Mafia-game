@@ -98,7 +98,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Jail NPCs', categoryId: 'admin-gameworld', collapseKey: 'jailNpcs', keywords: ['jail', 'npc', 'prisoner'] },
   { label: 'Casino Settings', categoryId: 'admin-gameworld', collapseKey: 'casinoCaps', keywords: ['casino', 'caps', 'max bet', 'buyback'] },
   { label: 'Admin Settings', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['admin', 'settings', 'config', 'banner', 'stock'] },
-  { label: 'Pre-order Settings', categoryId: 'admin-gameworld', collapseKey: 'launchSettings', keywords: ['preorder', 'points', 'release'] },
+  { label: 'Pre-order Settings', categoryId: 'admin-gameworld', collapseKey: 'launchSettings', keywords: ['preorder', 'points', 'release', 'manual', 'store', 'credit'] },
   { label: 'Release Preorder Points', categoryId: 'admin-gameworld', collapseKey: 'launchSettings', keywords: ['release', 'preorder', 'points', 'credit'] },
   { label: 'Login Lock', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['login', 'lock', 'maintenance'] },
   // Security
@@ -525,6 +525,8 @@ export default function Admin() {
   const [preregisterLandingBannerEnabled, setPreregisterLandingBannerEnabled] = useState(true);
   const [preregisterBannerPreviewOpen, setPreregisterBannerPreviewOpen] = useState(false);
   const [preorderReleaseDate, setPreorderReleaseDate] = useState('');
+  const [storePointsAutoCredit, setStorePointsAutoCredit] = useState(true);
+  const [storePointsManualCreditEta, setStorePointsManualCreditEta] = useState('');
   const [launchSettingsSaving, setLaunchSettingsSaving] = useState(false);
   const [preorderReleaseLoading, setPreorderReleaseLoading] = useState(false);
   const [manualCreditLoading, setManualCreditLoading] = useState(null);
@@ -843,6 +845,8 @@ export default function Admin() {
       );
       setPreregisterBannerPreviewOpen(!!res.data?.preregister_landing_banner_preview_open);
       setPreorderReleaseDate(res.data?.preorder_points_release_date || '');
+      setStorePointsAutoCredit(res.data?.store_points_auto_credit !== false);
+      setStorePointsManualCreditEta(res.data?.store_points_manual_credit_eta || '');
       setCasinoGlobalMaxBet(res.data?.casino_global_max_bet || 1000000000);
       setCasinoBuybackMaxPoints(res.data?.casino_buyback_max_points || 15000);
       if (Array.isArray(res.data?.mod_visible_category_ids)) {
@@ -859,6 +863,8 @@ export default function Admin() {
       setPreregisterLandingBannerEnabled(true);
       setPreregisterBannerPreviewOpen(false);
       setPreorderReleaseDate('');
+      setStorePointsAutoCredit(true);
+      setStorePointsManualCreditEta('');
       setCasinoGlobalMaxBet(1000000000);
       setCasinoBuybackMaxPoints(15000);
     }
@@ -979,6 +985,38 @@ export default function Admin() {
       toast.success('Preorder settings saved');
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to save preorder settings');
+    } finally {
+      setLaunchSettingsSaving(false);
+    }
+  };
+
+  const handleSaveStorePointsCredit = async () => {
+    setLaunchSettingsSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', {
+        store_points_auto_credit: storePointsAutoCredit,
+        store_points_manual_credit_eta: storePointsManualCreditEta || null,
+      });
+      setStorePointsAutoCredit(res.data?.store_points_auto_credit !== false);
+      setStorePointsManualCreditEta(res.data?.store_points_manual_credit_eta || '');
+      toast.success('Store crediting settings saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to save store crediting');
+    } finally {
+      setLaunchSettingsSaving(false);
+    }
+  };
+
+  const handleClearStoreManualEta = async () => {
+    setLaunchSettingsSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', {
+        store_points_manual_credit_eta: null,
+      });
+      setStorePointsManualCreditEta(res.data?.store_points_manual_credit_eta || '');
+      toast.success('Manual credit time cleared');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to clear');
     } finally {
       setLaunchSettingsSaving(false);
     }
@@ -3957,9 +3995,23 @@ export default function Admin() {
               {loginLockUntil && !preregisterLandingBannerEnabled ? (
                 <span className="text-mutedForeground"> · Strip off</span>
               ) : null}
-              {loginLockUntil && preorderReleaseDate ? ' · ' : null}
-              {preorderReleaseDate ? <span className="text-amber-400">Preorder active</span> : null}
-              {!loginLockUntil && !preorderReleaseDate ? <span className="text-mutedForeground">Not set</span> : null}
+              {preorderReleaseDate && storePointsAutoCredit ? (
+                <>
+                  {loginLockUntil ? <span className="text-mutedForeground"> · </span> : null}
+                  <span className="text-amber-400">Preorder active</span>
+                </>
+              ) : null}
+              {!storePointsAutoCredit ? (
+                <>
+                  {(loginLockUntil || (preorderReleaseDate && storePointsAutoCredit)) ? (
+                    <span className="text-mutedForeground"> · </span>
+                  ) : null}
+                  <span className="text-sky-400">Manual store credit</span>
+                </>
+              ) : null}
+              {!loginLockUntil && !preorderReleaseDate && storePointsAutoCredit ? (
+                <span className="text-mutedForeground">Not set</span>
+              ) : null}
             </span>
           }
           isCollapsed={collapsed.launchSettings}
@@ -4042,8 +4094,65 @@ export default function Admin() {
             <div className="h-px bg-zinc-700/30" />
 
             <div className="space-y-3">
+              <p className="text-[10px] font-heading font-bold text-sky-400 uppercase tracking-wider">Store point crediting</p>
+              <p className="text-[10px] text-mutedForeground">
+                When automatic crediting is off, paid purchases stay as <span className="text-sky-400/90">manual credit pending</span> until staff uses Credit in the payments log. Set an optional date/time below so players see when you plan to process credits (informational only).
+              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStorePointsAutoCredit(!storePointsAutoCredit)}
+                  disabled={launchSettingsSaving}
+                  className={`shrink-0 px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded border disabled:opacity-50 ${
+                    storePointsAutoCredit
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25'
+                      : 'bg-sky-500/15 text-sky-300 border-sky-500/40 hover:bg-sky-500/25'
+                  }`}
+                >
+                  {storePointsAutoCredit ? 'Auto credit: on' : 'Auto credit: off'}
+                </button>
+                <p className="text-[10px] text-mutedForeground flex-1">
+                  {storePointsAutoCredit
+                    ? 'Successful payments credit points immediately (or follow preorder rules below).'
+                    : 'Successful payments do not add points until staff credits them.'}
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="datetime-local"
+                  value={storePointsManualCreditEta ? storePointsManualCreditEta.slice(0, 16) : ''}
+                  onChange={(e) =>
+                    setStorePointsManualCreditEta(e.target.value ? new Date(e.target.value).toISOString() : '')
+                  }
+                  disabled={storePointsAutoCredit}
+                  className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-sky-500/50 focus:outline-none disabled:opacity-40"
+                />
+                <button
+                  type="button"
+                  onClick={handleClearStoreManualEta}
+                  disabled={launchSettingsSaving || storePointsAutoCredit || !storePointsManualCreditEta}
+                  className="px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 disabled:opacity-50"
+                >
+                  Clear time
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveStorePointsCredit}
+                disabled={launchSettingsSaving}
+                className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 hover:bg-sky-500/30 disabled:opacity-50"
+              >
+                {launchSettingsSaving ? 'Saving...' : 'Save store crediting'}
+              </button>
+            </div>
+
+            <div className="h-px bg-zinc-700/30" />
+
+            <div className="space-y-3">
               <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">Preorder Points Release</p>
-              <p className="text-[10px] text-mutedForeground">Points purchased before this date will be held and credited when this date arrives. After this date, points are credited immediately.</p>
+              <p className="text-[10px] text-mutedForeground">
+                Only when automatic store crediting is on: points purchased before this date are held until the date passes, then credit immediately or on claim. If auto crediting is off, purchases use manual crediting instead.
+              </p>
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="datetime-local"
@@ -7445,6 +7554,8 @@ export default function Admin() {
                                 <span className="text-green-400">Completed</span>
                               ) : row.payment_status === 'preorder_pending' ? (
                                 <span className="text-amber-400">Pre-order</span>
+                              ) : row.payment_status === 'manual_credit_pending' ? (
+                                <span className="text-sky-400">Manual credit</span>
                               ) : (
                                 <span className="text-red-400">{row.payment_status || 'Pending'}</span>
                               )}

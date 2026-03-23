@@ -215,6 +215,10 @@ def register(router):
                 preorder_active = now < preorder_dt
             except (ValueError, TypeError):
                 pass
+        store_auto = settings.get("store_points_auto_credit") if settings else None
+        if store_auto is None:
+            store_auto = True
+        manual_credit_eta = settings.get("store_points_manual_credit_eta") if settings else None
         show_strip = bool(banner_pref) and (login_locked or preview_open)
         return {
             "login_locked": login_locked,
@@ -225,6 +229,8 @@ def register(router):
             "show_preregister_banner": show_strip,
             "preorder_active": preorder_active,
             "preorder_release_date": preorder_release,
+            "store_points_auto_credit": bool(store_auto),
+            "manual_credit_eta": manual_credit_eta,
         }
 
     @router.post("/auth/register")
@@ -350,6 +356,7 @@ def register(router):
                     "sidebarLayout": "categorized_classic",
                     "mobileNavStyle": "bottom",
                     "mobileStatsDisplay": "top_bar",
+                    "fontId": "clean",
                 },
                 "founding_member": False,
                 "founding_rewards_claimed": False,

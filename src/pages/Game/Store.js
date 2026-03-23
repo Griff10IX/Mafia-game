@@ -136,6 +136,8 @@ export default function Store() {
   const [paymentTransactions, setPaymentTransactions] = useState([]);
   const [preorderActive, setPreorderActive] = useState(false);
   const [preorderReleaseDate, setPreorderReleaseDate] = useState(null);
+  const [storePointsAutoCredit, setStorePointsAutoCredit] = useState(true);
+  const [manualCreditEta, setManualCreditEta] = useState(null);
   const [pendingPoints, setPendingPoints] = useState(0);
   const [claimingPending, setClaimingPending] = useState(false);
 
@@ -187,6 +189,10 @@ export default function Store() {
       setPointsTabLockMessage(paths['/store/points'] || 'Points purchase temporarily unavailable');
       setPreorderActive(!!launchRes.data?.preorder_active);
       setPreorderReleaseDate(launchRes.data?.preorder_release_date || null);
+      setStorePointsAutoCredit(launchRes.data?.store_points_auto_credit !== false);
+      setManualCreditEta(
+        launchRes.data?.manual_credit_eta ?? pendingRes.data?.manual_credit_eta ?? null,
+      );
       setPendingPoints(pendingRes.data?.pending_points || 0);
       await fetchPaymentTransactions();
     } catch {
@@ -233,7 +239,20 @@ export default function Store() {
     try {
       const res = await api.get(`/payments/status/${sessionId}`);
       if (res.data.payment_status === 'paid') {
-        if (res.data.preorder) {
+        if (res.data.manual_credit_pending || res.data.status === 'manual_credit_pending') {
+          const eta = res.data.manual_credit_eta
+            ? new Date(res.data.manual_credit_eta).toLocaleString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+            : null;
+          toast.success(
+            `Payment received. ${Number(res.data.points_added || 0).toLocaleString()} points will be added manually by staff${eta ? ` (around ${eta})` : ''}.`,
+          );
+        } else if (res.data.preorder) {
           const releaseDate = res.data.preorder_release_date ? new Date(res.data.preorder_release_date).toLocaleDateString() : 'launch';
           toast.success(`Payment received. ${res.data.points_added} points will be credited on ${releaseDate}.`);
         } else {
@@ -343,7 +362,40 @@ export default function Store() {
         </div>
       )}
 
-      {preorderActive && (
+      {!storePointsAutoCredit && (
+        <div className="relative rounded-lg border border-sky-500/30 overflow-hidden bg-sky-500/5">
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-sky-500/50 to-transparent" />
+          <div className="px-4 py-3">
+            <p className="text-[10px] font-heading font-bold text-sky-400 uppercase tracking-[0.15em]">Manual point crediting</p>
+            <p className="text-[10px] text-zinc-400 font-heading mt-1">
+              Your payment is recorded; staff add points to your account manually.
+              {manualCreditEta ? (
+                <>
+                  {' '}
+                  Planned crediting window:{' '}
+                  <span className="text-sky-400 font-bold">
+                    {new Date(manualCreditEta).toLocaleString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </>
+              ) : null}
+            </p>
+            {pendingPoints > 0 && (
+              <p className="text-[10px] text-sky-400 font-heading font-bold mt-2">
+                You have {pendingPoints.toLocaleString()} points waiting to be credited
+              </p>
+            )}
+          </div>
+          <div className="h-px bg-sky-500/20 mx-3" />
+        </div>
+      )}
+
+      {storePointsAutoCredit && preorderActive && (
         <div className="relative rounded-lg border border-amber-500/30 overflow-hidden bg-amber-500/5">
           <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
           <div className="px-4 py-3">
@@ -364,7 +416,7 @@ export default function Store() {
         </div>
       )}
 
-      {!preorderActive && pendingPoints > 0 && (
+      {storePointsAutoCredit && !preorderActive && pendingPoints > 0 && (
         <div className="relative rounded-lg border border-green-500/30 overflow-hidden bg-green-500/5">
           <div className="h-0.5 bg-gradient-to-r from-transparent via-green-500/50 to-transparent" />
           <div className="px-4 py-3">
@@ -445,9 +497,6 @@ export default function Store() {
               </div>
             ))}
           </div>
-          <p className="text-[9px] text-mutedForeground font-heading text-center px-2">
-            Base ~£2.50 per 1k pts; larger packs include a volume discount.
-          </p>
           </>
           )}
         </div>
@@ -798,7 +847,12 @@ export default function Store() {
         </div>
         <div className="px-3 sm:px-4 py-3 space-y-2">
           <p className="text-[10px] text-zinc-500 font-heading italic">
-            Payments via Stripe. {preorderActive ? 'Pre-order points will be credited on release date.' : 'Points added after purchase.'}
+            Payments via Stripe.{' '}
+            {!storePointsAutoCredit
+              ? `Points are added manually by staff${manualCreditEta ? ` (planned around ${new Date(manualCreditEta).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}).` : '.'}`
+              : preorderActive
+                ? 'Pre-order points will be credited on release date.'
+                : 'Points added after purchase.'}
           </p>
           {paymentTransactions.length > 0 ? (
             <div className="rounded border border-primary/20 bg-zinc-900/50 overflow-hidden">
@@ -809,8 +863,22 @@ export default function Store() {
                 <span>Status</span>
               </div>
               {paymentTransactions.slice(0, 15).map((t, i) => {
-                const statusClass = t.payment_status === 'completed' ? 'text-green-400' : t.payment_status === 'preorder_pending' ? 'text-amber-400' : 'text-zinc-400';
-                const statusText = t.payment_status === 'completed' ? 'Credited' : t.payment_status === 'preorder_pending' ? 'Pre-order' : t.payment_status || 'Pending';
+                const statusClass =
+                  t.payment_status === 'completed'
+                    ? 'text-green-400'
+                    : t.payment_status === 'preorder_pending'
+                      ? 'text-amber-400'
+                      : t.payment_status === 'manual_credit_pending'
+                        ? 'text-sky-400'
+                        : 'text-zinc-400';
+                const statusText =
+                  t.payment_status === 'completed'
+                    ? 'Credited'
+                    : t.payment_status === 'preorder_pending'
+                      ? 'Pre-order'
+                      : t.payment_status === 'manual_credit_pending'
+                        ? 'Manual credit'
+                        : t.payment_status || 'Pending';
                 return (
                   <div key={t.session_id || i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-2 py-1.5 text-[10px] font-heading border-b border-zinc-800/50 last:border-0">
                     <span className="text-mutedForeground truncate" title={t.created_at}>{t.created_at ? new Date(t.created_at).toLocaleString() : '—'}</span>

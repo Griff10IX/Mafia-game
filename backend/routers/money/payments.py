@@ -25,7 +25,8 @@ def _get_stripe_key():
 async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_id: str, points: int) -> dict:
     """
     Credit points only once per session (idempotent). Returns dict with status info.
-    If preorder mode is active, stores points as pending instead of crediting.
+    If store_points_auto_credit is false, marks paid sessions as manual_credit_pending (staff credits later).
+    If preorder mode is active and auto-credit is on, stores points as preorder_pending instead of crediting.
     Use server-side points from POINT_PACKAGES only; do not trust client/metadata for amount.
     Logs points_before and points_after on the transaction for admin audit.
     """
@@ -35,8 +36,35 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
     
-    # Check for preorder mode
     settings = await db.game_settings.find_one({"_id": "main"})
+    auto_credit = settings.get("store_points_auto_credit") if settings else None
+    if auto_credit is None:
+        auto_credit = True
+    manual_eta = settings.get("store_points_manual_credit_eta") if settings else None
+
+    if auto_credit is False:
+        result = await db.payment_transactions.update_one(
+            {"session_id": session_id, "payment_status": {"$nin": ["completed", "preorder_pending", "manual_credit_pending"]}},
+            {"$set": {
+                "payment_status": "manual_credit_pending",
+                "preorder_points": points,
+                "manual_credit_marked_at": now_iso,
+            }},
+        )
+        if result.modified_count == 0:
+            txn = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0, "payment_status": 1})
+            return {
+                "credited": False,
+                "preorder": False,
+                "manual_credit_pending": txn.get("payment_status") == "manual_credit_pending" if txn else False,
+            }
+        logger.info(
+            "Payment manual credit pending: session_id=%s user_id=%s package_id=%s points=%s",
+            session_id, user_id, package_id, points,
+        )
+        return {"credited": True, "preorder": False, "manual_credit_pending": True, "manual_credit_eta": manual_eta}
+
+    # Preorder when auto-credit is on
     preorder_release_str = settings.get("preorder_points_release_date") if settings else None
     is_preorder = False
     if preorder_release_str:
@@ -49,7 +77,7 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
     if is_preorder:
         # Preorder mode: store as pending instead of crediting
         result = await db.payment_transactions.update_one(
-            {"session_id": session_id, "payment_status": {"$nin": ["completed", "preorder_pending"]}},
+            {"session_id": session_id, "payment_status": {"$nin": ["completed", "preorder_pending", "manual_credit_pending"]}},
             {"$set": {
                 "payment_status": "preorder_pending",
                 "preorder_points": points,
@@ -72,7 +100,7 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
     points_before = int(user.get("points") or 0) if user else 0
     points_after = points_before + points
     result = await db.payment_transactions.update_one(
-        {"session_id": session_id, "payment_status": {"$nin": ["completed", "preorder_pending"]}},
+        {"session_id": session_id, "payment_status": {"$nin": ["completed", "preorder_pending", "manual_credit_pending"]}},
         {"$set": {
             "payment_status": "completed",
             "points_credited_at": now_iso,
@@ -240,6 +268,17 @@ def register(router):
         if transaction and transaction.get("payment_status") == "completed":
             return {"status": "completed", "payment_status": "paid", "points_added": transaction["points"]}
         
+        if transaction and transaction.get("payment_status") == "manual_credit_pending":
+            settings = await db.game_settings.find_one({"_id": "main"})
+            eta = settings.get("store_points_manual_credit_eta") if settings else None
+            return {
+                "status": "manual_credit_pending",
+                "payment_status": "paid",
+                "points_added": transaction.get("preorder_points") or transaction.get("points", 0),
+                "manual_credit_pending": True,
+                "manual_credit_eta": eta,
+            }
+
         if transaction and transaction.get("payment_status") == "preorder_pending":
             return {
                 "status": "preorder_pending",
@@ -288,6 +327,14 @@ def register(router):
                     })
                 credit_result = await _credit_payment_if_pending(db, session_id, user_id, package_id or "", points)
                 if credit_result.get("credited"):
+                    if credit_result.get("manual_credit_pending"):
+                        return {
+                            "status": "manual_credit_pending",
+                            "payment_status": "paid",
+                            "points_added": points,
+                            "manual_credit_pending": True,
+                            "manual_credit_eta": credit_result.get("manual_credit_eta"),
+                        }
                     if credit_result.get("preorder"):
                         return {
                             "status": "preorder_pending",
@@ -298,15 +345,28 @@ def register(router):
                         }
                     return {"status": "completed", "payment_status": "paid", "points_added": points}
                 # Already completed or preorder pending (e.g. by webhook); return status with points
-                t2 = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0, "points": 1, "payment_status": 1, "preorder_release_date": 1})
+                t2 = await db.payment_transactions.find_one(
+                    {"session_id": session_id},
+                    {"_id": 0, "points": 1, "payment_status": 1, "preorder_release_date": 1, "preorder_points": 1},
+                )
                 if t2:
                     if t2.get("payment_status") == "completed":
                         return {"status": "completed", "payment_status": "paid", "points_added": t2.get("points", points)}
+                    if t2.get("payment_status") == "manual_credit_pending":
+                        settings = await db.game_settings.find_one({"_id": "main"})
+                        eta = settings.get("store_points_manual_credit_eta") if settings else None
+                        return {
+                            "status": "manual_credit_pending",
+                            "payment_status": "paid",
+                            "points_added": t2.get("preorder_points") or t2.get("points", points),
+                            "manual_credit_pending": True,
+                            "manual_credit_eta": eta,
+                        }
                     if t2.get("payment_status") == "preorder_pending":
                         return {
                             "status": "preorder_pending",
                             "payment_status": "paid",
-                            "points_added": t2.get("points", points),
+                            "points_added": t2.get("preorder_points") or t2.get("points", points),
                             "preorder": True,
                             "preorder_release_date": t2.get("preorder_release_date"),
                         }
@@ -373,12 +433,12 @@ def register(router):
         now = datetime.now(timezone.utc)
         thirty_mins_ago = (now - timedelta(minutes=30)).isoformat()
         
-        # Only show: completed, preorder_pending, or recent pending (last 30 min)
+        # Only show: completed, preorder_pending, manual_credit_pending, or recent pending (last 30 min)
         cursor = db.payment_transactions.find(
             {
                 "user_id": current_user["id"],
                 "$or": [
-                    {"payment_status": {"$in": ["completed", "preorder_pending"]}},
+                    {"payment_status": {"$in": ["completed", "preorder_pending", "manual_credit_pending"]}},
                     {"payment_status": "pending", "created_at": {"$gte": thirty_mins_ago}},
                 ]
             },
@@ -389,20 +449,32 @@ def register(router):
 
     @router.get("/payments/pending-points")
     async def get_pending_points(current_user: dict = Depends(get_current_user)):
-        """Get user's pending preorder points that will be credited on release date."""
-        # Only count preorder_pending (confirmed paid, waiting for release)
-        # Don't count "pending" - those are unconfirmed/abandoned checkout sessions
-        pending_txns = await db.payment_transactions.find(
+        """Pending points: preorder (scheduled release) and/or manual_credit_pending (staff credit)."""
+        settings = await db.game_settings.find_one({"_id": "main"})
+        release_date = settings.get("preorder_points_release_date") if settings else None
+        auto_credit = settings.get("store_points_auto_credit") if settings else None
+        if auto_credit is None:
+            auto_credit = True
+        manual_eta = settings.get("store_points_manual_credit_eta") if settings else None
+
+        preorder_txns = await db.payment_transactions.find(
             {"user_id": current_user["id"], "payment_status": "preorder_pending"},
             {"_id": 0, "preorder_points": 1, "points": 1, "preorder_release_date": 1},
         ).to_list(100)
-        total_pending = sum(t.get("preorder_points") or t.get("points", 0) for t in pending_txns)
-        settings = await db.game_settings.find_one({"_id": "main"})
-        release_date = settings.get("preorder_points_release_date") if settings else None
+        manual_txns = await db.payment_transactions.find(
+            {"user_id": current_user["id"], "payment_status": "manual_credit_pending"},
+            {"_id": 0, "preorder_points": 1, "points": 1},
+        ).to_list(100)
+        preorder_pts = sum(t.get("preorder_points") or t.get("points", 0) for t in preorder_txns)
+        manual_pts = sum(t.get("preorder_points") or t.get("points", 0) for t in manual_txns)
         return {
-            "pending_points": total_pending,
-            "transaction_count": len(pending_txns),
+            "pending_points": preorder_pts + manual_pts,
+            "preorder_pending_points": preorder_pts,
+            "manual_pending_points": manual_pts,
+            "transaction_count": len(preorder_txns) + len(manual_txns),
             "release_date": release_date,
+            "store_points_auto_credit": auto_credit,
+            "manual_credit_eta": manual_eta,
         }
 
     @router.post("/payments/check-release")
@@ -615,7 +687,10 @@ def register(router):
                 result["credit_result"] = credit_result
                 
                 if credit_result.get("credited"):
-                    result["message"] = f"Successfully processed: {points} points {'held for preorder' if credit_result.get('preorder') else 'credited'}"
+                    if credit_result.get("manual_credit_pending"):
+                        result["message"] = f"Successfully processed: {points} points held for manual staff credit"
+                    else:
+                        result["message"] = f"Successfully processed: {points} points {'held for preorder' if credit_result.get('preorder') else 'credited'}"
                 else:
                     result["message"] = "Already processed or failed to credit"
             else:
@@ -627,8 +702,8 @@ def register(router):
 
     @router.post("/admin/payments/manual-credit")
     async def admin_manual_credit_transaction(body: ManualCreditRequest, current_user: dict = Depends(get_current_user)):
-        """Admin only: Manually credit a pending transaction (for testing). 
-        Works for both 'pending' and 'preorder_pending' status transactions."""
+        """Admin only: Manually credit a non-completed paid transaction.
+        Works for pending, preorder_pending, and manual_credit_pending."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
         
