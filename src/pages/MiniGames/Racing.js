@@ -740,7 +740,17 @@ export default function Racing() {
       if (Array.isArray(liveDnfIds)) body.dnf_ids = liveDnfIds;
       const r = await api.post(`/racing/races/${raceId}/complete`, body);
       try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); localStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {}
-      setActiveRace((prev) => (prev?.id === raceId ? { ...r.data?.race, _resultsShown: true } : prev));
+      setActiveRace((prev) => {
+        if (prev?.id !== raceId) return prev;
+        const raceData = { ...r.data?.race, _resultsShown: true };
+        if (Array.isArray(liveResultOrder) && liveResultOrder.length > 0) {
+          raceData.result_order = liveResultOrder;
+        }
+        if (Array.isArray(liveDnfIds)) {
+          raceData.dnf_ids = liveDnfIds;
+        }
+        return raceData;
+      });
       refreshUser();
       fetchProfile();
       toast.success("Race completed");

@@ -2153,7 +2153,7 @@ export default function CircuitRaceView({
       const cl=2+Math.floor(Math.random()*(nLaps-3));
       weatherChg={lap:cl,to:Object.keys(WEATHER_DEFS).filter(k=>k!==cond)[Math.floor(Math.random()*4)]};
     }
-    let finishFlash=0, nextFO=1;
+    let finishFlash=0;
     stateRef.current={racers:racerArr,track,nLaps,wd:curWd,safetyCar:sc,fastestLap:fl,finishFlash:0,incidents};
     const SM=()=>spMultRef.current||1;
     const lapCrossAllowedAfterSec = nLaps > 1 ? (performance.now() / 1000 + 1.75) : -Infinity;
@@ -2331,10 +2331,10 @@ export default function CircuitRaceView({
               if(!r.inPit&&!(r.tyreWear>92&&tw<20))r.tyreWear=tw;
             }
             if(r.totalLapsDone>=nLaps){
-              r.finished=true;r.finishOrder=nextFO++;
-              r.finishedAtSec=nowSec+Math.min(0.5,(r.finishOrder-1)*0.08);
+              r.finished=true;
+              r.finishedAtProgress=(r.totalLapsDone??0)+(r.trackPos??0);
+              r.finishedAtSec=nowSec;
               r.finishVisibleUntil=nowSec+9999;
-              if(r.finishOrder===1&&nLaps>1){finishFlash=nowSec+2.0;stateRef.current.finishFlash=finishFlash;}
             }
           } else {
             // FIX: decrement each frame
@@ -2374,12 +2374,23 @@ export default function CircuitRaceView({
           if(!r.inPit&&r.tyreWear<=td.minWear+1){const dist=Math.abs(((r.trackPos-track.pitEntry)+1)%1);if(dist<0.12&&(!isLast2b||r.tyreWear<=td.minWear)){r.inPit=true;r.pitEndAt=nowSec+(r.pitDurationEmergencySeconds||4.2)+0.5;addInc(`${r.name} — emergency pit`);if(r.isPlayer)setPitNotif("Emergency pit — tyres critical!");}}
         });
 
+        // Assign finishOrder by progress (not array iteration order) so it matches visual standings
+        const finishedThisFrame=[...racers].filter(r=>r.finished&&!r.dnf);
+        if(finishedThisFrame.length>0){
+          finishedThisFrame.sort((a,b)=>(b.finishedAtProgress??0)-(a.finishedAtProgress??0));
+          finishedThisFrame.forEach((r,i)=>{r.finishOrder=i+1;});
+          if(!stateRef.current._finishFlashDone&&finishedThisFrame.length>0&&nLaps>1){
+            stateRef.current._finishFlashDone=true;finishFlash=nowSec+2.0;stateRef.current.finishFlash=finishFlash;
+          }
+        }
+
         // Sort standings
         const sorted=[...racers].sort((a,b)=>{
           if(a.dnf&&!b.dnf)return 1;if(!a.dnf&&b.dnf)return -1;
           if(a.dnf&&b.dnf){const pa=(a.totalLapsDone??0)+(a.trackPos??0),pb=(b.totalLapsDone??0)+(b.trackPos??0);if(Math.abs(pb-pa)>1e-9)return pb-pa;return(b.dnfAtSec??0)-(a.dnfAtSec??0);}
-          const aF=a.finished&&a.finishOrder>0,bF=b.finished&&b.finishOrder>0;
-          if(aF&&bF)return a.finishOrder-b.finishOrder;if(aF&&!bF)return-1;if(!aF&&bF)return 1;
+          const aF=a.finished&&!a.dnf,bF=b.finished&&!b.dnf;
+          if(aF&&bF)return(b.finishedAtProgress??0)-(a.finishedAtProgress??0);
+          if(aF&&!bF)return-1;if(!aF&&bF)return 1;
           const pa=(a.totalLapsDone??0)+(a.trackPos??0),pb=(b.totalLapsDone??0)+(b.trackPos??0);
           if(Math.abs(pb-pa)>1e-9)return pb-pa;return(a.position??99)-(b.position??99);
         });
@@ -2428,11 +2439,11 @@ export default function CircuitRaceView({
         const active=racers.filter(r=>!r.finished&&!r.dnf);
         if(active.length===0){
           if(nLaps===1&&onQualifyingComplete){
-            const fo=[...racers].sort((a,b)=>{const aF=a.finished&&a.finishOrder>0,bF=b.finished&&b.finishOrder>0;if(aF&&bF)return a.finishOrder-b.finishOrder;if(aF&&!bF)return-1;if(!aF&&bF)return 1;return((b.totalLapsDone??0)+(b.trackPos??0))-((a.totalLapsDone??0)+(a.trackPos??0));});
+            const fo=[...racers].sort((a,b)=>{const aF=a.finished&&!a.dnf,bF=b.finished&&!b.dnf;if(aF&&bF)return(b.finishedAtProgress??0)-(a.finishedAtProgress??0);if(aF&&!bF)return-1;if(!aF&&bF)return 1;return((b.totalLapsDone??0)+(b.trackPos??0))-((a.totalLapsDone??0)+(a.trackPos??0));});
             onQualifyingComplete(fo);return;
           }
           setUiPhase("done");setCommentary(rnd(COMMENTARY.done));
-          const fo=[...racers].sort((a,b)=>{if(a.dnf&&!b.dnf)return 1;if(!a.dnf&&b.dnf)return-1;if(a.dnf&&b.dnf){const pa=(a.totalLapsDone??0)+(a.trackPos??0),pb=(b.totalLapsDone??0)+(b.trackPos??0);if(Math.abs(pb-pa)>1e-9)return pb-pa;return(b.dnfAtSec??0)-(a.dnfAtSec??0);}const aF=a.finished&&a.finishOrder>0,bF=b.finished&&b.finishOrder>0;if(aF&&bF)return a.finishOrder-b.finishOrder;if(aF&&!bF)return-1;if(!aF&&bF)return 1;return((b.totalLapsDone??0)+(b.trackPos??0))-((a.totalLapsDone??0)+(a.trackPos??0));});
+          const fo=[...racers].sort((a,b)=>{if(a.dnf&&!b.dnf)return 1;if(!a.dnf&&b.dnf)return-1;if(a.dnf&&b.dnf){const pa=(a.totalLapsDone??0)+(a.trackPos??0),pb=(b.totalLapsDone??0)+(b.trackPos??0);if(Math.abs(pb-pa)>1e-9)return pb-pa;return(b.dnfAtSec??0)-(a.dnfAtSec??0);}const aF=a.finished&&!a.dnf,bF=b.finished&&!b.dnf;if(aF&&bF)return(b.finishedAtProgress??0)-(a.finishedAtProgress??0);if(aF&&!bF)return-1;if(!aF&&bF)return 1;return((b.totalLapsDone??0)+(b.trackPos??0))-((a.totalLapsDone??0)+(a.trackPos??0));});
           setResults(fo.map((r,i)=>({pos:i+1,id:r.id,name:r.name,isPlayer:r.isPlayer,color:r.color,carName:r.carName,pitStops:r.pitStops,lapTimes:r.lapTimes,dnf:r.dnf,bestLap:r.lapTimes.length?Math.min(...r.lapTimes):null,hasFastestLap:fl.holderId===r.id})));
           const rOIds=fo.map(r=>r.id),dIds=fo.filter(r=>r.dnf).map(r=>r.id);
           clearSaved();setTimeout(()=>onCompleteRef.current?.(rOIds,dIds),1200);return;
