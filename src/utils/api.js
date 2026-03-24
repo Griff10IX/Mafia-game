@@ -120,20 +120,19 @@ api.interceptors.response.use(
       }
     }
 
-    // ── 403 In jail → redirect to jail page (only from non-whitelisted pages) ──
+    // ── 403 In jail → redirect to jail page (only for specific blocked pages) ──
     if (error.response?.status === 403 && typeof window !== 'undefined') {
       const detail = error.response?.data?.detail;
       if (typeof detail === 'string' && detail.toLowerCase().includes('while in jail')) {
         const p = window.location.pathname;
-        const jailAllowed = [
-          '/crime/jail', '/jail',
-          '/casino', '/kill', '/game/travel', '/game/states', '/states', '/my-properties', '/game/family',
-          '/game/users-online', '/account/profile', '/account/autorank',
-          '/account/settings', '/social/forum', '/staffrole',
-          '/game/daily-rewards', '/game/leaderboard', '/game/help-desk',
-          '/game/stats', '/account/stats',
+        const jailBlocked = [
+          '/crime/crimes', '/crimes',
+          '/crime/gta', '/gta',
+          '/organised-crime', '/oc',
+          '/money/booze-run', '/booze-run',
+          '/kill/hitlist', '/hitlist',
         ];
-        if (!jailAllowed.some(prefix => p === prefix || p.startsWith(prefix + '/'))) {
+        if (jailBlocked.some(prefix => p === prefix || p.startsWith(prefix + '/'))) {
           window.location.replace('/crime/jail');
         }
         return Promise.reject(error);

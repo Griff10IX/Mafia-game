@@ -1504,9 +1504,14 @@ export default function Attack() {
         const result = {
           username: res.data.target_username ?? trimmed,
           bullets: res.data.bullets_required ?? 0,
+          isNpc: res.data.target_is_npc === true,
         };
         setKillBulletsResult(result);
-        // Hitlist NPC link: auto-fill bullets needed into the form (only once per NPC link)
+        // NPC targets: auto-fill bullets needed in the form.
+        if (result.isNpc && result.bullets > 0) {
+          setBulletsToUse(String(result.bullets));
+        }
+        // Hitlist NPC link: keep one-time behavior for direct board links as fallback.
         if (hitlistNpcAutoFillRef.current && result.bullets > 0) {
           hitlistNpcAutoFillRef.current = false;
           setBulletsToUse(String(result.bullets));

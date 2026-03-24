@@ -821,6 +821,7 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
         bullets_required = max(1, int(bullets_required * 0.35))
     return {
         "target_username": target["username"],
+        "target_is_npc": bool(target.get("is_npc")),
         "target_rank": target_rank_id,
         "target_rank_name": target_rank_name,
         "target_armour_level": target_armour,
@@ -1019,22 +1020,23 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         await _log_attack_error(current_user["id"], current_user.get("username"), "You must enter how many bullets to use (at least 1).", req)
         raise HTTPException(status_code=400, detail="You must enter how many bullets to use (at least 1).")
 
-    requested_effective = int(request.bullets_to_use)
+    requested_bullets = int(request.bullets_to_use)
     molotovs_used = 0
     bullets_used = 0
     effective_bullets = 0
 
     if request.use_molotovs and attacker_molotovs > 0:
-        # Use molotovs first, up to the requested effective amount (5,000 bullets each),
-        # then fill the remainder with real bullets.
-        max_molotovs_for_request = requested_effective // MOLOTOV_BULLET_EQUIV
-        molotovs_used = min(attacker_molotovs, max_molotovs_for_request)
-        effective_bullets = molotovs_used * MOLOTOV_BULLET_EQUIV
-        remaining_effective_needed = max(0, requested_effective - effective_bullets)
-        bullets_used = min(remaining_effective_needed, attacker_bullets)
-        effective_bullets += bullets_used
+        # Player-entered value is real bullets to fire. If molotovs are enabled,
+        # auto-use only as many molotovs as needed to cover the remaining kill requirement.
+        bullets_used = min(requested_bullets, attacker_bullets)
+        effective_bullets = bullets_used
+        shortfall = max(0, bullets_required - effective_bullets)
+        if shortfall > 0:
+            molotovs_needed = int(math.ceil(shortfall / MOLOTOV_BULLET_EQUIV))
+            molotovs_used = min(attacker_molotovs, molotovs_needed)
+            effective_bullets += molotovs_used * MOLOTOV_BULLET_EQUIV
     else:
-        bullets_used = min(requested_effective, attacker_bullets)
+        bullets_used = min(requested_bullets, attacker_bullets)
         effective_bullets = bullets_used
     attacker_state = ((attacker_location or current_user.get("current_state") or "").strip() or None)
     target_state = ((target.get("current_state") or "").strip() or None)

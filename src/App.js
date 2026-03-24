@@ -365,6 +365,7 @@ function App() {
               )
             }
           />
+          <Route path="/oc" element={<Navigate to="/organised-crime" replace />} />
           <Route
             path="/account/objectives"
             element={

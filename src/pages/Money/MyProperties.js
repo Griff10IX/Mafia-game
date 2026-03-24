@@ -515,9 +515,7 @@ export default function MyProperties() {
                     <p className="text-[11px] mb-1">
                       <span className="text-mutedForeground">Profit to collect: </span>
                       <span className="text-primary font-bold">
-                        {formatMoney(armouryDetail.owner_pending_profit ?? 0)}
-                        {(Number(armouryDetail.owner_pending_profit ?? 0) > 0 || Number(armouryDetail.owner_pending_profit_points ?? 0) > 0) && ', '}
-                        {Number(armouryDetail.owner_pending_profit_points ?? 0) > 0 ? `${Number(armouryDetail.owner_pending_profit_points).toLocaleString()} pts` : '0 pts'}
+                        {formatMoney(armouryDetail.owner_pending_profit ?? 0)} and {Number(armouryDetail.owner_pending_profit_points ?? 0).toLocaleString()} pts
                       </span>
                     </p>
                     <p className="text-[11px] mb-2">
