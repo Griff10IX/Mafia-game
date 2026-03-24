@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import api, { getApiErrorMessage, refreshUser } from "../../utils/api";
 import styles from "../../styles/noir.module.css";
 
-const GRAVITY = 0.42;
-const JUMP_FORCE = -7.2;
+const GRAVITY = 0.25;
+const JUMP_FORCE = -5.8;
+const TERMINAL_VEL = 6;
 const PIPE_SPEED_BASE = 3.0;
 const PIPE_GAP_BASE = 175;
 const PIPE_WIDTH = 62;
@@ -966,7 +967,7 @@ export default function Gauntlet() {
       return;
     }
     if (stateRef.current === "playing") {
-      setGameFrame(prev => ({ ...prev, birdVel: Math.min(JUMP_FORCE, prev.birdVel - 1.2) }));
+      setGameFrame(prev => ({ ...prev, birdVel: JUMP_FORCE }));
     }
     if (stateRef.current === "dead") {
       setGameState("idle");
@@ -998,7 +999,7 @@ export default function Gauntlet() {
       let cancelled = false;
       try {
         tickRef.current++;
-        const newVel = birdVelRef.current + GRAVITY;
+        const newVel = Math.min(TERMINAL_VEL, birdVelRef.current + GRAVITY);
         const newY = birdYRef.current + newVel;
         const newRot = Math.max(-30, Math.min(90, newVel * 5));
         const nextBgOffset = (bgOffsetRef.current + 1) % 60;
