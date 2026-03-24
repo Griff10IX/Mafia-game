@@ -924,7 +924,8 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
             return {
                 "success": True,
                 "melted_count": deleted_count,
-                "total_bullets": player_bullets,
+                "total_bullets": base_total_bullets,
+                "player_bullets": player_bullets,
                 "base_total_bullets": base_total_bullets,
                 "family_cut_bullets": family_cut,
                 "family_treasury_bullets_after": family_treasury_bullets_after,
