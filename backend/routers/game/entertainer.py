@@ -1,4 +1,4 @@
-# Entertainer Forum: free entry, random prizes (points/cash/bullets/cars). Dice = one winner; Gbox = everyone gets a random reward.
+# Entertainer Forum: free entry, random prizes (cash/bullets/tokens/cars). Dice/Hangman = one winner; Gbox = everyone gets a random reward.
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 import uuid
@@ -11,6 +11,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, send_notification, send_notification_to_all, _is_admin, CARS
+from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
 
 # Auto-create runs every 3 hours; open games roll 20 mins before the next batch (so plenty of time to join)
 AUTO_CREATE_INTERVAL_SECONDS = 3 * 3600   # 3 hours between batches
@@ -47,24 +48,45 @@ def _house_bonus_pot_if_zero_stored_pot(game: dict) -> tuple[int, int]:
 # Cars that can be won (common/uncommon/rare; exclude custom and exclusive)
 E_GAME_CAR_IDS = [c["id"] for c in CARS if c.get("id") not in ("car_custom", "car20") and c.get("rarity") in ("common", "uncommon", "rare")]
 
-REWARD_TYPES = [
-    "points",           # 5-50 points
-    "cash",             # $100-$2000
-    "bullets",          # 1-25 bullets
-    "cash_bullets",     # cash + bullets
-    "cash_points",      # cash + points
-    "bullets_points",   # bullets + points
-    "cash_bullets_points",  # all three
-    "car",              # 1 random car
-    "two_cars",         # 2 random cars
-    "car_cash",         # 1 car + cash
+HANGMAN_WORDS = [
+    "MAFIA", "BULLETS", "HEIST", "RACKET", "GODFATHER", "CONSIGLIERE", "FAMILY", "OMERTA",
+    "SPEAKEASY", "BLACKJACK", "UNDERBOSS", "CAPOREGIME", "ASSOCIATE", "ENFORCER", "HITMAN",
+    "SMUGGLER", "KINGPIN", "SAFEHOUSE", "WIRETAP", "BRIBE", "ALIBI", "SHOOTOUT", "AMBUSH",
+    "HIDEOUT", "CONTRABAND", "LAUNDERING", "KIDNAPPING", "EXTORTION", "BOOTLEG", "MOONSHINE",
+    "SYNDICATE", "DON", "CAPO", "CREW", "TERRITORY", "TRUCE", "RIVALRY", "VENDETTA",
+    "GETAWAY", "LOOKOUT", "PAYDAY", "CRACKDOWN", "INFORMANT", "MUGSHOT", "FUGITIVE", "MANHUNT",
+    "LOCKPICK", "VAULT", "CROWBAR", "BARRICADE", "DECOY", "STING", "SURVEILLANCE", "ROADBLOCK",
+    "CHECKPOINT", "WAREHOUSE", "DOCKYARD", "BACKALLEY", "HARBOR", "PENTHOUSE", "NIGHTCLUB",
+    "CASINO", "ROULETTE", "POKER", "DICE", "JACKPOT", "BANKROLL", "BOOKMAKER", "HIGHROLLER",
+    "STACKS", "CHIPS", "WAGER", "PAYOUT", "LUCK", "FORTUNE", "MERCENARY", "BODYGUARD",
+    "TACTICS", "STRATEGY", "SHOWDOWN", "DRAW", "DOUBLECROSS", "HANDSHAKE", "ALLIANCE", "BETRAYAL",
+    "BLOODOATH", "WHISPER", "SCARFACE", "SHADOW", "NIGHTFALL", "THUNDER", "STORM", "FALCON",
+    "VIPER", "COBRA", "WOLFPACK", "IRONCLAD", "STONEWALL", "GUNPOWDER", "TRIGGER", "HOLSTER",
+    "RELOADER", "CARTRIDGE", "SNIPER", "RIFLE", "PISTOL", "SHOTGUN", "SILENCER", "BLUEPRINT",
+    "LEDGER", "INVOICE", "CONTRACT", "PAYOFF", "RANSOM", "ESCROW", "AUCTION", "BLACKMARKET",
+    "TACTICAL", "OPERATION", "MIDNIGHT", "SUNRISE", "DOWNTOWN", "UPTOWN", "CITADEL", "STRONGHOLD",
+    "BUNKER", "ARMORY", "HIDEAWAY", "FOOTHOLD", "OUTPOST", "GARRISON", "RENEGADES", "VIGILANTE",
+    "SMOKESCREEN", "MIRAGE", "GHOST", "PHANTOM", "RAZOR", "ONYX", "OBSIDIAN", "EMBER",
+    "INFERNO", "FROST", "TEMPEST", "HAVOC", "RECKONING", "AFTERMATH", "LOCKDOWN", "COUNTDOWN",
 ]
+
+REWARD_TYPE_WEIGHTS = {
+    "cash": 36,
+    "bullets": 30,
+    "cash_bullets": 17,
+    "car_cash": 7,
+    "car": 5,
+    "two_cars": 2,
+    # Keep token rewards much rarer than core rewards
+    "token": 1,
+    "cash_token": 1,
+    "bullets_token": 1,
+    "cash_bullets_token": 1,
+    "all_tokens": 1,
+}
 
 def _random_cash():
     return _rng.randint(100, 2000)
-
-def _random_points():
-    return _rng.randint(5, 50)
 
 def _random_bullets():
     return _rng.randint(1, 25)
@@ -72,14 +94,29 @@ def _random_bullets():
 
 async def _give_random_reward(user_id: str) -> dict:
     """Apply a random reward to user. Returns description for result."""
-    reward_type = _rng.choice(REWARD_TYPES)
-    desc = {"reward_type": reward_type, "points": 0, "money": 0, "bullets": 0, "cars": []}
+    reward_type = _rng.choices(
+        population=list(REWARD_TYPE_WEIGHTS.keys()),
+        weights=list(REWARD_TYPE_WEIGHTS.values()),
+        k=1,
+    )[0]
+    desc = {"reward_type": reward_type, "money": 0, "bullets": 0, "cars": [], "tokens": {}}
     updates = {}
-    if reward_type == "points":
-        amt = _random_points()
-        updates["points"] = amt
-        desc["points"] = amt
-    elif reward_type == "cash":
+    token_updates = {}
+    unsellable_token_updates = {}
+
+    def _add_token(token_type: str, amount: int = 1):
+        cfg = TOKEN_CONFIG.get(token_type)
+        if not cfg or amount <= 0:
+            return
+        field = cfg.get("count_field")
+        if not field:
+            return
+        token_updates[field] = int(token_updates.get(field, 0)) + int(amount)
+        unsellable_key = f"entertainer_tokens.{field}"
+        unsellable_token_updates[unsellable_key] = int(unsellable_token_updates.get(unsellable_key, 0)) + int(amount)
+        desc["tokens"][token_type] = int(desc["tokens"].get(token_type, 0)) + int(amount)
+
+    if reward_type == "cash":
         amt = _random_cash()
         updates["money"] = amt
         desc["money"] = amt
@@ -91,18 +128,26 @@ async def _give_random_reward(user_id: str) -> dict:
         c, b = _random_cash(), _random_bullets()
         updates["money"], updates["bullets"] = c, b
         desc["money"], desc["bullets"] = c, b
-    elif reward_type == "cash_points":
-        c, p = _random_cash(), _random_points()
-        updates["money"], updates["points"] = c, p
-        desc["money"], desc["points"] = c, p
-    elif reward_type == "bullets_points":
-        b, p = _random_bullets(), _random_points()
-        updates["bullets"], updates["points"] = b, p
-        desc["bullets"], desc["points"] = b, p
-    elif reward_type == "cash_bullets_points":
-        c, b, p = _random_cash(), _random_bullets(), _random_points()
-        updates["money"], updates["bullets"], updates["points"] = c, b, p
-        desc["money"], desc["bullets"], desc["points"] = c, b, p
+    elif reward_type == "token":
+        _add_token(_rng.choice(list(TOKEN_TYPES)), 1)
+    elif reward_type == "all_tokens":
+        for token_type in TOKEN_TYPES:
+            _add_token(token_type, 1)
+    elif reward_type == "cash_token":
+        c = _random_cash()
+        updates["money"] = c
+        desc["money"] = c
+        _add_token(_rng.choice(list(TOKEN_TYPES)), 1)
+    elif reward_type == "bullets_token":
+        b = _random_bullets()
+        updates["bullets"] = b
+        desc["bullets"] = b
+        _add_token(_rng.choice(list(TOKEN_TYPES)), 1)
+    elif reward_type == "cash_bullets_token":
+        c, b = _random_cash(), _random_bullets()
+        updates["money"], updates["bullets"] = c, b
+        desc["money"], desc["bullets"] = c, b
+        _add_token(_rng.choice(list(TOKEN_TYPES)), 1)
     elif reward_type == "car":
         if E_GAME_CAR_IDS:
             car_id = _rng.choice(E_GAME_CAR_IDS)
@@ -150,6 +195,11 @@ async def _give_random_reward(user_id: str) -> dict:
         inc = {k: v for k, v in updates.items() if v}
         if inc:
             await db.users.update_one({"id": user_id}, {"$inc": inc})
+    if token_updates:
+        combined_updates = dict(token_updates)
+        for k, v in unsellable_token_updates.items():
+            combined_updates[k] = int(combined_updates.get(k, 0)) + int(v)
+        await db.users.update_one({"id": user_id}, {"$inc": combined_updates})
     return desc
 
 
@@ -160,10 +210,17 @@ def _format_reward_desc(desc: dict) -> str:
     parts = []
     if desc.get("money"):
         parts.append(f"${desc['money']:,}")
-    if desc.get("points"):
-        parts.append(f"{desc['points']} pts")
     if desc.get("bullets"):
         parts.append(f"{desc['bullets']} bullets")
+    if desc.get("tokens"):
+        token_parts = []
+        for token_type, amount in (desc.get("tokens") or {}).items():
+            if not amount:
+                continue
+            label = token_type.replace("_", " ")
+            token_parts.append(f"{int(amount)} {label} token")
+        if token_parts:
+            parts.append(", ".join(token_parts))
     if desc.get("cars"):
         parts.append(", ".join(desc["cars"]))
     return ", ".join(parts) if parts else "Nothing"
@@ -186,11 +243,13 @@ async def _settle_game(game: dict):
     if participants:
         if game.get("game_type") == "dice":
             result = await _run_dice_payout(game)
+        elif game.get("game_type") == "hangman":
+            result = await _run_hangman_payout(game)
         else:
             result = await _run_gbox_payout(game)
     cash_pot, house_bonus = _house_bonus_pot_if_zero_stored_pot(game)
     if cash_pot > 0 and participants:
-        if game.get("game_type") == "dice" and result and result.get("winner_id"):
+        if game.get("game_type") in ("dice", "hangman") and result and result.get("winner_id"):
             await db.users.update_one({"id": result["winner_id"]}, {"$inc": {"money": cash_pot}})
         elif game.get("game_type") == "gbox":
             n = len(participants)
@@ -218,7 +277,7 @@ async def _settle_game(game: dict):
             if not uid:
                 continue
             try:
-                if game_type == "dice":
+                if game_type in ("dice", "hangman"):
                     winner_id = (result or {}).get("winner_id")
                     reward = (result or {}).get("reward")
                     if uid == winner_id and reward:
@@ -226,7 +285,8 @@ async def _settle_game(game: dict):
                     else:
                         winner_name = (result or {}).get("winner_username") or "Someone"
                         msg = f"Game over. Winner: {winner_name}. Pot was ${pot:,}. Better luck next time!"
-                    await send_notification(uid, "🎲 E-Game results", msg, "system", category="ent_games")
+                    title = "🧩 Hangman results" if game_type == "hangman" else "🎲 E-Game results"
+                    await send_notification(uid, title, msg, "system", category="ent_games")
                 else:
                     # gbox: each player got a reward
                     rewards = (result or {}).get("rewards_by_user") or {}
@@ -241,7 +301,7 @@ async def _settle_game(game: dict):
 
 
 class CreateGameRequest(BaseModel):
-    game_type: str  # "dice" | "gbox"
+    game_type: str  # manual create supports: "dice" | "gbox" (hangman is auto-only)
     max_players: int = 10
     join_fee: int = 0  # entry fee per player (added to pot when they join)
     pot: int = 0  # creator-funded pot (deducted from creator on create)
@@ -250,7 +310,7 @@ class CreateGameRequest(BaseModel):
 
 
 async def _run_dice_payout(game: dict):
-    """One winner by roll; winner gets a random reward (points/cash/bullets/cars)."""
+    """One winner by roll; winner gets a random reward (cash/bullets/tokens/cars)."""
     participants = game.get("participants") or []
     if not participants:
         return None
@@ -274,8 +334,32 @@ async def _run_dice_payout(game: dict):
     return {"assignments": assignments, "roll": roll, "winner_id": winner_id, "winner_username": winner_username, "reward": reward}
 
 
+async def _run_hangman_payout(game: dict):
+    """Single winner by random pick; includes thematic Hangman result metadata."""
+    participants = game.get("participants") or []
+    if not participants:
+        return None
+    winner = _rng.choice(participants)
+    winner_id = winner.get("user_id")
+    winner_username = winner.get("username")
+    reward = None
+    if winner_id:
+        reward = await _give_random_reward(winner_id)
+    word = _rng.choice(HANGMAN_WORDS)
+    revealed_pattern = "".join(ch if _rng.random() < 0.45 else "_" for ch in word)
+    misses = _rng.randint(0, 6)
+    return {
+        "winner_id": winner_id,
+        "winner_username": winner_username,
+        "reward": reward,
+        "word": word,
+        "revealed_pattern": revealed_pattern,
+        "misses": misses,
+    }
+
+
 async def _run_gbox_payout(game: dict):
-    """Each participant gets a random reward (points/cash/bullets/cars)."""
+    """Each participant gets a random reward (cash/bullets/tokens/cars)."""
     participants = game.get("participants") or []
     if not participants:
         return None
@@ -326,16 +410,17 @@ async def settle_open_games_now():
 
 
 async def get_prizes(current_user: dict = Depends(get_current_user)):
-    """Return possible prizes for E-Games (for display: cash/points/bullets ranges and cars that can be won)."""
+    """Return possible prizes for E-Games (cash/bullets/tokens ranges and cars)."""
     prize_cars = [
         {"name": c.get("name", c["id"]), "rarity": c.get("rarity", "common")}
         for c in CARS
         if c.get("id") not in ("car_custom", "car20") and c.get("rarity") in ("common", "uncommon", "rare")
     ]
+    token_labels = [{"token_type": t, "label": t.replace("_", " ")} for t in TOKEN_TYPES]
     return {
         "cash": {"min": 100, "max": 2000},
-        "points": {"min": 5, "max": 50},
         "bullets": {"min": 1, "max": 25},
+        "tokens": {"min": 1, "max": len(TOKEN_TYPES), "types": token_labels},
         "cars": prize_cars,
     }
 
@@ -348,7 +433,7 @@ async def list_games(
     """List entertainer games (open + recent completed). Auto-settles open games when 20 mins before next batch."""
     await _maybe_auto_settle_open_games()
     query = {}
-    if game_type and game_type in ("dice", "gbox"):
+    if game_type and game_type in ("dice", "gbox", "hangman"):
         query["game_type"] = game_type
     if status and status in ("open", "full", "completed"):
         query["status"] = status
@@ -366,12 +451,12 @@ async def games_history(current_user: dict = Depends(get_current_user)):
     for g in games:
         r = g.get("result") or {}
         pot = g.get("pot") or 0
-        if g.get("game_type") == "dice":
+        if g.get("game_type") in ("dice", "hangman"):
             winner = r.get("winner_username") or "—"
             reward = r.get("reward")
             reward_text = _format_reward_desc(reward) if reward else None
             out.append({
-                "id": g["id"], "game_type": "dice", "pot": pot, "completed_at": g.get("completed_at"),
+                "id": g["id"], "game_type": g.get("game_type") or "dice", "pot": pot, "completed_at": g.get("completed_at"),
                 "winner": winner, "reward_text": reward_text,
             })
         else:
@@ -544,7 +629,7 @@ async def update_entertainer_config(
 
 # ---------- Admin: create 3–5 system games now and notify all ----------
 async def _create_system_game(game_type: str, max_players: int) -> dict:
-    """Create one open game with no creator (system). Free to join; winnings are random (points, cash, bullets, cars)."""
+    """Create one open game with no creator (system). Free to join; winnings are random (cash, bullets, tokens, cars)."""
     game_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     doc = {
@@ -579,7 +664,7 @@ async def admin_auto_create_now(current_user: dict = Depends(get_current_user)):
     n = min(n, MAX_OPEN_ENTERTAINER_GAMES - open_count)
     created = []
     for _ in range(n):
-        game_type = _rng.choice(["dice", "gbox"])
+        game_type = _rng.choice(["dice", "gbox", "hangman"])
         max_players = _rng.randint(2, 10)
         g = await _create_system_game(game_type, max_players)
         created.append(g)
@@ -592,7 +677,7 @@ async def admin_auto_create_now(current_user: dict = Depends(get_current_user)):
     try:
         await send_notification_to_all(
             "🎲 New E-Games",
-            f"{len(created)} new dice & gbox games are open in the Entertainer Forum! Join now.",
+            f"{len(created)} new dice, gbox & hangman games are open in the Entertainer Forum! Join now.",
             "system",
             category="ent_games",
         )
@@ -626,7 +711,7 @@ async def run_auto_create_if_enabled():
     if n <= 0:
         return
     for _ in range(n):
-        game_type = _rng.choice(["dice", "gbox"])
+        game_type = _rng.choice(["dice", "gbox", "hangman"])
         max_players = _rng.randint(2, 10)
         await _create_system_game(game_type, max_players)
     now_iso = now.isoformat()
@@ -637,7 +722,7 @@ async def run_auto_create_if_enabled():
     )
     await send_notification_to_all(
         "🎲 New E-Games",
-        f"{n} new dice & gbox games are open in the Entertainer Forum! Join now.",
+        f"{n} new dice, gbox & hangman games are open in the Entertainer Forum! Join now.",
         "system",
         category="ent_games",
     )

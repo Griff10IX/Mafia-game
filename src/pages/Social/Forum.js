@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, MessageCircle, Dice5, Package, Users, Bold, Italic, Image, Palette } from 'lucide-react';
+import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, MessageCircle, Dice5, Package, Users, Bold, Italic, Image, Palette, Puzzle } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
@@ -1051,7 +1051,7 @@ export default function Forum() {
         <div>
           <p className="text-[10px] text-zinc-500 font-heading italic">
             {activeTab === 'general' && 'Discuss OC, crews, trades & more'}
-            {activeTab === 'entertainer' && 'Dice games, gbox — auto payout when full'}
+            {activeTab === 'entertainer' && 'Dice, gbox, hangman — auto payout when full'}
             {activeTab === 'designer' && 'Designers: advertise your pictures. Users: request work or discuss.'}
             {activeTab === 'crew_oc' && 'Family Crew OC ads — apply from topic or family profile'}
             {activeTab === 'game_ideas' && 'Suggest features in the hub topic; vote on the Game Ideas board'}
@@ -1312,7 +1312,7 @@ export default function Forum() {
         </>
       )}
 
-      {/* Entertainer: Auto games (dice / gbox) */}
+      {/* Entertainer: Auto games (dice / gbox / hangman) */}
       {activeTab === 'entertainer' && (
         <>
           {/* Admin tools */}
@@ -1370,14 +1370,20 @@ export default function Forum() {
                       <span className="ml-2 text-primary font-heading font-bold">${entertainerPrizes.cash?.min?.toLocaleString()} – ${entertainerPrizes.cash?.max?.toLocaleString()}</span>
                     </div>
                     <div className="rounded bg-zinc-800/40 border border-zinc-700/30 px-2 py-1.5">
-                      <span className="text-mutedForeground">Points</span>
-                      <span className="ml-2 text-primary font-heading font-bold">{entertainerPrizes.points?.min} – {entertainerPrizes.points?.max}</span>
-                    </div>
-                    <div className="rounded bg-zinc-800/40 border border-zinc-700/30 px-2 py-1.5">
                       <span className="text-mutedForeground">Bullets</span>
                       <span className="ml-2 text-primary font-heading font-bold">{entertainerPrizes.bullets?.min} – {entertainerPrizes.bullets?.max}</span>
                     </div>
+                    <div className="rounded bg-zinc-800/40 border border-zinc-700/30 px-2 py-1.5">
+                      <span className="text-mutedForeground">Tokens</span>
+                      <span className="ml-2 text-primary font-heading font-bold">{entertainerPrizes.tokens?.min} – {entertainerPrizes.tokens?.max}</span>
+                    </div>
                   </div>
+                  {entertainerPrizes.tokens?.types?.length > 0 && (
+                    <div className="mb-3 rounded bg-zinc-800/30 border border-zinc-700/30 px-2 py-1.5">
+                      <span className="text-mutedForeground">Token types: </span>
+                      <span className="text-foreground">{entertainerPrizes.tokens.types.map((t) => t.label).join(', ')}</span>
+                    </div>
+                  )}
                   {entertainerPrizes.cars?.length > 0 && (
                     <div>
                       <div className="text-mutedForeground uppercase tracking-wider mb-1.5">Cars you can win</div>
@@ -1409,7 +1415,7 @@ export default function Forum() {
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-1">
               <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎲 Auto games</span>
-              <span className="text-[10px] text-mutedForeground">Free to join · Win random: points, cash, bullets, cars · Rolls when full or 20 mins before next batch</span>
+              <span className="text-[10px] text-mutedForeground">Free to join · Win random: cash, bullets, tokens, cars · Rolls when full or 20 mins before next batch</span>
             </div>
             {gamesLoading ? (
               <div className="p-4 text-center text-xs text-mutedForeground">Loading games...</div>
@@ -1425,14 +1431,20 @@ export default function Forum() {
                     <div key={g.id} className="px-3 py-2 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
-                          {g.game_type === 'dice' ? <Dice5 size={14} className="text-primary" /> : <Package size={14} className="text-primary" />}
+                          {g.game_type === 'dice' ? (
+                            <Dice5 size={14} className="text-primary" />
+                          ) : g.game_type === 'hangman' ? (
+                            <Puzzle size={14} className="text-primary" />
+                          ) : (
+                            <Package size={14} className="text-primary" />
+                          )}
                         </div>
                         <div>
                           <span className="text-xs font-heading font-bold text-foreground capitalize">{g.game_type}</span>
                           <span className="text-[10px] text-mutedForeground ml-2">
                             <Users size={10} className="inline" /> {participants.length}/{g.max_players}
                           </span>
-                          <span className="text-primary text-[10px] ml-2">Winnings: points, cash, bullets, cars</span>
+                          <span className="text-primary text-[10px] ml-2">Winnings: cash, bullets, tokens, cars</span>
                           {g.manual_roll && (
                             <span className="text-[10px] text-mutedForeground ml-2">Manual roll</span>
                           )}
