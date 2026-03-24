@@ -1,6 +1,7 @@
 # Auth: register, login, password reset, /auth/me
 import asyncio
 import logging
+import random
 import re
 import traceback
 import uuid
@@ -99,6 +100,7 @@ PREREGISTER_REWARDS = {
     "bonus_cash": 50000,
     "badge": "Founding Member",
     "auto_rank_trial_hours": 24,
+    "founding_random_tokens": 5,
     # Shown on pre-register page; mirrors server founding_member_income_mult (1.025)
     "founding_passive_bonus_pct": 2.5,
     "founding_passive_blurb": (
@@ -945,10 +947,16 @@ def register(router):
                     badge_name = PREREGISTER_REWARDS.get("badge", "Founding Member")
                     trial_hours = PREREGISTER_REWARDS.get("auto_rank_trial_hours", 24)
                     trial_until = (now + timedelta(hours=trial_hours)).isoformat()
+                    num_tokens = PREREGISTER_REWARDS.get("founding_random_tokens", 5)
+                    token_inc = {}
+                    picked = random.choices(REFERRED_USER_TOKEN_COUNT_FIELDS, k=num_tokens)
+                    for field in picked:
+                        token_inc[field] = token_inc.get(field, 0) + 1
                     reward_update = {
                         "$inc": {
                             "points": PREREGISTER_REWARDS.get("bonus_points", 500),
                             "money": PREREGISTER_REWARDS.get("bonus_cash", 50000),
+                            **token_inc,
                         },
                         "$set": {
                             "founding_rewards_claimed": True,
@@ -956,6 +964,7 @@ def register(router):
                             "auto_rank_purchased": True,
                             "auto_rank_trial": True,
                             "auto_rank_trial_until": trial_until,
+                            "founding_tokens": token_inc,
                         },
                         "$addToSet": {
                             "badges": badge_name,

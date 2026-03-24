@@ -177,7 +177,7 @@ export default function PreRegister() {
               <p className="text-xs font-heading mb-4" style={{ color: 'var(--noir-muted)' }}>
                 Register before launch to earn the <span className="text-primary/90 font-bold">Founding Member</span> badge on your profile, a launch-day bundle, and a permanent in-game earnings edge.
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl mx-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 max-w-4xl mx-auto">
                 <div className="p-4 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
                   <div className="text-2xl mb-1">💎</div>
                   <div className="text-xl font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
@@ -212,6 +212,15 @@ export default function PreRegister() {
                   </div>
                   <div className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
                     Auto Rank Access
+                  </div>
+                </div>
+                <div className="p-4 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
+                  <div className="text-2xl mb-1">🎲</div>
+                  <div className="text-xl font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
+                    {rewards?.founding_random_tokens || 5} Tokens
+                  </div>
+                  <div className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
+                    Random Boost Tokens
                   </div>
                 </div>
               </div>

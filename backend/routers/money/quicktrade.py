@@ -330,7 +330,7 @@ async def get_token_offers(current_user: dict = Depends(get_current_user)):
 async def get_my_token_balances(current_user: dict = Depends(get_current_user)):
     """Return per-token-type balances: total, unsellable (referral + entertainer), and sellable for Quick Trade."""
     user_id = current_user["id"]
-    projection = {"_id": 0, "referral_tokens": 1, "entertainer_tokens": 1}
+    projection = {"_id": 0, "referral_tokens": 1, "entertainer_tokens": 1, "founding_tokens": 1}
     for cfg in TOKEN_CONFIG.values():
         projection[cfg["count_field"]] = 1
     user = await db.users.find_one({"id": user_id}, projection)
@@ -338,15 +338,17 @@ async def get_my_token_balances(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="User not found")
     referral_tokens = user.get("referral_tokens") or {}
     entertainer_tokens = user.get("entertainer_tokens") or {}
+    founding_tokens = user.get("founding_tokens") or {}
     result = {}
     for token_type in TOKEN_TYPES:
         field = TOKEN_CONFIG[token_type]["count_field"]
         total = int(user.get(field) or 0)
         referral = int(referral_tokens.get(field) or 0)
         entertainer = int(entertainer_tokens.get(field) or 0)
-        unsellable = referral + entertainer
+        founding = int(founding_tokens.get(field) or 0)
+        unsellable = referral + entertainer + founding
         sellable = max(0, total - unsellable)
-        result[token_type] = {"total": total, "referral": referral, "entertainer": entertainer, "unsellable": unsellable, "sellable": sellable}
+        result[token_type] = {"total": total, "referral": referral, "entertainer": entertainer, "founding": founding, "unsellable": unsellable, "sellable": sellable}
     return result
 
 
@@ -364,6 +366,7 @@ async def create_token_offer(offer: CreateTokenOffer, current_user: dict = Depen
     field = TOKEN_CONFIG[offer.token_type]["count_field"]
     referral_key = f"referral_tokens.{field}"
     entertainer_key = f"entertainer_tokens.{field}"
+    founding_key = f"founding_tokens.{field}"
     result = await db.users.update_one(
         {
             "id": user_id,
@@ -374,6 +377,7 @@ async def create_token_offer(offer: CreateTokenOffer, current_user: dict = Depen
                         {"$add": [
                             {"$ifNull": ["$" + referral_key, 0]},
                             {"$ifNull": ["$" + entertainer_key, 0]},
+                            {"$ifNull": ["$" + founding_key, 0]},
                         ]}
                     ]},
                     offer.quantity
