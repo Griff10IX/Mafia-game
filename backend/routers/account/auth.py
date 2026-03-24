@@ -98,6 +98,7 @@ PREREGISTER_REWARDS = {
     "bonus_points": 500,
     "bonus_cash": 50000,
     "badge": "Founding Member",
+    "auto_rank_trial_hours": 24,
     # Shown on pre-register page; mirrors server founding_member_income_mult (1.025)
     "founding_passive_bonus_pct": 2.5,
     "founding_passive_blurb": (
@@ -941,6 +942,8 @@ def register(router):
                 if launch_happened:
                     # Apply rewards
                     badge_name = PREREGISTER_REWARDS.get("badge", "Founding Member")
+                    trial_hours = PREREGISTER_REWARDS.get("auto_rank_trial_hours", 24)
+                    trial_until = (now + timedelta(hours=trial_hours)).isoformat()
                     reward_update = {
                         "$inc": {
                             "points": PREREGISTER_REWARDS.get("bonus_points", 500),
@@ -949,6 +952,9 @@ def register(router):
                         "$set": {
                             "founding_rewards_claimed": True,
                             "founding_rewards_claimed_at": now.isoformat(),
+                            "auto_rank_purchased": True,
+                            "auto_rank_trial": True,
+                            "auto_rank_trial_until": trial_until,
                         },
                         "$addToSet": {
                             "badges": badge_name,

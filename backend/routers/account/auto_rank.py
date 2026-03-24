@@ -105,6 +105,17 @@ def _parse_iso(s):
         return None
 
 
+async def _expire_auto_rank_trials(db):
+    """Disable auto rank for users whose founding-member trial has expired."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    result = await db.users.update_many(
+        {"auto_rank_trial": True, "auto_rank_trial_until": {"$lte": now_iso}},
+        {"$set": {"auto_rank_purchased": False, "auto_rank_enabled": False, "auto_rank_trial": False}},
+    )
+    if result.modified_count:
+        logger.info("Auto rank: expired %d trial(s)", result.modified_count)
+
+
 def _is_car_usable(uc: dict) -> bool:
     """True if car has damage < 100 (or no damage field)."""
     dmg = uc.get("damage_percent")
@@ -1361,6 +1372,7 @@ async def run_auto_rank_loop():
         if not config["enabled"]:
             await asyncio.sleep(2)
             continue
+        await _expire_auto_rank_trials(db)
         cycle_start = datetime.now(timezone.utc)
         try:
             await run_booze_arrivals()
@@ -1384,6 +1396,7 @@ async def run_auto_rank_cron_cycle():
     if not config["enabled"]:
         logger.info("Auto rank cron: skipped (auto_rank disabled in game settings)")
         return {"ok": True, "skipped": "auto_rank disabled"}
+    await _expire_auto_rank_trials(db)
     cycle_start = datetime.now(timezone.utc)
     try:
         await run_booze_arrivals()
@@ -1675,6 +1688,7 @@ def register(router):
         auto_rank_melt_action_ids: Optional[list] = None
         auto_rank_melt_rarity_ids: Optional[list] = None
         auto_rank_scrap_rarity_ids: Optional[list] = None
+        auto_rank_trial_dismissed: Optional[bool] = None
 
     @router.get("/auto-rank/me")
     async def get_my_preferences(current_user: dict = Depends(get_current_user)):
@@ -1683,6 +1697,9 @@ def register(router):
             chat_id = (current_user.get("telegram_chat_id") or "").strip()
             prefs = _extract_preferences(current_user)
             prefs["auto_rank_purchased"] = current_user.get("auto_rank_purchased", False) or current_user.get("auto_rank_enabled", False)
+            prefs["auto_rank_trial"] = bool(current_user.get("auto_rank_trial"))
+            prefs["auto_rank_trial_until"] = current_user.get("auto_rank_trial_until")
+            prefs["auto_rank_trial_dismissed"] = bool(current_user.get("auto_rank_trial_dismissed"))
             prefs["telegram_chat_id_set"] = bool(chat_id)
             prefs["auto_rank_crime_ids"] = current_user.get("auto_rank_crime_ids") or []
             prefs["auto_rank_gta_option_ids"] = current_user.get("auto_rank_gta_option_ids") or []
@@ -1941,6 +1958,8 @@ def register(router):
             updates["auto_rank_melt_rarity_ids"] = [str(x) for x in body.auto_rank_melt_rarity_ids] if body.auto_rank_melt_rarity_ids else []
         if body.auto_rank_scrap_rarity_ids is not None:
             updates["auto_rank_scrap_rarity_ids"] = [str(x) for x in body.auto_rank_scrap_rarity_ids] if body.auto_rank_scrap_rarity_ids else []
+        if body.auto_rank_trial_dismissed is not None:
+            updates["auto_rank_trial_dismissed"] = bool(body.auto_rank_trial_dismissed)
         if not updates:
             return {"message": "No changes", **_extract_preferences(current_user)}
         op = {"$set": updates}

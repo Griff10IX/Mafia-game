@@ -142,6 +142,52 @@ const StatCard = ({ label, value, valueColor = "text-foreground", icon: Icon }) 
 );
 
 /* ═══════════════════════════════════════════════════════
+   Trial Banner
+   ═══════════════════════════════════════════════════════ */
+const TrialBanner = ({ trialUntil, dismissed, onDismiss }) => {
+  const [remaining, setRemaining] = useState('');
+  useEffect(() => {
+    const tick = () => {
+      if (!trialUntil) { setRemaining(''); return; }
+      const ms = new Date(trialUntil).getTime() - Date.now();
+      if (ms <= 0) { setRemaining('expired'); return; }
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      setRemaining(h > 0 ? `${h}h ${m}m` : `${m}m`);
+    };
+    tick();
+    const id = setInterval(tick, 30000);
+    return () => clearInterval(id);
+  }, [trialUntil]);
+
+  if (!remaining || dismissed) return null;
+  const expired = remaining === 'expired';
+
+  return (
+    <div className={`rounded-lg border p-2.5 sm:p-3 ar-fade-in ${expired ? 'border-red-500/30 bg-red-500/5' : 'border-cyan-500/30 bg-cyan-500/5'}`}>
+      <div className="flex items-center gap-2">
+        <Clock size={14} className={`shrink-0 ${expired ? 'text-red-400' : 'text-cyan-400'}`} />
+        <p className="flex-1 text-[10px] sm:text-xs font-heading text-zinc-300">
+          {expired ? (
+            <>Founding Member trial has ended. <Link to="/game/store" className="text-primary underline font-bold">Purchase Auto Rank</Link> in the Store to keep it.</>
+          ) : (
+            <>Founding Member trial — <span className="font-bold text-cyan-400">{remaining}</span> remaining. <Link to="/game/store" className="text-primary underline font-bold">Purchase permanently</Link> in the Store.</>
+          )}
+        </p>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className={`shrink-0 text-xs leading-none px-1 py-0.5 rounded hover:bg-white/10 ${expired ? 'text-red-400' : 'text-cyan-400'}`}
+          aria-label="Dismiss"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════
    Setup & Status Card
    ═══════════════════════════════════════════════════════ */
 const SetupCard = ({ canEnable, hasTelegram, telegramNotifyOn }) => (
@@ -1073,6 +1119,9 @@ export default function AutoRank() {
     auto_rank_melt: false,
     auto_rank_scrap: false,
     auto_rank_purchased: false,
+    auto_rank_trial: false,
+    auto_rank_trial_until: null,
+    auto_rank_trial_dismissed: false,
     telegram_chat_id_set: false,
     auto_rank_crime_ids: [],
     auto_rank_gta_option_ids: [],
@@ -1302,6 +1351,9 @@ export default function AutoRank() {
             auto_rank_oc: !!meRes.data.auto_rank_oc,
             auto_rank_booze: !!meRes.data.auto_rank_booze,
             auto_rank_purchased: !!meRes.data.auto_rank_purchased,
+            auto_rank_trial: !!meRes.data.auto_rank_trial,
+            auto_rank_trial_until: meRes.data.auto_rank_trial_until || null,
+            auto_rank_trial_dismissed: !!meRes.data.auto_rank_trial_dismissed,
             telegram_chat_id_set: !!meRes.data.telegram_chat_id_set,
             auto_rank_crime_ids: meRes.data.auto_rank_crime_ids ?? [],
             auto_rank_gta_option_ids: meRes.data.auto_rank_gta_option_ids ?? [],
@@ -1681,6 +1733,17 @@ export default function AutoRank() {
       </div>
 
       <SetupCard canEnable={canEnable} hasTelegram={hasTelegram} telegramNotifyOn={prefs?.auto_rank_telegram_notify !== false} />
+
+      {prefs?.auto_rank_trial && prefs?.auto_rank_trial_until && (
+        <TrialBanner
+          trialUntil={prefs.auto_rank_trial_until}
+          dismissed={prefs.auto_rank_trial_dismissed}
+          onDismiss={() => {
+            setPrefs(p => ({ ...p, auto_rank_trial_dismissed: true }));
+            api.patch('/auto-rank/me', { auto_rank_trial_dismissed: true }).catch(() => {});
+          }}
+        />
+      )}
       
       {canEnable && (
         <AutoRankSummaryCard stats={stats} liveCountdown={liveCountdown} prefs={prefs} />
