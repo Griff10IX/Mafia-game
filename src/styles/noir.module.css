@@ -563,6 +563,12 @@ body[data-theme-variant="modern"] .themeGangsterModern .sidebar {
   transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+body[data-theme-variant="modern"][data-modern-perf="on"] .themeGangsterModern .topBar,
+body[data-theme-variant="modern"][data-modern-perf="on"] .themeGangsterModern .sidebar {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 body[data-theme-variant="modern"] .themeGangsterModern .panelHeader {
   padding-top: 0.6rem;
   padding-bottom: 0.6rem;
@@ -724,6 +730,11 @@ body[data-theme-variant="modern"] [data-layout="bottom-nav"] nav {
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 -8px 24px rgba(0, 0, 0, 0.35);
 }
+body[data-theme-variant="modern"][data-modern-perf="on"] [data-layout="bottom-nav"] nav {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+}
 body[data-theme-variant="modern"] [data-layout="bottom-nav-submenu"] {
   border-color: var(--modern-divider, rgba(161, 161, 170, 0.14));
 }
@@ -740,6 +751,11 @@ body[data-theme-variant="modern"] [data-layout="touch-ball"] button {
     0 8px 32px rgba(0, 0, 0, 0.5) !important;
   border-radius: 50%;
 }
+body[data-theme-variant="modern"][data-modern-perf="on"] [data-layout="touch-ball"] button {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05) inset, 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+}
 body[data-theme-variant="modern"] [data-layout="touch-ball"] button:active {
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.04) inset,
@@ -755,6 +771,11 @@ body[data-theme-variant="modern"] [data-layout="touch-ball-panel"] {
     0 0 0 1px rgba(255, 255, 255, 0.04) inset,
     0 0 30px rgba(var(--noir-primary-rgb), 0.06),
     0 24px 60px rgba(0, 0, 0, 0.6) !important;
+}
+body[data-theme-variant="modern"][data-modern-perf="on"] [data-layout="touch-ball-panel"] {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04) inset, 0 16px 42px rgba(0, 0, 0, 0.55) !important;
 }
 
 /* Armoury: modern theme – no caution tape, modern panel look */

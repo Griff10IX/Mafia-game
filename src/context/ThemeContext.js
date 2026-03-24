@@ -382,6 +382,21 @@ function applyThemeVariantToDocument(themeVariant) {
   }
 }
 
+function applyModernPerfFlagToDocument(themeVariant) {
+  const body = document.body;
+  const root = document.documentElement;
+  const isModern = themeVariant === 'modern';
+  if (isModern) {
+    body.setAttribute('data-modern-perf', 'on');
+    root.setAttribute('data-modern-perf', 'on');
+  } else {
+    body.removeAttribute('data-modern-perf');
+    root.removeAttribute('data-modern-perf');
+    body.removeAttribute('data-busy-animations');
+    root.removeAttribute('data-busy-animations');
+  }
+}
+
 const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
@@ -583,6 +598,7 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     applyThemeVariantToDocument(themeVariant);
+    applyModernPerfFlagToDocument(themeVariant);
   }, [themeVariant]);
 
   const themeLoadedRef = useRef(false);

@@ -51,6 +51,17 @@ function betLabel(type, selection) {
   return String(selection ?? type).replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function setBusyAnimationsFlag(isBusy) {
+  if (typeof document === 'undefined') return;
+  if (isBusy) {
+    document.body?.setAttribute('data-busy-animations', '1');
+    document.documentElement?.setAttribute('data-busy-animations', '1');
+  } else {
+    document.body?.removeAttribute('data-busy-animations');
+    document.documentElement?.removeAttribute('data-busy-animations');
+  }
+}
+
 /* ═══════════════════════════════════════════════════════
    SVG Roulette Wheel – pie segments, metallic rim, ball
    ═══════════════════════════════════════════════════════ */
@@ -297,6 +308,7 @@ export default function Rlt() {
   const [recentNumbers, setRecentNumbers] = useState([]);
   const [showWin, setShowWin] = useState(false);
   const spinTimeoutRef = useRef(null);
+  const busyClearTimeoutRef = useRef(null);
   const pendingResultRef = useRef(null);
 
   const [newMaxBet, setNewMaxBet] = useState('');
@@ -332,7 +344,11 @@ export default function Rlt() {
     fetchOwnership();
   }, []);
 
-  useEffect(() => () => { if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current); }, []);
+  useEffect(() => () => {
+    if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
+    if (busyClearTimeoutRef.current) clearTimeout(busyClearTimeoutRef.current);
+    setBusyAnimationsFlag(false);
+  }, []);
 
   useEffect(() => {
     if (!buyBackOffer?.expires_at) { setBuyBackSecondsLeft(null); return; }
@@ -396,17 +412,31 @@ export default function Rlt() {
     }
     refreshUser();
     setSpinning(false);
+    if (busyClearTimeoutRef.current) clearTimeout(busyClearTimeoutRef.current);
+    // Keep perf mode active slightly into toast reveal, then release.
+    busyClearTimeoutRef.current = setTimeout(() => {
+      busyClearTimeoutRef.current = null;
+      setBusyAnimationsFlag(false);
+    }, 700);
   };
 
   const spin = async () => {
     if (!canSpin) return;
+    setBusyAnimationsFlag(true);
     setSpinning(true);
     setLastResult(null);
     setShowWin(false);
-    if (!useAnimation) setWheelRotation(0);
+    if (!useAnimation) {
+      setWheelRotation(0);
+    } else {
+      // Immediate visual feedback so spin feels responsive before API returns.
+      setWheelRotation((prev) => prev + 360);
+    }
     if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
 
     try {
+      // Let React paint the pressed/loading state before awaiting network.
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const payload = bets.map((b) => ({ type: b.type, selection: b.type === 'straight' ? Number(b.selection) : b.selection, amount: b.amount }));
       const res = await api.post('/casino/roulette/spin', { bets: payload });
       const data = res.data || {};
@@ -419,7 +449,6 @@ export default function Rlt() {
       }
 
       pendingResultRef.current = data;
-      await new Promise((r) => setTimeout(r, 16));
       startWheelSpin(data.result);
       spinTimeoutRef.current = setTimeout(() => {
         spinTimeoutRef.current = null;
@@ -429,6 +458,7 @@ export default function Rlt() {
       if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
       toast.error(e.response?.data?.detail || 'Spin failed');
       setSpinning(false);
+      setBusyAnimationsFlag(false);
       refreshUser(); // Sync balance in case debit succeeded but response failed
     }
   };
