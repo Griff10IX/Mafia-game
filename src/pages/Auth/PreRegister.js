@@ -181,10 +181,10 @@ export default function PreRegister() {
                 <div className="p-4 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
                   <div className="text-2xl mb-1">💎</div>
                   <div className="text-xl font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
-                    {rewards?.bonus_points?.toLocaleString() || '500'} Points
+                    {rewards?.bonus_respect_points?.toLocaleString() || '1,000'} Respect
                   </div>
                   <div className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
-                    Premium Currency
+                    Respect points
                   </div>
                 </div>
                 <div className="p-4 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>

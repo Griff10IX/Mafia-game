@@ -381,10 +381,10 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     <div className="p-1.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
                       <div className="text-sm leading-none mb-0.5">💎</div>
                       <div className="text-[10px] font-heading font-bold leading-tight" style={{ color: 'var(--noir-primary)' }}>
-                        {(preregisterRewards?.bonus_points ?? 500).toLocaleString()} pts
+                        {(preregisterRewards?.bonus_respect_points ?? 1000).toLocaleString()} resp
                       </div>
                       <div className="text-[6px] font-heading uppercase tracking-tighter leading-tight mt-0.5" style={{ color: 'var(--noir-muted)' }}>
-                        Premium
+                        Respect
                       </div>
                     </div>
                     <div className="p-1.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>

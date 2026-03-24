@@ -96,7 +96,7 @@ class PreRegisterBody(BaseModel):
 
 # Pre-registration rewards (applied on first login after launch)
 PREREGISTER_REWARDS = {
-    "bonus_points": 500,
+    "bonus_respect_points": 1000,
     "bonus_cash": 50000,
     "badge": "Founding Member",
     "auto_rank_trial_hours": 24,
@@ -952,9 +952,10 @@ def register(router):
                     picked = random.choices(REFERRED_USER_TOKEN_COUNT_FIELDS, k=num_tokens)
                     for field in picked:
                         token_inc[field] = token_inc.get(field, 0) + 1
+                    respect_bonus = int(PREREGISTER_REWARDS.get("bonus_respect_points", 0) or 0)
                     reward_update = {
                         "$inc": {
-                            "points": PREREGISTER_REWARDS.get("bonus_points", 500),
+                            "respect_points": respect_bonus,
                             "money": PREREGISTER_REWARDS.get("bonus_cash", 50000),
                             **token_inc,
                         },
@@ -971,6 +972,8 @@ def register(router):
                         }
                     }
                     await db.users.update_one({"id": user["id"]}, reward_update)
+                    if respect_bonus > 0:
+                        await srv.log_respect_earned(user["id"], respect_bonus, "founding_member")
                     founding_rewards_applied = True
                     logging.info("Applied founding member rewards to user %s", user["id"])
         except Exception as e:
@@ -1658,7 +1661,7 @@ def register(router):
         return {
             "message": (
                 "You're in! We'll email you when the game launches. "
-                "Create a full account to earn the Founding Member badge, launch-day points & cash, and a permanent +2.5% bonus on core payouts."
+                "Create a full account to earn the Founding Member badge, launch-day respect & cash, and a permanent +2.5% bonus on core payouts."
             ),
             "rewards": PREREGISTER_REWARDS,
         }
