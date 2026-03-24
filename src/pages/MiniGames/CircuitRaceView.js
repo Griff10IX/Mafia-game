@@ -1134,6 +1134,7 @@ export default function CircuitRaceView({
   liveRaceEvents = null,
   liveGapsToAhead = null,
   liveSafetyCarLaps = 0,
+  liveResultOrder = [],
   onInteractiveGreenFlag = null,
   onSessionPhaseChange = null,
   onInteractiveLeaderLapCross = null,
@@ -1254,6 +1255,7 @@ export default function CircuitRaceView({
   const liveTotalLapsRef = useRef(liveTotalLaps);
   const liveInitDone = useRef(false);
   const lapDeadlineRef = useRef(lapDeadline);
+  const liveResultOrderRef = useRef(liveResultOrder);
 
   useEffect(() => { liveCarStatesRef.current = liveCarStates; }, [liveCarStates]);
   useEffect(() => { liveIncidentsRef.current = liveIncidents; }, [liveIncidents]);
@@ -1261,6 +1263,7 @@ export default function CircuitRaceView({
   useEffect(() => { liveCurrentLapRef.current = liveCurrentLap; }, [liveCurrentLap]);
   useEffect(() => { liveTotalLapsRef.current = liveTotalLaps; }, [liveTotalLaps]);
   useEffect(() => { lapDeadlineRef.current = lapDeadline; }, [lapDeadline]);
+  useEffect(() => { liveResultOrderRef.current = liveResultOrder; }, [liveResultOrder]);
 
   const liveRaceEventsRef = useRef(liveRaceEvents);
   const liveGapsToAheadRef = useRef(liveGapsToAhead);
@@ -3040,8 +3043,8 @@ export default function CircuitRaceView({
           return;
         }
 
-        // Smooth position interpolation (overtakes — softer easing)
-        racer._smoothPos = racer._smoothPos + (racer._targetPos - racer._smoothPos) * Math.min(1, dt * 0.85);
+        // Smooth position interpolation — faster convergence to backend positions
+        racer._smoothPos = racer._smoothPos + (racer._targetPos - racer._smoothPos) * Math.min(1, dt * 2.5);
 
         // Tyre grip model (F1 Clash cliff model)
         const td = TYRE_DEFS[racer.currentTyre] || TYRE_DEFS.medium;
@@ -3051,8 +3054,18 @@ export default function CircuitRaceView({
 
         // effSpeed calibrated so leader completes 1 orbit in TARGET_LAP_SEC
         const totalActive = r.filter(x => !x.dnf && !x.inPit).length || 1;
-        const posSpeedMult = 1.0 + ((totalActive + 1) / 2 - racer._smoothPos) / totalActive * 0.20;
+        let posSpeedMult = 1.0 + ((totalActive + 1) / 2 - racer._smoothPos) / totalActive * 0.38;
         const enginePenalty = racer.engineHealth < 30 ? (0.85 + racer.engineHealth / 200) : 1.0;
+
+        // Final lap: force visual finish order to match backend result_order
+        const srvOrder = liveResultOrderRef.current;
+        if (Array.isArray(srvOrder) && srvOrder.length > 1 && curLap >= totLaps) {
+          const rank = srvOrder.indexOf(racer.id);
+          if (rank >= 0) {
+            const n = srvOrder.length;
+            posSpeedMult = 1.0 + (n - 1 - rank) / Math.max(1, n - 1) * 0.50;
+          }
+        }
 
         let effSpeed = (trk.lapBase / (TARGET_LAP_SEC * avgCSM))
           * posSpeedMult * td.gripMult * (wd.speedMult || 1) * tyreGripFactor * enginePenalty / fuelW;
@@ -3278,19 +3291,32 @@ export default function CircuitRaceView({
           st._resultsShown = true;
           setUiPhase("done");
           const allR = [...r];
-          // Use finishOrder from the checkered frame; fallback branch uses sortInteractiveByProgress (id tie, not live _targetPos).
-          const ordered = [...allR].sort((a, b) => {
-            if (a.dnf && !b.dnf) return 1;
-            if (!a.dnf && b.dnf) return -1;
-            if (a.dnf && b.dnf) {
-              const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0), pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
-              if (Math.abs(pb - pa) > 1e-9) return pb - pa;
-              return (b.dnfAtSec ?? 0) - (a.dnfAtSec ?? 0);
-            }
-            const aF = a.finished && a.finishOrder > 0, bF = b.finished && b.finishOrder > 0;
-            if (aF && bF) return a.finishOrder - b.finishOrder;
-            return sortInteractiveByProgress(a, b);
-          });
+          const racerById = {};
+          allR.forEach(x => { racerById[x.id] = x; });
+
+          // Prefer backend authoritative result_order when available
+          const srvOrder = liveResultOrderRef.current;
+          let ordered;
+          if (Array.isArray(srvOrder) && srvOrder.length > 0) {
+            const dnfSet = new Set(allR.filter(x => x.dnf).map(x => x.id));
+            const finishers = srvOrder.filter(id => !dnfSet.has(id) && racerById[id]);
+            const dnfs = srvOrder.filter(id => dnfSet.has(id) && racerById[id]);
+            const missing = allR.filter(x => !srvOrder.includes(x.id));
+            ordered = [...finishers, ...dnfs, ...missing].map(id => typeof id === "string" ? racerById[id] : id).filter(Boolean);
+          } else {
+            ordered = [...allR].sort((a, b) => {
+              if (a.dnf && !b.dnf) return 1;
+              if (!a.dnf && b.dnf) return -1;
+              if (a.dnf && b.dnf) {
+                const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0), pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+                if (Math.abs(pb - pa) > 1e-9) return pb - pa;
+                return (b.dnfAtSec ?? 0) - (a.dnfAtSec ?? 0);
+              }
+              const aF = a.finished && a.finishOrder > 0, bF = b.finished && b.finishOrder > 0;
+              if (aF && bF) return a.finishOrder - b.finishOrder;
+              return sortInteractiveByProgress(a, b);
+            });
+          }
           const fastest = st.fastestLap || { holderId: null, time: Infinity };
           setResults(ordered.map((x, i) => ({
             pos: i + 1, id: x.id, name: x.name, isPlayer: x.isPlayer, color: x.color,
@@ -3302,6 +3328,7 @@ export default function CircuitRaceView({
           debugRace("emit_on_complete", {
             emittedOrder: rOIds,
             emittedDnf: dIds,
+            source: (Array.isArray(srvOrder) && srvOrder.length > 0) ? "backend_authority" : "visual_fallback",
           });
           setTimeout(() => onCompleteRef.current?.(rOIds, dIds), 1200);
         }

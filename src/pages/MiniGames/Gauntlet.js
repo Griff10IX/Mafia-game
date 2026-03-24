@@ -5,6 +5,7 @@ import styles from "../../styles/noir.module.css";
 const GRAVITY = 0.25;
 const JUMP_FORCE = -5.8;
 const TERMINAL_VEL = 6;
+const FIXED_DT = 1000 / 60;
 const PIPE_SPEED_BASE = 3.0;
 const PIPE_GAP_BASE = 175;
 const PIPE_WIDTH = 62;
@@ -873,6 +874,8 @@ export default function Gauntlet() {
   const scoreRef = useRef(score);
   const bgOffsetRef = useRef(bgOffset);
   const tickRef = useRef(0);
+  const lastTimeRef = useRef(null);
+  const accumRef = useRef(0);
   const animTickRef = useRef(null);
 
   stateRef.current = gameState;
@@ -995,61 +998,85 @@ export default function Gauntlet() {
 
   useEffect(() => {
     if (gameState !== "playing") return;
-    const loop = () => {
-      let cancelled = false;
-      try {
-        tickRef.current++;
-        const newVel = Math.min(TERMINAL_VEL, birdVelRef.current + GRAVITY);
-        const newY = birdYRef.current + newVel;
-        const newRot = Math.max(-30, Math.min(90, newVel * 5));
-        const nextBgOffset = (bgOffsetRef.current + 1) % 60;
+    lastTimeRef.current = null;
+    accumRef.current = 0;
 
-        let newPipes = pipesRef.current.map(p => ({ ...p, x: p.x - pipeSpeed }));
-        if (tickRef.current % spawnInterval === 0) {
-          newPipes.push({ x: VIEW_W + 20, topHeight: 80 + Math.random() * 240, scored: false });
-        }
-        newPipes = newPipes.filter(p => p.x > -PIPE_WIDTH - 20);
+    const loop = (now) => {
+      if (lastTimeRef.current === null) {
+        lastTimeRef.current = now;
+        frameRef.current = requestAnimationFrame(loop);
+        return;
+      }
 
-        let newScore = scoreRef.current;
-        newPipes = newPipes.map(p => {
-          if (!p.scored && p.x + PIPE_WIDTH < 80) {
-            newScore++;
-            setFlashGold(true);
-            setTimeout(() => setFlashGold(false), 260);
-            spawnParticles(80, birdYRef.current, charAccent);
-            return { ...p, scored: true };
+      let elapsed = now - lastTimeRef.current;
+      lastTimeRef.current = now;
+      if (elapsed > 100) elapsed = 100;
+      accumRef.current += elapsed;
+
+      let dead = false;
+
+      while (accumRef.current >= FIXED_DT && !dead) {
+        accumRef.current -= FIXED_DT;
+
+        try {
+          tickRef.current++;
+          const newVel = Math.min(TERMINAL_VEL, birdVelRef.current + GRAVITY);
+          const newY = birdYRef.current + newVel;
+          const nextBgOffset = (bgOffsetRef.current + 1) % 60;
+
+          let newPipes = pipesRef.current.map(p => ({ ...p, x: p.x - pipeSpeed }));
+          if (tickRef.current % spawnInterval === 0) {
+            newPipes.push({ x: VIEW_W + 20, topHeight: 80 + Math.random() * 240, scored: false });
           }
-          return p;
-        });
+          newPipes = newPipes.filter(p => p.x > -PIPE_WIDTH - 20);
 
-        const birdX = 70, birdR = BIRD_SIZE / 2 - 4;
-        let dead = newY < 0 || newY > VIEW_H - BIRD_SIZE;
-        for (const p of newPipes) {
-          const inX = birdX + birdR > p.x + 4 && birdX - birdR < p.x + PIPE_WIDTH - 4;
-          const inTop = newY - birdR < p.topHeight - 4;
-          const inBot = newY + birdR > p.topHeight + pipeGap + 4;
-          if (inX && (inTop || inBot)) { dead = true; break; }
-        }
+          let newScore = scoreRef.current;
+          newPipes = newPipes.map(p => {
+            if (!p.scored && p.x + PIPE_WIDTH < 80) {
+              newScore++;
+              setFlashGold(true);
+              setTimeout(() => setFlashGold(false), 260);
+              spawnParticles(80, birdYRef.current, charAccent);
+              return { ...p, scored: true };
+            }
+            return p;
+          });
 
-        if (dead) {
-          cancelled = true;
-          spawnParticles(birdX, birdYRef.current, "#ff4444");
-          setBestScore(b => Math.max(b, newScore));
-          setGameFrame(prev => ({ ...prev, score: newScore }));
-          setGameState("dead");
-          cancelAnimationFrame(frameRef.current);
-          claimReward(newScore);
-          return;
-        }
+          const birdX = 70, birdR = BIRD_SIZE / 2 - 4;
+          let hitDeath = newY < 0 || newY > VIEW_H - BIRD_SIZE;
+          for (const p of newPipes) {
+            const inX = birdX + birdR > p.x + 4 && birdX - birdR < p.x + PIPE_WIDTH - 4;
+            const inTop = newY - birdR < p.topHeight - 4;
+            const inBot = newY + birdR > p.topHeight + pipeGap + 4;
+            if (inX && (inTop || inBot)) { hitDeath = true; break; }
+          }
 
-        birdYRef.current = newY; birdVelRef.current = newVel;
-        pipesRef.current = newPipes; scoreRef.current = newScore; bgOffsetRef.current = nextBgOffset;
-        setGameFrame({ birdY: newY, birdVel: newVel, birdRot: newRot, pipes: newPipes, score: newScore, bgOffset: nextBgOffset });
-      } catch (err) { console.error("Gauntlet loop error:", err); }
-      if (!cancelled) frameRef.current = requestAnimationFrame(loop);
+          if (hitDeath) {
+            dead = true;
+            spawnParticles(birdX, birdYRef.current, "#ff4444");
+            setBestScore(b => Math.max(b, newScore));
+            setGameFrame(prev => ({ ...prev, score: newScore }));
+            setGameState("dead");
+            claimReward(newScore);
+            break;
+          }
+
+          birdYRef.current = newY;
+          birdVelRef.current = newVel;
+          pipesRef.current = newPipes;
+          scoreRef.current = newScore;
+          bgOffsetRef.current = nextBgOffset;
+        } catch (err) { console.error("Gauntlet loop error:", err); }
+      }
+
+      if (!dead) {
+        const rot = Math.max(-30, Math.min(90, birdVelRef.current * 5));
+        setGameFrame({ birdY: birdYRef.current, birdVel: birdVelRef.current, birdRot: rot, pipes: pipesRef.current, score: scoreRef.current, bgOffset: bgOffsetRef.current });
+        frameRef.current = requestAnimationFrame(loop);
+      }
     };
     frameRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(frameRef.current);
+    return () => { cancelAnimationFrame(frameRef.current); lastTimeRef.current = null; };
   }, [gameState, pipeSpeed, pipeGap, spawnInterval, charAccent, spawnParticles, claimReward]);
 
   const reward = getReward(score);

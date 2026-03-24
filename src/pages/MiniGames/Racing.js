@@ -1115,6 +1115,7 @@ export default function Racing() {
             liveRaceEvents={liveRace.race_events}
             liveGapsToAhead={liveRace.gaps_to_ahead}
             liveSafetyCarLaps={liveRace.safety_car_laps_remaining || 0}
+            liveResultOrder={liveRace.result_order || []}
             onSessionPhaseChange={onInteractiveSessionPhase}
             onInteractiveGreenFlag={async () => {
               try {

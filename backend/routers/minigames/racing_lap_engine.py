@@ -116,6 +116,9 @@ def pace_mode_to_levels(pace_mode: Optional[str], push_level: int) -> Tuple[int,
     return pl, pace_mult, wear_mult
 
 
+QUAL_SPEED_NORMALIZER = 18.0
+
+
 def qual_lap_time(
     cfg: LapEngineConfig,
     lap_base: float,
@@ -130,12 +133,13 @@ def qual_lap_time(
     weather = cfg.get_weather(weather_id)
     is_wet = weather_id in ("rain", "snow")
     sectors = default_sectors_from_track(track or {}, is_wet)
+    norm_speed = speed_val / QUAL_SPEED_NORMALIZER
     combined = sectorized_combined_pace(
-        speed_val, grip_val, 1.0, compound_mult, corner_grip_bonus, weather, sectors
+        norm_speed, grip_val, 1.0, compound_mult, corner_grip_bonus, weather, sectors
     )
     combined = max(0.01, float(combined))
     t = lap_base / combined + qual_noise
-    return max(20.0, min(300.0, t))
+    return max(5.0, min(300.0, t))
 
 
 def launch_multiplier(
