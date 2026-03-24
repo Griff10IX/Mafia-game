@@ -10,7 +10,7 @@ const CG_STYLES = `
   .cg-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
-const SPIN_DURATION_MS = 6000;
+const SPIN_DURATION_MS = 4500;
 
 const WHEEL_ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
 const RED_NUMBERS = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
@@ -390,7 +390,7 @@ export default function Rlt() {
     if (data.win) {
       toast.success(`Landed ${data.result}! Won ${formatMoney(data.total_payout)}`);
       setShowWin(true);
-      setTimeout(() => setShowWin(false), 3000);
+      setTimeout(() => setShowWin(false), 2200);
     } else {
       toast.error(`Landed ${data.result}. Lost ${formatMoney(data.total_stake)}`);
     }
@@ -419,12 +419,12 @@ export default function Rlt() {
       }
 
       pendingResultRef.current = data;
-      await new Promise((r) => setTimeout(r, 60));
+      await new Promise((r) => setTimeout(r, 16));
       startWheelSpin(data.result);
       spinTimeoutRef.current = setTimeout(() => {
         spinTimeoutRef.current = null;
         if (pendingResultRef.current) applyResult(pendingResultRef.current);
-      }, SPIN_DURATION_MS + 200);
+      }, SPIN_DURATION_MS + 80);
     } catch (e) {
       if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
       toast.error(e.response?.data?.detail || 'Spin failed');
