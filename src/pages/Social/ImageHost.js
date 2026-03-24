@@ -195,19 +195,28 @@ export default function ImageHost() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setActiveTab('mine')}
+            onClick={() => { setActiveTab('mine'); setUploadPublic(false); setImportPublic(false); }}
             className={`px-3 py-1.5 rounded text-[10px] font-heading font-bold uppercase tracking-wider border ${activeTab === 'mine' ? 'border-primary/50 bg-primary/20 text-primary' : 'border-zinc-700/50 text-mutedForeground hover:text-foreground'}`}
           >
-            My images
+            Private ({count})
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('public')}
+            onClick={() => { setActiveTab('public'); setUploadPublic(true); setImportPublic(true); }}
             className={`px-3 py-1.5 rounded text-[10px] font-heading font-bold uppercase tracking-wider border ${activeTab === 'public' ? 'border-primary/50 bg-primary/20 text-primary' : 'border-zinc-700/50 text-mutedForeground hover:text-foreground'}`}
           >
-            Public gallery ({publicTotal})
+            Public ({publicTotal})
           </button>
         </div>
+
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
+          <p className="text-[10px] font-heading font-bold uppercase tracking-wider text-amber-300">{activeTab === 'public' ? 'Public' : 'Private'} gallery rules</p>
+          <p className="text-[10px] font-heading text-amber-100/90 mt-1">
+            No NSFW, nudity, sexual content, gore, hate content, threats, doxxing, or illegal content.
+            Uploads are moderated. If caught posting prohibited content you can be banned.
+          </p>
+        </div>
+
         <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center">
           <label className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider shrink-0">Save size</label>
           <select
@@ -220,16 +229,9 @@ export default function ImageHost() {
               <option key={o.value || 'orig'} value={o.value}>{o.label}</option>
             ))}
           </select>
-          <label className="inline-flex items-center gap-2 text-[10px] font-heading text-mutedForeground uppercase tracking-wider">
-            <input
-              type="checkbox"
-              checked={uploadPublic}
-              onChange={(e) => setUploadPublic(e.target.checked)}
-              disabled={uploading || importing || count >= max}
-              className="w-3.5 h-3.5 accent-primary"
-            />
-            Upload as public
-          </label>
+          <span className={`text-[10px] font-heading uppercase tracking-wider px-2 py-0.5 rounded ${activeTab === 'public' ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'bg-zinc-700/30 text-zinc-400 border border-zinc-600/30'}`}>
+            {activeTab === 'public' ? 'Uploading to public' : 'Uploading to private'}
+          </span>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <input ref={fileRef} type="file" accept={ACCEPT} className="hidden" onChange={onFile} />
@@ -251,16 +253,6 @@ export default function ImageHost() {
               className={`flex-1 min-w-0 ${styles.input} h-10 px-3 text-xs font-heading`}
               disabled={importing || count >= max}
             />
-            <label className="inline-flex items-center gap-2 text-[10px] font-heading text-mutedForeground uppercase tracking-wider shrink-0">
-              <input
-                type="checkbox"
-                checked={importPublic}
-                onChange={(e) => setImportPublic(e.target.checked)}
-                disabled={importing || count >= max}
-                className="w-3.5 h-3.5 accent-primary"
-              />
-              Public
-            </label>
             <button
               type="submit"
               disabled={importing || count >= max || !importUrl.trim()}
@@ -270,13 +262,6 @@ export default function ImageHost() {
               Import URL
             </button>
           </form>
-        </div>
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
-          <p className="text-[10px] font-heading font-bold uppercase tracking-wider text-amber-300">Public gallery rules</p>
-          <p className="text-[10px] font-heading text-amber-100/90 mt-1">
-            No NSFW, nudity, sexual content, gore, hate content, threats, doxxing, or illegal content.
-            Public uploads are moderated. If caught posting prohibited content you can be banned.
-          </p>
         </div>
       </div>
 

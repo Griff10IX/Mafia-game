@@ -1117,6 +1117,37 @@ function gridIdsFromQualifyingOrder(serverQo, sortedRacers) {
   return sortedRacers.map((r) => r.id);
 }
 
+/** Interactive-live: shared ordering — DNFs behind classified cars; stable id tie-break on equal progress. */
+function compareInteractiveDnf(a, b) {
+  if (a.dnf && !b.dnf) return 1;
+  if (!a.dnf && b.dnf) return -1;
+  if (a.dnf && b.dnf) {
+    const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0), pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+    if (Math.abs(pb - pa) > 1e-9) return pb - pa;
+    return (b.dnfAtSec ?? 0) - (a.dnfAtSec ?? 0);
+  }
+  return 0;
+}
+
+/** Live race order by track progress (higher progress first). */
+function compareInteractiveProgress(a, b) {
+  const d = compareInteractiveDnf(a, b);
+  if (d !== 0) return d;
+  const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0), pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
+  if (Math.abs(pb - pa) > 1e-9) return pb - pa;
+  return String(a.id || "").localeCompare(String(b.id || ""));
+}
+
+/** Final results / emitted order: use line-cross finishOrder when both classified; else progress comparator. */
+function compareInteractiveFinalResult(a, b) {
+  const d = compareInteractiveDnf(a, b);
+  if (d !== 0) return d;
+  const aF = a.finished && !a.dnf && (a.finishOrder ?? 0) > 0;
+  const bF = b.finished && !b.dnf && (b.finishOrder ?? 0) > 0;
+  if (aF && bF) return (a.finishOrder ?? 0) - (b.finishOrder ?? 0);
+  return compareInteractiveProgress(a, b);
+}
+
 // ─── COMPONENT ─────────────────────────────────────────────────────────────
 
 export default function CircuitRaceView({
@@ -2872,21 +2903,6 @@ export default function CircuitRaceView({
       stateRef.current.incidents.push({ text, time: performance.now() });
     };
 
-    function sortInteractiveByProgress(a, b) {
-      if (a.dnf && !b.dnf) return 1;
-      if (!a.dnf && b.dnf) return -1;
-      if (a.dnf && b.dnf) {
-        const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0), pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
-        if (Math.abs(pb - pa) > 1e-9) return pb - pa;
-        return (b.dnfAtSec ?? 0) - (a.dnfAtSec ?? 0);
-      }
-      const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0), pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
-      if (Math.abs(pb - pa) > 1e-9) return pb - pa;
-      // Stable tie-break: canvas draw order used to use progress-only sort (ties = stable order in r),
-      // while standings used server _targetPos — live tower could show P1 while checkered/results used P5.
-      return String(a.id || "").localeCompare(String(b.id || ""));
-    }
-
     const loop = (now) => {
       try {
       if (pausedRef.current) { lastFrame = now; rafRef.current = requestAnimationFrame(loop); return; }
@@ -2904,6 +2920,8 @@ export default function CircuitRaceView({
       const curLap = liveCurrentLapRef.current || 0;
       const totLaps = liveTotalLapsRef.current || 3;
 
+      r.forEach(x => { x._feLapStart = x.totalLapsDone ?? 0; });
+
       if (prevBackendLap === null || curLap !== prevBackendLap) {
         const hadPriorLap = prevBackendLap !== null;
         prevBackendLap = curLap;
@@ -2914,16 +2932,8 @@ export default function CircuitRaceView({
           x.lastSectorCross = nowSec;
           x.currentSector = 0;
           x._interactiveSfArmed = false;
-          if (!x.dnf) {
-            if (synced >= totLaps) {
-              // Server race complete (current_lap === total_laps). Do NOT set every car to
-              // totalLapsDone === totLaps — that erases per-car visual progress and re-sorts
-              // the field by trackPos + _targetPos tie-break, scrambling P2 live → P6 results.
-              x.lapCount = totLaps;
-            } else {
-              x.totalLapsDone = synced;
-              x.lapCount = Math.min(totLaps, synced + 1);
-            }
+          if (!x.dnf && synced >= totLaps) {
+            x.lapCount = totLaps;
           }
         });
       } else {
@@ -2989,9 +2999,7 @@ export default function CircuitRaceView({
       }
 
       // Build sorted standings from previous frame for rubber-banding / slipstream
-      const prevSorted = [...r].filter(x => !x.dnf && !x.inPit).sort((a, b) =>
-        ((b.totalLapsDone ?? 0) + (b.trackPos ?? 0)) - ((a.totalLapsDone ?? 0) + (a.trackPos ?? 0))
-      );
+      const prevSorted = [...r].filter(x => !x.dnf && !x.inPit).sort(compareInteractiveProgress);
       const prevMap = {};
       prevSorted.forEach((x, idx) => { prevMap[x.id] = { idx, prog: (x.totalLapsDone ?? 0) + (x.trackPos ?? 0) }; });
 
@@ -3151,6 +3159,35 @@ export default function CircuitRaceView({
           racer.currentSector = ns2; racer.lastSectorCross = nowSec;
         }
 
+        // Frontend-authoritative lap counting (per-car S/F); server current_lap is for strategy/anti-cheat only.
+        const sfCross = trk.sfLine ?? 0;
+        const prevTP = racer._interactiveLapPrevPos;
+        const crossedLap = prevTP !== undefined && crossedStartFinishLineForward(prevTP, racer.trackPos, sfCross);
+        const greenT = st._feGreenAtSec ?? 0;
+        const canCountLap = totLaps <= 1 || nowSec >= greenT + 1.75;
+        if (crossedLap && canCountLap && !(racer._justCrossedFrames > 0) && !racer.inPit && totLaps > 0) {
+          racer._justCrossedFrames = 4;
+          const prevDone = racer.totalLapsDone ?? 0;
+          const nextDone = Math.min(totLaps, prevDone + 1);
+          racer.totalLapsDone = nextDone;
+          racer.lapCount = Math.min(totLaps, nextDone + 1);
+          const flCorner = typeof cornerSM === "number" && !Number.isNaN(cornerSM) ? cornerSM : 0.85;
+          const lt = trk.lapBase / ((effSpeed || 0.01) * flCorner * 0.97) + (Math.random() - 0.5) * 0.8;
+          racer.lapTimes.push(lt);
+          const fl = st.fastestLap || { holderId: null, time: Infinity };
+          if (lt < fl.time) {
+            fl.time = lt; fl.holderId = racer.id; st.fastestLap = fl;
+            addInc(`${racer.name} — fastest lap! (${lt.toFixed(2)}s)`);
+          }
+          if (nextDone >= totLaps) {
+            racer.finished = true;
+            racer.finishedAtSec = nowSec;
+            racer.finishedAtProgress = nextDone + (racer.trackPos ?? 0);
+          }
+        } else if (racer._justCrossedFrames > 0) {
+          racer._justCrossedFrames--;
+        }
+
         // Visual tyre wear (gentle degradation between backend updates)
         if (racer.tyreWear > 5 && !racer.inPit) {
           const sl2 = stintLaps(racer.currentTyre, wd.wearMult || 1, 1);
@@ -3179,20 +3216,6 @@ export default function CircuitRaceView({
         }
       });
 
-      // Once backend says final lap processing is complete, classify finishers when they next cross S/F.
-      if (curLap >= totLaps) {
-        const sfLDone = trk.sfLine ?? 0;
-        r.forEach(racer => {
-          if (racer.dnf || racer.finished) return;
-          const prevT = racer._interactiveLapPrevPos;
-          if (prevT !== undefined && crossedStartFinishLineForward(prevT, racer.trackPos, sfLDone)) {
-            racer.finished = true;
-            racer.finishedAtSec = nowSec;
-            racer.finishedAtProgress = (racer.totalLapsDone ?? 0) + (racer.trackPos ?? 0);
-          }
-        });
-      }
-
       // Keep finish ordering consistent with true line-cross order.
       const finishedCars = r.filter(x => x.finished && !x.dnf);
       if (finishedCars.length > 0) {
@@ -3206,7 +3229,7 @@ export default function CircuitRaceView({
         finishedCars.forEach((x, i) => { x.finishOrder = i + 1; });
       }
 
-      const leaderSf = [...r].filter(x => !x.dnf && !x.inPit).sort((a, b) => (a._targetPos || 99) - (b._targetPos || 99))[0];
+      const leaderSf = [...r].filter(x => !x.dnf && !x.inPit).sort(compareInteractiveProgress)[0];
       const sfLx = trk.sfLine ?? 0;
       if (leaderSf) {
         const relFromSf = ((leaderSf.trackPos - sfLx + 1) % 1);
@@ -3220,7 +3243,7 @@ export default function CircuitRaceView({
         && onInteractiveLeaderLapCrossRef.current
         && curLap < totLaps
         && postedCrossForServerLap !== curLap
-        && leaderSf.totalLapsDone === curLap
+        && (leaderSf._feLapStart ?? 0) === curLap
         && framesSinceServerLapSync >= 50
         && !interactiveLapCrossInFlight
         && (performance.now() - lastLapCrossRealTimeMs) >= MIN_LAP_CROSS_GAP_MS
@@ -3230,7 +3253,7 @@ export default function CircuitRaceView({
           debugRace("interactive_lap_cross_trigger", {
             serverLap: curLap,
             leaderId: leaderSf.id,
-            leaderPos: leaderSf._targetPos,
+            leaderLocalLapsDone: leaderSf.totalLapsDone,
           });
           postedCrossForServerLap = curLap;
           lastLapCrossRealTimeMs = performance.now();
@@ -3251,14 +3274,14 @@ export default function CircuitRaceView({
       r.forEach(x => { if (!x.dnf) visLap = Math.max(visLap, x.totalLapsDone ?? 0); });
       visLap = Math.min(visLap, totLaps);
 
-      // Interactive-live: client orbit can lap ahead of server; only end race when backend has processed all laps
       const serverLapsComplete = curLap >= totLaps;
       const visualLapsComplete = visLap >= totLaps;
       const allClassified = r.every(x => x.finished || x.dnf);
+      // Frontend-authoritative: end when every car is classified on the visual sim; server lap may trail.
       const raceShouldEnd = mode === "interactive-live"
-        ? (serverLapsComplete && allClassified)
+        ? (visualLapsComplete && allClassified)
         : (serverLapsComplete || visualLapsComplete);
-      if (mode === "interactive-live" && serverLapsComplete && !allClassified) {
+      if (mode === "interactive-live" && visualLapsComplete && !allClassified) {
         debugRace("awaiting_full_classification", {
           total: r.length,
           finishedCount: r.filter((x) => x.finished).length,
@@ -3266,7 +3289,7 @@ export default function CircuitRaceView({
         });
       }
 
-      // Race finished: replay uses visual lap; interactive-live waits for server current_lap
+      // Race finished: replay uses visual lap; interactive-live ends on visual classification
       if (raceShouldEnd && totLaps > 0 && !st._raceFinished) {
         st._raceFinished = true;
         st._raceFinishedAt = nowSec;
@@ -3289,18 +3312,7 @@ export default function CircuitRaceView({
           const allR = [...r];
 
           // Visual is truth — sort by what the player saw on screen
-          const ordered = [...allR].sort((a, b) => {
-            if (a.dnf && !b.dnf) return 1;
-            if (!a.dnf && b.dnf) return -1;
-            if (a.dnf && b.dnf) {
-              const pa = (a.totalLapsDone ?? 0) + (a.trackPos ?? 0), pb = (b.totalLapsDone ?? 0) + (b.trackPos ?? 0);
-              if (Math.abs(pb - pa) > 1e-9) return pb - pa;
-              return (b.dnfAtSec ?? 0) - (a.dnfAtSec ?? 0);
-            }
-            const aF = a.finished && a.finishOrder > 0, bF = b.finished && b.finishOrder > 0;
-            if (aF && bF) return a.finishOrder - b.finishOrder;
-            return sortInteractiveByProgress(a, b);
-          });
+          const ordered = [...allR].sort(compareInteractiveFinalResult);
           const fastest = st.fastestLap || { holderId: null, time: Infinity };
           setResults(ordered.map((x, i) => ({
             pos: i + 1, id: x.id, name: x.name, isPlayer: x.isPlayer, color: x.color,
@@ -3318,7 +3330,7 @@ export default function CircuitRaceView({
       }
 
       // Sort by visual track progress — positions change only when a car visually passes another
-      r.sort(sortInteractiveByProgress);
+      r.sort(compareInteractiveProgress);
       r.forEach((x, i) => { x.position = i + 1; });
 
       const standingsOrder = [...r];
