@@ -264,6 +264,7 @@ async def ensure_all_indexes(db):
         # --- Image host (user uploads) ---
         await db.image_host_uploads.create_index("public_id", unique=True)
         await db.image_host_uploads.create_index([("user_id", 1), ("deleted_at", 1), ("created_at", -1)])
+        await db.image_host_uploads.create_index([("is_public_gallery", 1), ("deleted_at", 1), ("created_at", -1)])
 
         # --- War kill feed (family war UI) ---
         await db.war_kill_feed.create_index([("war_id", 1), ("created_at", -1)])

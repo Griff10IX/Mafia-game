@@ -23,12 +23,18 @@ export default function ImageHost() {
   const fileRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [images, setImages] = useState([]);
+  const [publicItems, setPublicItems] = useState([]);
+  const [publicTotal, setPublicTotal] = useState(0);
+  const [publicLoading, setPublicLoading] = useState(false);
   const [count, setCount] = useState(0);
   const [max, setMax] = useState(10);
   const [importUrl, setImportUrl] = useState('');
   const [maxEdge, setMaxEdge] = useState('');
+  const [uploadPublic, setUploadPublic] = useState(false);
+  const [importPublic, setImportPublic] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [activeTab, setActiveTab] = useState('mine');
 
   const load = useCallback(async () => {
     try {
@@ -44,9 +50,25 @@ export default function ImageHost() {
     }
   }, []);
 
+  const loadPublic = useCallback(async () => {
+    setPublicLoading(true);
+    try {
+      const r = await api.get('/image-host/public', { params: { limit: 120, skip: 0 } });
+      setPublicItems(r.data?.items ?? []);
+      setPublicTotal(r.data?.total ?? 0);
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to load public gallery');
+      setPublicItems([]);
+      setPublicTotal(0);
+    } finally {
+      setPublicLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     load();
-  }, [load]);
+    loadPublic();
+  }, [load, loadPublic]);
 
   const onFile = async (e) => {
     const f = e.target.files?.[0];
@@ -61,9 +83,11 @@ export default function ImageHost() {
       const fd = new FormData();
       fd.append('file', f);
       if (maxEdge) fd.append('max_edge', maxEdge);
+      fd.append('is_public_gallery', uploadPublic ? 'true' : 'false');
       await api.post('/image-host/upload', fd);
       toast.success('Image uploaded');
       await load();
+      await loadPublic();
     } catch (err) {
       toast.error(err.response?.data?.detail ?? 'Upload failed');
     } finally {
@@ -83,10 +107,12 @@ export default function ImageHost() {
     try {
       const body = { url: u };
       if (maxEdge) body.max_edge = Number(maxEdge);
+      body.is_public_gallery = importPublic;
       await api.post('/image-host/import-url', body);
       toast.success('Image imported');
       setImportUrl('');
       await load();
+      await loadPublic();
     } catch (err) {
       toast.error(err.response?.data?.detail ?? 'Import failed');
     } finally {
@@ -109,9 +135,26 @@ export default function ImageHost() {
       await api.delete(`/image-host/item/${encodeURIComponent(publicId)}`);
       toast.success('Deleted');
       await load();
+      await loadPublic();
     } catch (err) {
       toast.error(err.response?.data?.detail ?? 'Delete failed');
     }
+  };
+
+  const setVisibility = async (publicId, isPublic) => {
+    try {
+      await api.post(`/image-host/item/${encodeURIComponent(publicId)}/visibility`, { is_public_gallery: isPublic });
+      toast.success(isPublic ? 'Image is now public' : 'Image is now private');
+      await load();
+      await loadPublic();
+    } catch (err) {
+      toast.error(err.response?.data?.detail ?? 'Failed to update visibility');
+    }
+  };
+
+  const galleryUrl = (publicId) => {
+    const base = imageHostPublicUrl(publicId);
+    return base.replace('/image-host/i/', '/image-host/g/');
   };
 
   return (
@@ -135,6 +178,22 @@ export default function ImageHost() {
       </div>
 
       <div className={`${styles.panel} rounded-md border border-primary/20 p-4 space-y-4 mobile-panel`}>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('mine')}
+            className={`px-3 py-1.5 rounded text-[10px] font-heading font-bold uppercase tracking-wider border ${activeTab === 'mine' ? 'border-primary/50 bg-primary/20 text-primary' : 'border-zinc-700/50 text-mutedForeground hover:text-foreground'}`}
+          >
+            My images
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('public')}
+            className={`px-3 py-1.5 rounded text-[10px] font-heading font-bold uppercase tracking-wider border ${activeTab === 'public' ? 'border-primary/50 bg-primary/20 text-primary' : 'border-zinc-700/50 text-mutedForeground hover:text-foreground'}`}
+          >
+            Public gallery ({publicTotal})
+          </button>
+        </div>
         <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center">
           <label className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider shrink-0">Save size</label>
           <select
@@ -147,6 +206,16 @@ export default function ImageHost() {
               <option key={o.value || 'orig'} value={o.value}>{o.label}</option>
             ))}
           </select>
+          <label className="inline-flex items-center gap-2 text-[10px] font-heading text-mutedForeground uppercase tracking-wider">
+            <input
+              type="checkbox"
+              checked={uploadPublic}
+              onChange={(e) => setUploadPublic(e.target.checked)}
+              disabled={uploading || importing || count >= max}
+              className="w-3.5 h-3.5 accent-primary"
+            />
+            Upload as public
+          </label>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <input ref={fileRef} type="file" accept={ACCEPT} className="hidden" onChange={onFile} />
@@ -168,6 +237,16 @@ export default function ImageHost() {
               className={`flex-1 min-w-0 ${styles.input} h-10 px-3 text-xs font-heading`}
               disabled={importing || count >= max}
             />
+            <label className="inline-flex items-center gap-2 text-[10px] font-heading text-mutedForeground uppercase tracking-wider shrink-0">
+              <input
+                type="checkbox"
+                checked={importPublic}
+                onChange={(e) => setImportPublic(e.target.checked)}
+                disabled={importing || count >= max}
+                className="w-3.5 h-3.5 accent-primary"
+              />
+              Public
+            </label>
             <button
               type="submit"
               disabled={importing || count >= max || !importUrl.trim()}
@@ -180,7 +259,7 @@ export default function ImageHost() {
         </div>
       </div>
 
-      {loading ? (
+      {activeTab === 'mine' && (loading ? (
         <p className="text-center text-primary font-heading py-8">Loading…</p>
       ) : images.length === 0 ? (
         <p className="text-center text-mutedForeground font-heading text-sm py-8">No images yet. Upload or import one above.</p>
@@ -205,6 +284,15 @@ export default function ImageHost() {
                   {img.resize_max_edge != null && (
                     <p className="text-[9px] font-heading text-primary/90">Saved max side {img.resize_max_edge}px</p>
                   )}
+                  <label className="inline-flex items-center gap-2 text-[10px] font-heading text-mutedForeground">
+                    <input
+                      type="checkbox"
+                      checked={img.is_public_gallery === true}
+                      onChange={(e) => setVisibility(img.public_id, e.target.checked)}
+                      className="w-3.5 h-3.5 accent-primary"
+                    />
+                    Show in public gallery
+                  </label>
                   <p className="text-[9px] font-mono text-mutedForeground break-all line-clamp-2">{src}</p>
                   <div className="flex flex-wrap gap-2">
                     <button
@@ -227,7 +315,34 @@ export default function ImageHost() {
             );
           })}
         </div>
-      )}
+      ))}
+
+      {activeTab === 'public' && (publicLoading ? (
+        <p className="text-center text-primary font-heading py-8">Loading public gallery…</p>
+      ) : publicItems.length === 0 ? (
+        <p className="text-center text-mutedForeground font-heading text-sm py-8">No public images yet.</p>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {publicItems.map((img) => {
+            const src = galleryUrl(img.public_id);
+            return (
+              <div key={`pub-${img.public_id}`} className={`${styles.panel} rounded-md border border-primary/20 overflow-hidden mobile-panel`}>
+                <div className="aspect-square bg-zinc-950/90">
+                  <img
+                    src={src}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="p-2 border-t border-primary/10">
+                  <p className="text-[10px] font-heading text-foreground truncate">{img.username || 'Unknown'}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
