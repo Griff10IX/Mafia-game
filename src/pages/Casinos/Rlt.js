@@ -349,11 +349,18 @@ export default function Rlt() {
 
   const startWheelSpin = (resultNum) => {
     const idx = WHEEL_ORDER.indexOf(resultNum);
-    const finalRotation = 10 * 360 - (idx >= 0 ? idx : 0) * SEG - SEG / 2;
+    const targetOffset = - (idx >= 0 ? idx : 0) * SEG - SEG / 2;
     setSpinning(true);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        setWheelRotation(finalRotation);
+        setWheelRotation((prev) => {
+          const prevNorm = ((prev % 360) + 360) % 360;
+          const targetNorm = ((targetOffset % 360) + 360) % 360;
+          let delta = targetNorm - prevNorm;
+          if (delta < 0) delta += 360;
+          // Preserve current wheel angle and add full turns for spin feel.
+          return prev + (10 * 360) + delta;
+        });
       });
     });
   };
@@ -396,7 +403,7 @@ export default function Rlt() {
     setSpinning(true);
     setLastResult(null);
     setShowWin(false);
-    setWheelRotation(0);
+    if (!useAnimation) setWheelRotation(0);
     if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
 
     try {
@@ -405,9 +412,8 @@ export default function Rlt() {
       const data = res.data || {};
 
       if (!useAnimation) {
-        const idx = WHEEL_ORDER.indexOf(data.result);
-        const finalRotation = 10 * 360 - (idx >= 0 ? idx : 0) * SEG - SEG / 2;
-        setWheelRotation(finalRotation);
+        // No-animation mode: keep wheel fixed and reveal outcome instantly.
+        setWheelRotation(0);
         applyResult(data);
         return;
       }
