@@ -614,7 +614,7 @@ export default function Rlt() {
           <span className="text-mutedForeground">Max: <span className="text-primary font-bold">{formatMoney(config.max_bet)}</span></span>
           {canClaim && (
             <button onClick={handleClaim} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">
-              Claim
+              Claim ({formatMoney(config.claim_cost ?? 250_000_000)})
             </button>
           )}
         </div>

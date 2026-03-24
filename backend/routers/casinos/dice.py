@@ -37,6 +37,7 @@ DICE_HOUSE_EDGE = 0.0005  # 0.05% house edge
 DICE_MAX_BET = 5_000_000          # default max bet for new tables
 DICE_ABSOLUTE_MAX_BET = 500_000_000  # hard ceiling owners can set up to
 DICE_CLAIM_COST_POINTS = 0  # cost in points to claim a dice table (0 = free)
+DICE_CLAIM_COST = 125_000_000  # $125M to claim
 DICE_SIDES_BONUS_MULT = 1.05  # physical die has 5% more faces (ceil), e.g. 2→3, 1000→1050
 
 
@@ -134,6 +135,7 @@ def register(router):
             "max_bet": DICE_MAX_BET,
             "house_edge": DICE_HOUSE_EDGE,
             "sides_bonus_mult": DICE_SIDES_BONUS_MULT,
+            "claim_cost": DICE_CLAIM_COST,
         }
 
     @router.get("/casino/dice/ownership")
@@ -354,6 +356,9 @@ def register(router):
         if user_city != city:
             raise HTTPException(status_code=400, detail="You must be in this city to claim the dice table")
         stored_city, existing = await _get_dice_ownership_doc(city)
+        user = await db.users.find_one({"id": current_user.get("id") or ""})
+        if not user or user.get("money", 0) < DICE_CLAIM_COST:
+            raise HTTPException(status_code=400, detail=f"You need ${DICE_CLAIM_COST:,} to claim")
         points = int((current_user.get("points") or 0) or 0)
         if points < DICE_CLAIM_COST_POINTS:
             raise HTTPException(status_code=400, detail="Not enough points to claim")
@@ -373,9 +378,10 @@ def register(router):
         )
         if res.matched_count == 0 and res.upserted_id is None:
             raise HTTPException(status_code=400, detail="This table is already owned")
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -DICE_CLAIM_COST}})
         if DICE_CLAIM_COST_POINTS > 0:
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": -DICE_CLAIM_COST_POINTS}})
-        return {"message": "You now own the dice table here."}
+        return {"message": f"You now own the dice table in {city}!"}
 
     @router.post("/casino/dice/relinquish")
     async def casino_dice_relinquish(request: DiceClaimRequest, current_user: dict = Depends(get_current_user_verified)):

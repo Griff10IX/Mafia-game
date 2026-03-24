@@ -166,7 +166,7 @@ function WinParticles({ active }) {
    Main Page
    ═══════════════════════════════════════════════════════ */
 export default function VideoPoker() {
-  const [config, setConfig] = useState({ max_bet: 50_000_000, claim_cost: 500_000_000 });
+  const [config, setConfig] = useState({ max_bet: 50_000_000, claim_cost: 750_000_000 });
   const [ownership, setOwnership] = useState(null);
   const [bet, setBet] = useState('1000000');
   const [game, setGame] = useState(null);
@@ -185,8 +185,8 @@ export default function VideoPoker() {
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
 
   const fetchConfigAndOwnership = () => {
-    api.get('/casino/videopoker/config').then((r) => setConfig(r.data ?? { max_bet: 50_000_000, claim_cost: 500_000_000 })).catch(() => {
-      setConfig({ max_bet: 50_000_000, claim_cost: 500_000_000 });
+    api.get('/casino/videopoker/config').then((r) => setConfig(r.data ?? { max_bet: 50_000_000, claim_cost: 750_000_000 })).catch(() => {
+      setConfig({ max_bet: 50_000_000, claim_cost: 750_000_000 });
     });
     api.get('/casino/videopoker/ownership').then((r) => {
       const data = r.data ?? null;

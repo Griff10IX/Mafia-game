@@ -32,7 +32,7 @@ from routers.casinos.dice import DiceSellOnTradeRequest
 # ----- Constants -----
 ROULETTE_RED = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
 ROULETTE_MAX_BET = 50_000_000
-ROULETTE_CLAIM_COST = 500_000_000  # 500M to claim
+ROULETTE_CLAIM_COST = 250_000_000  # $250M to claim
 ROULETTE_HOUSE_EDGE = 0.0005  # 0.05% house edge goes to owner
 ROULETTE_DEFAULT_MAX_BET = 50_000_000
 ROULETTE_ABSOLUTE_MAX_BET = 500_000_000

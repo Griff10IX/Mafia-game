@@ -169,7 +169,7 @@ function WinParticles({ active }) {
    Main Page
    ═══════════════════════════════════════════════════════ */
 export default function Blackjack() {
-  const [config, setConfig] = useState({ max_bet: 50_000_000, claim_cost: 500_000_000 });
+  const [config, setConfig] = useState({ max_bet: 50_000_000, claim_cost: 1_000_000_000 });
   const [ownership, setOwnership] = useState(null);
   const [bet, setBet] = useState('1000');
   const [game, setGame] = useState(null);
@@ -188,8 +188,8 @@ export default function Blackjack() {
   const navigate = useNavigate();
 
   const fetchConfigAndOwnership = () => {
-    api.get('/casino/blackjack/config').then((r) => setConfig(r.data ?? { max_bet: 50_000_000, claim_cost: 500_000_000 })).catch(() => {
-      setConfig({ max_bet: 50_000_000, claim_cost: 500_000_000 });
+    api.get('/casino/blackjack/config').then((r) => setConfig(r.data ?? { max_bet: 50_000_000, claim_cost: 1_000_000_000 })).catch(() => {
+      setConfig({ max_bet: 50_000_000, claim_cost: 1_000_000_000 });
     });
     api.get('/casino/blackjack/ownership').then((r) => {
       const data = r.data ?? null;

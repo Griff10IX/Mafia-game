@@ -2862,7 +2862,7 @@ export default function Admin() {
   };
 
   const handleSeedFamilies = async () => {
-    if (!window.confirm('Create 3 test families with 5 users each?')) return;
+    if (!window.confirm('Create seed families from admin config (NPC members, exempt from player crew cap)?')) return;
     try {
       const res = await api.post('/admin/seed-families');
       toast.success(res.data?.message || 'Seeded');
@@ -8142,7 +8142,7 @@ export default function Admin() {
         />
         {!collapsed.quick && (
           <div className="p-2 space-y-1">
-            <ActionRow icon={Building2} label="Seed Families" description="Add seed families up to max (10), 10–15 members each; skips if name/tag exists">
+            <ActionRow icon={Building2} label="Seed Families" description="Create seed crews from config (10 named families, 10–15 NPC members each). Admin seed crews do not count toward the player cap (10). Skips if name/tag exists">
               <BtnPrimary onClick={handleSeedFamilies}>Seed</BtnPrimary>
             </ActionRow>
             <ActionRow icon={Gift} label="Give All Points" description="Give points to all alive accounts">

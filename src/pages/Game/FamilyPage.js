@@ -1813,7 +1813,11 @@ const StateHeadTab = ({ headOfState, stateHeadIncome, stateHeadCasinoWeekStats =
 // NO FAMILY VIEW — recruitment board
 // ============================================================================
 
-const NoFamilyView = ({ families, config, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin, joinModeForSelected, warHistory, onDetails }) => (
+const NoFamilyView = ({ families, config, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin, joinModeForSelected, warHistory, onDetails }) => {
+  const maxFamilies = config?.max_families ?? 10;
+  const towardCap = config?.player_cap_families_count ?? 0;
+  const atPlayerCap = towardCap >= maxFamilies;
+  return (
   <div className="space-y-2">
     <p className="text-center text-[10px] text-zinc-500 font-heading italic py-0.5 fam-fade-in">"In this world, a man without a family is nothing."</p>
 
@@ -1825,6 +1829,10 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
       </div>
       <form onSubmit={onCreate} className="p-2.5 sm:p-3 space-y-2">
         <p className="text-[10px] text-zinc-500 font-heading">Build your empire: recruit soldiers, run rackets, make your name feared.</p>
+        <p className="text-[10px] font-heading text-zinc-400">
+          Player-founded crews: <span className="text-primary font-bold tabular-nums">{towardCap}</span> / <span className="text-primary font-bold tabular-nums">{maxFamilies}</span>
+          {atPlayerCap && <span className="block mt-1 text-amber-400/90">Crew limit reached — join an existing family or wait for a slot.</span>}
+        </p>
         {config?.family_create_cost != null && (
           <p className="text-[10px] font-heading text-primary">Cost: {formatMoney(config.family_create_cost)}</p>
         )}
@@ -1834,7 +1842,7 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
           <input type="text" value={createTag} onChange={(e) => setCreateTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="TAG" maxLength={4}
             className="w-20 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-sm text-foreground font-heading uppercase text-center focus:border-primary/50 focus:outline-none transition-colors" />
         </div>
-        <button type="submit" className="w-full py-2.5 min-h-[44px] rounded-lg text-xs font-heading font-bold uppercase tracking-wider border-2 bg-gradient-to-b from-primary/30 to-primary/10 border-primary/50 text-primary hover:from-primary/40 hover:shadow-lg hover:shadow-primary/10 transition-all touch-manipulation">
+        <button type="submit" disabled={atPlayerCap} title={atPlayerCap ? 'Maximum player-founded crews reached' : undefined} className="w-full py-2.5 min-h-[44px] rounded-lg text-xs font-heading font-bold uppercase tracking-wider border-2 bg-gradient-to-b from-primary/30 to-primary/10 border-primary/50 text-primary hover:from-primary/40 hover:shadow-lg hover:shadow-primary/10 transition-all touch-manipulation disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed">
           Found the Family
         </button>
       </form>
@@ -1883,7 +1891,8 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
       </div>
     </div>
   </div>
-);
+  );
+};
 
 // ============================================================================
 // MAIN COMPONENT

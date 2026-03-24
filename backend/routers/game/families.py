@@ -46,6 +46,8 @@ from server import (
 
 # ============ Constants ============
 MAX_FAMILIES = 10
+# Admin-seeded / tool-created families set player_cap_exempt=True so they do not count toward this cap.
+FAMILY_LIST_QUERY_LIMIT = 500  # list view: player crews + exempt crews
 FAMILY_CREATE_COST = 6_250_000  # 75% reduction for beta ($25M -> $6.25M)
 FAMILY_ROLES = ["boss", "underboss", "consigliere", "capo", "soldier", "associate"]
 FAMILY_ROLE_LIMITS = {"boss": 1, "underboss": 1, "consigliere": 1, "capo": 4, "soldier": 15, "associate": 30}
@@ -77,6 +79,14 @@ CREW_OC_COOLDOWN_HOURS = 8
 
 # Casino game types that contribute to state head income (and have gambling_log entries with city/state)
 STATE_HEAD_CASINO_GAMES = ["dice", "roulette", "blackjack", "horseracing", "slots", "videopoker"]
+
+
+async def count_families_toward_player_cap() -> int:
+    """Crews that count toward MAX_FAMILIES for player creation (admin tools set player_cap_exempt)."""
+    return await db.families.count_documents({
+        "wiped": {"$ne": True},
+        "player_cap_exempt": {"$ne": True},
+    })
 
 
 async def _state_head_casino_week_stats(state_name: str):
@@ -763,7 +773,7 @@ async def families_list(current_user: dict = Depends(get_current_user)):
         _invalidate_list_cache()
     # No in-memory cache: multi-worker setups would show stale data (e.g. deleted families) until TTL
     cursor = db.families.find({"wiped": {"$ne": True}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "join_mode": 1})
-    fams = await cursor.to_list(MAX_FAMILIES * 2)
+    fams = await cursor.to_list(FAMILY_LIST_QUERY_LIMIT)
     out = []
     if fams:
         family_ids = [f["id"] for f in fams]
@@ -817,21 +827,24 @@ async def families_list(current_user: dict = Depends(get_current_user)):
 
 async def families_config(current_user: dict = Depends(get_current_user)):
     global _config_cache
-    if _config_cache is not None:
-        return _config_cache
-    _config_cache = {
+    if _config_cache is None:
+        _config_cache = {
+            "family_create_cost": FAMILY_CREATE_COST,
+            "roles": FAMILY_ROLES,
+            "ranks": RANKS,
+            "racket_max_level": RACKET_MAX_LEVEL,
+            "rackets": FAMILY_RACKETS,
+            "racket_upgrade_cost": RACKET_UPGRADE_COST,
+            "racket_unlock_cost": RACKET_UNLOCK_COST,
+            "family_melt_treasury_pct_max": FAMILY_MELT_TREASURY_PCT_MAX,
+            "family_melt_reward_threshold_step": FAMILY_MELT_REWARD_THRESHOLD_STEP,
+        }
+    toward_cap = await count_families_toward_player_cap()
+    return {
+        **_config_cache,
         "max_families": MAX_FAMILIES,
-        "family_create_cost": FAMILY_CREATE_COST,
-        "roles": FAMILY_ROLES,
-        "ranks": RANKS,
-        "racket_max_level": RACKET_MAX_LEVEL,
-        "rackets": FAMILY_RACKETS,
-        "racket_upgrade_cost": RACKET_UPGRADE_COST,
-        "racket_unlock_cost": RACKET_UNLOCK_COST,
-        "family_melt_treasury_pct_max": FAMILY_MELT_TREASURY_PCT_MAX,
-        "family_melt_reward_threshold_step": FAMILY_MELT_REWARD_THRESHOLD_STEP,
+        "player_cap_families_count": toward_cap,
     }
-    return _config_cache
 
 
 async def families_my(current_user: dict = Depends(get_current_user)):
@@ -1155,8 +1168,7 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
     if len(name) < 2 or len(tag) < 2:
         raise HTTPException(status_code=400, detail="Name and tag must be at least 2 characters")
     await cleanup_dead_families()
-    count = await db.families.count_documents({"wiped": {"$ne": True}})
-    if count >= MAX_FAMILIES:
+    if await count_families_toward_player_cap() >= MAX_FAMILIES:
         raise HTTPException(status_code=400, detail="Maximum number of families reached")
     if await db.families.find_one({"wiped": {"$ne": True}, "$or": [{"name": name}, {"tag": tag}]}):
         raise HTTPException(status_code=400, detail="Name or tag already taken")

@@ -34,7 +34,7 @@ from routers.casinos.dice import DiceSellOnTradeRequest
 BLACKJACK_MAX_BET = 50_000_000
 BLACKJACK_DEFAULT_MAX_BET = 50_000_000
 BLACKJACK_ABSOLUTE_MAX_BET = 500_000_000
-BLACKJACK_CLAIM_COST = 500_000_000  # $500M to claim table
+BLACKJACK_CLAIM_COST = 1_000_000_000  # $1B to claim table
 BLACKJACK_HOUSE_EDGE = 0.0005  # 0.05% of bet to owner when player loses
 BLACKJACK_HISTORY_MAX = 10
 BLACKJACK_GAME_TIMEOUT_SECONDS = 600  # Unfinished game auto-stands and finishes after this

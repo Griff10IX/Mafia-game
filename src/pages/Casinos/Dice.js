@@ -524,7 +524,7 @@ export default function Dice() {
           <span className="text-mutedForeground">Max: <span className="text-primary font-bold">{formatMoney(maxBet)}</span></span>
           {canClaim && (
             <button onClick={handleClaim} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">
-              Claim
+              Claim ({formatMoney(config.claim_cost ?? 125_000_000)})
             </button>
           )}
         </div>

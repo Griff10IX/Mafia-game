@@ -35,7 +35,7 @@ from routers.casinos.dice import DiceSellOnTradeRequest
 VIDEO_POKER_MAX_BET = 50_000_000
 VIDEO_POKER_DEFAULT_MAX_BET = 50_000_000
 VIDEO_POKER_ABSOLUTE_MAX_BET = 500_000_000
-VIDEO_POKER_CLAIM_COST = 500_000_000
+VIDEO_POKER_CLAIM_COST = 750_000_000  # $750M to claim
 VIDEO_POKER_HISTORY_MAX = 10
 VIDEO_POKER_HOUSE_EDGE = 0.0005  # 0.05% of profit to house (state head when no owner), like dice
 

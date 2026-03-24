@@ -24,6 +24,7 @@ AIRPORT_COST = 10
 AIRPORT_PRICE_MIN = 10
 AIRPORT_PRICE_MAX = 30
 AIRPORT_SLOTS_PER_STATE = 1
+AIRPORT_CLAIM_COST = 100_000_000  # $100M to claim
 MAX_TRAVELS_PER_HOUR = 15
 EXTRA_AIRMILES_COST = 25
 MAX_EXTRA_AIRMILES = 50
@@ -483,6 +484,10 @@ async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(g
         doc = await db.airport_ownership.find_one({"state": req.state, "slot": req.slot}, {"_id": 0})
     if doc.get("owner_id"):
         raise HTTPException(status_code=400, detail="This airport slot is already owned")
+    user = await db.users.find_one({"id": current_user["id"]})
+    if not user or user.get("money", 0) < AIRPORT_CLAIM_COST:
+        raise HTTPException(status_code=400, detail=f"You need ${AIRPORT_CLAIM_COST:,} to claim an airport")
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -AIRPORT_CLAIM_COST}})
     await db.airport_ownership.update_one(
         {"state": req.state, "slot": req.slot},
         {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "price_per_travel": AIRPORT_COST, "total_earnings": 0}}

@@ -206,7 +206,7 @@ class ChargebackRequest(BaseModel):
     payment_session_id: str
 
 
-# Up to MAX_FAMILIES seed configs; each created only if no family with that name/tag exists.
+# Seed configs (all may be created; families get player_cap_exempt and do not count toward player crew cap).
 SEED_FAMILIES_CONFIG = [
     {"name": "Corleone", "tag": "CORL"},
     {"name": "Baranco", "tag": "BARN"},
@@ -233,7 +233,7 @@ def register(router):
     """Register admin routes. Dependencies from server to avoid circular imports."""
     import server as srv
     import middleware.security as security_module
-    from routers.game.families import FAMILY_RACKETS, MAX_FAMILIES
+    from routers.game.families import FAMILY_RACKETS
     from routers.kill.bodyguards import _create_robot_bodyguard_user
     from routers.social.forum import create_redeem_code_forum_topic, remove_redeem_code_forum_topic
 
@@ -4983,10 +4983,7 @@ def register(router):
         now = datetime.now(timezone.utc).isoformat()
         created_users = []
         created_families = []
-        current_count = await db.families.count_documents({"wiped": {"$ne": True}})
         for fam_cfg in SEED_FAMILIES_CONFIG:
-            if current_count >= MAX_FAMILIES:
-                break
             name, tag = fam_cfg["name"], fam_cfg["tag"]
             existing = await db.families.find_one({"$or": [{"name": name}, {"tag": tag}]})
             if existing:
@@ -5065,8 +5062,8 @@ def register(router):
                 "treasury": SEED_TREASURY,
                 "created_at": now,
                 "rackets": rackets,
+                "player_cap_exempt": True,
             })
-            current_count += 1
             created_families.append({"name": name, "tag": tag, "member_count": len(user_ids)})
             for uid, role, _ in user_ids:
                 await db.family_members.insert_one({
@@ -5230,6 +5227,7 @@ def register(router):
                 "treasury": 50_000,
                 "created_at": now,
                 "rackets": rackets,
+                "player_cap_exempt": True,
             })
             created_families.append({"name": name, "tag": tag})
             for user_id, role in members:

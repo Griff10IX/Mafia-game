@@ -247,7 +247,7 @@ const CityCard = ({
                     disabled={claimingCity === city}
                     className="px-1.5 py-0.5 rounded bg-primary/20 border border-primary/50 text-primary text-[9px] font-heading font-bold uppercase hover:bg-primary/30 disabled:opacity-50 transition-colors"
                   >
-                    {claimingCity === city ? '...' : 'Take over'}
+                    {claimingCity === city ? '...' : 'Take over ($100M)'}
                   </button>
                 ) : (
                   <span className="text-[9px]">
