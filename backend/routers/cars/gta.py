@@ -819,6 +819,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
             melt_reward_due = 0
             melt_reward_paid = 0
             melt_pct_applied = 0
+            family_treasury_bullets_after = None
             if family_id:
                 fam = await db.families.find_one(
                     {"id": family_id, "wiped": {"$ne": True}},
@@ -862,6 +863,11 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                                 {"id": family_id},
                                 {"$inc": {"treasury_bullets": family_cut}},
                             )
+                            fam_after = await db.families.find_one(
+                                {"id": family_id},
+                                {"_id": 0, "treasury_bullets": 1},
+                            )
+                            family_treasury_bullets_after = int((fam_after or {}).get("treasury_bullets") or 0)
             await db.users.update_one(
                 {"id": user["id"]},
                 {
@@ -904,9 +910,13 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                         {"id": referred_by},
                         {"$inc": {"bullets": referral_bullets, "referral_earnings_melt_bullets": referral_bullets}},
                     )
-            msg = f"Melted {deleted_count} car(s) for {player_bullets} bullets. Next melt in {cooldown_seconds}s."
+            msg = (
+                f"Melted {deleted_count} car(s): {base_total_bullets} total bullets "
+                f"-> you kept {player_bullets}"
+            )
             if family_cut > 0:
-                msg += f" ({family_cut} bullets sent to family treasury)"
+                msg += f", family got {family_cut}"
+            msg += f". Next melt in {cooldown_seconds}s."
             if melt_reward_paid > 0:
                 msg += f" + ${melt_reward_paid:,} family reward."
             elif melt_reward_due > 0 and melt_reward_paid == 0:
@@ -917,6 +927,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                 "total_bullets": player_bullets,
                 "base_total_bullets": base_total_bullets,
                 "family_cut_bullets": family_cut,
+                "family_treasury_bullets_after": family_treasury_bullets_after,
                 "melt_treasury_pct": melt_pct_applied,
                 "melt_reward_paid": melt_reward_paid,
                 "message": msg,
