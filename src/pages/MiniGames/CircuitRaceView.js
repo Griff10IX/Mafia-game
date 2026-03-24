@@ -2858,6 +2858,7 @@ export default function CircuitRaceView({
     /** After server lap bumps, ignore S/F resolves for this many rAF ticks (~50 ≈ 830ms @ 60Hz) to kill double-fire. */
     let framesSinceServerLapSync = 999;
     let interactiveLapCrossInFlight = false;
+    let lastLapCrossRealTimeMs = 0;
     let lastTowerEmitMs = 0;
     let lastReportedVisLap = -1;
     let lastReportedProg = -1;
@@ -3219,6 +3220,7 @@ export default function CircuitRaceView({
         const relFromSf = ((leaderSf.trackPos - sfLx + 1) % 1);
         if (!leaderSf._interactiveSfArmed && relFromSf > 0.075) leaderSf._interactiveSfArmed = true;
       }
+      const MIN_LAP_CROSS_GAP_MS = 3000;
       if (
         leaderSf
         && leaderSf._interactiveSfArmed
@@ -3229,6 +3231,7 @@ export default function CircuitRaceView({
         && leaderSf.totalLapsDone === curLap
         && framesSinceServerLapSync >= 50
         && !interactiveLapCrossInFlight
+        && (performance.now() - lastLapCrossRealTimeMs) >= MIN_LAP_CROSS_GAP_MS
       ) {
         const prevT = leaderSf._interactiveLapPrevPos;
         if (prevT !== undefined && crossedStartFinishLineForward(prevT, leaderSf.trackPos, sfLx)) {
@@ -3238,6 +3241,7 @@ export default function CircuitRaceView({
             leaderPos: leaderSf._targetPos,
           });
           postedCrossForServerLap = curLap;
+          lastLapCrossRealTimeMs = performance.now();
           const hold = curLap;
           const cb = onInteractiveLeaderLapCrossRef.current;
           interactiveLapCrossInFlight = true;
@@ -3334,7 +3338,7 @@ export default function CircuitRaceView({
         }
       }
 
-      // Same comparator as standings / checkered so draw order and live tower never disagree on ties.
+      // Sort by visual track progress — positions change only when a car visually passes another
       r.sort(sortInteractiveByProgress);
       r.forEach((x, i) => { x.position = i + 1; });
 
