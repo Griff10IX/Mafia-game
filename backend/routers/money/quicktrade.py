@@ -695,6 +695,7 @@ async def get_properties_for_sale(current_user: dict = Depends(get_current_user)
                 "location": prop.get("location", "Unknown"),
                 "property_name": prop.get("name", "Property"),
                 "owner": prop.get("owner_username", "Unknown"),
+                "is_own": prop.get("owner_id") == current_user["id"],
                 "points": prop.get("sale_price", 0),
                 "created_at": prop.get("created_at")
             })
@@ -813,6 +814,18 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     return {"message": "Property purchased successfully", "property_name": prop.get("name", "Property"), "points_spent": sale_price}
 
 
+async def cancel_property_listing(property_id: str, current_user: dict = Depends(get_current_user)):
+    user_id = current_user["id"]
+    prop = await db.properties.find_one_and_update(
+        {"_id": ObjectId(property_id), "owner_id": user_id, "for_sale": True},
+        {"$set": {"for_sale": False, "cancelled_at": datetime.now(timezone.utc)}, "$unset": {"sale_price": 1}},
+    )
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property listing not found or already cancelled")
+    _invalidate_trade_caches()
+    return {"message": "Property listing cancelled", "property_name": prop.get("name", "Property")}
+
+
 def register(router):
     router.add_api_route("/trade/sell-offers", get_sell_offers, methods=["GET"])
     router.add_api_route("/trade/buy-offers", get_buy_offers, methods=["GET"])
@@ -824,6 +837,7 @@ def register(router):
     router.add_api_route("/trade/buy-offer/{offer_id}", cancel_buy_offer_delete, methods=["DELETE"])
     router.add_api_route("/trade/properties", get_properties_for_sale, methods=["GET"])
     router.add_api_route("/trade/property/{property_id}/accept", buy_property, methods=["POST"])
+    router.add_api_route("/trade/property/{property_id}/cancel", cancel_property_listing, methods=["POST"])
     router.add_api_route("/trade/sell-offer/{offer_id}/cancel", cancel_sell_offer_post, methods=["POST"])
     router.add_api_route("/trade/buy-offer/{offer_id}/cancel", cancel_buy_offer_post, methods=["POST"])
     router.add_api_route("/trade/token-offers", get_token_offers, methods=["GET"])

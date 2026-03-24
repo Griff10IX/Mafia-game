@@ -246,6 +246,18 @@ export default function QuickTrade() {
     }
   };
 
+  const handleCancelPropertyListing = async (propertyId) => {
+    if (!window.confirm('Cancel this property listing?')) return;
+    try {
+      await api.post(`/trade/property/${propertyId}/cancel`);
+      toast.success('Property listing cancelled.');
+      fetchTrades();
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to cancel property listing');
+    }
+  };
+
   const handleCancelAllOffers = async (type, ids) => {
     if (!ids.length) return;
     if (!window.confirm(`Cancel all ${ids.length} offer(s)? Fees will be refunded.`)) return;
@@ -800,9 +812,15 @@ export default function QuickTrade() {
                     <td className="px-4 py-2 font-heading text-xs text-foreground">{prop.owner}</td>
                     <td className="px-4 py-2 text-right font-heading text-xs text-primary font-bold">{formatNumber(prop.points)}</td>
                     <td className="px-4 py-2 text-center">
-                      <button onClick={() => handleAcceptOffer(prop.id, 'property')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30">
-                        Buy
-                      </button>
+                      {prop.is_own ? (
+                        <button onClick={() => handleCancelPropertyListing(prop.id)} className="px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30">
+                          Cancel
+                        </button>
+                      ) : (
+                        <button onClick={() => handleAcceptOffer(prop.id, 'property')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30">
+                          Buy
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -828,9 +846,15 @@ export default function QuickTrade() {
                     <div>Location: <span className="text-foreground">{prop.location}</span></div>
                     <div>Owner: <span className="text-foreground">{prop.owner}</span></div>
                   </div>
-                  <button onClick={() => handleAcceptOffer(prop.id, 'property')} className="w-full mt-2 px-3 py-1.5 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30">
-                    Buy Property
-                  </button>
+                  {prop.is_own ? (
+                    <button onClick={() => handleCancelPropertyListing(prop.id)} className="w-full mt-2 px-3 py-1.5 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30">
+                      Cancel Listing
+                    </button>
+                  ) : (
+                    <button onClick={() => handleAcceptOffer(prop.id, 'property')} className="w-full mt-2 px-3 py-1.5 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30">
+                      Buy Property
+                    </button>
+                  )}
                 </div>
               </div>
             ))
