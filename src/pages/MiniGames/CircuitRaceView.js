@@ -1188,13 +1188,35 @@ export default function CircuitRaceView({
   useEffect(() => { onInteractiveGreenFlagRef.current = onInteractiveGreenFlag; }, [onInteractiveGreenFlag]);
   const onCompleteRef = useRef(onComplete);
   useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+  const raceDbgSeqRef = useRef(0);
+  const debugRace = useCallback((event, payload = {}) => {
+    if (mode !== "interactive-live") return;
+    try {
+      const entry = {
+        seq: ++raceDbgSeqRef.current,
+        ts: Date.now(),
+        raceId,
+        event,
+        payload,
+      };
+      if (typeof window !== "undefined") {
+        const w = window;
+        if (!Array.isArray(w.__RACE_DEBUG)) w.__RACE_DEBUG = [];
+        w.__RACE_DEBUG.push(entry);
+        if (w.__RACE_DEBUG.length > 1200) w.__RACE_DEBUG = w.__RACE_DEBUG.slice(-800);
+      }
+      // eslint-disable-next-line no-console
+      console.debug(`[RACE_DEBUG][${raceId || "no-race"}][${entry.seq}] ${event}`, payload);
+    } catch (_) {}
+  }, [mode, raceId]);
   useEffect(() => {
     if (mode !== "interactive-live") return;
     const cb = onSessionPhaseChangeRef.current;
     if (!cb) return;
     if (uiPhase === "setup") return;
+    debugRace("ui_phase_change", { uiPhase });
     cb(uiPhase);
-  }, [mode, uiPhase]);
+  }, [mode, uiPhase, debugRace]);
 
   const uiPhaseRef = useRef(uiPhase);
   useEffect(() => { uiPhaseRef.current = uiPhase; }, [uiPhase]);
@@ -3197,6 +3219,11 @@ export default function CircuitRaceView({
       ) {
         const prevT = leaderSf._interactiveLapPrevPos;
         if (prevT !== undefined && crossedStartFinishLineForward(prevT, leaderSf.trackPos, sfLx)) {
+          debugRace("interactive_lap_cross_trigger", {
+            serverLap: curLap,
+            leaderId: leaderSf.id,
+            leaderPos: leaderSf._targetPos,
+          });
           postedCrossForServerLap = curLap;
           const hold = curLap;
           const cb = onInteractiveLeaderLapCrossRef.current;
@@ -3222,6 +3249,13 @@ export default function CircuitRaceView({
       const raceShouldEnd = mode === "interactive-live"
         ? (serverLapsComplete && allClassified)
         : (serverLapsComplete || visualLapsComplete);
+      if (mode === "interactive-live" && serverLapsComplete && !allClassified) {
+        debugRace("awaiting_full_classification", {
+          total: r.length,
+          finishedCount: r.filter((x) => x.finished).length,
+          dnfCount: r.filter((x) => x.dnf).length,
+        });
+      }
 
       // Race finished: replay uses visual lap; interactive-live waits for server current_lap
       if (raceShouldEnd && totLaps > 0 && !st._raceFinished) {
@@ -3230,6 +3264,11 @@ export default function CircuitRaceView({
         st.finishFlash = nowSec + 3.0;
         addInc("CHECKERED FLAG!");
         setCommentary(rnd(COMMENTARY.done));
+        debugRace("checkered_flag_state_entered", {
+          serverLap: curLap,
+          totalLaps: totLaps,
+          allClassified,
+        });
       }
 
       // After race finishes, show results after a brief delay
@@ -3260,6 +3299,10 @@ export default function CircuitRaceView({
             hasFastestLap: fastest.holderId === x.id,
           })));
           const rOIds = ordered.map(x => x.id), dIds = ordered.filter(x => x.dnf).map(x => x.id);
+          debugRace("emit_on_complete", {
+            emittedOrder: rOIds,
+            emittedDnf: dIds,
+          });
           setTimeout(() => onCompleteRef.current?.(rOIds, dIds), 1200);
         }
       }
@@ -3357,6 +3400,12 @@ export default function CircuitRaceView({
     });
     const orderedQualRacers = serverPoleOrder.map((id) => qualRacers.find((x) => x.id === id)).filter(Boolean);
     const humanQualQueue = orderedQualRacers.filter((r) => !(participantsById[r.id]?.is_npc));
+    debugRace("interactive_qual_queue_built", {
+      participantsCount: (participants || []).length,
+      serverPoleOrder,
+      humanQualQueue: humanQualQueue.map((x) => x.id),
+      npcHiddenCount: Math.max(0, orderedQualRacers.length - humanQualQueue.length),
+    });
 
     const beginRaceFromGrid = () => {
       if (rafRef.current) {
@@ -3402,6 +3451,7 @@ export default function CircuitRaceView({
         _smoothPos: i + 1,
         _interactiveSfArmed: false,
       }));
+      debugRace("grid_built_from_server_qualifying", { gridOrder: grid.map((x) => x.id) });
       stateRef.current = {
         racers: grid, track, nLaps: nRace, wd: wd2, safetyCar: sc,
         fastestLap: { holderId: null, time: Infinity }, finishFlash: 0, incidents: [],
@@ -3422,16 +3472,19 @@ export default function CircuitRaceView({
 
     const runHumanQualAt = (idx) => {
       if (idx >= humanQualQueue.length) {
+        debugRace("human_qual_queue_complete", { totalHumanRuns: humanQualQueue.length });
         beginRaceFromGrid();
         return;
       }
       const qr = humanQualQueue[idx];
+      debugRace("human_qual_run_start", { idx, entrantId: qr.id, entrantName: qr.name });
       setUiPhase("qualifying");
       setLapDisp("Qualifying");
       setCommentary(`Qualifying lap — ${qr.name}`);
       const solo = [{ ...qr, totalLapsDone: 0, lapCount: 1, finished: false, finishOrder: 0, lapTimes: [] }];
       startRaceLoopRef.current(track, cond, 1, solo, {
         onQualifyingComplete: () => {
+          debugRace("human_qual_run_complete", { idx, entrantId: qr.id, nextInMs: 5000 });
           if (rafRef.current) {
             cancelAnimationFrame(rafRef.current);
             rafRef.current = null;

@@ -740,7 +740,15 @@ export default function Racing() {
       const body = {};
       if (Array.isArray(liveResultOrder) && liveResultOrder.length > 0) body.result_order = liveResultOrder;
       if (Array.isArray(liveDnfIds)) body.dnf_ids = liveDnfIds;
+      // eslint-disable-next-line no-console
+      console.debug("[RACE_DEBUG][Racing.js] complete_race_request", { raceId, body });
       const r = await api.post(`/racing/races/${raceId}/complete`, body);
+      // eslint-disable-next-line no-console
+      console.debug("[RACE_DEBUG][Racing.js] complete_race_response", {
+        raceId,
+        result_order: r.data?.race?.result_order || [],
+        dnf_ids: r.data?.race?.dnf_ids || [],
+      });
       try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); localStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {}
       setActiveRace((prev) => {
         if (prev?.id !== raceId) return prev;
@@ -755,6 +763,12 @@ export default function Racing() {
   const onInteractiveCircuitComplete = useCallback((resultOrderIds, dnfIds) => {
     if (!activeRace?.id) return;
     if (!(activeRace?.mode === "interactive" || activeRace?.interactive)) return;
+    // eslint-disable-next-line no-console
+    console.debug("[RACE_DEBUG][Racing.js] circuit_on_complete", {
+      raceId: activeRace.id,
+      emittedOrder: resultOrderIds || [],
+      emittedDnf: dnfIds || [],
+    });
     setInteractiveDebugEmittedOrder(Array.isArray(resultOrderIds) ? resultOrderIds : []);
     setInteractiveDebugEmittedDnf(Array.isArray(dnfIds) ? dnfIds : []);
     void handleCompleteRace(activeRace.id, null, dnfIds);
@@ -1106,6 +1120,14 @@ export default function Racing() {
               try {
                 await api.post(`/racing/races/${activeRace.id}/green-flag`);
                 const { data } = await api.get(`/racing/races/${activeRace.id}/live`);
+                // eslint-disable-next-line no-console
+                console.debug("[RACE_DEBUG][Racing.js] green_flag_live_snapshot", {
+                  raceId: activeRace.id,
+                  current_lap: data?.current_lap,
+                  total_laps: data?.total_laps,
+                  qualifying_order: data?.qualifying_order || [],
+                  live_result_order: data?.result_order || [],
+                });
                 setLiveRace(data);
               } catch (e) {
                 toast.error(apiDetail(e));
@@ -1117,6 +1139,15 @@ export default function Racing() {
             onInteractiveLeaderLapCross={async (serverLap) => {
               await api.post(`/racing/races/${activeRace.id}/interactive-lap-cross`, { server_lap: serverLap });
               const { data } = await api.get(`/racing/races/${activeRace.id}/live`);
+              // eslint-disable-next-line no-console
+              console.debug("[RACE_DEBUG][Racing.js] lap_cross_live_snapshot", {
+                raceId: activeRace.id,
+                reportedServerLap: serverLap,
+                current_lap: data?.current_lap,
+                total_laps: data?.total_laps,
+                live_result_order: data?.result_order || [],
+                dnf_ids: data?.dnf_ids || [],
+              });
               setLiveRace(data);
             }}
             onInteractiveTimingUpdate={onInteractiveTimingFrame}

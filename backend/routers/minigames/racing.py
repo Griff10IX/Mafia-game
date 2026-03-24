@@ -26,6 +26,26 @@ from pydantic import BaseModel
 from pymongo import UpdateOne
 
 from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, send_notification, log_gambling, _is_admin, _get_staff_user_ids
+import logging as _logging
+import pathlib as _pathlib
+
+_race_debug_log_path = _pathlib.Path(__file__).resolve().parent.parent.parent / "race_debug.log"
+_race_dbg = _logging.getLogger("race_debug")
+_race_dbg.setLevel(_logging.DEBUG)
+_race_dbg.propagate = False
+if not _race_dbg.handlers:
+    _fh = _logging.FileHandler(str(_race_debug_log_path), mode="a", encoding="utf-8")
+    _fh.setFormatter(_logging.Formatter("%(asctime)s | %(message)s", datefmt="%H:%M:%S"))
+    _race_dbg.addHandler(_fh)
+
+def _rdebug(race_id: str, event: str, **kw):
+    try:
+        parts = [f"[{race_id or '?'}] {event}"]
+        for k, v in kw.items():
+            parts.append(f"  {k}={v}")
+        _race_dbg.debug("\n".join(parts))
+    except Exception:
+        pass
 
 # ---------- Constants ----------
 def _now_iso() -> str:
@@ -2363,6 +2383,9 @@ async def _start_race_internal(race_id: str) -> dict:
     # Deterministic qualifying so grid is stable and fair for a given race_id.
     with _SeededRandom(f"qualifying:{race_id}"):
         qualifying_order, qualifying_results = _run_qualifying(participants, profile_by_user, upgrades_map, track, weather_id)
+    _rdebug(race_id, "QUALIFYING_COMPLETE",
+            qualifying_order=qualifying_order,
+            qualifying_results=qualifying_results)
     id_to_p = {(p.get("user_id") or p.get("id")): p for p in participants}
     participants = [id_to_p[eid] for eid in qualifying_order if eid in id_to_p]
     for p in participants:
@@ -2660,16 +2683,31 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
     total_laps = int(race.get("total_laps") or race.get("laps") or 3)
     current_lap = int(race.get("current_lap") or 0)
 
+    _rdebug(race_id, "COMPLETE_RACE_CALLED",
+            is_interactive=is_interactive,
+            current_lap=current_lap, total_laps=total_laps,
+            server_result_order=result_order,
+            server_dnf_ids=dnf_ids,
+            client_result_order=body.result_order,
+            client_dnf_ids=body.dnf_ids,
+            caller=current_user.get("id"))
+
     if is_interactive and current_lap < total_laps:
+        _rdebug(race_id, "COMPLETE_RACE_REJECTED", reason="still_in_progress")
         raise HTTPException(status_code=400, detail="Race is still in progress")
 
     # Accept client result only as fallback when server has no interactive result yet.
-    if (
+    can_use_client = (
         body.result_order
         and set(body.result_order) == expected_ids
         and len(body.result_order) == len(expected_ids)
         and (not is_interactive or not result_order)
-    ):
+    )
+    _rdebug(race_id, "COMPLETE_RACE_CLIENT_ORDER_CHECK",
+            can_use_client=can_use_client,
+            has_server_result=bool(result_order),
+            client_order_valid=bool(body.result_order and set(body.result_order) == expected_ids))
+    if can_use_client:
         result_order = list(body.result_order)
         if body.dnf_ids is not None:
             dnf_ids = [eid for eid in body.dnf_ids if eid in expected_ids]
@@ -2732,6 +2770,11 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
             prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0})
             if prof:
                 profile_by_user[uid] = prof
+    _rdebug(race_id, "COMPLETE_RACE_FINAL_ORDER",
+            result_order=result_order,
+            dnf_ids=dnf_ids,
+            source="server_interactive" if (is_interactive and result_order) else "client_fallback_or_sim")
+
     pot = entry_fee * len(participants) * REWARD_POOL_PCT
     if pot < RACING_BASE_CASH_POOL:
         pot = RACING_BASE_CASH_POOL
@@ -2869,6 +2912,11 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
             uid = p.get("user_id")
             if uid and not p.get("is_npc"):
                 await send_notification(uid, f"H2H race finished! {winner_name} wins ${total_pot:,}!", "racing_challenge_result")
+
+    _rdebug(race_id, "COMPLETE_RACE_SAVED",
+            saved_result_order=race.get("result_order"),
+            saved_dnf_ids=race.get("dnf_ids"),
+            rewards_positions=[(r.get("entrant_id"), r.get("position")) for r in rewards[:6]])
 
     return {"message": "Race completed", "race": race}
 
@@ -3681,6 +3729,11 @@ async def _start_interactive_race(
     }
 
     await db.racing_races.update_one({"id": race_id}, {"$set": update_fields})
+    _rdebug(race_id, "INTERACTIVE_RACE_STARTED",
+            qualifying_order=qualifying_order,
+            num_laps=num_laps,
+            weather=weather_id,
+            car_states_positions={eid: cs.get("position") for eid, cs in car_states.items()})
     race_out = dict(race)
     race_out.update(update_fields)
     return race_out
@@ -3825,9 +3878,20 @@ async def _advance_one_lap(race: dict) -> Optional[dict]:
 
     is_final = new_lap >= total_laps
 
+    _rdebug(race_id, "LAP_ADVANCED",
+            new_lap=new_lap, total_laps=total_laps, is_final=is_final,
+            lap_order=lap_order,
+            new_dnfs=new_dnfs,
+            all_dnf_ids=all_dnf_ids,
+            car_positions={eid: cs.get("position") for eid, cs in updated_cs.items()})
+
     if is_final:
         finishers = [eid for eid in lap_order if eid not in all_dnf_ids]
         result_order = finishers + all_dnf_ids
+        _rdebug(race_id, "FINAL_LAP_RESULT_ORDER",
+                finishers=finishers,
+                dnf_ids=all_dnf_ids,
+                result_order=result_order)
 
         update = {
             "current_lap": new_lap,
@@ -4070,11 +4134,22 @@ async def interactive_lap_cross(
     if not entrant_ok:
         raise HTTPException(status_code=403, detail="You are not a participant in this race")
 
+    _rdebug(race_id, "LAP_CROSS_ENDPOINT",
+            client_server_lap=body.server_lap,
+            actual_server_lap=cl,
+            total_laps=total_laps,
+            caller=current_user.get("id"))
+
     updated = await _advance_one_lap(dict(race))
     if not updated:
+        _rdebug(race_id, "LAP_CROSS_ADVANCE_FAILED")
         raise HTTPException(status_code=409, detail="Could not advance lap")
 
     race_out = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
+    _rdebug(race_id, "LAP_CROSS_POST_ADVANCE",
+            new_current_lap=race_out.get("current_lap"),
+            result_order=race_out.get("result_order"),
+            dnf_ids=race_out.get("dnf_ids"))
     return {"ok": True, "race": race_out}
 
 
