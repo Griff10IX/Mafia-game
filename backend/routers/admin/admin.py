@@ -31,6 +31,11 @@ from utils.cheat_detection_utils import (
     compute_dupe_risk_score,
 )
 from routers.kill.armoury import TOKEN_CONFIG
+from utils.point_provenance import (
+    chargeback_preview,
+    execute_chargeback_best_effort,
+    ensure_user_legacy_seed_lot,
+)
 
 # Cloudflare API config for bot blocking toggle
 CF_ZONE_ID = os.environ.get("CF_ZONE_ID", "")
@@ -197,6 +202,10 @@ class PageLockUpdate(BaseModel):
     unlock_at: Optional[str] = None  # ISO datetime; lock auto-expires when past
 
 
+class ChargebackRequest(BaseModel):
+    payment_session_id: str
+
+
 # Up to MAX_FAMILIES seed configs; each created only if no family with that name/tag exists.
 SEED_FAMILIES_CONFIG = [
     {"name": "Corleone", "tag": "CORL"},
@@ -343,6 +352,58 @@ def register(router):
             {"$inc": {"points": points}}
         )
         return {"message": f"Added {points} points to {target_username}"}
+
+    @router.get("/admin/points/provenance/user/{user_id}")
+    async def admin_points_provenance_user(user_id: str, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        u = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "username": 1, "points": 1})
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        await ensure_user_legacy_seed_lot(db, user_id, int(u.get("points") or 0))
+        lots = await db.point_lots.find(
+            {"owner_user_id": user_id},
+            {"_id": 0, "id": 1, "origin_type": 1, "origin_ref": 1, "remaining_points": 1, "root_purchase_ref": 1, "created_at": 1},
+        ).sort([("created_at", 1), ("id", 1)]).to_list(5000)
+        ledger = await db.point_ledger_events.find(
+            {"user_id": user_id},
+            {"_id": 0, "id": 1, "event_type": 1, "points": 1, "origin_ref": 1, "root_purchase_ref": 1, "created_at": 1},
+        ).sort("created_at", -1).limit(200).to_list(200)
+        return {"user": u, "lots": lots, "ledger": ledger}
+
+    @router.get("/admin/points/chargeback/preview/{payment_session_id}")
+    async def admin_points_chargeback_preview(payment_session_id: str, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        summary = await chargeback_preview(db, payment_session_id)
+        return {"payment_session_id": payment_session_id, **summary}
+
+    @router.get("/admin/points/provenance/payment/{payment_session_id}")
+    async def admin_points_provenance_payment(payment_session_id: str, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        txn = await db.payment_transactions.find_one({"session_id": payment_session_id}, {"_id": 0})
+        lots = await db.point_lots.find(
+            {"root_purchase_ref": payment_session_id},
+            {"_id": 0, "id": 1, "owner_user_id": 1, "origin_type": 1, "origin_ref": 1, "remaining_points": 1, "parent_lot_id": 1, "created_at": 1},
+        ).sort([("created_at", 1), ("id", 1)]).to_list(10000)
+        ledger = await db.point_ledger_events.find(
+            {"root_purchase_ref": payment_session_id},
+            {"_id": 0, "id": 1, "user_id": 1, "event_type": 1, "points": 1, "origin_ref": 1, "lot_id": 1, "created_at": 1},
+        ).sort("created_at", -1).limit(2000).to_list(2000)
+        return {"payment_session_id": payment_session_id, "transaction": txn, "lots": lots, "ledger": ledger}
+
+    @router.post("/admin/points/chargeback/execute")
+    async def admin_points_chargeback_execute(body: ChargebackRequest, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        summary = await execute_chargeback_best_effort(
+            db,
+            payment_session_id=body.payment_session_id,
+            admin_user_id=current_user.get("id"),
+            admin_username=current_user.get("username") or "?",
+        )
+        return {"payment_session_id": body.payment_session_id, **summary}
 
     @router.post("/admin/set-founding-member")
     async def admin_set_founding_member(

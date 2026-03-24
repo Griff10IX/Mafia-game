@@ -54,6 +54,7 @@ from routers.money.booze_run import (
     BOOZE_CAPACITY_BONUS_MAX,
 )
 from routers.admin.airport import _invalidate_travel_info_cache
+from utils.point_provenance import consume_points_fifo, mint_transfer_in_lots
 
 # Store-only constants
 SILENCER_COST_POINTS = 150
@@ -76,6 +77,23 @@ def _bullet_cost(bullets: int) -> int:
 CUSTOM_CAR_COST = 500
 BUY_HEALTH_COST_POINTS = 15
 FULL_HEALTH = 100
+
+
+async def _record_store_points_spend(user_id: str, inc: dict, event_ref: str):
+    spend_points = max(0, int(-(inc or {}).get("points", 0)))
+    if spend_points <= 0:
+        return
+    try:
+        await consume_points_fifo(
+            db,
+            user_id=user_id,
+            points=spend_points,
+            event_type="spend_store",
+            event_ref=event_ref,
+            meta={"source": "store"},
+        )
+    except Exception:
+        logger.exception("point provenance spend failed user_id=%s event_ref=%s", user_id, event_ref)
 
 
 class CustomCarPurchase(BaseModel):
@@ -149,6 +167,7 @@ async def buy_premium_rank_bar(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(current_user["id"], inc, "buy-rank-bar")
     return {"message": "Premium rank bar purchased!", "cost": cost_used}
 
 
@@ -169,6 +188,7 @@ async def buy_silencer(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(current_user["id"], inc, "buy-silencer")
     return {"message": "Silencer purchased! Fewer witness statements will go out when you kill.", "cost": cost_used}
 
 
@@ -187,6 +207,7 @@ async def buy_anti_snitch(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(current_user["id"], inc, "buy-anti-snitch")
     return {"message": "Anti Snitch purchased! You cannot be snitched on.", "cost": cost_used}
 
 
@@ -204,6 +225,7 @@ async def buy_oc_timer(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(current_user["id"], inc, "buy-oc-timer")
     return {"message": "OC timer reduced! Heist cooldown is now 4 hours.", "cost": cost_used}
 
 
@@ -222,6 +244,7 @@ async def buy_crew_oc_timer(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(current_user["id"], inc, "buy-crew-oc-timer")
     return {"message": "Crew OC timer purchased! When you commit, family Crew OC cooldown is 6h instead of 8h.", "cost": cost_used}
 
 
@@ -241,6 +264,7 @@ async def upgrade_garage_batch_limit(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(current_user["id"], inc, "upgrade-garage-batch")
     return {"message": f"Garage batch limit upgraded to {new_limit}", "new_limit": new_limit, "cost": cost_used}
 
 
@@ -261,6 +285,7 @@ async def buy_booze_capacity(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(current_user["id"], inc, "buy-booze-capacity")
     new_capacity = _booze_user_capacity({**current_user, "booze_capacity_bonus": current_bonus + add_bonus})
     return {"message": f"+{add_bonus} booze capacity for {cost_used} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}
 
@@ -288,6 +313,7 @@ async def store_buy_bullets(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(current_user["id"], inc, "buy-bullets")
     return {"message": f"Bought {bullets:,} bullets for {cost_used} points", "bullets": bullets, "cost": cost_used}
 
 
@@ -306,6 +332,7 @@ async def buy_auto_rank(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(current_user["id"], inc, "buy-auto-rank")
     return {
         "message": "Auto Rank purchased! Go to Auto Rank to enable it and choose which activities to run.",
         "cost": cost_used,
@@ -329,6 +356,7 @@ async def buy_health(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(current_user["id"], inc, "buy-health")
     return {"message": "Full health restored!", "health": FULL_HEALTH, "cost": cost_used}
 
 
@@ -351,6 +379,7 @@ async def buy_custom_car(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(current_user["id"], inc, "buy-custom-car")
     await db.user_cars.insert_one({
         "id": str(uuid.uuid4()),
         "user_id": current_user["id"],
@@ -403,7 +432,29 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
     recipient_username = (recipient.get("username") or "").strip() or "?"
     now = datetime.now(timezone.utc).isoformat()
     transfer_id = str(uuid.uuid4())
+    slices = []
+    try:
+        slices = await consume_points_fifo(
+            db,
+            user_id=sender_id,
+            points=amount,
+            event_type="transfer_out",
+            event_ref=transfer_id,
+            meta={"to_user_id": recipient["id"], "to_username": recipient_username},
+        )
+    except Exception:
+        logger.exception("point provenance transfer_out failed transfer_id=%s", transfer_id)
     await db.users.update_one({"id": recipient["id"]}, {"$inc": {"points": amount}})
+    try:
+        await mint_transfer_in_lots(
+            db,
+            to_user_id=recipient["id"],
+            transfer_id=transfer_id,
+            from_user_id=sender_id,
+            slices=slices,
+        )
+    except Exception:
+        logger.exception("point provenance transfer_in failed transfer_id=%s", transfer_id)
     await db.points_transfers.insert_one({
         "id": transfer_id,
         "from_user_id": sender_id,
@@ -483,6 +534,7 @@ async def buy_store_token(
     result = await db.users.update_one(filt, {"$inc": inc})
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
+    await _record_store_points_spend(current_user["id"], inc, f"buy-token:{tt}")
     return {"message": f"+{amt} {tt.replace('_', ' ')} token(s) for {cost_used} points", "cost": cost_used, "token_type": tt, "amount": amt}
 
 
@@ -512,6 +564,7 @@ async def buy_store_token_bundle(
     result = await db.users.update_one(filt, {"$inc": inc})
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
+    await _record_store_points_spend(current_user["id"], inc, f"buy-token-bundle:{bid}")
     return {"message": f"Bundle '{bid}' purchased for {cost_used} points", "cost": cost_used, "bundle_id": bid}
 
 
@@ -533,6 +586,7 @@ async def buy_shooting_range_bonus(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(current_user["id"], inc, "buy-shooting-range-bonus")
     new_bonus = cur + add
     base = 10  # SHOOTING_RANGE_MAX_PLAYS_PER_HOUR in armoury
     return {

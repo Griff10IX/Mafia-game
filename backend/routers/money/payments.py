@@ -8,6 +8,7 @@ from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from server import send_notification
+from utils.point_provenance import mint_purchase_lot_if_missing
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,13 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
     if result.modified_count == 0:
         return {"credited": False, "preorder": False}
     await db.users.update_one({"id": user_id}, {"$inc": {"points": points}})
+    await mint_purchase_lot_if_missing(
+        db,
+        user_id=user_id,
+        session_id=session_id,
+        package_id=package_id,
+        points=points,
+    )
     logger.info(
         "Payment credited: session_id=%s user_id=%s package_id=%s points_added=%s points_before=%s points_after=%s",
         session_id, user_id, package_id, points, points_before, points_after,
@@ -153,6 +161,13 @@ async def _credit_preorder_points(db, txn: dict) -> bool:
     if result.modified_count == 0:
         return False
     await db.users.update_one({"id": user_id}, {"$inc": {"points": points}})
+    await mint_purchase_lot_if_missing(
+        db,
+        user_id=user_id,
+        session_id=session_id,
+        package_id=package_id,
+        points=points,
+    )
     logger.info(
         "Preorder points released: session_id=%s user_id=%s package_id=%s points=%s",
         session_id, user_id, package_id, points,
@@ -742,6 +757,13 @@ def register(router):
             }},
         )
         await db.users.update_one({"id": user_id}, {"$inc": {"points": points}})
+        await mint_purchase_lot_if_missing(
+            db,
+            user_id=user_id,
+            session_id=body.session_id,
+            package_id=package_id or "",
+            points=points,
+        )
         
         logger.info(
             "Admin manual credit: session_id=%s user_id=%s points=%s by=%s",

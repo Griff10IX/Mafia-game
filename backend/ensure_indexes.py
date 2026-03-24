@@ -177,6 +177,14 @@ async def ensure_all_indexes(db):
         await db.login_page_visits.create_index("ip", unique=True)
         await db.revive_used_by_email.create_index("email", unique=True)
         await db.payment_transactions.create_index("session_id", unique=True)
+        await db.point_lots.create_index("id", unique=True)
+        await db.point_lots.create_index([("owner_user_id", 1), ("created_at", 1)])
+        await db.point_lots.create_index([("root_purchase_ref", 1), ("owner_user_id", 1)])
+        await db.point_lots.create_index([("origin_ref", 1)])
+        await db.point_ledger_events.create_index("id", unique=True)
+        await db.point_ledger_events.create_index([("user_id", 1), ("created_at", -1)])
+        await db.point_ledger_events.create_index([("root_purchase_ref", 1), ("created_at", -1)])
+        await db.point_ledger_events.create_index([("origin_ref", 1), ("created_at", -1)])
 
         # --- Notifications: unread count (profile has user_id) ---
         await db.notifications.create_index([("user_id", 1), ("read", 1)])

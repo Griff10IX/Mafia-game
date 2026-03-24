@@ -340,3 +340,41 @@ class TestLeaderboard:
             assert "username" in data[0]
             assert "money" in data[0]
             assert "rank" in data[0]
+
+
+class TestPointProvenance:
+    """Points provenance and chargeback admin endpoints."""
+
+    @pytest.fixture
+    def admin_ctx(self):
+        response = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": ADMIN_EMAIL,
+            "password": ADMIN_PASSWORD
+        })
+        assert response.status_code == 200
+        data = response.json()
+        return {"token": data["token"], "user_id": data["user"]["id"]}
+
+    def test_admin_user_provenance_endpoint(self, admin_ctx):
+        response = requests.get(
+            f"{BASE_URL}/api/admin/points/provenance/user/{admin_ctx['user_id']}",
+            headers={"Authorization": f"Bearer {admin_ctx['token']}"},
+        )
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert "user" in data
+        assert "lots" in data
+        assert "ledger" in data
+
+    def test_admin_chargeback_preview_endpoint(self, admin_ctx):
+        # Unknown session_id is valid for preview and should return zeros.
+        fake_session = f"cs_test_{uuid.uuid4().hex[:12]}"
+        response = requests.get(
+            f"{BASE_URL}/api/admin/points/chargeback/preview/{fake_session}",
+            headers={"Authorization": f"Bearer {admin_ctx['token']}"},
+        )
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["payment_session_id"] == fake_session
+        assert "requested" in data
+        assert "eligible_remaining" in data
