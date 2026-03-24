@@ -201,6 +201,8 @@ export default function Racing() {
   const [interactiveCanvasPhase, setInteractiveCanvasPhase] = useState(null);
   /** In-race timing tower rows from canvas orbit (progress order + live gaps); stale server gaps_to_ahead only updates per lap. */
   const [interactiveTowerRows, setInteractiveTowerRows] = useState([]);
+  const [interactiveDebugEmittedOrder, setInteractiveDebugEmittedOrder] = useState([]);
+  const [interactiveDebugEmittedDnf, setInteractiveDebugEmittedDnf] = useState([]);
   const [myDecision, setMyDecision] = useState({
     push_level: 3, pit_this_lap: false, pit_compound: "medium", defend: false,
     pace_mode: "normal", reaction_ms: null,
@@ -753,6 +755,8 @@ export default function Racing() {
   const onInteractiveCircuitComplete = useCallback((resultOrderIds, dnfIds) => {
     if (!activeRace?.id) return;
     if (!(activeRace?.mode === "interactive" || activeRace?.interactive)) return;
+    setInteractiveDebugEmittedOrder(Array.isArray(resultOrderIds) ? resultOrderIds : []);
+    setInteractiveDebugEmittedDnf(Array.isArray(dnfIds) ? dnfIds : []);
     void handleCompleteRace(activeRace.id, null, dnfIds);
   }, [activeRace?.id, activeRace?.interactive, activeRace?.mode, handleCompleteRace]);
 
@@ -1001,6 +1005,22 @@ export default function Racing() {
         const _participantsForCanvas = (Array.isArray(_liveParts) && _liveParts.length > 0)
           ? _liveParts
           : (activeRace.participants || []);
+        const _nameById = Object.fromEntries(
+          _participantsForCanvas.map((p) => [
+            (p.user_id || p.id),
+            p.team_name || p.username || (p.user_id || p.id || "").slice(0, 8),
+          ]),
+        );
+        const _formatOrder = (ids) => (Array.isArray(ids) ? ids : [])
+          .map((id, i) => `${i + 1}.${_nameById[id] || String(id).slice(0, 8)}`)
+          .join(" | ");
+        const _towerIds = (
+          interactiveTowerRows.length > 0
+            ? interactiveTowerRows.map((row) => row.id)
+            : _carEntries.map(([eid]) => eid)
+        );
+        const _serverLiveResultOrder = liveRace.result_order || [];
+        const _savedFinalResultOrder = activeRace.result_order || [];
         // Stable key: do not tie to car_states count or QO string — live polls change those and would
         // remount the canvas, cancel qualifying RAF, and strand the session on "Qualifying".
         const _circuitKey = activeRace.id;
@@ -1048,6 +1068,17 @@ export default function Racing() {
             </div>
             <div className="h-1 bg-[var(--noir-border)]">
               <div className="h-full bg-[var(--noir-primary)] transition-all duration-1000" style={{ width: `${Math.min(100, _lapProg * 100)}%` }} />
+            </div>
+          </div>
+
+          <div className={styles.panel + " p-2 text-[10px] space-y-1"}>
+            <div className="font-heading uppercase tracking-wider text-amber-400">Race Order Debug</div>
+            <div className="text-[var(--noir-muted)] break-words">Tower now: {_formatOrder(_towerIds) || "—"}</div>
+            <div className="text-[var(--noir-muted)] break-words">Client emitted at finish: {_formatOrder(interactiveDebugEmittedOrder) || "—"}</div>
+            <div className="text-[var(--noir-muted)] break-words">Server live result_order: {_formatOrder(_serverLiveResultOrder) || "—"}</div>
+            <div className="text-[var(--noir-muted)] break-words">Saved race result_order: {_formatOrder(_savedFinalResultOrder) || "—"}</div>
+            <div className="text-[var(--noir-muted)] break-words">
+              Emitted DNF ids: {(interactiveDebugEmittedDnf || []).map((id) => _nameById[id] || String(id).slice(0, 8)).join(" | ") || "—"}
             </div>
           </div>
 
