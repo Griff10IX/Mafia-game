@@ -213,10 +213,10 @@ export default function ThemePicker({ open, onClose }) {
   const {
     colourId, textureId, buttonColourId, accentLineColourId, fontId,
     buttonStyleId, buttonShapeId, writingColourId, mutedWritingColourId,
-    toastTextColourId, textStyleId, mobileNavStyle, themeVariant,
+    toastTextColourId, textStyleId, mobileNavStyle, themeVariant, modernVisualQuality,
     setColour, setTexture, setButtonColour, setAccentLineColour, setFont,
     setButtonStyle, setButtonShape, setWritingColour, setMutedWritingColour,
-    setToastTextColour, setTextStyle, setMobileNavStyle, setThemeVariant,
+    setToastTextColour, setTextStyle, setMobileNavStyle, setThemeVariant, setModernVisualQuality,
     resetButtonToDefault, resetAccentLineToDefault,
     customThemes, addCustomTheme, removeCustomTheme,
   } = useTheme();
@@ -514,6 +514,20 @@ export default function ThemePicker({ open, onClose }) {
                       </button>
                     );
                   })}
+                </div>
+                <div className="mt-3 rounded-lg border border-zinc-700/70 bg-zinc-900/60 p-3">
+                  <p className="text-[9px] font-heading text-zinc-500 uppercase tracking-wider mb-2">Modern visual quality</p>
+                  <Pills
+                    options={[
+                      { id: 'high', label: 'High' },
+                      { id: 'performance', label: 'Performance' },
+                    ]}
+                    value={modernVisualQuality}
+                    onChange={setModernVisualQuality}
+                  />
+                  <p className="text-[9px] text-zinc-600 mt-2">
+                    Performance reduces blur/glow load in modern theme for faster toasts and casino animations.
+                  </p>
                 </div>
               </TabSection>
 

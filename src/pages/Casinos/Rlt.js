@@ -384,7 +384,7 @@ export default function Rlt() {
   const chipValue = customChip ? (parseInt(String(customChip).replace(/\D/g, ''), 10) || 0) : selectedChip;
   const totalBet = bets.reduce((s, b) => s + b.amount, 0);
   const totalReturns = bets.reduce((s, b) => s + getPayout(b.type, b.selection, b.amount), 0);
-  const canSpin = bets.length > 0 && totalBet <= (config.max_bet || 0) && !spinning;
+  const canSpin = bets.length > 0 && totalBet <= (config.max_bet || 0);
   const isOwner = !!ownership?.is_owner;
   const canClaim = ownership?.is_unclaimed && !ownership?.owner_id;
   const currentCity = ownership?.current_city || '—';

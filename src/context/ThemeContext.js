@@ -17,6 +17,7 @@ const STORAGE_KEY_MOBILE_NAV = 'app_theme_mobile_nav';
 const MOBILE_STATS_DISPLAY_LS = 'mobile_stats_display';
 const STORAGE_KEY_BUTTON_SHAPE = 'app_theme_button_shape';
 const STORAGE_KEY_THEME_VARIANT = 'app_theme_variant';
+const STORAGE_KEY_MODERN_VISUAL_QUALITY = 'app_theme_modern_visual_quality';
 
 const LS_TOPBAR_GAP = 'topbar_gap';
 const LS_TOPBAR_SIZE = 'topbar_size';
@@ -382,11 +383,12 @@ function applyThemeVariantToDocument(themeVariant) {
   }
 }
 
-function applyModernPerfFlagToDocument(themeVariant) {
+function applyModernPerfFlagToDocument(themeVariant, modernVisualQuality) {
   const body = document.body;
   const root = document.documentElement;
   const isModern = themeVariant === 'modern';
-  if (isModern) {
+  const usePerf = modernVisualQuality !== 'high';
+  if (isModern && usePerf) {
     body.setAttribute('data-modern-perf', 'on');
     root.setAttribute('data-modern-perf', 'on');
   } else {
@@ -513,6 +515,13 @@ export function ThemeProvider({ children }) {
     } catch (_) {}
     return DEFAULT_THEME_VARIANT;
   });
+  const [modernVisualQuality, setModernVisualQualityState] = useState(() => {
+    try {
+      const v = localStorage.getItem(STORAGE_KEY_MODERN_VISUAL_QUALITY);
+      return v === 'high' ? 'high' : 'performance';
+    } catch (_) {}
+    return 'performance';
+  });
   useEffect(() => {
     const colour = getResolvedColour(colourId, customThemes);
     applyColourToDocument(colour);
@@ -598,8 +607,8 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     applyThemeVariantToDocument(themeVariant);
-    applyModernPerfFlagToDocument(themeVariant);
-  }, [themeVariant]);
+    applyModernPerfFlagToDocument(themeVariant, modernVisualQuality);
+  }, [themeVariant, modernVisualQuality]);
 
   const themeLoadedRef = useRef(false);
   useEffect(() => {
@@ -818,6 +827,14 @@ export function ThemeProvider({ children }) {
     } catch (_) {}
   }, []);
 
+  const setModernVisualQuality = useCallback((quality) => {
+    const v = quality === 'high' ? 'high' : 'performance';
+    setModernVisualQualityState(v);
+    try {
+      localStorage.setItem(STORAGE_KEY_MODERN_VISUAL_QUALITY, v);
+    } catch (_) {}
+  }, []);
+
   const value = {
     colourId,
     textureId,
@@ -861,6 +878,8 @@ export function ThemeProvider({ children }) {
     setMobileNavStyle,
     themeVariant,
     setThemeVariant,
+    modernVisualQuality,
+    setModernVisualQuality,
   };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
