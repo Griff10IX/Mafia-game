@@ -8,7 +8,7 @@ import time
 import uuid
 import os
 import sys
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
