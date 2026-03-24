@@ -535,6 +535,7 @@ export default function Admin() {
   const [stripeCheckResult, setStripeCheckResult] = useState(null);
   const [casinoGlobalMaxBet, setCasinoGlobalMaxBet] = useState(1000000000);
   const [casinoBuybackMaxPoints, setCasinoBuybackMaxPoints] = useState(15000);
+  const [mpPokerMaxBlind, setMpPokerMaxBlind] = useState(2500000);
   const [casinoCapsSaving, setCasinoCapsSaving] = useState(false);
   const [pageLocks, setPageLocks] = useState({});
   const [pageLockPath, setPageLockPath] = useState('');
@@ -849,6 +850,7 @@ export default function Admin() {
       setStorePointsManualCreditEta(res.data?.store_points_manual_credit_eta || '');
       setCasinoGlobalMaxBet(res.data?.casino_global_max_bet || 1000000000);
       setCasinoBuybackMaxPoints(res.data?.casino_buyback_max_points || 15000);
+      setMpPokerMaxBlind(res.data?.mp_poker_max_blind || 2500000);
       if (Array.isArray(res.data?.mod_visible_category_ids)) {
         setModVisibleCategoryIds(res.data.mod_visible_category_ids.length ? res.data.mod_visible_category_ids : [...MOD_ONLY_CATEGORY_IDS]);
       }
@@ -867,6 +869,7 @@ export default function Admin() {
       setStorePointsManualCreditEta('');
       setCasinoGlobalMaxBet(1000000000);
       setCasinoBuybackMaxPoints(15000);
+      setMpPokerMaxBlind(2500000);
     }
   };
 
@@ -1028,6 +1031,7 @@ export default function Admin() {
       await api.patch('/admin/settings', {
         casino_global_max_bet: Math.max(1000000, parseInt(String(casinoGlobalMaxBet).replace(/\D/g, ''), 10) || 1000000000),
         casino_buyback_max_points: Math.max(0, parseInt(String(casinoBuybackMaxPoints).replace(/\D/g, ''), 10) || 15000),
+        mp_poker_max_blind: Math.max(1000, parseInt(String(mpPokerMaxBlind).replace(/\D/g, ''), 10) || 2500000),
       });
       toast.success('Casino caps saved');
     } catch (e) {
@@ -4199,7 +4203,7 @@ export default function Admin() {
           title="Casino Limits"
           badge={
             <span className="text-[10px] font-heading text-mutedForeground">
-              Max bet: ${(casinoGlobalMaxBet || 1000000000).toLocaleString()} · Buy-back: {(casinoBuybackMaxPoints || 15000).toLocaleString()} pts
+              Max bet: ${(casinoGlobalMaxBet || 1000000000).toLocaleString()} · Buy-back: {(casinoBuybackMaxPoints || 15000).toLocaleString()} pts · MP poker blind: ${(mpPokerMaxBlind || 2500000).toLocaleString()}
             </span>
           }
           isCollapsed={collapsed.casinoLimits}
@@ -4227,6 +4231,16 @@ export default function Admin() {
                   onChange={(e) => setCasinoBuybackMaxPoints(parseInt(e.target.value.replace(/\D/g, ''), 10) || 0)}
                   className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none font-mono"
                   placeholder="15,000"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-mutedForeground w-32 shrink-0">MP Poker Blind ($)</span>
+                <input
+                  type="text"
+                  value={mpPokerMaxBlind.toLocaleString()}
+                  onChange={(e) => setMpPokerMaxBlind(parseInt(e.target.value.replace(/\D/g, ''), 10) || 0)}
+                  className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none font-mono"
+                  placeholder="2,500,000"
                 />
               </div>
             </div>

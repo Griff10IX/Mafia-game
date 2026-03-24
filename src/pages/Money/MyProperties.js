@@ -303,7 +303,11 @@ export default function MyProperties() {
       fetchMyProperties();
       window.dispatchEvent(new CustomEvent('app:refresh-user'));
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
+      const detail = e?.response?.data?.detail;
+      const msg = Array.isArray(detail)
+        ? (detail[0]?.msg || 'Failed')
+        : (typeof detail === 'string' ? detail : 'Failed');
+      toast.error(msg);
     } finally {
       setSaving(false);
     }

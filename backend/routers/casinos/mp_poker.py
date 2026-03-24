@@ -23,7 +23,17 @@ MP_POKER_MAX_PLAYERS = 9
 MP_POKER_MAX_BUY_IN = 1_000_000_000
 MP_POKER_MAX_EXTRA_PRIZE = 1_000_000_000
 MP_POKER_VS_DEALER_MIN_BLIND = 1000
-MP_POKER_VS_DEALER_MAX_BLIND = 50_000_000
+MP_POKER_VS_DEALER_MAX_BLIND_DEFAULT = 2_500_000
+
+
+async def _get_mp_poker_max_blind() -> int:
+    """Admin-configurable max blind cap for MP poker (default 2.5M)."""
+    try:
+        main_doc = await db.game_settings.find_one({"_id": "main"}, {"_id": 0, "mp_poker_max_blind": 1})
+        raw = int((main_doc or {}).get("mp_poker_max_blind") or MP_POKER_VS_DEALER_MAX_BLIND_DEFAULT)
+        return max(MP_POKER_VS_DEALER_MIN_BLIND, raw)
+    except Exception:
+        return MP_POKER_VS_DEALER_MAX_BLIND_DEFAULT
 
 # Hand rank categories (higher = better)
 HAND_HIGH_CARD = 0
@@ -419,8 +429,9 @@ def register(router):
     ):
         """Start a new 1v1 vs dealer game. Body: { blind?: number }."""
         uid = current_user.get("id") or ""
+        max_blind = await _get_mp_poker_max_blind()
         blind = blind or 5000
-        blind = max(MP_POKER_VS_DEALER_MIN_BLIND, min(MP_POKER_VS_DEALER_MAX_BLIND, int(blind)))
+        blind = max(MP_POKER_VS_DEALER_MIN_BLIND, min(max_blind, int(blind)))
         game_id = str(uuid.uuid4())
         deck = _make_deck()
         _rng.shuffle(deck)
@@ -679,10 +690,11 @@ def register(router):
         need = buy_in + extra_prize
         game_id = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
+        max_blind = await _get_mp_poker_max_blind()
         if request.small_blind > 0:
-            small_blind = max(1, min(buy_in // 2, request.small_blind))
+            small_blind = max(1, min(buy_in // 2, max_blind, request.small_blind))
         else:
-            small_blind = max(buy_in // 100, 1)
+            small_blind = max(1, min(max_blind, buy_in // 100))
         big_blind = small_blind * 2
         players = [{
             "user_id": uid,

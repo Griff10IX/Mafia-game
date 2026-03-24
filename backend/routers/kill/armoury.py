@@ -729,8 +729,16 @@ async def bullet_factory_sell_on_trade(
         raise HTTPException(status_code=400, detail="Points must be non-negative")
     state = _normalize_state(request.state or current_user.get("current_state"))
     factory = await _get_or_create_factory(state)
+    # Fallback: if UI/current_state is out of sync, resolve the actual owned armoury state.
     if factory.get("owner_id") != current_user["id"]:
-        raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
+        owned_factory = await db.bullet_factory.find_one({"owner_id": current_user["id"]}, {"_id": 0, "state": 1})
+        owned_state = _normalize_state((owned_factory or {}).get("state"))
+        if not owned_state:
+            raise HTTPException(status_code=403, detail="You do not own an armoury")
+        state = owned_state
+        factory = await _get_or_create_factory(state)
+        if factory.get("owner_id") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
     # Check no existing listing for this state
     existing = await db.properties.find_one({"type": "bullet_factory", "state": state, "for_sale": True})
     if existing:

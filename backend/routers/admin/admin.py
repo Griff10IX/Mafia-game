@@ -109,6 +109,7 @@ class AdminSettingsUpdate(BaseModel):
     store_points_manual_credit_eta: Optional[str] = None  # ISO datetime shown to users (informational)
     casino_global_max_bet: Optional[int] = None  # Max bet cap for all casinos (default 1B)
     casino_buyback_max_points: Optional[int] = None  # Max points for buy-back reward (default 15000)
+    mp_poker_max_blind: Optional[int] = None  # Max MP poker small blind cap (default 2.5M)
     mod_visible_category_ids: Optional[List[str]] = None  # Admin Tool category ids visible to moderators
 
 
@@ -2084,6 +2085,7 @@ def register(router):
         store_points_manual_credit_eta = main_doc.get("store_points_manual_credit_eta") if main_doc else None
         casino_global_max_bet = int(main_doc.get("casino_global_max_bet") or 1_000_000_000) if main_doc else 1_000_000_000
         casino_buyback_max_points = int(main_doc.get("casino_buyback_max_points") or 15_000) if main_doc else 15_000
+        mp_poker_max_blind = int(main_doc.get("mp_poker_max_blind") or 2_500_000) if main_doc else 2_500_000
         mod_cat_doc = await db.game_settings.find_one({"key": "mod_visible_category_ids"}, {"_id": 0, "value": 1})
         raw_mod_cats = mod_cat_doc.get("value") if mod_cat_doc else None
         if isinstance(raw_mod_cats, list) and raw_mod_cats and all(isinstance(x, str) and x in ADMIN_CATEGORY_IDS for x in raw_mod_cats):
@@ -2106,6 +2108,7 @@ def register(router):
             "store_points_manual_credit_eta": store_points_manual_credit_eta,
             "casino_global_max_bet": casino_global_max_bet,
             "casino_buyback_max_points": casino_buyback_max_points,
+            "mp_poker_max_blind": mp_poker_max_blind,
             "mod_visible_category_ids": mod_visible_category_ids,
         }
 
@@ -2214,6 +2217,12 @@ def register(router):
                 {"$set": {"casino_buyback_max_points": max(0, int(body.casino_buyback_max_points))}},
                 upsert=True,
             )
+        if body.mp_poker_max_blind is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"mp_poker_max_blind": max(1_000, int(body.mp_poker_max_blind))}},
+                upsert=True,
+            )
         if body.mod_visible_category_ids is not None:
             ids = list(body.mod_visible_category_ids) if isinstance(body.mod_visible_category_ids, list) else []
             if not all(isinstance(x, str) and x in ADMIN_CATEGORY_IDS for x in ids):
@@ -2253,6 +2262,7 @@ def register(router):
         store_points_manual_credit_eta = main_doc.get("store_points_manual_credit_eta") if main_doc else None
         casino_global_max_bet = int(main_doc.get("casino_global_max_bet") or 1_000_000_000) if main_doc else 1_000_000_000
         casino_buyback_max_points = int(main_doc.get("casino_buyback_max_points") or 15_000) if main_doc else 15_000
+        mp_poker_max_blind = int(main_doc.get("mp_poker_max_blind") or 2_500_000) if main_doc else 2_500_000
         return {
             "admin_online_color": admin_online_color,
             "mod_default_online_color": mod_default_online_color.strip() if isinstance(mod_default_online_color, str) else MOD_DEFAULT,
@@ -2269,6 +2279,7 @@ def register(router):
             "store_points_manual_credit_eta": store_points_manual_credit_eta,
             "casino_global_max_bet": casino_global_max_bet,
             "casino_buyback_max_points": casino_buyback_max_points,
+            "mp_poker_max_blind": mp_poker_max_blind,
         }
 
     PAGE_LOCKS_KEY = "page_locks"
