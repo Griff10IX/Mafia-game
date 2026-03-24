@@ -4,6 +4,9 @@ import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
+/** One-time verification POST per token. React 18 Strict Mode runs effects twice in dev — without this the 2nd call consumes nothing and shows "invalid link". */
+const verifyEmailPostStarted = new Set();
+
 export default function VerifyEmail({ setIsAuthenticated }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -22,8 +25,11 @@ export default function VerifyEmail({ setIsAuthenticated }) {
 
   useEffect(() => {
     if (ran.current) return;
-    const token = searchParams.get('token');
+    const raw = searchParams.get('token');
+    const token = raw ? decodeURIComponent(raw.trim()) : null;
     if (token) {
+      if (verifyEmailPostStarted.has(token)) return;
+      verifyEmailPostStarted.add(token);
       ran.current = true;
       api.post('/auth/verify-email', { token })
         .then((response) => {
@@ -43,6 +49,7 @@ export default function VerifyEmail({ setIsAuthenticated }) {
           }
         })
         .catch((err) => {
+          verifyEmailPostStarted.delete(token);
           setStatus('error');
           const detail = err.response?.data?.detail;
           setMessage(typeof detail === 'string' ? detail : 'Verification link invalid or expired. Request a new one.');

@@ -96,7 +96,7 @@ class PreRegisterBody(BaseModel):
 # Pre-registration rewards (applied on first login after launch)
 PREREGISTER_REWARDS = {
     "bonus_points": 500,
-    "bonus_cash": 5000,
+    "bonus_cash": 50000,
     "badge": "Founding Member",
     # Shown on pre-register page; mirrors server founding_member_income_mult (1.025)
     "founding_passive_bonus_pct": 2.5,
@@ -944,7 +944,7 @@ def register(router):
                     reward_update = {
                         "$inc": {
                             "points": PREREGISTER_REWARDS.get("bonus_points", 500),
-                            "money": PREREGISTER_REWARDS.get("bonus_cash", 5000),
+                            "money": PREREGISTER_REWARDS.get("bonus_cash", 50000),
                         },
                         "$set": {
                             "founding_rewards_claimed": True,

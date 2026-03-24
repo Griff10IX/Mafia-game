@@ -190,7 +190,7 @@ export default function PreRegister() {
                 <div className="p-4 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
                   <div className="text-2xl mb-1">💵</div>
                   <div className="text-xl font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
-                    ${rewards?.bonus_cash?.toLocaleString() || '5,000'}
+                    ${rewards?.bonus_cash?.toLocaleString() || '50,000'}
                   </div>
                   <div className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
                     Starting Cash Boost
