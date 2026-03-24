@@ -26,24 +26,19 @@ from pydantic import BaseModel
 from pymongo import UpdateOne
 
 from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, send_notification, log_gambling, _is_admin, _get_staff_user_ids
-import logging as _logging
 import pathlib as _pathlib
 
-_race_debug_log_path = _pathlib.Path(__file__).resolve().parent.parent.parent / "race_debug.log"
-_race_dbg = _logging.getLogger("race_debug")
-_race_dbg.setLevel(_logging.DEBUG)
-_race_dbg.propagate = False
-if not _race_dbg.handlers:
-    _fh = _logging.FileHandler(str(_race_debug_log_path), mode="a", encoding="utf-8")
-    _fh.setFormatter(_logging.Formatter("%(asctime)s | %(message)s", datefmt="%H:%M:%S"))
-    _race_dbg.addHandler(_fh)
+_RACE_DEBUG_LOG = str(_pathlib.Path(__file__).resolve().parent.parent.parent / "race_debug.log")
 
 def _rdebug(race_id: str, event: str, **kw):
     try:
-        parts = [f"[{race_id or '?'}] {event}"]
+        from datetime import datetime as _dt
+        ts = _dt.now().strftime("%H:%M:%S.%f")[:-3]
+        lines = [f"{ts} | [{race_id or '?'}] {event}"]
         for k, v in kw.items():
-            parts.append(f"  {k}={v}")
-        _race_dbg.debug("\n".join(parts))
+            lines.append(f"  {k}={v}")
+        with open(_RACE_DEBUG_LOG, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
     except Exception:
         pass
 
