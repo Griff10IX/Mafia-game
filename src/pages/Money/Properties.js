@@ -104,7 +104,7 @@ export default function Properties() {
     }
   };
 
-  const collectibleProperties = properties.filter((p) => p.owned && p.available_income >= 1);
+  const collectibleProperties = properties.filter((p) => p.owned && !p.locked);
   const collectAll = async () => {
     if (collectibleProperties.length === 0 || collectAllLoading) return;
     setCollectAllLoading(true);
@@ -265,15 +265,13 @@ export default function Properties() {
               <div className="space-y-1.5">
                 {property.owned ? (
                   <>
-                    {property.available_income >= 1 && (
-                      <button
-                        onClick={() => collectIncome(property.id)}
-                        data-testid={`collect-income-${property.id}`}
-                        className="w-full bg-primary/20 text-primary rounded font-heading font-bold uppercase tracking-wider py-1.5 text-[10px] border border-primary/40 hover:bg-primary/30 transition-all flex items-center justify-center gap-1.5"
-                      >
-                        <DollarSign size={12} /> Collect
-                      </button>
-                    )}
+                    <button
+                      onClick={() => collectIncome(property.id)}
+                      data-testid={`collect-income-${property.id}`}
+                      className="w-full bg-primary/20 text-primary rounded font-heading font-bold uppercase tracking-wider py-1.5 text-[10px] border border-primary/40 hover:bg-primary/30 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <DollarSign size={12} /> Collect
+                    </button>
                     {property.level < property.max_level && (
                       <button
                         onClick={() => buyProperty(property.id)}

@@ -84,6 +84,7 @@ RISK_LOSS_MAX = 0.25      # 25% loss
 BUFF_INCOME_MULT = 0.10
 BUFF_DURATION_HOURS = 24
 BUFF_COST_POINTS = 100
+COLLECT_COOLDOWN_MINUTES = 10
 
 
 def _property_order(properties: list) -> list:
@@ -283,17 +284,10 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     total_income = 0.0
     total_base_cap = 0.0
     max_hours_passed = 0.0
+    min_hours_passed = float("inf")
     now_iso = now_utc.isoformat()
     first_user_prop = None
-    for ref in user_props_list:
-        # Atomically swap last_collected to claim this property's income window;
-        # returns the pre-update document so a concurrent request sees ~0 hours.
-        user_prop = await db.user_properties.find_one_and_update(
-            {"_id": ref["_id"], "user_id": current_user["id"]},
-            {"$set": {"last_collected": now_iso}},
-        )
-        if not user_prop:
-            continue
+    for user_prop in user_props_list:
         if first_user_prop is None:
             first_user_prop = user_prop
         last_collected = _parse_iso_datetime(user_prop.get("last_collected"))
@@ -301,6 +295,7 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
             last_collected = now_utc
         hours_passed = (now_utc - last_collected).total_seconds() / 3600
         max_hours_passed = max(max_hours_passed, hours_passed)
+        min_hours_passed = min(min_hours_passed, hours_passed)
         level = max(0, int(user_prop.get("level") or 0))
         base_income_cap = prop["income_per_hour"] * level * 24
         total_base_cap += base_income_cap
@@ -308,6 +303,13 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
         total_income += up_income
     if not first_user_prop:
         raise HTTPException(status_code=404, detail="You don't own this property")
+    cooldown_hours = COLLECT_COOLDOWN_MINUTES / 60.0
+    if min_hours_passed < cooldown_hours:
+        mins_left = max(1, int((cooldown_hours - min_hours_passed) * 60))
+        raise HTTPException(
+            status_code=400,
+            detail=f"You can collect every {COLLECT_COOLDOWN_MINUTES} minutes. Try again in {mins_left} minute(s).",
+        )
     if total_income < 1:
         raise HTTPException(status_code=400, detail="No income to collect yet")
     # Apply stack bonus
@@ -357,6 +359,10 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$inc": {"money": income}}
+    )
+    await db.user_properties.update_many(
+        {"user_id": current_user["id"], "property_id": property_id},
+        {"$set": {"last_collected": now_iso}}
     )
     await db.user_properties.update_many(
         {"user_id": current_user["id"], "property_id": property_id},

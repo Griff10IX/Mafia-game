@@ -702,14 +702,14 @@ export default function Dice() {
                   <input
                     type="number"
                     min={1}
-                    max={sidesNum}
-                    placeholder={`1-${sidesNum}`}
+                    max={actualSidesNum}
+                    placeholder={`1-${actualSidesNum}`}
                     value={chosenNumber === '' ? '' : String(chosenNum)}
                     onChange={(e) => {
                       const v = e.target.value;
                       if (v === '') { setChosenNumber(''); return; }
                       const n = parseInt(v, 10);
-                      if (!Number.isNaN(n)) setChosenNumber(String(Math.max(1, Math.min(sidesNum, n))));
+                      if (!Number.isNaN(n)) setChosenNumber(String(Math.max(1, Math.min(actualSidesNum, n))));
                     }}
                     onBlur={() => { if (chosenNumber === '') setChosenNumber('1'); }}
                     className="w-full bg-black/30 border border-emerald-700/30 rounded-lg h-10 px-3 text-white text-sm font-heading font-bold focus:border-primary/60 focus:outline-none"
