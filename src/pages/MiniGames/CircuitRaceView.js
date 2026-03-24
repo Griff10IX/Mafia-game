@@ -3491,6 +3491,7 @@ export default function CircuitRaceView({
             setUiPhase("racing");
             setLapDisp(nRace === 1 ? "Qualifying" : `1 / ${nRace}`);
             setCommentary(rnd(COMMENTARY.start));
+            if (stateRef.current) stateRef.current._feGreenAtSec = performance.now() / 1000;
             startRacing();
           })();
         });

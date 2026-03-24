@@ -195,8 +195,10 @@ export default function Racing() {
   const [myDriver, setMyDriver] = useState(null);
   const [driverLoading, setDriverLoading] = useState(false);
   const [liveRace, setLiveRace] = useState(null);
-  /** Fractional race distance from canvas (within-lap motion); lap number comes from server liveRace. */
+  /** Fractional race distance from canvas (within-lap motion). */
   const [interactiveRaceProg, setInteractiveRaceProg] = useState(null);
+  /** Lap index shown in HUD from canvas (frontend-authoritative during interactive racing). */
+  const [interactiveHudLap, setInteractiveHudLap] = useState(null);
   /** Canvas session phase for interactive-live (qualifying → countdown → racing → done). */
   const [interactiveCanvasPhase, setInteractiveCanvasPhase] = useState(null);
   /** In-race timing tower rows from canvas orbit (progress order + live gaps); stale server gaps_to_ahead only updates per lap. */
@@ -749,6 +751,15 @@ export default function Racing() {
         result_order: r.data?.race?.result_order || [],
         dnf_ids: r.data?.race?.dnf_ids || [],
       });
+      try {
+        const { data: liveSnap } = await api.get(`/racing/races/${raceId}/live`);
+        setLiveRace(liveSnap);
+        // eslint-disable-next-line no-console
+        console.debug("[RACE_DEBUG][Racing.js] post_complete_live_refresh", {
+          raceId,
+          persisted_result_order: liveSnap?.result_order || r.data?.race?.result_order || [],
+        });
+      } catch (_) {}
       try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); localStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {}
       setActiveRace((prev) => {
         if (prev?.id !== raceId) return prev;
@@ -992,7 +1003,7 @@ export default function Racing() {
         const _fromSrv = _preGreen
           ? null
           : Math.min(_serverLap + 1, _totLapsHud);
-        // Lap display must follow server current_lap (completed laps 0…N); canvas orbit is not authoritative.
+        // During interactive racing, lap label follows canvas; server current_lap is for strategy sync only.
         const _dispLap = _fromSrv ?? 1;
         const _serverProg = _totLapsHud > 0 ? Math.min(1, (_serverLap || 0) / _totLapsHud) : 0;
         // Canvas orbit can run ahead of poll / current_lap; max(visual, server) alone made the bar
@@ -1050,13 +1061,15 @@ export default function Racing() {
         } else if (interactiveCanvasPhase === "qualifying") {
           _sessionTitle = <>Qualifying <span className="text-[var(--noir-muted)] font-normal text-[9px]">· not a race lap</span></>;
         } else if (interactiveCanvasPhase === "racing") {
-          _sessionTitle = `Race lap ${_dispLap} / ${_totLapsHud}`;
+          const _lapShow = interactiveHudLap != null ? interactiveHudLap : _dispLap;
+          _sessionTitle = `Race lap ${_lapShow} / ${_totLapsHud}`;
         } else if (interactiveCanvasPhase === "done") {
           _sessionTitle = "Checkered — results";
         } else if (_preGreen) {
           _sessionTitle = <>Formation <span className="text-[var(--noir-muted)] font-normal">·</span> Q</>;
         } else {
-          _sessionTitle = `Race lap ${_dispLap} / ${_totLapsHud}`;
+          const _lapShow2 = interactiveHudLap != null ? interactiveHudLap : _dispLap;
+          _sessionTitle = `Race lap ${_lapShow2} / ${_totLapsHud}`;
         }
         return (
         <div className="px-4 py-3 md:px-3 md:py-3 space-y-3">
@@ -1137,7 +1150,8 @@ export default function Racing() {
                 toast.error(apiDetail(e));
               }
             }}
-            onVisualLapChange={(_completed, _tot, prog01) => {
+            onVisualLapChange={(completedLap, _tot, prog01) => {
+              if (typeof completedLap === "number" && !Number.isNaN(completedLap)) setInteractiveHudLap(completedLap);
               if (prog01 != null) setInteractiveRaceProg(prog01);
             }}
             onInteractiveLeaderLapCross={async (serverLap) => {
