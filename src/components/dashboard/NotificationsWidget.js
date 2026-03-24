@@ -34,7 +34,7 @@ export default function NotificationsWidget({ onRefresh }) {
       const res = await api.get('/notifications');
       setData(res.data);
     } catch {
-      setData(null);
+      // Keep previous data on transient failures
     } finally {
       setLoading(false);
     }

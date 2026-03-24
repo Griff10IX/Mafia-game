@@ -4989,11 +4989,25 @@ def register(router):
                 coll_name,
                 total,
             )
+        # Founding rewards also apply to full signups during login-lock (no preregistrations row).
+        founding_total = await db.users.count_documents({"founding_member": True})
+        founding_cursor = (
+            db.users.find(
+                {"founding_member": True},
+                {"_id": 0, "id": 1, "email": 1, "username": 1, "created_at": 1, "is_dead": 1},
+            )
+            .sort("created_at", -1)
+            .limit(limit)
+        )
+        founding_items = await founding_cursor.to_list(limit)
         return {
             "total": total,
             "count": len(items),
             "items": items,
             "collection": coll_name,
+            "founding_member_total": founding_total,
+            "founding_member_count": len(founding_items),
+            "founding_member_items": founding_items,
         }
 
     def _seed_family_roles(size: int):

@@ -719,57 +719,29 @@ DEAD_ACCOUNT_WHITELIST = {
     "/api/user/rank-progress",
 }
 
-JAIL_WHITELIST_EXACT = {
-    "/api/auth/me",
-    "/api/user/rank-progress",
-    "/api/bodyguards",
-}
-JAIL_WHITELIST_PREFIXES = (
-    "/api/jail/",
-    "/api/auth/",
-    "/api/account-locked",
-    "/api/death/",
-    "/api/user/",
-    "/api/users/",
-    "/api/forum/",
-    "/api/help-desk/",
-    "/api/auto-rank/",
-    "/api/admin/",
-    "/api/families/",
-    "/api/chat/",
-    "/api/notifications/",
-    "/api/settings/",
-    "/api/telegram/",
-    "/api/webhook/",
-    "/api/casino/",
-    "/api/bodyguards/",
-    "/api/travel/",
-    "/api/airport/",
-    "/api/kill/",
-    "/api/attack/",
-    "/api/hitlist/",
-    "/api/armoury/",
-    "/api/bullet-factory",
-    "/api/armour/",
-    "/api/weapons",
-    "/api/shooting-range/",
-    "/api/inventory",
-    "/api/sports-betting/",
-    "/api/profile/",
-    "/api/boxing/",
-    "/api/racing/",
-    "/api/snake/",
-    "/api/stats/",
-    "/api/gauntlet/",
-    "/api/minigames/",
-    "/api/minesweeper/",
-    "/api/battleships/",
-    "/api/the-getaway/",
-    "/api/family-run/",
-    "/api/whack-a-copper/",
-    "/api/states",
-    "/api/my-properties",
+# Jail: block only Crime / GTA steal hub / OC / Booze Run. All other authenticated routes are allowed.
+# GTA cars (garage, melt, marketplace, etc.) use /api/gta/... but are not the steal page — do not block whole /api/gta/.
+JAIL_BLOCKED_EXACT = frozenset({
+    "/api/crimes",
+    "/api/gta/options",
+    "/api/gta/attempt",
+    "/api/gta/recent-stolen",
+    "/api/gta/stats",
+    "/api/store/buy-oc-timer",
+    "/api/store/buy-booze-capacity",
+})
+JAIL_BLOCKED_PREFIXES = (
+    "/api/crimes/",
+    "/api/oc/",
+    "/api/organised-crime/",
+    "/api/booze-run/",
 )
+
+
+def _is_jail_blocked_path(path: str) -> bool:
+    if path in JAIL_BLOCKED_EXACT:
+        return True
+    return any(path.startswith(p) for p in JAIL_BLOCKED_PREFIXES)
 
 
 async def apply_passive_health_regen(user_id: str, user: dict) -> None:
@@ -895,7 +867,7 @@ async def get_current_user(
             )
     if user.get("in_jail"):
         path = request.url.path if request else ""
-        if path not in JAIL_WHITELIST_EXACT and not any(path.startswith(p) for p in JAIL_WHITELIST_PREFIXES):
+        if _is_jail_blocked_path(path):
             raise HTTPException(status_code=403, detail="You can't do that while in jail.")
     # Auto-expire lock when account_locked_until is in the past
     locked_until = user.get("account_locked_until")

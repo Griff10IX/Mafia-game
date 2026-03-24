@@ -745,16 +745,20 @@ export default function Layout({ children }) {
       const crimesPromise = crimesPrefetchData != null
         ? Promise.resolve({ data: crimesPrefetchData })
         : api.get('/crimes');
-      const [crimesRes, gtaRes, jailPlayersRes, exclusiveRes] = await Promise.all([
+      const settled = await Promise.allSettled([
         crimesPromise,
         api.get('/gta/options'),
         api.get('/jail/players'),
-        api.get('/gta/exclusive-pool-status').catch(() => ({ data: { exclusive_in_pool: false } })),
+        api.get('/gta/exclusive-pool-status'),
       ]);
+      const crimesRes = settled[0].status === 'fulfilled' ? settled[0].value : null;
+      const gtaRes = settled[1].status === 'fulfilled' ? settled[1].value : null;
+      const jailPlayersRes = settled[2].status === 'fulfilled' ? settled[2].value : null;
+      const exclusiveRes = settled[3].status === 'fulfilled' ? settled[3].value : { data: { exclusive_in_pool: false } };
       const now = new Date();
-      const crimesAvailable = Array.isArray(crimesRes.data) ? crimesRes.data.filter((c) => c?.can_commit).length : 0;
-      const gtaAvailable = Array.isArray(gtaRes.data) ? gtaRes.data.filter((o) => { if (!o?.unlocked) return false; if (!o?.cooldown_until) return true; const t = new Date(o.cooldown_until); return !Number.isNaN(t.getTime()) && t <= now; }).length : 0;
-      const jailCount = Array.isArray(jailPlayersRes.data?.players) ? jailPlayersRes.data.players.length : 0;
+      const crimesAvailable = crimesRes && Array.isArray(crimesRes.data) ? crimesRes.data.filter((c) => c?.can_commit).length : 0;
+      const gtaAvailable = gtaRes && Array.isArray(gtaRes.data) ? gtaRes.data.filter((o) => { if (!o?.unlocked) return false; if (!o?.cooldown_until) return true; const t = new Date(o.cooldown_until); return !Number.isNaN(t.getTime()) && t <= now; }).length : 0;
+      const jailCount = jailPlayersRes && Array.isArray(jailPlayersRes.data?.players) ? jailPlayersRes.data.players.length : 0;
       setRankingCounts({ crimes: crimesAvailable, gta: gtaAvailable, jail: jailCount });
       setGtaExclusiveInPool(!!exclusiveRes?.data?.exclusive_in_pool);
     } catch (error) { }

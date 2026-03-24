@@ -302,6 +302,8 @@ export default function Admin() {
   const [preregAccounts, setPreregAccounts] = useState([]);
   const [preregAccountsTotal, setPreregAccountsTotal] = useState(0);
   const [preregAccountsLoading, setPreregAccountsLoading] = useState(false);
+  const [foundingMemberAccounts, setFoundingMemberAccounts] = useState([]);
+  const [foundingMemberTotal, setFoundingMemberTotal] = useState(0);
   const [preregCollectionName, setPreregCollectionName] = useState(null);
   
   const [cfBotBlockEnabled, setCfBotBlockEnabled] = useState(null);
@@ -1319,11 +1321,15 @@ export default function Admin() {
       setPreregAccounts(Array.isArray(res.data?.items) ? res.data.items : []);
       setPreregAccountsTotal(Number(res.data?.total ?? 0));
       setPreregCollectionName(typeof res.data?.collection === 'string' ? res.data.collection : null);
+      setFoundingMemberAccounts(Array.isArray(res.data?.founding_member_items) ? res.data.founding_member_items : []);
+      setFoundingMemberTotal(Number(res.data?.founding_member_total ?? 0));
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load pre-registered accounts');
       setPreregAccounts([]);
       setPreregAccountsTotal(0);
       setPreregCollectionName(null);
+      setFoundingMemberAccounts([]);
+      setFoundingMemberTotal(0);
     } finally {
       setPreregAccountsLoading(false);
     }
@@ -4578,7 +4584,11 @@ export default function Admin() {
         <SectionHeader
           icon={Mail}
           title="Pre-Registered Accounts"
-          badge={<span className="text-[10px] font-heading text-mutedForeground">{preregAccountsTotal || 0} total</span>}
+          badge={
+            <span className="text-[10px] font-heading text-mutedForeground">
+              {preregAccountsTotal || 0} email list · {foundingMemberTotal || 0} founding accounts
+            </span>
+          }
           isCollapsed={collapsed.preregisterAccounts}
           onToggle={() => toggleSection('preregisterAccounts')}
         />
@@ -4588,8 +4598,11 @@ export default function Admin() {
               <BtnPrimary onClick={fetchPreregisterAccounts} disabled={preregAccountsLoading}>
                 {preregAccountsLoading ? 'Loading...' : 'Refresh list'}
               </BtnPrimary>
-              <span className="text-[10px] text-mutedForeground">Loads when you open Game World; refresh to update. Newest 500 emails.</span>
+              <span className="text-[10px] text-mutedForeground">Loads when you open Game World; refresh to update. Newest 500 per list.</span>
             </div>
+            <p className="text-[10px] text-zinc-500">
+              <span className="text-zinc-400 font-heading">Email-only list</span> — people who used <span className="font-mono">/preregister</span> (stored in Mongo). <span className="text-zinc-400 font-heading">Founding accounts</span> — users with <span className="font-mono">founding_member</span> (includes anyone who registered a full account during the login-lock window, even if they never used the email-only form).
+            </p>
             {preregCollectionName && (
               <p className="text-[10px] text-mutedForeground font-mono">
                 MongoDB collection: <span className="text-primary">{preregCollectionName}</span>
@@ -4598,14 +4611,42 @@ export default function Admin() {
                 )}
               </p>
             )}
-            {!preregAccountsLoading && preregAccountsTotal === 0 && (
+            {!preregAccountsLoading && preregAccountsTotal === 0 && foundingMemberTotal === 0 && (
               <p className="text-[10px] text-zinc-500">
-                If you expect rows here, confirm data lives in collection <span className="font-mono text-zinc-400">preregistrations</span> (also checked: <span className="font-mono">preregistration</span>, <span className="font-mono">pre_registrations</span>) in the same database as this server.
+                If the email list is empty but you expect it, confirm data lives in collection <span className="font-mono text-zinc-400">preregistrations</span> (also checked: <span className="font-mono">preregistration</span>, <span className="font-mono">pre_registrations</span>). If players already have founding rewards but no email list rows, they likely signed up during the launch lock — see founding accounts below.
               </p>
             )}
+
+            <p className="text-[10px] font-heading uppercase tracking-wide text-primary pt-1">Founding member accounts ({foundingMemberTotal || 0})</p>
+            {foundingMemberAccounts.length === 0 ? (
+              <p className="text-[10px] text-mutedForeground">
+                {preregAccountsLoading ? 'Loading...' : 'No founding_member users found.'}
+              </p>
+            ) : (
+              <div className="border border-zinc-700/40 rounded overflow-hidden mb-3">
+                <div className="grid grid-cols-12 gap-2 px-2 py-1.5 text-[9px] font-heading uppercase tracking-wide text-mutedForeground bg-zinc-900/60">
+                  <div className="col-span-4">Email</div>
+                  <div className="col-span-3">Username</div>
+                  <div className="col-span-3">Registered</div>
+                  <div className="col-span-2">Status</div>
+                </div>
+                <div className="max-h-60 overflow-auto divide-y divide-zinc-700/30">
+                  {foundingMemberAccounts.map((row, idx) => (
+                    <div key={row.id || idx} className="grid grid-cols-12 gap-2 px-2 py-1.5 text-[10px] font-heading">
+                      <div className="col-span-4 break-all">{row.email || '—'}</div>
+                      <div className="col-span-3 break-all">{row.username || '—'}</div>
+                      <div className="col-span-3 text-mutedForeground">{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</div>
+                      <div className="col-span-2 text-mutedForeground">{row.is_dead ? 'Dead' : 'Alive'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <p className="text-[10px] font-heading uppercase tracking-wide text-primary">Email-only pre-register list ({preregAccountsTotal || 0})</p>
             {preregAccounts.length === 0 ? (
               <p className="text-[10px] text-mutedForeground">
-                {preregAccountsLoading ? 'Loading pre-registered accounts...' : 'No pre-registered accounts loaded yet.'}
+                {preregAccountsLoading ? 'Loading pre-registered accounts...' : 'No email-only pre-registrations in Mongo.'}
               </p>
             ) : (
               <div className="border border-zinc-700/40 rounded overflow-hidden">

@@ -565,8 +565,7 @@ export default function Inbox() {
       setUnreadCount(response.data?.unread_count ?? 0);
     } catch (error) {
       toast.error('Failed to load notifications');
-      setNotifications([]);
-      setUnreadCount(0);
+      // Do not clear inbox on failure — a later refetch can error while data is still valid on the server.
     } finally {
       setLoading(false);
     }

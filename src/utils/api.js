@@ -130,7 +130,6 @@ api.interceptors.response.use(
           '/crime/gta', '/gta',
           '/organised-crime', '/oc',
           '/money/booze-run', '/booze-run',
-          '/kill/hitlist', '/hitlist',
         ];
         if (jailBlocked.some(prefix => p === prefix || p.startsWith(prefix + '/'))) {
           window.location.replace('/crime/jail');

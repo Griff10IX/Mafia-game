@@ -931,12 +931,12 @@ export default function Attack() {
       return '';
     }
   });
-  const setBulletsToUse = (value) => {
+  const setBulletsToUse = useCallback((value) => {
     setBulletsToUseState(value);
     try {
       if (value != null) sessionStorage.setItem('attack-bullets-to-use', String(value));
     } catch (_) {}
-  };
+  }, []);
   const [calcTarget, setCalcTarget] = useState('');
   const [calcLoading, setCalcLoading] = useState(false);
   const [calcResult, setCalcResult] = useState(null);
