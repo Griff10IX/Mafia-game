@@ -302,6 +302,7 @@ export default function Admin() {
   const [preregAccounts, setPreregAccounts] = useState([]);
   const [preregAccountsTotal, setPreregAccountsTotal] = useState(0);
   const [preregAccountsLoading, setPreregAccountsLoading] = useState(false);
+  const [preregCollectionName, setPreregCollectionName] = useState(null);
   
   const [cfBotBlockEnabled, setCfBotBlockEnabled] = useState(null);
   const [cfBotBlockLoading, setCfBotBlockLoading] = useState(false);
@@ -1311,20 +1312,28 @@ export default function Admin() {
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
   };
 
-  const fetchPreregisterAccounts = async () => {
+  const fetchPreregisterAccounts = useCallback(async () => {
     setPreregAccountsLoading(true);
     try {
       const res = await api.get('/admin/preregistrations?limit=500');
       setPreregAccounts(Array.isArray(res.data?.items) ? res.data.items : []);
-      setPreregAccountsTotal(Number(res.data?.total || 0));
+      setPreregAccountsTotal(Number(res.data?.total ?? 0));
+      setPreregCollectionName(typeof res.data?.collection === 'string' ? res.data.collection : null);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load pre-registered accounts');
       setPreregAccounts([]);
       setPreregAccountsTotal(0);
+      setPreregCollectionName(null);
     } finally {
       setPreregAccountsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (activeCategoryId === 'admin-gameworld' && isAdmin) {
+      fetchPreregisterAccounts();
+    }
+  }, [activeCategoryId, isAdmin, fetchPreregisterAccounts]);
 
   const fetchCfBotBlockStatus = async () => {
     try {
@@ -4579,8 +4588,21 @@ export default function Admin() {
               <BtnPrimary onClick={fetchPreregisterAccounts} disabled={preregAccountsLoading}>
                 {preregAccountsLoading ? 'Loading...' : 'Refresh list'}
               </BtnPrimary>
-              <span className="text-[10px] text-mutedForeground">Shows newest 500 pre-registered emails.</span>
+              <span className="text-[10px] text-mutedForeground">Loads when you open Game World; refresh to update. Newest 500 emails.</span>
             </div>
+            {preregCollectionName && (
+              <p className="text-[10px] text-mutedForeground font-mono">
+                MongoDB collection: <span className="text-primary">{preregCollectionName}</span>
+                {preregCollectionName !== 'preregistrations' && (
+                  <span className="text-amber-400/90 ml-1">(legacy name — new signups use preregistrations)</span>
+                )}
+              </p>
+            )}
+            {!preregAccountsLoading && preregAccountsTotal === 0 && (
+              <p className="text-[10px] text-zinc-500">
+                If you expect rows here, confirm data lives in collection <span className="font-mono text-zinc-400">preregistrations</span> (also checked: <span className="font-mono">preregistration</span>, <span className="font-mono">pre_registrations</span>) in the same database as this server.
+              </p>
+            )}
             {preregAccounts.length === 0 ? (
               <p className="text-[10px] text-mutedForeground">
                 {preregAccountsLoading ? 'Loading pre-registered accounts...' : 'No pre-registered accounts loaded yet.'}

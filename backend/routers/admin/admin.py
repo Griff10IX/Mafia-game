@@ -4948,21 +4948,53 @@ def register(router):
         )
         return {"message": "Beta signup " + ("enabled" if enabled else "disabled"), "beta_signup_enabled": bool(enabled)}
 
+    # Pre-register emails are stored in preregistrations; tolerate legacy/alternate collection names.
+    _PREREG_COLLECTION_CANDIDATES = ("preregistrations", "preregistration", "pre_registrations")
+
+    async def _resolve_preregistration_collection():
+        """Pick first candidate that has documents; else default to preregistrations (may be empty)."""
+        for name in _PREREG_COLLECTION_CANDIDATES:
+            coll = db[name]
+            try:
+                n = await coll.count_documents({})
+            except Exception:
+                n = 0
+            if n > 0:
+                return coll, name
+        return db.preregistrations, "preregistrations"
+
     @router.get("/admin/preregistrations")
     async def admin_get_preregistrations(
         limit: int = Query(500, ge=1, le=5000),
         current_user: dict = Depends(get_current_user),
     ):
-        """Admin only: list pre-registered emails (newest first)."""
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
-        cursor = db.preregistrations.find(
+        """Admin or moderator: list pre-registered emails (newest first)."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        coll, coll_name = await _resolve_preregistration_collection()
+        total = await coll.count_documents({})
+        cursor = coll.find(
             {},
-            {"_id": 0, "email": 1, "source": 1, "created_at": 1, "ip": 1, "user_agent": 1},
-        ).sort("created_at", -1).limit(limit)
+            {"_id": 0, "email": 1, "Email": 1, "source": 1, "created_at": 1, "ip": 1, "user_agent": 1},
+        ).sort("_id", -1).limit(limit)
         items = await cursor.to_list(limit)
-        total = await db.preregistrations.count_documents({})
-        return {"total": total, "count": len(items), "items": items}
+        for row in items:
+            em = row.get("email") or row.get("Email")
+            if em:
+                row["email"] = em
+            row.pop("Email", None)
+        if coll_name != "preregistrations" and total:
+            logging.info(
+                "admin preregistrations: list served from collection %r (total=%s)",
+                coll_name,
+                total,
+            )
+        return {
+            "total": total,
+            "count": len(items),
+            "items": items,
+            "collection": coll_name,
+        }
 
     def _seed_family_roles(size: int):
         """Return role list for 10-15 members: boss, underboss, consigliere, 2 capos, rest soldiers."""
