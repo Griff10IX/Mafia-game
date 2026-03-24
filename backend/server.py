@@ -429,7 +429,7 @@ ARMOUR_SETS = [
 # Garage melt/scrap batch limits (upgradeable via Store)
 DEFAULT_GARAGE_BATCH_LIMIT = 6
 GARAGE_BATCH_UPGRADE_INCREMENT = 10
-GARAGE_BATCH_UPGRADE_COST = 25
+GARAGE_BATCH_UPGRADE_COST = 75
 GARAGE_BATCH_LIMIT_MAX = 100
 
 # Bullet storage cap: melt (and other sources) cannot push bullets above this
