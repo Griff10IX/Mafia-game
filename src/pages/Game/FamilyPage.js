@@ -511,18 +511,28 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
 // ROSTER TAB — hierarchy layout with role badges
 // ============================================================================
 
-const RosterTab = ({ members, fallen, canManage, myRole, config, onKick, onAssignRole, joinApplications, joinMode, joinAutoAccept, joinAutoAcceptRankMin, onAcceptJoinApplication, onDenyJoinApplication, onJoinSettingsUpdate }) => {
+const RosterTab = ({
+  members, fallen, canManage, myRole, config, onKick, onAssignRole, joinApplications, joinMode, joinAutoAccept, joinAutoAcceptRankMin,
+  onAcceptJoinApplication, onDenyJoinApplication, onJoinSettingsUpdate, meltTreasuryPct, meltRewardTiers, onMeltSettingsUpdate,
+}) => {
   const [assignUserId, setAssignUserId] = useState('');
   const [assignRole, setAssignRole] = useState('associate');
   const [joinModeSetting, setJoinModeSetting] = useState(joinMode ?? 'open');
   const [joinAutoAcceptSetting, setJoinAutoAcceptSetting] = useState(joinAutoAccept ?? 'none');
   const [joinRankMinSetting, setJoinRankMinSetting] = useState(joinAutoAcceptRankMin ?? '');
+  const [meltPctInput, setMeltPctInput] = useState(String(meltTreasuryPct ?? 0));
+  const [tierThresholdInput, setTierThresholdInput] = useState('');
+  const [tierRewardInput, setTierRewardInput] = useState('');
 
   useEffect(() => {
     setJoinModeSetting(joinMode ?? 'open');
     setJoinAutoAcceptSetting(joinAutoAccept ?? 'none');
     setJoinRankMinSetting(joinAutoAcceptRankMin ?? '');
   }, [joinMode, joinAutoAccept, joinAutoAcceptRankMin]);
+
+  useEffect(() => {
+    setMeltPctInput(String(meltTreasuryPct ?? 0));
+  }, [meltTreasuryPct]);
 
   const handleAssign = (e) => {
     e.preventDefault();
@@ -556,6 +566,10 @@ const RosterTab = ({ members, fallen, canManage, myRole, config, onKick, onAssig
                   {m.username}
                 </Link>
                 <RoleBadge role={m.role} />
+                <p className="text-[9px] text-zinc-500 mt-0.5">
+                  Melted: {(Number(m.bullets_melted || 0)).toLocaleString()} bullets
+                  {' '}({(Number(m.family_bullets_melted || 0)).toLocaleString()} to family)
+                </p>
               </div>
               {canManage && m.role !== 'boss' && (
                 <button onClick={() => onKick(m.user_id)} className="text-red-400 hover:text-red-300 text-[9px] font-bold px-2 py-1 rounded hover:bg-red-500/10 transition-all shrink-0">
@@ -673,6 +687,92 @@ const RosterTab = ({ members, fallen, canManage, myRole, config, onKick, onAssig
         </div>
       )}
 
+      {/* ── Melt settings (Don/Underboss/Consigliere) ── */}
+      {['boss', 'underboss', 'consigliere'].includes(myRole) && onMeltSettingsUpdate && (
+        <div className="pt-3 border-t border-zinc-700/30 space-y-2">
+          <p className="text-[9px] text-zinc-500 font-heading uppercase tracking-[0.2em]">Garage melt treasury settings</p>
+          <div className="flex flex-wrap gap-2 items-end">
+            <div>
+              <label className="block text-[9px] text-zinc-500 font-heading mb-0.5">Family cut % (max 50)</label>
+              <input
+                value={meltPctInput}
+                onChange={(e) => setMeltPctInput(e.target.value.replace(/[^\d]/g, ''))}
+                className="bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] font-heading focus:border-primary/50 focus:outline-none w-24"
+                placeholder="0-50"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => onMeltSettingsUpdate({ melt_treasury_pct: Math.max(0, Math.min(50, parseInt(meltPctInput || '0', 10) || 0)) })}
+              className="px-3 py-1.5 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 transition-all"
+            >
+              Save %
+            </button>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-[9px] text-zinc-500 font-heading">Reward tiers (stack on melt)</label>
+            {(meltRewardTiers || []).length > 0 ? (
+              <div className="space-y-1">
+                {(meltRewardTiers || []).map((t) => (
+                  <div key={t.threshold_bullets} className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-zinc-900/40 border border-zinc-700/40">
+                    <span className="text-[10px] text-zinc-300">{Number(t.threshold_bullets || 0).toLocaleString()} bullets</span>
+                    <span className="text-[10px] text-emerald-400">{formatMoneyFull(t.reward_money || 0)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[10px] text-zinc-500">No tiers configured.</p>
+            )}
+            <div className="flex flex-wrap gap-2 items-end">
+              <div>
+                <label className="block text-[9px] text-zinc-500 font-heading mb-0.5">Threshold bullets</label>
+                <input
+                  value={tierThresholdInput}
+                  onChange={(e) => setTierThresholdInput(e.target.value.replace(/[^\d]/g, ''))}
+                  className="bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] font-heading focus:border-primary/50 focus:outline-none w-32"
+                  placeholder="5000"
+                />
+              </div>
+              <div>
+                <label className="block text-[9px] text-zinc-500 font-heading mb-0.5">Reward money</label>
+                <input
+                  value={tierRewardInput}
+                  onChange={(e) => setTierRewardInput(e.target.value.replace(/[^\d]/g, ''))}
+                  className="bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] font-heading focus:border-primary/50 focus:outline-none w-32"
+                  placeholder="5000000"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const threshold = parseInt(tierThresholdInput || '0', 10) || 0;
+                  const reward = parseInt(tierRewardInput || '0', 10) || 0;
+                  if (threshold < 1000 || reward < 1) return;
+                  const next = [...(meltRewardTiers || []).filter((x) => Number(x.threshold_bullets) !== threshold), { threshold_bullets: threshold, reward_money: reward }]
+                    .sort((a, b) => Number(a.threshold_bullets) - Number(b.threshold_bullets));
+                  onMeltSettingsUpdate({ melt_reward_tiers: next });
+                  setTierThresholdInput('');
+                  setTierRewardInput('');
+                }}
+                className="px-3 py-1.5 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition-all"
+              >
+                Add/Update tier
+              </button>
+              {(meltRewardTiers || []).length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onMeltSettingsUpdate({ melt_reward_tiers: [] })}
+                  className="px-3 py-1.5 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 transition-all"
+                >
+                  Clear tiers
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Graveyard ── */}
       {fallen.length > 0 && (
         <div className="pt-3 border-t border-zinc-700/20">
@@ -705,6 +805,9 @@ const RosterTab = ({ members, fallen, canManage, myRole, config, onKick, onAssig
                       <span className={`inline-flex items-center gap-0.5 text-[9px] font-heading ${cfg.color} opacity-60`}>
                         {cfg.icon} {cfg.label}
                       </span>
+                      <p className="text-[9px] text-zinc-600 mt-0.5">
+                        Melted: {(Number(m.bullets_melted || 0)).toLocaleString()} ({(Number(m.family_bullets_melted || 0)).toLocaleString()} family)
+                      </p>
                     </div>
                   </div>
                   {deadDate && (
@@ -1791,6 +1894,7 @@ export default function FamilyPage() {
   const handleAcceptJoinApplication = async (applicationId) => { try { await api.post(`/families/join-applications/${applicationId}/accept`); toast.success('Application accepted'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleDenyJoinApplication = async (applicationId) => { try { await api.post(`/families/join-applications/${applicationId}/deny`); toast.success('Application denied'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleJoinSettingsUpdate = async (payload) => { try { await api.patch('/families/join-settings', payload); toast.success('Join settings updated'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleMeltSettingsUpdate = async (payload) => { try { await api.patch('/families/melt-settings', payload); toast.success('Melt settings updated'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleAssignRole = async (userId, role) => {
     if (role === 'boss' && !window.confirm('Transfer family leadership to this member? You will become Underboss.')) return;
     try { await api.post('/families/assign-role', { user_id: userId, role }); toast.success(role === 'boss' ? 'Leadership transferred.' : `Assigned ${getRoleConfig(role).label}`); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); }
@@ -2178,9 +2282,12 @@ export default function FamilyPage() {
                   joinMode={family?.join_mode}
                   joinAutoAccept={family?.join_auto_accept}
                   joinAutoAcceptRankMin={family?.join_auto_accept_rank_min}
+                  meltTreasuryPct={family?.melt_treasury_pct}
+                  meltRewardTiers={family?.melt_reward_tiers ?? []}
                   onAcceptJoinApplication={handleAcceptJoinApplication}
                   onDenyJoinApplication={handleDenyJoinApplication}
                   onJoinSettingsUpdate={handleJoinSettingsUpdate}
+                  onMeltSettingsUpdate={handleMeltSettingsUpdate}
                 />
               )}
               {activeTab === 'families' && <FamiliesTab families={families} myFamilyId={family?.id} />}

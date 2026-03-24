@@ -813,31 +813,111 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
             except Exception:
                 pass
             cooldown_until = now + timedelta(seconds=cooldown_seconds)
+            base_total_bullets = int(total_bullets or 0)
+            family_cut = 0
+            player_bullets = base_total_bullets
+            melt_reward_due = 0
+            melt_reward_paid = 0
+            melt_pct_applied = 0
+            if family_id:
+                fam = await db.families.find_one(
+                    {"id": family_id, "wiped": {"$ne": True}},
+                    {"_id": 0, "melt_treasury_pct": 1, "melt_reward_tiers": 1},
+                )
+                if fam:
+                    configured_pct = max(0, min(50, int(fam.get("melt_treasury_pct") or 0)))
+                    tiers_raw = fam.get("melt_reward_tiers") or []
+                    valid_tiers = []
+                    for tier in tiers_raw:
+                        try:
+                            threshold = int((tier or {}).get("threshold_bullets") or 0)
+                            reward = int((tier or {}).get("reward_money") or 0)
+                        except Exception:
+                            continue
+                        if threshold >= 1000 and threshold % 1000 == 0 and reward > 0:
+                            valid_tiers.append({"threshold_bullets": threshold, "reward_money": reward})
+                    if base_total_bullets > 0 and valid_tiers:
+                        melt_reward_due = sum(
+                            int(t["reward_money"])
+                            for t in valid_tiers
+                            if base_total_bullets >= int(t["threshold_bullets"])
+                        )
+                    if melt_reward_due > 0:
+                        payout_res = await db.families.update_one(
+                            {"id": family_id, "treasury": {"$gte": melt_reward_due}},
+                            {"$inc": {"treasury": -melt_reward_due}},
+                        )
+                        if payout_res.modified_count > 0:
+                            melt_reward_paid = melt_reward_due
+                        else:
+                            # Cannot pay configured rewards: disable family melt cut globally.
+                            await db.families.update_one({"id": family_id}, {"$set": {"melt_treasury_pct": 0}})
+                            configured_pct = 0
+                    if configured_pct > 0 and base_total_bullets > 0:
+                        melt_pct_applied = configured_pct
+                        family_cut = (base_total_bullets * configured_pct) // 100
+                        player_bullets = base_total_bullets - family_cut
+                        if family_cut > 0:
+                            await db.families.update_one(
+                                {"id": family_id},
+                                {"$inc": {"treasury_bullets": family_cut}},
+                            )
             await db.users.update_one(
                 {"id": user["id"]},
-                {"$inc": {"bullets": total_bullets, "bullets_melted": total_bullets, "cars_melted": deleted_count, "uncommon_cars_scrapped": uncommon_count}, "$set": {"melt_bullets_cooldown_until": cooldown_until.isoformat()}},
+                {
+                    "$inc": {
+                        "bullets": player_bullets,
+                        "money": melt_reward_paid,
+                        "bullets_melted": player_bullets,
+                        "family_bullets_melted": family_cut,
+                        "cars_melted": deleted_count,
+                        "uncommon_cars_scrapped": uncommon_count,
+                    },
+                    "$set": {"melt_bullets_cooldown_until": cooldown_until.isoformat()},
+                },
             )
-            await log_melt_event(user["id"], total_bullets)
+            await log_melt_event(user["id"], player_bullets)
             await log_activity(
                 user["id"],
                 user.get("username") or "?",
                 "garage_melt",
-                {"action": "bullets", "melted_count": deleted_count, "total_bullets": total_bullets, "car_ids": car_ids[:limit]},
+                {
+                    "action": "bullets",
+                    "melted_count": deleted_count,
+                    "total_bullets": player_bullets,
+                    "base_total_bullets": base_total_bullets,
+                    "family_cut_bullets": family_cut,
+                    "melt_treasury_pct": melt_pct_applied,
+                    "melt_reward_due": melt_reward_due,
+                    "melt_reward_paid": melt_reward_paid,
+                    "car_ids": car_ids[:limit],
+                },
             )
-            # Referral: referrer gets 10% of bullets (game-paid); referred user's bullets unchanged
+            # Referral: referrer gets 10% of player-earned bullets (post family cut).
             referred_by = user.get("referred_by")
-            if referred_by and referred_by != user["id"] and total_bullets > 0:
-                referral_bullets = max(0, int(total_bullets * 0.10))
+            if referred_by and referred_by != user["id"] and player_bullets > 0:
+                referral_bullets = max(0, int(player_bullets * 0.10))
                 if referral_bullets > 0:
                     await db.users.update_one(
                         {"id": referred_by},
                         {"$inc": {"bullets": referral_bullets, "referral_earnings_melt_bullets": referral_bullets}},
                     )
+            msg = f"Melted {deleted_count} car(s) for {player_bullets} bullets. Next melt in {cooldown_seconds}s."
+            if family_cut > 0:
+                msg += f" ({family_cut} bullets sent to family treasury)"
+            if melt_reward_paid > 0:
+                msg += f" + ${melt_reward_paid:,} family reward."
+            elif melt_reward_due > 0 and melt_reward_paid == 0:
+                msg += " Family treasury could not pay reward; family melt % was reset to 0%."
             return {
                 "success": True,
                 "melted_count": deleted_count,
-                "total_bullets": total_bullets,
-                "message": f"Melted {deleted_count} car(s) for {total_bullets} bullets. Next melt in {cooldown_seconds}s.",
+                "total_bullets": player_bullets,
+                "base_total_bullets": base_total_bullets,
+                "family_cut_bullets": family_cut,
+                "melt_treasury_pct": melt_pct_applied,
+                "melt_reward_paid": melt_reward_paid,
+                "message": msg,
                 "melt_bullets_cooldown_until": cooldown_until.isoformat(),
             }
         await db.users.update_one(

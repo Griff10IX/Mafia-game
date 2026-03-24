@@ -35,6 +35,7 @@ export default function ImageHost() {
   const [uploading, setUploading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [activeTab, setActiveTab] = useState('mine');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -68,6 +69,7 @@ export default function ImageHost() {
   useEffect(() => {
     load();
     loadPublic();
+    api.get('/admin/check').then((r) => setIsAdmin(!!r.data?.is_admin)).catch(() => setIsAdmin(false));
   }, [load, loadPublic]);
 
   const onFile = async (e) => {
@@ -149,6 +151,18 @@ export default function ImageHost() {
       await loadPublic();
     } catch (err) {
       toast.error(err.response?.data?.detail ?? 'Failed to update visibility');
+    }
+  };
+
+  const adminRemovePublic = async (publicId) => {
+    if (!window.confirm('Admin delete this public image? It will be removed for everyone.')) return;
+    try {
+      await api.delete(`/image-host/admin/item/${encodeURIComponent(publicId)}`);
+      toast.success('Public image deleted');
+      await load();
+      await loadPublic();
+    } catch (err) {
+      toast.error(err.response?.data?.detail ?? 'Admin delete failed');
     }
   };
 
@@ -257,6 +271,13 @@ export default function ImageHost() {
             </button>
           </form>
         </div>
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
+          <p className="text-[10px] font-heading font-bold uppercase tracking-wider text-amber-300">Public gallery rules</p>
+          <p className="text-[10px] font-heading text-amber-100/90 mt-1">
+            No NSFW, nudity, sexual content, gore, hate content, threats, doxxing, or illegal content.
+            Public uploads are moderated. If caught posting prohibited content you can be banned.
+          </p>
+        </div>
       </div>
 
       {activeTab === 'mine' && (loading ? (
@@ -337,6 +358,15 @@ export default function ImageHost() {
                 </div>
                 <div className="p-2 border-t border-primary/10">
                   <p className="text-[10px] font-heading text-foreground truncate">{img.username || 'Unknown'}</p>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => adminRemovePublic(img.public_id)}
+                      className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded border border-red-500/40 text-red-400 text-[10px] font-heading font-bold uppercase hover:bg-red-950/30"
+                    >
+                      <Trash2 size={11} /> Admin delete
+                    </button>
+                  )}
                 </div>
               </div>
             );

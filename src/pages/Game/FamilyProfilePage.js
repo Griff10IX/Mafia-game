@@ -168,6 +168,9 @@ function MemberCard({ member, accentColor, delay = 0 }) {
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className={`text-[9px] font-heading ${cfg.color} opacity-70`}>{cfg.label}</span>
           </div>
+          <p className="text-[9px] text-zinc-500 mt-0.5">
+            Melted {(Number(member.bullets_melted || 0)).toLocaleString()} ({(Number(member.family_bullets_melted || 0)).toLocaleString()} family)
+          </p>
         </div>
       </div>
     </div>
@@ -555,6 +558,9 @@ export default function FamilyProfilePage() {
                           {m.username}
                         </Link>
                       </div>
+                      <span className="text-[8px] text-zinc-600 shrink-0">
+                        {Number(m.bullets_melted || 0).toLocaleString()} / {Number(m.family_bullets_melted || 0).toLocaleString()}
+                      </span>
                       <span className={`text-[8px] font-heading shrink-0 ${cfg.color} opacity-50`}>{cfg.label}</span>
                     </div>
                   );

@@ -166,6 +166,11 @@ FAMILY_RACKET_COLLECT_SUCCESS_MESSAGES = [
     "${income:,} in the bag.", "Racket income: ${income:,}.", "Collected ${income:,}. Clean.", "Your share: ${income:,}.",
 ]
 
+FAMILY_MELT_TREASURY_PCT_MAX = 50
+FAMILY_MELT_REWARD_THRESHOLD_STEP = 1000
+FAMILY_MELT_REWARD_THRESHOLD_MAX = 5_000_000
+FAMILY_MELT_REWARD_MONEY_MAX = 5_000_000_000
+
 
 # ============ Request models ============
 class FamilyCreateRequest(BaseModel):
@@ -185,6 +190,16 @@ class FamilyJoinSettingsRequest(BaseModel):
     join_mode: Optional[str] = None   # "open" | "approval"
     join_auto_accept: Optional[str] = None   # "none" | "all" | "rank_min"
     join_auto_accept_rank_min: Optional[int] = None   # rank id; used when join_auto_accept == "rank_min"
+
+
+class FamilyMeltRewardTier(BaseModel):
+    threshold_bullets: int
+    reward_money: int
+
+
+class FamilyMeltSettingsRequest(BaseModel):
+    melt_treasury_pct: Optional[int] = None
+    melt_reward_tiers: Optional[List[FamilyMeltRewardTier]] = None
 
 
 class FamilyJoinApplicationActionRequest(BaseModel):
@@ -505,8 +520,11 @@ async def cleanup_dead_families():
                     "boss_id": None,
                     "rackets": {},
                     "treasury": 0,
+                    "treasury_bullets": 0,
                     "treasury_points": 0,
                     "treasury_loot_pieces": 0,
+                    "melt_treasury_pct": 0,
+                    "melt_reward_tiers": [],
                     "compound_cash": 0,
                     "compound_points": 0,
                     "compound_loot_pieces": 0,
@@ -792,6 +810,8 @@ async def families_config(current_user: dict = Depends(get_current_user)):
         "rackets": FAMILY_RACKETS,
         "racket_upgrade_cost": RACKET_UPGRADE_COST,
         "racket_unlock_cost": RACKET_UNLOCK_COST,
+        "family_melt_treasury_pct_max": FAMILY_MELT_TREASURY_PCT_MAX,
+        "family_melt_reward_threshold_step": FAMILY_MELT_REWARD_THRESHOLD_STEP,
     }
     return _config_cache
 
@@ -835,6 +855,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "username": (u or {}).get("username", "?"),
             "role": str(m.get("role", "")).strip().lower() or "associate",
             "rank_name": rank_name,
+            "bullets_melted": int((u or {}).get("bullets_melted") or 0),
+            "family_bullets_melted": int((u or {}).get("family_bullets_melted") or 0),
         }
         if (u or {}).get("is_dead"):
             entry["dead_at"] = (u or {}).get("dead_at")
@@ -952,8 +974,11 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         "family": {
             "id": fam["id"], "name": fam["name"], "tag": fam["tag"],
             "treasury": fam.get("treasury", 0),
+            "treasury_bullets": int(fam.get("treasury_bullets") or 0),
             "treasury_points": int(fam.get("treasury_points") or 0),
             "treasury_loot_pieces": int(fam.get("treasury_loot_pieces") or 0),
+            "melt_treasury_pct": int(fam.get("melt_treasury_pct") or 0),
+            "melt_reward_tiers": fam.get("melt_reward_tiers") or [],
             "crew_oc_cooldown_until": fam.get("crew_oc_cooldown_until"),
             "crew_oc_join_fee": int(fam.get("crew_oc_join_fee") or 0),
             "crew_oc_auto_accept": bool(fam.get("crew_oc_auto_accept")),
@@ -1037,7 +1062,14 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
                 if RANKS:
                     rank_name = next((x["name"] for x in RANKS if x.get("id") == u.get("rank", 1)), str(u.get("rank", 1)))
                 uname = ((u.get("username") if u else None) or "").strip() or "?"
-        entry = {"user_id": m["user_id"], "username": uname, "role": role_norm, "rank_name": rank_name}
+        entry = {
+            "user_id": m["user_id"],
+            "username": uname,
+            "role": role_norm,
+            "rank_name": rank_name,
+            "bullets_melted": int((u or {}).get("bullets_melted") or 0),
+            "family_bullets_melted": int((u or {}).get("family_bullets_melted") or 0),
+        }
         if (u or {}).get("is_dead"):
             entry["dead_at"] = (u or {}).get("dead_at")
             fallen.append(entry)
@@ -1071,6 +1103,7 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
     crew_oc_crew += [{"username": a.get("username") or "?", "is_family_member": False} for a in accepted_apps]
     out = {
         "id": fam["id"], "name": fam["name"], "tag": fam["tag"], "treasury": fam.get("treasury", 0),
+        "treasury_bullets": int(fam.get("treasury_bullets") or 0),
         "head_of_state": fam.get("head_of_state"),
         "profile_text": (fam.get("profile_text") or "").strip() or None,
         "avatar_url": fam.get("avatar_url"),
@@ -1079,6 +1112,8 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
         "crew_oc_forum_topic_id": crew_oc_forum_topic_id,
         "crew_oc_application": crew_oc_application, "crew_oc_crew": crew_oc_crew,
         "join_mode": fam.get("join_mode") or "open",
+        "melt_treasury_pct": int(fam.get("melt_treasury_pct") or 0),
+        "melt_reward_tiers": fam.get("melt_reward_tiers") or [],
     }
     if fam.get("wiped"):
         out["wiped"] = True
@@ -1108,13 +1143,15 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
     first_racket_id = FAMILY_RACKETS[0]["id"]
     await db.families.insert_one({
         "id": family_id, "name": name, "tag": tag, "boss_id": current_user["id"],
-        "treasury": 0, "treasury_points": 0, "treasury_loot_pieces": 0, "created_at": now,
+        "treasury": 0, "treasury_bullets": 0, "treasury_points": 0, "treasury_loot_pieces": 0, "created_at": now,
         "rackets": {first_racket_id: {"level": 1, "last_collected_at": None}},
         "compound_cash": 0, "compound_points": 0, "compound_loot_pieces": 0,
         "compound_deposits_by_user": {},
         "join_mode": "open",
         "join_auto_accept": "none",
         "join_auto_accept_rank_min": None,
+        "melt_treasury_pct": 0,
+        "melt_reward_tiers": [],
     })
     await db.family_members.insert_one({
         "id": str(uuid.uuid4()), "family_id": family_id, "user_id": current_user["id"],
@@ -1312,6 +1349,58 @@ async def families_join_settings(request: FamilyJoinSettingsRequest, current_use
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
     return {"message": "Join settings updated"}
+
+
+def _normalize_melt_reward_tiers(tiers_raw: list) -> list:
+    normalized = []
+    for t in tiers_raw or []:
+        threshold = int((t or {}).get("threshold_bullets") or 0)
+        reward = int((t or {}).get("reward_money") or 0)
+        if threshold < FAMILY_MELT_REWARD_THRESHOLD_STEP or threshold > FAMILY_MELT_REWARD_THRESHOLD_MAX:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tier threshold must be between {FAMILY_MELT_REWARD_THRESHOLD_STEP:,} and {FAMILY_MELT_REWARD_THRESHOLD_MAX:,}",
+            )
+        if threshold % FAMILY_MELT_REWARD_THRESHOLD_STEP != 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tier threshold must be in {FAMILY_MELT_REWARD_THRESHOLD_STEP:,} bullet steps",
+            )
+        if reward <= 0 or reward > FAMILY_MELT_REWARD_MONEY_MAX:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tier reward must be between $1 and ${FAMILY_MELT_REWARD_MONEY_MAX:,}",
+            )
+        normalized.append({"threshold_bullets": threshold, "reward_money": reward})
+    deduped = {}
+    for t in normalized:
+        deduped[t["threshold_bullets"]] = t["reward_money"]
+    return [
+        {"threshold_bullets": thr, "reward_money": deduped[thr]}
+        for thr in sorted(deduped.keys())
+    ]
+
+
+async def families_melt_settings(request: FamilyMeltSettingsRequest, current_user: dict = Depends(get_current_user)):
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    role = (current_user.get("family_role") or "").lower()
+    if role not in ("boss", "underboss", "consigliere"):
+        raise HTTPException(status_code=403, detail="Only Don, Underboss, or Consigliere can change melt settings")
+    updates = {}
+    if request.melt_treasury_pct is not None:
+        pct = int(request.melt_treasury_pct)
+        if pct < 0 or pct > FAMILY_MELT_TREASURY_PCT_MAX:
+            raise HTTPException(status_code=400, detail=f"melt_treasury_pct must be between 0 and {FAMILY_MELT_TREASURY_PCT_MAX}")
+        updates["melt_treasury_pct"] = pct
+    if request.melt_reward_tiers is not None:
+        updates["melt_reward_tiers"] = _normalize_melt_reward_tiers([t.model_dump() for t in request.melt_reward_tiers])
+    if not updates:
+        return {"message": "No changes"}
+    await db.families.update_one({"id": family_id}, {"$set": updates})
+    _invalidate_my_cache(current_user["id"])
+    return {"message": "Melt settings updated", **updates}
 
 
 RETRIBUTION_CHANCE = 0.5  # 50% chance family sends a hitman when you leave
@@ -2771,6 +2860,7 @@ def register(router):
     router.add_api_route("/families/join-applications/{application_id}/accept", families_join_application_accept, methods=["POST"])
     router.add_api_route("/families/join-applications/{application_id}/deny", families_join_application_deny, methods=["POST"])
     router.add_api_route("/families/join-settings", families_join_settings, methods=["PATCH"])
+    router.add_api_route("/families/melt-settings", families_melt_settings, methods=["PATCH"])
     router.add_api_route("/families/leave", families_leave, methods=["POST"])
     router.add_api_route("/families/kick", families_kick, methods=["POST"])
     router.add_api_route("/families/assign-role", families_assign_role, methods=["POST"])

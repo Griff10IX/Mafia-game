@@ -117,7 +117,18 @@ def _property_order(properties: list) -> list:
 
 
 async def get_properties(current_user: dict = Depends(get_current_user)):
-    properties = await db.properties.find({}, {"_id": 0}).to_list(100)
+    # db.properties also stores sell-on-trade listings (casinos/airports/armouries).
+    # The properties page should only use canonical progression properties.
+    properties = await db.properties.find(
+        {
+            "price": {"$exists": True},
+            "income_per_hour": {"$exists": True},
+            "max_level": {"$exists": True},
+            "property_type": {"$exists": True},
+            "for_sale": {"$ne": True},
+        },
+        {"_id": 0},
+    ).to_list(100)
     properties = _property_order(properties)
     user_properties = await db.user_properties.find({"user_id": current_user["id"]}, {"_id": 0}).to_list(100)
     # Group user properties by property_id to count duplicates (from kills)
@@ -129,6 +140,9 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
         properties_by_id[pid].append(up)
     result = []
     for prop in properties:
+        # Defensive guard against malformed docs to avoid 500s in production.
+        if not all(k in prop for k in ("id", "name", "property_type", "price", "income_per_hour", "max_level")):
+            continue
         user_props_list = properties_by_id.get(prop["id"], [])
         owned_count = len(user_props_list)
         owned = owned_count > 0
@@ -207,7 +221,17 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
 
 
 async def buy_property(property_id: str, current_user: dict = Depends(get_current_user)):
-    prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
+    prop = await db.properties.find_one(
+        {
+            "id": property_id,
+            "price": {"$exists": True},
+            "income_per_hour": {"$exists": True},
+            "max_level": {"$exists": True},
+            "property_type": {"$exists": True},
+            "for_sale": {"$ne": True},
+        },
+        {"_id": 0},
+    )
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     user_prop = await db.user_properties.find_one(
@@ -267,7 +291,17 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
 
 
 async def collect_property_income(property_id: str, current_user: dict = Depends(get_current_user)):
-    prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
+    prop = await db.properties.find_one(
+        {
+            "id": property_id,
+            "price": {"$exists": True},
+            "income_per_hour": {"$exists": True},
+            "max_level": {"$exists": True},
+            "property_type": {"$exists": True},
+            "for_sale": {"$ne": True},
+        },
+        {"_id": 0},
+    )
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
     # Find ALL copies of this property type owned by user (from kills)
