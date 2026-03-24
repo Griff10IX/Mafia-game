@@ -925,20 +925,20 @@ def register(router):
         except Exception as e:
             logging.warning("Failed to release preorder points on login: %s", e)
         
-        # Apply founding member rewards on first login after launch
+        # Apply founding member rewards on first login after launch (staff get them immediately)
         founding_rewards_applied = False
         try:
             if user.get("founding_member") and not user.get("founding_rewards_claimed"):
-                # Check if launch has happened (login_lock_until has passed)
-                settings = settings or await db.game_settings.find_one({"_id": "main"})
-                lock_until_str = settings.get("login_lock_until") if settings else None
                 launch_happened = True
-                if lock_until_str:
-                    try:
-                        lock_dt = datetime.fromisoformat(lock_until_str.replace("Z", "+00:00"))
-                        launch_happened = now >= lock_dt
-                    except (ValueError, TypeError):
-                        pass
+                if not staff_route:
+                    settings = settings or await db.game_settings.find_one({"_id": "main"})
+                    lock_until_str = settings.get("login_lock_until") if settings else None
+                    if lock_until_str:
+                        try:
+                            lock_dt = datetime.fromisoformat(lock_until_str.replace("Z", "+00:00"))
+                            launch_happened = now >= lock_dt
+                        except (ValueError, TypeError):
+                            pass
                 
                 if launch_happened:
                     # Apply rewards
