@@ -35,10 +35,12 @@ export const NPC_STATS  = [
 export const NPC_TYRES  = ["soft", "medium", "medium", "hard", "medium", "hard", "soft", "medium"];
 
 export const COMMENTARY = {
-  start: ["They're off!", "Bootleg run underway!", "Green flag — go!", "Engines roar across the grid!"],
-  mid:   ["Close battle through the chicane!", "Tyre wear is a real factor now!", "The gap is tightening!", "Pit window opening up...", "Flat out on the back straight!", "Wheel to wheel into Turn 3!", "Slipstream down the long straight!", "Fuel load dropping — cars quickening!", "Yellow and black of the pit board!"],
-  final: ["White flag — final lap!", "Everything on the line!", "Push to the absolute limit!"],
-  done:  ["Checkered flag!", "What a race!", "That's the finish!", "The crowd goes wild!"],
+  grid:   ["Grid is set — standing start", "Formation complete — all eyes on the lights", "Cars on the grid — engines screaming", "Grid locked in — tension building"],
+  lights: ["Red lights on...", "Five red lights — watch for the start", "Lights sequence — hold your nerve", "Red lights glowing — any moment now"],
+  start:  ["Lights out and away we go!", "They're off!", "Bootleg run underway!", "Green flag — go!", "Engines roar across the grid!", "And it's go go go!", "Brilliant start — the pack surges forward!", "Clean getaway from the grid!"],
+  mid:    ["Close battle through the chicane!", "Tyre wear is a real factor now!", "The gap is tightening!", "Pit window opening up...", "Flat out on the back straight!", "Wheel to wheel into Turn 3!", "Slipstream down the long straight!", "Fuel load dropping — cars quickening!", "Yellow and black of the pit board!", "Pressure building in the midfield!", "DRS zone — can they make the move?", "Dirty air causing problems for the chaser!", "Running nose to tail through the complex!", "Strategy is everything at this point!", "Tyre deg is rearing its head!"],
+  final:  ["White flag — final lap!", "Everything on the line!", "Push to the absolute limit!", "Last lap — it's now or never!", "Final tour — give it everything!"],
+  done:   ["Checkered flag!", "What a race!", "That's the finish!", "The crowd goes wild!", "And that's the race — incredible!", "What a drive — take a bow!"],
   safetyCar:    ["Safety car deployed!", "Yellow flags — hold positions!", "Caution period — safety car out!"],
   safetyCarEnd: ["Safety car in — green flag!", "Racing resumes — go go go!", "The pack bunches — big restart!"],
   weatherChange:["Conditions changing out there!", "Rain incoming — tyres under threat!", "Track drying — strategies shifting!"],

@@ -572,7 +572,7 @@ export default function Racing() {
   useEffect(() => {
     // Keep last orbit-sorted rows through "done" so the tower does not swap to server car_states.position
     // (which disagrees with client sim / results). Only reset when starting a new session phase.
-    if (interactiveCanvasPhase === "qualifying" || interactiveCanvasPhase === "countdown" || interactiveCanvasPhase == null) {
+    if (interactiveCanvasPhase === "qualifying" || interactiveCanvasPhase === "grid" || interactiveCanvasPhase === "countdown" || interactiveCanvasPhase == null) {
       setInteractiveTowerRows([]);
     }
   }, [interactiveCanvasPhase]);
@@ -988,6 +988,7 @@ export default function Racing() {
         const _progCap = _totLapsHud > 0 ? Math.min(1, ((_serverLap || 0) + 1) / _totLapsHud) : 0;
         const _inQualOrGrid =
           interactiveCanvasPhase === "qualifying"
+          || interactiveCanvasPhase === "grid"
           || interactiveCanvasPhase === "countdown"
           || (_preGreen && interactiveCanvasPhase !== "racing");
         const _lapProg =
@@ -1009,9 +1010,11 @@ export default function Racing() {
         // Stable key: do not tie to car_states count or QO string — live polls change those and would
         // remount the canvas, cancel qualifying RAF, and strand the session on "Qualifying".
         const _circuitKey = activeRace.id;
-        const _phaseChip = { qualifying: "QUALIFYING", countdown: "GRID", racing: "RACE", done: "FINISHED" }[interactiveCanvasPhase];
+        const _phaseChip = { qualifying: "QUALIFYING", grid: "GRID", countdown: "LIGHTS", racing: "RACE", done: "FINISHED" }[interactiveCanvasPhase];
         let _sessionTitle;
-        if (interactiveCanvasPhase === "countdown") {
+        if (interactiveCanvasPhase === "grid") {
+          _sessionTitle = <>Grid <span className="text-[var(--noir-muted)] font-normal">·</span> formation</>;
+        } else if (interactiveCanvasPhase === "countdown") {
           _sessionTitle = <>Grid <span className="text-[var(--noir-muted)] font-normal">·</span> lights</>;
         } else if (interactiveCanvasPhase === "qualifying") {
           _sessionTitle = <>Qualifying <span className="text-[var(--noir-muted)] font-normal text-[9px]">· not a race lap</span></>;

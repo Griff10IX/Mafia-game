@@ -100,7 +100,8 @@ class AdminSettingsUpdate(BaseModel):
     stock_market_max_points: Optional[int] = None
     landing_banner_enabled: Optional[bool] = None
     landing_banner_message: Optional[str] = None
-    login_lock_until: Optional[str] = None  # ISO datetime - block logins until this date
+    login_lock_from: Optional[str] = None  # ISO datetime - start blocking logins from this date
+    login_lock_until: Optional[str] = None  # ISO datetime - stop blocking logins after this date
     login_lock_message: Optional[str] = None  # Custom message shown on login page during lock
     preregister_landing_banner_enabled: Optional[bool] = None  # Slim banner on / login when login lock active (founding / ref info)
     preregister_landing_banner_preview_open: Optional[bool] = None  # Show same strip while logins are open (staff preview)
@@ -2103,6 +2104,7 @@ def register(router):
         msg_doc = await db.game_settings.find_one({"key": "landing_banner_message"}, {"_id": 0, "value": 1})
         landing_banner_message = (msg_doc.get("value") or "") if msg_doc and msg_doc.get("value") is not None else ""
         main_doc = await db.game_settings.find_one({"_id": "main"})
+        login_lock_from = main_doc.get("login_lock_from") if main_doc else None
         login_lock_until = main_doc.get("login_lock_until") if main_doc else None
         login_lock_message = main_doc.get("login_lock_message") if main_doc else None
         preregister_landing_banner_enabled = main_doc.get("preregister_landing_banner_enabled") if main_doc else None
@@ -2130,6 +2132,7 @@ def register(router):
             "stock_market_max_points": stock_market_max_points,
             "landing_banner_enabled": landing_banner_enabled,
             "landing_banner_message": landing_banner_message,
+            "login_lock_from": login_lock_from,
             "login_lock_until": login_lock_until,
             "login_lock_message": login_lock_message,
             "preregister_landing_banner_enabled": bool(preregister_landing_banner_enabled),
@@ -2191,6 +2194,12 @@ def register(router):
             await db.game_settings.update_one(
                 {"key": "landing_banner_message"},
                 {"$set": {"value": body.landing_banner_message}},
+                upsert=True,
+            )
+        if body.login_lock_from is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"login_lock_from": body.login_lock_from if body.login_lock_from else None}},
                 upsert=True,
             )
         if body.login_lock_until is not None:
@@ -2280,6 +2289,7 @@ def register(router):
         msg_doc = await db.game_settings.find_one({"key": "landing_banner_message"}, {"_id": 0, "value": 1})
         landing_banner_message = (msg_doc.get("value") or "") if msg_doc and msg_doc.get("value") is not None else ""
         main_doc = await db.game_settings.find_one({"_id": "main"})
+        login_lock_from = main_doc.get("login_lock_from") if main_doc else None
         login_lock_until = main_doc.get("login_lock_until") if main_doc else None
         login_lock_message = main_doc.get("login_lock_message") if main_doc else None
         preregister_landing_banner_enabled = main_doc.get("preregister_landing_banner_enabled")
@@ -2301,6 +2311,7 @@ def register(router):
             "stock_market_max_points": stock_market_max_points,
             "landing_banner_enabled": landing_banner_enabled,
             "landing_banner_message": landing_banner_message,
+            "login_lock_from": login_lock_from,
             "login_lock_until": login_lock_until,
             "login_lock_message": login_lock_message,
             "preregister_landing_banner_enabled": bool(preregister_landing_banner_enabled),

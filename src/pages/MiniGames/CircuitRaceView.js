@@ -1154,7 +1154,9 @@ export default function CircuitRaceView({
   const [condition,  setCondition]  = useState(initialCondition);
   const [chosenTyre, setChosenTyre] = useState(playerTyreId);
   const [numLaps,    setNumLaps]    = useState(() => Math.max(2, Math.min(20, totalLaps)));
-  const [countdown,  setCountdown]  = useState(3);
+  const [countdown,  setCountdown]  = useState(6);
+  const [gridOrder,  setGridOrder]  = useState(null);
+  const [greenFlash, setGreenFlash] = useState(false);
   const [commentary, setCommentary] = useState("Select track & tyres, then start");
   const [standings,  setStandings]  = useState([]);
   const [pitNotif,   setPitNotif]   = useState(null);
@@ -1193,6 +1195,34 @@ export default function CircuitRaceView({
     if (uiPhase === "setup") return;
     cb(uiPhase);
   }, [mode, uiPhase]);
+
+  const uiPhaseRef = useRef(uiPhase);
+  useEffect(() => { uiPhaseRef.current = uiPhase; }, [uiPhase]);
+  const gridTimerRef = useRef(null);
+  const startLightsSequence = useCallback((gridRacers, onGo) => {
+    const order = gridRacers.map((r, i) => ({ id: r.id, name: r.name, color: r.color, isPlayer: r.isPlayer, pos: i + 1 }));
+    setGridOrder(order);
+    setUiPhase("grid");
+    setCommentary(rnd(COMMENTARY.grid || ["Grid is set — standing start"]));
+    if (gridTimerRef.current) clearTimeout(gridTimerRef.current);
+    gridTimerRef.current = setTimeout(() => {
+      setGridOrder(null);
+      setUiPhase("countdown");
+      setCountdown(6);
+      setCommentary(rnd(COMMENTARY.lights || ["Red lights on..."]));
+      let cdVal = 6;
+      cdRef.current = setInterval(() => {
+        cdVal--;
+        setCountdown(cdVal);
+        if (cdVal <= 0) {
+          clearInterval(cdRef.current); cdRef.current = null;
+          setGreenFlash(true);
+          setTimeout(() => setGreenFlash(false), 900);
+          onGo();
+        }
+      }, 800);
+    }, 2000);
+  }, []);
 
   const liveCarStatesRef = useRef(liveCarStates);
   const liveIncidentsRef = useRef(liveIncidents);
@@ -1725,6 +1755,12 @@ export default function CircuitRaceView({
         const offs = (r.slideOffUntil>0&&nowSec<r.slideOffUntil) ? (halfW+9) : latOff;
         px = sx(p.x)+Math.cos(angle+Math.PI/2)*offs;
         py = sy(p.y)+Math.sin(angle+Math.PI/2)*offs;
+        if (uiPhaseRef.current==="countdown"||uiPhaseRef.current==="grid") {
+          const wobbleT=performance.now()/1000;
+          const freq=8+di*1.3, amp=1.2+Math.sin(di*2.7)*0.4;
+          px+=Math.sin(wobbleT*freq)*amp;
+          py+=Math.cos(wobbleT*freq*0.7)*amp*0.5;
+        }
       }
 
       const tt = r.inPit ? ((track.pitEntry+track.pitExit)/2) : ((prog%1)+1)%1;
@@ -2033,6 +2069,17 @@ export default function CircuitRaceView({
       if (r.dnf) { ctx.fillStyle="#e74c3c"; ctx.font="bold 8px Cinzel,serif"; ctx.textAlign="center"; ctx.fillText("DNF",px,py+16); }
       else if (r.inPit) { ctx.fillStyle="#ff9800"; ctx.font="bold 8px Cinzel,serif"; ctx.textAlign="center"; ctx.fillText("PIT",px,py+16); }
       else if (r.slideOffUntil>0&&nowSec<r.slideOffUntil) { ctx.fillStyle="#e74c3c"; ctx.font="bold 7px Cinzel,serif"; ctx.textAlign="center"; ctx.fillText("OFF",px,py+16); }
+
+      if ((uiPhaseRef.current==="countdown"||uiPhaseRef.current==="grid") && r.carNumber) {
+        const label=`P${r.carNumber}`;
+        ctx.font="bold 9px Cinzel,serif"; ctx.textAlign="center";
+        const tw=ctx.measureText(label).width;
+        ctx.fillStyle="rgba(0,0,0,.7)"; ctx.beginPath();
+        const bx=px, by=py-18, bw=tw+8, bh=13, br=3;
+        ctx.moveTo(bx-bw/2+br,by-bh/2);ctx.arcTo(bx+bw/2,by-bh/2,bx+bw/2,by+bh/2,br);ctx.arcTo(bx+bw/2,by+bh/2,bx-bw/2,by+bh/2,br);ctx.arcTo(bx-bw/2,by+bh/2,bx-bw/2,by-bh/2,br);ctx.arcTo(bx-bw/2,by-bh/2,bx+bw/2,by-bh/2,br);ctx.fill();
+        ctx.fillStyle=r.carNumber===1?"#e8c870":r.carNumber===2?"#ccc":r.carNumber===3?"#cd853f":"var(--noir-muted,#888)";
+        ctx.fillText(label,px,py-14);
+      }
     });
 
     // ── Particles (tire smoke, sparks) ──
@@ -2532,27 +2579,16 @@ export default function CircuitRaceView({
         });
         stateRef.current.pendingReplay = { racers: gridRacers, track, cond, totalLaps };
         stateRef.current.racers = gridRacers;
-        setCommentary("Grid set — lights out next");
-        setUiPhase("countdown");
-        setCountdown(3);
-        cdRef.current = setInterval(() => {
-          setCountdown(prev => {
-            const next = prev - 1;
-            if (next <= 0) {
-              clearInterval(cdRef.current); cdRef.current = null;
-              setUiPhase("racing");
-              setLapDisp(`1 / ${totalLaps}`);
-              setCommentary(rnd(COMMENTARY.start));
-              rpStarted.current = true;
-              startRaceLoop(track, cond, totalLaps, gridRacers);
-              return 0;
-            }
-            return next;
-          });
-        }, 1000);
+        startLightsSequence(gridRacers, () => {
+          setUiPhase("racing");
+          setLapDisp(`1 / ${totalLaps}`);
+          setCommentary(rnd(COMMENTARY.start));
+          rpStarted.current = true;
+          startRaceLoop(track, cond, totalLaps, gridRacers);
+        });
       },
     });
-    return () => { clearInterval(cdRef.current); if(rafRef.current)cancelAnimationFrame(rafRef.current); };
+    return () => { clearInterval(cdRef.current); clearTimeout(gridTimerRef.current); if(rafRef.current)cancelAnimationFrame(rafRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, currentUserId, raceId, participants.length, resultOrder.length]);
 
@@ -2628,29 +2664,19 @@ export default function CircuitRaceView({
         });
         stateRef.current.pendingReplay={...pr,racers:gridRacers};
         stateRef.current.racers=gridRacers;
-        setCommentary("Grid set — lights out next");
-        setUiPhase("countdown");setCountdown(3);
-        cdRef.current=setInterval(()=>{
-          setCountdown(prev=>{
-            const next=prev-1;
-            if(next<=0){
-              clearInterval(cdRef.current);cdRef.current=null;
-              setUiPhase("racing");setLapDisp(`1 / ${pr.totalLaps}`);setCommentary(rnd(COMMENTARY.start));
-              startRaceLoop(pr.track,pr.cond,pr.totalLaps,gridRacers);
-              return 0;
-            }
-            return next;
-          });
-        },1000);
+        startLightsSequence(gridRacers, () => {
+          setUiPhase("racing");setLapDisp(`1 / ${pr.totalLaps}`);setCommentary(rnd(COMMENTARY.start));
+          startRaceLoop(pr.track,pr.cond,pr.totalLaps,gridRacers);
+        });
       },
     });
-    return()=>{clearInterval(cdRef.current);if(rafRef.current)cancelAnimationFrame(rafRef.current);};
+    return()=>{clearInterval(cdRef.current);clearTimeout(gridTimerRef.current);if(rafRef.current)cancelAnimationFrame(rafRef.current);};
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[mode,currentUserId]);
 
-  // Countdown draw loop
+  // Countdown / grid draw loop
   useEffect(()=>{
-    if(uiPhase!=="countdown"||(mode!=="replay"&&mode!=="live"&&mode!=="interactive-live"))return;
+    if((uiPhase!=="countdown"&&uiPhase!=="grid")||(mode!=="replay"&&mode!=="live"&&mode!=="interactive-live"))return;
     let id;const draw=()=>{const{track,racers}=stateRef.current||{};if(track&&racers?.length)drawCanvas(track,effCond,racers);id=requestAnimationFrame(draw);};
     id=requestAnimationFrame(draw);return()=>{cancelAnimationFrame(id);};
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2733,7 +2759,6 @@ export default function CircuitRaceView({
 
     const sc = { active: false, endsAtSec: 0, cooldownUntil: 0 };
     liveInitDone.current = false;
-    let lightsAfterQualInterval = null;
 
     setUiPhase("qualifying");
     setLapDisp("Qualifying");
@@ -3300,31 +3325,21 @@ export default function CircuitRaceView({
         };
         liveInitDone.current = true;
         drawCanvas(track, cond, grid, 0);
-        setCommentary("Grid set — lights out next.");
-        setUiPhase("countdown");
-        setCountdown(3);
-        let cdVal = 3;
-        lightsAfterQualInterval = setInterval(() => {
-          cdVal--;
-          setCountdown(cdVal);
-          if (cdVal <= 0) {
-            if (lightsAfterQualInterval) clearInterval(lightsAfterQualInterval);
-            lightsAfterQualInterval = null;
-            void (async () => {
-              const gf = onInteractiveGreenFlagRef.current;
-              if (gf) await gf();
-              setUiPhase("racing");
-              setLapDisp(nRace === 1 ? "Qualifying" : `1 / ${nRace}`);
-              setCommentary(rnd(COMMENTARY.start));
-              startRacing();
-            })();
-          }
-        }, 1000);
+        startLightsSequence(grid, () => {
+          void (async () => {
+            const gf = onInteractiveGreenFlagRef.current;
+            if (gf) await gf();
+            setUiPhase("racing");
+            setLapDisp(nRace === 1 ? "Qualifying" : `1 / ${nRace}`);
+            setCommentary(rnd(COMMENTARY.start));
+            startRacing();
+          })();
+        });
       },
     });
 
     return () => {
-      if (lightsAfterQualInterval) clearInterval(lightsAfterQualInterval);
+      clearInterval(cdRef.current); clearTimeout(gridTimerRef.current);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
     // startRaceLoop / weather / liveTotalLaps / currentUserId omitted: use refs + small isPlayer patch so live polls
@@ -3352,25 +3367,18 @@ export default function CircuitRaceView({
           currentSector:0,lastSectorCross:0,bestSectors:[Infinity,Infinity,Infinity],sectorDelta:null,
           inSlipstream:false,tyreBlister:false,overtakeBoostUntil:0,currentSpeedMph:null,_justCrossedFrames:0,
         }));
-        setCommentary("Grid set — lights out next");
-        setUiPhase("countdown");setCountdown(3);
-        let c=3;
-        const cdI=setInterval(()=>{
-          c--;setCountdown(c);
-          if(c<=0){
-            clearInterval(cdI);
-            setUiPhase("racing");setLapDisp(`1 / ${numLaps}`);setCommentary(rnd(COMMENTARY.start));
-            startRaceLoop(track,cond,numLaps,grid);
-          }
-        },1000);
+        startLightsSequence(grid, () => {
+          setUiPhase("racing");setLapDisp(`1 / ${numLaps}`);setCommentary(rnd(COMMENTARY.start));
+          startRaceLoop(track,cond,numLaps,grid);
+        });
       },
     });
-  },[uiPhase,selTrack,effCond,numLaps,chosenTyre,buildRacers,resizeCanvas,startRaceLoop]);
+  },[uiPhase,selTrack,effCond,numLaps,chosenTyre,buildRacers,resizeCanvas,startRaceLoop,startLightsSequence]);
 
   const handleReset=useCallback(()=>{
-    if(onReset){if(rafRef.current)cancelAnimationFrame(rafRef.current);onReset();return;}
-    if(rafRef.current)cancelAnimationFrame(rafRef.current);
-    setUiPhase("setup");setResults(null);setStandings([]);setLapDisp("—");
+    if(onReset){if(rafRef.current)cancelAnimationFrame(rafRef.current);clearInterval(cdRef.current);clearTimeout(gridTimerRef.current);onReset();return;}
+    if(rafRef.current)cancelAnimationFrame(rafRef.current);clearInterval(cdRef.current);clearTimeout(gridTimerRef.current);
+    setUiPhase("setup");setResults(null);setStandings([]);setLapDisp("—");setGridOrder(null);setGreenFlash(false);
     setCommentary("Select track & tyres, then start");
     resizeCanvas(); requestAnimationFrame(()=>drawCanvas(selTrack,effCond,[]));
   },[selTrack,effCond,drawCanvas,resizeCanvas,onReset]);
@@ -3501,10 +3509,42 @@ export default function CircuitRaceView({
           <div style={{ fontFamily:"'Crimson Text',serif",fontStyle:"italic",fontSize:"clamp(11px,2.5vw,14px)",color:"var(--noir-primary)",textShadow:"0 0 14px rgba(201,164,96,.5)" }}>{commentary}</div>
         </div>
 
-        {/* Countdown */}
+        {/* Grid order flash */}
+        {uiPhase==="grid"&&gridOrder&&(
+          <div style={{ position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.82)",pointerEvents:"none",gap:6 }}>
+            <div style={{ fontFamily:"'Cinzel',serif",fontSize:"clamp(14px,4vw,22px)",fontWeight:700,letterSpacing:".25em",textTransform:"uppercase",color:"var(--noir-primary)",textShadow:"0 0 20px rgba(201,164,96,.5)",marginBottom:8 }}>Grid Order</div>
+            {gridOrder.map((g,i)=>(
+              <div key={g.id} style={{ display:"flex",alignItems:"center",gap:8,padding:"3px 12px",background:g.isPlayer?"rgba(201,164,96,.12)":"transparent",borderRadius:3 }}>
+                <span style={{ fontFamily:"'Cinzel',serif",fontSize:12,fontWeight:700,color:i===0?"#e8c870":i===1?"#bbb":i===2?"#cd853f":"var(--noir-muted)",width:22,textAlign:"right" }}>P{i+1}</span>
+                <span style={{ width:8,height:8,borderRadius:"50%",background:g.color,display:"inline-block",boxShadow:`0 0 6px ${g.color}80` }}/>
+                <span style={{ fontSize:12,fontWeight:600,color:"var(--noir-foreground)" }}>{g.name}{g.isPlayer?<span style={{ color:"var(--noir-primary)",fontSize:10,marginLeft:4 }}>(You)</span>:null}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* F1-style starting lights */}
         {uiPhase==="countdown"&&(
-          <div style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.72)",pointerEvents:"none" }}>
-            <div style={{ fontFamily:"'Cinzel',serif",fontSize:"clamp(40px,12vw,80px)",fontWeight:900,color:countdown>1?"var(--noir-primary)":"#dc2626",textShadow:`0 0 40px ${countdown>1?"rgba(201,164,96,.6)":"rgba(220,38,38,.8)"}`,lineHeight:1 }}>{countdown===0?"GO!":countdown}</div>
+          <div style={{ position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.72)",pointerEvents:"none",gap:20 }}>
+            <div style={{ display:"flex",gap:"clamp(8px,3vw,16px)",alignItems:"center" }}>
+              {[1,2,3,4,5].map(n=>{
+                const lightsLit=countdown!==null?(6-countdown):0;
+                const lit=lightsLit>=n;
+                return(
+                  <div key={n} style={{ width:"clamp(20px,6vw,36px)",height:"clamp(20px,6vw,36px)",borderRadius:"50%",border:"2px solid rgba(100,100,100,.6)",background:lit?"radial-gradient(circle at 40% 35%,#ff4444,#cc0000 60%,#880000)":"radial-gradient(circle at 40% 35%,#333,#1a1a1a 60%,#0d0d0d)",boxShadow:lit?"0 0 18px 6px rgba(255,0,0,.6), inset 0 -2px 4px rgba(0,0,0,.5)":"inset 0 -2px 4px rgba(0,0,0,.5)",transition:"background .15s, box-shadow .15s" }}/>
+                );
+              })}
+            </div>
+            <div style={{ fontFamily:"'Cinzel',serif",fontSize:"clamp(10px,2.8vw,15px)",fontWeight:700,letterSpacing:".3em",textTransform:"uppercase",color:"var(--noir-muted)",textShadow:"0 0 10px rgba(201,164,96,.3)" }}>
+              {countdown>0?"Red lights...":""}
+            </div>
+          </div>
+        )}
+
+        {/* Green flash — LIGHTS OUT */}
+        {greenFlash&&(
+          <div className="lightsOutFlash" style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none" }}>
+            <div style={{ fontFamily:"'Cinzel',serif",fontSize:"clamp(28px,10vw,60px)",fontWeight:900,color:"#22c55e",textShadow:"0 0 40px rgba(34,197,94,.8), 0 0 80px rgba(34,197,94,.4)",letterSpacing:".15em",lineHeight:1 }}>LIGHTS OUT!</div>
           </div>
         )}
 
@@ -3570,7 +3610,7 @@ export default function CircuitRaceView({
               Start Race
             </button>
           )}
-          {(uiPhase==="qualifying"||uiPhase==="racing"||uiPhase==="done")&&(
+          {(uiPhase==="qualifying"||uiPhase==="grid"||uiPhase==="racing"||uiPhase==="done")&&(
             <button type="button" onClick={handleReset}
               style={{ fontFamily:"'Cinzel',serif",fontSize:"9px",letterSpacing:".2em",textTransform:"uppercase",padding:"10px 16px",minHeight:44,border:"1px solid var(--noir-border)",background:"rgba(201,164,96,.07)",color:"var(--noir-primary)",cursor:"pointer",touchAction:"manipulation" }}>
               Reset
@@ -3618,7 +3658,7 @@ export default function CircuitRaceView({
         </div>
       )}
 
-      <style>{`@keyframes winPulse{0%,100%{border-color:var(--noir-border)}50%{border-color:var(--noir-primary);box-shadow:0 0 18px rgba(201,164,96,.3)}}`}</style>
+      <style>{`@keyframes winPulse{0%,100%{border-color:var(--noir-border)}50%{border-color:var(--noir-primary);box-shadow:0 0 18px rgba(201,164,96,.3)}}@keyframes lightsOutFade{0%{opacity:1;background:rgba(34,197,94,.25)}100%{opacity:0;background:transparent}}.lightsOutFlash{animation:lightsOutFade .8s ease-out forwards}`}</style>
     </div>
   );
 }

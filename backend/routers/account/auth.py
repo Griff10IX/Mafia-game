@@ -193,6 +193,7 @@ def register(router):
     async def get_launch_status():
         """Public endpoint to check if login is locked until launch date."""
         settings = await db.game_settings.find_one({"_id": "main"})
+        lock_from = settings.get("login_lock_from") if settings else None
         lock_until = settings.get("login_lock_until") if settings else None
         lock_message = settings.get("login_lock_message") if settings else None
         banner_pref = settings.get("preregister_landing_banner_enabled") if settings else None
@@ -204,8 +205,12 @@ def register(router):
         login_locked = False
         if lock_until:
             try:
-                lock_dt = datetime.fromisoformat(lock_until.replace("Z", "+00:00"))
-                login_locked = now < lock_dt
+                lock_until_dt = datetime.fromisoformat(lock_until.replace("Z", "+00:00"))
+                started = True
+                if lock_from:
+                    lock_from_dt = datetime.fromisoformat(lock_from.replace("Z", "+00:00"))
+                    started = now >= lock_from_dt
+                login_locked = started and now < lock_until_dt
             except (ValueError, TypeError):
                 pass
         preorder_active = False
@@ -222,6 +227,7 @@ def register(router):
         show_strip = bool(banner_pref) and (login_locked or preview_open)
         return {
             "login_locked": login_locked,
+            "lock_from": lock_from,
             "lock_until": lock_until,
             "lock_message": lock_message,
             "preregister_landing_banner_enabled": bool(banner_pref),
@@ -366,11 +372,17 @@ def register(router):
             # Check if registering during pre-launch (founding member)
             settings = await db.game_settings.find_one({"_id": "main"})
             lock_until = settings.get("login_lock_until") if settings else None
+            lock_from = settings.get("login_lock_from") if settings else None
             is_founding = False
             if lock_until:
                 try:
                     lock_dt = datetime.fromisoformat(lock_until.replace("Z", "+00:00"))
-                    if datetime.now(timezone.utc) < lock_dt:
+                    reg_now = datetime.now(timezone.utc)
+                    started = True
+                    if lock_from:
+                        from_dt = datetime.fromisoformat(lock_from.replace("Z", "+00:00"))
+                        started = reg_now >= from_dt
+                    if started and reg_now < lock_dt:
                         is_founding = True
                 except (ValueError, TypeError):
                     pass
@@ -471,11 +483,17 @@ def register(router):
             # Check if login is locked (pre-registration mode) - don't auto-login
             settings = await db.game_settings.find_one({"_id": "main"})
             login_lock_until = settings.get("login_lock_until") if settings else None
+            login_lock_from = settings.get("login_lock_from") if settings else None
             login_is_locked = False
             if login_lock_until:
                 try:
                     lock_dt = datetime.fromisoformat(login_lock_until.replace("Z", "+00:00"))
-                    login_is_locked = datetime.now(timezone.utc) < lock_dt
+                    reg_now = datetime.now(timezone.utc)
+                    started = True
+                    if login_lock_from:
+                        from_dt = datetime.fromisoformat(login_lock_from.replace("Z", "+00:00"))
+                        started = reg_now >= from_dt
+                    login_is_locked = started and reg_now < lock_dt
                 except (ValueError, TypeError):
                     pass
             
@@ -713,11 +731,18 @@ def register(router):
         if not staff_route:
             settings = await db.game_settings.find_one({"_id": "main"})
             lock_until_str = settings.get("login_lock_until") if settings else None
+            lock_from_str = settings.get("login_lock_from") if settings else None
             if lock_until_str:
                 try:
-                    lock_until = datetime.fromisoformat(lock_until_str.replace("Z", "+00:00"))
-                    if now < lock_until:
+                    lock_until_dt = datetime.fromisoformat(lock_until_str.replace("Z", "+00:00"))
+                    started = True
+                    if lock_from_str:
+                        lock_from_dt = datetime.fromisoformat(lock_from_str.replace("Z", "+00:00"))
+                        started = now >= lock_from_dt
+                    if started and now < lock_until_dt:
                         raise HTTPException(status_code=423, detail="Login is not available until launch. Please check back later.")
+                except HTTPException:
+                    raise
                 except (ValueError, TypeError):
                     pass
 

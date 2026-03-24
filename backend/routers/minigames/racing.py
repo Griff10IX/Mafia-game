@@ -1160,6 +1160,12 @@ def _run_race_simulation_laps(
                 ent_pit_level = min(MAX_CREW_LEVEL, int(ent_prof.get("pit_level") or 0))
                 pit_factor = PIT_PENALTY_FACTOR_BASE + ent_pit_level * PIT_PENALTY_IMPROVEMENT_PER_LEVEL
                 combined *= pit_factor
+
+            if lap == 1:
+                grid_pos = ids.index(eid) if eid in ids else len(ids)
+                grid_advantage = max(0, (len(ids) - grid_pos)) * 0.008
+                combined += grid_advantage
+
             lap_speeds.append((eid, combined))
 
         random.shuffle(lap_speeds)
@@ -2768,7 +2774,8 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
                 from_crew = await _pay_driver_salary_from_user_then_crew(uid, driver_salary)
                 net_crew_bank = -from_crew
             inst_id = entrant.get("racing_car_instance_id")
-            if inst_id:
+            is_interactive = bool(race.get("interactive"))
+            if inst_id and not is_interactive:
                 car = await db.user_racing_cars.find_one({"user_id": uid, "id": inst_id}, {"_id": 0, "engine_wear": 1})
                 if car is not None:
                     current_wear = float(car.get("engine_wear") or 0)

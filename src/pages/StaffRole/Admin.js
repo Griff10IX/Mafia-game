@@ -523,6 +523,7 @@ export default function Admin() {
   const [landingBannerMessage, setLandingBannerMessage] = useState('');
   const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);
   const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
+  const [loginLockFrom, setLoginLockFrom] = useState('');
   const [loginLockUntil, setLoginLockUntil] = useState('');
   const [loginLockMessage, setLoginLockMessage] = useState('');
   const [preregisterLandingBannerEnabled, setPreregisterLandingBannerEnabled] = useState(true);
@@ -840,6 +841,7 @@ export default function Admin() {
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setLandingBannerMessage(res.data?.landing_banner_message ?? '');
       setStockMarketMaxPoints(Math.max(1, parseInt(res.data?.stock_market_max_points, 10) || 3000));
+      setLoginLockFrom(res.data?.login_lock_from || '');
       setLoginLockUntil(res.data?.login_lock_until || '');
       setLoginLockMessage(res.data?.login_lock_message || '');
       setPreregisterLandingBannerEnabled(
@@ -863,6 +865,7 @@ export default function Admin() {
       setRequireEmailVerification(false);
       setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
+      setLoginLockFrom('');
       setLoginLockUntil('');
       setLoginLockMessage('');
       setPreregisterLandingBannerEnabled(true);
@@ -932,6 +935,7 @@ export default function Admin() {
     setLaunchSettingsSaving(true);
     try {
       await api.patch('/admin/settings', {
+        login_lock_from: loginLockFrom || null,
         login_lock_until: loginLockUntil || null,
         login_lock_message: loginLockMessage || null,
       });
@@ -1048,9 +1052,11 @@ export default function Admin() {
     setLaunchSettingsSaving(true);
     try {
       await api.patch('/admin/settings', {
+        login_lock_from: null,
         login_lock_until: null,
         login_lock_message: null,
       });
+      setLoginLockFrom('');
       setLoginLockUntil('');
       setLoginLockMessage('');
       toast.success('Login lock cleared');
@@ -4029,25 +4035,25 @@ export default function Admin() {
           color="text-amber-400"
           badge={
             <span className="text-[10px] font-heading">
-              {loginLockUntil ? <span className="text-amber-400">Login locked</span> : null}
-              {loginLockUntil && !preregisterLandingBannerEnabled ? (
+              {(loginLockFrom || loginLockUntil) ? <span className="text-amber-400">Login locked</span> : null}
+              {(loginLockFrom || loginLockUntil) && !preregisterLandingBannerEnabled ? (
                 <span className="text-mutedForeground"> · Strip off</span>
               ) : null}
               {preorderReleaseDate && storePointsAutoCredit ? (
                 <>
-                  {loginLockUntil ? <span className="text-mutedForeground"> · </span> : null}
+                  {(loginLockFrom || loginLockUntil) ? <span className="text-mutedForeground"> · </span> : null}
                   <span className="text-amber-400">Preorder active</span>
                 </>
               ) : null}
               {!storePointsAutoCredit ? (
                 <>
-                  {(loginLockUntil || (preorderReleaseDate && storePointsAutoCredit)) ? (
+                  {((loginLockFrom || loginLockUntil) || (preorderReleaseDate && storePointsAutoCredit)) ? (
                     <span className="text-mutedForeground"> · </span>
                   ) : null}
                   <span className="text-sky-400">Manual store credit</span>
                 </>
               ) : null}
-              {!loginLockUntil && !preorderReleaseDate && storePointsAutoCredit ? (
+              {!(loginLockFrom || loginLockUntil) && !preorderReleaseDate && storePointsAutoCredit ? (
                 <span className="text-mutedForeground">Not set</span>
               ) : null}
             </span>
@@ -4059,18 +4065,30 @@ export default function Admin() {
           <div className="p-3 space-y-4">
             <div className="space-y-3">
               <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">Login Lock (Launch Date)</p>
-              <p className="text-[10px] text-mutedForeground">Block all logins until this date. Users can still register. Staff can login via /staff-login.</p>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  type="datetime-local"
-                  value={loginLockUntil ? loginLockUntil.slice(0, 16) : ''}
-                  onChange={(e) => setLoginLockUntil(e.target.value ? new Date(e.target.value).toISOString() : '')}
-                  className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-amber-500/50 focus:outline-none"
-                />
+              <p className="text-[10px] text-mutedForeground">Block all logins from a start date till an end date. Users can still register. Staff can login via /staff-login.</p>
+              <div className="flex flex-col sm:flex-row gap-2 items-end">
+                <div className="flex-1 min-w-0">
+                  <label className="block text-[9px] font-heading font-bold uppercase tracking-wider text-mutedForeground mb-1">From</label>
+                  <input
+                    type="datetime-local"
+                    value={loginLockFrom ? loginLockFrom.slice(0, 16) : ''}
+                    onChange={(e) => setLoginLockFrom(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                    className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-amber-500/50 focus:outline-none"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <label className="block text-[9px] font-heading font-bold uppercase tracking-wider text-mutedForeground mb-1">Till</label>
+                  <input
+                    type="datetime-local"
+                    value={loginLockUntil ? loginLockUntil.slice(0, 16) : ''}
+                    onChange={(e) => setLoginLockUntil(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                    className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-amber-500/50 focus:outline-none"
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={handleClearLoginLock}
-                  disabled={launchSettingsSaving || !loginLockUntil}
+                  disabled={launchSettingsSaving || (!loginLockFrom && !loginLockUntil)}
                   className="px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 disabled:opacity-50"
                 >
                   Clear
