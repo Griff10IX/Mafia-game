@@ -841,7 +841,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
             if family_id:
                 fam = await db.families.find_one(
                     {"id": family_id, "wiped": {"$ne": True}},
-                    {"_id": 0, "melt_treasury_pct": 1, "melt_reward_tiers": 1},
+                    {"_id": 0, "melt_treasury_pct": 1, "melt_reward_tiers": 1, "treasury": 1, "name": 1},
                 )
                 if fam:
                     configured_pct = max(0, min(50, int(fam.get("melt_treasury_pct") or 0)))
@@ -856,33 +856,38 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                         if threshold >= 1000 and threshold % 1000 == 0 and reward > 0:
                             valid_tiers.append({"threshold_bullets": threshold, "reward_money": reward})
                     if configured_pct > 0 and base_total_bullets > 0 and valid_tiers:
-                        # Reward tiers apply per chunk of bullets contributed to family.
                         projected_family_cut = (base_total_bullets * configured_pct) // 100
                         if projected_family_cut > 0:
-                            melt_reward_hits_due = sum(
-                                projected_family_cut // int(t["threshold_bullets"])
-                                for t in valid_tiers
-                                if int(t["threshold_bullets"]) > 0
-                            )
-                            melt_reward_due = sum(
-                                (projected_family_cut // int(t["threshold_bullets"])) * int(t["reward_money"])
-                                for t in valid_tiers
-                                if int(t["threshold_bullets"]) > 0
-                            )
+                            individual_rewards = []
+                            for t in valid_tiers:
+                                tb = int(t["threshold_bullets"])
+                                rm = int(t["reward_money"])
+                                if tb > 0:
+                                    hits = projected_family_cut // tb
+                                    for _ in range(hits):
+                                        individual_rewards.append(rm)
+                            melt_reward_hits_due = len(individual_rewards)
+                            melt_reward_due = sum(individual_rewards)
                     if melt_reward_due > 0:
-                        payout_res = await db.families.update_one(
-                            {"id": family_id, "treasury": {"$gte": melt_reward_due}},
-                            {"$inc": {"treasury": -melt_reward_due}},
-                        )
-                        if payout_res.modified_count > 0:
-                            melt_reward_paid = melt_reward_due
-                            melt_reward_hits_paid = melt_reward_hits_due
-                        else:
-                            # Cannot pay configured rewards: disable family melt cut globally.
+                        treasury_balance = int(fam.get("treasury") or 0)
+                        affordable = []
+                        remaining = treasury_balance
+                        for reward_amount in individual_rewards:
+                            if remaining >= reward_amount:
+                                affordable.append(reward_amount)
+                                remaining -= reward_amount
+                        melt_reward_paid = sum(affordable)
+                        melt_reward_hits_paid = len(affordable)
+                        if melt_reward_paid > 0:
+                            payout_res = await db.families.update_one(
+                                {"id": family_id, "treasury": {"$gte": melt_reward_paid}},
+                                {"$inc": {"treasury": -melt_reward_paid}},
+                            )
+                            if payout_res.modified_count == 0:
+                                melt_reward_paid = 0
+                                melt_reward_hits_paid = 0
+                        if melt_reward_paid < melt_reward_due:
                             await db.families.update_one({"id": family_id}, {"$set": {"melt_treasury_pct": 0}})
-                            configured_pct = 0
-                            melt_reward_due = 0
-                            melt_reward_hits_due = 0
                     if configured_pct > 0 and base_total_bullets > 0:
                         melt_pct_applied = configured_pct
                         family_cut = (base_total_bullets * configured_pct) // 100
@@ -914,6 +919,27 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                 },
             )
             await log_melt_event(user["id"], player_bullets)
+            if melt_reward_paid > 0:
+                updated_user = await db.users.find_one(
+                    {"id": user["id"]},
+                    {"_id": 0, "family_melt_reward_money_earned": 1},
+                )
+                total_melt_earned = int((updated_user or {}).get("family_melt_reward_money_earned") or 0)
+                fam_name = (fam or {}).get("name") or "your family"
+                notif_msg = (
+                    f"You earned ${melt_reward_paid:,} from {fam_name}'s treasury for melting "
+                    f"({melt_reward_hits_paid} reward hit{'s' if melt_reward_hits_paid != 1 else ''}). "
+                    f"Total earned from melt rewards: ${total_melt_earned:,}."
+                )
+                if melt_reward_paid < melt_reward_due:
+                    notif_msg += " Treasury ran out — family melt % has been reset to 0%."
+                await send_notification(
+                    user["id"],
+                    "Family Melt Reward",
+                    notif_msg,
+                    "family",
+                    category="family",
+                )
             await log_activity(
                 user["id"],
                 user.get("username") or "?",
@@ -948,9 +974,9 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                 msg += f", family got {family_cut}"
             msg += f". Next melt in {cooldown_seconds}s."
             if melt_reward_paid > 0:
-                msg += f" + ${melt_reward_paid:,} family reward ({melt_reward_hits_paid} hit{'s' if melt_reward_hits_paid != 1 else ''})."
-            elif melt_reward_due > 0 and melt_reward_paid == 0:
-                msg += " Family treasury could not pay reward; family melt % was reset to 0%."
+                msg += f" + ${melt_reward_paid:,} family reward ({melt_reward_hits_paid}/{melt_reward_hits_due} hit{'s' if melt_reward_hits_due != 1 else ''})."
+            if melt_reward_due > 0 and melt_reward_paid < melt_reward_due:
+                msg += " Treasury couldn't cover all rewards; family melt % reset to 0%."
             return {
                 "success": True,
                 "melted_count": deleted_count,
