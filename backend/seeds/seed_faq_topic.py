@@ -3,6 +3,7 @@ Seed script: creates a "FAQs" forum topic from FORUM_FAQ.md (or fallback text).
 Run from backend dir: python seed_faq_topic.py
 Reads docs/FORUM_FAQ.md from project root (or legacy FORUM_FAQ.md at root). Uses first user in DB as author.
 Skips if a topic with title "FAQs" already exists.
+To refresh an existing topic from disk, use update_faq_topic.py in this folder.
 """
 import os
 import sys

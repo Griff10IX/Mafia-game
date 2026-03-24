@@ -2,6 +2,10 @@
 
 Use this when updating [FORUM_FAQ.md](FORUM_FAQ.md) so numbers stay aligned with the codebase.
 
+**Route / feature coverage:** see [FORUM_FAQ_ROUTE_COVERAGE.md](FORUM_FAQ_ROUTE_COVERAGE.md) (major `App.js` routes vs FAQ sections).
+
+**Live forum topic:** `seed_faq_topic.py` only *creates* the "FAQs" topic if missing. To refresh an existing topic from disk, run `python backend/seeds/update_faq_topic.py` (from repo root: `python seeds/update_faq_topic.py` from `backend/`).
+
 | Topic | Source file / symbol |
 |--------|----------------------|
 | Rank names & RP thresholds | `backend/server.py` → `RANKS` |
@@ -28,9 +32,12 @@ Use this when updating [FORUM_FAQ.md](FORUM_FAQ.md) so numbers stay aligned with
 | GTA options | `backend/routers/cars/gta.py` → `GTA_OPTIONS` (cooldown seconds, jail seconds, success rates) |
 | Melt for bullets | `backend/routers/cars/gta.py` → `_melt_cars_impl`, `MELT_BULLETS_COOLDOWN_SECONDS` |
 | Jail, bust, snitch | `backend/routers/crime/jail.py` → bust logic, `SNITCH_*` |
+| API paths blocked while `in_jail` (denylist) | `backend/server.py` → `JAIL_BLOCKED_EXACT`, `JAIL_BLOCKED_PREFIXES`, `_is_jail_blocked_path` |
 | API rate limits (optional) | `backend/middleware/security.py` → `GLOBAL_RATE_LIMITS_ENABLED`, `RATE_LIMIT_CONFIG` |
 | Consumable tokens | `backend/routers/kill/armoury.py` → `TOKEN_CONFIG`, `use_token`; descriptions also in `crack_safe.py` |
 | Mini-game weekly leaderboard | `backend/routers/minigames/minigame_leaderboard.py` → `VALID_GAMES`, `DEFAULT_REWARDS`, week start |
+| Daily Rewards (RPS + TTT) plays per window | `backend/routers/game/daily_rewards.py` → `RPS_PLAYS_PER_WINDOW`, `RPS_WINDOW_HOURS` |
+| Famiglia (Mafia RPG) session submit rate | `backend/routers/minigames/mafia_rpg.py` → `MAX_PLAYS_PER_HOUR`, `_composite_score` |
 | Property catalog ($/hr, max level) | Database `properties` collection; API via `backend/routers/money/properties.py` |
 | Weapon list & damage | Database `weapons` collection; `backend/routers/kill/armoury.py` |
 | BBCode & smileys | `src/utils/forumContent.js` → `parseForumContent` |

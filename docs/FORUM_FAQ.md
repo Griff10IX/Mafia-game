@@ -421,6 +421,9 @@ Free players from jail:
 [*][color=#888888]While [b]you[/b] are in jail: one attempt per term, [b]10–20%[/b] success — on success you walk and a random/targeted free player is jailed [b]45s[/b] (Anti Snitch blocks being chosen)[/color]
 [*][color=#888888]Makes enemies — victims get a notification (not who snitched)[/color]
 [/list]
+
+[color=#E74C3C][b]What the server blocks while you’re in jail[/b][/color]
+Only a small set of [b]crime economy[/b] APIs are denied: [b]Crimes[/b] (list/stats/logs/commit), the [b]GTA steal hub[/b] (options, attempt, recent stolen, stats — [b]not[/b] garage/melt/marketplace/view-car), [b]Organised Crime[/b] ([i]/oc/…[/i] and [i]/organised-crime/…[/i]), and [b]Booze Run[/b] ([i]/booze-run/…[/i]). Almost everything else stays available — travel, inbox, missions, properties, hitlist, attack, casinos, Cars/GTA garage, families, etc.
 [/quote]
 
 [hr]
@@ -473,6 +476,9 @@ Each city has [b]one airport ownership slot[/b]. Owners earn when others pay to 
 [*][color=#888888]Passive income while you hold the slot[/color]
 [*][color=#888888]Lose ownership if someone kills you[/color]
 [/list]
+
+[color=#3498DB][b]States (city overview)[/b][/color]
+Open [b]Game → States[/b] for a per-city snapshot: casinos (dice, roulette, blackjack, slots, video poker, horse racing), airports, fares/ownership — useful before you travel or hunt targets.
 [/quote]
 
 [hr]
@@ -698,6 +704,9 @@ Family-based running game:
 [*][color=#888888]Builds family teamwork[/color]
 [/list]
 
+[color=#00BCD4][b]Famiglia (Mafia RPG)[/b][/color]
+Top-down Chicago-map mini-RPG: missions, respect, street work — submit a session to record your run. The server scores your session (respect, missions done, lifetime cash earned in-run) for weekly mini-game points and a small cash payout; [b]up to 8 session submits per rolling hour[/b] per account ([i]backend/routers/minigames/mafia_rpg.py[/i]).
+
 [color=#00BCD4][b]Mini-Games Leaderboard[/b][/color]
 Combined weekly points from the mini-games that count toward the leaderboard (listed in-game):
 [list]
@@ -779,6 +788,12 @@ Complete objectives for bonus rewards. Which periods exist (daily, weekly, etc.)
 [*][color=#888888]Rewards and reset timers are listed per objective in the UI[/color]
 [/list]
 
+[color=#FFD700][b]Game Leaderboard[/b][/color]
+Separate from the [b]mini-games weekly[/b] board: open [b]Game → Leaderboard[/b] for period-based rankings (kills, crimes, GTA, jail busts, points spent, respect, bullets melted, stock profit, booze profit, and more) with [b]top 5 / 10 / 20 / 50 / 100[/b] and optional inclusion of dead accounts where the UI allows.
+
+[color=#FFD700][b]Inventory[/b][/color]
+[b]Account → Inventory[/b] — equip weapons and armour, view loot exclusives, and activate [b]tokens[/b] (same consumables the Point Store describes).
+
 [color=#FFD700][b]Badges & achievements[/b][/color]
 Open [b]Ranking → Badges[/b] (and related stats). Earning badges gives [b]small stacking bonuses[/b] across many systems — crime cash, OC payouts, jail bust odds, melt cooldown, and more — with stronger effect as your [b]prestige[/b] grows where the game applies prestige scaling. Exact % values are shown on the Badges page. The [b]Founding Member[/b] badge from [b]pre-launch registration[/b] is a separate profile badge with its own passive payout bonus (about [b]+2.5%[/b] on listed income while you wear it) — see [b]SOCIAL FEATURES → Pre-launch registration (Founding Member)[/b] below.
 
@@ -821,10 +836,10 @@ Collect loot box pieces to open a box (piece cost is shown in-game). Pieces drop
 [*][color=#888888]OC Timer Reduction (300 pts) — one-time: personal OC cooldown [b]6h → 4h[/b][/color]
 [*][color=#888888]Crew OC Timer (350 pts) — one-time: family Crew OC [b]8h → 6h[/b][/color]
 [*][color=#888888]Custom Car (500 pts) - Design your own unique car[/color]
-[*][color=#888888]Garage batch limit — [b]25 pts[/b] per +[b]10[/b] cars per melt/scrap batch (cap [b]100[/b]; starts at [b]6[/b])[/color]
+[*][color=#888888]Garage batch limit — [b]75 pts[/b] per +[b]10[/b] cars per melt/scrap batch (cap [b]100[/b]; starts at [b]6[/b]; [i]GARAGE_BATCH_UPGRADE_COST[/i] in [i]server.py[/i])[/color]
 [*][color=#888888]Username changes are [b]not[/b] sold in the Point Store — ask staff / Help Desk if a rename is offered[/color]
 [*][color=#888888]Extra bodyguard slots — buy on the [b]Bodyguards[/b] screen ([b]75 / 150 / 300 / 450[/b] pts per unlock; [b]max 4[/b] filled at once, robots and/or humans — see [b]COMBAT → Bodyguards[/b])[/color]
-[*][color=#888888]Booze Capacity Upgrade ([b]30 pts[/b]) — +[b]100[/b] carry capacity per purchase, up to +[b]1000[/b] bonus (see Store / Booze screens)[/color]
+[*][color=#888888]Booze Capacity Upgrade ([b]100 pts[/b] per purchase from Store) — +[b]100[/b] carry capacity each time, up to +[b]1000[/b] bonus cap (see Store / Booze screens; [i]BOOZE_CAPACITY_UPGRADE_COST[/i] in [i]booze_run.py[/i])[/color]
 [*][color=#888888]Premium Rank Bar (50 pts)[/color] - Enhanced rank display on profile
 [/list]
 
@@ -887,6 +902,12 @@ Community discussion boards:
 [*][color=#888888][b]Designer competitions[/b] — occasional design contests when announced in-game or on the forum[/color]
 [*][color=#888888][b]Game Ideas[/b] — when staff run a season: pinned hub topic to post ideas, register your post, then vote on the Game Ideas board; finalists and implementation rewards are configured by admins[/color]
 [/list]
+
+[color=#1ABC9C][b]Image Host[/b][/color]
+[b]Social → Image Host[/b] — upload or import images (JPEG, PNG, GIF, WebP), optional max edge resize, copy direct links for forum posts, profiles, or messages. Per-account limits and a public gallery tab are shown in-game.
+
+[color=#1ABC9C][b]Users online[/b][/color]
+[b]Game → Users online[/b] — see who is currently in-game and open profiles quickly.
 
 [color=#1ABC9C][b]Referrals[/b][/color]
 [list]
@@ -1209,7 +1230,7 @@ If someone used your card without permission:
 [color=#AAAAAA]A: After reaching Godfather (top of the 13-rank ladder), you can Prestige up to 5 times for permanent bonuses — stronger crime/OC/NPC/illegal-business payouts, GTA rare-car luck, mission redo scaling, and exclusive Prestige Crimes. See the Prestige screen for exact numbers.[/color]
 
 [color=#3498DB][b]Q: What are Daily Rewards?[/b][/color]
-[color=#AAAAAA]A: Mini-games (Rock Paper Scissors, Noughts & Crosses) you can play every 6 hours for free cash and car rewards. Don't miss them![/color]
+[color=#AAAAAA]A: [b]Rock Paper Scissors[/b] and [b]Noughts & Crosses[/b] vs the house. You get [b]up to 3 plays per rolling 6-hour window[/b] (shared across both games). Wins pay cash and sometimes cars (see [i]daily_rewards.py[/i]).[/color]
 
 [color=#3498DB][b]Q: How do I own a casino table or airport slot?[/b][/color]
 [color=#AAAAAA]A: Kill the current owner! Casino tables and airport slots transfer to whoever kills the owner. Great passive income source.[/color]
