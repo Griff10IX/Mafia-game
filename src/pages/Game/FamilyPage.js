@@ -234,7 +234,8 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect
 const TreasuryTab = ({
   treasury, treasuryBullets, treasuryPoints, treasuryLootPieces, canWithdraw, vaultAndRacketsLocked,
   meltTreasuryPct, meltRewardTiers, members,
-  depositAmount, setDepositAmount, withdrawAmount, setWithdrawAmount, onDeposit, onWithdraw,
+  depositAmount, setDepositAmount, depositBullets, setDepositBullets,
+  withdrawAmount, setWithdrawAmount, withdrawBullets, setWithdrawBullets, onDeposit, onWithdraw,
   compoundCash, compoundPoints, compoundLootPieces, myCompoundCash, myCompoundPoints, myCompoundLootPieces, myCompoundCars,
   compoundDepositCash, setCompoundDepositCash, compoundDepositPoints, setCompoundDepositPoints, compoundDepositLootPieces, setCompoundDepositLootPieces,
   compoundWithdrawCash, setCompoundWithdrawCash, compoundWithdrawPoints, setCompoundWithdrawPoints, compoundWithdrawLootPieces, setCompoundWithdrawLootPieces,
@@ -273,41 +274,6 @@ const TreasuryTab = ({
       </p>
     </div>
 
-    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3">
-      <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2">Melt rewards (configured)</p>
-      {(meltRewardTiers && meltRewardTiers.length > 0) ? (
-        <div className="space-y-1.5">
-          {meltRewardTiers.map((t) => (
-            <div key={t.threshold_bullets} className="flex items-center justify-between px-2 py-1 rounded bg-zinc-900/40 border border-zinc-700/30">
-              <span className="text-[10px] text-zinc-300">{Number(t.threshold_bullets || 0).toLocaleString()} bullets</span>
-              <span className="text-[10px] text-emerald-400">{formatMoneyFull(t.reward_money || 0)}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-[10px] text-zinc-500">No reward tiers set.</p>
-      )}
-    </div>
-
-    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3">
-      <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2">Member melt + reward stats</p>
-      {(members && members.length > 0) ? (
-        <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-          {[...members]
-            .sort((a, b) => Number(b.family_bullets_melted || 0) - Number(a.family_bullets_melted || 0))
-            .map((m) => (
-              <div key={m.user_id} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 px-2 py-1 rounded bg-zinc-900/40 border border-zinc-700/30">
-                <span className="text-[10px] text-foreground truncate">{m.username}</span>
-                <span className="text-[10px] text-amber-300">{Number(m.family_bullets_melted || 0).toLocaleString()} family bullets</span>
-                <span className="text-[10px] text-emerald-400">{formatMoneyFull(m.family_melt_reward_money_earned || 0)} ({Number(m.family_melt_reward_hits || 0)}x)</span>
-              </div>
-            ))}
-        </div>
-      ) : (
-        <p className="text-[10px] text-zinc-500">No member data.</p>
-      )}
-    </div>
-
     {/* Deposit */}
     <div className={`bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3 fam-fade-in ${vaultAndRacketsLocked ? 'opacity-60 pointer-events-none' : ''}`} style={{ animationDelay: '0.1s' }}>
       <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
@@ -325,8 +291,14 @@ const TreasuryTab = ({
         <FormattedNumberInput
           value={depositAmount}
           onChange={setDepositAmount}
-          placeholder="Custom amount"
+          placeholder="Cash amount"
           className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none min-w-0 transition-colors"
+        />
+        <FormattedNumberInput
+          value={depositBullets}
+          onChange={setDepositBullets}
+          placeholder="Bullets"
+          className="w-28 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors"
         />
         <button type="submit" className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all shrink-0 touch-manipulation">
           Deposit
@@ -352,8 +324,14 @@ const TreasuryTab = ({
           <FormattedNumberInput
             value={withdrawAmount}
             onChange={setWithdrawAmount}
-            placeholder="Custom amount"
+            placeholder="Cash amount"
             className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none min-w-0 transition-colors"
+          />
+          <FormattedNumberInput
+            value={withdrawBullets}
+            onChange={setWithdrawBullets}
+            placeholder="Bullets"
+            className="w-28 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors"
           />
           <button type="submit" className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-zinc-700/50 border-zinc-600/50 text-zinc-300 hover:bg-zinc-700/70 transition-all shrink-0 touch-manipulation">
             Withdraw
@@ -416,6 +394,41 @@ const TreasuryTab = ({
             ))}
           </div>
         </div>
+      )}
+    </div>
+
+    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3">
+      <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2">Melt rewards (configured)</p>
+      {(meltRewardTiers && meltRewardTiers.length > 0) ? (
+        <div className="space-y-1.5">
+          {meltRewardTiers.map((t) => (
+            <div key={t.threshold_bullets} className="flex items-center justify-between px-2 py-1 rounded bg-zinc-900/40 border border-zinc-700/30">
+              <span className="text-[10px] text-zinc-300">{Number(t.threshold_bullets || 0).toLocaleString()} bullets</span>
+              <span className="text-[10px] text-emerald-400">{formatMoneyFull(t.reward_money || 0)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[10px] text-zinc-500">No reward tiers set.</p>
+      )}
+    </div>
+
+    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3">
+      <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2">Member melt + reward stats</p>
+      {(members && members.length > 0) ? (
+        <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+          {[...members]
+            .sort((a, b) => Number(b.family_bullets_melted || 0) - Number(a.family_bullets_melted || 0))
+            .map((m) => (
+              <div key={m.user_id} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 px-2 py-1 rounded bg-zinc-900/40 border border-zinc-700/30">
+                <span className="text-[10px] text-foreground truncate">{m.username}</span>
+                <span className="text-[10px] text-amber-300">{Number(m.family_bullets_melted || 0).toLocaleString()} family bullets</span>
+                <span className="text-[10px] text-emerald-400">{formatMoneyFull(m.family_melt_reward_money_earned || 0)} ({Number(m.family_melt_reward_hits || 0)}x)</span>
+              </div>
+            ))}
+        </div>
+      ) : (
+        <p className="text-[10px] text-zinc-500">No member data.</p>
       )}
     </div>
   </div>
@@ -1847,7 +1860,9 @@ export default function FamilyPage() {
   const [createTag, setCreateTag] = useState('');
   const [joinId, setJoinId] = useState('');
   const [depositAmount, setDepositAmount] = useState('');
+  const [depositBullets, setDepositBullets] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [withdrawBullets, setWithdrawBullets] = useState('');
   const [compoundDepositCash, setCompoundDepositCash] = useState('');
   const [compoundDepositPoints, setCompoundDepositPoints] = useState('');
   const [compoundDepositLootPieces, setCompoundDepositLootPieces] = useState('');
@@ -1946,8 +1961,34 @@ export default function FamilyPage() {
     if (role === 'boss' && !window.confirm('Transfer family leadership to this member? You will become Underboss.')) return;
     try { await api.post('/families/assign-role', { user_id: userId, role }); toast.success(role === 'boss' ? 'Leadership transferred.' : `Assigned ${getRoleConfig(role).label}`); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); }
   };
-  const handleDeposit = async (e) => { e.preventDefault(); const amount = parseInt(depositAmount.replace(/\D/g, ''), 10); if (!amount) return; try { await api.post('/families/deposit', { amount }); toast.success('Deposited'); setDepositAmount(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
-  const handleWithdraw = async (e) => { e.preventDefault(); const amount = parseInt(withdrawAmount.replace(/\D/g, ''), 10); if (!amount) return; try { await api.post('/families/withdraw', { amount }); toast.success('Withdrew'); setWithdrawAmount(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleDeposit = async (e) => {
+    e.preventDefault();
+    const amount = parseInt(String(depositAmount).replace(/\D/g, ''), 10) || 0;
+    const bullets = parseInt(String(depositBullets).replace(/\D/g, ''), 10) || 0;
+    if (amount === 0 && bullets === 0) return;
+    try {
+      await api.post('/families/deposit', { amount, bullets });
+      toast.success('Deposited');
+      setDepositAmount('');
+      setDepositBullets('');
+      refreshUser();
+      fetchData();
+    } catch (e) { toast.error(apiDetail(e)); }
+  };
+  const handleWithdraw = async (e) => {
+    e.preventDefault();
+    const amount = parseInt(String(withdrawAmount).replace(/\D/g, ''), 10) || 0;
+    const bullets = parseInt(String(withdrawBullets).replace(/\D/g, ''), 10) || 0;
+    if (amount === 0 && bullets === 0) return;
+    try {
+      await api.post('/families/withdraw', { amount, bullets });
+      toast.success('Withdrew');
+      setWithdrawAmount('');
+      setWithdrawBullets('');
+      refreshUser();
+      fetchData();
+    } catch (e) { toast.error(apiDetail(e)); }
+  };
   const handleCompoundDeposit = async (e) => {
     e.preventDefault();
     const cash = parseInt(String(compoundDepositCash).replace(/\D/g, ''), 10) || 0;
@@ -2288,8 +2329,12 @@ export default function FamilyPage() {
                 vaultAndRacketsLocked={vaultAndRacketsLocked}
                 depositAmount={depositAmount}
                 setDepositAmount={setDepositAmount}
+                depositBullets={depositBullets}
+                setDepositBullets={setDepositBullets}
                 withdrawAmount={withdrawAmount}
                 setWithdrawAmount={setWithdrawAmount}
+                withdrawBullets={withdrawBullets}
+                setWithdrawBullets={setWithdrawBullets}
                 onDeposit={handleDeposit}
                 onWithdraw={handleWithdraw}
                 compoundCash={family.compound_cash}

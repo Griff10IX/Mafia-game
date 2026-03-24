@@ -216,11 +216,13 @@ class FamilyRoleRequest(BaseModel):
 
 
 class FamilyDepositRequest(BaseModel):
-    amount: int
+    amount: int = 0
+    bullets: int = 0
 
 
 class FamilyWithdrawRequest(BaseModel):
-    amount: int
+    amount: int = 0
+    bullets: int = 0
 
 
 class CompoundDepositRequest(BaseModel):
@@ -1519,16 +1521,24 @@ async def families_deposit(request: FamilyDepositRequest, current_user: dict = D
     if await _family_in_active_war(family_id):
         raise HTTPException(status_code=403, detail="Vault is locked until the family war is over")
     amount = int(request.amount or 0)
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Invalid amount")
+    bullets = int(request.bullets or 0)
+    if amount < 0 or bullets < 0:
+        raise HTTPException(status_code=400, detail="Amounts cannot be negative")
+    if amount == 0 and bullets == 0:
+        raise HTTPException(status_code=400, detail="Specify cash and/or bullets")
+    user_filter = {"id": current_user["id"]}
+    if amount > 0:
+        user_filter["money"] = {"$gte": amount}
+    if bullets > 0:
+        user_filter["bullets"] = {"$gte": bullets}
     result = await db.users.find_one_and_update(
-        {"id": current_user["id"], "money": {"$gte": amount}},
-        {"$inc": {"money": -amount}},
+        user_filter,
+        {"$inc": {"money": -amount, "bullets": -bullets}},
         return_document=False,
     )
     if not result:
-        raise HTTPException(status_code=400, detail="Not enough cash")
-    await db.families.update_one({"id": family_id}, {"$inc": {"treasury": amount}})
+        raise HTTPException(status_code=400, detail="Not enough cash or bullets")
+    await db.families.update_one({"id": family_id}, {"$inc": {"treasury": amount, "treasury_bullets": bullets}})
     _invalidate_my_cache(current_user["id"])
     return {"message": "Deposited to treasury"}
 
@@ -1542,16 +1552,24 @@ async def families_withdraw(request: FamilyWithdrawRequest, current_user: dict =
     if await _family_in_active_war(family_id):
         raise HTTPException(status_code=403, detail="Vault is locked until the family war is over")
     amount = int(request.amount or 0)
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Invalid amount")
+    bullets = int(request.bullets or 0)
+    if amount < 0 or bullets < 0:
+        raise HTTPException(status_code=400, detail="Amounts cannot be negative")
+    if amount == 0 and bullets == 0:
+        raise HTTPException(status_code=400, detail="Specify cash and/or bullets")
+    family_filter = {"id": family_id}
+    if amount > 0:
+        family_filter["treasury"] = {"$gte": amount}
+    if bullets > 0:
+        family_filter["treasury_bullets"] = {"$gte": bullets}
     result = await db.families.find_one_and_update(
-        {"id": family_id, "treasury": {"$gte": amount}},
-        {"$inc": {"treasury": -amount}},
+        family_filter,
+        {"$inc": {"treasury": -amount, "treasury_bullets": -bullets}},
         return_document=False,
     )
     if not result:
-        raise HTTPException(status_code=400, detail="Not enough treasury")
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": amount}})
+        raise HTTPException(status_code=400, detail="Not enough treasury cash or bullets")
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": amount, "bullets": bullets}})
     _invalidate_my_cache(current_user["id"])
     return {"message": "Withdrew from treasury"}
 
