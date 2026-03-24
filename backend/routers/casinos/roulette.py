@@ -482,6 +482,9 @@ def register(router):
                 multiplier = _roulette_get_multiplier(bet["type"])
                 total_payout += bet["amount"] * multiplier
         win = total_payout > 0
+        # Final payout actually credited to player for this spin.
+        # Keep this defined across all branches so loss paths never crash.
+        settled_payout = total_payout
         head_family_id = await get_head_family_id_for_state(stored_city or city)
         edge = int(total_stake * ROULETTE_HOUSE_EDGE)
         if not win:
@@ -511,6 +514,7 @@ def register(router):
                 # State-head tax comes out of owner's net (floor at 0)
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}})
             actual_payout = min(total_payout, owner_money + total_stake)
+            settled_payout = actual_payout
             shortfall = total_payout - actual_payout
             actual_net_cost = actual_payout - total_stake
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
@@ -572,7 +576,7 @@ def register(router):
         return {
             "result": result,
             "win": win,
-            "total_payout": total_payout if not owner_id else actual_payout,
+            "total_payout": settled_payout,
             "total_stake": total_stake,
             "owner_cut": edge if (head_family_id or owner_id) else 0,
             "ownership_transferred": ownership_transferred if win and owner_id else False,
