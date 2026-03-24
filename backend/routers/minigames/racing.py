@@ -2691,17 +2691,19 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
         _rdebug(race_id, "COMPLETE_RACE_REJECTED", reason="still_in_progress")
         raise HTTPException(status_code=400, detail="Race is still in progress")
 
-    # Accept client result only as fallback when server has no interactive result yet.
-    can_use_client = (
+    # Interactive races: visual is truth — always accept valid client result_order.
+    # Non-interactive: client order accepted as fallback when server has none.
+    client_order_valid = (
         body.result_order
         and set(body.result_order) == expected_ids
         and len(body.result_order) == len(expected_ids)
-        and (not is_interactive or not result_order)
     )
+    can_use_client = client_order_valid if is_interactive else (client_order_valid and not result_order)
     _rdebug(race_id, "COMPLETE_RACE_CLIENT_ORDER_CHECK",
             can_use_client=can_use_client,
+            is_interactive=is_interactive,
             has_server_result=bool(result_order),
-            client_order_valid=bool(body.result_order and set(body.result_order) == expected_ids))
+            client_order_valid=client_order_valid)
     if can_use_client:
         result_order = list(body.result_order)
         if body.dnf_ids is not None:

@@ -771,7 +771,7 @@ export default function Racing() {
     });
     setInteractiveDebugEmittedOrder(Array.isArray(resultOrderIds) ? resultOrderIds : []);
     setInteractiveDebugEmittedDnf(Array.isArray(dnfIds) ? dnfIds : []);
-    void handleCompleteRace(activeRace.id, null, dnfIds);
+    void handleCompleteRace(activeRace.id, resultOrderIds, dnfIds);
   }, [activeRace?.id, activeRace?.interactive, activeRace?.mode, handleCompleteRace]);
 
   const handleCreateTeam = async (e) => {
