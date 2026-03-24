@@ -729,6 +729,7 @@ def register(router):
             raise HTTPException(status_code=422, detail="Password is required.")
 
         # Check for login lock (skip for staff route - admins can still log in)
+        settings = None
         if not staff_route:
             settings = await db.game_settings.find_one({"_id": "main"})
             lock_until_str = settings.get("login_lock_until") if settings else None
