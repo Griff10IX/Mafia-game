@@ -1158,6 +1158,7 @@ export default function CircuitRaceView({
   const [countdown,  setCountdown]  = useState(6);
   const [gridOrder,  setGridOrder]  = useState(null);
   const [greenFlash, setGreenFlash] = useState(false);
+  const [qualResults, setQualResults] = useState(null);
   const [commentary, setCommentary] = useState("Select track & tyres, then start");
   const [standings,  setStandings]  = useState([]);
   const [pitNotif,   setPitNotif]   = useState(null);
@@ -2750,9 +2751,9 @@ export default function CircuitRaceView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[mode,currentUserId]);
 
-  // Countdown / grid draw loop
+  // Countdown / grid / qual-results draw loop
   useEffect(()=>{
-    if((uiPhase!=="countdown"&&uiPhase!=="grid")||(mode!=="replay"&&mode!=="live"&&mode!=="interactive-live"))return;
+    if((uiPhase!=="countdown"&&uiPhase!=="grid"&&uiPhase!=="qual-results")||(mode!=="replay"&&mode!=="live"&&mode!=="interactive-live"))return;
     let id;const draw=()=>{const{track,racers}=stateRef.current||{};if(track&&racers?.length)drawCanvas(track,effCond,racers);id=requestAnimationFrame(draw);};
     id=requestAnimationFrame(draw);return()=>{cancelAnimationFrame(id);};
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2779,15 +2780,8 @@ export default function CircuitRaceView({
     const TARGET_LAP_SEC = 28;
 
     const cs = liveCarStatesRef.current || {};
-    const rawQo = Array.isArray(qualifying_order) && qualifying_order.length > 0 ? qualifying_order : null;
-    let ids;
-    if (rawQo) {
-      ids = rawQo.filter(id => participants.some(p => (p.user_id || p.id) === id));
-    } else if (Object.keys(cs).length) {
-      ids = Object.entries(cs).sort((a, b) => (a[1].position ?? 99) - (b[1].position ?? 99)).map(([k]) => k);
-    } else {
-      ids = participants.map(p => p.user_id || p.id);
-    }
+    // Frontend-driven qualifying: build racers from participant list, compute qualifying from physics
+    const ids = participants.map(p => p.user_id || p.id);
     const seen = new Set();
     const order = ids.filter(id => { if (seen.has(id)) return false; seen.add(id); return true; });
 
@@ -2832,6 +2826,17 @@ export default function CircuitRaceView({
         _interactiveSfArmed: false,
       };
     });
+
+    // Frontend-driven qualifying: compute qualifying lap times from physics
+    const QUAL_SPEED_SPREAD = 0.35;
+    qualRacers.forEach(r => {
+      const td = TYRE_DEFS[r.currentTyre] || TYRE_DEFS.medium;
+      const tyreGrip = tyreGripFromWear(r.tyreWear ?? 100, r.currentTyre);
+      const csm = 1.0 + ((r.baseSpeed || 1) - 1.0) * QUAL_SPEED_SPREAD;
+      const qualSpeed = csm * td.gripMult * (wd.speedMult || 1) * tyreGrip;
+      r.qualTime = TARGET_LAP_SEC / Math.max(0.01, qualSpeed) + (Math.random() - 0.5) * 0.8;
+    });
+    qualRacers.sort((a, b) => a.qualTime - b.qualTime);
 
     const sc = { active: false, endsAtSec: 0, cooldownUntil: 0 };
     liveInitDone.current = false;
@@ -3113,7 +3118,7 @@ export default function CircuitRaceView({
           racer.trackPos = (racer.trackPos + (1 / lapTime) * dt + 1) % 1;
 
           // Realistic MPH display (based on track's natural pace, not compressed orbit)
-          const displayEff = 1.0 * posSpeedMult * tyreGripFactor * enginePenalty;
+          const displayEff = 1.0 * carSpeedMult * tyreGripFactor * enginePenalty;
           const rawMph = trk.km && trk.lapBase
             ? SSCALE * (3600 * trk.km * cornerSM * displayEff) / trk.lapBase : null;
           const tMph = rawMph != null ? Math.max(0, Math.min(SCAP, rawMph)) : null;
@@ -3388,26 +3393,12 @@ export default function CircuitRaceView({
     } // end startRacing()
 
     const participantsById = Object.fromEntries((participants || []).map((p) => [(p.user_id || p.id), p]));
-    const serverPoleOrderRaw = (qualifyingOrderRef.current && qualifyingOrderRef.current.length)
-      ? qualifyingOrderRef.current
-      : qualRacers.map(x => x.id);
-    const seenIds = new Set();
-    const serverPoleOrder = serverPoleOrderRaw.filter((id) => {
-      if (seenIds.has(id)) return false;
-      seenIds.add(id);
-      return !!qualRacers.find((x) => x.id === id);
-    });
-    qualRacers.forEach((x) => {
-      if (!seenIds.has(x.id)) {
-        seenIds.add(x.id);
-        serverPoleOrder.push(x.id);
-      }
-    });
-    const orderedQualRacers = serverPoleOrder.map((id) => qualRacers.find((x) => x.id === id)).filter(Boolean);
+    // Frontend-driven: qualRacers already sorted by frontend-computed qualTime
+    const orderedQualRacers = qualRacers;
     const humanQualQueue = orderedQualRacers.filter((r) => !(participantsById[r.id]?.is_npc));
     debugRace("interactive_qual_queue_built", {
       participantsCount: (participants || []).length,
-      serverPoleOrder,
+      frontendQualOrder: orderedQualRacers.map(x => ({ id: x.id, qualTime: x.qualTime })),
       humanQualQueue: humanQualQueue.map((x) => x.id),
       npcHiddenCount: Math.max(0, orderedQualRacers.length - humanQualQueue.length),
     });
@@ -3417,62 +3408,81 @@ export default function CircuitRaceView({
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
-      const nRace = liveTotalLapsRef.current || 3;
-      const wd2 = wd;
-      const trkSfL = track.sfLine ?? 0;
-      const grid = orderedQualRacers.map((r, i) => ({
-        ...r,
-        trackPos: ((trkSfL + (orderedQualRacers.length - i) * 0.012) % 1),
-        totalLapsDone: 0,
-        lapCount: 1,
-        finished: false,
-        finishOrder: 0,
-        visible: true,
-        tyreWear: Math.min(100, r.tyreWear ?? 100),
-        lapTimes: [],
-        pitStops: 0,
-        inPit: false,
-        pitEndAt: 0,
-        slideOffUntil: 0,
-        pitExitUntil: null,
-        position: i + 1,
-        carNumber: i + 1,
-        pitStrategy: buildStrategy(r.currentTyre, nRace, wd2.wearMult || 1, r.reliabilityWearMult || 1, r.isPlayer ? 0 : Math.floor(Math.random() * 3) - 1, r.strategyType || "normal"),
-        engineHealth: r.engineHealth ?? 100,
-        dnf: false,
-        dnfAtSec: 0,
-        dnfSparks: [],
-        fuelLoad: r.fuelLoad ?? 100,
-        currentSector: 0,
-        lastSectorCross: 0,
-        bestSectors: [Infinity, Infinity, Infinity],
-        sectorDelta: null,
-        inSlipstream: false,
-        tyreBlister: false,
-        overtakeBoostUntil: 0,
-        currentSpeedMph: null,
-        _justCrossedFrames: 0,
-        _targetPos: i + 1,
-        _smoothPos: i + 1,
-        _interactiveSfArmed: false,
+
+      // Re-sort by qualifying time (human visual times may have updated)
+      qualRacers.sort((a, b) => (a.qualTime || 999) - (b.qualTime || 999));
+
+      // Show qualifying results overlay
+      const qResults = qualRacers.map((r, i) => ({
+        id: r.id, name: r.name, color: r.color, isPlayer: r.isPlayer,
+        pos: i + 1, time: r.qualTime,
       }));
-      debugRace("grid_built_from_server_qualifying", { gridOrder: grid.map((x) => x.id) });
-      stateRef.current = {
-        racers: grid, track, nLaps: nRace, wd: wd2, safetyCar: sc,
-        fastestLap: { holderId: null, time: Infinity }, finishFlash: 0, incidents: [],
-      };
-      liveInitDone.current = true;
-      drawCanvas(track, cond, grid, 0);
-      startLightsSequence(grid, () => {
-        void (async () => {
-          const gf = onInteractiveGreenFlagRef.current;
-          if (gf) await gf();
-          setUiPhase("racing");
-          setLapDisp(nRace === 1 ? "Qualifying" : `1 / ${nRace}`);
-          setCommentary(rnd(COMMENTARY.start));
-          startRacing();
-        })();
-      });
+      setQualResults(qResults);
+      setUiPhase("qual-results");
+      setCommentary("Qualifying complete!");
+      drawCanvas(track, cond, qualRacers, 0);
+      debugRace("qual_results_shown", { order: qResults.map(q => ({ id: q.id, pos: q.pos, time: q.time })) });
+
+      // After showing results, proceed to grid/countdown
+      qualQueueTimerRef.current = setTimeout(() => {
+        setQualResults(null);
+        const nRace = liveTotalLapsRef.current || 3;
+        const wd2 = wd;
+        const trkSfL = track.sfLine ?? 0;
+        const grid = qualRacers.map((r, i) => ({
+          ...r,
+          trackPos: ((trkSfL + (qualRacers.length - i) * 0.012) % 1),
+          totalLapsDone: 0,
+          lapCount: 1,
+          finished: false,
+          finishOrder: 0,
+          visible: true,
+          tyreWear: Math.min(100, r.tyreWear ?? 100),
+          lapTimes: [],
+          pitStops: 0,
+          inPit: false,
+          pitEndAt: 0,
+          slideOffUntil: 0,
+          pitExitUntil: null,
+          position: i + 1,
+          carNumber: i + 1,
+          pitStrategy: buildStrategy(r.currentTyre, nRace, wd2.wearMult || 1, r.reliabilityWearMult || 1, r.isPlayer ? 0 : Math.floor(Math.random() * 3) - 1, r.strategyType || "normal"),
+          engineHealth: r.engineHealth ?? 100,
+          dnf: false,
+          dnfAtSec: 0,
+          dnfSparks: [],
+          fuelLoad: r.fuelLoad ?? 100,
+          currentSector: 0,
+          lastSectorCross: 0,
+          bestSectors: [Infinity, Infinity, Infinity],
+          sectorDelta: null,
+          inSlipstream: false,
+          tyreBlister: false,
+          overtakeBoostUntil: 0,
+          currentSpeedMph: null,
+          _justCrossedFrames: 0,
+          _targetPos: i + 1,
+          _smoothPos: i + 1,
+          _interactiveSfArmed: false,
+        }));
+        debugRace("grid_built_from_frontend_qualifying", { gridOrder: grid.map((x) => x.id) });
+        stateRef.current = {
+          racers: grid, track, nLaps: nRace, wd: wd2, safetyCar: sc,
+          fastestLap: { holderId: null, time: Infinity }, finishFlash: 0, incidents: [],
+        };
+        liveInitDone.current = true;
+        drawCanvas(track, cond, grid, 0);
+        startLightsSequence(grid, () => {
+          void (async () => {
+            const gf = onInteractiveGreenFlagRef.current;
+            if (gf) await gf();
+            setUiPhase("racing");
+            setLapDisp(nRace === 1 ? "Qualifying" : `1 / ${nRace}`);
+            setCommentary(rnd(COMMENTARY.start));
+            startRacing();
+          })();
+        });
+      }, 3500);
     };
 
     const runHumanQualAt = (idx) => {
@@ -3488,13 +3498,18 @@ export default function CircuitRaceView({
       setCommentary(`Qualifying lap — ${qr.name}`);
       const solo = [{ ...qr, totalLapsDone: 0, lapCount: 1, finished: false, finishOrder: 0, lapTimes: [] }];
       startRaceLoopRef.current(track, cond, 1, solo, {
-        onQualifyingComplete: () => {
-          debugRace("human_qual_run_complete", { idx, entrantId: qr.id, nextInMs: 5000 });
+        onQualifyingComplete: (sortedSolo) => {
+          const visualTime = sortedSolo?.[0]?.lapTimes?.[0];
+          if (visualTime != null) {
+            const rInArr = qualRacers.find(r => r.id === qr.id);
+            if (rInArr) rInArr.qualTime = visualTime;
+          }
+          debugRace("human_qual_run_complete", { idx, entrantId: qr.id, visualTime, nextInMs: 3000 });
           if (rafRef.current) {
             cancelAnimationFrame(rafRef.current);
             rafRef.current = null;
           }
-          qualQueueTimerRef.current = setTimeout(() => runHumanQualAt(idx + 1), 5000);
+          qualQueueTimerRef.current = setTimeout(() => runHumanQualAt(idx + 1), 3000);
         },
       });
     };
@@ -3543,7 +3558,7 @@ export default function CircuitRaceView({
   const handleReset=useCallback(()=>{
     if(onReset){if(rafRef.current)cancelAnimationFrame(rafRef.current);clearInterval(cdRef.current);clearTimeout(gridTimerRef.current);onReset();return;}
     if(rafRef.current)cancelAnimationFrame(rafRef.current);clearInterval(cdRef.current);clearTimeout(gridTimerRef.current);
-    setUiPhase("setup");setResults(null);setStandings([]);setLapDisp("—");setGridOrder(null);setGreenFlash(false);
+    setUiPhase("setup");setResults(null);setStandings([]);setLapDisp("—");setGridOrder(null);setGreenFlash(false);setQualResults(null);
     setCommentary("Select track & tyres, then start");
     resizeCanvas(); requestAnimationFrame(()=>drawCanvas(selTrack,effCond,[]));
   },[selTrack,effCond,drawCanvas,resizeCanvas,onReset]);
@@ -3674,6 +3689,21 @@ export default function CircuitRaceView({
           <div style={{ fontFamily:"'Crimson Text',serif",fontStyle:"italic",fontSize:"clamp(11px,2.5vw,14px)",color:"var(--noir-primary)",textShadow:"0 0 14px rgba(201,164,96,.5)" }}>{commentary}</div>
         </div>
 
+        {/* Qualifying results overlay */}
+        {uiPhase==="qual-results"&&qualResults&&(
+          <div style={{ position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.88)",pointerEvents:"none",gap:5,zIndex:10 }}>
+            <div style={{ fontFamily:"'Cinzel',serif",fontSize:"clamp(14px,4vw,22px)",fontWeight:700,letterSpacing:".25em",textTransform:"uppercase",color:"var(--noir-primary)",textShadow:"0 0 20px rgba(201,164,96,.5)",marginBottom:12 }}>Qualifying Results</div>
+            {qualResults.map((q,i)=>(
+              <div key={q.id} style={{ display:"flex",alignItems:"center",gap:10,padding:"4px 16px",background:q.isPlayer?"rgba(201,164,96,.15)":"transparent",borderRadius:3,minWidth:280 }}>
+                <span style={{ fontFamily:"'Cinzel',serif",fontSize:13,fontWeight:700,color:i===0?"#e8c870":i===1?"#bbb":i===2?"#cd853f":"var(--noir-muted)",width:28,textAlign:"right" }}>P{i+1}</span>
+                <span style={{ width:10,height:10,borderRadius:"50%",background:q.color,display:"inline-block",boxShadow:`0 0 6px ${q.color}80` }}/>
+                <span style={{ fontFamily:"'Cinzel',serif",fontSize:12,color:q.isPlayer?"#e8c870":"var(--noir-text)",flex:1 }}>{q.name}{q.isPlayer?" (You)":""}</span>
+                <span style={{ fontFamily:"'Cinzel',serif",fontSize:12,fontWeight:600,color:"var(--noir-muted)",letterSpacing:".05em" }}>{q.time!=null?q.time.toFixed(2)+"s":"—"}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Grid order flash */}
         {uiPhase==="grid"&&gridOrder&&(
           <div style={{ position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.82)",pointerEvents:"none",gap:6 }}>
@@ -3775,7 +3805,7 @@ export default function CircuitRaceView({
               Start Race
             </button>
           )}
-          {(uiPhase==="qualifying"||uiPhase==="grid"||uiPhase==="racing"||uiPhase==="done")&&(
+          {(uiPhase==="qualifying"||uiPhase==="qual-results"||uiPhase==="grid"||uiPhase==="racing"||uiPhase==="done")&&(
             <button type="button" onClick={handleReset}
               style={{ fontFamily:"'Cinzel',serif",fontSize:"9px",letterSpacing:".2em",textTransform:"uppercase",padding:"10px 16px",minHeight:44,border:"1px solid var(--noir-border)",background:"rgba(201,164,96,.07)",color:"var(--noir-primary)",cursor:"pointer",touchAction:"manipulation" }}>
               Reset
