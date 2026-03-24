@@ -759,8 +759,9 @@ export default function Racing() {
 
   const onInteractiveCircuitComplete = useCallback((resultOrderIds, dnfIds) => {
     if (!activeRace?.id) return;
+    if (!(activeRace?.mode === "interactive" || activeRace?.interactive)) return;
     void handleCompleteRace(activeRace.id, resultOrderIds, dnfIds);
-  }, [activeRace?.id, handleCompleteRace]);
+  }, [activeRace?.id, activeRace?.interactive, activeRace?.mode, handleCompleteRace]);
 
   const handleCreateTeam = async (e) => {
     e?.preventDefault();
@@ -1316,7 +1317,6 @@ export default function Racing() {
             playerPitLevel={profile?.pit_level ?? 0}
             currentUserId={profile?.user_id}
             rewards={activeRace.rewards || null}
-            onComplete={onInteractiveCircuitComplete}
             onReset={() => { try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); localStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {} setActiveRace(null); fetchOpenRaces(); }}
           />
         </div>
