@@ -50,6 +50,7 @@ function formatCountdown(expiresAtIso) {
 
 // Shown in toast when caught during booze run (prohibition bust)
 const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/12/0a79f-boston-rum-prohibition1.jpg';
+const MOLOTOV_BULLET_EQUIV = 5000;
 
 // Subcomponents
 const LoadingSpinner = () => (
@@ -1524,6 +1525,19 @@ export default function Attack() {
     }, 400);
     return () => clearTimeout(timer);
   }, [killUsername]);
+
+  // Convenience: if molotov mode is on and molotovs alone can cover the kill requirement,
+  // auto-set bullets input to 1 so the attack still includes a minimal bullet amount.
+  useEffect(() => {
+    const needed = Number(killBulletsResult?.bullets || 0);
+    if (!useMolotovs || needed < 1) return;
+    const molotovs = Number(userMolotovs || 0);
+    const canCoverWithMolotovs = (molotovs * MOLOTOV_BULLET_EQUIV) >= needed;
+    if (!canCoverWithMolotovs) return;
+    if (String(bulletsToUse || '').trim() !== '1') {
+      setBulletsToUse('1');
+    }
+  }, [useMolotovs, killBulletsResult?.bullets, userMolotovs, bulletsToUse, setBulletsToUse]);
 
   const foundAndReady = useMemo(() => attacks.filter((a) => a.status === 'found'), [attacks]);
   
