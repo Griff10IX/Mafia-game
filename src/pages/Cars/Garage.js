@@ -22,9 +22,18 @@ const GARAGE_STYLES = `
 const RARITY_ORDER = { exclusive: 7, loot_exclusive: 6, custom: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
 const DEFAULT_VISIBLE = 16;
 const MELT_SCRAP_RARITIES_KEY = 'garage_melt_scrap_rarities';
-/** Keep in sync with backend `server.MELT_VALUE_PER_BULLET` (melt bullets = floor(value / this)). */
+/** Keep in sync with backend melt math in `routers/cars/gta.py`. */
 const MELT_VALUE_PER_BULLET = 500;
+const MELT_VALUE_MULTIPLIER_NUM = 112; // +12% per car before conversion
+const MELT_VALUE_MULTIPLIER_DEN = 100;
 const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive'];
+
+function previewBulletsForCarValue(value) {
+  const carValue = Number(value || 0);
+  if (!Number.isFinite(carValue) || carValue <= 0) return 0;
+  const meltValue = Math.floor((carValue * MELT_VALUE_MULTIPLIER_NUM) / MELT_VALUE_MULTIPLIER_DEN);
+  return Math.floor(meltValue / MELT_VALUE_PER_BULLET);
+}
 
 function loadMeltScrapRarities() {
   try {
@@ -215,7 +224,7 @@ const ActionsBar = ({
             <button
               onClick={onMelt}
               disabled={meltOnCooldown}
-              title={meltOnCooldown ? `1 car per 45s. Next in ${meltBulletsSecondsRemaining}s` : 'Melt for bullets (1 car every 45s)'}
+              title={meltOnCooldown ? `Melt cooldown active. Next melt in ${meltBulletsSecondsRemaining}s` : 'Melt selected eligible cars for bullets'}
               className={`rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase tracking-wide border inline-flex items-center gap-1.5 touch-manipulation transition-all ${
                 meltOnCooldown
                   ? 'bg-secondary/50 text-mutedForeground border-border cursor-not-allowed'
@@ -223,7 +232,7 @@ const ActionsBar = ({
               }`}
             >
               <Flame size={12} />
-              Melt (1/45s)
+              Melt bullets
               {selectedEligibleCount > 0 && selectedEligibleCount !== selectedCount && (
                 <span className="font-normal normal-case text-amber-300/90">({selectedEligibleCount} eligible)</span>
               )}
@@ -608,7 +617,7 @@ export default function Garage() {
   );
   const predictedMeltBullets = selectedCarsForMelt
     .slice(0, batchLimit)
-    .reduce((sum, c) => sum + Math.floor((c.value || 0) / MELT_VALUE_PER_BULLET), 0);
+    .reduce((sum, c) => sum + previewBulletsForCarValue(c.value), 0);
 
   const toggleSelectAllDisplayed = () => {
     if (noEligibleInView) return;
