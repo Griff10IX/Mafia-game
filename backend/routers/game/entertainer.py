@@ -92,6 +92,21 @@ def _random_bullets():
     return _rng.randint(1, 25)
 
 
+def _token_label(token_type: str) -> str:
+    custom = {
+        "xp_crimes": "XP Crimes",
+        "xp_gta": "XP GTA",
+        "melt": "Melt",
+        "oc_reduced": "OC Reduced",
+        "booze": "Booze",
+        "racket": "Racket",
+        "travel": "Travel",
+        "properties": "Properties",
+        "jailbust_bonus": "Jailbust Bonus",
+    }
+    return custom.get(token_type, token_type.replace("_", " ").title())
+
+
 async def _give_random_reward(user_id: str) -> dict:
     """Apply a random reward to user. Returns description for result."""
     reward_type = _rng.choices(
@@ -217,7 +232,7 @@ def _format_reward_desc(desc: dict) -> str:
         for token_type, amount in (desc.get("tokens") or {}).items():
             if not amount:
                 continue
-            label = token_type.replace("_", " ")
+            label = _token_label(token_type)
             token_parts.append(f"{int(amount)} {label} token")
         if token_parts:
             parts.append(", ".join(token_parts))
@@ -309,6 +324,54 @@ class CreateGameRequest(BaseModel):
     topic_id: Optional[str] = None  # optional; when created from a topic
 
 
+class HangmanGuessRequest(BaseModel):
+    guess: str
+
+
+def _hangman_init_state() -> dict:
+    return {
+        "word": _rng.choice(HANGMAN_WORDS),
+        "attempts_per_user": 3,
+        "guesses": {},  # user_id -> [{"guess": str, "correct": bool, "at": iso}]
+        "solved_by": None,
+        "solved_at": None,
+    }
+
+
+def _hangman_public_state(game: dict, current_user_id: Optional[str]) -> Optional[dict]:
+    if game.get("game_type") != "hangman":
+        return None
+    state = game.get("hangman_state") or {}
+    attempts_per_user = int(state.get("attempts_per_user") or 3)
+    guesses_by_user = state.get("guesses") or {}
+    my_guesses = guesses_by_user.get(current_user_id, []) if current_user_id else []
+    word = state.get("word") or ""
+    solved = bool(state.get("solved_by"))
+    return {
+        "attempts_per_user": attempts_per_user,
+        "my_attempts_used": len(my_guesses),
+        "my_attempts_left": max(0, attempts_per_user - len(my_guesses)),
+        "my_guesses": my_guesses,
+        "total_guesses": sum(len(v or []) for v in guesses_by_user.values()),
+        "word_length": len(word),
+        "revealed_pattern": state.get("revealed_pattern") or ("_" * len(word) if word else ""),
+        "solved_by": state.get("solved_by"),
+        "solved_at": state.get("solved_at"),
+        "solved": solved,
+    }
+
+
+def _with_public_hangman(game: dict, current_user_id: Optional[str]) -> dict:
+    g = dict(game or {})
+    if g.get("game_type") == "hangman":
+        g["hangman"] = _hangman_public_state(g, current_user_id)
+        if "hangman_state" in g:
+            hs = dict(g.get("hangman_state") or {})
+            hs.pop("word", None)
+            g["hangman_state"] = hs
+    return g
+
+
 async def _run_dice_payout(game: dict):
     """One winner by roll; winner gets a random reward (cash/bullets/tokens/cars)."""
     participants = game.get("participants") or []
@@ -335,18 +398,39 @@ async def _run_dice_payout(game: dict):
 
 
 async def _run_hangman_payout(game: dict):
-    """Single winner by random pick; includes thematic Hangman result metadata."""
+    """Single winner from correct guess (earliest). Fallback random if unsolved."""
     participants = game.get("participants") or []
     if not participants:
         return None
-    winner = _rng.choice(participants)
+    state = game.get("hangman_state") or {}
+    guesses = state.get("guesses") or {}
+    winner = None
+    solved_guess = None
+    correct_attempts = []
+    for p in participants:
+        uid = p.get("user_id")
+        if not uid:
+            continue
+        for attempt in (guesses.get(uid) or []):
+            if attempt.get("correct"):
+                correct_attempts.append((attempt.get("at") or "", uid, attempt))
+    if correct_attempts:
+        correct_attempts.sort(key=lambda t: t[0])
+        win_uid = correct_attempts[0][1]
+        solved_guess = correct_attempts[0][2]
+        winner = next((p for p in participants if p.get("user_id") == win_uid), None)
+    if not winner:
+        winner = _rng.choice(participants)
     winner_id = winner.get("user_id")
     winner_username = winner.get("username")
     reward = None
     if winner_id:
         reward = await _give_random_reward(winner_id)
-    word = _rng.choice(HANGMAN_WORDS)
-    revealed_pattern = "".join(ch if _rng.random() < 0.45 else "_" for ch in word)
+    word = state.get("word") or _rng.choice(HANGMAN_WORDS)
+    if solved_guess and solved_guess.get("correct"):
+        revealed_pattern = word
+    else:
+        revealed_pattern = "".join(ch if _rng.random() < 0.35 else "_" for ch in word)
     misses = _rng.randint(0, 6)
     return {
         "winner_id": winner_id,
@@ -355,6 +439,8 @@ async def _run_hangman_payout(game: dict):
         "word": word,
         "revealed_pattern": revealed_pattern,
         "misses": misses,
+        "solved_by_guess": bool(solved_guess),
+        "winning_guess": (solved_guess or {}).get("guess"),
     }
 
 
@@ -416,7 +502,7 @@ async def get_prizes(current_user: dict = Depends(get_current_user)):
         for c in CARS
         if c.get("id") not in ("car_custom", "car20") and c.get("rarity") in ("common", "uncommon", "rare")
     ]
-    token_labels = [{"token_type": t, "label": t.replace("_", " ")} for t in TOKEN_TYPES]
+    token_labels = [{"token_type": t, "label": _token_label(t)} for t in TOKEN_TYPES]
     return {
         "cash": {"min": 100, "max": 2000},
         "bullets": {"min": 1, "max": 25},
@@ -438,7 +524,7 @@ async def list_games(
     if status and status in ("open", "full", "completed"):
         query["status"] = status
     games = await db.entertainer_games.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
-    return {"games": games}
+    return {"games": [_with_public_hangman(g, current_user.get("id")) for g in games]}
 
 
 async def games_history(current_user: dict = Depends(get_current_user)):
@@ -481,7 +567,7 @@ async def get_game(game_id: str, current_user: dict = Depends(get_current_user))
     game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    return {"game": game}
+    return {"game": _with_public_hangman(game, current_user.get("id"))}
 
 
 async def create_game(
@@ -524,8 +610,10 @@ async def create_game(
         "manual_roll": manual_roll,
         "topic_id": topic_id,
     }
+    if request.game_type == "hangman":
+        doc["hangman_state"] = _hangman_init_state()
     await db.entertainer_games.insert_one(doc)
-    return {"id": game_id, "message": "Game created", "game": {**doc, "participants": participants}}
+    return {"id": game_id, "message": "Game created", "game": _with_public_hangman({**doc, "participants": participants}, current_user.get("id"))}
 
 
 async def join_game(game_id: str, current_user: dict = Depends(get_current_user)):
@@ -537,6 +625,8 @@ async def join_game(game_id: str, current_user: dict = Depends(get_current_user)
         raise HTTPException(status_code=400, detail="Game is not open to join")
     max_players = game.get("max_players", 10)
     join_fee = int(game.get("join_fee") or 0)
+    if game.get("game_type") == "hangman" and not game.get("hangman_state"):
+        await db.entertainer_games.update_one({"id": game_id}, {"$set": {"hangman_state": _hangman_init_state()}})
     if join_fee > 0:
         result = await db.users.update_one(
             {"id": current_user["id"], "money": {"$gte": join_fee}},
@@ -568,7 +658,61 @@ async def join_game(game_id: str, current_user: dict = Depends(get_current_user)
         game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
         await _settle_game(game)
     updated = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
-    return {"message": "Joined game" + (" — rewards rolled!" if is_full else ""), "game": updated}
+    return {"message": "Joined game" + (" — rewards rolled!" if is_full else ""), "game": _with_public_hangman(updated, current_user.get("id"))}
+
+
+async def guess_hangman(
+    game_id: str,
+    body: HangmanGuessRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Submit a whole-word Hangman guess (3 attempts per player)."""
+    game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if game.get("game_type") != "hangman":
+        raise HTTPException(status_code=400, detail="This game is not hangman")
+    if game.get("status") != "open":
+        raise HTTPException(status_code=400, detail="Game is not open")
+    uid = current_user["id"]
+    participants = game.get("participants") or []
+    if not any((p.get("user_id") == uid) for p in participants):
+        raise HTTPException(status_code=403, detail="Join the game first")
+    state = game.get("hangman_state") or _hangman_init_state()
+    if state.get("solved_by"):
+        raise HTTPException(status_code=400, detail="Word already solved")
+    guess_raw = (body.guess or "").strip().upper()
+    if not guess_raw:
+        raise HTTPException(status_code=400, detail="Guess cannot be empty")
+    word = (state.get("word") or "").strip().upper()
+    attempts_per_user = int(state.get("attempts_per_user") or 3)
+    guesses_by_user = state.get("guesses") or {}
+    mine = list(guesses_by_user.get(uid) or [])
+    if len(mine) >= attempts_per_user:
+        raise HTTPException(status_code=400, detail=f"No attempts left ({attempts_per_user}/{attempts_per_user})")
+    correct = guess_raw == word
+    now_iso = datetime.now(timezone.utc).isoformat()
+    mine.append({"guess": guess_raw, "correct": bool(correct), "at": now_iso})
+    guesses_by_user[uid] = mine
+    new_state = dict(state)
+    new_state["guesses"] = guesses_by_user
+    if correct:
+        new_state["solved_by"] = uid
+        new_state["solved_at"] = now_iso
+        new_state["revealed_pattern"] = word
+    await db.entertainer_games.update_one({"id": game_id, "status": "open"}, {"$set": {"hangman_state": new_state}})
+    updated = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
+    if not updated:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if correct and updated.get("status") == "open":
+        await _settle_game(updated)
+        updated = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
+    return {
+        "message": "Correct guess! Game settled." if correct else "Guess submitted",
+        "correct": bool(correct),
+        "attempts_left": max(0, attempts_per_user - len(mine)),
+        "game": _with_public_hangman(updated, uid),
+    }
 
 
 # ---------- Manual roll: admin or creator (for manual_roll games) ----------
@@ -646,6 +790,8 @@ async def _create_system_game(game_type: str, max_players: int) -> dict:
         "completed_at": None,
         "result": None,
     }
+    if game_type == "hangman":
+        doc["hangman_state"] = _hangman_init_state()
     await db.entertainer_games.insert_one(doc)
     return doc
 
@@ -735,6 +881,7 @@ def register(router):
     router.add_api_route("/forum/entertainer/games/history", games_history, methods=["GET"])
     router.add_api_route("/forum/entertainer/games/{game_id}", get_game, methods=["GET"])
     router.add_api_route("/forum/entertainer/games/{game_id}/join", join_game, methods=["POST"])
+    router.add_api_route("/forum/entertainer/games/{game_id}/guess", guess_hangman, methods=["POST"])
     router.add_api_route("/forum/entertainer/games/{game_id}/roll", admin_roll_game, methods=["POST"])
     router.add_api_route("/forum/entertainer/admin/config", get_entertainer_config, methods=["GET"])
     router.add_api_route("/forum/entertainer/admin/config", update_entertainer_config, methods=["PATCH"])

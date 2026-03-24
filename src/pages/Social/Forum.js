@@ -897,6 +897,27 @@ export default function Forum() {
     }
   };
 
+  const handleGuessHangman = async (game) => {
+    const hang = game?.hangman || {};
+    const left = Number(hang.my_attempts_left || 0);
+    if (left <= 0) {
+      toast.error('No attempts left');
+      return;
+    }
+    const guess = window.prompt(`Guess the word (${hang.word_length || '?'} letters). Attempts left: ${left}`);
+    if (!guess || !guess.trim()) return;
+    try {
+      const res = await api.post(`/forum/entertainer/games/${game.id}/guess`, { guess: guess.trim() });
+      if (res.data?.correct) toast.success('Correct! You solved it.');
+      else toast.success(`Wrong guess. Attempts left: ${res.data?.attempts_left ?? Math.max(0, left - 1)}`);
+      fetchEntertainerGames();
+      fetchEntertainerHistory();
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to submit guess');
+    }
+  };
+
   const handleDesignerVote = async (compId, entryId) => {
     setDesignerVotingId(entryId);
     try {
@@ -1445,6 +1466,11 @@ export default function Forum() {
                             <Users size={10} className="inline" /> {participants.length}/{g.max_players}
                           </span>
                           <span className="text-primary text-[10px] ml-2">Winnings: cash, bullets, tokens, cars</span>
+                          {g.game_type === 'hangman' && g.hangman && (
+                            <span className="text-[10px] text-amber-400 ml-2">
+                              Word: {g.hangman.revealed_pattern || '—'} ({g.hangman.word_length || 0}) · Attempts: {g.hangman.my_attempts_left ?? 0}/3
+                            </span>
+                          )}
                           {g.manual_roll && (
                             <span className="text-[10px] text-mutedForeground ml-2">Manual roll</span>
                           )}
@@ -1464,6 +1490,17 @@ export default function Forum() {
                           </button>
                         )}
                         {isIn && <span className="text-[10px] text-mutedForeground">You're in</span>}
+                        {isIn && g.game_type === 'hangman' && g.status === 'open' && (
+                          <button
+                            type="button"
+                            onClick={() => handleGuessHangman(g)}
+                            disabled={(g.hangman?.my_attempts_left ?? 0) <= 0 || !!g.hangman?.solved}
+                            className="px-2 py-1 bg-amber-500/20 border border-amber-500/50 text-amber-400 text-[10px] font-heading font-bold uppercase rounded hover:bg-amber-500/30 disabled:opacity-50"
+                            title="You get 3 guesses"
+                          >
+                            Guess
+                          </button>
+                        )}
                         {((isAdmin || (g.manual_roll && user && g.creator_id === user.id)) && g.status === 'open') && (
                           <button
                             type="button"
