@@ -225,6 +225,11 @@ class FamilyWithdrawRequest(BaseModel):
     bullets: int = 0
 
 
+class FamilyGiveBulletsRequest(BaseModel):
+    user_id: str
+    bullets: int
+
+
 class CompoundDepositRequest(BaseModel):
     cash: int = 0
     points: int = 0
@@ -1574,6 +1579,92 @@ async def families_withdraw(request: FamilyWithdrawRequest, current_user: dict =
     return {"message": "Withdrew from treasury"}
 
 
+async def families_give_bullets(request: FamilyGiveBulletsRequest, current_user: dict = Depends(get_current_user)):
+    if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail="Vault is locked until the family war is over")
+    target_id = str(request.user_id or "").strip()
+    bullets = int(request.bullets or 0)
+    if not target_id:
+        raise HTTPException(status_code=400, detail="Target member is required")
+    if bullets <= 0:
+        raise HTTPException(status_code=400, detail="Invalid bullet amount")
+    member = await db.family_members.find_one({"family_id": family_id, "user_id": target_id}, {"_id": 0, "user_id": 1})
+    if not member:
+        raise HTTPException(status_code=404, detail="Target is not in your family")
+    target_user = await db.users.find_one({"id": target_id}, {"_id": 0, "is_dead": 1})
+    if not target_user or target_user.get("is_dead"):
+        raise HTTPException(status_code=400, detail="Target member must be alive")
+    debited = await db.families.update_one(
+        {"id": family_id, "treasury_bullets": {"$gte": bullets}},
+        {"$inc": {"treasury_bullets": -bullets}},
+    )
+    if debited.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Not enough family bullets")
+    await db.users.update_one({"id": target_id}, {"$inc": {"bullets": bullets}})
+    _invalidate_my_cache(current_user["id"])
+    _invalidate_my_cache(target_id)
+    return {"message": f"Gave {bullets:,} bullets to family member"}
+
+
+async def families_split_all_bullets(current_user: dict = Depends(get_current_user)):
+    if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail="Vault is locked until the family war is over")
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury_bullets": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    total_bullets = int(fam.get("treasury_bullets") or 0)
+    if total_bullets <= 0:
+        raise HTTPException(status_code=400, detail="No bullets in family vault")
+    members = await db.family_members.find({"family_id": family_id}, {"_id": 0, "user_id": 1}).to_list(200)
+    member_ids = [str(m.get("user_id") or "").strip() for m in members if (m.get("user_id") or "").strip()]
+    if not member_ids:
+        raise HTTPException(status_code=400, detail="No family members found")
+    living = await db.users.find(
+        {"id": {"$in": member_ids}, "is_dead": {"$ne": True}},
+        {"_id": 0, "id": 1},
+    ).to_list(200)
+    living_ids = sorted({str(u.get("id") or "").strip() for u in living if (u.get("id") or "").strip()})
+    if not living_ids:
+        raise HTTPException(status_code=400, detail="No living family members")
+    each = total_bullets // len(living_ids)
+    remainder = total_bullets % len(living_ids)
+    if each <= 0 and remainder <= 0:
+        raise HTTPException(status_code=400, detail="Not enough bullets to split")
+    distribution = {}
+    for idx, uid in enumerate(living_ids):
+        give = each + (1 if idx < remainder else 0)
+        if give > 0:
+            distribution[uid] = give
+    to_distribute = sum(distribution.values())
+    debited = await db.families.update_one(
+        {"id": family_id, "treasury_bullets": {"$gte": to_distribute}},
+        {"$inc": {"treasury_bullets": -to_distribute}},
+    )
+    if debited.modified_count == 0:
+        raise HTTPException(status_code=409, detail="Vault changed, please try again")
+    for uid, amt in distribution.items():
+        await db.users.update_one({"id": uid}, {"$inc": {"bullets": amt}})
+        _invalidate_my_cache(uid)
+    _invalidate_my_cache(current_user["id"])
+    return {
+        "message": f"Split {to_distribute:,} bullets across {len(distribution)} living members",
+        "total_split": to_distribute,
+        "member_count": len(distribution),
+        "each_base": each,
+        "remainder_distributed": remainder,
+    }
+
+
 async def families_compound_deposit(request: CompoundDepositRequest, current_user: dict = Depends(get_current_user)):
     family_id = current_user.get("family_id")
     if not family_id:
@@ -2899,6 +2990,8 @@ def register(router):
     router.add_api_route("/families/assign-role", families_assign_role, methods=["POST"])
     router.add_api_route("/families/deposit", families_deposit, methods=["POST"])
     router.add_api_route("/families/withdraw", families_withdraw, methods=["POST"])
+    router.add_api_route("/families/bullets/give", families_give_bullets, methods=["POST"])
+    router.add_api_route("/families/bullets/split-all", families_split_all_bullets, methods=["POST"])
     router.add_api_route("/families/compound/deposit", families_compound_deposit, methods=["POST"])
     router.add_api_route("/families/compound/withdraw", families_compound_withdraw, methods=["POST"])
     router.add_api_route("/families/compound/return-to-member", families_compound_return_to_member, methods=["POST"])

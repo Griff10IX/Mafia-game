@@ -236,6 +236,7 @@ const TreasuryTab = ({
   meltTreasuryPct, meltRewardTiers, members,
   depositAmount, setDepositAmount, depositBullets, setDepositBullets,
   withdrawAmount, setWithdrawAmount, withdrawBullets, setWithdrawBullets, onDeposit, onWithdraw,
+  giveBulletsUserId, setGiveBulletsUserId, giveBulletsAmount, setGiveBulletsAmount, onGiveBullets, onSplitAllBullets, splitAllBulletsLoading,
   compoundCash, compoundPoints, compoundLootPieces, myCompoundCash, myCompoundPoints, myCompoundLootPieces, myCompoundCars,
   compoundDepositCash, setCompoundDepositCash, compoundDepositPoints, setCompoundDepositPoints, compoundDepositLootPieces, setCompoundDepositLootPieces,
   compoundWithdrawCash, setCompoundWithdrawCash, compoundWithdrawPoints, setCompoundWithdrawPoints, compoundWithdrawLootPieces, setCompoundWithdrawLootPieces,
@@ -335,6 +336,37 @@ const TreasuryTab = ({
           />
           <button type="submit" className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-zinc-700/50 border-zinc-600/50 text-zinc-300 hover:bg-zinc-700/70 transition-all shrink-0 touch-manipulation">
             Withdraw
+          </button>
+        </form>
+
+        <form onSubmit={onGiveBullets} className="flex flex-wrap gap-2 mt-2">
+          <select
+            value={giveBulletsUserId}
+            onChange={(e) => setGiveBulletsUserId(e.target.value)}
+            className="flex-1 min-w-[140px] bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-2 text-xs font-heading focus:border-primary/50 focus:outline-none"
+          >
+            <option value="">Give bullets to member...</option>
+            {(members || []).map((m) => (
+              <option key={m.user_id} value={m.user_id}>{m.username}</option>
+            ))}
+          </select>
+          <FormattedNumberInput
+            value={giveBulletsAmount}
+            onChange={setGiveBulletsAmount}
+            placeholder="Bullets"
+            className="w-28 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors"
+          />
+          <button type="submit" className="px-3 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30 transition-all shrink-0 touch-manipulation">
+            Give
+          </button>
+          <button
+            type="button"
+            onClick={onSplitAllBullets}
+            disabled={splitAllBulletsLoading}
+            className="px-3 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 transition-all shrink-0 touch-manipulation disabled:opacity-50"
+            title="Split all vault bullets across all living family members"
+          >
+            {splitAllBulletsLoading ? '...' : 'Split all bullets'}
           </button>
         </form>
       </div>
@@ -1863,6 +1895,9 @@ export default function FamilyPage() {
   const [depositBullets, setDepositBullets] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawBullets, setWithdrawBullets] = useState('');
+  const [giveBulletsUserId, setGiveBulletsUserId] = useState('');
+  const [giveBulletsAmount, setGiveBulletsAmount] = useState('');
+  const [splitAllBulletsLoading, setSplitAllBulletsLoading] = useState(false);
   const [compoundDepositCash, setCompoundDepositCash] = useState('');
   const [compoundDepositPoints, setCompoundDepositPoints] = useState('');
   const [compoundDepositLootPieces, setCompoundDepositLootPieces] = useState('');
@@ -1989,6 +2024,32 @@ export default function FamilyPage() {
       fetchData();
     } catch (e) { toast.error(apiDetail(e)); }
   };
+  const handleGiveBullets = async (e) => {
+    e.preventDefault();
+    const user_id = String(giveBulletsUserId || '').trim();
+    const bullets = parseInt(String(giveBulletsAmount).replace(/\D/g, ''), 10) || 0;
+    if (!user_id || bullets <= 0) return;
+    try {
+      await api.post('/families/bullets/give', { user_id, bullets });
+      toast.success('Bullets sent');
+      setGiveBulletsAmount('');
+      setGiveBulletsUserId('');
+      refreshUser();
+      fetchData();
+    } catch (e) { toast.error(apiDetail(e)); }
+  };
+  const handleSplitAllBullets = async () => {
+    if (splitAllBulletsLoading) return;
+    if (!window.confirm('Split ALL vault bullets across all living family members?')) return;
+    setSplitAllBulletsLoading(true);
+    try {
+      const res = await api.post('/families/bullets/split-all');
+      toast.success(res?.data?.message || 'Split complete');
+      refreshUser();
+      fetchData();
+    } catch (e) { toast.error(apiDetail(e)); }
+    finally { setSplitAllBulletsLoading(false); }
+  };
   const handleCompoundDeposit = async (e) => {
     e.preventDefault();
     const cash = parseInt(String(compoundDepositCash).replace(/\D/g, ''), 10) || 0;
@@ -2038,20 +2099,24 @@ export default function FamilyPage() {
     setCollectAllRacketsLoading(true);
     let collected = 0;
     let total = 0;
-    for (const r of ready) {
-      try {
-        const res = await api.post(`/families/rackets/${r.id}/collect`);
-        collected++;
-        total += Number(res.data?.amount ?? 0);
-      } catch (e) {
-        toast.error(apiDetail(e));
+    try {
+      for (const r of ready) {
+        try {
+          const res = await api.post(`/families/rackets/${r.id}/collect`);
+          collected++;
+          total += Number(res.data?.amount ?? 0);
+        } catch (e) {
+          toast.error(apiDetail(e));
+        }
       }
+      // Keep button disabled until fresh cooldown state is loaded.
+      await fetchData();
+      if (collected > 0) {
+        toast.success(total > 0 ? `Collected ${formatMoneyFull(total)} from ${collected} racket${collected === 1 ? '' : 's'}` : `Collected from ${collected} racket${collected === 1 ? '' : 's'}`);
+      }
+    } finally {
+      setCollectAllRacketsLoading(false);
     }
-    if (collected > 0) {
-      fetchData();
-      toast.success(total > 0 ? `Collected ${formatMoneyFull(total)} from ${collected} racket${collected === 1 ? '' : 's'}` : `Collected from ${collected} racket${collected === 1 ? '' : 's'}`);
-    }
-    setCollectAllRacketsLoading(false);
   };
   const upgradeRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/upgrade`); toast.success(res.data?.message || 'Upgraded'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const unlockRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/unlock`); toast.success(res.data?.message || 'Unlocked'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
@@ -2337,6 +2402,13 @@ export default function FamilyPage() {
                 setWithdrawBullets={setWithdrawBullets}
                 onDeposit={handleDeposit}
                 onWithdraw={handleWithdraw}
+                giveBulletsUserId={giveBulletsUserId}
+                setGiveBulletsUserId={setGiveBulletsUserId}
+                giveBulletsAmount={giveBulletsAmount}
+                setGiveBulletsAmount={setGiveBulletsAmount}
+                onGiveBullets={handleGiveBullets}
+                onSplitAllBullets={handleSplitAllBullets}
+                splitAllBulletsLoading={splitAllBulletsLoading}
                 compoundCash={family.compound_cash}
                 compoundPoints={family.compound_points}
                 compoundLootPieces={family.compound_loot_pieces}

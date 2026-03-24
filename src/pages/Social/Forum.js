@@ -4,6 +4,7 @@ import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, Message
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
+import FormattedNumberInput from '../../components/FormattedNumberInput';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
 
