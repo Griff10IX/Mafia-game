@@ -135,6 +135,7 @@ const ActionsBar = ({
   hiddenCount,
   showAll,
   selectedCount,
+  selectedEligibleCount,
   allDisplayedSelected,
   noEligibleInView,
   filterActive,
@@ -161,6 +162,9 @@ const ActionsBar = ({
           {selectedCount > 0 && (
             <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/30">
               {selectedCount} selected
+              {selectedEligibleCount !== selectedCount && (
+                <span className="text-amber-300 font-normal"> ({selectedEligibleCount} eligible)</span>
+              )}
             </span>
           )}
           
@@ -220,6 +224,9 @@ const ActionsBar = ({
             >
               <Flame size={12} />
               Melt (1/45s)
+              {selectedEligibleCount > 0 && selectedEligibleCount !== selectedCount && (
+                <span className="font-normal normal-case text-amber-300/90">({selectedEligibleCount} eligible)</span>
+              )}
               {predictedMeltBullets != null && predictedMeltBullets > 0 && (
                 <span className="font-normal normal-case text-amber-400/90">→ {predictedMeltBullets.toLocaleString()} bullets</span>
               )}
@@ -671,6 +678,7 @@ export default function Garage() {
             hiddenCount={hiddenCount}
             showAll={showAll}
             selectedCount={selectedCars.length}
+            selectedEligibleCount={selectedCarsForMelt.length}
             allDisplayedSelected={allDisplayedSelected}
             noEligibleInView={noEligibleInView}
             filterActive={filterActive}

@@ -632,7 +632,17 @@ async def _users_map_by_ids(user_ids: list, projection: Optional[dict] = None) -
     if not user_ids:
         return {}
     uids = list(dict.fromkeys([s for u in user_ids if (s := _uid_str(u))]))
-    proj = projection or {"_id": 0, "username": 1, "rank": 1, "is_dead": 1, "dead_at": 1}
+    proj = projection or {
+        "_id": 0,
+        "username": 1,
+        "rank": 1,
+        "is_dead": 1,
+        "dead_at": 1,
+        "bullets_melted": 1,
+        "family_bullets_melted": 1,
+        "family_melt_reward_money_earned": 1,
+        "family_melt_reward_hits": 1,
+    }
     # Match users.id whether stored as string or legacy int (Mongo $in is strict on type)
     or_clauses = []
     seen = set()
@@ -857,6 +867,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "rank_name": rank_name,
             "bullets_melted": int((u or {}).get("bullets_melted") or 0),
             "family_bullets_melted": int((u or {}).get("family_bullets_melted") or 0),
+            "family_melt_reward_money_earned": int((u or {}).get("family_melt_reward_money_earned") or 0),
+            "family_melt_reward_hits": int((u or {}).get("family_melt_reward_hits") or 0),
         }
         if (u or {}).get("is_dead"):
             entry["dead_at"] = (u or {}).get("dead_at")
@@ -1069,6 +1081,8 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
             "rank_name": rank_name,
             "bullets_melted": int((u or {}).get("bullets_melted") or 0),
             "family_bullets_melted": int((u or {}).get("family_bullets_melted") or 0),
+            "family_melt_reward_money_earned": int((u or {}).get("family_melt_reward_money_earned") or 0),
+            "family_melt_reward_hits": int((u or {}).get("family_melt_reward_hits") or 0),
         }
         if (u or {}).get("is_dead"):
             entry["dead_at"] = (u or {}).get("dead_at")

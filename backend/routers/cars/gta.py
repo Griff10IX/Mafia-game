@@ -870,6 +870,8 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                         "money": melt_reward_paid,
                         "bullets_melted": player_bullets,
                         "family_bullets_melted": family_cut,
+                        "family_melt_reward_money_earned": melt_reward_paid,
+                        "family_melt_reward_hits": 1 if melt_reward_paid > 0 else 0,
                         "cars_melted": deleted_count,
                         "uncommon_cars_scrapped": uncommon_count,
                     },

@@ -232,7 +232,8 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect
 // ============================================================================
 
 const TreasuryTab = ({
-  treasury, treasuryPoints, treasuryLootPieces, canWithdraw, vaultAndRacketsLocked,
+  treasury, treasuryBullets, treasuryPoints, treasuryLootPieces, canWithdraw, vaultAndRacketsLocked,
+  meltTreasuryPct, meltRewardTiers, members,
   depositAmount, setDepositAmount, withdrawAmount, setWithdrawAmount, onDeposit, onWithdraw,
   compoundCash, compoundPoints, compoundLootPieces, myCompoundCash, myCompoundPoints, myCompoundLootPieces, myCompoundCars,
   compoundDepositCash, setCompoundDepositCash, compoundDepositPoints, setCompoundDepositPoints, compoundDepositLootPieces, setCompoundDepositLootPieces,
@@ -263,6 +264,47 @@ const TreasuryTab = ({
           {(treasuryPoints ?? 0) > 0 && (treasuryLootPieces ?? 0) > 0 && ' · '}
           {(treasuryLootPieces ?? 0) > 0 && <span>{(treasuryLootPieces ?? 0).toLocaleString()} loot pieces</span>}
         </p>
+      )}
+      <p className="text-[10px] font-heading text-amber-300 mt-2">
+        Bullet treasury: {(Number(treasuryBullets || 0)).toLocaleString()} bullets
+      </p>
+      <p className="text-[9px] text-zinc-500 font-heading mt-1">
+        Family melt cut: {Number(meltTreasuryPct || 0)}%
+      </p>
+    </div>
+
+    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3">
+      <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2">Melt rewards (configured)</p>
+      {(meltRewardTiers && meltRewardTiers.length > 0) ? (
+        <div className="space-y-1.5">
+          {meltRewardTiers.map((t) => (
+            <div key={t.threshold_bullets} className="flex items-center justify-between px-2 py-1 rounded bg-zinc-900/40 border border-zinc-700/30">
+              <span className="text-[10px] text-zinc-300">{Number(t.threshold_bullets || 0).toLocaleString()} bullets</span>
+              <span className="text-[10px] text-emerald-400">{formatMoneyFull(t.reward_money || 0)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[10px] text-zinc-500">No reward tiers set.</p>
+      )}
+    </div>
+
+    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3">
+      <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2">Member melt + reward stats</p>
+      {(members && members.length > 0) ? (
+        <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+          {[...members]
+            .sort((a, b) => Number(b.family_bullets_melted || 0) - Number(a.family_bullets_melted || 0))
+            .map((m) => (
+              <div key={m.user_id} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 px-2 py-1 rounded bg-zinc-900/40 border border-zinc-700/30">
+                <span className="text-[10px] text-foreground truncate">{m.username}</span>
+                <span className="text-[10px] text-amber-300">{Number(m.family_bullets_melted || 0).toLocaleString()} family bullets</span>
+                <span className="text-[10px] text-emerald-400">{formatMoneyFull(m.family_melt_reward_money_earned || 0)} ({Number(m.family_melt_reward_hits || 0)}x)</span>
+              </div>
+            ))}
+        </div>
+      ) : (
+        <p className="text-[10px] text-zinc-500">No member data.</p>
       )}
     </div>
 
@@ -570,6 +612,9 @@ const RosterTab = ({
                   Melted: {(Number(m.bullets_melted || 0)).toLocaleString()} bullets
                   {' '}({(Number(m.family_bullets_melted || 0)).toLocaleString()} to family)
                 </p>
+                <p className="text-[9px] text-emerald-400/90 mt-0.5">
+                  Rewards: {formatMoneyFull(m.family_melt_reward_money_earned || 0)} ({Number(m.family_melt_reward_hits || 0)}x)
+                </p>
               </div>
               {canManage && m.role !== 'boss' && (
                 <button onClick={() => onKick(m.user_id)} className="text-red-400 hover:text-red-300 text-[9px] font-bold px-2 py-1 rounded hover:bg-red-500/10 transition-all shrink-0">
@@ -727,20 +772,20 @@ const RosterTab = ({
             <div className="flex flex-wrap gap-2 items-end">
               <div>
                 <label className="block text-[9px] text-zinc-500 font-heading mb-0.5">Threshold bullets</label>
-                <input
+                <FormattedNumberInput
                   value={tierThresholdInput}
-                  onChange={(e) => setTierThresholdInput(e.target.value.replace(/[^\d]/g, ''))}
+                  onChange={setTierThresholdInput}
                   className="bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] font-heading focus:border-primary/50 focus:outline-none w-32"
-                  placeholder="5000"
+                  placeholder="5,000"
                 />
               </div>
               <div>
                 <label className="block text-[9px] text-zinc-500 font-heading mb-0.5">Reward money</label>
-                <input
+                <FormattedNumberInput
                   value={tierRewardInput}
-                  onChange={(e) => setTierRewardInput(e.target.value.replace(/[^\d]/g, ''))}
+                  onChange={setTierRewardInput}
                   className="bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] font-heading focus:border-primary/50 focus:outline-none w-32"
-                  placeholder="5000000"
+                  placeholder="5,000,000"
                 />
               </div>
               <button
@@ -807,6 +852,9 @@ const RosterTab = ({
                       </span>
                       <p className="text-[9px] text-zinc-600 mt-0.5">
                         Melted: {(Number(m.bullets_melted || 0)).toLocaleString()} ({(Number(m.family_bullets_melted || 0)).toLocaleString()} family)
+                      </p>
+                      <p className="text-[9px] text-emerald-400/80 mt-0.5">
+                        Rewards: {formatMoneyFull(m.family_melt_reward_money_earned || 0)} ({Number(m.family_melt_reward_hits || 0)}x)
                       </p>
                     </div>
                   </div>
@@ -2231,8 +2279,12 @@ export default function FamilyPage() {
               )}
               {activeTab === 'treasury' && <TreasuryTab
                 treasury={family.treasury}
+                treasuryBullets={family.treasury_bullets}
                 treasuryPoints={family.treasury_points}
                 treasuryLootPieces={family.treasury_loot_pieces}
+                meltTreasuryPct={family.melt_treasury_pct}
+                meltRewardTiers={family.melt_reward_tiers ?? []}
+                members={members}
                 canWithdraw={canWithdraw}
                 vaultAndRacketsLocked={vaultAndRacketsLocked}
                 depositAmount={depositAmount}
