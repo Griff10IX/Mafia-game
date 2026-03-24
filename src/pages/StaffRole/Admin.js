@@ -458,6 +458,9 @@ export default function Admin() {
   const [gtaLogsLoading, setGtaLogsLoading] = useState(false);
   const [gtaExclusiveReleased, setGtaExclusiveReleased] = useState(null);
   const [gtaExclusiveLoading, setGtaExclusiveLoading] = useState(false);
+  const [gtaExclusiveDropWeight, setGtaExclusiveDropWeight] = useState(0.000006);
+  const [gtaExclusiveApproxOneIn, setGtaExclusiveApproxOneIn] = useState(166667);
+  const [gtaExclusiveDropWeightInput, setGtaExclusiveDropWeightInput] = useState('0.000006');
   const [giveEveryoneExclusiveLoading, setGiveEveryoneExclusiveLoading] = useState(false);
   const [jailLogsUsername, setJailLogsUsername] = useState('');
   const [jailLogsLimit, setJailLogsLimit] = useState(500);
@@ -2479,16 +2482,31 @@ export default function Admin() {
     try {
       const res = await api.get('/admin/gta/exclusive-pool');
       setGtaExclusiveReleased(!!res.data?.released);
+      const w = Number(res.data?.drop_weight ?? 0.000006);
+      setGtaExclusiveDropWeight(Number.isFinite(w) ? w : 0.000006);
+      setGtaExclusiveDropWeightInput(String(Number.isFinite(w) ? w : 0.000006));
+      setGtaExclusiveApproxOneIn(Number(res.data?.approx_one_in ?? 0));
     } catch {
       setGtaExclusiveReleased(false);
+      setGtaExclusiveDropWeight(0.000006);
+      setGtaExclusiveDropWeightInput('0.000006');
+      setGtaExclusiveApproxOneIn(166667);
     }
   };
 
-  const handleSetGtaExclusivePool = async (released) => {
+  const handleSetGtaExclusivePool = async (released, dropWeightOverride) => {
     setGtaExclusiveLoading(true);
     try {
-      const res = await api.post('/admin/gta/exclusive-pool', { released });
+      const payload = { released };
+      if (dropWeightOverride != null) payload.drop_weight = dropWeightOverride;
+      const res = await api.post('/admin/gta/exclusive-pool', payload);
       setGtaExclusiveReleased(!!res.data?.released);
+      const w = Number(res.data?.drop_weight ?? gtaExclusiveDropWeight);
+      if (Number.isFinite(w)) {
+        setGtaExclusiveDropWeight(w);
+        setGtaExclusiveDropWeightInput(String(w));
+      }
+      if (res.data?.approx_one_in != null) setGtaExclusiveApproxOneIn(Number(res.data.approx_one_in) || 0);
       toast.success(res.data?.message || (released ? 'Al Capone exclusive released into GTA pool' : 'Al Capone exclusive retracted from GTA pool'));
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
@@ -2496,6 +2514,22 @@ export default function Admin() {
       setGtaExclusiveLoading(false);
     }
   };
+
+  const handleSetGtaExclusiveOdds = async () => {
+    const next = Number(String(gtaExclusiveDropWeightInput || '').trim());
+    if (!Number.isFinite(next) || next <= 0) {
+      toast.error('Enter a valid drop weight');
+      return;
+    }
+    await handleSetGtaExclusivePool(!!gtaExclusiveReleased, next);
+  };
+
+  useEffect(() => {
+    const showingPanel = !collapsed.gtaPool || !collapsed.gtaLogs;
+    const inCategory = activeCategoryId === 'admin-gameworld' || activeCategoryId === 'admin-logs';
+    if (!isAdmin || !inCategory || !showingPanel) return;
+    fetchGtaExclusivePool();
+  }, [isAdmin, activeCategoryId, collapsed.gtaPool, collapsed.gtaLogs]);
 
   const handleGiveEveryoneExclusiveCars = async (lootExclusive, alCapone) => {
     setGiveEveryoneExclusiveLoading(true);
@@ -4913,6 +4947,32 @@ export default function Admin() {
                     </button>
                   </>
                 )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-zinc-700/50">
+                <span className="text-[10px] font-heading text-mutedForeground">Current drop weight:</span>
+                <span className="text-[10px] font-heading font-bold text-primary">{Number(gtaExclusiveDropWeight || 0).toExponential(3)}</span>
+                <span className="text-[10px] text-mutedForeground">(about 1 in {Number(gtaExclusiveApproxOneIn || 0).toLocaleString()})</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="number"
+                  step="0.0000001"
+                  min="0.0000001"
+                  max="0.05"
+                  value={gtaExclusiveDropWeightInput}
+                  onChange={(e) => setGtaExclusiveDropWeightInput(e.target.value)}
+                  className="w-36 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                  placeholder="0.000006"
+                />
+                <button
+                  type="button"
+                  disabled={gtaExclusiveLoading}
+                  onClick={handleSetGtaExclusiveOdds}
+                  className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-[10px] font-heading font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
+                >
+                  {gtaExclusiveLoading ? '…' : 'Set odds'}
+                </button>
+                <span className="text-[10px] text-mutedForeground">Range: 0.0000001 to 0.05</span>
               </div>
               <p className="text-[10px] text-mutedForeground font-heading">When released, the Al Capone exclusive can drop from GTA (very rare). Only one in game at a time. GTA logs are in the &quot;GTA logs (post data)&quot; section further down.</p>
               <div className="pt-3 border-t border-zinc-700/50 space-y-2">
@@ -7335,6 +7395,32 @@ export default function Admin() {
                     </button>
                   </>
                 )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-zinc-700/50">
+                <span className="text-[10px] font-heading text-mutedForeground">Current drop weight:</span>
+                <span className="text-[10px] font-heading font-bold text-primary">{Number(gtaExclusiveDropWeight || 0).toExponential(3)}</span>
+                <span className="text-[10px] text-mutedForeground">(about 1 in {Number(gtaExclusiveApproxOneIn || 0).toLocaleString()})</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="number"
+                  step="0.0000001"
+                  min="0.0000001"
+                  max="0.05"
+                  value={gtaExclusiveDropWeightInput}
+                  onChange={(e) => setGtaExclusiveDropWeightInput(e.target.value)}
+                  className="w-36 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                  placeholder="0.000006"
+                />
+                <button
+                  type="button"
+                  disabled={gtaExclusiveLoading}
+                  onClick={handleSetGtaExclusiveOdds}
+                  className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-[10px] font-heading font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
+                >
+                  {gtaExclusiveLoading ? '…' : 'Set odds'}
+                </button>
+                <span className="text-[10px] text-mutedForeground">Range: 0.0000001 to 0.05</span>
               </div>
               <p className="text-[10px] text-mutedForeground font-heading">Search by username to load that user&apos;s GTA attempts. Full post data: option, car, success, profit, jailed.</p>
               <div className="flex flex-wrap items-center gap-2">

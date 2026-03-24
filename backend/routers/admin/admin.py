@@ -120,6 +120,7 @@ class TestUsersAutoRankRequest(BaseModel):
 class GTAExclusivePoolRequest(BaseModel):
     """Release or retract the Al Capone exclusive (car20) into the GTA car pool. Only 1 in game at a time; when released, very rare drop."""
     released: bool
+    drop_weight: Optional[float] = None
 
 
 class GiveEveryoneExclusiveCarsRequest(BaseModel):
@@ -483,25 +484,50 @@ def register(router):
         return {"message": f"Added {car['name']} to {target_username}'s garage"}
 
     GTA_EXCLUSIVE_POOL_CONFIG_ID = "gta_exclusive"
+    GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT = 0.000006
+    GTA_EXCLUSIVE_DROP_WEIGHT_MIN = 0.0000001
+    GTA_EXCLUSIVE_DROP_WEIGHT_MAX = 0.05
 
     @router.get("/admin/gta/exclusive-pool")
     async def admin_gta_exclusive_pool_get(current_user: dict = Depends(get_current_user)):
         """Get whether the Al Capone exclusive is released into the GTA car pool. Admin only."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        doc = await db.game_config.find_one({"id": GTA_EXCLUSIVE_POOL_CONFIG_ID}, {"_id": 0, "released": 1})
-        return {"released": bool(doc.get("released") if doc else False)}
+        doc = await db.game_config.find_one({"id": GTA_EXCLUSIVE_POOL_CONFIG_ID}, {"_id": 0, "released": 1, "drop_weight": 1})
+        drop_weight = float((doc or {}).get("drop_weight") or GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT)
+        drop_weight = max(GTA_EXCLUSIVE_DROP_WEIGHT_MIN, min(GTA_EXCLUSIVE_DROP_WEIGHT_MAX, drop_weight))
+        approx_one_in = int(round(1.0 / drop_weight)) if drop_weight > 0 else 0
+        return {
+            "released": bool(doc.get("released") if doc else False),
+            "drop_weight": drop_weight,
+            "approx_one_in": approx_one_in,
+            "min_drop_weight": GTA_EXCLUSIVE_DROP_WEIGHT_MIN,
+            "max_drop_weight": GTA_EXCLUSIVE_DROP_WEIGHT_MAX,
+        }
 
     @router.post("/admin/gta/exclusive-pool")
     async def admin_gta_exclusive_pool_set(body: GTAExclusivePoolRequest, current_user: dict = Depends(get_current_user)):
         """Release or retract the Al Capone exclusive (car20) into the GTA car pool. When released, it can drop from GTA (very rare); only 1 in game at a time. Admin only."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        updates = {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID, "released": body.released}
+        if body.drop_weight is not None:
+            dw = float(body.drop_weight)
+            if dw < GTA_EXCLUSIVE_DROP_WEIGHT_MIN or dw > GTA_EXCLUSIVE_DROP_WEIGHT_MAX:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"drop_weight must be between {GTA_EXCLUSIVE_DROP_WEIGHT_MIN} and {GTA_EXCLUSIVE_DROP_WEIGHT_MAX}",
+                )
+            updates["drop_weight"] = dw
         await db.game_config.update_one(
             {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID},
-            {"$set": {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID, "released": body.released}},
+            {"$set": updates},
             upsert=True,
         )
+        cfg = await db.game_config.find_one({"id": GTA_EXCLUSIVE_POOL_CONFIG_ID}, {"_id": 0, "drop_weight": 1})
+        drop_weight = float((cfg or {}).get("drop_weight") or GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT)
+        drop_weight = max(GTA_EXCLUSIVE_DROP_WEIGHT_MIN, min(GTA_EXCLUSIVE_DROP_WEIGHT_MAX, drop_weight))
+        approx_one_in = int(round(1.0 / drop_weight)) if drop_weight > 0 else 0
         if body.released:
             await send_notification_to_all(
                 "GTA exclusive in pool",
@@ -509,7 +535,12 @@ def register(router):
                 "system",
                 category="gta_exclusive",
             )
-        return {"message": f"Al Capone exclusive {'released into' if body.released else 'retracted from'} GTA car pool", "released": body.released}
+        return {
+            "message": f"Al Capone exclusive {'released into' if body.released else 'retracted from'} GTA car pool",
+            "released": body.released,
+            "drop_weight": drop_weight,
+            "approx_one_in": approx_one_in,
+        }
 
     @router.post("/admin/give-everyone-exclusive-cars")
     async def admin_give_everyone_exclusive_cars(body: GiveEveryoneExclusiveCarsRequest, current_user: dict = Depends(get_current_user)):

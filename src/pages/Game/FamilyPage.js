@@ -53,6 +53,13 @@ const formatTimeLeft = (isoUntil) => {
   } catch { return null; }
 };
 
+const isRacketReadyAt = (isoUntil) => {
+  if (!isoUntil) return true;
+  const t = new Date(isoUntil).getTime();
+  if (!Number.isFinite(t)) return true;
+  return t <= Date.now();
+};
+
 const apiDetail = (e) => {
   const d = e.response?.data?.detail;
   return typeof d === 'string' ? d : Array.isArray(d) && d.length ? d.map((x) => x.msg || x.loc?.join('.')).join('; ') : 'Request failed';
@@ -137,8 +144,8 @@ const RoleBadge = ({ role, size = 'sm' }) => {
 
 const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect, onUpgrade, onUnlock }) => {
   const timeLeft = formatTimeLeft(racket.next_collect_at);
-  const onCooldown = timeLeft && timeLeft !== 'Ready';
-  const isReady = racket.level > 0 && !onCooldown;
+  const isReady = racket.level > 0 && isRacketReadyAt(racket.next_collect_at);
+  const onCooldown = racket.level > 0 && !isReady;
   const income = racket.effective_income_per_collect ?? racket.income_per_collect;
   const locked = racket.locked || racket.level <= 0;
   const isMax = racket.level >= maxLevel;
@@ -192,7 +199,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect
           {racket.level > 0 && (
             <button
               type="button"
-              onClick={() => canCollect && onCollect(racket.id)}
+              onClick={() => isReady && canCollect && onCollect(racket.id)}
               disabled={onCooldown || !canCollect}
               className={`flex-1 px-3 py-2 sm:py-1.5 min-h-[44px] sm:min-h-0 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider border transition-all touch-manipulation ${
                 isReady && canCollect
@@ -200,7 +207,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect
                   : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500 cursor-not-allowed'
               } disabled:opacity-40`}
             >
-              {onCooldown ? `${timeLeft}` : !canCollect ? 'Locked' : 'Collect'}
+              {onCooldown ? `${timeLeft || 'Cooldown'}` : !canCollect ? 'Locked' : 'Collect'}
             </button>
           )}
           {canUpgrade && locked && racket.can_unlock && (
@@ -1935,7 +1942,7 @@ export default function FamilyPage() {
   const canManageCrewOC = ['boss', 'underboss', 'capo'].includes(myRole);
   const activeWars = warStats?.wars ?? [];
 
-  const readyRackets = rackets.filter(r => r.level > 0 && (!formatTimeLeft(r.next_collect_at) || formatTimeLeft(r.next_collect_at) === 'Ready')).length;
+  const readyRackets = rackets.filter((r) => r.level > 0 && isRacketReadyAt(r.next_collect_at)).length;
   const unlockedRackets = rackets.filter(r => r.level > 0).length;
 
   const fetchData = useCallback(async () => {
@@ -2092,9 +2099,13 @@ export default function FamilyPage() {
       fetchData();
     } catch (err) { toast.error(apiDetail(err)); }
   };
-  const collectRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/collect`); toast.success(res.data?.message || 'Collected'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const collectRacket = async (id) => {
+    const target = (rackets || []).find((r) => r.id === id);
+    if (!target || target.level <= 0 || !isRacketReadyAt(target.next_collect_at)) return;
+    try { const res = await api.post(`/families/rackets/${id}/collect`); toast.success(res.data?.message || 'Collected'); fetchData(); } catch (e) { toast.error(apiDetail(e)); }
+  };
   const collectAllRackets = async () => {
-    const ready = rackets.filter(r => r.level > 0 && (formatTimeLeft(r.next_collect_at) === 'Ready' || !formatTimeLeft(r.next_collect_at)));
+    const ready = rackets.filter((r) => r.level > 0 && isRacketReadyAt(r.next_collect_at));
     if (ready.length === 0 || collectAllRacketsLoading) return;
     setCollectAllRacketsLoading(true);
     let collected = 0;

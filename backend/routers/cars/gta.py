@@ -106,7 +106,9 @@ RESPECT_FROM_GTA_MULT = 0.25
 # Al Capone exclusive (car20): admin can release into GTA pool; only 1 in game at a time; very rare drop
 GTA_EXCLUSIVE_CAR_ID = "car20"
 GTA_EXCLUSIVE_POOL_CONFIG_ID = "gta_exclusive"
-GTA_EXCLUSIVE_DROP_WEIGHT = 0.000006  # ~1 in 167k relative to weight-1.0 cars when all cars in pool
+GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT = 0.000006  # ~1 in 167k relative to weight-1.0 cars when all cars in pool
+GTA_EXCLUSIVE_DROP_WEIGHT_MIN = 0.0000001
+GTA_EXCLUSIVE_DROP_WEIGHT_MAX = 0.05
 REFERRED_USER_GTA_RARE_BOOST = 0.15  # Slight GTA rare car weight boost for users who signed up with a referral
 FOUNDING_MEMBER_GTA_RARE_BOOST = 0.025  # Founding Member: extra weight toward rarer cars
 
@@ -375,11 +377,18 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         # Optional: Al Capone exclusive in pool (admin-released, only 1 in game, very rare)
         exclusive_car = next((c for c in CARS if c.get("id") == GTA_EXCLUSIVE_CAR_ID), None)
         if exclusive_car and option["difficulty"] >= (exclusive_car.get("min_difficulty") or 5):
-            config = await db.game_config.find_one({"id": GTA_EXCLUSIVE_POOL_CONFIG_ID}, {"_id": 0, "released": 1})
+            config = await db.game_config.find_one(
+                {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID},
+                {"_id": 0, "released": 1, "drop_weight": 1},
+            )
             if config and config.get("released"):
                 count = await db.user_cars.count_documents({"car_id": GTA_EXCLUSIVE_CAR_ID})
                 if count == 0:
                     available_cars = list(available_cars) + [exclusive_car]
+            exclusive_drop_weight = float((config or {}).get("drop_weight") or GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT)
+            exclusive_drop_weight = max(GTA_EXCLUSIVE_DROP_WEIGHT_MIN, min(GTA_EXCLUSIVE_DROP_WEIGHT_MAX, exclusive_drop_weight))
+        else:
+            exclusive_drop_weight = GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT
         # Prestige bonus and loot-box GTA rare perk: weight rarer cars more heavily
         from server import get_prestige_bonus, founding_member_income_mult
         _fm_gta = founding_member_income_mult(current_user)
@@ -401,12 +410,12 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         if gta_rare_perk > 0:
             _rare_boost = max(_rare_boost, 1.0)
         if _rare_boost > 0:
-            _rarity_weights = {"common": 1.0, "uncommon": 1.0 + _rare_boost * 0.5, "rare": 1.0 + _rare_boost, "ultra_rare": 1.0 + _rare_boost * 1.5, "legendary": 1.0 + _rare_boost * 2.0, "exclusive": GTA_EXCLUSIVE_DROP_WEIGHT}
+            _rarity_weights = {"common": 1.0, "uncommon": 1.0 + _rare_boost * 0.5, "rare": 1.0 + _rare_boost, "ultra_rare": 1.0 + _rare_boost * 1.5, "legendary": 1.0 + _rare_boost * 2.0, "exclusive": exclusive_drop_weight}
             _weights = [_rarity_weights.get(c.get("rarity", "common"), 1.0) for c in available_cars]
             car = _rng.choices(available_cars, weights=_weights, k=1)[0]
         else:
             if exclusive_car and available_cars and available_cars[-1].get("id") == GTA_EXCLUSIVE_CAR_ID:
-                _weights = [1.0] * (len(available_cars) - 1) + [GTA_EXCLUSIVE_DROP_WEIGHT]
+                _weights = [1.0] * (len(available_cars) - 1) + [exclusive_drop_weight]
                 car = _rng.choices(available_cars, weights=_weights, k=1)[0]
             else:
                 car = _rng.choice(available_cars)
