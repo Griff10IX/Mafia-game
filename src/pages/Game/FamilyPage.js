@@ -609,8 +609,7 @@ const RosterTab = ({
                 </Link>
                 <RoleBadge role={m.role} />
                 <p className="text-[9px] text-zinc-500 mt-0.5">
-                  Melted: {(Number(m.bullets_melted || 0)).toLocaleString()} bullets
-                  {' '}({(Number(m.family_bullets_melted || 0)).toLocaleString()} to family)
+                  Melted for family: {(Number(m.family_bullets_melted || 0)).toLocaleString()} bullets
                 </p>
                 <p className="text-[9px] text-emerald-400/90 mt-0.5">
                   Rewards: {formatMoneyFull(m.family_melt_reward_money_earned || 0)} ({Number(m.family_melt_reward_hits || 0)}x)
@@ -851,7 +850,7 @@ const RosterTab = ({
                         {cfg.icon} {cfg.label}
                       </span>
                       <p className="text-[9px] text-zinc-600 mt-0.5">
-                        Melted: {(Number(m.bullets_melted || 0)).toLocaleString()} ({(Number(m.family_bullets_melted || 0)).toLocaleString()} family)
+                        Melted for family: {(Number(m.family_bullets_melted || 0)).toLocaleString()}
                       </p>
                       <p className="text-[9px] text-emerald-400/80 mt-0.5">
                         Rewards: {formatMoneyFull(m.family_melt_reward_money_earned || 0)} ({Number(m.family_melt_reward_hits || 0)}x)

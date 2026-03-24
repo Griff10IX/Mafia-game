@@ -139,6 +139,22 @@ function getTimeAgo(iso) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+function getAuctionEndStatusLabel(auction) {
+  if (!auction?.end_at) return 'No end';
+  const end = new Date(auction.end_at);
+  if (Number.isNaN(end.getTime())) return 'No end';
+  const status = String(auction.status || '').toLowerCase();
+  if (status === 'open') {
+    const leftMs = end.getTime() - Date.now();
+    if (leftMs <= 0) return 'Ends now';
+    const s = Math.floor(leftMs / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m left` : `${m}m left`;
+  }
+  return `Ended ${end.toLocaleString()}`;
+}
+
 export default function ForumTopic() {
   const { topicId } = useParams();
   const navigate = useNavigate();
@@ -181,6 +197,15 @@ export default function ForumTopic() {
   const [activeGameIdeaSeason, setActiveGameIdeaSeason] = useState(null);
   const [gameIdeaMyEntryCommentId, setGameIdeaMyEntryCommentId] = useState(null);
   const [gameIdeaSubmittingCommentId, setGameIdeaSubmittingCommentId] = useState(null);
+  const [designerAuction, setDesignerAuction] = useState(null);
+  const [designerAuctionLoading, setDesignerAuctionLoading] = useState(false);
+  const [designerBidAmount, setDesignerBidAmount] = useState('');
+  const [designerBidSubmitting, setDesignerBidSubmitting] = useState(false);
+  const [designerDeliverUrl, setDesignerDeliverUrl] = useState('');
+  const [designerDeliverSubmitting, setDesignerDeliverSubmitting] = useState(false);
+  const [designerConfirmSubmitting, setDesignerConfirmSubmitting] = useState(false);
+  const [designerDisputeReason, setDesignerDisputeReason] = useState('');
+  const [designerDisputeSubmitting, setDesignerDisputeSubmitting] = useState(false);
 
   const fetchTopic = useCallback(async (silent = false) => {
     if (!topicId) return;
@@ -249,6 +274,26 @@ export default function ForumTopic() {
       setMyEntryCommentId(null);
     }
   }, [topic?.category, user]);
+
+  const fetchDesignerAuction = useCallback(async () => {
+    if (!topicId || topic?.category !== 'designer') {
+      setDesignerAuction(null);
+      return;
+    }
+    setDesignerAuctionLoading(true);
+    try {
+      const res = await api.get(`/forum/designer/auctions/topic/${topicId}`);
+      setDesignerAuction(res.data?.auction ?? null);
+    } catch {
+      setDesignerAuction(null);
+    } finally {
+      setDesignerAuctionLoading(false);
+    }
+  }, [topicId, topic?.category]);
+
+  useEffect(() => {
+    fetchDesignerAuction();
+  }, [fetchDesignerAuction]);
 
   useEffect(() => {
     const sid = topic?.game_idea_season_id;
@@ -326,6 +371,75 @@ export default function ForumTopic() {
       toast.error(err.response?.data?.detail || 'Failed');
     } finally {
       setAdminBusy(false);
+    }
+  };
+
+  const handleDesignerBid = async (e) => {
+    e.preventDefault();
+    if (!designerAuction?.id) return;
+    const amount = parseInt(String(designerBidAmount).replace(/\D/g, ''), 10) || 0;
+    if (amount <= 0) return;
+    setDesignerBidSubmitting(true);
+    try {
+      await api.post(`/forum/designer/auctions/${designerAuction.id}/bid`, { amount });
+      toast.success('Bid placed');
+      setDesignerBidAmount('');
+      fetchDesignerAuction();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to bid');
+    } finally {
+      setDesignerBidSubmitting(false);
+    }
+  };
+
+  const handleDesignerDeliver = async (e) => {
+    e.preventDefault();
+    if (!designerAuction?.id) return;
+    if (!designerDeliverUrl.trim()) return;
+    setDesignerDeliverSubmitting(true);
+    try {
+      await api.post(`/forum/designer/auctions/${designerAuction.id}/deliver`, { delivered_image_url: designerDeliverUrl.trim() });
+      toast.success('Marked delivered');
+      setDesignerDeliverUrl('');
+      fetchDesignerAuction();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to mark delivered');
+    } finally {
+      setDesignerDeliverSubmitting(false);
+    }
+  };
+
+  const handleDesignerConfirm = async (side) => {
+    if (!designerAuction?.id) return;
+    setDesignerConfirmSubmitting(true);
+    try {
+      if (side === 'designer') {
+        await api.post(`/forum/designer/auctions/${designerAuction.id}/confirm-designer`);
+      } else {
+        await api.post(`/forum/designer/auctions/${designerAuction.id}/confirm-winner`);
+      }
+      toast.success('Confirmation recorded');
+      fetchDesignerAuction();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to confirm');
+    } finally {
+      setDesignerConfirmSubmitting(false);
+    }
+  };
+
+  const handleDesignerDispute = async (e) => {
+    e.preventDefault();
+    if (!designerAuction?.id) return;
+    setDesignerDisputeSubmitting(true);
+    try {
+      await api.post(`/forum/designer/auctions/${designerAuction.id}/dispute`, { reason: designerDisputeReason.trim() || undefined });
+      toast.success('Dispute reported to staff');
+      setDesignerDisputeReason('');
+      fetchDesignerAuction();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to report dispute');
+    } finally {
+      setDesignerDisputeSubmitting(false);
     }
   };
 
@@ -604,6 +718,97 @@ export default function ForumTopic() {
           <span className="font-heading font-bold text-amber-400 uppercase tracking-wide mr-2">Game Ideas</span>
           Post your idea below, then register your post.{' '}
           <Link to="/game/game-ideas" className="text-primary font-heading font-bold hover:underline">Open voting board →</Link>
+        </div>
+      )}
+
+      {topic?.category === 'designer' && (
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Designer Auction</span>
+            {designerAuctionLoading && <span className="text-[10px] text-mutedForeground">Loading…</span>}
+          </div>
+          <div className="p-3 space-y-2">
+            {!designerAuction ? (
+              <p className="text-xs text-mutedForeground">No auction attached to this topic.</p>
+            ) : (
+              <>
+                <div className="text-xs text-mutedForeground">
+                  Status: <span className="text-foreground">{designerAuction.status}</span> · Currency: <span className="text-foreground">{designerAuction.currency}</span>
+                </div>
+                <div className="text-xs text-mutedForeground">
+                  Highest bid: <span className="text-primary font-bold">{(designerAuction.current_bid || 0).toLocaleString()}</span> (start {(designerAuction.starting_bid || 0).toLocaleString()})
+                </div>
+                <div className="text-xs text-mutedForeground">
+                  End: {getAuctionEndStatusLabel(designerAuction)}
+                </div>
+                {designerAuction.image_url && (
+                  <a href={designerAuction.image_url} target="_blank" rel="noreferrer" className="text-xs text-primary underline break-all">Open design image</a>
+                )}
+                {designerAuction.delivered_image_url && (
+                  <a href={designerAuction.delivered_image_url} target="_blank" rel="noreferrer" className="text-xs text-emerald-400 underline break-all">Open delivered image</a>
+                )}
+
+                {designerAuction.status === 'open' && user?.id !== designerAuction.designer_user_id && (
+                  <form onSubmit={handleDesignerBid} className="flex gap-2">
+                    <FormattedNumberInput
+                      value={designerBidAmount}
+                      onChange={setDesignerBidAmount}
+                      placeholder={`Bid in ${designerAuction.currency}`}
+                      className="flex-1 px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground"
+                    />
+                    <button type="submit" disabled={designerBidSubmitting} className="px-3 py-2 rounded border border-primary/40 bg-primary/20 text-primary text-xs font-heading font-bold">
+                      {designerBidSubmitting ? '...' : 'Bid'}
+                    </button>
+                  </form>
+                )}
+
+                {user?.id === designerAuction.designer_user_id && ['in_escrow', 'delivered', 'disputed'].includes(designerAuction.status) && (
+                  <form onSubmit={handleDesignerDeliver} className="flex gap-2">
+                    <input
+                      type="url"
+                      value={designerDeliverUrl}
+                      onChange={(e) => setDesignerDeliverUrl(e.target.value)}
+                      placeholder="Delivered image URL"
+                      className="flex-1 px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground"
+                    />
+                    <button type="submit" disabled={designerDeliverSubmitting} className="px-3 py-2 rounded border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 text-xs font-heading font-bold">
+                      {designerDeliverSubmitting ? '...' : 'Deliver'}
+                    </button>
+                  </form>
+                )}
+
+                {(user?.id === designerAuction.designer_user_id || user?.id === designerAuction.winner_id) && ['in_escrow', 'delivered', 'disputed'].includes(designerAuction.status) && (
+                  <div className="flex gap-2">
+                    {user?.id === designerAuction.designer_user_id && (
+                      <button type="button" onClick={() => handleDesignerConfirm('designer')} disabled={designerConfirmSubmitting} className="px-3 py-1.5 rounded border border-primary/40 bg-primary/20 text-primary text-xs font-heading font-bold">
+                        Confirm (designer)
+                      </button>
+                    )}
+                    {user?.id === designerAuction.winner_id && (
+                      <button type="button" onClick={() => handleDesignerConfirm('winner')} disabled={designerConfirmSubmitting} className="px-3 py-1.5 rounded border border-primary/40 bg-primary/20 text-primary text-xs font-heading font-bold">
+                        Confirm (winner)
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {(user?.id === designerAuction.designer_user_id || user?.id === designerAuction.winner_id) && ['in_escrow', 'delivered'].includes(designerAuction.status) && (
+                  <form onSubmit={handleDesignerDispute} className="space-y-2">
+                    <input
+                      type="text"
+                      value={designerDisputeReason}
+                      onChange={(e) => setDesignerDisputeReason(e.target.value)}
+                      placeholder="Report dispute reason (optional)"
+                      className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground"
+                    />
+                    <button type="submit" disabled={designerDisputeSubmitting} className="px-3 py-1.5 rounded border border-amber-500/40 bg-amber-500/20 text-amber-300 text-xs font-heading font-bold">
+                      {designerDisputeSubmitting ? '...' : 'Report dispute'}
+                    </button>
+                  </form>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
 

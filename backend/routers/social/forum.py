@@ -163,6 +163,25 @@ async def get_topics(
         async for fam in db.families.find({"id": {"$in": crew_oc_ids}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "crew_oc_join_fee": 1}):
             if fam.get("id"):
                 crew_oc_fam_map[fam["id"]] = fam
+    topic_ids = [t.get("id") for t in topics if t.get("id")]
+    auction_by_topic = {}
+    if topic_ids:
+        async for a in db.forum_designer_auctions.find(
+            {"topic_id": {"$in": topic_ids}},
+            {
+                "_id": 0,
+                "topic_id": 1,
+                "status": 1,
+                "currency": 1,
+                "current_bid": 1,
+                "starting_bid": 1,
+                "end_at": 1,
+                "winner_username": 1,
+            },
+        ):
+            tid = a.get("topic_id")
+            if tid:
+                auction_by_topic[tid] = a
     out = []
     for t in topics:
         comment_count = count_by_topic.get(t["id"], 0)
@@ -192,6 +211,17 @@ async def get_topics(
                 item["crew_oc_join_fee"] = int(fam.get("crew_oc_join_fee") or 0)
         if t.get("redeem_code"):
             item["redeem_code"] = t["redeem_code"]
+        if item.get("category") == "designer":
+            auc = auction_by_topic.get(t.get("id"))
+            if auc:
+                item["designer_auction"] = {
+                    "status": auc.get("status"),
+                    "currency": auc.get("currency"),
+                    "current_bid": int(auc.get("current_bid") or 0),
+                    "starting_bid": int(auc.get("starting_bid") or 0),
+                    "end_at": auc.get("end_at"),
+                    "winner_username": auc.get("winner_username"),
+                }
         out.append(item)
     can_view_page_2 = _is_admin(current_user) or _is_moderator(current_user)
     return {"topics": out, "categories": FORUM_CATEGORIES, "page": page, "can_view_page_2": can_view_page_2}
@@ -268,6 +298,30 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
             {"_id": 0, "status": 1},
         )
         topic["crew_oc_my_application"] = {"status": app["status"]} if app else None
+    if topic.get("category") == "designer":
+        auc = await db.forum_designer_auctions.find_one(
+            {"topic_id": topic_id},
+            {
+                "_id": 0,
+                "id": 1,
+                "status": 1,
+                "currency": 1,
+                "current_bid": 1,
+                "starting_bid": 1,
+                "end_at": 1,
+                "winner_username": 1,
+            },
+        )
+        if auc:
+            topic["designer_auction"] = {
+                "id": auc.get("id"),
+                "status": auc.get("status"),
+                "currency": auc.get("currency"),
+                "current_bid": int(auc.get("current_bid") or 0),
+                "starting_bid": int(auc.get("starting_bid") or 0),
+                "end_at": auc.get("end_at"),
+                "winner_username": auc.get("winner_username"),
+            }
     return {
         "topic": topic,
         "comments": comments,
@@ -594,6 +648,12 @@ async def update_topic(
     can_sticky_important = is_admin or is_mod
     can_lock = is_admin or is_mod or is_hdo
     can_edit_content = is_author or is_admin or is_mod
+    active_auction = None
+    if topic.get("category") == "designer":
+        active_auction = await db.forum_designer_auctions.find_one(
+            {"topic_id": topic_id, "status": {"$in": ["open", "in_escrow", "delivered", "disputed"]}},
+            {"_id": 0, "id": 1},
+        )
     updates = {}
     if can_sticky_important:
         if request.is_sticky is not None:
@@ -603,6 +663,9 @@ async def update_topic(
     if can_lock and request.is_locked is not None:
         updates["is_locked"] = request.is_locked
     if can_edit_content:
+        if active_auction and not (is_admin or is_mod):
+            if request.title is not None or request.content is not None or request.gif_url is not None:
+                raise HTTPException(status_code=400, detail="Active designer auction topics can only be edited by staff")
         if request.title is not None:
             title = (request.title or "").strip()
             if not title:
@@ -714,6 +777,12 @@ async def delete_topic(
     topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
+    if topic.get("category") == "designer":
+        auc = await db.forum_designer_auctions.find_one({"topic_id": topic_id}, {"_id": 0, "id": 1})
+        if auc and auc.get("id"):
+            await db.forum_designer_auction_bids.delete_many({"auction_id": auc["id"]})
+            await db.forum_designer_auction_disputes.delete_many({"auction_id": auc["id"]})
+            await db.forum_designer_auctions.delete_one({"id": auc["id"]})
     await _delete_topic_fully(topic_id)
     return {"message": "Topic deleted"}
 

@@ -825,6 +825,8 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
             player_bullets = base_total_bullets
             melt_reward_due = 0
             melt_reward_paid = 0
+            melt_reward_hits_due = 0
+            melt_reward_hits_paid = 0
             melt_pct_applied = 0
             family_treasury_bullets_after = None
             if family_id:
@@ -844,12 +846,20 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                             continue
                         if threshold >= 1000 and threshold % 1000 == 0 and reward > 0:
                             valid_tiers.append({"threshold_bullets": threshold, "reward_money": reward})
-                    if base_total_bullets > 0 and valid_tiers:
-                        melt_reward_due = sum(
-                            int(t["reward_money"])
-                            for t in valid_tiers
-                            if base_total_bullets >= int(t["threshold_bullets"])
-                        )
+                    if configured_pct > 0 and base_total_bullets > 0 and valid_tiers:
+                        # Reward tiers apply per chunk of bullets contributed to family.
+                        projected_family_cut = (base_total_bullets * configured_pct) // 100
+                        if projected_family_cut > 0:
+                            melt_reward_hits_due = sum(
+                                projected_family_cut // int(t["threshold_bullets"])
+                                for t in valid_tiers
+                                if int(t["threshold_bullets"]) > 0
+                            )
+                            melt_reward_due = sum(
+                                (projected_family_cut // int(t["threshold_bullets"])) * int(t["reward_money"])
+                                for t in valid_tiers
+                                if int(t["threshold_bullets"]) > 0
+                            )
                     if melt_reward_due > 0:
                         payout_res = await db.families.update_one(
                             {"id": family_id, "treasury": {"$gte": melt_reward_due}},
@@ -857,10 +867,13 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                         )
                         if payout_res.modified_count > 0:
                             melt_reward_paid = melt_reward_due
+                            melt_reward_hits_paid = melt_reward_hits_due
                         else:
                             # Cannot pay configured rewards: disable family melt cut globally.
                             await db.families.update_one({"id": family_id}, {"$set": {"melt_treasury_pct": 0}})
                             configured_pct = 0
+                            melt_reward_due = 0
+                            melt_reward_hits_due = 0
                     if configured_pct > 0 and base_total_bullets > 0:
                         melt_pct_applied = configured_pct
                         family_cut = (base_total_bullets * configured_pct) // 100
@@ -884,7 +897,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                         "bullets_melted": player_bullets,
                         "family_bullets_melted": family_cut,
                         "family_melt_reward_money_earned": melt_reward_paid,
-                        "family_melt_reward_hits": 1 if melt_reward_paid > 0 else 0,
+                        "family_melt_reward_hits": melt_reward_hits_paid,
                         "cars_melted": deleted_count,
                         "uncommon_cars_scrapped": uncommon_count,
                     },
@@ -905,6 +918,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                     "melt_treasury_pct": melt_pct_applied,
                     "melt_reward_due": melt_reward_due,
                     "melt_reward_paid": melt_reward_paid,
+                    "melt_reward_hits_paid": melt_reward_hits_paid,
                     "car_ids": car_ids[:limit],
                 },
             )
@@ -925,7 +939,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                 msg += f", family got {family_cut}"
             msg += f". Next melt in {cooldown_seconds}s."
             if melt_reward_paid > 0:
-                msg += f" + ${melt_reward_paid:,} family reward."
+                msg += f" + ${melt_reward_paid:,} family reward ({melt_reward_hits_paid} hit{'s' if melt_reward_hits_paid != 1 else ''})."
             elif melt_reward_due > 0 and melt_reward_paid == 0:
                 msg += " Family treasury could not pay reward; family melt % was reset to 0%."
             return {
@@ -938,6 +952,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                 "family_treasury_bullets_after": family_treasury_bullets_after,
                 "melt_treasury_pct": melt_pct_applied,
                 "melt_reward_paid": melt_reward_paid,
+                "melt_reward_hits_paid": melt_reward_hits_paid,
                 "message": msg,
                 "melt_bullets_cooldown_until": cooldown_until.isoformat(),
             }

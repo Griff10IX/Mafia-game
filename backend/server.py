@@ -1804,7 +1804,7 @@ from routers.game import families, leaderboard, states, stats, store, dead_alive
 from routers.kill import attack, armoury, bodyguards, hitlist
 from routers.minigames import gauntlet, boxing, racing, snake
 from routers.money import bank, stock_market, properties, quicktrade, crack_safe, illegal_business, booze_run, racket, payments
-from routers.social import forum, game_chat, giphy, image_host
+from routers.social import forum, game_chat, giphy, image_host, designer_auctions
 from routers.account import objectives
 from routers.account.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
 from routers.game.families import FAMILY_RACKETS, compute_loser_racket_cash, WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT, RACKET_UNLOCK_COST, RACKET_UPGRADE_COST  # used by _family_war_check_wipe_and_award and seed
@@ -1824,6 +1824,7 @@ jail.register(api_router)
 organised_crime.register(api_router)
 oc.register(api_router)
 forum.register(api_router)
+designer_auctions.register(api_router)
 from routers.social import game_ideas as game_ideas_router
 game_ideas_router.register(api_router)
 entertainer.register(api_router)

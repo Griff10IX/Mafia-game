@@ -310,6 +310,15 @@ async def ensure_all_indexes(db):
         await db.designer_competition_votes.create_index("entry_id")
         await db.designer_competition_votes.create_index([("competition_id", 1), ("entry_id", 1)])
 
+        # --- Designer forum auctions ---
+        await db.forum_designer_auctions.create_index("id", unique=True)
+        await db.forum_designer_auctions.create_index([("topic_id", 1)], unique=True)
+        await db.forum_designer_auctions.create_index([("status", 1), ("end_at", 1)])
+        await db.forum_designer_auction_bids.create_index("id", unique=True)
+        await db.forum_designer_auction_bids.create_index([("auction_id", 1), ("created_at", -1)])
+        await db.forum_designer_auction_disputes.create_index("id", unique=True)
+        await db.forum_designer_auction_disputes.create_index([("auction_id", 1), ("status", 1), ("created_at", -1)])
+
         # --- Game Ideas (forum hub + voting) ---
         await db.game_idea_seasons.create_index("id", unique=True)
         await db.game_idea_seasons.create_index("status")

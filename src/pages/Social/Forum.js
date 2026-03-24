@@ -272,6 +272,32 @@ function getTimeAgo(iso) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+function getAuctionEndLabel(auction) {
+  if (!auction?.end_at) return 'No end';
+  const status = String(auction.status || '').toLowerCase();
+  const end = new Date(auction.end_at);
+  if (Number.isNaN(end.getTime())) return 'No end';
+  if (status === 'open') {
+    const leftMs = end.getTime() - Date.now();
+    if (leftMs <= 0) return 'Ends now';
+    const s = Math.floor(leftMs / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m left` : `${m}m left`;
+  }
+  return `Ended ${end.toLocaleString()}`;
+}
+
+function getAuctionStatusChip(statusRaw) {
+  const status = String(statusRaw || '').toLowerCase();
+  if (status === 'open') return { label: 'Open', className: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40' };
+  if (status === 'in_escrow') return { label: 'Escrow', className: 'bg-amber-500/20 text-amber-300 border-amber-400/40' };
+  if (status === 'completed') return { label: 'Completed', className: 'bg-blue-500/20 text-blue-300 border-blue-400/40' };
+  if (status === 'disputed') return { label: 'Disputed', className: 'bg-red-500/20 text-red-300 border-red-400/40' };
+  if (status === 'delivered') return { label: 'Delivered', className: 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40' };
+  return { label: 'Closed', className: 'bg-zinc-600/30 text-zinc-200 border-zinc-500/40' };
+}
+
 /** Seconds until next batch (next_auto_create_at). */
 function getSecondsUntilNextBatch(nextAutoCreateAt) {
   if (!nextAutoCreateAt) return 0;
@@ -342,6 +368,11 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
   const [content, setContent] = useState('');
   const [topicGifUrl, setTopicGifUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [isAuction, setIsAuction] = useState(false);
+  const [auctionImageUrl, setAuctionImageUrl] = useState('');
+  const [auctionCurrency, setAuctionCurrency] = useState('money');
+  const [auctionStartingBid, setAuctionStartingBid] = useState('');
+  const [auctionEndAt, setAuctionEndAt] = useState('');
   const [showEmojis, setShowEmojis] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const contentTextareaRef = useRef(null);
@@ -369,15 +400,51 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
     if (!title.trim()) { toast.error('Enter a title'); return; }
     setSubmitting(true);
     try {
-      const payload = { title: title.trim(), content: content.trim(), category };
-      if (topicGifUrl.trim()) payload.gif_url = topicGifUrl.trim();
-      if (titleColor) payload.title_color = titleColor;
-      await api.post('/forum/topics', payload);
-      toast.success('Topic created');
+      if (category === 'designer' && isAuction) {
+        const endAtIso = auctionEndAt ? new Date(auctionEndAt).toISOString() : '';
+        if (!auctionImageUrl.trim()) {
+          toast.error('Auction image URL is required');
+          setSubmitting(false);
+          return;
+        }
+        if (!endAtIso) {
+          toast.error('Auction end time is required');
+          setSubmitting(false);
+          return;
+        }
+        const endAt = new Date(endAtIso);
+        const maxEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        if (endAt > maxEnd) {
+          toast.error('Auction max duration is 1 day');
+          setSubmitting(false);
+          return;
+        }
+        await api.post('/forum/designer/auctions', {
+          title: title.trim(),
+          content: content.trim(),
+          image_url: auctionImageUrl.trim(),
+          currency: auctionCurrency,
+          starting_bid: parseInt(String(auctionStartingBid).replace(/\D/g, ''), 10) || 0,
+          end_at: endAtIso,
+          title_color: titleColor || undefined,
+        });
+        toast.success('Designer auction created');
+      } else {
+        const payload = { title: title.trim(), content: content.trim(), category };
+        if (topicGifUrl.trim()) payload.gif_url = topicGifUrl.trim();
+        if (titleColor) payload.title_color = titleColor;
+        await api.post('/forum/topics', payload);
+        toast.success('Topic created');
+      }
       setTitle('');
       setTitleColor('');
       setContent('');
       setTopicGifUrl('');
+      setIsAuction(false);
+      setAuctionImageUrl('');
+      setAuctionCurrency('money');
+      setAuctionStartingBid('');
+      setAuctionEndAt('');
       onClose();
       onCreated();
     } catch (err) {
@@ -441,6 +508,53 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
               </div>
             )}
           </div>
+          {category === 'designer' && (
+            <div className="rounded border border-zinc-700/50 p-2 space-y-2">
+              <label className="inline-flex items-center gap-2 text-[11px] font-heading text-foreground">
+                <input
+                  type="checkbox"
+                  checked={isAuction}
+                  onChange={(e) => setIsAuction(e.target.checked)}
+                  className="w-3.5 h-3.5 accent-primary"
+                />
+                Create as image auction
+              </label>
+              {isAuction && (
+                <div className="grid grid-cols-1 gap-2">
+                  <input
+                    type="url"
+                    placeholder="Picture URL (image-host link or external URL)"
+                    value={auctionImageUrl}
+                    onChange={(e) => setAuctionImageUrl(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={auctionCurrency}
+                      onChange={(e) => setAuctionCurrency(e.target.value)}
+                      className="px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                    >
+                      <option value="money">Cash ($)</option>
+                      <option value="points">Points</option>
+                    </select>
+                    <FormattedNumberInput
+                      value={auctionStartingBid}
+                      onChange={setAuctionStartingBid}
+                      placeholder="Starting bid"
+                      className="px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
+                    />
+                  </div>
+                  <input
+                    type="datetime-local"
+                    value={auctionEndAt}
+                    onChange={(e) => setAuctionEndAt(e.target.value)}
+                    className="px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                  />
+                  <p className="text-[10px] text-zinc-500">Max auction length: 1 day. Winner is highest bidder at close; funds go to escrow until both confirm delivery.</p>
+                </div>
+              )}
+            </div>
+          )}
           {showGifPicker && (
             <div className="rounded border border-zinc-700/50 overflow-hidden">
               <GifPicker
@@ -610,6 +724,18 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
               style={topic.title_color ? { color: topic.title_color } : {}}
               dangerouslySetInnerHTML={{ __html: titleHtml }}
             />
+            {topic?.designer_auction && (
+              <span className="inline-flex items-center gap-1 shrink-0">
+                <span className={`text-[9px] px-1 py-0.5 rounded border ${getAuctionStatusChip(topic.designer_auction.status).className}`}>
+                  {getAuctionStatusChip(topic.designer_auction.status).label}
+                </span>
+                <span className="text-[9px] px-1 py-0.5 rounded border border-primary/40 bg-primary/15 text-primary">
+                  Auction: {(Number(topic.designer_auction.current_bid || topic.designer_auction.starting_bid || 0)).toLocaleString()} {topic.designer_auction.currency === 'points' ? 'pts' : '$'}
+                  {topic.designer_auction.winner_username ? ` · Winner: ${topic.designer_auction.winner_username}` : ''}
+                  {` · ${getAuctionEndLabel(topic.designer_auction)}`}
+                </span>
+              </span>
+            )}
             {topic.is_locked && <Lock size={10} className="text-mutedForeground shrink-0" />}
           </Link>
           {showDesignerSubmit && (
@@ -695,6 +821,17 @@ const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating
             style={topic.title_color && !topic.is_important && !topic.is_sticky ? { color: topic.title_color } : {}}
             dangerouslySetInnerHTML={{ __html: titleHtml }}
           />
+          {topic?.designer_auction && (
+            <span className="inline-flex items-center gap-1 shrink-0">
+              <span className={`text-[9px] px-1 py-0.5 rounded border ${getAuctionStatusChip(topic.designer_auction.status).className}`}>
+                {getAuctionStatusChip(topic.designer_auction.status).label}
+              </span>
+              <span className="text-[9px] px-1 py-0.5 rounded border border-primary/40 bg-primary/15 text-primary">
+                {(Number(topic.designer_auction.current_bid || topic.designer_auction.starting_bid || 0)).toLocaleString()} {topic.designer_auction.currency === 'points' ? 'pts' : '$'}
+                {topic.designer_auction.winner_username ? ` · ${topic.designer_auction.winner_username}` : ''}
+              </span>
+            </span>
+          )}
           {topic.is_locked && <Lock size={10} className="text-mutedForeground shrink-0" />}
         </div>
         <div className="flex items-center gap-3 mt-1 text-[10px] text-mutedForeground">
