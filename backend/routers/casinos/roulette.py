@@ -418,8 +418,10 @@ def register(router):
         stored_city, doc = await _get_roulette_ownership_doc(city)
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
+        listing_id = ObjectId()
         casino_property = {
-            "_id": ObjectId(),
+            "_id": listing_id,
+            "id": str(listing_id),
             "type": "casino_rlt",
             "location": city,
             "name": f"Roulette Table ({city})",

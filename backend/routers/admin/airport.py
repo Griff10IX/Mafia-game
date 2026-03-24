@@ -561,8 +561,10 @@ async def airport_sell_on_trade(req: AirportSellRequest, current_user: dict = De
     doc = await db.airport_ownership.find_one({"state": req.state, "slot": req.slot}, {"_id": 0})
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this airport slot")
+    listing_id = ObjectId()
     listing = {
-        "_id": ObjectId(),
+        "_id": listing_id,
+        "id": str(listing_id),
         "type": "airport",
         "state": req.state,
         "slot": req.slot,

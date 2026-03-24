@@ -743,8 +743,10 @@ async def bullet_factory_sell_on_trade(
     existing = await db.properties.find_one({"type": "bullet_factory", "state": state, "for_sale": True})
     if existing:
         raise HTTPException(status_code=400, detail="This armoury is already listed on Quick Trade. Cancel the listing first.")
+    listing_id = ObjectId()
     listing = {
-        "_id": ObjectId(),
+        "_id": listing_id,
+        "id": str(listing_id),
         "type": "bullet_factory",
         "state": state,
         "location": state,
