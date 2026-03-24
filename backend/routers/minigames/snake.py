@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
-from server import db, get_current_user, log_activity, log_respect_earned
+from server import db, get_current_user, log_activity, log_respect_earned, _get_staff_user_ids
 from routers.minigames.minigame_leaderboard import log_minigame_play
 
 
@@ -125,8 +125,10 @@ def register(router):
 
     @router.get("/snake/leaderboard")
     async def snake_leaderboard(current_user: dict = Depends(get_current_user)):
+        staff_ids = await _get_staff_user_ids()
+        q = {"user_id": {"$nin": staff_ids}} if staff_ids else {}
         cursor = db.snake_scores.find(
-            {},
+            q,
             {"_id": 0, "user_id": 1, "username": 1, "score": 1, "at": 1},
         ).sort([("score", -1), ("at", 1)]).limit(10)
         rows = await cursor.to_list(10)

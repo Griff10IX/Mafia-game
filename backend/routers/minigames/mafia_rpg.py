@@ -7,7 +7,7 @@ import uuid
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user, log_activity
+from server import db, get_current_user, log_activity, _get_staff_user_ids
 
 MAX_PLAYS_PER_HOUR = 8
 MAX_RESPECT = 100
@@ -129,9 +129,11 @@ def register(router):
     @router.get("/mafia-rpg/leaderboard")
     async def mafia_rpg_leaderboard(current_user: dict = Depends(get_current_user)):
         """Top 10 Famiglia composite scores."""
+        staff_ids = await _get_staff_user_ids()
+        q = {"user_id": {"$nin": staff_ids}} if staff_ids else {}
         cursor = (
             db.mafia_rpg_scores.find(
-                {},
+                q,
                 {
                     "_id": 0,
                     "user_id": 1,

@@ -1834,6 +1834,27 @@ export default function CircuitRaceView({
         addSparks(px - Math.cos(angle)*5, py - Math.sin(angle)*5);
       }
 
+      // Player car indicator — pulsing gold ring + arrow
+      if (r.isPlayer && !r.dnf) {
+        const pulse = 0.5 + 0.5 * Math.sin(nowSec * 4);
+        const ringR = 16 + pulse * 3;
+        ctx.save();
+        ctx.strokeStyle = `rgba(232,200,112,${0.45 + pulse * 0.35})`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.arc(px, py, ringR, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+        const arrowY = py - ringR - 6 - pulse * 2;
+        ctx.fillStyle = `rgba(232,200,112,${0.7 + pulse * 0.3})`;
+        ctx.beginPath();
+        ctx.moveTo(px, arrowY + 6);
+        ctx.lineTo(px - 4, arrowY);
+        ctx.lineTo(px + 4, arrowY);
+        ctx.closePath();
+        ctx.fill();
+      }
+
       // Speed glow
       const clr = r.color||"#888";
       const grd = ctx.createRadialGradient(px,py,0,px,py,22);
@@ -1892,8 +1913,13 @@ export default function CircuitRaceView({
       ctx.closePath();
       ctx.fillStyle = carClr;
       ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.25)";
-      ctx.lineWidth = 0.5;
+      if (r.isPlayer) {
+        ctx.strokeStyle = "rgba(232,200,112,0.8)";
+        ctx.lineWidth = 1.2;
+      } else {
+        ctx.strokeStyle = "rgba(255,255,255,0.25)";
+        ctx.lineWidth = 0.5;
+      }
       ctx.stroke();
 
       // Sidepods
@@ -2016,11 +2042,27 @@ export default function CircuitRaceView({
       const dn = r.carNumber != null ? r.carNumber : (di+1);
       ctx.save(); ctx.translate(px,py); ctx.scale(CAR_SCALE,CAR_SCALE);
       ctx.fillStyle = r.isPlayer ? "#e8c870" : r.color;
-      ctx.beginPath(); ctx.arc(0,-13,7,0,Math.PI*2); ctx.fill();
-      ctx.strokeStyle = r.isPlayer ? "#0a0c06" : "rgba(0,0,0,0.6)"; ctx.lineWidth=1.2; ctx.stroke();
+      const badgeR = r.isPlayer ? 8 : 7;
+      ctx.beginPath(); ctx.arc(0,-13,badgeR,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle = r.isPlayer ? "#0a0c06" : "rgba(0,0,0,0.6)"; ctx.lineWidth=r.isPlayer?1.5:1.2; ctx.stroke();
       ctx.fillStyle = r.isPlayer ? "#0a0c06" : "#fff";
-      ctx.font="bold 7px Rajdhani,sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.font=`bold ${r.isPlayer?8:7}px Rajdhani,sans-serif`; ctx.textAlign="center"; ctx.textBaseline="middle";
       ctx.fillText(String(dn),0,-13); ctx.textBaseline="alphabetic"; ctx.restore();
+
+      // "YOU" label for player
+      if (r.isPlayer && !r.dnf) {
+        ctx.save();
+        ctx.font="bold 8px Cinzel,serif"; ctx.textAlign="center";
+        const youY=py-26;
+        const tw=ctx.measureText("YOU").width;
+        ctx.fillStyle="rgba(232,200,112,0.85)";
+        ctx.beginPath();
+        const bx2=px,bw2=tw+6,bh2=11,br2=3;
+        ctx.moveTo(bx2-bw2/2+br2,youY-bh2/2);ctx.arcTo(bx2+bw2/2,youY-bh2/2,bx2+bw2/2,youY+bh2/2,br2);ctx.arcTo(bx2+bw2/2,youY+bh2/2,bx2-bw2/2,youY+bh2/2,br2);ctx.arcTo(bx2-bw2/2,youY+bh2/2,bx2-bw2/2,youY-bh2/2,br2);ctx.arcTo(bx2-bw2/2,youY-bh2/2,bx2+bw2/2,youY-bh2/2,br2);ctx.fill();
+        ctx.fillStyle="#0a0c06";
+        ctx.fillText("YOU",px,youY+3);
+        ctx.restore();
+      }
 
       // Tyre dot + blister
       const td3 = TYRE_DEFS[r.currentTyre]||TYRE_DEFS.medium;
@@ -2554,7 +2596,7 @@ export default function CircuitRaceView({
     startRaceLoop(track, cond, 1, racers, {
       onQualifyingComplete: (sortedRacers) => {
         const rSfL = track.sfLine ?? 0;
-        const poleOrder = gridIdsFromQualifyingOrder(qualifyingOrderRef.current, sortedRacers);
+        const poleOrder = sortedRacers.map(r => r.id);
         const gridRacers = poleOrder.map((id, gi) => {
           const r = sortedRacers.find(x => x.id === id) || sortedRacers[gi];
           const p = participants.find(x => (x.user_id || x.id) === id) || {};
@@ -2649,7 +2691,7 @@ export default function CircuitRaceView({
         if(!pr)return;
         const qWd=WEATHER_DEFS[pr.cond]||WEATHER_DEFS.clear;
         const rSfL=pr.track.sfLine??0;
-        const poleOrder = gridIdsFromQualifyingOrder(qualifyingOrderRef.current, sortedRacers);
+        const poleOrder = sortedRacers.map(r => r.id);
         const gridRacers=poleOrder.map((id,gi)=>{
           const r=sortedRacers.find(x=>x.id===id)||sortedRacers[gi];
           return({
@@ -3279,7 +3321,7 @@ export default function CircuitRaceView({
         const nRace = liveTotalLapsRef.current || 3;
         const wd2 = wd;
         const trkSfL = track.sfLine ?? 0;
-        const poleOrder = gridIdsFromQualifyingOrder(qualifyingOrderRef.current, sorted);
+        const poleOrder = sorted.map(r => r.id);
         const grid = poleOrder.map((id, i) => {
           const r = sorted.find(x => x.id === id) || sorted[i];
           return ({
@@ -3580,7 +3622,7 @@ export default function CircuitRaceView({
             }
             const pos=r.position||i+1;
             return(
-              <div key={r.id} style={{ display:"flex",alignItems:"center",padding:narrow?"4px 6px":"5px 8px",borderBottom:"1px solid rgba(201,164,96,.06)",background:r.isPlayer?"rgba(201,164,96,.07)":pos===1?"rgba(201,164,96,.03)":"transparent",gap:narrow?"4px":"6px",opacity:r.dnf?0.5:1 }}>
+              <div key={r.id} style={{ display:"flex",alignItems:"center",padding:narrow?"4px 6px":"5px 8px",borderBottom:"1px solid rgba(201,164,96,.06)",background:r.isPlayer?"rgba(201,164,96,.12)":pos===1?"rgba(201,164,96,.03)":"transparent",borderLeft:r.isPlayer?"3px solid #e8c870":"3px solid transparent",gap:narrow?"4px":"6px",opacity:r.dnf?0.5:1 }}>
                 <div style={{ width:20,height:20,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Cinzel',serif",fontSize:10,fontWeight:700,flexShrink:0,background:pos===1?"linear-gradient(135deg,#a87820,#e8c870)":pos===2?"rgba(160,160,160,.2)":pos===3?"rgba(140,80,20,.2)":"rgba(201,164,96,.06)",color:pos===1?"#0a0c06":pos===2?"#bbb":pos===3?"#c07a30":"var(--noir-muted)",border:"1px solid rgba(201,164,96,.15)" }}>{pos}</div>
                 <div style={{ width:9,height:9,borderRadius:"50%",background:r.color,flexShrink:0,boxShadow:`0 0 5px ${r.color}80` }}/>
                 <div style={{ flex:1,fontSize:narrow?11:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>

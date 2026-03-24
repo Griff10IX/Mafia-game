@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user
+from server import db, get_current_user, _get_staff_user_ids
 
 VALID_DIFFICULTIES = ["snitch", "capo", "godfather"]
 
@@ -98,7 +98,9 @@ def register(router):
     @router.get("/minesweeper/leaderboard")
     async def get_minesweeper_leaderboard(current_user: dict = Depends(get_current_user)):
         """Get top 10 fastest Minesweeper wins across all difficulties."""
-        pipeline = [
+        staff_ids = await _get_staff_user_ids()
+        staff_stage = [{"$match": {"user_id": {"$nin": staff_ids}}}] if staff_ids else []
+        pipeline = staff_stage + [
             {"$sort": {"time_seconds": 1}},
             {
                 "$group": {

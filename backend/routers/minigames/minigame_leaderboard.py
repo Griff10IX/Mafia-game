@@ -9,7 +9,7 @@ from typing import Optional, List
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user, ADMIN_EMAILS
+from server import db, get_current_user, ADMIN_EMAILS, _get_staff_user_ids
 
 MINIGAME_LB_CONFIG_ID = "minigame_weekly_leaderboard"
 VALID_GAMES = ["snake", "gauntlet", "shooting_range", "minesweeper", "battleships", "the_getaway", "family_run", "whack_a_copper", "mafia_rpg"]
@@ -104,8 +104,12 @@ def register(router):
         next_payout = _next_monday_midnight(now)
         next_payout_iso = next_payout.isoformat().replace("+00:00", "Z")
 
+        staff_ids = await _get_staff_user_ids()
+        lb_match = {"week_start": week_start_iso}
+        if staff_ids:
+            lb_match["user_id"] = {"$nin": staff_ids}
         pipeline = [
-            {"$match": {"week_start": week_start_iso}},
+            {"$match": lb_match},
             {
                 "$group": {
                     "_id": "$user_id",
@@ -195,8 +199,12 @@ def register(router):
             total_points += row["points"]
             games_played += row["plays"]
 
+        staff_ids = await _get_staff_user_ids()
+        rank_match = {"week_start": week_start_iso}
+        if staff_ids:
+            rank_match["user_id"] = {"$nin": staff_ids}
         all_pipeline = [
-            {"$match": {"week_start": week_start_iso}},
+            {"$match": rank_match},
             {
                 "$group": {
                     "_id": "$user_id",
@@ -270,8 +278,12 @@ async def run_minigame_weekly_payout(database, test_run: bool = False):
         if claim_result.modified_count == 0 and claim_result.upserted_id is None:
             return
 
+    staff_ids = await _get_staff_user_ids()
+    payout_match = {"week_start": last_week_start_iso}
+    if staff_ids:
+        payout_match["user_id"] = {"$nin": staff_ids}
     pipeline = [
-        {"$match": {"week_start": last_week_start_iso}},
+        {"$match": payout_match},
         {
             "$group": {
                 "_id": "$user_id",

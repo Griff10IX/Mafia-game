@@ -1552,6 +1552,24 @@ def _is_hdo(user: dict) -> bool:
     return bool(user.get("is_help_desk_operator"))
 
 
+def _staff_exclude_user_filter() -> dict:
+    """Mongo match dict to exclude admin/mod accounts from queries on the users collection."""
+    q = {"is_moderator": {"$ne": True}}
+    if ADMIN_EMAILS:
+        q["email"] = {"$nin": list(ADMIN_EMAILS)}
+    return q
+
+
+async def _get_staff_user_ids() -> list:
+    """Return user IDs of all admin and moderator accounts (for excluding from non-users collections)."""
+    admin_emails = list(ADMIN_EMAILS or [])
+    conditions = [{"is_moderator": True}]
+    if admin_emails:
+        conditions.append({"email": {"$in": admin_emails}})
+    cursor = db.users.find({"$or": conditions}, {"_id": 0, "id": 1})
+    return [u["id"] for u in await cursor.to_list(500)]
+
+
 # Admin endpoints -> routers/admin.py
 
 # Username lookup helpers

@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user_verified, get_current_user, log_gambling
+from server import db, get_current_user_verified, get_current_user, log_gambling, _get_staff_user_ids
 
 
 def _now_iso() -> str:
@@ -784,11 +784,13 @@ async def _refund_challenge_bets(challenge_id: str):
 async def boxing_leaderboard(period: str = "weekly", current_user: dict = Depends(get_current_user)):
     p = (period or "weekly").lower()
     now = datetime.now(timezone.utc)
+    staff_ids = await _get_staff_user_ids()
+    staff_match = {"user_id": {"$nin": staff_ids}} if staff_ids else {}
     if p == "weekly":
         ws = _week_start(now)
         pipeline = [
             {"$addFields": {"_ts": {"$toDate": "$at"}}},
-            {"$match": {"_ts": {"$gte": ws}}},
+            {"$match": {"_ts": {"$gte": ws}, **staff_match}},
             {"$group": {
                 "_id": "$user_id",
                 "points": {"$sum": "$points"},
@@ -800,6 +802,7 @@ async def boxing_leaderboard(period: str = "weekly", current_user: dict = Depend
         ]
     else:
         pipeline = [
+            {"$match": staff_match},
             {"$group": {
                 "_id": "$user_id",
                 "points": {"$sum": "$points"},

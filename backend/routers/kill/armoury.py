@@ -13,7 +13,7 @@ from fastapi import Depends, HTTPException, Request, Body
 from pydantic import BaseModel
 from bson.objectid import ObjectId
 
-from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS
+from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids
 from routers.game.store import _store_cost_inc
 from routers.minigames.minigame_leaderboard import log_minigame_play
 import middleware.security as _security_mod
@@ -1555,7 +1555,8 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
 
 async def get_shooting_range_leaderboard(period: str = "all", current_user: dict = Depends(get_current_user)):
     """Return top 10 shooting range scores with optional period filter and personal best."""
-    query = {}
+    staff_ids = await _get_staff_user_ids()
+    query = {"user_id": {"$nin": staff_ids}} if staff_ids else {}
     now = datetime.now(timezone.utc)
     if period == "weekly":
         cutoff = (now - timedelta(days=7)).isoformat().replace("+00:00", "Z")

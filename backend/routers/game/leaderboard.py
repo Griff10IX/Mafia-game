@@ -8,19 +8,14 @@ from typing import List
 from fastapi import Depends, Query
 from pydantic import BaseModel
 
-from server import ADMIN_EMAILS, db, get_current_user
+from server import ADMIN_EMAILS, db, get_current_user, _staff_exclude_user_filter
 
 _lb_cache: dict = {}
 _LB_CACHE_TTL = 30
 _last_reward_winners_cache: dict = {}
 _LAST_WINNERS_CACHE_TTL = 300
 
-# Exclude admin accounts and moderators from leaderboards
-def _leaderboard_user_filter() -> dict:
-    q = {"is_moderator": {"$ne": True}}
-    if ADMIN_EMAILS:
-        q["email"] = {"$nin": list(ADMIN_EMAILS)}
-    return q
+_leaderboard_user_filter = _staff_exclude_user_filter
 
 
 def _week_start(dt: datetime) -> datetime:

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user
+from server import db, get_current_user, _get_staff_user_ids
 
 MAX_RUNS_PER_HOUR = 10
 
@@ -107,7 +107,9 @@ def register(router):
     @router.get("/the-getaway/leaderboard")
     async def get_getaway_leaderboard(current_user: dict = Depends(get_current_user)):
         """Get top 10 Getaway runs by distance."""
-        pipeline = [
+        staff_ids = await _get_staff_user_ids()
+        staff_stage = [{"$match": {"user_id": {"$nin": staff_ids}}}] if staff_ids else []
+        pipeline = staff_stage + [
             {"$sort": {"distance": -1, "coins_collected": -1}},
             {
                 "$group": {

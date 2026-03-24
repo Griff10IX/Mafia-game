@@ -25,7 +25,7 @@ from .racing_lap_engine import (
 from pydantic import BaseModel
 from pymongo import UpdateOne
 
-from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, send_notification, log_gambling, _is_admin
+from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, send_notification, log_gambling, _is_admin, _get_staff_user_ids
 
 # ---------- Constants ----------
 def _now_iso() -> str:
@@ -2928,7 +2928,9 @@ async def get_championship_standings(current_user: dict = Depends(get_current_us
 
 async def get_racing_leaderboard(current_user: dict = Depends(get_current_user), limit: int = 50):
     limit = min(limit, 100)
-    cursor = db.racing_profiles.find({}, {"_id": 0, "user_id": 1, "wins": 1, "racing_rep": 1, "races_completed": 1}).sort("wins", -1).limit(limit)
+    staff_ids = await _get_staff_user_ids()
+    q = {"user_id": {"$nin": staff_ids}} if staff_ids else {}
+    cursor = db.racing_profiles.find(q, {"_id": 0, "user_id": 1, "wins": 1, "racing_rep": 1, "races_completed": 1}).sort("wins", -1).limit(limit)
     profs = await cursor.to_list(limit)
     user_ids = [p["user_id"] for p in profs]
     users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "username": 1}).to_list(len(user_ids))

@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user
+from server import db, get_current_user, _get_staff_user_ids
 
 MAX_PLAYS_PER_HOUR = 10
 MAX_SCORE_ACCEPTED = 50_000
@@ -99,9 +99,11 @@ def register(router):
     @router.get("/whack-a-copper/leaderboard")
     async def whack_a_copper_leaderboard(current_user: dict = Depends(get_current_user)):
         """Get top 10 Whack-A-Copper scores."""
+        staff_ids = await _get_staff_user_ids()
+        q = {"user_id": {"$nin": staff_ids}} if staff_ids else {}
         cursor = (
             db.whack_a_copper_scores.find(
-                {},
+                q,
                 {"_id": 0, "user_id": 1, "username": 1, "score": 1, "at": 1},
             )
             .sort([("score", -1), ("at", 1)])

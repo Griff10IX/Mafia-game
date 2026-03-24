@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
 
-from server import db, get_current_user, log_activity, log_respect_earned
+from server import db, get_current_user, log_activity, log_respect_earned, _get_staff_user_ids
 from routers.minigames.minigame_leaderboard import log_minigame_play
 
 
@@ -75,16 +75,16 @@ def register(router):
     ):
         p = (period or "weekly").lower()
         now_dt = datetime.now(timezone.utc)
+        staff_ids = await _get_staff_user_ids()
+        staff_match = {"user_id": {"$nin": staff_ids}} if staff_ids else {}
         if p == "weekly":
-            # Monday 00:00 UTC
             d = now_dt.date()
             days_since_monday = (d.weekday()) % 7
             week_start = datetime(d.year, d.month, d.day, tzinfo=timezone.utc) - timedelta(days=days_since_monday)
-            match = {"_ts": {"$gte": week_start}}
+            match = {"_ts": {"$gte": week_start}, **staff_match}
             pipeline = [
                 {"$addFields": {"_ts": {"$toDate": "$at"}}},
                 {"$match": match},
-                # Best score per user for the period
                 {"$group": {"_id": "$user_id", "best_score": {"$max": "$score"}, "username": {"$last": "$username"}}},
                 {"$sort": {"best_score": -1}},
                 {"$limit": 10},
@@ -92,7 +92,7 @@ def register(router):
             rows = await db.gauntlet_scores.aggregate(pipeline).to_list(10)
             out = [{"rank": i + 1, "user_id": r.get("_id"), "username": r.get("username") or "?", "score": int(r.get("best_score") or 0)} for i, r in enumerate(rows)]
         else:
-            cursor = db.gauntlet_scores.find({}, {"_id": 0}).sort([("score", -1), ("at", 1)]).limit(10)
+            cursor = db.gauntlet_scores.find(staff_match, {"_id": 0}).sort([("score", -1), ("at", 1)]).limit(10)
             rows = await cursor.to_list(10)
             out = [{"rank": i + 1, "user_id": r.get("user_id"), "username": r.get("username") or "?", "score": int(r.get("score") or 0), "at": r.get("at")} for i, r in enumerate(rows)]
         return {"period": p, "top10": out}

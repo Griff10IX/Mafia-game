@@ -108,6 +108,8 @@ def register(router):
     get_rank_info = srv.get_rank_info
     _is_admin = srv._is_admin
     _is_moderator = srv._is_moderator
+    _staff_exclude_user_filter = srv._staff_exclude_user_filter
+    _get_staff_user_ids = srv._get_staff_user_ids
     RANKS = srv.RANKS
     CARS = srv.CARS
 
@@ -117,9 +119,11 @@ def register(router):
         current_user: dict = Depends(get_current_user),
     ):
         now = datetime.now(timezone.utc)
-        # Real users only: exclude NPCs (bodyguards, jail NPCs, hitlist NPCs, etc.)
-        real_user_match = {"is_npc": {"$ne": True}}
-        alive_real_match = {"is_npc": {"$ne": True}, "is_dead": {"$ne": True}}
+        staff_filter = _staff_exclude_user_filter()
+        staff_ids = await _get_staff_user_ids()
+        # Real users only: exclude NPCs and staff (admins + mods)
+        real_user_match = {"is_npc": {"$ne": True}, **staff_filter}
+        alive_real_match = {"is_npc": {"$ne": True}, "is_dead": {"$ne": True}, **staff_filter}
 
         total_users = await db.users.count_documents(real_user_match)
         alive_users = await db.users.count_documents(alive_real_match)
@@ -157,20 +161,28 @@ def register(router):
         ]).to_list(1)
         total_cash_alive = int(cash_agg[0].get("money_total", 0) or 0) if cash_agg else 0
 
+        bank_match = {"claimed_at": None}
+        if staff_ids:
+            bank_match["user_id"] = {"$nin": staff_ids}
         interest_agg = await db.bank_deposits.aggregate([
-            {"$match": {"claimed_at": None}},
+            {"$match": bank_match},
             {"$group": {"_id": None, "total": {"$sum": {"$add": [{"$ifNull": ["$principal", 0]}, {"$ifNull": ["$interest_amount", 0]}]}}}}
         ]).to_list(1)
         interest_bank_total = int(interest_agg[0].get("total", 0) or 0) if interest_agg else 0
 
+        qt_match = {"status": "active"}
+        if staff_ids:
+            qt_match["user_id"] = {"$nin": staff_ids}
         quicktrade_agg = await db.trade_buy_offers.aggregate([
-            {"$match": {"status": "active"}},
+            {"$match": qt_match},
             {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$offer", 0]}}}}
         ]).to_list(1)
         quicktrade_cash = int(quicktrade_agg[0].get("total", 0) or 0) if quicktrade_agg else 0
 
-        total_vehicles = await db.user_cars.count_documents({})
+        non_staff_car_filter = {"user_id": {"$nin": staff_ids}} if staff_ids else {}
+        total_vehicles = await db.user_cars.count_documents(non_staff_car_filter)
         car_counts = await db.user_cars.aggregate([
+            {"$match": non_staff_car_filter},
             {"$group": {"_id": "$car_id", "count": {"$sum": 1}}}
         ]).to_list(100)
         car_by_id = {c.get("id"): c for c in CARS}
@@ -196,7 +208,7 @@ def register(router):
         cars_scrapped_doc = cars_scrapped_agg[0] if cars_scrapped_agg else {}
         
         # Racing cars count
-        racing_cars_count = await db.user_racing_cars.count_documents({})
+        racing_cars_count = await db.user_racing_cars.count_documents(non_staff_car_filter)
         
         # GTA success rate (GTAs / attempts if we have attempts data)
         gta_stats_agg = await db.users.aggregate([
