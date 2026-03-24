@@ -75,6 +75,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Search Users', categoryId: 'admin-players', collapseKey: 'searchUsers', keywords: ['search', 'users', 'email', 'find'] },
   { label: 'Change Rank', categoryId: 'admin-players', collapseKey: 'rank', keywords: ['rank', 'change', 'prestige', 'level'] },
   { label: 'Add Points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'add', 'give'] },
+  { label: 'Points Provenance', categoryId: 'admin-players', collapseKey: 'pointsProvenance', keywords: ['chargeback', 'provenance', 'payment session', 'points tree'] },
   { label: 'Add Tokens', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['tokens', 'crime', 'gta', 'melt', 'booze', 'travel', 'oc', 'racket', 'jailbust'] },
   { label: 'Founding Member', categoryId: 'admin-players', collapseKey: 'founding', keywords: ['founding', 'member', 'badge', 'founder'] },
   { label: 'Add Money', categoryId: 'admin-players', collapseKey: 'money', keywords: ['money', 'cash', 'add', 'give'] },
@@ -90,6 +91,7 @@ const SEARCHABLE_TOOLS = [
   // Game World
   { label: 'Events Toggle', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable'] },
   { label: 'Beta Round Signup', categoryId: 'admin-gameworld', collapseKey: 'betaSignup', keywords: ['beta', 'signup', 'round', 'points', 'cash', 'testing'] },
+  { label: 'Pre-Registered Accounts', categoryId: 'admin-gameworld', collapseKey: 'preregisterAccounts', keywords: ['pre-register', 'preregister', 'emails', 'launch list'] },
   { label: 'Booze Run Rotation', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices'] },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
   { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
@@ -297,6 +299,9 @@ export default function Admin() {
   const [eventClearOverrideLoading, setEventClearOverrideLoading] = useState(false);
   const [selectedForRandomPool, setSelectedForRandomPool] = useState({});
   const [betaSignupEnabled, setBetaSignupEnabled] = useState(false);
+  const [preregAccounts, setPreregAccounts] = useState([]);
+  const [preregAccountsTotal, setPreregAccountsTotal] = useState(0);
+  const [preregAccountsLoading, setPreregAccountsLoading] = useState(false);
   
   const [cfBotBlockEnabled, setCfBotBlockEnabled] = useState(null);
   const [cfBotBlockLoading, setCfBotBlockLoading] = useState(false);
@@ -363,6 +368,15 @@ export default function Admin() {
   };
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
   const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
+  const [pointsProvSessionId, setPointsProvSessionId] = useState('');
+  const [pointsProvUserId, setPointsProvUserId] = useState('');
+  const [pointsProvPreviewLoading, setPointsProvPreviewLoading] = useState(false);
+  const [pointsProvExecuteLoading, setPointsProvExecuteLoading] = useState(false);
+  const [pointsProvUserLoading, setPointsProvUserLoading] = useState(false);
+  const [pointsProvPaymentLoading, setPointsProvPaymentLoading] = useState(false);
+  const [pointsProvPreview, setPointsProvPreview] = useState(null);
+  const [pointsProvUserData, setPointsProvUserData] = useState(null);
+  const [pointsProvPaymentData, setPointsProvPaymentData] = useState(null);
   const [viewRegistrationInfo, setViewRegistrationInfo] = useState(null);
   const [adminUserSessions, setAdminUserSessions] = useState(null);
   const [adminUserSessionsLoading, setAdminUserSessionsLoading] = useState(false);
@@ -1297,6 +1311,21 @@ export default function Admin() {
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
   };
 
+  const fetchPreregisterAccounts = async () => {
+    setPreregAccountsLoading(true);
+    try {
+      const res = await api.get('/admin/preregistrations?limit=500');
+      setPreregAccounts(Array.isArray(res.data?.items) ? res.data.items : []);
+      setPreregAccountsTotal(Number(res.data?.total || 0));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load pre-registered accounts');
+      setPreregAccounts([]);
+      setPreregAccountsTotal(0);
+    } finally {
+      setPreregAccountsLoading(false);
+    }
+  };
+
   const fetchCfBotBlockStatus = async () => {
     try {
       const res = await api.get('/admin/cloudflare/bot-block-status');
@@ -1506,6 +1535,67 @@ export default function Admin() {
       const response = await api.post(`/admin/add-points?target_username=${formData.targetUsername}&points=${formData.points}`);
       toast.success(response.data.message);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handlePointsPreview = async () => {
+    const sid = (pointsProvSessionId || '').trim();
+    if (!sid) { toast.error('Enter payment session id'); return; }
+    setPointsProvPreviewLoading(true);
+    try {
+      const res = await api.get(`/admin/points/chargeback/preview/${encodeURIComponent(sid)}`);
+      setPointsProvPreview(res.data || null);
+      toast.success('Chargeback preview loaded');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to load preview');
+    } finally {
+      setPointsProvPreviewLoading(false);
+    }
+  };
+
+  const handlePointsPaymentProvenance = async () => {
+    const sid = (pointsProvSessionId || '').trim();
+    if (!sid) { toast.error('Enter payment session id'); return; }
+    setPointsProvPaymentLoading(true);
+    try {
+      const res = await api.get(`/admin/points/provenance/payment/${encodeURIComponent(sid)}`);
+      setPointsProvPaymentData(res.data || null);
+      toast.success('Payment provenance loaded');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to load payment provenance');
+    } finally {
+      setPointsProvPaymentLoading(false);
+    }
+  };
+
+  const handlePointsExecuteChargeback = async () => {
+    const sid = (pointsProvSessionId || '').trim();
+    if (!sid) { toast.error('Enter payment session id'); return; }
+    if (!window.confirm(`Execute best-effort chargeback for ${sid}?`)) return;
+    setPointsProvExecuteLoading(true);
+    try {
+      const res = await api.post('/admin/points/chargeback/execute', { payment_session_id: sid });
+      setPointsProvPreview(res.data || null);
+      toast.success(`Chargeback executed. Reclaimed ${res.data?.reclaimed ?? 0}`);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to execute chargeback');
+    } finally {
+      setPointsProvExecuteLoading(false);
+    }
+  };
+
+  const handlePointsUserProvenance = async () => {
+    const uid = (pointsProvUserId || '').trim();
+    if (!uid) { toast.error('Enter user id'); return; }
+    setPointsProvUserLoading(true);
+    try {
+      const res = await api.get(`/admin/points/provenance/user/${encodeURIComponent(uid)}`);
+      setPointsProvUserData(res.data || null);
+      toast.success('User provenance loaded');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to load user provenance');
+    } finally {
+      setPointsProvUserLoading(false);
+    }
   };
 
   const handleSetFoundingMember = async (isFounding) => {
@@ -3845,6 +3935,65 @@ export default function Admin() {
               <BtnPrimary onClick={handleAddPoints}>Add</BtnPrimary>
             </ActionRow>
 
+            <ActionRow icon={Layers} label="Points Provenance / Chargeback" description="Trace purchased points by payment session and execute best-effort clawback.">
+              <Input
+                value={pointsProvSessionId}
+                onChange={(e) => setPointsProvSessionId(e.target.value)}
+                placeholder="payment session id (cs_...)"
+                className="flex-1 min-w-[180px] text-[11px]"
+              />
+              <BtnSecondary onClick={handlePointsPreview} disabled={pointsProvPreviewLoading}>
+                {pointsProvPreviewLoading ? '...' : 'Preview'}
+              </BtnSecondary>
+              <BtnSecondary onClick={handlePointsPaymentProvenance} disabled={pointsProvPaymentLoading}>
+                {pointsProvPaymentLoading ? '...' : 'Payment Tree'}
+              </BtnSecondary>
+              <BtnDanger onClick={handlePointsExecuteChargeback} disabled={pointsProvExecuteLoading}>
+                {pointsProvExecuteLoading ? '...' : 'Execute'}
+              </BtnDanger>
+            </ActionRow>
+            <ActionRow icon={Users} label="User Points Lots" description="Inspect one user's point lots and recent ledger events.">
+              <Input
+                value={pointsProvUserId}
+                onChange={(e) => setPointsProvUserId(e.target.value)}
+                placeholder="user id"
+                className="flex-1 min-w-[140px] text-[11px]"
+              />
+              <BtnSecondary onClick={handlePointsUserProvenance} disabled={pointsProvUserLoading}>
+                {pointsProvUserLoading ? '...' : 'Load'}
+              </BtnSecondary>
+            </ActionRow>
+            {(pointsProvPreview || pointsProvPaymentData || pointsProvUserData) && (
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-2 pl-6">
+                {pointsProvPreview && (
+                  <div>
+                    <div className="font-bold text-primary">Chargeback Preview</div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1">
+                      <div><span className="text-mutedForeground">Session:</span> {pointsProvPreview.payment_session_id || pointsProvSessionId}</div>
+                      <div><span className="text-mutedForeground">Requested:</span> {pointsProvPreview.requested ?? 0}</div>
+                      <div><span className="text-mutedForeground">Eligible:</span> {pointsProvPreview.eligible_remaining ?? 0}</div>
+                      <div><span className="text-mutedForeground">Reclaimed:</span> {pointsProvPreview.reclaimed ?? 0}</div>
+                      <div><span className="text-mutedForeground">Unrecoverable:</span> {pointsProvPreview.unrecoverable ?? 0}</div>
+                      <div><span className="text-mutedForeground">Owners:</span> {Array.isArray(pointsProvPreview.owners) ? pointsProvPreview.owners.length : 0}</div>
+                    </div>
+                  </div>
+                )}
+                {pointsProvPaymentData && (
+                  <div>
+                    <div className="font-bold text-primary">Payment Provenance</div>
+                    <div className="mt-1"><span className="text-mutedForeground">Lots:</span> {Array.isArray(pointsProvPaymentData.lots) ? pointsProvPaymentData.lots.length : 0} | <span className="text-mutedForeground">Ledger:</span> {Array.isArray(pointsProvPaymentData.ledger) ? pointsProvPaymentData.ledger.length : 0}</div>
+                  </div>
+                )}
+                {pointsProvUserData && (
+                  <div>
+                    <div className="font-bold text-primary">User Provenance</div>
+                    <div className="mt-1"><span className="text-mutedForeground">User:</span> {pointsProvUserData.user?.username || '?'} ({pointsProvUserData.user?.id || pointsProvUserId})</div>
+                    <div><span className="text-mutedForeground">Balance:</span> {pointsProvUserData.user?.points ?? 0} | <span className="text-mutedForeground">Lots:</span> {Array.isArray(pointsProvUserData.lots) ? pointsProvUserData.lots.length : 0} | <span className="text-mutedForeground">Ledger:</span> {Array.isArray(pointsProvUserData.ledger) ? pointsProvUserData.ledger.length : 0}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <ActionRow icon={Zap} label="Add Tokens" description="Give consumable tokens (crime XP, GTA XP, melt, etc.)">
               <Select value={formData.tokenType} onChange={(e) => setFormData((prev) => ({ ...prev, tokenType: e.target.value }))}>
                 <option value="xp_crimes">Crime XP</option>
@@ -4411,6 +4560,51 @@ export default function Admin() {
               <li><span className="text-emerald-400 font-bold">$1,000,000,000</span> Cash</li>
               <li><span className="text-primary font-bold">15,000</span> Respect Points</li>
             </ul>
+          </div>
+        )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Mail}
+          title="Pre-Registered Accounts"
+          badge={<span className="text-[10px] font-heading text-mutedForeground">{preregAccountsTotal || 0} total</span>}
+          isCollapsed={collapsed.preregisterAccounts}
+          onToggle={() => toggleSection('preregisterAccounts')}
+        />
+        {!collapsed.preregisterAccounts && (
+          <div className="p-3 space-y-2">
+            <div className="flex flex-wrap gap-2 items-center">
+              <BtnPrimary onClick={fetchPreregisterAccounts} disabled={preregAccountsLoading}>
+                {preregAccountsLoading ? 'Loading...' : 'Refresh list'}
+              </BtnPrimary>
+              <span className="text-[10px] text-mutedForeground">Shows newest 500 pre-registered emails.</span>
+            </div>
+            {preregAccounts.length === 0 ? (
+              <p className="text-[10px] text-mutedForeground">
+                {preregAccountsLoading ? 'Loading pre-registered accounts...' : 'No pre-registered accounts loaded yet.'}
+              </p>
+            ) : (
+              <div className="border border-zinc-700/40 rounded overflow-hidden">
+                <div className="grid grid-cols-12 gap-2 px-2 py-1.5 text-[9px] font-heading uppercase tracking-wide text-mutedForeground bg-zinc-900/60">
+                  <div className="col-span-5">Email</div>
+                  <div className="col-span-2">Source</div>
+                  <div className="col-span-3">Created</div>
+                  <div className="col-span-2">IP</div>
+                </div>
+                <div className="max-h-80 overflow-auto divide-y divide-zinc-700/30">
+                  {preregAccounts.map((row, idx) => (
+                    <div key={`${row.email || 'unknown'}-${row.created_at || idx}`} className="grid grid-cols-12 gap-2 px-2 py-1.5 text-[10px] font-heading">
+                      <div className="col-span-5 break-all">{row.email || '—'}</div>
+                      <div className="col-span-2 text-mutedForeground">{row.source || '—'}</div>
+                      <div className="col-span-3 text-mutedForeground">{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</div>
+                      <div className="col-span-2 text-mutedForeground truncate" title={row.ip || ''}>{row.ip || '—'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
         </div>

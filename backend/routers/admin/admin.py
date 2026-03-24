@@ -4948,6 +4948,22 @@ def register(router):
         )
         return {"message": "Beta signup " + ("enabled" if enabled else "disabled"), "beta_signup_enabled": bool(enabled)}
 
+    @router.get("/admin/preregistrations")
+    async def admin_get_preregistrations(
+        limit: int = Query(500, ge=1, le=5000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Admin only: list pre-registered emails (newest first)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        cursor = db.preregistrations.find(
+            {},
+            {"_id": 0, "email": 1, "source": 1, "created_at": 1, "ip": 1, "user_agent": 1},
+        ).sort("created_at", -1).limit(limit)
+        items = await cursor.to_list(limit)
+        total = await db.preregistrations.count_documents({})
+        return {"total": total, "count": len(items), "items": items}
+
     def _seed_family_roles(size: int):
         """Return role list for 10-15 members: boss, underboss, consigliere, 2 capos, rest soldiers."""
         roles = ["boss", "underboss", "consigliere", "capo", "capo"]
