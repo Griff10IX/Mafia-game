@@ -742,14 +742,7 @@ export default function Racing() {
       try { sessionStorage.removeItem(RACING_ACTIVE_RACE_KEY); localStorage.removeItem(RACING_ACTIVE_RACE_KEY); } catch (_) {}
       setActiveRace((prev) => {
         if (prev?.id !== raceId) return prev;
-        const raceData = { ...r.data?.race, _resultsShown: true };
-        if (Array.isArray(liveResultOrder) && liveResultOrder.length > 0) {
-          raceData.result_order = liveResultOrder;
-        }
-        if (Array.isArray(liveDnfIds)) {
-          raceData.dnf_ids = liveDnfIds;
-        }
-        return raceData;
+        return { ...r.data?.race, _resultsShown: true };
       });
       refreshUser();
       fetchProfile();
@@ -760,7 +753,7 @@ export default function Racing() {
   const onInteractiveCircuitComplete = useCallback((resultOrderIds, dnfIds) => {
     if (!activeRace?.id) return;
     if (!(activeRace?.mode === "interactive" || activeRace?.interactive)) return;
-    void handleCompleteRace(activeRace.id, resultOrderIds, dnfIds);
+    void handleCompleteRace(activeRace.id, null, dnfIds);
   }, [activeRace?.id, activeRace?.interactive, activeRace?.mode, handleCompleteRace]);
 
   const handleCreateTeam = async (e) => {

@@ -2656,9 +2656,20 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
     pit_stops = race.get("pit_stops")
     tire_wear_after_lap = race.get("tire_wear_after_lap")
     dnf_ids: List[str] = list(race.get("dnf_ids") or [])
+    is_interactive = bool(race.get("interactive") or race.get("mode") == "interactive")
+    total_laps = int(race.get("total_laps") or race.get("laps") or 3)
+    current_lap = int(race.get("current_lap") or 0)
 
-    # Use live result from client when provided (so results screen matches what the user saw)
-    if body.result_order and set(body.result_order) == expected_ids and len(body.result_order) == len(expected_ids):
+    if is_interactive and current_lap < total_laps:
+        raise HTTPException(status_code=400, detail="Race is still in progress")
+
+    # Accept client result only as fallback when server has no interactive result yet.
+    if (
+        body.result_order
+        and set(body.result_order) == expected_ids
+        and len(body.result_order) == len(expected_ids)
+        and (not is_interactive or not result_order)
+    ):
         result_order = list(body.result_order)
         if body.dnf_ids is not None:
             dnf_ids = [eid for eid in body.dnf_ids if eid in expected_ids]
@@ -3640,6 +3651,8 @@ async def _start_interactive_race(
         "participants": participants,
         "qualifying_order": qualifying_order,
         "qualifying_results": qualifying_results,
+        "qualifying_mode": "fastest_lap_time_trial",
+        "qualifying_release_gap_sec": 5,
         "upgrades_snapshot": upgrades_map,
         "engine_wear_snapshot": engine_wear_by_entrant,
         "profile_snapshot": safe_profiles,
@@ -4142,6 +4155,8 @@ async def get_race_live(
         "lap_deadline": race.get("lap_deadline"),
         "qualifying_order": race.get("qualifying_order") or [],
         "qualifying_results": race.get("qualifying_results") or [],
+        "qualifying_mode": race.get("qualifying_mode") or "fastest_lap_time_trial",
+        "qualifying_release_gap_sec": int(race.get("qualifying_release_gap_sec") or 5),
         "car_states": race.get("car_states"),
         "lap_results": race.get("lap_results"),
         "pit_stops": race.get("pit_stops"),

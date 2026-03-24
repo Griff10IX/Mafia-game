@@ -1199,6 +1199,7 @@ export default function CircuitRaceView({
   const uiPhaseRef = useRef(uiPhase);
   useEffect(() => { uiPhaseRef.current = uiPhase; }, [uiPhase]);
   const gridTimerRef = useRef(null);
+  const qualQueueTimerRef = useRef(null);
   const startLightsSequence = useCallback((gridRacers, onGo) => {
     const order = gridRacers.map((r, i) => ({ id: r.id, name: r.name, color: r.color, isPlayer: r.isPlayer, pos: i + 1 }));
     setGridOrder(order);
@@ -3150,6 +3151,33 @@ export default function CircuitRaceView({
         }
       });
 
+      // Once backend says final lap processing is complete, classify finishers when they next cross S/F.
+      if (curLap >= totLaps) {
+        const sfLDone = trk.sfLine ?? 0;
+        r.forEach(racer => {
+          if (racer.dnf || racer.finished) return;
+          const prevT = racer._interactiveLapPrevPos;
+          if (prevT !== undefined && crossedStartFinishLineForward(prevT, racer.trackPos, sfLDone)) {
+            racer.finished = true;
+            racer.finishedAtSec = nowSec;
+            racer.finishedAtProgress = (racer.totalLapsDone ?? 0) + (racer.trackPos ?? 0);
+          }
+        });
+      }
+
+      // Keep finish ordering consistent with true line-cross order.
+      const finishedCars = r.filter(x => x.finished && !x.dnf);
+      if (finishedCars.length > 0) {
+        finishedCars.sort((a, b) => {
+          const at = a.finishedAtSec ?? Infinity, bt = b.finishedAtSec ?? Infinity;
+          if (Math.abs(at - bt) > 1e-9) return at - bt;
+          const ap = a.finishedAtProgress ?? 0, bp = b.finishedAtProgress ?? 0;
+          if (Math.abs(bp - ap) > 1e-9) return bp - ap;
+          return String(a.id || "").localeCompare(String(b.id || ""));
+        });
+        finishedCars.forEach((x, i) => { x.finishOrder = i + 1; });
+      }
+
       const leaderSf = [...r].filter(x => !x.dnf && !x.inPit).sort((a, b) => (a._targetPos || 99) - (b._targetPos || 99))[0];
       const sfLx = trk.sfLine ?? 0;
       if (leaderSf) {
@@ -3190,8 +3218,9 @@ export default function CircuitRaceView({
       // Interactive-live: client orbit can lap ahead of server; only end race when backend has processed all laps
       const serverLapsComplete = curLap >= totLaps;
       const visualLapsComplete = visLap >= totLaps;
+      const allClassified = r.every(x => x.finished || x.dnf);
       const raceShouldEnd = mode === "interactive-live"
-        ? serverLapsComplete
+        ? (serverLapsComplete && allClassified)
         : (serverLapsComplete || visualLapsComplete);
 
       // Race finished: replay uses visual lap; interactive-live waits for server current_lap
@@ -3201,16 +3230,6 @@ export default function CircuitRaceView({
         st.finishFlash = nowSec + 3.0;
         addInc("CHECKERED FLAG!");
         setCommentary(rnd(COMMENTARY.done));
-        const atFlagSorted = [...r].sort(sortInteractiveByProgress);
-        let fo = 1;
-        atFlagSorted.forEach(x => {
-          if (!x.dnf) {
-            const ord = fo++;
-            x.finished = true;
-            x.finishOrder = ord;
-            x.finishedAtSec = nowSec + Math.min(0.5, (ord - 1) * 0.08);
-          }
-        });
       }
 
       // After race finishes, show results after a brief delay
@@ -3320,76 +3339,114 @@ export default function CircuitRaceView({
     rafRef.current = requestAnimationFrame(loop);
     } // end startRacing()
 
-    startRaceLoopRef.current(track, cond, 1, qualRacers, {
-      onQualifyingComplete: (sorted) => {
-        if (rafRef.current) {
-          cancelAnimationFrame(rafRef.current);
-          rafRef.current = null;
-        }
-        const nRace = liveTotalLapsRef.current || 3;
-        const wd2 = wd;
-        const trkSfL = track.sfLine ?? 0;
-        const poleOrder = sorted.map(r => r.id);
-        const grid = poleOrder.map((id, i) => {
-          const r = sorted.find(x => x.id === id) || sorted[i];
-          return ({
-          ...r,
-          trackPos: ((trkSfL + (poleOrder.length - i) * 0.012) % 1),
-          totalLapsDone: 0,
-          lapCount: 1,
-          finished: false,
-          finishOrder: 0,
-          visible: true,
-          tyreWear: Math.min(100, r.tyreWear ?? 100),
-          lapTimes: [],
-          pitStops: 0,
-          inPit: false,
-          pitEndAt: 0,
-          slideOffUntil: 0,
-          pitExitUntil: null,
-          position: i + 1,
-          carNumber: i + 1,
-          pitStrategy: buildStrategy(r.currentTyre, nRace, wd2.wearMult || 1, r.reliabilityWearMult || 1, r.isPlayer ? 0 : Math.floor(Math.random() * 3) - 1, r.strategyType || "normal"),
-          engineHealth: r.engineHealth ?? 100,
-          dnf: false,
-          dnfAtSec: 0,
-          dnfSparks: [],
-          fuelLoad: r.fuelLoad ?? 100,
-          currentSector: 0,
-          lastSectorCross: 0,
-          bestSectors: [Infinity, Infinity, Infinity],
-          sectorDelta: null,
-          inSlipstream: false,
-          tyreBlister: false,
-          overtakeBoostUntil: 0,
-          currentSpeedMph: null,
-          _justCrossedFrames: 0,
-          _targetPos: i + 1,
-          _smoothPos: i + 1,
-          _interactiveSfArmed: false,
-        });
-        });
-        stateRef.current = {
-          racers: grid, track, nLaps: nRace, wd: wd2, safetyCar: sc,
-          fastestLap: { holderId: null, time: Infinity }, finishFlash: 0, incidents: [],
-        };
-        liveInitDone.current = true;
-        drawCanvas(track, cond, grid, 0);
-        startLightsSequence(grid, () => {
-          void (async () => {
-            const gf = onInteractiveGreenFlagRef.current;
-            if (gf) await gf();
-            setUiPhase("racing");
-            setLapDisp(nRace === 1 ? "Qualifying" : `1 / ${nRace}`);
-            setCommentary(rnd(COMMENTARY.start));
-            startRacing();
-          })();
-        });
-      },
+    const participantsById = Object.fromEntries((participants || []).map((p) => [(p.user_id || p.id), p]));
+    const serverPoleOrderRaw = (qualifyingOrderRef.current && qualifyingOrderRef.current.length)
+      ? qualifyingOrderRef.current
+      : qualRacers.map(x => x.id);
+    const seenIds = new Set();
+    const serverPoleOrder = serverPoleOrderRaw.filter((id) => {
+      if (seenIds.has(id)) return false;
+      seenIds.add(id);
+      return !!qualRacers.find((x) => x.id === id);
     });
+    qualRacers.forEach((x) => {
+      if (!seenIds.has(x.id)) {
+        seenIds.add(x.id);
+        serverPoleOrder.push(x.id);
+      }
+    });
+    const orderedQualRacers = serverPoleOrder.map((id) => qualRacers.find((x) => x.id === id)).filter(Boolean);
+    const humanQualQueue = orderedQualRacers.filter((r) => !(participantsById[r.id]?.is_npc));
+
+    const beginRaceFromGrid = () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      const nRace = liveTotalLapsRef.current || 3;
+      const wd2 = wd;
+      const trkSfL = track.sfLine ?? 0;
+      const grid = orderedQualRacers.map((r, i) => ({
+        ...r,
+        trackPos: ((trkSfL + (orderedQualRacers.length - i) * 0.012) % 1),
+        totalLapsDone: 0,
+        lapCount: 1,
+        finished: false,
+        finishOrder: 0,
+        visible: true,
+        tyreWear: Math.min(100, r.tyreWear ?? 100),
+        lapTimes: [],
+        pitStops: 0,
+        inPit: false,
+        pitEndAt: 0,
+        slideOffUntil: 0,
+        pitExitUntil: null,
+        position: i + 1,
+        carNumber: i + 1,
+        pitStrategy: buildStrategy(r.currentTyre, nRace, wd2.wearMult || 1, r.reliabilityWearMult || 1, r.isPlayer ? 0 : Math.floor(Math.random() * 3) - 1, r.strategyType || "normal"),
+        engineHealth: r.engineHealth ?? 100,
+        dnf: false,
+        dnfAtSec: 0,
+        dnfSparks: [],
+        fuelLoad: r.fuelLoad ?? 100,
+        currentSector: 0,
+        lastSectorCross: 0,
+        bestSectors: [Infinity, Infinity, Infinity],
+        sectorDelta: null,
+        inSlipstream: false,
+        tyreBlister: false,
+        overtakeBoostUntil: 0,
+        currentSpeedMph: null,
+        _justCrossedFrames: 0,
+        _targetPos: i + 1,
+        _smoothPos: i + 1,
+        _interactiveSfArmed: false,
+      }));
+      stateRef.current = {
+        racers: grid, track, nLaps: nRace, wd: wd2, safetyCar: sc,
+        fastestLap: { holderId: null, time: Infinity }, finishFlash: 0, incidents: [],
+      };
+      liveInitDone.current = true;
+      drawCanvas(track, cond, grid, 0);
+      startLightsSequence(grid, () => {
+        void (async () => {
+          const gf = onInteractiveGreenFlagRef.current;
+          if (gf) await gf();
+          setUiPhase("racing");
+          setLapDisp(nRace === 1 ? "Qualifying" : `1 / ${nRace}`);
+          setCommentary(rnd(COMMENTARY.start));
+          startRacing();
+        })();
+      });
+    };
+
+    const runHumanQualAt = (idx) => {
+      if (idx >= humanQualQueue.length) {
+        beginRaceFromGrid();
+        return;
+      }
+      const qr = humanQualQueue[idx];
+      setUiPhase("qualifying");
+      setLapDisp("Qualifying");
+      setCommentary(`Qualifying lap — ${qr.name}`);
+      const solo = [{ ...qr, totalLapsDone: 0, lapCount: 1, finished: false, finishOrder: 0, lapTimes: [] }];
+      startRaceLoopRef.current(track, cond, 1, solo, {
+        onQualifyingComplete: () => {
+          if (rafRef.current) {
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = null;
+          }
+          qualQueueTimerRef.current = setTimeout(() => runHumanQualAt(idx + 1), 5000);
+        },
+      });
+    };
+
+    if (humanQualQueue.length > 0) runHumanQualAt(0);
+    else beginRaceFromGrid();
 
     return () => {
       clearInterval(cdRef.current); clearTimeout(gridTimerRef.current);
+      clearTimeout(qualQueueTimerRef.current);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
     // startRaceLoop / weather / liveTotalLaps / currentUserId omitted: use refs + small isPlayer patch so live polls
