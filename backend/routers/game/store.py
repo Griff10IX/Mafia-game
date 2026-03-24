@@ -35,6 +35,21 @@ def _store_cost_inc(current_user: dict, points_cost: int):
         gte["points"] = {"$gte": points_decrement}
     return points_cost, inc, gte
 
+
+def _token_count_lte_atom_filter(count_field: str, max_current: int) -> dict:
+    """Require (current stored count) <= max_current, treating missing/null as 0.
+    Plain {field: {$lte: n}} does not match docs where the field is absent, which caused
+    store token purchases to fail for first-time buyers even with enough points/respect."""
+    return {
+        "$expr": {
+            "$lte": [
+                {"$ifNull": [f"${count_field}", 0]},
+                max_current,
+            ]
+        }
+    }
+
+
 from server import (
     db,
     get_current_user,
@@ -530,7 +545,11 @@ async def buy_store_token(
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     inc[cf] = inc.get(cf, 0) + amt
-    filt = {"id": current_user["id"], cf: {"$lte": STORE_TOKEN_MAX_HELD - amt}, **gte_filter}
+    filt = {
+        "id": current_user["id"],
+        **_token_count_lte_atom_filter(cf, STORE_TOKEN_MAX_HELD - amt),
+        **gte_filter,
+    }
     result = await db.users.update_one(filt, {"$inc": inc})
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
@@ -558,9 +577,15 @@ async def buy_store_token_bundle(
         raise HTTPException(status_code=400, detail="Insufficient points")
     for field, add in field_inc.items():
         inc[field] = inc.get(field, 0) + add
-    filt = {"id": current_user["id"], **gte_filter}
-    for field, add in field_inc.items():
-        filt[field] = {"$lte": STORE_TOKEN_MAX_HELD - add}
+    expr_clauses = [
+        {"$lte": [{"$ifNull": [f"${field}", 0]}, STORE_TOKEN_MAX_HELD - add]}
+        for field, add in field_inc.items()
+    ]
+    filt = {
+        "id": current_user["id"],
+        "$expr": expr_clauses[0] if len(expr_clauses) == 1 else {"$and": expr_clauses},
+        **gte_filter,
+    }
     result = await db.users.update_one(filt, {"$inc": inc})
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
