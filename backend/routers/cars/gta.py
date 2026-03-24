@@ -781,7 +781,14 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                 if action == "bullets":
                     # Garage melt bullets only: +12% per car melt value.
                     melt_value = (car_value * 112) // 100
-                    total_bullets += melt_value // MELT_VALUE_PER_BULLET
+                    car_bullets = melt_value // MELT_VALUE_PER_BULLET
+                    # Common cars should still feel worthwhile to melt.
+                    if car_info.get("rarity") == "common":
+                        if car_bullets < 2:
+                            car_bullets = 2
+                        elif car_bullets > 3:
+                            car_bullets = 3
+                    total_bullets += car_bullets
                 else:
                     total_value += int(car_value * 0.5)
                 if user_car.get("_id") is not None:

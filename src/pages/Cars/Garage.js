@@ -28,11 +28,16 @@ const MELT_VALUE_MULTIPLIER_NUM = 112; // +12% per car before conversion
 const MELT_VALUE_MULTIPLIER_DEN = 100;
 const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive'];
 
-function previewBulletsForCarValue(value) {
+function previewBulletsForCarValue(value, rarity) {
   const carValue = Number(value || 0);
   if (!Number.isFinite(carValue) || carValue <= 0) return 0;
   const meltValue = Math.floor((carValue * MELT_VALUE_MULTIPLIER_NUM) / MELT_VALUE_MULTIPLIER_DEN);
-  return Math.floor(meltValue / MELT_VALUE_PER_BULLET);
+  let bullets = Math.floor(meltValue / MELT_VALUE_PER_BULLET);
+  if (rarity === 'common') {
+    if (bullets < 2) bullets = 2;
+    else if (bullets > 3) bullets = 3;
+  }
+  return bullets;
 }
 
 function loadMeltScrapRarities() {
@@ -617,7 +622,7 @@ export default function Garage() {
   );
   const predictedMeltBullets = selectedCarsForMelt
     .slice(0, batchLimit)
-    .reduce((sum, c) => sum + previewBulletsForCarValue(c.value), 0);
+    .reduce((sum, c) => sum + previewBulletsForCarValue(c.value, c.rarity), 0);
 
   const toggleSelectAllDisplayed = () => {
     if (noEligibleInView) return;

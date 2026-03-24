@@ -634,6 +634,7 @@ async def _users_map_by_ids(user_ids: list, projection: Optional[dict] = None) -
     uids = list(dict.fromkeys([s for u in user_ids if (s := _uid_str(u))]))
     proj = projection or {
         "_id": 0,
+        "id": 1,
         "username": 1,
         "rank": 1,
         "is_dead": 1,
