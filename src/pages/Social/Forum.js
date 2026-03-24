@@ -14,7 +14,180 @@ const FORUM_STYLES = `
   .f-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .f-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
   .f-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  @keyframes hm-draw { from { stroke-dashoffset: 200; } to { stroke-dashoffset: 0; } }
+  .hm-part { stroke-dasharray: 200; stroke-dashoffset: 200; animation: hm-draw 0.45s ease-out forwards; }
+  @keyframes hm-appear { from { opacity: 0; transform: scale(0.7); } to { opacity: 1; transform: scale(1); } }
+  .hm-head { animation: hm-appear 0.35s ease-out forwards; }
+  .hm-letter-box { transition: background 0.2s, color 0.2s; }
+  .hm-key { transition: background 0.15s, opacity 0.15s; }
+  @keyframes hm-correct { 0%,100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+  .hm-letter-correct { animation: hm-correct 0.3s ease-out; }
+  @keyframes hm-clue-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  .hm-clue-in { animation: hm-clue-in 0.4s ease-out both; }
 `;
+
+// ─── Hangman game panel ──────────────────────────────────────────────────────
+const HangmanSVG = ({ wrongCount }) => {
+  const stroke = 'currentColor';
+  const sw = 3;
+  const sw2 = 2.5;
+  return (
+    <svg viewBox="0 0 120 130" width="100%" height="100%" className="text-zinc-400" aria-label="Hangman drawing">
+      {/* Gallows — always visible */}
+      <line x1="10" y1="125" x2="110" y2="125" stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
+      <line x1="30" y1="125" x2="30" y2="10"  stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
+      <line x1="30" y1="10"  x2="70" y2="10"  stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
+      <line x1="70" y1="10"  x2="70" y2="28"  stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
+      {/* Part 1 — head */}
+      {wrongCount >= 1 && (
+        <circle cx="70" cy="38" r="10" stroke={stroke} strokeWidth={sw2} fill="none" className="hm-head" />
+      )}
+      {/* Part 2 — body */}
+      {wrongCount >= 2 && (
+        <line x1="70" y1="48" x2="70" y2="85" stroke={stroke} strokeWidth={sw2} strokeLinecap="round" className="hm-part" />
+      )}
+      {/* Part 3 — left arm */}
+      {wrongCount >= 3 && (
+        <line x1="70" y1="58" x2="50" y2="72" stroke={stroke} strokeWidth={sw2} strokeLinecap="round" className="hm-part" />
+      )}
+      {/* Part 4 — right arm */}
+      {wrongCount >= 4 && (
+        <line x1="70" y1="58" x2="90" y2="72" stroke={stroke} strokeWidth={sw2} strokeLinecap="round" className="hm-part" />
+      )}
+      {/* Part 5 — left leg */}
+      {wrongCount >= 5 && (
+        <line x1="70" y1="85" x2="52" y2="108" stroke={stroke} strokeWidth={sw2} strokeLinecap="round" className="hm-part" />
+      )}
+      {/* Part 6 — right leg */}
+      {wrongCount >= 6 && (
+        <line x1="70" y1="85" x2="88" y2="108" stroke={stroke} strokeWidth={sw2} strokeLinecap="round" className="hm-part" />
+      )}
+    </svg>
+  );
+};
+
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+const HangmanPanel = ({ game, userId, onGuessLetter, guessingLetter }) => {
+  const hang = game?.hangman || {};
+  const revealed = hang.revealed_pattern || [];
+  const guessed = hang.guessed_letters || [];
+  const wrong = hang.wrong_letters || [];
+  const wrongCount = hang.wrong_count || 0;
+  const maxWrong = hang.max_wrong || 6;
+  const solved = hang.solved || false;
+  const gameOver = hang.game_over_no_solve || wrongCount >= maxWrong;
+  const canGuess = !solved && !gameOver && game?.status === 'open';
+  const category = hang.category || '';
+  const clue = hang.clue || '';
+  const showClue = wrongCount >= 2 && clue;
+
+  return (
+    <div className="px-3 pb-3 pt-1 border-t border-zinc-700/30 bg-zinc-900/30">
+      <div className="flex flex-col sm:flex-row gap-4 items-start">
+        {/* Hangman SVG */}
+        <div className="w-28 h-28 shrink-0 flex items-center justify-center rounded bg-zinc-800/60 border border-zinc-700/40 p-1">
+          <HangmanSVG wrongCount={wrongCount} />
+        </div>
+
+        <div className="flex-1 min-w-0 space-y-2">
+          {/* Category + clue */}
+          <div className="flex flex-wrap items-center gap-2">
+            {category && (
+              <span className="text-[9px] font-heading font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-primary/15 border border-primary/30 text-primary">
+                {category}
+              </span>
+            )}
+            {wrongCount >= 2 && !clue && (
+              <span className="text-[10px] text-zinc-500 italic">Hint unlocks at 2 misses…</span>
+            )}
+            {showClue && (
+              <span className="text-[10px] text-amber-300/80 italic hm-clue-in">Hint: {clue}</span>
+            )}
+            {wrongCount < 2 && (
+              <span className="text-[10px] text-zinc-600 italic">Hint unlocks after 2 misses</span>
+            )}
+          </div>
+
+          {/* Word boxes */}
+          <div className="flex flex-wrap gap-1.5">
+            {(Array.isArray(revealed) ? revealed : Array.from(revealed)).map((ch, i) => {
+              const isRevealed = ch !== '_';
+              return (
+                <div
+                  key={i}
+                  className={`w-7 h-8 flex items-center justify-center rounded border text-sm font-heading font-bold hm-letter-box
+                    ${isRevealed
+                      ? 'border-primary/60 bg-primary/15 text-primary hm-letter-correct'
+                      : 'border-zinc-600/50 bg-zinc-800/50 text-zinc-600'
+                    }`}
+                >
+                  {isRevealed ? ch : '_'}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Wrong letters */}
+          {wrong.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-[9px] text-zinc-500 font-heading uppercase tracking-wider">Wrong:</span>
+              {wrong.map(l => (
+                <span key={l} className="text-[10px] font-heading font-bold text-red-400/80 px-1">{l}</span>
+              ))}
+            </div>
+          )}
+
+          {/* Miss counter bar */}
+          <div className="flex items-center gap-2">
+            <div className="flex gap-0.5">
+              {Array.from({ length: maxWrong }).map((_, i) => (
+                <div key={i} className={`w-2.5 h-2.5 rounded-sm border ${i < wrongCount ? 'bg-red-500/70 border-red-500/50' : 'bg-zinc-800/50 border-zinc-700/40'}`} />
+              ))}
+            </div>
+            <span className="text-[9px] text-zinc-500">{wrongCount}/{maxWrong} misses</span>
+          </div>
+
+          {/* Status messages */}
+          {solved && (
+            <p className="text-[11px] font-heading font-bold text-emerald-400">Word solved! Winner: {hang.solved_by || 'someone'}</p>
+          )}
+          {gameOver && !solved && (
+            <p className="text-[11px] font-heading font-bold text-red-400">Hangman complete — no one solved it.</p>
+          )}
+        </div>
+      </div>
+
+      {/* A–Z keyboard */}
+      {canGuess && (
+        <div className="mt-3 flex flex-wrap gap-1 justify-center">
+          {ALPHABET.map(l => {
+            const used = guessed.includes(l);
+            const isWrong = wrong.includes(l);
+            const isCorrect = used && !isWrong;
+            const isLoading = guessingLetter === l;
+            return (
+              <button
+                key={l}
+                type="button"
+                disabled={used || !!guessingLetter}
+                onClick={() => onGuessLetter(game.id, l)}
+                className={`w-7 h-7 text-xs font-heading font-bold rounded border hm-key
+                  ${isLoading ? 'opacity-60 animate-pulse' : ''}
+                  ${isWrong ? 'bg-red-900/40 border-red-500/30 text-red-400/60 cursor-not-allowed' : ''}
+                  ${isCorrect ? 'bg-primary/20 border-primary/40 text-primary/60 cursor-not-allowed' : ''}
+                  ${!used ? 'bg-zinc-800/60 border-zinc-600/50 text-zinc-300 hover:bg-primary/20 hover:border-primary/50 hover:text-primary active:scale-95' : ''}
+                `}
+              >
+                {isLoading ? '…' : l}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Classic forum smileys (text codes that render as images)
 const CLASSIC_SMILEYS = [
@@ -897,24 +1070,31 @@ export default function Forum() {
     }
   };
 
-  const handleGuessHangman = async (game) => {
-    const hang = game?.hangman || {};
-    const left = Number(hang.my_attempts_left || 0);
-    if (left <= 0) {
-      toast.error('No attempts left');
-      return;
-    }
-    const guess = window.prompt(`Guess the word (${hang.word_length || '?'} letters). Attempts left: ${left}`);
-    if (!guess || !guess.trim()) return;
+  const [expandedHangmanId, setExpandedHangmanId] = useState(null);
+  const [guessingLetter, setGuessingLetter] = useState(null);
+
+  const handleGuessLetter = async (gameId, letter) => {
+    setGuessingLetter(letter);
     try {
-      const res = await api.post(`/forum/entertainer/games/${game.id}/guess`, { guess: guess.trim() });
-      if (res.data?.correct) toast.success('Correct! You solved it.');
-      else toast.success(`Wrong guess. Attempts left: ${res.data?.attempts_left ?? Math.max(0, left - 1)}`);
+      const res = await api.post(`/forum/entertainer/games/${gameId}/guess`, { letter });
       fetchEntertainerGames();
       fetchEntertainerHistory();
       window.dispatchEvent(new CustomEvent('app:refresh-user'));
+      if (res.data?.word_solved) {
+        toast.success(`'${letter}' — word solved! Game settled.`);
+        setExpandedHangmanId(null);
+      } else if (res.data?.game_over) {
+        toast.error(`Hangman complete — game settled (${res.data?.wrong_count}/6 misses).`);
+        setExpandedHangmanId(null);
+      } else if (res.data?.correct) {
+        toast.success(`'${letter}' is in the word!`);
+      } else {
+        toast.error(`'${letter}' not in word (${res.data?.wrong_count}/6 misses)`);
+      }
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to submit guess');
+    } finally {
+      setGuessingLetter(null);
     }
   };
 
@@ -1449,7 +1629,8 @@ export default function Forum() {
                   const isIn = user && participants.some((p) => p.user_id === user.id);
                   const secsLeft = getSecondsUntilRollWindow(entertainerConfig.next_auto_create_at);
                   return (
-                    <div key={g.id} className="px-3 py-2 flex flex-wrap items-center justify-between gap-2">
+                    <div key={g.id}>
+                    <div className="px-3 py-2 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
                           {g.game_type === 'dice' ? (
@@ -1468,7 +1649,7 @@ export default function Forum() {
                           <span className="text-primary text-[10px] ml-2">Winnings: cash, bullets, tokens, cars</span>
                           {g.game_type === 'hangman' && g.hangman && (
                             <span className="text-[10px] text-amber-400 ml-2">
-                              Word: {g.hangman.revealed_pattern || '—'} ({g.hangman.word_length || 0}) · Attempts: {g.hangman.my_attempts_left ?? 0}/3
+                              {(g.hangman.wrong_count || 0)}/{g.hangman.max_wrong || 6} misses · {(g.hangman.revealed_pattern || []).filter(c => c !== '_').length}/{g.hangman.word_length || 0} revealed
                             </span>
                           )}
                           {g.manual_roll && (
@@ -1490,15 +1671,13 @@ export default function Forum() {
                           </button>
                         )}
                         {isIn && <span className="text-[10px] text-mutedForeground">You're in</span>}
-                        {isIn && g.game_type === 'hangman' && g.status === 'open' && (
+                        {g.game_type === 'hangman' && (
                           <button
                             type="button"
-                            onClick={() => handleGuessHangman(g)}
-                            disabled={(g.hangman?.my_attempts_left ?? 0) <= 0 || !!g.hangman?.solved}
-                            className="px-2 py-1 bg-amber-500/20 border border-amber-500/50 text-amber-400 text-[10px] font-heading font-bold uppercase rounded hover:bg-amber-500/30 disabled:opacity-50"
-                            title="You get 3 guesses"
+                            onClick={() => setExpandedHangmanId(expandedHangmanId === g.id ? null : g.id)}
+                            className="px-2 py-1 bg-amber-500/20 border border-amber-500/50 text-amber-400 text-[10px] font-heading font-bold uppercase rounded hover:bg-amber-500/30"
                           >
-                            Guess
+                            {expandedHangmanId === g.id ? 'Hide' : 'Play'}
                           </button>
                         )}
                         {((isAdmin || (g.manual_roll && user && g.creator_id === user.id)) && g.status === 'open') && (
@@ -1513,6 +1692,15 @@ export default function Forum() {
                           </button>
                         )}
                       </div>
+                    </div>
+                    {g.game_type === 'hangman' && expandedHangmanId === g.id && (
+                      <HangmanPanel
+                        game={g}
+                        userId={user?.id}
+                        onGuessLetter={isIn ? handleGuessLetter : null}
+                        guessingLetter={guessingLetter}
+                      />
+                    )}
                     </div>
                   );
                 })}

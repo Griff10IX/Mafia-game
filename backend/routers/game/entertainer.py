@@ -48,27 +48,173 @@ def _house_bonus_pot_if_zero_stored_pot(game: dict) -> tuple[int, int]:
 # Cars that can be won (common/uncommon/rare; exclude custom and exclusive)
 E_GAME_CAR_IDS = [c["id"] for c in CARS if c.get("id") not in ("car_custom", "car20") and c.get("rarity") in ("common", "uncommon", "rare")]
 
-HANGMAN_WORDS = [
-    "MAFIA", "BULLETS", "HEIST", "RACKET", "GODFATHER", "CONSIGLIERE", "FAMILY", "OMERTA",
-    "SPEAKEASY", "BLACKJACK", "UNDERBOSS", "CAPOREGIME", "ASSOCIATE", "ENFORCER", "HITMAN",
-    "SMUGGLER", "KINGPIN", "SAFEHOUSE", "WIRETAP", "BRIBE", "ALIBI", "SHOOTOUT", "AMBUSH",
-    "HIDEOUT", "CONTRABAND", "LAUNDERING", "KIDNAPPING", "EXTORTION", "BOOTLEG", "MOONSHINE",
-    "SYNDICATE", "DON", "CAPO", "CREW", "TERRITORY", "TRUCE", "RIVALRY", "VENDETTA",
-    "GETAWAY", "LOOKOUT", "PAYDAY", "CRACKDOWN", "INFORMANT", "MUGSHOT", "FUGITIVE", "MANHUNT",
-    "LOCKPICK", "VAULT", "CROWBAR", "BARRICADE", "DECOY", "STING", "SURVEILLANCE", "ROADBLOCK",
-    "CHECKPOINT", "WAREHOUSE", "DOCKYARD", "BACKALLEY", "HARBOR", "PENTHOUSE", "NIGHTCLUB",
-    "CASINO", "ROULETTE", "POKER", "DICE", "JACKPOT", "BANKROLL", "BOOKMAKER", "HIGHROLLER",
-    "STACKS", "CHIPS", "WAGER", "PAYOUT", "LUCK", "FORTUNE", "MERCENARY", "BODYGUARD",
-    "TACTICS", "STRATEGY", "SHOWDOWN", "DRAW", "DOUBLECROSS", "HANDSHAKE", "ALLIANCE", "BETRAYAL",
-    "BLOODOATH", "WHISPER", "SCARFACE", "SHADOW", "NIGHTFALL", "THUNDER", "STORM", "FALCON",
-    "VIPER", "COBRA", "WOLFPACK", "IRONCLAD", "STONEWALL", "GUNPOWDER", "TRIGGER", "HOLSTER",
-    "RELOADER", "CARTRIDGE", "SNIPER", "RIFLE", "PISTOL", "SHOTGUN", "SILENCER", "BLUEPRINT",
-    "LEDGER", "INVOICE", "CONTRACT", "PAYOFF", "RANSOM", "ESCROW", "AUCTION", "BLACKMARKET",
-    "TACTICAL", "OPERATION", "MIDNIGHT", "SUNRISE", "DOWNTOWN", "UPTOWN", "CITADEL", "STRONGHOLD",
-    "BUNKER", "ARMORY", "HIDEAWAY", "FOOTHOLD", "OUTPOST", "GARRISON", "RENEGADES", "VIGILANTE",
-    "SMOKESCREEN", "MIRAGE", "GHOST", "PHANTOM", "RAZOR", "ONYX", "OBSIDIAN", "EMBER",
-    "INFERNO", "FROST", "TEMPEST", "HAVOC", "RECKONING", "AFTERMATH", "LOCKDOWN", "COUNTDOWN",
+MAX_HANGMAN_WRONG = 6  # parts of the hangman drawing
+
+HANGMAN_WORD_DATA = [
+    # Crime
+    {"word": "MAFIA",         "category": "Crime",       "clue": "Operates from the shadows, feared by all"},
+    {"word": "HEIST",         "category": "Crime",       "clue": "A carefully planned score"},
+    {"word": "RACKET",        "category": "Crime",       "clue": "Illegal money-making scheme"},
+    {"word": "BRIBE",         "category": "Crime",       "clue": "Cash that buys silence or favours"},
+    {"word": "ALIBI",         "category": "Crime",       "clue": "Proof you were elsewhere"},
+    {"word": "SHOOTOUT",      "category": "Crime",       "clue": "When bullets fly between rivals"},
+    {"word": "AMBUSH",        "category": "Crime",       "clue": "Strike before they see you coming"},
+    {"word": "CONTRABAND",    "category": "Crime",       "clue": "Goods that move in the dark"},
+    {"word": "LAUNDERING",    "category": "Crime",       "clue": "Making dirty money look clean"},
+    {"word": "KIDNAPPING",    "category": "Crime",       "clue": "Taking someone for a ransom"},
+    {"word": "EXTORTION",     "category": "Crime",       "clue": "Paying up — or else"},
+    {"word": "BOOTLEG",       "category": "Crime",       "clue": "Illegal goods sold under the table"},
+    {"word": "CRACKDOWN",     "category": "Crime",       "clue": "When the heat turns up on the streets"},
+    {"word": "INFORMANT",     "category": "Crime",       "clue": "Someone who talks to the wrong people"},
+    {"word": "FUGITIVE",      "category": "Crime",       "clue": "Running from justice"},
+    {"word": "WIRETAP",       "category": "Crime",       "clue": "Listening in without permission"},
+    {"word": "DECOY",         "category": "Crime",       "clue": "Used to draw attention away"},
+    {"word": "STING",         "category": "Crime",       "clue": "An undercover trap"},
+    {"word": "SMUGGLER",      "category": "Crime",       "clue": "Moves forbidden cargo across borders"},
+    {"word": "DOUBLECROSS",   "category": "Crime",       "clue": "Betrayal dressed as loyalty"},
+    {"word": "RANSOM",        "category": "Crime",       "clue": "The price for a safe return"},
+    {"word": "BLACKMARKET",   "category": "Crime",       "clue": "Where prohibited goods are traded"},
+    {"word": "RENEGADES",     "category": "Crime",       "clue": "Those who broke from the group"},
+    {"word": "HAVOC",         "category": "Crime",       "clue": "Total destruction and chaos"},
+    {"word": "LOCKDOWN",      "category": "Crime",       "clue": "Nothing and no one gets through"},
+    # Mob Rank
+    {"word": "GODFATHER",     "category": "Mob Rank",    "clue": "The one all others answer to"},
+    {"word": "CONSIGLIERE",   "category": "Mob Rank",    "clue": "The advisor who whispers in the boss's ear"},
+    {"word": "UNDERBOSS",     "category": "Mob Rank",    "clue": "Second in command of the family"},
+    {"word": "CAPOREGIME",    "category": "Mob Rank",    "clue": "A captain who commands his crew"},
+    {"word": "ASSOCIATE",     "category": "Mob Rank",    "clue": "Not yet made, but runs with the family"},
+    {"word": "ENFORCER",      "category": "Mob Rank",    "clue": "Makes sure debts and orders are kept"},
+    {"word": "HITMAN",        "category": "Mob Rank",    "clue": "Hired to make problems disappear"},
+    {"word": "KINGPIN",       "category": "Mob Rank",    "clue": "Controls the entire operation"},
+    {"word": "SYNDICATE",     "category": "Mob Rank",    "clue": "A powerful network of criminals"},
+    {"word": "DON",           "category": "Mob Rank",    "clue": "A title of respect for the boss"},
+    {"word": "CAPO",          "category": "Mob Rank",    "clue": "A captain within the family"},
+    {"word": "CREW",          "category": "Mob Rank",    "clue": "A tight-knit group under one captain"},
+    {"word": "MERCENARY",     "category": "Mob Rank",    "clue": "Fights for whoever pays most"},
+    {"word": "VIGILANTE",     "category": "Mob Rank",    "clue": "Takes justice into their own hands"},
+    # Operations
+    {"word": "OMERTA",        "category": "Operations",  "clue": "The code that keeps mouths shut"},
+    {"word": "FAMILY",        "category": "Operations",  "clue": "The bond that runs deeper than blood"},
+    {"word": "TERRITORY",     "category": "Operations",  "clue": "The ground a crew claims as their own"},
+    {"word": "TRUCE",         "category": "Operations",  "clue": "A temporary peace between enemies"},
+    {"word": "RIVALRY",       "category": "Operations",  "clue": "Long-running competition for power"},
+    {"word": "VENDETTA",      "category": "Operations",  "clue": "A personal grudge that must be settled"},
+    {"word": "GETAWAY",       "category": "Operations",  "clue": "The fast exit after the job"},
+    {"word": "LOOKOUT",       "category": "Operations",  "clue": "Watches for danger so others can work"},
+    {"word": "PAYDAY",        "category": "Operations",  "clue": "When the score is finally divided"},
+    {"word": "MANHUNT",       "category": "Operations",  "clue": "A large-scale search for someone"},
+    {"word": "SURVEILLANCE",  "category": "Operations",  "clue": "Watching without being seen"},
+    {"word": "ALLIANCE",      "category": "Operations",  "clue": "Rivals united for a common goal"},
+    {"word": "BETRAYAL",      "category": "Operations",  "clue": "Breaking trust from within"},
+    {"word": "BLOODOATH",     "category": "Operations",  "clue": "A vow sealed in the most serious way"},
+    {"word": "HANDSHAKE",     "category": "Operations",  "clue": "The deal is done without a contract"},
+    {"word": "TACTICS",       "category": "Operations",  "clue": "The method behind the madness"},
+    {"word": "STRATEGY",      "category": "Operations",  "clue": "The long-term plan for domination"},
+    {"word": "SHOWDOWN",      "category": "Operations",  "clue": "The final confrontation"},
+    {"word": "OPERATION",     "category": "Operations",  "clue": "A coordinated plan in motion"},
+    {"word": "SMOKESCREEN",   "category": "Operations",  "clue": "Distraction hiding the real move"},
+    {"word": "COUNTDOWN",     "category": "Operations",  "clue": "Time running out before the moment arrives"},
+    {"word": "RECKONING",     "category": "Operations",  "clue": "A day of settling all accounts"},
+    {"word": "AFTERMATH",     "category": "Operations",  "clue": "What is left when the smoke clears"},
+    # Casino
+    {"word": "SPEAKEASY",     "category": "Casino",      "clue": "An illegal bar hidden behind a false wall"},
+    {"word": "BLACKJACK",     "category": "Casino",      "clue": "Beat the dealer without going over"},
+    {"word": "CASINO",        "category": "Casino",      "clue": "Where the house always has an edge"},
+    {"word": "ROULETTE",      "category": "Casino",      "clue": "Spin the wheel and pray"},
+    {"word": "POKER",         "category": "Casino",      "clue": "Read the table, not the cards"},
+    {"word": "DICE",          "category": "Casino",      "clue": "Luck in a pair of cubes"},
+    {"word": "JACKPOT",       "category": "Casino",      "clue": "The biggest possible win"},
+    {"word": "BANKROLL",      "category": "Casino",      "clue": "The funds you bring to the table"},
+    {"word": "BOOKMAKER",     "category": "Casino",      "clue": "Sets the odds on every bet"},
+    {"word": "HIGHROLLER",    "category": "Casino",      "clue": "Bets large and expects VIP treatment"},
+    {"word": "STACKS",        "category": "Casino",      "clue": "Piles of chips or cash on the table"},
+    {"word": "CHIPS",         "category": "Casino",      "clue": "Plastic currency used on the floor"},
+    {"word": "WAGER",         "category": "Casino",      "clue": "What you risk before the cards are dealt"},
+    {"word": "PAYOUT",        "category": "Casino",      "clue": "The winnings handed over after a win"},
+    {"word": "LUCK",          "category": "Casino",      "clue": "The invisible hand that decides it all"},
+    {"word": "FORTUNE",       "category": "Casino",      "clue": "Fate or a pile of accumulated wealth"},
+    {"word": "DRAW",          "category": "Casino",      "clue": "Nobody wins and nobody loses"},
+    {"word": "MOONSHINE",     "category": "Casino",      "clue": "Homemade spirits flowing after hours"},
+    {"word": "AUCTION",       "category": "Casino",      "clue": "Highest bidder takes it all"},
+    {"word": "ESCROW",        "category": "Casino",      "clue": "Funds held by a neutral party"},
+    # Weapons
+    {"word": "BULLETS",       "category": "Weapons",     "clue": "The currency of street violence"},
+    {"word": "TRIGGER",       "category": "Weapons",     "clue": "One pull and it is all over"},
+    {"word": "HOLSTER",       "category": "Weapons",     "clue": "Where the piece rests when not in use"},
+    {"word": "CARTRIDGE",     "category": "Weapons",     "clue": "The loaded casing ready to fire"},
+    {"word": "SNIPER",        "category": "Weapons",     "clue": "Hits the mark from a distance"},
+    {"word": "RIFLE",         "category": "Weapons",     "clue": "Long-barrel firearm for precision shots"},
+    {"word": "PISTOL",        "category": "Weapons",     "clue": "Compact and concealed sidearm"},
+    {"word": "SHOTGUN",       "category": "Weapons",     "clue": "Wide spread, short range, devastating"},
+    {"word": "SILENCER",      "category": "Weapons",     "clue": "Keeps the noise to a minimum"},
+    {"word": "GUNPOWDER",     "category": "Weapons",     "clue": "The black grain behind every shot"},
+    {"word": "RELOADER",      "category": "Weapons",     "clue": "Prepares the next round quickly"},
+    {"word": "CROWBAR",       "category": "Weapons",     "clue": "Entry tool and blunt instrument in one"},
+    {"word": "RAZOR",         "category": "Weapons",     "clue": "Sharp, thin, and dangerous up close"},
+    {"word": "IRONCLAD",      "category": "Weapons",     "clue": "Impossible to break or dispute"},
+    {"word": "STONEWALL",     "category": "Weapons",     "clue": "An unyielding defence that blocks all"},
+    # Location
+    {"word": "SAFEHOUSE",     "category": "Location",    "clue": "A place to hide when the heat is on"},
+    {"word": "HIDEOUT",       "category": "Location",    "clue": "Where the crew lays low after a job"},
+    {"word": "VAULT",         "category": "Location",    "clue": "Locked tight with everything valuable inside"},
+    {"word": "WAREHOUSE",     "category": "Location",    "clue": "Large building used to store or meet"},
+    {"word": "DOCKYARD",      "category": "Location",    "clue": "Where ships unload more than cargo"},
+    {"word": "HARBOR",        "category": "Location",    "clue": "A sheltered bay used for arrivals and departures"},
+    {"word": "PENTHOUSE",     "category": "Location",    "clue": "Top-floor luxury for those at the top"},
+    {"word": "NIGHTCLUB",     "category": "Location",    "clue": "A front business with more going on inside"},
+    {"word": "ROADBLOCK",     "category": "Location",    "clue": "Stops movement dead in its tracks"},
+    {"word": "CHECKPOINT",    "category": "Location",    "clue": "You must pass inspection to get through"},
+    {"word": "BACKALLEY",     "category": "Location",    "clue": "Where deals are done away from eyes"},
+    {"word": "DOWNTOWN",      "category": "Location",    "clue": "The busy heart of the city"},
+    {"word": "UPTOWN",        "category": "Location",    "clue": "Where the wealthy keep their distance"},
+    {"word": "CITADEL",       "category": "Location",    "clue": "A fortified stronghold of power"},
+    {"word": "STRONGHOLD",    "category": "Location",    "clue": "Hard to take and harder to hold"},
+    {"word": "BUNKER",        "category": "Location",    "clue": "Underground and built to survive anything"},
+    {"word": "ARMORY",        "category": "Location",    "clue": "Where all the hardware is stored"},
+    {"word": "HIDEAWAY",      "category": "Location",    "clue": "A secret retreat away from trouble"},
+    {"word": "FOOTHOLD",      "category": "Location",    "clue": "The first piece of territory you claim"},
+    {"word": "OUTPOST",       "category": "Location",    "clue": "A distant watch point at the edge of turf"},
+    {"word": "GARRISON",      "category": "Location",    "clue": "Troops stationed to hold a position"},
+    {"word": "BLUEPRINT",     "category": "Location",    "clue": "The plan drawn before the job begins"},
+    {"word": "LOCKPICK",      "category": "Location",    "clue": "Tool for entering without a key"},
+    {"word": "MIDNIGHT",      "category": "Location",    "clue": "The hour most jobs are done"},
+    {"word": "SUNRISE",       "category": "Location",    "clue": "When the night shift finally ends"},
+    # Crew / Identity
+    {"word": "SCARFACE",      "category": "Identity",    "clue": "A mark left behind from a close call"},
+    {"word": "SHADOW",        "category": "Identity",    "clue": "Follows unnoticed, leaves no trace"},
+    {"word": "GHOST",         "category": "Identity",    "clue": "Moves through without being seen"},
+    {"word": "PHANTOM",       "category": "Identity",    "clue": "Rumoured to exist but never confirmed"},
+    {"word": "WHISPER",       "category": "Identity",    "clue": "Information passed very quietly"},
+    {"word": "MIRAGE",        "category": "Identity",    "clue": "Looks real but disappears on approach"},
+    {"word": "VIPER",         "category": "Identity",    "clue": "Deadly and strikes without warning"},
+    {"word": "COBRA",         "category": "Identity",    "clue": "Dangerous, patient, and precise"},
+    {"word": "WOLFPACK",      "category": "Identity",    "clue": "A coordinated group that hunts together"},
+    {"word": "FALCON",        "category": "Identity",    "clue": "Watches from above and strikes fast"},
+    {"word": "NIGHTFALL",     "category": "Identity",    "clue": "When darkness gives cover for work"},
+    {"word": "THUNDER",       "category": "Identity",    "clue": "A warning before the real storm hits"},
+    {"word": "STORM",         "category": "Identity",    "clue": "Fast, destructive, and impossible to ignore"},
+    {"word": "ONYX",          "category": "Identity",    "clue": "Black as night and worth something"},
+    {"word": "OBSIDIAN",      "category": "Identity",    "clue": "Dark volcanic glass, sharp as a blade"},
+    {"word": "EMBER",         "category": "Identity",    "clue": "A small glow that can reignite everything"},
+    {"word": "INFERNO",       "category": "Identity",    "clue": "Out of control and consuming everything"},
+    {"word": "FROST",         "category": "Identity",    "clue": "Cold, calculated, and relentless"},
+    {"word": "TEMPEST",       "category": "Identity",    "clue": "A violent storm of action"},
+    # Additional words (Operations / Crime)
+    {"word": "MUGSHOT",       "category": "Crime",       "clue": "A photo taken after an arrest"},
+    {"word": "BODYGUARD",     "category": "Operations",  "clue": "Puts themselves between you and danger"},
+    {"word": "LEDGER",        "category": "Operations",  "clue": "The book that records all the debts"},
+    {"word": "INVOICE",       "category": "Operations",  "clue": "A bill for services rendered"},
+    {"word": "CONTRACT",      "category": "Operations",  "clue": "An agreement that cannot be undone easily"},
+    {"word": "PAYOFF",        "category": "Operations",  "clue": "The reward at the end of the job"},
+    {"word": "TACTICAL",      "category": "Operations",  "clue": "Planned with precision and purpose"},
+    {"word": "BARRICADE",     "category": "Location",    "clue": "A hasty barrier thrown up in a hurry"},
+    {"word": "WOLFPACK",      "category": "Identity",    "clue": "A coordinated group that hunts together"},
 ]
+# Deduplicate by word (WOLFPACK appears twice above; keep last entry)
+_seen = {}
+for _e in HANGMAN_WORD_DATA:
+    _seen[_e["word"]] = _e
+HANGMAN_WORD_DATA = list(_seen.values())
 
 REWARD_TYPE_WEIGHTS = {
     "cash": 36,
@@ -325,14 +471,22 @@ class CreateGameRequest(BaseModel):
 
 
 class HangmanGuessRequest(BaseModel):
-    guess: str
+    letter: str  # single A-Z letter
 
 
 def _hangman_init_state() -> dict:
+    entry = _rng.choice(HANGMAN_WORD_DATA)
+    word = entry["word"]
     return {
-        "word": _rng.choice(HANGMAN_WORDS),
-        "attempts_per_user": 3,
-        "guesses": {},  # user_id -> [{"guess": str, "correct": bool, "at": iso}]
+        "word": word,
+        "category": entry["category"],
+        "clue": entry["clue"],
+        "guessed_letters": [],       # all letters tried (correct + wrong)
+        "wrong_letters": [],         # only incorrect letters
+        "wrong_count": 0,            # drives hangman drawing — max MAX_HANGMAN_WRONG
+        "letter_solvers": {},        # letter -> user_id (who guessed each correct letter)
+        "letter_solved_at": {},      # letter -> ISO timestamp of correct guess
+        "revealed_pattern": ["_"] * len(word),
         "solved_by": None,
         "solved_at": None,
     }
@@ -342,23 +496,33 @@ def _hangman_public_state(game: dict, current_user_id: Optional[str]) -> Optiona
     if game.get("game_type") != "hangman":
         return None
     state = game.get("hangman_state") or {}
-    attempts_per_user = int(state.get("attempts_per_user") or 3)
-    guesses_by_user = state.get("guesses") or {}
-    my_guesses = guesses_by_user.get(current_user_id, []) if current_user_id else []
     word = state.get("word") or ""
+    guessed = list(state.get("guessed_letters") or [])
+    wrong = list(state.get("wrong_letters") or [])
+    wrong_count = int(state.get("wrong_count") or 0)
     solved = bool(state.get("solved_by"))
-    return {
-        "attempts_per_user": attempts_per_user,
-        "my_attempts_used": len(my_guesses),
-        "my_attempts_left": max(0, attempts_per_user - len(my_guesses)),
-        "my_guesses": my_guesses,
-        "total_guesses": sum(len(v or []) for v in guesses_by_user.values()),
+    revealed = state.get("revealed_pattern") or ["_"] * len(word)
+    # Count how many letters in the word this user personally solved
+    letter_solvers = state.get("letter_solvers") or {}
+    my_letter_count = sum(1 for uid in letter_solvers.values() if uid == current_user_id) if current_user_id else 0
+    out = {
+        "category": state.get("category") or "",
         "word_length": len(word),
-        "revealed_pattern": state.get("revealed_pattern") or ("_" * len(word) if word else ""),
+        "guessed_letters": guessed,
+        "wrong_letters": wrong,
+        "wrong_count": wrong_count,
+        "max_wrong": MAX_HANGMAN_WRONG,
+        "revealed_pattern": revealed if isinstance(revealed, list) else list(revealed),
+        "my_letter_count": my_letter_count,
+        "solved": solved,
         "solved_by": state.get("solved_by"),
         "solved_at": state.get("solved_at"),
-        "solved": solved,
+        "game_over_no_solve": wrong_count >= MAX_HANGMAN_WRONG,
     }
+    # Only reveal the clue text after 2 wrong guesses — not too easy, not hidden forever
+    if wrong_count >= 2:
+        out["clue"] = state.get("clue") or ""
+    return out
 
 
 def _with_public_hangman(game: dict, current_user_id: Optional[str]) -> dict:
@@ -368,6 +532,9 @@ def _with_public_hangman(game: dict, current_user_id: Optional[str]) -> dict:
         if "hangman_state" in g:
             hs = dict(g.get("hangman_state") or {})
             hs.pop("word", None)
+            hs.pop("clue", None)
+            hs.pop("letter_solvers", None)
+            hs.pop("letter_solved_at", None)
             g["hangman_state"] = hs
     return g
 
@@ -398,49 +565,57 @@ async def _run_dice_payout(game: dict):
 
 
 async def _run_hangman_payout(game: dict):
-    """Single winner from correct guess (earliest). Fallback random if unsolved."""
+    """Winner = participant who guessed the most correct letters.
+    Tiebreak = whoever's latest correct letter had the earliest timestamp.
+    Fallback = random participant (when no letters were guessed correctly).
+    """
     participants = game.get("participants") or []
     if not participants:
         return None
     state = game.get("hangman_state") or {}
-    guesses = state.get("guesses") or {}
-    winner = None
-    solved_guess = None
-    correct_attempts = []
-    for p in participants:
-        uid = p.get("user_id")
-        if not uid:
-            continue
-        for attempt in (guesses.get(uid) or []):
-            if attempt.get("correct"):
-                correct_attempts.append((attempt.get("at") or "", uid, attempt))
-    if correct_attempts:
-        correct_attempts.sort(key=lambda t: t[0])
-        win_uid = correct_attempts[0][1]
-        solved_guess = correct_attempts[0][2]
-        winner = next((p for p in participants if p.get("user_id") == win_uid), None)
-    if not winner:
-        winner = _rng.choice(participants)
-    winner_id = winner.get("user_id")
-    winner_username = winner.get("username")
+    word = state.get("word") or _rng.choice([e["word"] for e in HANGMAN_WORD_DATA])
+    letter_solvers = state.get("letter_solvers") or {}
+    letter_solved_at = state.get("letter_solved_at") or {}
+    # Count correct letters per participant and find their latest solve timestamp
+    uid_scores: dict[str, dict] = {}
+    for letter, uid in letter_solvers.items():
+        if uid not in uid_scores:
+            uid_scores[uid] = {"count": 0, "latest_at": ""}
+        uid_scores[uid]["count"] += 1
+        ts = letter_solved_at.get(letter) or ""
+        if ts > uid_scores[uid]["latest_at"]:
+            uid_scores[uid]["latest_at"] = ts
+    winner_id = None
+    winner_username = None
+    word_solved = state.get("solved_by") is not None
+    if uid_scores:
+        # Sort: most letters first; tiebreak by earliest latest-timestamp
+        ranked = sorted(uid_scores.keys(), key=lambda u: (-uid_scores[u]["count"], uid_scores[u]["latest_at"]))
+        winner_id = ranked[0]
+        winner_p = next((p for p in participants if p.get("user_id") == winner_id), None)
+        winner_username = (winner_p or {}).get("username")
+    if not winner_id:
+        fallback = _rng.choice(participants)
+        winner_id = fallback.get("user_id")
+        winner_username = fallback.get("username")
     reward = None
     if winner_id:
         reward = await _give_random_reward(winner_id)
-    word = state.get("word") or _rng.choice(HANGMAN_WORDS)
-    if solved_guess and solved_guess.get("correct"):
-        revealed_pattern = word
+    # revealed_pattern for history display
+    revealed = state.get("revealed_pattern") or ["_"] * len(word)
+    if isinstance(revealed, list):
+        revealed_str = "".join(revealed)
     else:
-        revealed_pattern = "".join(ch if _rng.random() < 0.35 else "_" for ch in word)
-    misses = _rng.randint(0, 6)
+        revealed_str = str(revealed)
+    wrong_count = int(state.get("wrong_count") or 0)
     return {
         "winner_id": winner_id,
         "winner_username": winner_username,
         "reward": reward,
         "word": word,
-        "revealed_pattern": revealed_pattern,
-        "misses": misses,
-        "solved_by_guess": bool(solved_guess),
-        "winning_guess": (solved_guess or {}).get("guess"),
+        "revealed_pattern": revealed_str,
+        "wrong_count": wrong_count,
+        "solved_by_guess": bool(word_solved),
     }
 
 
@@ -666,7 +841,11 @@ async def guess_hangman(
     body: HangmanGuessRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Submit a whole-word Hangman guess (3 attempts per player)."""
+    """Submit a single-letter Hangman guess. Shared board across all participants.
+    Correct: reveals letter positions in pattern.
+    Wrong: increments wrong_count — game auto-settles at MAX_HANGMAN_WRONG.
+    Word fully revealed: game auto-settles immediately.
+    """
     game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -679,38 +858,70 @@ async def guess_hangman(
     if not any((p.get("user_id") == uid) for p in participants):
         raise HTTPException(status_code=403, detail="Join the game first")
     state = game.get("hangman_state") or _hangman_init_state()
-    if state.get("solved_by"):
-        raise HTTPException(status_code=400, detail="Word already solved")
-    guess_raw = (body.guess or "").strip().upper()
-    if not guess_raw:
-        raise HTTPException(status_code=400, detail="Guess cannot be empty")
+    if state.get("solved_by") or int(state.get("wrong_count") or 0) >= MAX_HANGMAN_WRONG:
+        raise HTTPException(status_code=400, detail="Game is already over")
+    # Validate: single A-Z letter
+    letter = (body.letter or "").strip().upper()
+    if len(letter) != 1 or not letter.isalpha():
+        raise HTTPException(status_code=400, detail="Guess must be a single letter A-Z")
+    guessed = list(state.get("guessed_letters") or [])
+    if letter in guessed:
+        raise HTTPException(status_code=400, detail=f"Letter '{letter}' has already been guessed")
     word = (state.get("word") or "").strip().upper()
-    attempts_per_user = int(state.get("attempts_per_user") or 3)
-    guesses_by_user = state.get("guesses") or {}
-    mine = list(guesses_by_user.get(uid) or [])
-    if len(mine) >= attempts_per_user:
-        raise HTTPException(status_code=400, detail=f"No attempts left ({attempts_per_user}/{attempts_per_user})")
-    correct = guess_raw == word
     now_iso = datetime.now(timezone.utc).isoformat()
-    mine.append({"guess": guess_raw, "correct": bool(correct), "at": now_iso})
-    guesses_by_user[uid] = mine
-    new_state = dict(state)
-    new_state["guesses"] = guesses_by_user
+    guessed.append(letter)
+    wrong_letters = list(state.get("wrong_letters") or [])
+    wrong_count = int(state.get("wrong_count") or 0)
+    letter_solvers = dict(state.get("letter_solvers") or {})
+    letter_solved_at = dict(state.get("letter_solved_at") or {})
+    revealed = list(state.get("revealed_pattern") or ["_"] * len(word))
+    # Expand revealed to list if stored as string
+    if isinstance(revealed, str):
+        revealed = list(revealed)
+    correct = letter in word
     if correct:
+        for i, ch in enumerate(word):
+            if ch == letter:
+                revealed[i] = letter
+        letter_solvers[letter] = uid
+        letter_solved_at[letter] = now_iso
+    else:
+        wrong_letters.append(letter)
+        wrong_count += 1
+    new_state = dict(state)
+    new_state["guessed_letters"] = guessed
+    new_state["wrong_letters"] = wrong_letters
+    new_state["wrong_count"] = wrong_count
+    new_state["letter_solvers"] = letter_solvers
+    new_state["letter_solved_at"] = letter_solved_at
+    new_state["revealed_pattern"] = revealed
+    word_solved = "_" not in revealed and all(ch != "_" for ch in revealed)
+    game_over_wrong = wrong_count >= MAX_HANGMAN_WRONG
+    if word_solved:
         new_state["solved_by"] = uid
         new_state["solved_at"] = now_iso
-        new_state["revealed_pattern"] = word
     await db.entertainer_games.update_one({"id": game_id, "status": "open"}, {"$set": {"hangman_state": new_state}})
     updated = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     if not updated:
         raise HTTPException(status_code=404, detail="Game not found")
-    if correct and updated.get("status") == "open":
+    should_settle = word_solved or game_over_wrong
+    if should_settle and updated.get("status") == "open":
         await _settle_game(updated)
         updated = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
+    if word_solved:
+        msg = f"'{letter}' — word solved! Game settled."
+    elif game_over_wrong:
+        msg = f"'{letter}' — wrong! Hangman complete ({wrong_count}/{MAX_HANGMAN_WRONG})."
+    elif correct:
+        msg = f"'{letter}' is in the word!"
+    else:
+        msg = f"'{letter}' not in word ({wrong_count}/{MAX_HANGMAN_WRONG} misses)"
     return {
-        "message": "Correct guess! Game settled." if correct else "Guess submitted",
+        "message": msg,
         "correct": bool(correct),
-        "attempts_left": max(0, attempts_per_user - len(mine)),
+        "word_solved": bool(word_solved),
+        "game_over": bool(game_over_wrong),
+        "wrong_count": wrong_count,
         "game": _with_public_hangman(updated, uid),
     }
 
