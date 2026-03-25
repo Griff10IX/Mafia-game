@@ -111,6 +111,35 @@ async def _record_store_points_spend(user_id: str, inc: dict, event_ref: str):
         logger.exception("point provenance spend failed user_id=%s event_ref=%s", user_id, event_ref)
 
 
+async def _rollback_transfer_out_slices(sender_id: str, transfer_id: str, slices: list):
+    """Best-effort rollback when transfer provenance fails after sender deduction."""
+    if not sender_id or not slices:
+        return
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for sl in slices:
+        lot_id = sl.get("from_lot_id")
+        amt = int(sl.get("amount") or 0)
+        if not lot_id or amt <= 0:
+            continue
+        await db.point_lots.update_one(
+            {"id": lot_id},
+            {"$inc": {"remaining_points": amt}, "$set": {"updated_at": now_iso}},
+        )
+        await db.point_ledger_events.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "event_type": "transfer_out_rollback",
+                "user_id": sender_id,
+                "points": amt,
+                "lot_id": lot_id,
+                "origin_ref": transfer_id,
+                "root_purchase_ref": sl.get("root_purchase_ref"),
+                "meta": {"reason": "mint_transfer_in_failed"},
+                "created_at": now_iso,
+            }
+        )
+
+
 class CustomCarPurchase(BaseModel):
     car_name: str
 
@@ -459,6 +488,24 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
         )
     except Exception:
         logger.exception("point provenance transfer_out failed transfer_id=%s", transfer_id)
+        await db.users.update_one({"id": sender_id}, {"$inc": {"points": amount}})
+        raise HTTPException(status_code=500, detail="Transfer failed. No points were sent; please retry.")
+    consumed_total = sum(int(s.get("amount") or 0) for s in slices)
+    if consumed_total != amount:
+        logger.error(
+            "point provenance transfer_out mismatch transfer_id=%s sender=%s amount=%s consumed=%s",
+            transfer_id,
+            sender_id,
+            amount,
+            consumed_total,
+        )
+        if consumed_total > 0:
+            try:
+                await _rollback_transfer_out_slices(sender_id, transfer_id, slices)
+            except Exception:
+                logger.exception("point provenance rollback failed transfer_id=%s", transfer_id)
+        await db.users.update_one({"id": sender_id}, {"$inc": {"points": amount}})
+        raise HTTPException(status_code=500, detail="Transfer failed integrity check. No points were sent.")
     await db.users.update_one({"id": recipient["id"]}, {"$inc": {"points": amount}})
     try:
         await mint_transfer_in_lots(
@@ -470,6 +517,13 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
         )
     except Exception:
         logger.exception("point provenance transfer_in failed transfer_id=%s", transfer_id)
+        await db.users.update_one({"id": recipient["id"]}, {"$inc": {"points": -amount}})
+        await db.users.update_one({"id": sender_id}, {"$inc": {"points": amount}})
+        try:
+            await _rollback_transfer_out_slices(sender_id, transfer_id, slices)
+        except Exception:
+            logger.exception("point provenance rollback failed transfer_id=%s", transfer_id)
+        raise HTTPException(status_code=500, detail="Transfer failed. No points were sent; please retry.")
     await db.points_transfers.insert_one({
         "id": transfer_id,
         "from_user_id": sender_id,

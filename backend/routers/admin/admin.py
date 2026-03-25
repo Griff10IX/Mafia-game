@@ -405,12 +405,54 @@ def register(router):
     async def admin_points_chargeback_execute(body: ChargebackRequest, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        payer_username = "the purchasing account"
+        txn = await db.payment_transactions.find_one(
+            {"session_id": body.payment_session_id},
+            {"_id": 0, "user_id": 1},
+        )
+        payer_user_id = (txn or {}).get("user_id")
+        if payer_user_id:
+            payer_user = await db.users.find_one(
+                {"id": payer_user_id},
+                {"_id": 0, "username": 1},
+            )
+            payer_username = (payer_user or {}).get("username") or payer_username
         summary = await execute_chargeback_best_effort(
             db,
             payment_session_id=body.payment_session_id,
             admin_user_id=current_user.get("id"),
             admin_username=current_user.get("username") or "?",
         )
+        # Notify each affected user when points were reclaimed from their balance.
+        for row in (summary.get("owners") or []):
+            uid = row.get("user_id")
+            reclaimed = int(row.get("reclaimed") or 0)
+            if not uid or reclaimed <= 0:
+                continue
+            try:
+                await send_notification(
+                    uid,
+                    "Points Adjustment Notice",
+                    (
+                        f"{reclaimed:,} points were removed from your account due to a payment chargeback/reversal "
+                        f"for a purchase made by {payer_username}. "
+                        "If those points were transferred to you or originated from a reversed payment, "
+                        "they may be reclaimed during chargeback processing. "
+                        "Even if you did not intentionally get points directly from the charged-back user "
+                        "(for example, you bought them on Quick Trade), we still reserve the right to remove them "
+                        "from the game if they are deemed fraudulent. "
+                        "We apologize for any inconvenience this causes."
+                    ),
+                    "system",
+                    category="system",
+                )
+            except Exception:
+                logger.exception(
+                    "chargeback notification failed: session=%s user_id=%s reclaimed=%s",
+                    body.payment_session_id,
+                    uid,
+                    reclaimed,
+                )
         return {"payment_session_id": body.payment_session_id, **summary}
 
     @router.post("/admin/set-founding-member")
