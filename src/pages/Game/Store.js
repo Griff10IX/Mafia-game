@@ -387,9 +387,9 @@ export default function Store() {
         <div className="relative rounded-lg border border-sky-500/30 overflow-hidden bg-sky-500/5">
           <div className="h-0.5 bg-gradient-to-r from-transparent via-sky-500/50 to-transparent" />
           <div className="px-4 py-3">
-            <p className="text-[10px] font-heading font-bold text-sky-400 uppercase tracking-[0.15em]">Manual point crediting</p>
+            <p className="text-[10px] font-heading font-bold text-sky-400 uppercase tracking-[0.15em]">Pre-order point crediting</p>
             <p className="text-[10px] text-zinc-400 font-heading mt-1">
-              Your payment is recorded; staff add points to your account manually.
+              This applies only to <span className="text-zinc-300">pre-order</span> point purchases: your payment is recorded and staff add points to your account manually.
               {manualCreditEta ? (
                 <>
                   {' '}
@@ -405,6 +405,27 @@ export default function Store() {
                   </span>
                 </>
               ) : null}
+              {preorderReleaseDate ? (
+                <>
+                  {' '}
+                  On or after{' '}
+                  <span className="text-zinc-300 font-semibold">
+                    {new Date(preorderReleaseDate).toLocaleString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                  , new point purchases are credited <span className="text-emerald-400/90">automatically as soon as payment succeeds</span>.
+                </>
+              ) : (
+                <>
+                  {' '}
+                  After the release date, new point purchases are credited <span className="text-emerald-400/90">automatically as soon as payment succeeds</span>.
+                </>
+              )}
             </p>
             {pendingPoints > 0 && (
               <p className="text-[10px] text-sky-400 font-heading font-bold mt-2">
@@ -426,6 +447,7 @@ export default function Store() {
               <span className="text-amber-400 font-bold">
                 {preorderReleaseDate ? new Date(preorderReleaseDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'launch date'}
               </span>
+              . Purchases on or after that time are credited <span className="text-emerald-400/90">automatically as soon as payment succeeds</span>.
             </p>
             {pendingPoints > 0 && (
               <p className="text-[10px] text-amber-400 font-heading font-bold mt-2">
@@ -870,10 +892,10 @@ export default function Store() {
           <p className="text-[10px] text-zinc-500 font-heading italic">
             Payments via Stripe.{' '}
             {!storePointsAutoCredit
-              ? `Points are added manually by staff${manualCreditEta ? ` (planned around ${new Date(manualCreditEta).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}).` : '.'}`
+              ? `Pre-order point purchases are added manually by staff${manualCreditEta ? ` (planned around ${new Date(manualCreditEta).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}).` : '.'} ${preorderReleaseDate ? `From ${new Date(preorderReleaseDate).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} onward, new point purchases credit automatically when payment completes.` : 'After release, new point purchases credit automatically when payment completes.'}`
               : preorderActive
-                ? 'Pre-order points will be credited on release date.'
-                : 'Points added after purchase.'}
+                ? 'Pre-order points credit on the release date above; purchases on or after that date credit automatically when payment completes.'
+                : 'Point purchases are credited automatically when payment completes.'}
           </p>
           {paymentTransactions.length > 0 ? (
             <div className="rounded border border-primary/20 bg-zinc-900/50 overflow-hidden">
