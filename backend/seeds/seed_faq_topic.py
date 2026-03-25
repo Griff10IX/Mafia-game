@@ -1,7 +1,7 @@
 """
 Seed script: creates a "FAQs" forum topic from FORUM_FAQ.md (or fallback text).
 Run from backend dir: python seed_faq_topic.py
-Reads docs/FORUM_FAQ.md from project root (or legacy FORUM_FAQ.md at root). Uses first user in DB as author.
+Reads docs/FORUM_FAQ.md from project root (or legacy FORUM_FAQ.md at root). Author: FAQ_TOPIC_USERNAME, FAQ_TOPIC_AUTHOR_ID, or ADMIN_EMAILS (see utils/faq_topic_author.py).
 Skips if a topic with title "FAQs" already exists.
 To refresh an existing topic from disk, use update_faq_topic.py in this folder.
 """
@@ -18,9 +18,14 @@ except ModuleNotFoundError as e:
     print("Missing dependency. Install with: pip install pymongo python-dotenv")
     sys.exit(1)
 
-ROOT_DIR = Path(__file__).parent  # backend/
-PROJECT_ROOT = ROOT_DIR.parent    # project root (where FORUM_FAQ.md lives)
-load_dotenv(ROOT_DIR / ".env")
+ROOT_DIR = Path(__file__).parent  # backend/seeds/
+BACKEND_DIR = ROOT_DIR.parent
+PROJECT_ROOT = BACKEND_DIR.parent  # repo root (where FORUM_FAQ.md lives)
+load_dotenv(BACKEND_DIR / ".env")
+
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+from utils.faq_topic_author import resolve_faq_topic_author_sync
 
 FAQ_TITLE = "FAQs"
 # Primary: docs/FORUM_FAQ.md; fallback: repo root FORUM_FAQ.md
@@ -74,9 +79,7 @@ def main():
         print(f"Topic '{FAQ_TITLE}' already exists. Skipping.")
         return
 
-    user = db.users.find_one({}, {"_id": 0, "id": 1, "username": 1})
-    author_id = user["id"] if user else "system"
-    author_username = user.get("username", "Game") if user else "Game"
+    author_id, author_username = resolve_faq_topic_author_sync(db)
 
     topic_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins } from 'lucide-react';
 import api, { imageHostPublicUrl } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -55,6 +55,7 @@ const ADMIN_STYLES = `
 
 const ADMIN_CATEGORIES = [
   { id: 'admin-players', label: 'Player Management', icon: UserCog },
+  { id: 'admin-donations', label: 'Donations', icon: HandCoins },
   { id: 'admin-gameworld', label: 'Game World', icon: Zap },
   { id: 'admin-security', label: 'Security & Cloudflare', icon: Globe },
   { id: 'admin-cheat', label: 'Cheat Detection', icon: AlertTriangle },
@@ -66,7 +67,7 @@ const ADMIN_CATEGORIES = [
   { id: 'admin-staff', label: 'Staff Management', icon: Shield },
   { id: 'admin-mod-tools', label: 'Mod Tools', icon: Palette },
 ];
-const MOD_ONLY_CATEGORY_IDS = ['admin-cheat', 'admin-logs', 'admin-staff', 'admin-mod-tools'];
+const MOD_ONLY_CATEGORY_IDS = ['admin-cheat', 'admin-logs', 'admin-staff', 'admin-mod-tools', 'admin-donations'];
 
 // Searchable tools list - each item has: label (searchable), categoryId (scroll target), collapseKey (optional - to expand section)
 const SEARCHABLE_TOOLS = [
@@ -75,7 +76,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Search Users', categoryId: 'admin-players', collapseKey: 'searchUsers', keywords: ['search', 'users', 'email', 'find'] },
   { label: 'Change Rank', categoryId: 'admin-players', collapseKey: 'rank', keywords: ['rank', 'change', 'prestige', 'level'] },
   { label: 'Add Points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'add', 'give'] },
-  { label: 'Points Provenance', categoryId: 'admin-players', collapseKey: 'pointsProvenance', keywords: ['chargeback', 'provenance', 'payment session', 'points tree'] },
+  { label: 'Points Provenance', categoryId: 'admin-donations', collapseKey: 'donationsProvenance', keywords: ['chargeback', 'provenance', 'payment session', 'points tree'] },
   { label: 'Add Tokens', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['tokens', 'crime', 'gta', 'melt', 'booze', 'travel', 'oc', 'racket', 'jailbust'] },
   { label: 'Founding Member', categoryId: 'admin-players', collapseKey: 'founding', keywords: ['founding', 'member', 'badge', 'founder'] },
   { label: 'Add Money', categoryId: 'admin-players', collapseKey: 'money', keywords: ['money', 'cash', 'add', 'give'] },
@@ -88,6 +89,11 @@ const SEARCHABLE_TOOLS = [
   { label: 'User Details', categoryId: 'admin-players', collapseKey: 'userDetails', keywords: ['user', 'details', 'info', 'profile'] },
   { label: 'Gambling Log', categoryId: 'admin-players', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
   { label: 'Activity Log', categoryId: 'admin-players', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
+  // Donations
+  { label: 'Donations Payments Log', categoryId: 'admin-donations', collapseKey: 'donationsPayments', keywords: ['donations', 'payments', 'stripe', 'credit'] },
+  { label: 'Store Point Crediting', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['store', 'crediting', 'manual', 'eta', 'payments'] },
+  { label: 'Pre-order Settings', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['preorder', 'points', 'release', 'manual', 'store', 'credit'] },
+  { label: 'Release Preorder Points', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['release', 'preorder', 'points', 'credit'] },
   // Game World
   { label: 'Events Toggle', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable'] },
   { label: 'Beta Round Signup', categoryId: 'admin-gameworld', collapseKey: 'betaSignup', keywords: ['beta', 'signup', 'round', 'points', 'cash', 'testing'] },
@@ -100,8 +106,6 @@ const SEARCHABLE_TOOLS = [
   { label: 'Jail NPCs', categoryId: 'admin-gameworld', collapseKey: 'jailNpcs', keywords: ['jail', 'npc', 'prisoner'] },
   { label: 'Casino Settings', categoryId: 'admin-gameworld', collapseKey: 'casinoCaps', keywords: ['casino', 'caps', 'max bet', 'buyback'] },
   { label: 'Admin Settings', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['admin', 'settings', 'config', 'banner', 'stock'] },
-  { label: 'Pre-order Settings', categoryId: 'admin-gameworld', collapseKey: 'launchSettings', keywords: ['preorder', 'points', 'release', 'manual', 'store', 'credit'] },
-  { label: 'Release Preorder Points', categoryId: 'admin-gameworld', collapseKey: 'launchSettings', keywords: ['release', 'preorder', 'points', 'credit'] },
   { label: 'Login Lock', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['login', 'lock', 'maintenance'] },
   // Security
   { label: 'Security Summary', categoryId: 'admin-security', collapseKey: 'securitySummary', keywords: ['security', 'summary', 'flags'] },
@@ -3950,65 +3954,6 @@ export default function Admin() {
               <BtnPrimary onClick={handleAddPoints}>Add</BtnPrimary>
             </ActionRow>
 
-            <ActionRow icon={Layers} label="Points Provenance / Chargeback" description="Trace purchased points by payment session and execute best-effort clawback.">
-              <Input
-                value={pointsProvSessionId}
-                onChange={(e) => setPointsProvSessionId(e.target.value)}
-                placeholder="payment session id (cs_...)"
-                className="flex-1 min-w-[180px] text-[11px]"
-              />
-              <BtnSecondary onClick={handlePointsPreview} disabled={pointsProvPreviewLoading}>
-                {pointsProvPreviewLoading ? '...' : 'Preview'}
-              </BtnSecondary>
-              <BtnSecondary onClick={handlePointsPaymentProvenance} disabled={pointsProvPaymentLoading}>
-                {pointsProvPaymentLoading ? '...' : 'Payment Tree'}
-              </BtnSecondary>
-              <BtnDanger onClick={handlePointsExecuteChargeback} disabled={pointsProvExecuteLoading}>
-                {pointsProvExecuteLoading ? '...' : 'Execute'}
-              </BtnDanger>
-            </ActionRow>
-            <ActionRow icon={Users} label="User Points Lots" description="Inspect one user's point lots and recent ledger events.">
-              <Input
-                value={pointsProvUserId}
-                onChange={(e) => setPointsProvUserId(e.target.value)}
-                placeholder="user id"
-                className="flex-1 min-w-[140px] text-[11px]"
-              />
-              <BtnSecondary onClick={handlePointsUserProvenance} disabled={pointsProvUserLoading}>
-                {pointsProvUserLoading ? '...' : 'Load'}
-              </BtnSecondary>
-            </ActionRow>
-            {(pointsProvPreview || pointsProvPaymentData || pointsProvUserData) && (
-              <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-2 pl-6">
-                {pointsProvPreview && (
-                  <div>
-                    <div className="font-bold text-primary">Chargeback Preview</div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1">
-                      <div><span className="text-mutedForeground">Session:</span> {pointsProvPreview.payment_session_id || pointsProvSessionId}</div>
-                      <div><span className="text-mutedForeground">Requested:</span> {pointsProvPreview.requested ?? 0}</div>
-                      <div><span className="text-mutedForeground">Eligible:</span> {pointsProvPreview.eligible_remaining ?? 0}</div>
-                      <div><span className="text-mutedForeground">Reclaimed:</span> {pointsProvPreview.reclaimed ?? 0}</div>
-                      <div><span className="text-mutedForeground">Unrecoverable:</span> {pointsProvPreview.unrecoverable ?? 0}</div>
-                      <div><span className="text-mutedForeground">Owners:</span> {Array.isArray(pointsProvPreview.owners) ? pointsProvPreview.owners.length : 0}</div>
-                    </div>
-                  </div>
-                )}
-                {pointsProvPaymentData && (
-                  <div>
-                    <div className="font-bold text-primary">Payment Provenance</div>
-                    <div className="mt-1"><span className="text-mutedForeground">Lots:</span> {Array.isArray(pointsProvPaymentData.lots) ? pointsProvPaymentData.lots.length : 0} | <span className="text-mutedForeground">Ledger:</span> {Array.isArray(pointsProvPaymentData.ledger) ? pointsProvPaymentData.ledger.length : 0}</div>
-                  </div>
-                )}
-                {pointsProvUserData && (
-                  <div>
-                    <div className="font-bold text-primary">User Provenance</div>
-                    <div className="mt-1"><span className="text-mutedForeground">User:</span> {pointsProvUserData.user?.username || '?'} ({pointsProvUserData.user?.id || pointsProvUserId})</div>
-                    <div><span className="text-mutedForeground">Balance:</span> {pointsProvUserData.user?.points ?? 0} | <span className="text-mutedForeground">Lots:</span> {Array.isArray(pointsProvUserData.lots) ? pointsProvUserData.lots.length : 0} | <span className="text-mutedForeground">Ledger:</span> {Array.isArray(pointsProvUserData.ledger) ? pointsProvUserData.ledger.length : 0}</div>
-                  </div>
-                )}
-              </div>
-            )}
-
             <ActionRow icon={Zap} label="Add Tokens" description="Give consumable tokens (crime XP, GTA XP, melt, etc.)">
               <Select value={formData.tokenType} onChange={(e) => setFormData((prev) => ({ ...prev, tokenType: e.target.value }))}>
                 <option value="xp_crimes">Crime XP</option>
@@ -4183,6 +4128,289 @@ export default function Admin() {
           </>
           )}
 
+      {activeCategoryId === 'admin-donations' && isAdmin && (
+      <section id="admin-donations" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <HandCoins size={12} />
+          Donations
+        </h2>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-sky-500/30 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-sky-500/50 to-transparent" />
+          <SectionHeader
+            icon={DollarSign}
+            title="Store Point Crediting & Preorder"
+            color="text-sky-300"
+            isCollapsed={collapsed.donationsStore}
+            onToggle={() => toggleSection('donationsStore')}
+          />
+          {!collapsed.donationsStore && (
+            <div className="p-3 space-y-4">
+              <div className="space-y-3">
+                <p className="text-[10px] font-heading font-bold text-sky-400 uppercase tracking-wider">Store point crediting</p>
+                <p className="text-[10px] text-mutedForeground">
+                  When automatic crediting is off, paid purchases stay as <span className="text-sky-400/90">manual credit pending</span> until staff uses Credit in the payments log. Set an optional date/time below so players see when you plan to process credits (informational only).
+                </p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStorePointsAutoCredit(!storePointsAutoCredit)}
+                    disabled={launchSettingsSaving}
+                    className={`shrink-0 px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded border disabled:opacity-50 ${
+                      storePointsAutoCredit
+                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25'
+                        : 'bg-sky-500/15 text-sky-300 border-sky-500/40 hover:bg-sky-500/25'
+                    }`}
+                  >
+                    {storePointsAutoCredit ? 'Auto credit: on' : 'Auto credit: off'}
+                  </button>
+                  <p className="text-[10px] text-mutedForeground flex-1">
+                    {storePointsAutoCredit
+                      ? 'Successful payments credit points immediately (or follow preorder rules below).'
+                      : 'Successful payments do not add points until staff credits them.'}
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="datetime-local"
+                    value={storePointsManualCreditEta ? storePointsManualCreditEta.slice(0, 16) : ''}
+                    onChange={(e) =>
+                      setStorePointsManualCreditEta(e.target.value ? new Date(e.target.value).toISOString() : '')
+                    }
+                    disabled={storePointsAutoCredit}
+                    className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-sky-500/50 focus:outline-none disabled:opacity-40"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleClearStoreManualEta}
+                    disabled={launchSettingsSaving || storePointsAutoCredit || !storePointsManualCreditEta}
+                    className="px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 disabled:opacity-50"
+                  >
+                    Clear time
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveStorePointsCredit}
+                  disabled={launchSettingsSaving}
+                  className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 hover:bg-sky-500/30 disabled:opacity-50"
+                >
+                  {launchSettingsSaving ? 'Saving...' : 'Save store crediting'}
+                </button>
+              </div>
+
+              <div className="h-px bg-zinc-700/30" />
+
+              <div className="space-y-3">
+                <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">Preorder Points Release</p>
+                <p className="text-[10px] text-mutedForeground">
+                  Only when automatic store crediting is on: points purchased before this date are held until the date passes, then credit immediately or on claim. If auto crediting is off, purchases use manual crediting instead.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="datetime-local"
+                    value={preorderReleaseDate ? preorderReleaseDate.slice(0, 16) : ''}
+                    onChange={(e) => setPreorderReleaseDate(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                    className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-amber-500/50 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleClearPreorder}
+                    disabled={launchSettingsSaving || !preorderReleaseDate}
+                    className="px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 disabled:opacity-50"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSavePreorder}
+                  disabled={launchSettingsSaving}
+                  className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50"
+                >
+                  {launchSettingsSaving ? 'Saving...' : 'Save Preorder Settings'}
+                </button>
+                <div className="h-px bg-zinc-700/30 my-2" />
+                <p className="text-[10px] text-mutedForeground">If release date has passed, click below to manually credit all pending preorder points to users (sends notifications).</p>
+                <button
+                  type="button"
+                  onClick={handleReleaseAllPreorder}
+                  disabled={preorderReleaseLoading}
+                  className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50"
+                >
+                  {preorderReleaseLoading ? 'Releasing...' : 'Release All Pending Preorder Points'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Layers}
+            title="Points Provenance / Chargeback"
+            isCollapsed={collapsed.donationsProvenance}
+            onToggle={() => toggleSection('donationsProvenance')}
+          />
+          {!collapsed.donationsProvenance && (
+            <div className="p-2 space-y-1">
+              <ActionRow icon={Layers} label="Points Provenance / Chargeback" description="Trace purchased points by payment session and execute best-effort clawback.">
+                <Input value={pointsProvSessionId} onChange={(e) => setPointsProvSessionId(e.target.value)} placeholder="payment session id (cs_...)" className="flex-1 min-w-[180px] text-[11px]" />
+                <BtnSecondary onClick={handlePointsPreview} disabled={pointsProvPreviewLoading}>{pointsProvPreviewLoading ? '...' : 'Preview'}</BtnSecondary>
+                <BtnSecondary onClick={handlePointsPaymentProvenance} disabled={pointsProvPaymentLoading}>{pointsProvPaymentLoading ? '...' : 'Payment Tree'}</BtnSecondary>
+                <BtnDanger onClick={handlePointsExecuteChargeback} disabled={pointsProvExecuteLoading}>{pointsProvExecuteLoading ? '...' : 'Execute'}</BtnDanger>
+              </ActionRow>
+              <ActionRow icon={Users} label="User Points Lots" description="Inspect one user's point lots and recent ledger events.">
+                <Input value={pointsProvUserId} onChange={(e) => setPointsProvUserId(e.target.value)} placeholder="user id" className="flex-1 min-w-[140px] text-[11px]" />
+                <BtnSecondary onClick={handlePointsUserProvenance} disabled={pointsProvUserLoading}>{pointsProvUserLoading ? '...' : 'Load'}</BtnSecondary>
+              </ActionRow>
+              {(pointsProvPreview || pointsProvPaymentData || pointsProvUserData) && (
+                <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-2 pl-6">
+                  {pointsProvPreview && (
+                    <div>
+                      <div className="font-bold text-primary">Chargeback Preview</div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1">
+                        <div><span className="text-mutedForeground">Session:</span> {pointsProvPreview.payment_session_id || pointsProvSessionId}</div>
+                        <div><span className="text-mutedForeground">Requested:</span> {pointsProvPreview.requested ?? 0}</div>
+                        <div><span className="text-mutedForeground">Eligible:</span> {pointsProvPreview.eligible_remaining ?? 0}</div>
+                        <div><span className="text-mutedForeground">Reclaimed:</span> {pointsProvPreview.reclaimed ?? 0}</div>
+                        <div><span className="text-mutedForeground">Unrecoverable:</span> {pointsProvPreview.unrecoverable ?? 0}</div>
+                        <div><span className="text-mutedForeground">Owners:</span> {Array.isArray(pointsProvPreview.owners) ? pointsProvPreview.owners.length : 0}</div>
+                      </div>
+                    </div>
+                  )}
+                  {pointsProvPaymentData && (
+                    <div>
+                      <div className="font-bold text-primary">Payment Provenance</div>
+                      <div className="mt-1"><span className="text-mutedForeground">Lots:</span> {Array.isArray(pointsProvPaymentData.lots) ? pointsProvPaymentData.lots.length : 0} | <span className="text-mutedForeground">Ledger:</span> {Array.isArray(pointsProvPaymentData.ledger) ? pointsProvPaymentData.ledger.length : 0}</div>
+                    </div>
+                  )}
+                  {pointsProvUserData && (
+                    <div>
+                      <div className="font-bold text-primary">User Provenance</div>
+                      <div className="mt-1"><span className="text-mutedForeground">User:</span> {pointsProvUserData.user?.username || '?'} ({pointsProvUserData.user?.id || pointsProvUserId})</div>
+                      <div><span className="text-mutedForeground">Balance:</span> {pointsProvUserData.user?.points ?? 0} | <span className="text-mutedForeground">Lots:</span> {Array.isArray(pointsProvUserData.lots) ? pointsProvUserData.lots.length : 0} | <span className="text-mutedForeground">Ledger:</span> {Array.isArray(pointsProvUserData.ledger) ? pointsProvUserData.ledger.length : 0}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Zap}
+            title="Donations / Payments (Stripe)"
+            badge={donationsLogData ? <span className="text-[10px] font-heading text-primary">{donationsLogData.length} entries</span> : null}
+            isCollapsed={collapsed.donationsPayments}
+            onToggle={() => toggleSection('donationsPayments')}
+          />
+          {!collapsed.donationsPayments && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">Stripe point purchases. Status shows whether Stripe reports paid or unpaid. "Credit" only appears when the payment succeeded in Stripe but points are not credited yet. Use "Check &amp; Process" for a session id if a row looks stuck.</p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <BtnPrimary onClick={handleFetchDonationsLog} disabled={donationsLogLoading}>
+                  {donationsLogLoading ? 'Loading…' : 'Load payments log'}
+                </BtnPrimary>
+                <input
+                  type="text"
+                  value={stripeSessionInput}
+                  onChange={(e) => setStripeSessionInput(e.target.value)}
+                  placeholder="Stripe session ID (cs_test_...)"
+                  className="flex-1 min-w-[200px] px-2 py-1 rounded border border-input bg-transparent text-[10px] font-heading"
+                />
+                <BtnSecondary onClick={handleCheckStripeSession} disabled={checkStripeLoading || !stripeSessionInput.trim()}>
+                  {checkStripeLoading ? '...' : 'Check & Process'}
+                </BtnSecondary>
+              </div>
+              {stripeCheckResult && (
+                <div className="mt-2 p-2 rounded bg-zinc-800/50 border border-zinc-700/50 text-[9px] font-mono overflow-x-auto">
+                  <pre className="whitespace-pre-wrap">{JSON.stringify(stripeCheckResult, null, 2)}</pre>
+                </div>
+              )}
+              {donationsLogData && donationsLogData.length > 0 && (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <table className="w-full text-left border-collapse text-[9px] font-heading">
+                    <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                      <tr className="border-b border-zinc-700/50">
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Date</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Session</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Lot ID</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">User</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Package</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Points</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Status</th>
+                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {donationsLogData.map((row, idx) => {
+                        const added = row.preorder_points || row.points || 0;
+                        const isPending = row.payment_status !== 'completed';
+                        const canCredit = row.allow_manual_credit === true
+                          || (row.allow_manual_credit === undefined && isPending && row.session_id && row.payment_status !== 'pending' && row.payment_status !== 'abandoned');
+                        const statusLabel = row.status_display || (
+                          row.payment_status === 'completed' ? 'Credited'
+                            : row.payment_status === 'preorder_pending' ? 'Pre-order'
+                              : row.payment_status === 'manual_credit_pending' ? 'Manual credit'
+                                : row.payment_status || 'Pending'
+                        );
+                        const statusClass = row.allow_manual_credit
+                          ? 'text-emerald-400'
+                          : (statusLabel || '').startsWith('Unpaid')
+                            ? 'text-red-400/90'
+                            : row.payment_status === 'completed'
+                              ? 'text-green-400'
+                              : 'text-amber-400';
+                        const sessionId = row.session_id || '—';
+                        const lotId = row.provenance_lot_id || (row.session_id ? `purchase:${row.session_id}` : '—');
+                        return (
+                          <tr key={row.session_id || idx} className="border-b border-zinc-700/30">
+                            <td className="py-1 pr-1 text-mutedForeground" title={row.created_at}>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-1 font-mono text-[8px] max-w-[170px] truncate" title={sessionId}>{sessionId}</td>
+                            <td className="py-1 pr-1 font-mono text-[8px] max-w-[170px] truncate" title={lotId}>{lotId}</td>
+                            <td className="py-1 pr-1">{row.username ?? row.user_id ?? '—'}</td>
+                            <td className="py-1 pr-1 capitalize">{row.package_id ?? '—'}</td>
+                            <td className="py-1 pr-1 font-mono">{Number(added).toLocaleString()}</td>
+                            <td className="py-1 pr-1">
+                              <span className={statusClass}>{statusLabel}</span>
+                              {row.stripe_payment_status && row.payment_status === 'pending' ? (
+                                <span className="block text-[8px] text-mutedForeground mt-0.5 font-mono" title="Stripe payment_status">Stripe: {row.stripe_payment_status}</span>
+                              ) : null}
+                            </td>
+                            <td className="py-1 pr-1">
+                              {canCredit && row.session_id ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleManualCreditTransaction(row.session_id)}
+                                  disabled={manualCreditLoading === row.session_id}
+                                  className="px-2 py-0.5 text-[8px] font-heading font-bold uppercase rounded bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50"
+                                >
+                                  {manualCreditLoading === row.session_id ? '...' : 'Credit'}
+                                </button>
+                              ) : (
+                                <span className="text-mutedForeground">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {donationsLogData && donationsLogData.length === 0 && (
+                <p className="text-[10px] text-mutedForeground font-heading">No payment transactions.</p>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+      )}
+
       {activeCategoryId === 'admin-gameworld' && isAdmin && (
       <section id="admin-gameworld" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
@@ -4203,21 +4431,7 @@ export default function Admin() {
               {(loginLockFrom || loginLockUntil) && !preregisterLandingBannerEnabled ? (
                 <span className="text-mutedForeground"> · Strip off</span>
               ) : null}
-              {preorderReleaseDate && storePointsAutoCredit ? (
-                <>
-                  {(loginLockFrom || loginLockUntil) ? <span className="text-mutedForeground"> · </span> : null}
-                  <span className="text-amber-400">Preorder active</span>
-                </>
-              ) : null}
-              {!storePointsAutoCredit ? (
-                <>
-                  {((loginLockFrom || loginLockUntil) || (preorderReleaseDate && storePointsAutoCredit)) ? (
-                    <span className="text-mutedForeground"> · </span>
-                  ) : null}
-                  <span className="text-sky-400">Manual store credit</span>
-                </>
-              ) : null}
-              {!(loginLockFrom || loginLockUntil) && !preorderReleaseDate && storePointsAutoCredit ? (
+              {!(loginLockFrom || loginLockUntil) ? (
                 <span className="text-mutedForeground">Not set</span>
               ) : null}
             </span>
@@ -4311,103 +4525,6 @@ export default function Admin() {
               </div>
             </div>
 
-            <div className="h-px bg-zinc-700/30" />
-
-            <div className="space-y-3">
-              <p className="text-[10px] font-heading font-bold text-sky-400 uppercase tracking-wider">Store point crediting</p>
-              <p className="text-[10px] text-mutedForeground">
-                When automatic crediting is off, paid purchases stay as <span className="text-sky-400/90">manual credit pending</span> until staff uses Credit in the payments log. Set an optional date/time below so players see when you plan to process credits (informational only).
-              </p>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => setStorePointsAutoCredit(!storePointsAutoCredit)}
-                  disabled={launchSettingsSaving}
-                  className={`shrink-0 px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded border disabled:opacity-50 ${
-                    storePointsAutoCredit
-                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25'
-                      : 'bg-sky-500/15 text-sky-300 border-sky-500/40 hover:bg-sky-500/25'
-                  }`}
-                >
-                  {storePointsAutoCredit ? 'Auto credit: on' : 'Auto credit: off'}
-                </button>
-                <p className="text-[10px] text-mutedForeground flex-1">
-                  {storePointsAutoCredit
-                    ? 'Successful payments credit points immediately (or follow preorder rules below).'
-                    : 'Successful payments do not add points until staff credits them.'}
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  type="datetime-local"
-                  value={storePointsManualCreditEta ? storePointsManualCreditEta.slice(0, 16) : ''}
-                  onChange={(e) =>
-                    setStorePointsManualCreditEta(e.target.value ? new Date(e.target.value).toISOString() : '')
-                  }
-                  disabled={storePointsAutoCredit}
-                  className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-sky-500/50 focus:outline-none disabled:opacity-40"
-                />
-                <button
-                  type="button"
-                  onClick={handleClearStoreManualEta}
-                  disabled={launchSettingsSaving || storePointsAutoCredit || !storePointsManualCreditEta}
-                  className="px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 disabled:opacity-50"
-                >
-                  Clear time
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={handleSaveStorePointsCredit}
-                disabled={launchSettingsSaving}
-                className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 hover:bg-sky-500/30 disabled:opacity-50"
-              >
-                {launchSettingsSaving ? 'Saving...' : 'Save store crediting'}
-              </button>
-            </div>
-
-            <div className="h-px bg-zinc-700/30" />
-
-            <div className="space-y-3">
-              <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">Preorder Points Release</p>
-              <p className="text-[10px] text-mutedForeground">
-                Only when automatic store crediting is on: points purchased before this date are held until the date passes, then credit immediately or on claim. If auto crediting is off, purchases use manual crediting instead.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  type="datetime-local"
-                  value={preorderReleaseDate ? preorderReleaseDate.slice(0, 16) : ''}
-                  onChange={(e) => setPreorderReleaseDate(e.target.value ? new Date(e.target.value).toISOString() : '')}
-                  className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-amber-500/50 focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={handleClearPreorder}
-                  disabled={launchSettingsSaving || !preorderReleaseDate}
-                  className="px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 disabled:opacity-50"
-                >
-                  Clear
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={handleSavePreorder}
-                disabled={launchSettingsSaving}
-                className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50"
-              >
-                {launchSettingsSaving ? 'Saving...' : 'Save Preorder Settings'}
-              </button>
-              <div className="h-px bg-zinc-700/30 my-2" />
-              <p className="text-[10px] text-mutedForeground">If release date has passed, click below to manually credit all pending preorder points to users (sends notifications).</p>
-              <button
-                type="button"
-                onClick={handleReleaseAllPreorder}
-                disabled={preorderReleaseLoading}
-                className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50"
-              >
-                {preorderReleaseLoading ? 'Releasing...' : 'Release All Pending Preorder Points'}
-              </button>
-            </div>
           </div>
         )}
         </div>
@@ -7865,115 +7982,6 @@ export default function Admin() {
             </div>
           )}
         </div>
-
-        {isAdmin && (
-        <>
-        {/* Donations / Payments (Stripe point purchases) — admin only */}
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={Zap}
-            title="Donations / Payments (Stripe)"
-            badge={donationsLogData ? <span className="text-[10px] font-heading text-primary">{donationsLogData.length} entries</span> : null}
-            isCollapsed={collapsed.donationsLog}
-            onToggle={() => toggleSection('donationsLog')}
-          />
-          {!collapsed.donationsLog && (
-            <div className="p-3 space-y-3">
-              <p className="text-[10px] text-mutedForeground font-heading">Stripe point purchases. Status shows whether Stripe reports paid or unpaid. &quot;Credit&quot; only appears when the payment succeeded in Stripe but points are not credited yet. Use &quot;Check &amp; Process&quot; for a session id if a row looks stuck.</p>
-              <div className="flex flex-wrap gap-2 items-center">
-                <BtnPrimary onClick={handleFetchDonationsLog} disabled={donationsLogLoading}>
-                  {donationsLogLoading ? 'Loading…' : 'Load payments log'}
-                </BtnPrimary>
-                <input
-                  type="text"
-                  value={stripeSessionInput}
-                  onChange={(e) => setStripeSessionInput(e.target.value)}
-                  placeholder="Stripe session ID (cs_test_...)"
-                  className="flex-1 min-w-[200px] px-2 py-1 rounded border border-input bg-transparent text-[10px] font-heading"
-                />
-                <BtnSecondary onClick={handleCheckStripeSession} disabled={checkStripeLoading || !stripeSessionInput.trim()}>
-                  {checkStripeLoading ? '...' : 'Check & Process'}
-                </BtnSecondary>
-              </div>
-              {stripeCheckResult && (
-                <div className="mt-2 p-2 rounded bg-zinc-800/50 border border-zinc-700/50 text-[9px] font-mono overflow-x-auto">
-                  <pre className="whitespace-pre-wrap">{JSON.stringify(stripeCheckResult, null, 2)}</pre>
-                </div>
-              )}
-              {donationsLogData && donationsLogData.length > 0 && (
-                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-                  <table className="w-full text-left border-collapse text-[9px] font-heading">
-                    <thead className="sticky top-0 bg-zinc-900/95 z-10">
-                      <tr className="border-b border-zinc-700/50">
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Date</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">User</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Package</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Points</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Status</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {donationsLogData.map((row, idx) => {
-                        const added = row.preorder_points || row.points || 0;
-                        const isPending = row.payment_status !== 'completed';
-                        const canCredit = row.allow_manual_credit === true
-                          || (row.allow_manual_credit === undefined && isPending && row.session_id && row.payment_status !== 'pending' && row.payment_status !== 'abandoned');
-                        const statusLabel = row.status_display || (
-                          row.payment_status === 'completed' ? 'Credited'
-                            : row.payment_status === 'preorder_pending' ? 'Pre-order'
-                              : row.payment_status === 'manual_credit_pending' ? 'Manual credit'
-                                : row.payment_status || 'Pending'
-                        );
-                        const statusClass = row.allow_manual_credit
-                          ? 'text-emerald-400'
-                          : (statusLabel || '').startsWith('Unpaid')
-                            ? 'text-red-400/90'
-                            : row.payment_status === 'completed'
-                              ? 'text-green-400'
-                              : 'text-amber-400';
-                        return (
-                          <tr key={row.session_id || idx} className="border-b border-zinc-700/30">
-                            <td className="py-1 pr-1 text-mutedForeground" title={row.created_at}>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
-                            <td className="py-1 pr-1">{row.username ?? row.user_id ?? '—'}</td>
-                            <td className="py-1 pr-1 capitalize">{row.package_id ?? '—'}</td>
-                            <td className="py-1 pr-1 font-mono">{Number(added).toLocaleString()}</td>
-                            <td className="py-1 pr-1">
-                              <span className={statusClass}>{statusLabel}</span>
-                              {row.stripe_payment_status && row.payment_status === 'pending' ? (
-                                <span className="block text-[8px] text-mutedForeground mt-0.5 font-mono" title="Stripe payment_status">Stripe: {row.stripe_payment_status}</span>
-                              ) : null}
-                            </td>
-                            <td className="py-1 pr-1">
-                              {canCredit && row.session_id ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleManualCreditTransaction(row.session_id)}
-                                  disabled={manualCreditLoading === row.session_id}
-                                  className="px-2 py-0.5 text-[8px] font-heading font-bold uppercase rounded bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50"
-                                >
-                                  {manualCreditLoading === row.session_id ? '...' : 'Credit'}
-                                </button>
-                              ) : (
-                                <span className="text-mutedForeground">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              {donationsLogData && donationsLogData.length === 0 && (
-                <p className="text-[10px] text-mutedForeground font-heading">No payment transactions.</p>
-              )}
-            </div>
-          )}
-        </div>
-        </>
-        )}
 
         {/* Stock Logs (Post Data) */}
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>

@@ -23,6 +23,10 @@ BACKEND_DIR = ROOT_DIR.parent
 PROJECT_ROOT = BACKEND_DIR.parent
 load_dotenv(BACKEND_DIR / ".env")
 
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+from utils.faq_topic_author import resolve_faq_topic_author_sync
+
 FAQ_TITLE = "FAQs"
 FAQ_MD_PATH = PROJECT_ROOT / "docs" / "FORUM_FAQ.md"
 FAQ_MD_PATH_LEGACY = PROJECT_ROOT / "FORUM_FAQ.md"
@@ -58,9 +62,7 @@ def main():
         {"$set": {"content": body, "updated_at": now}},
     )
     if result.matched_count == 0:
-        user = db.users.find_one({}, {"_id": 0, "id": 1, "username": 1})
-        author_id = user["id"] if user else "system"
-        author_username = user.get("username", "Game") if user else "Game"
+        author_id, author_username = resolve_faq_topic_author_sync(db)
         topic_id = str(uuid.uuid4())
         doc = {
             "id": topic_id,

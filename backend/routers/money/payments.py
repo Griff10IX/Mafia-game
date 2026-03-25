@@ -283,6 +283,7 @@ async def _enrich_admin_payment_log_rows(items: list, api_key: Optional[str]) ->
     for t in items:
         ps = t.get("payment_status")
         sid = t.get("session_id")
+        t["provenance_lot_id"] = f"purchase:{sid}" if sid else None
 
         if ps == "completed":
             t["status_display"] = "Credited"

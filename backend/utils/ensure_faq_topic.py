@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from utils.faq_topic_author import resolve_faq_topic_author_async
+
 logger = logging.getLogger(__name__)
 
 FAQ_TITLE = "FAQs"
@@ -71,9 +73,7 @@ async def ensure_faq_forum_topic(db) -> None:
             logger.debug("ensure_faq_forum_topic: '%s' already matches file", FAQ_TITLE)
         return
 
-    user = await db.users.find_one({}, {"_id": 0, "id": 1, "username": 1})
-    author_id = user["id"] if user else "system"
-    author_username = user.get("username", "Game") if user else "Game"
+    author_id, author_username = await resolve_faq_topic_author_async(db)
     doc = {
         "id": str(uuid.uuid4()),
         "title": FAQ_TITLE,
