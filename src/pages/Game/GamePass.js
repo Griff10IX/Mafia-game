@@ -7,22 +7,56 @@ import styles from '../../styles/noir.module.css';
 
 const GAME_PASS_PACKAGE_ID = 'rank_xp_pass_499';
 
-// Must stay in sync with backend `routers/kill/armoury.py` (RANK_XP_PASS_REWARD_TIERS).
+// Must stay in sync with backend `routers/kill/armoury.py` micro-tier reward scaling.
 // We only display; activation/entitlement is still handled by the existing rank_xp_pass flow.
 const MAX_THRESHOLD_RP = 20_000;
 
-// 10+ tier UIs often include a "level 0" state in the header; this grid starts at the first real reward tier.
-const LEVELS = [
-  { levelNumber: 1, thresholdRp: 2000, rewards: { money: 25_000_000 } },
-  { levelNumber: 2, thresholdRp: 4000, rewards: { bullets: 2_500 } },
-  { levelNumber: 3, thresholdRp: 8000, rewards: { xp_crimes_tokens: 2, xp_gta_tokens: 2 } },
-  { levelNumber: 4, thresholdRp: 10_000, rewards: { points: 50 } },
-  { levelNumber: 5, thresholdRp: 12_000, rewards: { respect_points: 50 } },
-  { levelNumber: 6, thresholdRp: 14_000, rewards: { melt_tokens: 2 } },
-  { levelNumber: 7, thresholdRp: 16_000, rewards: { jailbust_tokens: 2 } },
-  { levelNumber: 8, thresholdRp: 18_000, rewards: { travel_tokens: 1 } },
-  { levelNumber: 9, thresholdRp: 20_000, rewards: { properties_tokens: 1 } },
-];
+const MAX_MICRO_TIER = 100; // 1 micro tier = 1% of MAX_THRESHOLD_RP
+const MICRO_TIER_STEP_RP = MAX_THRESHOLD_RP / MAX_MICRO_TIER; // 200 RP
+
+// UI compression: render 10 band cards, but the details panel lists every micro tier in the band.
+const BANDS = Array.from({ length: 10 }, (_, i) => {
+  const start = i * 10 + 1;
+  const end = (i + 1) * 10;
+  return { start, end, index: i };
+});
+
+// Reward scaling baselines (confirmed):
+// Amount at micro tier T is: ceil(baseAmount * (T / baseTier)).
+const MICRO_TIER_REWARD_BASELINES = {
+  money: { baseTier: 10, baseAmount: 25_000_000 },
+  bullets: { baseTier: 20, baseAmount: 2_500 },
+  xp_crimes_tokens: { baseTier: 40, baseAmount: 2 },
+  xp_gta_tokens: { baseTier: 40, baseAmount: 2 },
+  points: { baseTier: 50, baseAmount: 50 },
+  respect_points: { baseTier: 60, baseAmount: 50 },
+  melt_tokens: { baseTier: 70, baseAmount: 2 },
+  jailbust_tokens: { baseTier: 80, baseAmount: 2 },
+  travel_tokens: { baseTier: 90, baseAmount: 1 },
+  properties_tokens: { baseTier: 100, baseAmount: 1 },
+};
+
+function microTierToThresholdRp(microTier) {
+  const t = Number(microTier || 0);
+  if (!Number.isFinite(t) || t <= 0) return 0;
+  return Math.max(0, Math.floor(t * MICRO_TIER_STEP_RP));
+}
+
+function getRewardsForMicroTier(microTier) {
+  const t = Number(microTier || 0);
+  if (!Number.isFinite(t) || t < 1) return {};
+  const tier = Math.min(MAX_MICRO_TIER, Math.max(1, Math.floor(t)));
+  const out = {};
+  for (const [k, cfg] of Object.entries(MICRO_TIER_REWARD_BASELINES)) {
+    const raw = cfg.baseAmount * (tier / cfg.baseTier);
+    out[k] = Math.ceil(raw);
+  }
+  return out;
+}
+
+function getTierRewardObj(microTier) {
+  return { levelNumber: microTier, thresholdRp: microTierToThresholdRp(microTier), rewards: getRewardsForMicroTier(microTier) };
+}
 
 const REWARD_DISPLAY_ORDER = [
   'money',
@@ -114,7 +148,7 @@ export default function GamePass() {
   const [loading, setLoading] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [user, setUser] = useState(null);
-  const [selectedTierLevelNumber, setSelectedTierLevelNumber] = useState(null);
+  const [selectedBandIndex, setSelectedBandIndex] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -144,14 +178,9 @@ export default function GamePass() {
       : Number(user?.rank_points ?? 0);
   const previewRankPoints = Math.max(0, Math.floor(previewRankPointsRaw));
 
-  const currentLevelNumber = LEVELS.reduce((acc, tier) => (
-    previewRankPoints >= tier.thresholdRp ? tier.levelNumber : acc
-  ), 0);
-
-  const seasonLevel = Math.min(
-    100,
-    Math.floor((previewRankPoints / MAX_THRESHOLD_RP) * 100),
-  );
+  const microTierCurrent = Math.min(MAX_MICRO_TIER, Math.max(0, Math.floor((previewRankPoints / MAX_THRESHOLD_RP) * 100)));
+  const seasonLevel = microTierCurrent; // Progress bar: 0..100
+  const currentBandIndex = microTierCurrent === 0 ? 0 : Math.min(9, Math.floor((microTierCurrent - 1) / 10));
 
   const membershipType = passIsActive
     ? 'VIP (Activated)'
@@ -162,12 +191,11 @@ export default function GamePass() {
   const closeDate = passIsUnactivatedValid ? passExpiryUntil : null;
 
   useEffect(() => {
-    // Default selection = current completed tier (preview). Keeps selection stable once picked.
-    if (selectedTierLevelNumber == null) setSelectedTierLevelNumber(currentLevelNumber);
-  }, [currentLevelNumber, selectedTierLevelNumber]);
+    // Default selection = current band. Keeps selection stable once picked.
+    if (selectedBandIndex == null) setSelectedBandIndex(currentBandIndex);
+  }, [currentBandIndex, selectedBandIndex]);
 
-  const selectedTier = LEVELS.find((t) => t.levelNumber === selectedTierLevelNumber) || null;
-  const nextTier = selectedTier ? LEVELS.find((t) => t.levelNumber === selectedTier.levelNumber + 1) || null : null;
+  const selectedBand = selectedBandIndex != null ? BANDS[selectedBandIndex] : null;
 
   const handlePurchase = async () => {
     if (!user) return;
@@ -263,8 +291,7 @@ export default function GamePass() {
                 </div>
                 <div className="p-2 rounded bg-zinc-900/30 border border-primary/10">
                   <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">VIP Tier</div>
-                  <div className="text-[11px] font-heading font-bold text-primary">{currentLevelNumber}</div>
-                  <div className="text-[9px] text-zinc-500 font-heading mt-0.5">Progress: {seasonLevel}%</div>
+                  <div className="text-[11px] font-heading font-bold text-primary">{microTierCurrent}</div>
                 </div>
                 <div className="p-2 rounded bg-zinc-900/30 border border-primary/10">
                   <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">XP</div>
@@ -337,48 +364,52 @@ export default function GamePass() {
 
             <div className="p-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {LEVELS.map((tier) => {
-                  const isTierCompleted = previewRankPoints >= tier.thresholdRp;
-                  const isCurrent = tier.levelNumber === currentLevelNumber;
-                  const isPreviousTierDone = isTierCompleted && !isCurrent;
+                {BANDS.map((band) => {
+                  const isBandCompleted = microTierCurrent >= band.end;
+                  const isBandCurrent = microTierCurrent >= band.start && microTierCurrent <= band.end;
+                  const isBandPreviousDone = isBandCompleted && !isBandCurrent;
                   const isFreeMembership = membershipType === 'Free';
-                  const isClickable = isTierCompleted;
+                  const isClickable = microTierCurrent >= band.start;
+                  const bandEndTier = getTierRewardObj(band.end);
+
                   return (
                     <div
-                      key={tier.levelNumber}
+                      key={band.index}
                       className={`relative rounded-lg border overflow-hidden ${
-                        isCurrent
+                        isBandCurrent
                           ? 'border-primary/60 bg-primary/5'
-                          : isPreviousTierDone
+                          : isBandPreviousDone
                             ? 'border-primary/30 bg-primary/10'
                             : 'border-primary/20 bg-zinc-900/30'
                       } ${isClickable ? 'cursor-pointer hover:border-primary/80' : 'opacity-60 cursor-not-allowed'}`}
                       role={isClickable ? 'button' : undefined}
                       tabIndex={isClickable ? 0 : -1}
-                      onClick={() => { if (isClickable) setSelectedTierLevelNumber(tier.levelNumber); }}
+                      onClick={() => { if (isClickable) setSelectedBandIndex(band.index); }}
                       onKeyDown={(e) => {
                         if (!isClickable) return;
-                        if (e.key === 'Enter' || e.key === ' ') setSelectedTierLevelNumber(tier.levelNumber);
+                        if (e.key === 'Enter' || e.key === ' ') setSelectedBandIndex(band.index);
                       }}
                     >
                       <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
                       <div className="p-3 space-y-1">
                         <div className="flex items-baseline justify-between gap-2">
-                          <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Level {tier.levelNumber}</div>
-                          {isCurrent ? (
+                          <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+                            {band.start}-{band.end}
+                          </div>
+                          {isBandCurrent ? (
                             <div className="text-[9px] font-heading font-bold text-primary">Current</div>
-                          ) : isPreviousTierDone ? (
+                          ) : isBandPreviousDone ? (
                             <div className="text-[9px] font-heading font-bold text-primary">Done</div>
                           ) : null}
                         </div>
                         <div className="text-[11px] font-heading font-bold text-foreground tabular-nums">
-                          {getTierPrimaryLabel(tier)}
+                          {getTierPrimaryLabel(bandEndTier)}
                         </div>
-                        <div className="text-[9px] text-zinc-500 font-heading">XP Needed: {tier.thresholdRp.toLocaleString()} XP</div>
+                        <div className="text-[9px] text-zinc-500 font-heading">XP Needed: {bandEndTier.thresholdRp.toLocaleString()} XP</div>
                         <TierRewards
-                          rewards={tier.rewards}
+                          rewards={bandEndTier.rewards}
                           isFreeMembership={isFreeMembership}
-                          isTierCompleted={isTierCompleted}
+                          isTierCompleted={isBandCompleted}
                         />
                       </div>
                     </div>
@@ -389,43 +420,74 @@ export default function GamePass() {
             <div className="store-art-line text-primary mx-3" />
           </div>
 
-          {/* Tier details for selected (previous/current) */}
-          {selectedTier && (
+          {/* Band details: list every micro tier inside the selected band */}
+          {selectedBand && (
             <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
               <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">
-                    Tier {selectedTier.levelNumber} Details
+                    Tiers {selectedBand.start}-{selectedBand.end}
                   </div>
                   <div className="text-[9px] text-zinc-500 font-heading italic">
-                    {selectedTier.levelNumber === currentLevelNumber ? 'Current tier' : 'Previous tier'}
+                    Current tier: {microTierCurrent}
                   </div>
                 </div>
               </div>
               <div className="p-3 space-y-3">
-                <div>
-                  <div className="text-[11px] font-heading font-bold text-foreground">{getTierPrimaryLabel(selectedTier)}</div>
-                  <div className="text-[9px] text-zinc-500 font-heading">XP Needed: {selectedTier.thresholdRp.toLocaleString()} XP</div>
+                <div className="text-[10px] text-zinc-400 font-heading italic">
+                  Clicked band rewards preview (VIP shows all; Free unlocks only 1 item per completed tier).
                 </div>
 
-                <div>
-                  <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Rewards for this tier</div>
-                  <TierRewards
-                    rewards={selectedTier.rewards}
-                    isFreeMembership={membershipType === 'Free'}
-                    isTierCompleted={previewRankPoints >= selectedTier.thresholdRp}
-                  />
+                <div className="space-y-2">
+                  {Array.from({ length: selectedBand.end - selectedBand.start + 1 }, (_, i) => selectedBand.start + i).map((t) => {
+                    const tierObj = getTierRewardObj(t);
+                    const isMicroCompleted = microTierCurrent >= t;
+                    const isCurrent = microTierCurrent === t;
+                    const isNext = microTierCurrent + 1 === t;
+                    return (
+                      <div
+                        key={t}
+                        className={`relative rounded-lg border p-2 ${
+                          isCurrent
+                            ? 'border-primary/60 bg-primary/5'
+                            : isMicroCompleted
+                              ? 'border-primary/20 bg-primary/10'
+                              : 'border-primary/10 bg-zinc-900/25'
+                        }`}
+                      >
+                        <div className="flex items-baseline justify-between gap-2">
+                          <div className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+                            Tier {t}
+                          </div>
+                          {isCurrent ? (
+                            <div className="text-[8px] font-heading font-bold text-primary">Current</div>
+                          ) : isMicroCompleted ? (
+                            <div className="text-[8px] font-heading font-bold text-primary">Done</div>
+                          ) : null}
+                          {isNext ? (
+                            <div className="text-[8px] font-heading font-bold text-amber-300/90">Next</div>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-1">
+                          <TierRewards
+                            rewards={tierObj.rewards}
+                            isFreeMembership={membershipType === 'Free'}
+                            isTierCompleted={isMicroCompleted}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {nextTier && (
+                {microTierCurrent < 100 && (
                   <div className="pt-2 border-t border-zinc-800/60">
-                    <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Next reward</div>
-                    <div className="text-[11px] font-heading font-bold text-foreground mt-1">{getTierPrimaryLabel(nextTier)}</div>
-                    <div className="text-[9px] text-zinc-500 font-heading">XP Needed: {nextTier.thresholdRp.toLocaleString()} XP</div>
+                    <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Next tier ({microTierCurrent + 1})</div>
                     <div className="mt-2">
                       <TierRewards
-                        rewards={nextTier.rewards}
+                        rewards={getTierRewardObj(microTierCurrent + 1).rewards}
                         isFreeMembership={membershipType === 'Free'}
                         isTierCompleted={false}
                       />

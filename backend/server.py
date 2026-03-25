@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
 from typing import List, Optional, Dict, Union
 import uuid
 from datetime import datetime, timezone, timedelta
+from utils.game_pass_micro_rewards import micro_tier_from_rank_points, rewards_for_micro_tier, format_rewards_summary, MAX_MICRO_TIER
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import random
@@ -1436,6 +1437,16 @@ RANK_UP_RESPECT_BY_REACHED_RANK = {
 async def check_and_process_rank_up(user_id: str, old_rank: int, new_rank: int, username: str = ""):
     """Process rank up: give bullets and respect, send inbox notification."""
     if new_rank > old_rank:
+        # Idempotency guard:
+        # In some race scenarios, the same rank transition can be processed multiple times.
+        # We only grant rewards/notifications once per destination rank.
+        atomic = await db.users.update_one(
+            {"id": user_id, "rank_up_rewarded_to_rank": {"$ne": int(new_rank)}},
+            {"$set": {"rank_up_rewarded_to_rank": int(new_rank)}},
+        )
+        if atomic.modified_count == 0:
+            return 0
+
         num_ranks = new_rank - old_rank
         total_bullets = RANK_UP_BULLET_REWARD * num_ranks
         total_respect = sum(
