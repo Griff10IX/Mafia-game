@@ -18,6 +18,7 @@ from utils.game_pass_micro_rewards import (
     micro_tier_from_rank_points,
     rewards_for_micro_tier,
     format_rewards_summary,
+    free_unlocked_key_for_micro_tier,
     REWARD_KEY_ORDER,
     REWARD_KEY_LABELS,
     MAX_MICRO_TIER,
@@ -53,6 +54,8 @@ TOKEN_DURATION_HOURS = 1
 TOKEN_TYPES = (
     "xp_crimes",
     "xp_gta",
+    # Auto-rank boost: affects both crimes+GTA durations simultaneously.
+    "auto_rank_2h",
     "melt",
     "oc_reduced",
     "booze",
@@ -71,6 +74,7 @@ TOKEN_TYPES = (
 TOKEN_CONFIG = {
     "xp_crimes":     {"count_field": "xp_crimes_tokens",     "until_field": "xp_crimes_until",     "max_stack_hours": 6},
     "xp_gta":        {"count_field": "xp_gta_tokens",        "until_field": "xp_gta_until",        "max_stack_hours": 6},
+    "auto_rank_2h":  {"count_field": "auto_rank_2h_tokens",  "until_field": "xp_crimes_until",     "duration_hours": 2, "max_stack_hours": 6},
     "melt":          {"count_field": "melt_tokens",          "until_field": "melt_until",          "max_stack_hours": 6},
     "oc_reduced":    {"count_field": "oc_reduced_tokens",    "until_field": "oc_reduced_until",    "max_stack_hours": 6},
     "booze":         {"count_field": "booze_tokens",         "until_field": "booze_until",         "max_stack_hours": 6},
@@ -105,9 +109,12 @@ async def _try_grant_rank_xp_pass_micro_tier(
 
     rewards = rewards_for_micro_tier(t)
 
-    # Free auto-grants cash-only for tiers <= its cursor, so suppress money here to prevent duplicates.
+    # Free auto-grants exactly 1 reward bucket per micro tier (deterministic).
+    # Suppress that same bucket here to prevent duplicates.
     if int(free_cash_last_micro_tier_granted or 0) >= t:
-        rewards["money"] = 0
+        free_key = free_unlocked_key_for_micro_tier(t, rewards)
+        if free_key:
+            rewards[free_key] = 0
 
     inc = {k: int(v) for k, v in rewards.items() if int(v or 0) > 0}
     if not inc:
@@ -179,8 +186,6 @@ async def _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
             next_rewards = next_rewards_cache.get(next_t)
             if next_rewards is None:
                 next_rewards = rewards_for_micro_tier(next_t)
-                if int(free_cash_last_micro_tier_granted or 0) >= next_t:
-                    next_rewards["money"] = 0
                 next_rewards_cache[next_t] = next_rewards
             next_summary = f"Tier {next_t} rewards: {format_rewards_summary(next_rewards)}"
 
@@ -1821,6 +1826,96 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
     count = int(current_user.get(count_field) or 0)
     if count < 1:
         raise HTTPException(status_code=400, detail="No tokens of this type available.")
+
+    # Special case: auto_rank_2h extends both crimes and GTA auto-rank durations.
+    if req.token_type == "auto_rank_2h":
+        # Parse current expiry windows for both effects.
+        now = datetime.now(timezone.utc)
+        crimes_until_dt = _parse_until(current_user.get("xp_crimes_until"))
+        gta_until_dt = _parse_until(current_user.get("xp_gta_until"))
+        existing_until = None
+        if crimes_until_dt and gta_until_dt:
+            existing_until = max(crimes_until_dt, gta_until_dt)
+        else:
+            existing_until = crimes_until_dt or gta_until_dt
+        if existing_until and existing_until <= now:
+            existing_until = None
+
+        cap_until = now + timedelta(hours=max_stack_hours)
+        duration_td = timedelta(hours=duration_hours)
+
+        if req.use_all:
+            to_use = 0
+            sim_count = count
+            sim_until = existing_until
+            while sim_count > 0:
+                if sim_until and sim_until > now:
+                    add_until = sim_until + duration_td
+                    new_until = min(add_until, cap_until)
+                    if new_until <= sim_until:
+                        break
+                else:
+                    new_until = now + timedelta(hours=min(duration_hours, max_stack_hours))
+                sim_until = new_until
+                sim_count -= 1
+                to_use += 1
+
+            if to_use < 1 or sim_until is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot extend this boost further — already at the maximum stack duration.",
+                )
+
+            new_until_iso = sim_until.isoformat()
+            result = await db.users.update_one(
+                {"id": current_user["id"], count_field: {"$gte": to_use}},
+                {
+                    "$inc": {count_field: -to_use},
+                    "$set": {"xp_crimes_until": new_until_iso, "xp_gta_until": new_until_iso},
+                },
+            )
+            if result.modified_count == 0:
+                raise HTTPException(status_code=400, detail="No tokens available or race condition.")
+
+            tokens = _tokens_from_user({
+                **current_user,
+                count_field: count - to_use,
+                "xp_crimes_until": new_until_iso,
+                "xp_gta_until": new_until_iso,
+            })
+            return {
+                "message": f"Used {to_use} token(s). Auto-rank boost active until {new_until_iso} (up to {max_stack_hours}h stack).",
+                "tokens": tokens,
+            }
+
+        # Use 1 token.
+        if existing_until and existing_until > now:
+            add_until = existing_until + duration_td
+            new_until = min(add_until, cap_until)
+        else:
+            new_until = now + timedelta(hours=min(duration_hours, max_stack_hours))
+        new_until_iso = new_until.isoformat()
+
+        result = await db.users.update_one(
+            {"id": current_user["id"], count_field: {"$gte": 1}},
+            {
+                "$inc": {count_field: -1},
+                "$set": {"xp_crimes_until": new_until_iso, "xp_gta_until": new_until_iso},
+            },
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="No tokens available or race condition.")
+
+        tokens = _tokens_from_user({
+            **current_user,
+            count_field: count - 1,
+            "xp_crimes_until": new_until_iso,
+            "xp_gta_until": new_until_iso,
+        })
+        return {
+            "message": f"Used 1 token. Auto-rank boost active until {new_until_iso} (2h).",
+            "tokens": tokens,
+        }
 
     # Rank-XP pass: enforce token expiry if token was not activated before expiry_field.
     if expiry_field:

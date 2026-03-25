@@ -9,10 +9,10 @@ const GAME_PASS_PACKAGE_ID = 'rank_xp_pass_499';
 
 // Must stay in sync with backend `routers/kill/armoury.py` micro-tier reward scaling.
 // We only display; activation/entitlement is still handled by the existing rank_xp_pass flow.
-const MAX_THRESHOLD_RP = 20_000;
+const MAX_THRESHOLD_RP = 400_000;
 
 const MAX_MICRO_TIER = 100; // 1 micro tier = 1% of MAX_THRESHOLD_RP
-const MICRO_TIER_STEP_RP = MAX_THRESHOLD_RP / MAX_MICRO_TIER; // 200 RP
+const MICRO_TIER_STEP_RP = MAX_THRESHOLD_RP / MAX_MICRO_TIER; // 4,000 RP
 
 // UI compression: render 10 band cards, but the details panel lists every micro tier in the band.
 const BANDS = Array.from({ length: 10 }, (_, i) => {
@@ -29,34 +29,101 @@ function microTierToThresholdRp(microTier) {
   return Math.max(0, Math.floor(t * MICRO_TIER_STEP_RP));
 }
 
+// Normalization constants so totals across micro tiers match your request.
+const TARGET_CASH_TOTAL = 50_000_000;
+const TARGET_POINTS_TOTAL = 6_000;
+const TARGET_AUTO_RANK_2H_TOTAL = 50;
+const MONEY_BASE_TIER = 10;
+const POINTS_BASE_TIER = 50;
+const AUTO_RANK_2H_BASE_TIER = 100;
+
+function normalizeBaseAmountToTotal(baseTier, targetTotal, initialBaseAmount) {
+  let base = Number(initialBaseAmount) || 1;
+  if (base <= 0) base = 1;
+  const weights = Array.from({ length: 100 }, (_, i) => (i + 1) / baseTier);
+  for (let i = 0; i < 8; i += 1) {
+    let s = 0;
+    for (const w of weights) s += Math.ceil(base * w);
+    if (s <= 0) return base;
+    base *= targetTotal / s;
+  }
+  return base;
+}
+
+function normalizeBaseAmountToTotalForTiers(baseTier, targetTotal, tiers, initialBaseAmount) {
+  let base = Number(initialBaseAmount) || 1;
+  if (base <= 0) base = 1;
+  const weights = tiers.map((t) => t / baseTier);
+  for (let i = 0; i < 8; i += 1) {
+    let s = 0;
+    for (const w of weights) s += Math.ceil(base * w);
+    if (s <= 0) return base;
+    base *= targetTotal / s;
+  }
+  return base;
+}
+
+const moneyActiveTiers = Array.from({ length: 10 }, (_, i) => i + 1); // 1..10
+const pointsActiveTiers = Array.from({ length: 10 }, (_, i) => 31 + i); // 31..40
+const autoRank2hActiveTiers = Array.from({ length: 20 }, (_, i) => 81 + i); // 81..100
+const moneyInitialDenom = moneyActiveTiers.reduce((acc, t) => acc + t / MONEY_BASE_TIER, 0);
+const pointsInitialDenom = pointsActiveTiers.reduce((acc, t) => acc + t / POINTS_BASE_TIER, 0);
+const autoRank2hInitialDenom = autoRank2hActiveTiers.reduce((acc, t) => acc + t / AUTO_RANK_2H_BASE_TIER, 0);
+
+const moneyBase = normalizeBaseAmountToTotalForTiers(
+  MONEY_BASE_TIER,
+  TARGET_CASH_TOTAL,
+  moneyActiveTiers,
+  TARGET_CASH_TOTAL / moneyInitialDenom,
+);
+const pointsBase = normalizeBaseAmountToTotalForTiers(
+  POINTS_BASE_TIER,
+  TARGET_POINTS_TOTAL,
+  pointsActiveTiers,
+  TARGET_POINTS_TOTAL / pointsInitialDenom,
+);
+
+const autoRank2hBase = normalizeBaseAmountToTotalForTiers(
+  AUTO_RANK_2H_BASE_TIER,
+  TARGET_AUTO_RANK_2H_TOTAL,
+  autoRank2hActiveTiers,
+  TARGET_AUTO_RANK_2H_TOTAL / autoRank2hInitialDenom,
+);
+
 function getRewardsForMicroTier(microTier) {
   const t = Number(microTier || 0);
   if (!Number.isFinite(t) || t < 1) return {};
-  // Linear scaling model:
-  // amount = ceil(baseAmount * (tier / baseTier))
   // Must match backend `backend/utils/game_pass_micro_rewards.py`.
   const tier = Math.max(1, Math.min(100, Math.floor(t)));
-  const out = {};
-
   const baselines = {
-    money: { baseTier: 10, baseAmount: 25_000_000 },
+    money: { baseTier: MONEY_BASE_TIER, baseAmount: moneyBase },
     bullets: { baseTier: 20, baseAmount: 2_500 },
     xp_crimes_tokens: { baseTier: 40, baseAmount: 2 },
     xp_gta_tokens: { baseTier: 40, baseAmount: 2 },
-    points: { baseTier: 50, baseAmount: 50 },
+    points: { baseTier: POINTS_BASE_TIER, baseAmount: pointsBase },
     respect_points: { baseTier: 60, baseAmount: 50 },
     melt_tokens: { baseTier: 70, baseAmount: 2 },
     jailbust_tokens: { baseTier: 80, baseAmount: 2 },
     travel_tokens: { baseTier: 90, baseAmount: 1 },
     properties_tokens: { baseTier: 100, baseAmount: 1 },
+    auto_rank_2h_tokens: { baseTier: AUTO_RANK_2H_BASE_TIER, baseAmount: autoRank2hBase },
   };
 
-  for (const [k, cfg] of Object.entries(baselines)) {
-    const raw = cfg.baseAmount * (tier / cfg.baseTier);
-    out[k] = Math.ceil(raw);
+  // Band-fixed 1-2 bucket contract (mirrors backend).
+  if (tier >= 1 && tier <= 10) return { money: Math.ceil(baselines.money.baseAmount * (tier / baselines.money.baseTier)) };
+  if (tier >= 11 && tier <= 20) return { bullets: Math.ceil(baselines.bullets.baseAmount * (tier / baselines.bullets.baseTier)) };
+  if (tier >= 21 && tier <= 30) {
+    return {
+      xp_crimes_tokens: Math.ceil(baselines.xp_crimes_tokens.baseAmount * (tier / baselines.xp_crimes_tokens.baseTier)),
+      xp_gta_tokens: Math.ceil(baselines.xp_gta_tokens.baseAmount * (tier / baselines.xp_gta_tokens.baseTier)),
+    };
   }
-
-  return out;
+  if (tier >= 31 && tier <= 40) return { points: Math.ceil(baselines.points.baseAmount * (tier / baselines.points.baseTier)) };
+  if (tier >= 41 && tier <= 50) return { respect_points: Math.ceil(baselines.respect_points.baseAmount * (tier / baselines.respect_points.baseTier)) };
+  if (tier >= 51 && tier <= 60) return { melt_tokens: Math.ceil(baselines.melt_tokens.baseAmount * (tier / baselines.melt_tokens.baseTier)) };
+  if (tier >= 61 && tier <= 70) return { jailbust_tokens: Math.ceil(baselines.jailbust_tokens.baseAmount * (tier / baselines.jailbust_tokens.baseTier)) };
+  if (tier >= 71 && tier <= 80) return { travel_tokens: Math.ceil(baselines.travel_tokens.baseAmount * (tier / baselines.travel_tokens.baseTier)) };
+  return { auto_rank_2h_tokens: Math.ceil(baselines.auto_rank_2h_tokens.baseAmount * (tier / baselines.auto_rank_2h_tokens.baseTier)) };
 }
 
 function getTierRewardObj(microTier) {
@@ -74,6 +141,7 @@ const REWARD_DISPLAY_ORDER = [
   'jailbust_tokens',
   'travel_tokens',
   'properties_tokens',
+  'auto_rank_2h_tokens',
 ];
 
 const TOKEN_REWARD_NAMES = {
@@ -83,6 +151,7 @@ const TOKEN_REWARD_NAMES = {
   jailbust_tokens: 'Jailbust Token',
   travel_tokens: 'Travel Token',
   properties_tokens: 'Properties Token',
+  auto_rank_2h_tokens: 'Auto Rank (2h) Token',
 };
 
 function formatTierRewardItem(key, value) {
@@ -113,8 +182,16 @@ function TierRewards({ rewards, isFreeMembership, isTierCompleted }) {
         const text =
           k === 'xp_crimes_tokens'
             ? (() => {
-                const total = Number(rewards?.xp_crimes_tokens || 0) + Number(rewards?.xp_gta_tokens || 0);
-                return total > 0 ? `${total} Auto Rank Perks` : null;
+                const crimes = Number(rewards?.xp_crimes_tokens || 0);
+                const gta = Number(rewards?.xp_gta_tokens || 0);
+                let displayAmount = crimes + gta;
+                // Free membership unlocks exactly one bucket per micro tier.
+                // For the auto-rank tier we render as a single line, so we must not sum both buckets for Free previews.
+                if (isFreeMembership) {
+                  if (freeUnlockedRewardKey === 'xp_crimes_tokens') displayAmount = crimes;
+                  if (freeUnlockedRewardKey === 'xp_gta_tokens') displayAmount = gta;
+                }
+                return displayAmount > 0 ? `${displayAmount} Auto Rank Perks` : null;
               })()
             : formatTierRewardItem(k, v);
         if (!text) return null;
@@ -132,12 +209,18 @@ function TierRewards({ rewards, isFreeMembership, isTierCompleted }) {
   );
 }
 
-function getTierPrimaryLabel(tier) {
+function getTierPrimaryLabel(tier, { isFreeMembership, freeUnlockedRewardKey } = {}) {
   const rewards = tier?.rewards || {};
   if (rewards.money) return `$${Number(rewards.money).toLocaleString()} cash`;
   if (rewards.bullets) return `${Number(rewards.bullets).toLocaleString()} Bullets`;
   if (rewards.xp_crimes_tokens || rewards.xp_gta_tokens) {
-    const n = Number(rewards.xp_crimes_tokens || 0) + Number(rewards.xp_gta_tokens || 0);
+    const crimes = Number(rewards.xp_crimes_tokens || 0);
+    const gta = Number(rewards.xp_gta_tokens || 0);
+    let n = crimes + gta;
+    if (isFreeMembership) {
+      if (freeUnlockedRewardKey === 'xp_crimes_tokens') n = crimes;
+      if (freeUnlockedRewardKey === 'xp_gta_tokens') n = gta;
+    }
     return `${n} Auto Rank Perks`;
   }
   if (rewards.points) return `${Number(rewards.points).toLocaleString()} Points`;
@@ -145,6 +228,7 @@ function getTierPrimaryLabel(tier) {
   if (rewards.melt_tokens) return `${Number(rewards.melt_tokens).toLocaleString()} Melt Tokens`;
   if (rewards.jailbust_tokens) return `${Number(rewards.jailbust_tokens).toLocaleString()} Jail Immunity`;
   if (rewards.travel_tokens) return `${Number(rewards.travel_tokens).toLocaleString()} Travel Token`;
+  if (rewards.auto_rank_2h_tokens) return `${Number(rewards.auto_rank_2h_tokens).toLocaleString()} Auto Rank (2h)`;
   if (rewards.properties_tokens) return `${Number(rewards.properties_tokens).toLocaleString()} Properties Token`;
   return '—';
 }
@@ -390,6 +474,9 @@ export default function GamePass() {
                   const isFreeMembership = membershipType === 'Free';
                   const isClickable = microTierCurrent >= band.start;
                   const bandEndTier = getTierRewardObj(band.end);
+                  const freeUnlockedRewardKeyForBand = isFreeMembership
+                    ? REWARD_DISPLAY_ORDER.filter((k) => Number(bandEndTier.rewards?.[k] ?? 0) > 0)[0] || null
+                    : null;
 
                   return (
                     <div
@@ -422,7 +509,10 @@ export default function GamePass() {
                           ) : null}
                         </div>
                         <div className="text-[11px] font-heading font-bold text-foreground tabular-nums">
-                          {getTierPrimaryLabel(bandEndTier)}
+                          {getTierPrimaryLabel(bandEndTier, {
+                            isFreeMembership,
+                            freeUnlockedRewardKey: freeUnlockedRewardKeyForBand,
+                          })}
                         </div>
                         <div className="text-[9px] text-zinc-500 font-heading">XP Needed: {bandEndTier.thresholdRp.toLocaleString()} XP</div>
                         <TierRewards
@@ -458,7 +548,7 @@ export default function GamePass() {
                   Clicked band rewards preview (VIP shows all; Free unlocks only 1 item per completed tier).
                 </div>
 
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                   {Array.from({ length: selectedBand.end - selectedBand.start + 1 }, (_, i) => selectedBand.start + i).map((t) => {
                     const tierObj = getTierRewardObj(t);
                     const isMicroCompleted = microTierCurrent >= t;
@@ -489,7 +579,11 @@ export default function GamePass() {
                           ) : null}
                         </div>
 
-                        <div className="mt-1">
+                      <div className="mt-1 text-[9px] text-zinc-500 font-heading">
+                        XP Needed: {tierObj.thresholdRp.toLocaleString()} XP
+                      </div>
+
+                      <div className="mt-1">
                           <TierRewards
                             rewards={tierObj.rewards}
                             isFreeMembership={membershipType === 'Free'}

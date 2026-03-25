@@ -24,6 +24,7 @@ from utils.game_pass_micro_rewards import (
     MAX_MICRO_TIER,
     REWARD_KEY_ORDER,
     REWARD_KEY_LABELS,
+    free_unlocked_key_for_micro_tier,
 )
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -971,7 +972,9 @@ async def get_current_user(
                     for t in range(last_granted + 1, current_micro + 1):
                         rewards = rewards_for_micro_tier(t)
                         if free_cash_last_micro >= t:
-                            rewards["money"] = 0
+                            free_key = free_unlocked_key_for_micro_tier(t, rewards)
+                            if free_key:
+                                rewards[free_key] = 0
                         inc = {k: int(v) for k, v in rewards.items() if int(v or 0) > 0}
 
                         # Atomic cursor update: prevents duplicates across multiple requests.
@@ -998,8 +1001,6 @@ async def get_current_user(
                             next_summary = "Max tier reached"
                         else:
                             next_rewards = rewards_for_micro_tier(next_t)
-                            if free_cash_last_micro >= next_t:
-                                next_rewards["money"] = 0
                             next_summary = f"Tier {next_t} rewards: {format_rewards_summary(next_rewards)}"
 
                         for reward_key in REWARD_KEY_ORDER:
@@ -1027,7 +1028,7 @@ async def get_current_user(
         # Never block user requests due to reward automation.
         pass
 
-    # Free Game Pass auto-grant: unlock the 1 free reward item (cash) per completed micro tier.
+    # Free Game Pass auto-grant: unlock exactly 1 reward bucket per completed micro tier.
     # Only runs for effectively Free users:
     #   - no VIP claim granted yet
     #   - no unactivated but ready Game Pass token
@@ -1056,7 +1057,13 @@ async def get_current_user(
                     last_micro = int(user.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
                     if current_micro > last_micro:
                         for t in range(last_micro + 1, current_micro + 1):
-                            cash_reward = int(rewards_for_micro_tier(t).get("money") or 0)
+                            rewards = rewards_for_micro_tier(t)
+                            free_key = free_unlocked_key_for_micro_tier(t, rewards)
+                            if not free_key:
+                                continue
+                            reward_amount = int(rewards.get(free_key) or 0)
+                            if reward_amount <= 0:
+                                continue
                             res = await db.users.update_one(
                                 {
                                     "id": user_id,
@@ -1065,12 +1072,11 @@ async def get_current_user(
                                         {"rank_xp_pass_free_last_micro_tier_granted": {"$exists": False}},
                                     ],
                                 },
-                                {"$inc": {"money": cash_reward}, "$set": {"rank_xp_pass_free_last_micro_tier_granted": t}},
+                                {"$inc": {free_key: reward_amount}, "$set": {"rank_xp_pass_free_last_micro_tier_granted": t}},
                             )
                             if res.modified_count <= 0:
                                 continue
-
-                            user["money"] = int(user.get("money") or 0) + cash_reward
+                            user[free_key] = int(user.get(free_key) or 0) + reward_amount
 
                             next_tier = t + 1 if t < MAX_MICRO_TIER else None
                             next_summary = (
@@ -1078,13 +1084,21 @@ async def get_current_user(
                                 if next_tier
                                 else "Max tier reached"
                             )
+
+                            if free_key == "money":
+                                received_text = f"${reward_amount:,} cash"
+                            elif free_key in ("bullets", "points", "respect_points"):
+                                received_text = f"{reward_amount:,} {REWARD_KEY_LABELS.get(free_key, free_key)}"
+                            else:
+                                received_text = f"{reward_amount:,}x {REWARD_KEY_LABELS.get(free_key, free_key)}"
+
                             await send_notification(
                                 user_id,
                                 "Game Pass reward",
-                                f"You received ${cash_reward:,} cash. Next reward: {next_summary}.",
+                                f"You received {received_text}. Next reward: {next_summary}.",
                                 "reward",
                                 category="system",
-                                reward_key="money",
+                                reward_key=free_key,
                                 tier_micro=t,
                                 next_tier=next_tier,
                             )
