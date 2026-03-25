@@ -280,7 +280,9 @@ export default function MyInventory() {
               {TOKEN_TYPES.filter((key) => (tokens[key]?.count ?? 0) > 0 || tokens[key]?.active_until).map((key) => {
                 const t = tokens[key] || { count: 0, active_until: null, expires_at: null };
                 const { name, icon: Icon, desc } = tokenLabels[key] || { name: key, icon: Zap, desc: '' };
-                const active = t.active_until ? new Date(t.active_until) > new Date() : false;
+                // Game Pass is now one-time tier rewards (no 24h "active until" window).
+                // Older DB rows may still have rank_xp_pass_bonus_until set, so we explicitly ignore it in UI.
+                const active = key !== 'rank_xp_pass' && t.active_until ? new Date(t.active_until) > new Date() : false;
                 const expired = key === 'rank_xp_pass' && t.expires_at ? new Date(t.expires_at) <= new Date() : false;
                 return (
                   <div key={key} className="inv-item flex flex-wrap items-center justify-between gap-2 py-2">
@@ -298,6 +300,9 @@ export default function MyInventory() {
                         <div className="text-[9px] text-amber-300 mt-0.5">
                           {expired ? 'Expired' : `Expires ${new Date(t.expires_at).toLocaleDateString()}`}
                         </div>
+                      )}
+                      {!active && key === 'rank_xp_pass' && !t.expires_at && (
+                        <div className="text-[9px] text-emerald-300 mt-0.5">Rewards claimed</div>
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">

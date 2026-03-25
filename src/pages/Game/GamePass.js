@@ -161,21 +161,6 @@ export default function GamePass() {
 
   const closeDate = passIsUnactivatedValid ? passExpiryUntil : null;
 
-  const completedRangeCount = Math.max(0, Math.min(10, Math.floor(seasonLevel / 10)));
-
-  const SEASON_PROGRESS_RANGES = [
-    { start: 1, end: 10 },
-    { start: 11, end: 20 },
-    { start: 21, end: 30 },
-    { start: 31, end: 40 },
-    { start: 41, end: 50 },
-    { start: 51, end: 60 },
-    { start: 61, end: 70 },
-    { start: 71, end: 80 },
-    { start: 81, end: 90 },
-    { start: 91, end: 100 },
-  ];
-
   useEffect(() => {
     // Default selection = current completed tier (preview). Keeps selection stable once picked.
     if (selectedTierLevelNumber == null) setSelectedTierLevelNumber(currentLevelNumber);
@@ -279,7 +264,7 @@ export default function GamePass() {
                 <div className="p-2 rounded bg-zinc-900/30 border border-primary/10">
                   <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">VIP Tier</div>
                   <div className="text-[11px] font-heading font-bold text-primary">{currentLevelNumber}</div>
-                  <div className="text-[9px] text-zinc-500 font-heading mt-0.5">Season {seasonLevel}/100</div>
+                  <div className="text-[9px] text-zinc-500 font-heading mt-0.5">Progress: {seasonLevel}%</div>
                 </div>
                 <div className="p-2 rounded bg-zinc-900/30 border border-primary/10">
                   <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">XP</div>
@@ -332,28 +317,12 @@ export default function GamePass() {
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-              <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">Season Progress</div>
-              <div className="text-[9px] text-zinc-400 font-heading italic mt-0.5">Complete levels to earn rewards</div>
+              <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">Progress</div>
+              <div className="text-[9px] text-zinc-400 font-heading italic mt-0.5">Earn tier rewards as you reach RP milestones</div>
             </div>
             <div className="p-3 space-y-2">
               <div className="w-full h-2 bg-zinc-900/30 border border-primary/10 rounded-full overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-primary via-primary to-primary" style={{ width: `${seasonLevel}%` }} />
-              </div>
-
-              <div className="grid grid-cols-5 gap-2">
-                {SEASON_PROGRESS_RANGES.map((r, idx) => {
-                  const done = idx < completedRangeCount;
-                  return (
-                    <div
-                      key={`${r.start}-${r.end}`}
-                      className={`rounded border p-2 text-center ${done ? 'border-primary/30 bg-primary/10' : 'border-primary/10 bg-zinc-900/20'}`}
-                    >
-                      <div className={`text-[9px] font-heading uppercase tracking-wider ${done ? 'text-primary' : 'text-zinc-500'}`}>
-                        {r.start} - {r.end}
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             </div>
             <div className="store-art-line text-primary mx-3" />
