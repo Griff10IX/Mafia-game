@@ -1112,6 +1112,10 @@ async def get_current_user(
 async def get_current_user_verified(current_user: dict = Depends(get_current_user)):
     """Same as get_current_user but requires email_verified. Use for crimes, GTA, OC, attack, etc."""
     if current_user.get("email_verified") is False:
+        # Staff accounts should not be blocked by email verification
+        # (admins can handle user issues manually from in-game tools).
+        if _is_admin(current_user) or _is_moderator(current_user):
+            return current_user
         raise HTTPException(
             status_code=403,
             detail="Verify your email to use this feature.",

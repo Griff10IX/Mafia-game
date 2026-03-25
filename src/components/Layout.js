@@ -812,7 +812,8 @@ export default function Layout({ children }) {
     return `$${Math.trunc(num).toLocaleString()}`;
   };
 
-  const needsEmailVerification = user && user.email_verified === false;
+  // Staff accounts bypass the email verification requirement.
+  const needsEmailVerification = user && user.email_verified === false && !isAdmin && !isModerator;
 
   const isCategorizedClassic = sidebarLayout === 'categorized_classic';
   const PATH_TO_CATEGORY = isCategorizedClassic
