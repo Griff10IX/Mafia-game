@@ -9,16 +9,19 @@ const GAME_PASS_PACKAGE_ID = 'rank_xp_pass_499';
 
 // Must stay in sync with backend `routers/kill/armoury.py` (RANK_XP_PASS_REWARD_TIERS).
 // We only display; activation/entitlement is still handled by the existing rank_xp_pass flow.
-const GAME_PASS_REWARD_TIERS = [
-  { threshold: 2000, rewards: { money: 25_000_000 } },
-  { threshold: 4000, rewards: { bullets: 2_500 } },
-  { threshold: 8000, rewards: { xp_crimes_tokens: 2, xp_gta_tokens: 2 } },
-  { threshold: 10_000, rewards: { points: 50 } },
-  { threshold: 12_000, rewards: { respect_points: 50 } },
-  { threshold: 14_000, rewards: { melt_tokens: 2 } },
-  { threshold: 16_000, rewards: { jailbust_tokens: 2 } },
-  { threshold: 18_000, rewards: { travel_tokens: 1 } },
-  { threshold: 20_000, rewards: { properties_tokens: 1 } },
+const MAX_THRESHOLD_RP = 20_000;
+
+const LEVELS = [
+  { levelNumber: 1, thresholdRp: 0, rewards: {} },
+  { levelNumber: 2, thresholdRp: 2000, rewards: { money: 25_000_000 } },
+  { levelNumber: 3, thresholdRp: 4000, rewards: { bullets: 2_500 } },
+  { levelNumber: 4, thresholdRp: 8000, rewards: { xp_crimes_tokens: 2, xp_gta_tokens: 2 } },
+  { levelNumber: 5, thresholdRp: 10_000, rewards: { points: 50 } },
+  { levelNumber: 6, thresholdRp: 12_000, rewards: { respect_points: 50 } },
+  { levelNumber: 7, thresholdRp: 14_000, rewards: { melt_tokens: 2 } },
+  { levelNumber: 8, thresholdRp: 16_000, rewards: { jailbust_tokens: 2 } },
+  { levelNumber: 9, thresholdRp: 18_000, rewards: { travel_tokens: 1 } },
+  { levelNumber: 10, thresholdRp: 20_000, rewards: { properties_tokens: 1 } },
 ];
 
 const REWARD_DISPLAY_ORDER = [
@@ -55,6 +58,8 @@ function formatTierRewardItem(key, value) {
 }
 
 function TierRewards({ rewards }) {
+  const hasAny = !!rewards && Object.values(rewards).some((v) => Number(v || 0) > 0);
+  if (!hasAny) return null;
   return (
     <div className="space-y-1">
       {REWARD_DISPLAY_ORDER.map((k) => {
@@ -69,6 +74,24 @@ function TierRewards({ rewards }) {
       })}
     </div>
   );
+}
+
+function getTierPrimaryLabel(tier) {
+  const rewards = tier?.rewards || {};
+  if (tier?.levelNumber === 1) return '—';
+  if (rewards.money) return `$${Number(rewards.money).toLocaleString()} cash`;
+  if (rewards.bullets) return `${Number(rewards.bullets).toLocaleString()} Bullets`;
+  if (rewards.xp_crimes_tokens || rewards.xp_gta_tokens) {
+    const n = Number(rewards.xp_crimes_tokens || 0) || Number(rewards.xp_gta_tokens || 0) || 0;
+    return `${n} Auto Rank Perks`;
+  }
+  if (rewards.points) return `${Number(rewards.points).toLocaleString()} Points`;
+  if (rewards.respect_points) return `${Number(rewards.respect_points).toLocaleString()} Respect`;
+  if (rewards.melt_tokens) return `${Number(rewards.melt_tokens).toLocaleString()} Melt Tokens`;
+  if (rewards.jailbust_tokens) return `${Number(rewards.jailbust_tokens).toLocaleString()} Jail Immunity`;
+  if (rewards.travel_tokens) return `${Number(rewards.travel_tokens).toLocaleString()} Travel Token`;
+  if (rewards.properties_tokens) return `${Number(rewards.properties_tokens).toLocaleString()} Properties Token`;
+  return '—';
 }
 
 const LoadingSpinner = () => (
@@ -105,6 +128,45 @@ export default function GamePass() {
   const passExpiryUntil = user?.rank_xp_pass_token_expires_at ? new Date(user.rank_xp_pass_token_expires_at) : null;
   const passIsUnactivatedValid = passTokensHeld > 0 && !!(passExpiryUntil && passExpiryUntil.getTime() > nowTs);
   const passIsUnactivatedExpired = passTokensHeld > 0 && !!(passExpiryUntil && passExpiryUntil.getTime() <= nowTs);
+
+  const previewRankPointsRaw = passIsActive
+    ? Number(user?.rank_xp_pass_tier_snapshot ?? 0)
+    : passIsUnactivatedValid
+      ? Number(user?.rank_xp_pass_pending_tier_snapshot ?? 0)
+      : Number(user?.rank_points ?? 0);
+  const previewRankPoints = Math.max(0, Math.floor(previewRankPointsRaw));
+
+  const currentLevelNumber = LEVELS.reduce((acc, tier) => (
+    previewRankPoints >= tier.thresholdRp ? tier.levelNumber : acc
+  ), 1);
+
+  const seasonLevel = Math.min(
+    100,
+    Math.floor((previewRankPoints / MAX_THRESHOLD_RP) * 100),
+  );
+
+  const membershipType = passIsActive
+    ? 'VIP (Active)'
+    : passIsUnactivatedValid
+      ? 'VIP (Token Ready)'
+      : 'Free';
+
+  const closeDate = passIsActive ? passBonusUntil : passExpiryUntil;
+
+  const completedRangeCount = Math.max(0, Math.min(10, Math.floor(seasonLevel / 10)));
+
+  const SEASON_PROGRESS_RANGES = [
+    { start: 1, end: 10 },
+    { start: 11, end: 20 },
+    { start: 21, end: 30 },
+    { start: 31, end: 40 },
+    { start: 41, end: 50 },
+    { start: 51, end: 60 },
+    { start: 61, end: 70 },
+    { start: 71, end: 80 },
+    { start: 81, end: 90 },
+    { start: 91, end: 100 },
+  ];
 
   const handlePurchase = async () => {
     if (!user) return;
@@ -182,8 +244,9 @@ export default function GamePass() {
           <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Verifying payment…</span>
         </div>
       ) : (
-        <div className="max-w-3xl mx-auto space-y-4">
-          <div className={`relative rounded-lg border border-primary/20 overflow-hidden bg-primary/5`}>
+        <div className="max-w-5xl mx-auto space-y-4">
+          {/* Membership header + purchase CTA */}
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
               <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">
@@ -191,30 +254,21 @@ export default function GamePass() {
               </span>
               <Package className="text-primary shrink-0" size={14} />
             </div>
-            <div className="p-3 space-y-2">
-              <p className="text-[10px] text-zinc-400 font-heading">
-                Purchase grants an unactivated Game Pass token. Activate it in{' '}
-                <span className="text-primary font-bold">
-                  <Link to="/account/inventory">My Inventory</Link>
-                </span>{' '}
-                to start 24h bonuses.
-              </p>
-
-              {passIsUnactivatedValid && passExpiryUntil && (
-                <p className="text-[10px] text-primary font-heading">
-                  Token ready. Expires {passExpiryUntil?.toLocaleDateString('en-GB')}.
-                </p>
-              )}
-
-              {passIsUnactivatedExpired && (
-                <p className="text-[10px] text-amber-400 font-heading">Previous token expired — you can buy again.</p>
-              )}
-
-              {passIsActive && passBonusUntil && (
-                <p className="text-[10px] text-emerald-400 font-heading">
-                  24h bonus active until {passBonusUntil?.toLocaleString('en-GB')}.
-                </p>
-              )}
+            <div className="p-3 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="p-2 rounded bg-zinc-900/30 border border-primary/10">
+                  <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Membership Type</div>
+                  <div className="text-[11px] font-heading font-bold text-primary">{membershipType}</div>
+                </div>
+                <div className="p-2 rounded bg-zinc-900/30 border border-primary/10">
+                  <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Level</div>
+                  <div className="text-[11px] font-heading font-bold text-primary">{seasonLevel}</div>
+                </div>
+                <div className="p-2 rounded bg-zinc-900/30 border border-primary/10">
+                  <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">XP</div>
+                  <div className="text-[11px] font-heading font-bold text-primary">{previewRankPoints.toLocaleString()}</div>
+                </div>
+              </div>
 
               <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                 <button
@@ -233,35 +287,102 @@ export default function GamePass() {
                   Activate
                 </Link>
               </div>
+
+              {passIsActive && passBonusUntil && (
+                <p className="text-[10px] text-emerald-400 font-heading">
+                  24h bonus active until {passBonusUntil?.toLocaleString('en-GB')}.
+                </p>
+              )}
+
+              {passIsUnactivatedValid && passExpiryUntil && (
+                <p className="text-[10px] text-primary font-heading">
+                  Token ready. Expires {passExpiryUntil?.toLocaleDateString('en-GB')}.
+                </p>
+              )}
+
+              {passIsUnactivatedExpired && (
+                <p className="text-[10px] text-amber-400 font-heading">Previous token expired — you can buy again.</p>
+              )}
+
+              {closeDate && (
+                <p className="text-[10px] text-mutedForeground font-heading">
+                  Close Date: <span className="text-primary font-bold">{closeDate.toLocaleDateString('en-GB')}</span>
+                </p>
+              )}
             </div>
             <div className="store-art-line text-primary mx-3" />
           </div>
 
-          <div className="space-y-2">
-            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">
-              What you get on activation
-            </h2>
-            <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl">
-              Rewards are based on your rank points at purchase time, and are granted when you activate the Game Pass token.
-            </p>
+          {/* Season progress */}
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+              <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">Season Progress</div>
+              <div className="text-[9px] text-zinc-400 font-heading italic mt-0.5">Complete levels to earn rewards</div>
+            </div>
+            <div className="p-3 space-y-2">
+              <div className="w-full h-2 bg-zinc-900/30 border border-primary/10 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-primary via-primary to-primary" style={{ width: `${seasonLevel}%` }} />
+              </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {GAME_PASS_REWARD_TIERS.map((tier) => (
-                <div key={tier.threshold} className="relative rounded-lg border border-primary/20 bg-zinc-900/30 overflow-hidden">
-                  <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-                  <div className="px-3 py-2.5">
-                    <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
-                      Tier {tier.threshold.toLocaleString()}+
+              <div className="grid grid-cols-5 gap-2">
+                {SEASON_PROGRESS_RANGES.map((r, idx) => {
+                  const done = idx < completedRangeCount;
+                  return (
+                    <div
+                      key={`${r.start}-${r.end}`}
+                      className={`rounded border p-2 text-center ${done ? 'border-primary/30 bg-primary/10' : 'border-primary/10 bg-zinc-900/20'}`}
+                    >
+                      <div className={`text-[9px] font-heading uppercase tracking-wider ${done ? 'text-primary' : 'text-zinc-500'}`}>
+                        {r.start} - {r.end}
+                      </div>
                     </div>
-                    <TierRewards rewards={tier.rewards} />
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
+              </div>
+            </div>
+            <div className="store-art-line text-primary mx-3" />
+          </div>
+
+          {/* Tier grid */}
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">Tiers</span>
             </div>
 
-            <div className="text-[9px] text-zinc-500 font-heading italic">
-              You also get the 24h Rank-XP multiplier window once activated.
+            <div className="p-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {LEVELS.map((tier) => {
+                  const isCurrent = tier.levelNumber === currentLevelNumber;
+                  const xpNeededDisplay = tier.thresholdRp === 0 ? 2000 : tier.thresholdRp;
+                  return (
+                    <div
+                      key={tier.levelNumber}
+                      className={`relative rounded-lg border overflow-hidden ${isCurrent ? 'border-primary/60 bg-primary/5' : 'border-primary/20 bg-zinc-900/30'}`}
+                    >
+                      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                      <div className="p-3 space-y-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Level {tier.levelNumber}</div>
+                          {isCurrent && <div className="text-[9px] font-heading font-bold text-primary">Current</div>}
+                        </div>
+                        <div className="text-[11px] font-heading font-bold text-foreground tabular-nums">
+                          {getTierPrimaryLabel(tier)}
+                        </div>
+                        <div className="text-[9px] text-zinc-500 font-heading">XP Needed: {xpNeededDisplay.toLocaleString()} XP</div>
+                        <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wider">VIP Only</div>
+                        <TierRewards rewards={tier.rewards} />
+                        {tier.levelNumber === 1 && (
+                          <div className="text-[9px] text-zinc-500 font-heading italic">No reward at this level</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+            <div className="store-art-line text-primary mx-3" />
           </div>
 
           <div className="text-[9px] text-zinc-500 font-heading italic">
