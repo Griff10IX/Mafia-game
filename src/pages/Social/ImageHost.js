@@ -19,6 +19,13 @@ const MAX_EDGE_OPTIONS = [
   { value: '1920', label: 'Max 1920px' },
 ];
 
+// Nginx (and/or upstream) upload limit in this project is typically 10MB.
+// We keep a small buffer to avoid hitting 413.
+const CLIENT_MAX_UPLOAD_BYTES = 9 * 1024 * 1024; // ~9MB
+
+// Backend gallery resize max edge is 640px; we mirror it for safe uploads.
+const SERVER_MAX_EDGE = 640;
+
 export default function ImageHost() {
   const fileRef = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -82,8 +89,92 @@ export default function ImageHost() {
     }
     setUploading(true);
     try {
+      const originalFile = f;
+      let uploadFile = originalFile;
+
+      // If the file is too large for the request body limit, resize on the client first.
+      // This prevents HTTP 413 before the backend can apply its own resizing/validation.
+      if (originalFile.size > CLIENT_MAX_UPLOAD_BYTES) {
+        // Only raster images can be resized safely in-browser.
+        const isSupportedMime = ['image/jpeg', 'image/png', 'image/webp'].includes(originalFile.type);
+        if (!isSupportedMime) {
+          toast.error('Image is too large to upload. Use JPEG/PNG/WebP (GIF resize is not handled client-side).');
+          return;
+        }
+
+        toast.info('Large image detected — resizing before upload…');
+
+        const imgUrl = URL.createObjectURL(originalFile);
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+
+        // eslint-disable-next-line no-inner-declarations
+        const loadImg = () =>
+          new Promise((resolve, reject) => {
+            img.onload = () => resolve(true);
+            img.onerror = () => reject(new Error('Failed to read image for resizing'));
+            img.src = imgUrl;
+          });
+
+        await loadImg();
+
+        const width = img.width || 1;
+        const height = img.height || 1;
+        const baseScale = Math.min(1, SERVER_MAX_EDGE / Math.max(width, height));
+
+        // Try a couple of downscale steps + JPEG quality reductions until it fits.
+        const qualitySteps = [0.85, 0.75, 0.65, 0.55, 0.45];
+        const scaleSteps = [1, 0.85];
+
+        let finalBlob = null;
+        try {
+          // eslint-disable-next-line no-restricted-syntax
+          for (const scaleStep of scaleSteps) {
+            if (finalBlob) break;
+            const scale = baseScale * scaleStep;
+            const nextW = Math.max(1, Math.round(width * scale));
+            const nextH = Math.max(1, Math.round(height * scale));
+
+            const canvas = document.createElement('canvas');
+            canvas.width = nextW;
+            canvas.height = nextH;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('Canvas not available');
+            ctx.drawImage(img, 0, 0, nextW, nextH);
+
+            // eslint-disable-next-line no-restricted-syntax
+            for (const q of qualitySteps) {
+              // eslint-disable-next-line no-loop-func
+              const blob = await new Promise((resolve, reject) => {
+                canvas.toBlob(
+                  (b) => {
+                    if (!b) reject(new Error('Failed to encode resized image'));
+                    else resolve(b);
+                  },
+                  'image/jpeg',
+                  q,
+                );
+              });
+              if (blob.size <= CLIENT_MAX_UPLOAD_BYTES) {
+                finalBlob = blob;
+                break;
+              }
+            }
+          }
+        } finally {
+          URL.revokeObjectURL(imgUrl);
+        }
+
+        if (!finalBlob) {
+          toast.error('Image is too large to upload even after resizing. Please pick a smaller file.');
+          return;
+        }
+
+        uploadFile = new File([finalBlob], originalFile.name, { type: 'image/jpeg' });
+      }
+
       const fd = new FormData();
-      fd.append('file', f);
+      fd.append('file', uploadFile);
       if (maxEdge) fd.append('max_edge', maxEdge);
       fd.append('is_public_gallery', uploadPublic ? 'true' : 'false');
       await api.post('/image-host/upload', fd);
@@ -91,6 +182,8 @@ export default function ImageHost() {
       await load();
       await loadPublic();
     } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Image upload exception', err);
       // Bubble up backend validation/resize errors so we can debug quickly.
       // eslint-disable-next-line no-console
       console.error('Image upload failed', err);
