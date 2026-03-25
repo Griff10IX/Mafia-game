@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
 const GAME_PASS_PACKAGE_ID = 'rank_xp_pass_499';
+const GAME_PASS_POINTS_PRICE = 8_000;
 
 // Must stay in sync with backend `routers/kill/armoury.py` micro-tier reward scaling.
 // We only display; activation/entitlement is still handled by the existing rank_xp_pass flow.
@@ -401,9 +402,11 @@ export default function GamePass() {
   const nowTs = Date.now();
   const passTokensHeld = Number(user?.rank_xp_pass_tokens ?? 0);
   const vipClaimed = user?.rank_xp_pass_rewards_granted === true;
+  const pointsBalance = Number(user?.points ?? 0);
   const passExpiryUntil = user?.rank_xp_pass_token_expires_at ? new Date(user.rank_xp_pass_token_expires_at) : null;
   const passIsUnactivatedValid = passTokensHeld > 0 && !!(passExpiryUntil && passExpiryUntil.getTime() > nowTs);
   const passIsUnactivatedExpired = passTokensHeld > 0 && !!(passExpiryUntil && passExpiryUntil.getTime() <= nowTs);
+  const passIsUnactivatedUnknownExpiry = passTokensHeld > 0 && !passExpiryUntil;
 
   const vipGrantingActive = vipClaimed && (!passExpiryUntil || passExpiryUntil.getTime() > nowTs);
 
@@ -446,6 +449,23 @@ export default function GamePass() {
         origin_url: window.location.origin + '/game-pass',
       });
       window.location.href = res.data.url;
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePurchaseWithPoints = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const res = await api.post('/payments/buy-game-pass-with-points', {
+        origin_url: window.location.origin + '/game-pass',
+      });
+      toast.success(res?.data?.message || 'Game Pass purchased.');
+      refreshUser();
+      await fetchData();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
@@ -543,7 +563,7 @@ export default function GamePass() {
                 <button
                   type="button"
                   onClick={handlePurchase}
-                  disabled={!user || loading || passIsUnactivatedValid || vipClaimed}
+                  disabled={!user || loading || vipClaimed || passIsUnactivatedValid || passIsUnactivatedUnknownExpiry}
                   className="flex-1 w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                 >
                   {loading ? '...' : vipClaimed ? 'VIP claimed' : passIsUnactivatedValid ? 'Token ready (activate to claim)' : 'Buy for £4.99'}
@@ -555,6 +575,20 @@ export default function GamePass() {
                   <Clock size={14} className="shrink-0" />
                   Activate
                 </Link>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                <button
+                  type="button"
+                  onClick={handlePurchaseWithPoints}
+                  disabled={!user || loading || vipClaimed || passIsUnactivatedValid || passIsUnactivatedUnknownExpiry || pointsBalance < GAME_PASS_POINTS_PRICE}
+                  className="flex-1 w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 disabled:opacity-50 touch-manipulation"
+                >
+                  {loading ? '...' : pointsBalance < GAME_PASS_POINTS_PRICE ? `Need ${GAME_PASS_POINTS_PRICE.toLocaleString()} points` : 'Buy for 8,000 points'}
+                </button>
+                <div className="text-[9px] text-zinc-400 font-heading italic sm:text-right sm:flex-1">
+                  Deducts points to grant an unactivated Game Pass token.
+                </div>
               </div>
 
               <p className="text-[10px] text-mutedForeground font-heading">
