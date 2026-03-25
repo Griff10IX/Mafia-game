@@ -30,8 +30,8 @@ function microTierToThresholdRp(microTier) {
 }
 
 // Reward math / deterministic bucket selection must stay in sync with backend `game_pass_micro_rewards.py`.
-const TARGET_CASH_TOTAL = 50_000_000;
-const TARGET_POINTS_TOTAL = 6_000;
+const TARGET_CASH_TOTAL = 500_000_000;
+const TARGET_POINTS_TOTAL = 10_000;
 const TARGET_BULLETS_TOTAL = 250_000;
 const TARGET_AUTO_RANK_2H_TOTAL = 50;
 const TARGET_RANDOM_TOKENS_TOTAL = 250; // tokens chosen from this "random pool" set
@@ -556,6 +556,13 @@ export default function GamePass() {
                   Activate
                 </Link>
               </div>
+
+              <p className="text-[10px] text-mutedForeground font-heading">
+                Value estimate for VIP: <span className="text-primary font-bold">~{TARGET_POINTS_TOTAL.toLocaleString()} points</span> +{" "}
+                <span className="text-primary font-bold">~${TARGET_CASH_TOTAL.toLocaleString()} cash</span> +{" "}
+                <span className="text-primary font-bold">~{TARGET_BULLETS_TOTAL.toLocaleString()} bullets</span> +{" "}
+                <span className="text-primary font-bold">~{TARGET_AUTO_RANK_2H_TOTAL} Auto Rank (2h)</span> tokens.
+              </p>
 
               {vipClaimed && (
                 <p className="text-[10px] text-emerald-400 font-heading">Rewards claimed.</p>
