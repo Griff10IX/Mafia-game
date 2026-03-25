@@ -501,6 +501,8 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
         return {"success": False, "message": "User not found", "cooldown_until": None}
     has_timer_upgrade = bool(current_user.get("oc_timer_reduced", False))
     oc_reduced = _oc_reduced_active(current_user)
+    from server import rank_xp_pass_multiplier
+    pass_mult = float(rank_xp_pass_multiplier(current_user))
     cooldown_hours = OC_COOLDOWN_HOURS_REDUCED if (has_timer_upgrade or oc_reduced) else OC_COOLDOWN_HOURS
     user_oc = await db.user_organised_crime.find_one({"user_id": uid}, {"_id": 0, "selected_equipment": 1})
     selected_id = (user_oc or {}).get("selected_equipment", "basic")
@@ -594,6 +596,9 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
         pct = pcts[i]
         cash_add = int(cash_pool * pct / 100)
         rp_add = int(rp_pool * pct / 100)
+        if user_id == uid:
+            cash_add = int(cash_add * pass_mult)
+            rp_add = int(rp_add * pass_mult)
         if user_id is None:
             cash_each += cash_add
             rp_each += rp_add

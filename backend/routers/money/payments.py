@@ -14,6 +14,35 @@ from utils.point_provenance import mint_purchase_lot_if_missing
 
 logger = logging.getLogger(__name__)
 
+RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
+
+
+def _parse_utc(s: Optional[str]):
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+def _add_months(dt: datetime, months: int) -> datetime:
+    """Add calendar months (e.g. Jan 31 -> Feb 28/29) in UTC."""
+    import calendar
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    y = dt.year + (dt.month - 1 + months) // 12
+    m = (dt.month - 1 + months) % 12 + 1
+    # Clamp day to end of target month
+    last_day = calendar.monthrange(y, m)[1]
+    d = min(dt.day, last_day)
+    return dt.replace(year=y, month=m, day=d)
+
 
 class CheckoutRequest(BaseModel):
     package_id: str
@@ -33,12 +62,69 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
     Use server-side points from POINT_PACKAGES only; do not trust client/metadata for amount.
     Logs points_before and points_after on the transaction for admin audit.
     """
-    if not user_id or points <= 0:
+    is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
+    if not user_id or (points <= 0 and not is_rank_xp_pass):
         return {"credited": False, "preorder": False}
     
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
     
+    # Rank-XP pass entitlement: does not credit points; grants token entitlement + tier snapshot.
+    if is_rank_xp_pass:
+        user = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "points": 1, "rank_points": 1, "rank_xp_pass_tokens": 1},
+        )
+        points_before = int(user.get("points") or 0) if user else 0
+        now_iso = now.isoformat()
+        result = await db.payment_transactions.update_one(
+            {"session_id": session_id, "payment_status": {"$nin": ["completed", "preorder_pending", "manual_credit_pending"]}},
+            {
+                "$set": {
+                    "payment_status": "completed",
+                    "points_credited_at": now_iso,
+                    "points_before": points_before,
+                    "points_after": points_before,
+                    "pass_entitled_at": now_iso,
+                }
+            },
+        )
+        if result.modified_count == 0:
+            return {"credited": False, "preorder": False}
+
+        rank_points = int((user or {}).get("rank_points") or 0)
+        expires_at = _add_months(now, 1).isoformat()
+        await db.users.update_one(
+            {"id": user_id},
+            {
+                "$set": {
+                    "rank_xp_pass_tokens": 1,
+                    "rank_xp_pass_token_expires_at": expires_at,
+                    # Store for the unactivated token; activation will copy into the active multiplier window.
+                    "rank_xp_pass_pending_tier_snapshot": rank_points,
+                    "rank_xp_pass_rewards_granted": False,
+                }
+            },
+        )
+        await send_notification(
+            user_id,
+            "Rank-XP Pass",
+            (
+                "Your Rank-XP Pass token is ready. "
+                "Use it in the Armoury/My Inventory to start the 24-hour bonuses."
+            ),
+            "rank_xp_pass_token_entitled",
+            category="system",
+        )
+        logger.info(
+            "Rank-XP pass entitlement granted: session_id=%s user_id=%s tier_snapshot=%s expires_at=%s",
+            session_id,
+            user_id,
+            rank_points,
+            expires_at,
+        )
+        return {"credited": True, "preorder": False, "pass_entitled": True}
+
     settings = await db.game_settings.find_one({"_id": "main"})
     auto_credit = settings.get("store_points_auto_credit") if settings else None
     if auto_credit is None:
@@ -382,6 +468,31 @@ def register(router):
         points = package["points"]
         price_gbp = package["price_gbp"]
         package_id = request.package_id
+        now = datetime.now(timezone.utc)
+
+        # Pre-check: disallow buying again while the user already has an unactivated pass token.
+        if package_id == RANK_XP_PASS_PACKAGE_ID:
+            existing_tokens = int(current_user.get("rank_xp_pass_tokens") or 0)
+            if existing_tokens > 0:
+                expires_dt = _parse_utc(current_user.get("rank_xp_pass_token_expires_at"))
+                # If expired, allow repurchase (and clear the old entitlement).
+                if expires_dt and expires_dt <= now:
+                    await db.users.update_one(
+                        {"id": current_user["id"]},
+                        {
+                            "$set": {
+                                "rank_xp_pass_tokens": 0,
+                                "rank_xp_pass_rewards_granted": False,
+                                "rank_xp_pass_pending_tier_snapshot": None,
+                            },
+                            "$unset": {"rank_xp_pass_token_expires_at": "", "rank_xp_pass_pending_tier_snapshot": ""},
+                        },
+                    )
+                else:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="You already have an unactivated Rank-XP Pass token. Activate it before buying again.",
+                    )
         # success_url: frontend sends origin_url like http://localhost:3000/store
         origin = (request.origin_url or "").rstrip("/")
         success_url = f"{origin}?session_id={{CHECKOUT_SESSION_ID}}"
@@ -391,6 +502,9 @@ def register(router):
         def _create():
             import stripe
             stripe.api_key = api_key
+            product_name = f"{points} points"
+            if package_id == RANK_XP_PASS_PACKAGE_ID:
+                product_name = "Rank-XP Pass"
             session = stripe.checkout.Session.create(
                 payment_method_types=["card"],
                 line_items=[{
@@ -398,7 +512,7 @@ def register(router):
                         "currency": "gbp",
                         "unit_amount": int(round(price_gbp * 100)),
                         "product_data": {
-                            "name": f"{points} points",
+                        "name": product_name,
                             "metadata": {"package_id": package_id},
                         },
                     },
@@ -617,7 +731,8 @@ def register(router):
                 package_id = session.metadata.get("package_id")
                 # Use server-side points only (never trust metadata for amount — prevents exploit)
                 points = POINT_PACKAGES.get(package_id, {}).get("points", 0) if package_id else 0
-                if not user_id or points <= 0:
+                is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
+                if not user_id or (points <= 0 and not is_rank_xp_pass):
                     logger.warning("Stripe webhook: missing user_id or invalid package_id, session_id=%s", session.id)
                 else:
                     # Ensure we have a transaction row (status poll may not have run)
@@ -731,7 +846,8 @@ def register(router):
                         user_id = txn.get("user_id")
                         package_id = txn.get("package_id", "")
                         points = txn.get("points", 0)
-                        if user_id and points > 0:
+                        is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
+                        if user_id and (points > 0 or is_rank_xp_pass):
                             result = await _credit_payment_if_pending(db, session_id, user_id, package_id, points)
                             if result.get("credited"):
                                 processed_stuck += 1
@@ -885,7 +1001,8 @@ def register(router):
             if not points and txn:
                 points = txn.get("points", 0)
             
-            if user_id and points > 0:
+            is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
+            if user_id and (points > 0 or is_rank_xp_pass):
                 # Ensure transaction exists
                 if not txn:
                     await db.payment_transactions.insert_one({

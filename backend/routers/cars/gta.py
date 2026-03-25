@@ -441,6 +441,9 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         xp_gta_until = _parse_iso_datetime(current_user.get("xp_gta_until"))
         if xp_gta_until and now_utc < xp_gta_until:
             rank_points = rank_points * 2
+        from server import rank_xp_pass_multiplier
+        pass_mult = float(rank_xp_pass_multiplier(current_user))
+        rank_points = int(rank_points * pass_mult)
         gta_rare_perk = int(current_user.get("gta_rare_drop_perk_attempts_remaining") or 0)
         if gta_rare_perk > 0:
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"gta_rare_drop_perk_attempts_remaining": -1}})
@@ -457,14 +460,14 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         _invalidate_travel_info_cache(current_user.get("id") or "")
         rp_before = int(current_user.get("rank_points") or 0)
         rp_granted = int(rank_points * _fm_gta)
-        gta_inc = {"money": int(car["value"] * _fm_gta), "rank_points": rp_granted}
+        gta_inc = {"money": int(car["value"] * _fm_gta * pass_mult), "rank_points": rp_granted}
         if not caller_updates_total_gta:
             gta_inc["total_gta"] = 1
         if (car.get("rarity") or "").strip().lower() == "uncommon":
             gta_inc["uncommon_cars_stolen"] = 1
         respect_drop = maybe_respect_points_drop()
         if respect_drop:
-            gta_inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_GTA_MULT * _fm_gta))
+            gta_inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_GTA_MULT * _fm_gta * pass_mult))
         await db.users.update_one(
             {"id": current_user.get("id") or ""},
             {"$inc": gta_inc},

@@ -760,7 +760,12 @@ async def complete_mission(
         raise HTTPException(status_code=400, detail=f"Complete {prev_title} first")
 
     user_id = current_user["id"]
-    mult = float(get_prestige_bonus(current_user).get("mission_reward_mult") or 1.0) * founding_member_income_mult(current_user)
+    from server import rank_xp_pass_multiplier
+    mult = (
+        float(get_prestige_bonus(current_user).get("mission_reward_mult") or 1.0)
+        * founding_member_income_mult(current_user)
+        * float(rank_xp_pass_multiplier(current_user))
+    )
     reward_money = int((mission.get("reward_money") or 0) * mult)
     reward_cash_immediate = int((mission.get("reward_cash_immediate") or 0) * mult)
     reward_points = int((mission.get("reward_points") or 0) * mult)

@@ -18,12 +18,20 @@ export default function StaffLogin({ setIsAuthenticated }) {
         if (response.data.token) {
           localStorage.setItem('token', response.data.token);
           setIsAuthenticated(true);
+          if (response.data.user && response.data.user.rules_accepted === false) {
+            navigate('/account/rules-acceptance', { replace: true });
+            return;
+          }
         }
         toast.success(response.data.message || 'Check your email to verify your account.');
         return;
       }
       localStorage.setItem('token', response.data.token);
       setIsAuthenticated(true);
+      if (response.data.user && response.data.user.rules_accepted === false) {
+        navigate('/account/rules-acceptance', { replace: true });
+        return;
+      }
       toast.success('Welcome back.');
     } catch (error) {
       const detail = error.response?.data?.detail;

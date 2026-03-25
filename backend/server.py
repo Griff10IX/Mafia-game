@@ -188,6 +188,43 @@ def founding_member_income_mult(user: Optional[dict]) -> float:
     return 1.0
 
 
+def rank_xp_pass_multiplier(user: Optional[dict]) -> float:
+    """
+    Rank-XP Pass (24h): multiplier applied while `rank_xp_pass_bonus_until` is active.
+    Tier is derived from `rank_xp_pass_tier_snapshot` (rank_points at purchase time).
+    """
+    if not user:
+        return 1.0
+    until_raw = user.get("rank_xp_pass_bonus_until")
+    if not until_raw:
+        return 1.0
+    try:
+        until = datetime.fromisoformat(str(until_raw).replace("Z", "+00:00"))
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+    except Exception:
+        return 1.0
+    if datetime.now(timezone.utc) >= until:
+        return 1.0
+
+    snap = 0
+    try:
+        snap = int(user.get("rank_xp_pass_tier_snapshot") or 0)
+    except Exception:
+        snap = 0
+
+    # Conservative tiered multipliers (tune later).
+    if snap >= 20_000:
+        return 1.20
+    if snap >= 16_000:
+        return 1.15
+    if snap >= 12_000:
+        return 1.12
+    if snap >= 8_000:
+        return 1.10
+    return 1.07
+
+
 # Wealth ranks: based on cash on hand (ordered by min_money ascending)
 WEALTH_RANKS = [
     {"id": 1, "name": "Broke", "min_money": 0},
@@ -443,6 +480,8 @@ POINT_PACKAGES = {
     "gold": {"points": 25000, "price_gbp": 52.99},
     "platinum": {"points": 50000, "price_gbp": 99.99},
     "diamond": {"points": 100000, "price_gbp": 189.99},
+    # Rank-XP pass entitlement (no points credited; token is activated in Armoury).
+    "rank_xp_pass_499": {"points": 0, "price_gbp": 4.99},
 }
 
 # Travel times based on car rarity (in seconds)
@@ -576,6 +615,8 @@ class UserResponse(BaseModel):
     travel_until: Optional[str] = None
     properties_until: Optional[str] = None
     jailbust_bonus_until: Optional[str] = None
+    # Rank-XP pass token: 24h window starts only when the token is activated in Armoury.
+    rank_xp_pass_bonus_until: Optional[str] = None
     # Unactivated consumable token counts (armoury inventory); store purchases respect STORE_TOKEN_MAX_HELD
     xp_crimes_tokens: int = 0
     xp_gta_tokens: int = 0
@@ -586,6 +627,14 @@ class UserResponse(BaseModel):
     travel_tokens: int = 0
     properties_tokens: int = 0
     jailbust_tokens: int = 0
+    # Rank-XP pass token entitlement (unactivated): stored as 0 or 1 via purchase rules.
+    rank_xp_pass_tokens: int = 0
+    # For unactivated pass tokens only: expires if not used within 1 month.
+    rank_xp_pass_token_expires_at: Optional[str] = None
+    # Tier snapshot for the pass (rank_points at purchase time), used to compute rewards.
+    rank_xp_pass_tier_snapshot: Optional[int] = None
+    # Idempotency guard for tiered one-time rewards.
+    rank_xp_pass_rewards_granted: bool = False
     shooting_range_bonus_plays: int = 0  # store upgrade: added to base 10 plays/hour in shooting range
     censor_profanity: bool = False  # when true, chat/forum show swear words as ***
     referred_by: Optional[str] = None  # referrer user id (set at signup via referral code)

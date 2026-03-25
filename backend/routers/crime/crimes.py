@@ -593,6 +593,10 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         # Referred user: 2% higher crime payouts
         if current_user.get("referred_by"):
             reward = int(reward * 1.02)
+        from server import rank_xp_pass_multiplier
+        pass_mult = float(rank_xp_pass_multiplier(current_user))
+        reward = int(reward * pass_mult)
+        rank_points = int(rank_points * pass_mult)
         rp_before = int(current_user.get("rank_points") or 0)
         # Racket / illegal-business missions: crimes in the business's state (doc.state set at start)
         ib_crimes_in_state_inc = 0
@@ -618,7 +622,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
             inc["illegal_business_crimes_in_state"] = ib_crimes_in_state_inc
         respect_drop = maybe_respect_points_drop()
         if respect_drop:
-            inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_CRIMES_MULT * _fm_cr))
+            inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_CRIMES_MULT * _fm_cr * pass_mult))
         # Global ultra-rare molotov drop from any successful crime
         prestige_bonus_earned: Optional[dict] = None
         if _rng.random() < MOLOTOV_GLOBAL_DROP_CHANCE:

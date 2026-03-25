@@ -70,6 +70,21 @@ def register(router):
         money_at_death = int(dead_user.get("money_at_death") or 0)
         if points_at_death <= 0 and money_at_death <= 0:
             raise HTTPException(status_code=400, detail="That account had no points or cash to transfer")
+        now = datetime.now(timezone.utc)
+
+        def _parse_iso(s):
+            if not s:
+                return None
+            try:
+                dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt
+            except Exception:
+                return None
+
+        pass_bonus_until_dt = _parse_iso(dead_user.get("rank_xp_pass_bonus_until"))
+        pass_token_expires_dt = _parse_iso(dead_user.get("rank_xp_pass_token_expires_at"))
         # Atomically claim — prevents double-retrieval race condition
         claim = await db.users.find_one_and_update(
             {"id": dead_user["id"], "is_dead": True, "retrieval_used": {"$ne": True}},
@@ -89,6 +104,9 @@ def register(router):
             count_field = cfg["count_field"]
             original_count = int(tokens_at_death.get(count_field, 0) or 0)
             if original_count > 0:
+                # Rank-XP pass: skip restoring an expired unactivated token.
+                if token_type == "rank_xp_pass" and pass_token_expires_dt and pass_token_expires_dt <= now:
+                    continue
                 restored = max(1, int(original_count * TOKEN_RESTORE_PERCENT))
                 token_inc[count_field] = restored
                 tokens_restored[token_type] = restored
@@ -117,6 +135,34 @@ def register(router):
                 {"id": current_user["id"]},
                 {"$inc": user_inc}
             )
+
+        # Dead > Alive carry-over for Rank-XP pass state.
+        # Support both simultaneously:
+        # - Active bonus window (rank_xp_pass_bonus_until + rank_xp_pass_tier_snapshot)
+        # - Unactivated token entitlement (rank_xp_pass_tokens + rank_xp_pass_token_expires_at + rank_xp_pass_pending_tier_snapshot)
+        pass_updates = {}
+        pass_active = bool(pass_bonus_until_dt and pass_bonus_until_dt > now)
+        pass_pending = bool(pass_token_expires_dt and pass_token_expires_dt > now)
+
+        if pass_active:
+            pass_updates["rank_xp_pass_bonus_until"] = pass_bonus_until_dt.isoformat()
+            pass_updates["rank_xp_pass_tier_snapshot"] = dead_user.get("rank_xp_pass_tier_snapshot")
+        else:
+            pass_updates["rank_xp_pass_bonus_until"] = None
+            pass_updates["rank_xp_pass_tier_snapshot"] = None
+
+        if pass_pending:
+            pass_updates["rank_xp_pass_token_expires_at"] = pass_token_expires_dt.isoformat()
+            pass_updates["rank_xp_pass_pending_tier_snapshot"] = dead_user.get("rank_xp_pass_pending_tier_snapshot")
+        else:
+            pass_updates["rank_xp_pass_token_expires_at"] = None
+            pass_updates["rank_xp_pass_pending_tier_snapshot"] = None
+
+        # Preserve idempotency/reward-grant state for whichever token (pending) might be activated later.
+        pass_updates["rank_xp_pass_rewards_granted"] = bool(dead_user.get("rank_xp_pass_rewards_granted", False))
+
+        if pass_updates:
+            await db.users.update_one({"id": current_user["id"]}, {"$set": pass_updates})
         msg = f"Transferred 99.95% from your dead account ({dead_user['username']}, 0.05% tax): "
         parts = []
         if add_money > 0:

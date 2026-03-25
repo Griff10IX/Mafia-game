@@ -61,7 +61,8 @@ STANDARD_REWARD_WEIGHTS = [
     ("perk", 1),
     ("tokens", 1),
 ]
-LOOT_BOX_TOKEN_TYPES = list(TOKEN_TYPES)
+# Pass tokens are purchasable/entitled only; do not allow them as random loot box prizes.
+LOOT_BOX_TOKEN_TYPES = [t for t in TOKEN_TYPES if t != "rank_xp_pass"]
 PERK_TYPES = [
     "property_income_10",
     "rp_10",

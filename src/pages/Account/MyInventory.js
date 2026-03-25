@@ -175,7 +175,7 @@ export default function MyInventory() {
     }
   };
 
-  const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus'];
+  const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus', 'rank_xp_pass'];
   const tokenLabels = {
     xp_crimes: { name: 'Crimes XP', icon: Zap, desc: 'Double XP from crimes, 1h per token (stack up to 6h)' },
     xp_gta: { name: 'GTA XP', icon: Zap, desc: 'Double XP from GTA, 1h per token (stack up to 6h)' },
@@ -186,6 +186,7 @@ export default function MyInventory() {
     travel: { name: 'Travel', icon: Zap, desc: 'Lower airport cost & 2% car travel time reduction, 1h per token (2h)' },
     properties: { name: 'Properties', icon: Building2, desc: '3× property income, 1h per token (stack up to 3h)' },
     jailbust_bonus: { name: 'Jailbust bonus', icon: Target, desc: '+10% jail bust success, less chance of jail on fail, 1h (6h)' },
+    rank_xp_pass: { name: 'Rank-XP Pass', icon: Package, desc: 'Activate in Armoury to start 24h Rank-XP bonuses. Expires in 1 month if unused.' },
   };
 
   return (
@@ -277,9 +278,10 @@ export default function MyInventory() {
                 Use all spends every token needed to reach this row&apos;s max stack (or until you run out). Extra tokens stay in your inventory.
               </p>
               {TOKEN_TYPES.filter((key) => (tokens[key]?.count ?? 0) > 0 || tokens[key]?.active_until).map((key) => {
-                const t = tokens[key] || { count: 0, active_until: null };
+                const t = tokens[key] || { count: 0, active_until: null, expires_at: null };
                 const { name, icon: Icon, desc } = tokenLabels[key] || { name: key, icon: Zap, desc: '' };
                 const active = t.active_until ? new Date(t.active_until) > new Date() : false;
+                const expired = key === 'rank_xp_pass' && t.expires_at ? new Date(t.expires_at) <= new Date() : false;
                 return (
                   <div key={key} className="inv-item flex flex-wrap items-center justify-between gap-2 py-2">
                     <div className="min-w-0">
@@ -292,24 +294,31 @@ export default function MyInventory() {
                       {active && t.active_until && (
                         <div className="text-[9px] text-primary mt-0.5">Active until {new Date(t.active_until).toLocaleString()}</div>
                       )}
+                      {!active && key === 'rank_xp_pass' && t.expires_at && (
+                        <div className="text-[9px] text-amber-300 mt-0.5">
+                          {expired ? 'Expired' : `Expires ${new Date(t.expires_at).toLocaleDateString()}`}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
-                        disabled={t.count < 1 || usingToken !== null}
+                        disabled={t.count < 1 || usingToken !== null || expired}
                         onClick={() => activateToken(key, false)}
                         className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50"
                       >
                         {usingToken === key ? '...' : 'Use'}
                       </button>
-                      <button
-                        type="button"
-                        disabled={t.count < 1 || usingToken !== null}
-                        onClick={() => activateToken(key, true)}
-                        className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-teal-500/40 bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 disabled:opacity-50"
-                      >
-                        {usingToken === `${key}:all` ? '...' : 'Use all'}
-                      </button>
+                      {key !== 'rank_xp_pass' && (
+                        <button
+                          type="button"
+                          disabled={t.count < 1 || usingToken !== null}
+                          onClick={() => activateToken(key, true)}
+                          className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-teal-500/40 bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 disabled:opacity-50"
+                        >
+                          {usingToken === `${key}:all` ? '...' : 'Use all'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

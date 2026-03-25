@@ -43,9 +43,23 @@ BULLET_PACKS = {5000: 100, 10000: 175, 50000: 775, 100000: 1525}  # matches stor
 # Consumable tokens: 1 token = 1 hour effect. Stackable up to max_stack_hours per type.
 TOKEN_DURATION_HOURS = 1
 TOKEN_TYPES = (
-    "xp_crimes", "xp_gta", "melt", "oc_reduced", "booze", "racket", "travel", "properties", "jailbust_bonus"
+    "xp_crimes",
+    "xp_gta",
+    "melt",
+    "oc_reduced",
+    "booze",
+    "racket",
+    "travel",
+    "properties",
+    "jailbust_bonus",
+    # Rank-XP (£4.99) pass token: 24h window granted only when activated via Armoury/My Inventory.
+    "rank_xp_pass",
 )
-# count_field: user doc key for token count; until_field: expiry ISO; max_stack_hours: cap when stacking
+# count_field: user doc key for token count
+# until_field: active-until ISO timestamp
+# duration_hours: effect duration per token (overrides global TOKEN_DURATION_HOURS)
+# expiry_field: optional "token expiry" ISO timestamp (for unactivated tokens)
+# max_stack_hours: cap when stacking (per-token stacking rules)
 TOKEN_CONFIG = {
     "xp_crimes":     {"count_field": "xp_crimes_tokens",     "until_field": "xp_crimes_until",     "max_stack_hours": 6},
     "xp_gta":        {"count_field": "xp_gta_tokens",        "until_field": "xp_gta_until",        "max_stack_hours": 6},
@@ -56,7 +70,74 @@ TOKEN_CONFIG = {
     "travel":        {"count_field": "travel_tokens",        "until_field": "travel_until",        "max_stack_hours": 2},
     "properties":    {"count_field": "properties_tokens",    "until_field": "properties_until",    "max_stack_hours": 3},
     "jailbust_bonus": {"count_field": "jailbust_tokens",     "until_field": "jailbust_bonus_until", "max_stack_hours": 6},
+    # 24h multiplier window, only when the token is activated.
+    "rank_xp_pass": {
+        "count_field": "rank_xp_pass_tokens",
+        "until_field": "rank_xp_pass_bonus_until",
+        "duration_hours": 24,
+        "expiry_field": "rank_xp_pass_token_expires_at",
+        # Effect stacking is allowed (buy again after consuming); choose a large cap so stacking isn't artificially limited.
+        "max_stack_hours": 8760,  # ~1 year
+    },
 }
+
+# Rank-XP Pass one-time rewards tiers based on the rank_points snapshot at purchase time.
+# (No guns/cars granted here; rewards are limited to money/points/respect and existing token types.)
+RANK_XP_PASS_REWARD_TIERS = (
+    (2000, {"money": 25_000_000}),
+    (4000, {"bullets": 2_500}),
+    (8000, {"xp_crimes_tokens": 2, "xp_gta_tokens": 2}),
+    (10_000, {"points": 50}),
+    (12_000, {"respect_points": 50}),
+    (14_000, {"melt_tokens": 2}),
+    (16_000, {"jailbust_tokens": 2}),
+    (18_000, {"travel_tokens": 1}),
+    (20_000, {"properties_tokens": 1}),
+)
+
+
+def _rank_xp_pass_one_time_reward_increments(tier_snapshot: int) -> dict:
+    """Return $inc increments for the pass' one-time rewards up to the given tier snapshot."""
+    inc = {}
+    try:
+        snap = int(tier_snapshot or 0)
+    except Exception:
+        snap = 0
+
+    for threshold, reward in RANK_XP_PASS_REWARD_TIERS:
+        if snap < threshold:
+            continue
+        for k, v in reward.items():
+            if not v:
+                continue
+            inc[k] = int(inc.get(k) or 0) + int(v)
+    return inc
+
+
+async def _grant_rank_xp_pass_one_time_rewards(db, user_id: str, tier_snapshot: int) -> Optional[dict]:
+    """
+    Idempotent one-time rewards for Rank-XP Pass activation.
+    Returns the applied $inc dict when rewards were granted, otherwise None.
+    """
+    # Flip rewards_granted atomically so concurrent activations don't double-grant.
+    updated = await db.users.update_one(
+        {"id": user_id, "rank_xp_pass_rewards_granted": {"$ne": True}},
+        {
+            "$set": {
+                "rank_xp_pass_rewards_granted": True,
+                # Make this activation the source of truth for the 24h multiplier window.
+                "rank_xp_pass_tier_snapshot": int(tier_snapshot or 0),
+            },
+            "$unset": {"rank_xp_pass_pending_tier_snapshot": ""},
+        },
+    )
+    if updated.modified_count == 0:
+        return None
+
+    inc = _rank_xp_pass_one_time_reward_increments(tier_snapshot)
+    if inc:
+        await db.users.update_one({"id": user_id}, {"$inc": inc})
+    return inc
 
 # Shooting range: weapon mastery 0-100%; at 100% = up to MASTERY_MAX_BULLET_REDUCTION_PCT fewer bullets in attack.
 MASTERY_MAX_BULLET_REDUCTION_PCT = 10
@@ -1594,6 +1675,7 @@ def _tokens_from_user(user: dict) -> dict:
             continue
         count_field = cfg["count_field"]
         until_field = cfg["until_field"]
+        expiry_field = cfg.get("expiry_field")
         count = int(user.get(count_field) or 0)
         until_raw = user.get(until_field)
         active_until = None
@@ -1601,7 +1683,14 @@ def _tokens_from_user(user: dict) -> dict:
             until = _parse_utc(until_raw)
             if until and until > now:
                 active_until = until.isoformat()
-        out[t] = {"count": count, "active_until": active_until}
+        expires_at = None
+        if expiry_field:
+            expires_raw = user.get(expiry_field)
+            if expires_raw:
+                expires_dt = _parse_utc(expires_raw)
+                if expires_dt:
+                    expires_at = expires_dt.isoformat()
+        out[t] = {"count": count, "active_until": active_until, "expires_at": expires_at}
     return out
 
 
@@ -1626,6 +1715,7 @@ def _tokens_to_reach_stack_cap(user_doc: dict, token_type: str) -> Tuple[int, Op
     cfg = TOKEN_CONFIG[token_type]
     count_field = cfg["count_field"]
     until_field = cfg["until_field"]
+    duration_hours = cfg.get("duration_hours", TOKEN_DURATION_HOURS)
     max_stack_hours = cfg["max_stack_hours"]
     count = int(user_doc.get(count_field) or 0)
     if count < 1:
@@ -1637,12 +1727,12 @@ def _tokens_to_reach_stack_cap(user_doc: dict, token_type: str) -> Tuple[int, Op
     sim_count = count
     while sim_count > 0:
         if sim_until and sim_until > now:
-            add_until = sim_until + timedelta(hours=TOKEN_DURATION_HOURS)
+            add_until = sim_until + timedelta(hours=duration_hours)
             new_until = min(add_until, cap_until)
             if new_until <= sim_until:
                 break
         else:
-            new_until = now + timedelta(hours=min(TOKEN_DURATION_HOURS, max_stack_hours))
+            new_until = now + timedelta(hours=min(duration_hours, max_stack_hours))
         sim_until = new_until
         sim_count -= 1
         to_use += 1
@@ -1656,10 +1746,32 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
     cfg = TOKEN_CONFIG[req.token_type]
     count_field = cfg["count_field"]
     until_field = cfg["until_field"]
+    duration_hours = cfg.get("duration_hours", TOKEN_DURATION_HOURS)
     max_stack_hours = cfg["max_stack_hours"]
+    expiry_field = cfg.get("expiry_field")
     count = int(current_user.get(count_field) or 0)
     if count < 1:
         raise HTTPException(status_code=400, detail="No tokens of this type available.")
+
+    # Rank-XP pass: enforce token expiry if token was not activated before expiry_field.
+    if expiry_field:
+        expires_dt = _parse_until(current_user.get(expiry_field))
+        if expires_dt and expires_dt <= datetime.now(timezone.utc):
+            # Expired unactivated token: remove it so the UI doesn't keep offering activation.
+            unset_map = {expiry_field: "", until_field: ""}
+            if req.token_type == "rank_xp_pass":
+                unset_map["rank_xp_pass_pending_tier_snapshot"] = ""
+                # Pending token can never be activated now, so it must not be considered “granted”.
+                await db.users.update_one(
+                    {"id": current_user["id"]},
+                    {"$set": {count_field: 0, "rank_xp_pass_rewards_granted": False}, "$unset": unset_map},
+                )
+            else:
+                await db.users.update_one(
+                    {"id": current_user["id"]},
+                    {"$set": {count_field: 0}, "$unset": unset_map},
+                )
+            raise HTTPException(status_code=400, detail="Rank-XP pass token has expired. Buy a new pass.")
 
     if req.use_all:
         n, new_until = _tokens_to_reach_stack_cap(current_user, req.token_type)
@@ -1671,7 +1783,12 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         new_until_iso = new_until.isoformat()
         result = await db.users.update_one(
             {"id": current_user["id"], count_field: {"$gte": n}},
-            {"$inc": {count_field: -n}, "$set": {until_field: new_until_iso}},
+            {
+                "$inc": {count_field: -n},
+                "$set": {until_field: new_until_iso},
+                # Activation consumes the token(s); token expiry only matters for unactivated tokens.
+                **({"$unset": {expiry_field: ""}} if expiry_field else {}),
+            },
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail="No tokens of this type available or race condition.")
@@ -1680,25 +1797,39 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
             **current_user,
             count_field: new_count,
             until_field: new_until_iso,
+            **({"%s" % expiry_field: None} if expiry_field else {}),
         })
+
+        pass_rewards_inc = None
+        if req.token_type == "rank_xp_pass":
+            tier_snapshot = current_user.get("rank_xp_pass_pending_tier_snapshot") or current_user.get("rank_xp_pass_tier_snapshot") or 0
+            pass_rewards_inc = await _grant_rank_xp_pass_one_time_rewards(db, current_user["id"], tier_snapshot)
         return {
-            "message": f"Used {n} token(s). Effect active until {new_until_iso} (up to {max_stack_hours}h stack).",
+            "message": (
+                f"Rank-XP Pass activated. Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
+                if req.token_type == "rank_xp_pass"
+                else f"Used {n} token(s). Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
+            ),
             "tokens": tokens,
         }
 
     now = datetime.now(timezone.utc)
     current_until = _parse_until(current_user.get(until_field))
     if current_until and current_until > now:
-        # Stack: new expiry = min(current + 1h, now + max_stack_hours)
-        add_until = current_until + timedelta(hours=TOKEN_DURATION_HOURS)
+        # Stack: new expiry = min(current + duration_hours, now + max_stack_hours)
+        add_until = current_until + timedelta(hours=duration_hours)
         cap_until = now + timedelta(hours=max_stack_hours)
         new_until = min(add_until, cap_until)
     else:
-        new_until = now + timedelta(hours=min(TOKEN_DURATION_HOURS, max_stack_hours))
+        new_until = now + timedelta(hours=min(duration_hours, max_stack_hours))
     new_until_iso = new_until.isoformat()
     result = await db.users.update_one(
         {"id": current_user["id"], count_field: {"$gte": 1}},
-        {"$inc": {count_field: -1}, "$set": {until_field: new_until_iso}},
+        {
+            "$inc": {count_field: -1},
+            "$set": {until_field: new_until_iso},
+            **({"$unset": {expiry_field: ""}} if expiry_field else {}),
+        },
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="No tokens of this type available or race condition.")
@@ -1706,9 +1837,19 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         **current_user,
         count_field: count - 1,
         until_field: new_until_iso,
+        **({"%s" % expiry_field: None} if expiry_field else {}),
     })
+
+    pass_rewards_inc = None
+    if req.token_type == "rank_xp_pass":
+        tier_snapshot = current_user.get("rank_xp_pass_pending_tier_snapshot") or current_user.get("rank_xp_pass_tier_snapshot") or 0
+        pass_rewards_inc = await _grant_rank_xp_pass_one_time_rewards(db, current_user["id"], tier_snapshot)
     return {
-        "message": f"Token used. Effect active until {new_until_iso} (up to {max_stack_hours}h stack).",
+        "message": (
+            f"Rank-XP Pass activated. Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
+            if req.token_type == "rank_xp_pass"
+            else f"Token used. Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
+        ),
         "tokens": tokens,
     }
 
