@@ -590,6 +590,8 @@ class UserResponse(BaseModel):
     censor_profanity: bool = False  # when true, chat/forum show swear words as ***
     referred_by: Optional[str] = None  # referrer user id (set at signup via referral code)
     referred_by_username: Optional[str] = None  # referrer username for display
+    rules_accepted: bool = False
+    rules_accepted_at: Optional[str] = None
 
 class NotificationCreate(BaseModel):
     title: str

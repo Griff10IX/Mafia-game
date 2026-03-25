@@ -357,6 +357,8 @@ def register(router):
                 "registration_ip": _client_ip(request),
                 "login_ips": [_client_ip(request)] if _client_ip(request) else [],
                 "email_verified": not require_verification,
+                "rules_accepted": False,
+                "rules_accepted_at": None,
                 "auto_rank_purchased": False,
                 "auto_rank_enabled": False,
                 "mission_completions": [],
@@ -568,6 +570,7 @@ def register(router):
                     "total_kills": user_doc["total_kills"],
                     "total_deaths": user_doc["total_deaths"],
                     "created_at": user_doc["created_at"],
+                    "rules_accepted": bool(user_doc.get("rules_accepted", False)),
                 }
                 return {"token": token, "user": user_response}
 
@@ -630,6 +633,7 @@ def register(router):
                 "total_deaths": user_doc["total_deaths"],
                 "created_at": user_doc["created_at"],
                 "email_verified": False,
+                "rules_accepted": bool(user_doc.get("rules_accepted", False)),
             }
             return {
                 "token": token,
@@ -670,7 +674,18 @@ def register(router):
                     out[k] = str(v)
             except Exception:
                 logging.warning("Login response: skipping non-serializable key=%s type=%s", k, type(v).__name__)
+        out["rules_accepted"] = bool(user.get("rules_accepted", False))
         return out
+
+    @router.post("/auth/accept-rules")
+    async def accept_rules(current_user: dict = Depends(get_current_user)):
+        """One-time rules acceptance gate for gameplay access."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"rules_accepted": True, "rules_accepted_at": now_iso}},
+        )
+        return {"ok": True, "rules_accepted": True, "rules_accepted_at": now_iso}
 
     @router.post("/auth/track-login-page-view")
     async def track_login_page_view(request: Request):
@@ -1356,6 +1371,8 @@ def register(router):
                 censor_profanity=bool(u.get("censor_profanity", False)),
                 referred_by=referred_by,
                 referred_by_username=referred_by_username,
+                rules_accepted=bool(u.get("rules_accepted", False)),
+                rules_accepted_at=u.get("rules_accepted_at"),
             )
         except HTTPException:
             raise

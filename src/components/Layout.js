@@ -679,6 +679,11 @@ export default function Layout({ children }) {
         navigate('/locked', { replace: true });
         return;
       }
+      if (!userRes.data?.rules_accepted && location.pathname !== '/account/rules-acceptance') {
+        setUser((prev) => ({ ...userRes.data, ...prev }));
+        navigate('/account/rules-acceptance', { replace: true });
+        return;
+      }
       const progressRes = await api.get('/user/rank-progress');
       setUser((prev) => ({
         ...userRes.data,

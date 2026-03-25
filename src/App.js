@@ -29,6 +29,7 @@ const Referral = lazy(() => import("./pages/Account/Referral"));
 
 // Auth pages
 const LockedPage = lazy(() => import("./pages/Auth/LockedPage"));
+const RulesAccept = lazy(() => import("./pages/Auth/RulesAccept"));
 
 // Cars pages
 const BuyCars = lazy(() => import("./pages/Cars/BuyCars"));
@@ -281,6 +282,16 @@ function App() {
             element={
               isAuthenticated ? (
                 <LockedPage />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/account/rules-acceptance"
+            element={
+              isAuthenticated ? (
+                <RulesAccept />
               ) : (
                 <Navigate to="/" replace />
               )
