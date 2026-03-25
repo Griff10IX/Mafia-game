@@ -600,7 +600,7 @@ const InfoCard = ({ rotationHours, rotationSeconds, dailyEstimateRough }) => (
         {dailyEstimateRough != null && dailyEstimateRough > 0 && (
           <li className="flex items-start gap-1">
             <TrendingUp size={8} className="text-emerald-400 shrink-0 mt-0.5" />
-            <span>24h estimate (custom car, best route, non-stop): <strong className="text-emerald-400">~${Number(dailyEstimateRough).toLocaleString()}</strong></span>
+            <span>24h estimate (best car you have in your garage, best route, non-stop): <strong className="text-emerald-400">~${Number(dailyEstimateRough).toLocaleString()}</strong></span>
           </li>
         )}
         <li className="flex items-start gap-1 md:col-span-2">

@@ -13,7 +13,6 @@ from server import (
     get_current_user,
     get_rank_info,
     STATES,
-    TRAVEL_TIMES,
     _is_admin,
 )
 
@@ -125,7 +124,7 @@ def _booze_prices_for_rotation():
     return out
 
 
-def _booze_daily_estimate_rough(capacity: int, prices_map: dict) -> int:
+def _booze_daily_estimate_rough(capacity: int, prices_map: dict, secs_per_leg: int) -> int:
     if capacity <= 0:
         return 0
     unordered_pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
@@ -141,7 +140,8 @@ def _booze_daily_estimate_rough(capacity: int, prices_map: dict) -> int:
         for i in range(n_booze)
     )
     profit_per_unit = max(best_ab, best_ba, 1)
-    secs_per_run = 2 * TRAVEL_TIMES.get("custom", 20)
+    leg = max(1, int(secs_per_leg))
+    secs_per_run = 2 * leg
     jail_per_action = (BOOZE_RUN_JAIL_CHANCE_MIN + BOOZE_RUN_JAIL_CHANCE_MAX) / 2
     jail_per_run = 1 - (1 - jail_per_action) ** 2
     jail_seconds = BOOZE_RUN_JAIL_SECONDS
@@ -430,7 +430,10 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
     runs_count = current_user.get("booze_runs_count", 0)
     history = (current_user.get("booze_run_history") or [])[:BOOZE_RUN_HISTORY_MAX]
     capacity_bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
-    daily_estimate_rough = _booze_daily_estimate_rough(capacity, prices_map)
+    from routers.account.auto_rank import booze_travel_seconds_per_leg
+
+    travel_leg_sec = await booze_travel_seconds_per_leg(db, uid)
+    daily_estimate_rough = _booze_daily_estimate_rough(capacity, prices_map, travel_leg_sec)
 
     payload = {
         "locations": list(STATES),

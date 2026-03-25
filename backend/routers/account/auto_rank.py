@@ -127,24 +127,24 @@ def _is_car_usable(uc: dict) -> bool:
         return True
 
 
-async def _get_travel_method(db, user_id: str) -> Optional[str]:
-    """Find the fastest travel method for a user: custom car first, then fastest non-destroyed car by rarity. Used for booze (cars only, no airport)."""
+async def _booze_garage_travel_leg_seconds(db, user_id: str) -> tuple[Optional[str], int]:
+    """Travel method id and seconds per leg for booze: custom car if owned and usable, else fastest non-destroyed garage car by TRAVEL_TIMES."""
     import server as srv
+
     CARS = getattr(srv, "CARS", None) or []
     TRAVEL_TIMES = getattr(srv, "TRAVEL_TIMES", None) or {}
+    default_leg = int(TRAVEL_TIMES.get("common", 45))
     user_id = (user_id or "").strip()
     if not user_id:
-        return None
-    # Fetch all cars; filter in Python to avoid MongoDB query quirks (legacy docs, type coercion)
+        return None, default_leg
     cursor = db.user_cars.find({"user_id": user_id}, {"_id": 1, "id": 1, "car_id": 1, "damage_percent": 1})
     all_cars = await cursor.to_list(50)
     usable = [uc for uc in all_cars if _is_car_usable(uc)]
     if not usable:
-        return None
-    # Prefer custom first (fastest non-exclusive)
+        return None, default_leg
     custom = next((uc for uc in usable if uc.get("car_id") == "car_custom"), None)
     if custom:
-        return "custom"
+        return "custom", int(TRAVEL_TIMES.get("custom", 20))
     best_car = None
     best_time = 999
     for uc in usable:
@@ -156,11 +156,23 @@ async def _get_travel_method(db, user_id: str) -> Optional[str]:
             best_time = travel_time
             best_car = uc
     if not best_car:
-        return None
+        return None, default_leg
     result = best_car.get("id") or str(best_car.get("_id", ""))
     if not result:
-        return None
-    return result
+        return None, default_leg
+    return result, int(best_time)
+
+
+async def booze_travel_seconds_per_leg(db, user_id: str) -> int:
+    """Seconds per one-way leg; booze round-trip uses 2× this (matches garage car selection for booze / auto-rank)."""
+    _, secs = await _booze_garage_travel_leg_seconds(db, user_id)
+    return secs
+
+
+async def _get_travel_method(db, user_id: str) -> Optional[str]:
+    """Find the fastest travel method for a user: custom car first, then fastest non-destroyed car by rarity. Used for booze (cars only, no airport)."""
+    mid, _ = await _booze_garage_travel_leg_seconds(db, user_id)
+    return mid
 
 
 async def _get_booze_protected_car_ids(db, user_id: str) -> set:
