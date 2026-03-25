@@ -7,6 +7,70 @@ import styles from '../../styles/noir.module.css';
 
 const GAME_PASS_PACKAGE_ID = 'rank_xp_pass_499';
 
+// Must stay in sync with backend `routers/kill/armoury.py` (RANK_XP_PASS_REWARD_TIERS).
+// We only display; activation/entitlement is still handled by the existing rank_xp_pass flow.
+const GAME_PASS_REWARD_TIERS = [
+  { threshold: 2000, rewards: { money: 25_000_000 } },
+  { threshold: 4000, rewards: { bullets: 2_500 } },
+  { threshold: 8000, rewards: { xp_crimes_tokens: 2, xp_gta_tokens: 2 } },
+  { threshold: 10_000, rewards: { points: 50 } },
+  { threshold: 12_000, rewards: { respect_points: 50 } },
+  { threshold: 14_000, rewards: { melt_tokens: 2 } },
+  { threshold: 16_000, rewards: { jailbust_tokens: 2 } },
+  { threshold: 18_000, rewards: { travel_tokens: 1 } },
+  { threshold: 20_000, rewards: { properties_tokens: 1 } },
+];
+
+const REWARD_DISPLAY_ORDER = [
+  'money',
+  'bullets',
+  'xp_crimes_tokens',
+  'xp_gta_tokens',
+  'points',
+  'respect_points',
+  'melt_tokens',
+  'jailbust_tokens',
+  'travel_tokens',
+  'properties_tokens',
+];
+
+const TOKEN_REWARD_NAMES = {
+  xp_crimes_tokens: 'Crimes XP Token',
+  xp_gta_tokens: 'GTA XP Token',
+  melt_tokens: 'Melt Token',
+  jailbust_tokens: 'Jailbust Token',
+  travel_tokens: 'Travel Token',
+  properties_tokens: 'Properties Token',
+};
+
+function formatTierRewardItem(key, value) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (key === 'money') return `$${n.toLocaleString()} cash`;
+  if (key === 'bullets') return `${n.toLocaleString()} bullets`;
+  if (key === 'points') return `${n.toLocaleString()} points`;
+  if (key === 'respect_points') return `${n.toLocaleString()} respect`;
+  const tokenName = TOKEN_REWARD_NAMES[key] || key;
+  return `${n.toLocaleString()}x ${tokenName}`;
+}
+
+function TierRewards({ rewards }) {
+  return (
+    <div className="space-y-1">
+      {REWARD_DISPLAY_ORDER.map((k) => {
+        const v = rewards?.[k];
+        const text = formatTierRewardItem(k, v);
+        if (!text) return null;
+        return (
+          <div key={k} className="text-[9px] text-zinc-300 font-heading">
+            {text}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const LoadingSpinner = () => (
   <div className={`${styles.pageContent} p-4 mobile-page-root`}>
     <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
@@ -171,6 +235,33 @@ export default function GamePass() {
               </div>
             </div>
             <div className="store-art-line text-primary mx-3" />
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">
+              What you get on activation
+            </h2>
+            <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl">
+              Rewards are based on your rank points at purchase time, and are granted when you activate the Game Pass token.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {GAME_PASS_REWARD_TIERS.map((tier) => (
+                <div key={tier.threshold} className="relative rounded-lg border border-primary/20 bg-zinc-900/30 overflow-hidden">
+                  <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                  <div className="px-3 py-2.5">
+                    <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+                      Tier {tier.threshold.toLocaleString()}+
+                    </div>
+                    <TierRewards rewards={tier.rewards} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="text-[9px] text-zinc-500 font-heading italic">
+              You also get the 24h Rank-XP multiplier window once activated.
+            </div>
           </div>
 
           <div className="text-[9px] text-zinc-500 font-heading italic">
