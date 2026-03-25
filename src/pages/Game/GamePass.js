@@ -114,6 +114,7 @@ export default function GamePass() {
   const [loading, setLoading] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [user, setUser] = useState(null);
+  const [selectedTierLevelNumber, setSelectedTierLevelNumber] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -130,16 +131,16 @@ export default function GamePass() {
 
   const nowTs = Date.now();
   const passTokensHeld = Number(user?.rank_xp_pass_tokens ?? 0);
-  const passBonusUntil = user?.rank_xp_pass_bonus_until ? new Date(user.rank_xp_pass_bonus_until) : null;
-  const passIsActive = !!(passBonusUntil && passBonusUntil.getTime() > nowTs);
+  // When true, the Game Pass one-time rewards were already claimed at activation.
+  const passIsActive = user?.rank_xp_pass_rewards_granted === true;
   const passExpiryUntil = user?.rank_xp_pass_token_expires_at ? new Date(user.rank_xp_pass_token_expires_at) : null;
   const passIsUnactivatedValid = passTokensHeld > 0 && !!(passExpiryUntil && passExpiryUntil.getTime() > nowTs);
   const passIsUnactivatedExpired = passTokensHeld > 0 && !!(passExpiryUntil && passExpiryUntil.getTime() <= nowTs);
 
   const previewRankPointsRaw = passIsActive
-    ? Number(user?.rank_xp_pass_tier_snapshot ?? 0)
+    ? Number(user?.rank_xp_pass_tier_snapshot ?? 0) // rewards granted tier snapshot
     : passIsUnactivatedValid
-      ? Number(user?.rank_xp_pass_pending_tier_snapshot ?? 0)
+      ? Number(user?.rank_xp_pass_pending_tier_snapshot ?? 0) // pending snapshot before activation
       : Number(user?.rank_points ?? 0);
   const previewRankPoints = Math.max(0, Math.floor(previewRankPointsRaw));
 
@@ -153,12 +154,12 @@ export default function GamePass() {
   );
 
   const membershipType = passIsActive
-    ? 'VIP (Active)'
+    ? 'VIP (Activated)'
     : passIsUnactivatedValid
       ? 'VIP (Token Ready)'
       : 'Free';
 
-  const closeDate = passIsActive ? passBonusUntil : passExpiryUntil;
+  const closeDate = passIsUnactivatedValid ? passExpiryUntil : null;
 
   const completedRangeCount = Math.max(0, Math.min(10, Math.floor(seasonLevel / 10)));
 
@@ -174,6 +175,14 @@ export default function GamePass() {
     { start: 81, end: 90 },
     { start: 91, end: 100 },
   ];
+
+  useEffect(() => {
+    // Default selection = current completed tier (preview). Keeps selection stable once picked.
+    if (selectedTierLevelNumber == null) setSelectedTierLevelNumber(currentLevelNumber);
+  }, [currentLevelNumber, selectedTierLevelNumber]);
+
+  const selectedTier = LEVELS.find((t) => t.levelNumber === selectedTierLevelNumber) || null;
+  const nextTier = selectedTier ? LEVELS.find((t) => t.levelNumber === selectedTier.levelNumber + 1) || null : null;
 
   const handlePurchase = async () => {
     if (!user) return;
@@ -281,10 +290,10 @@ export default function GamePass() {
                 <button
                   type="button"
                   onClick={handlePurchase}
-                  disabled={!user || loading || passIsUnactivatedValid}
+                  disabled={!user || loading || passIsUnactivatedValid || passIsActive}
                   className="flex-1 w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                 >
-                  {loading ? '...' : passIsUnactivatedValid ? 'Token available (activate to extend)' : 'Buy for £4.99'}
+                  {loading ? '...' : passIsActive ? 'VIP claimed' : passIsUnactivatedValid ? 'Token ready (activate to claim)' : 'Buy for £4.99'}
                 </button>
                 <Link
                   to="/account/inventory"
@@ -295,10 +304,8 @@ export default function GamePass() {
                 </Link>
               </div>
 
-              {passIsActive && passBonusUntil && (
-                <p className="text-[10px] text-emerald-400 font-heading">
-                  24h bonus active until {passBonusUntil?.toLocaleString('en-GB')}.
-                </p>
+              {passIsActive && (
+                <p className="text-[10px] text-emerald-400 font-heading">Rewards claimed.</p>
               )}
 
               {passIsUnactivatedValid && passExpiryUntil && (
@@ -365,6 +372,7 @@ export default function GamePass() {
                   const isCurrent = tier.levelNumber === currentLevelNumber;
                   const isPreviousTierDone = isTierCompleted && !isCurrent;
                   const isFreeMembership = membershipType === 'Free';
+                  const isClickable = isTierCompleted;
                   return (
                     <div
                       key={tier.levelNumber}
@@ -374,7 +382,14 @@ export default function GamePass() {
                           : isPreviousTierDone
                             ? 'border-primary/30 bg-primary/10'
                             : 'border-primary/20 bg-zinc-900/30'
-                      }`}
+                      } ${isClickable ? 'cursor-pointer hover:border-primary/80' : 'opacity-60 cursor-not-allowed'}`}
+                      role={isClickable ? 'button' : undefined}
+                      tabIndex={isClickable ? 0 : -1}
+                      onClick={() => { if (isClickable) setSelectedTierLevelNumber(tier.levelNumber); }}
+                      onKeyDown={(e) => {
+                        if (!isClickable) return;
+                        if (e.key === 'Enter' || e.key === ' ') setSelectedTierLevelNumber(tier.levelNumber);
+                      }}
                     >
                       <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
                       <div className="p-3 space-y-1">
@@ -403,6 +418,53 @@ export default function GamePass() {
             </div>
             <div className="store-art-line text-primary mx-3" />
           </div>
+
+          {/* Tier details for selected (previous/current) */}
+          {selectedTier && (
+            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+              <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">
+                    Tier {selectedTier.levelNumber} Details
+                  </div>
+                  <div className="text-[9px] text-zinc-500 font-heading italic">
+                    {selectedTier.levelNumber === currentLevelNumber ? 'Current tier' : 'Previous tier'}
+                  </div>
+                </div>
+              </div>
+              <div className="p-3 space-y-3">
+                <div>
+                  <div className="text-[11px] font-heading font-bold text-foreground">{getTierPrimaryLabel(selectedTier)}</div>
+                  <div className="text-[9px] text-zinc-500 font-heading">XP Needed: {selectedTier.thresholdRp.toLocaleString()} XP</div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Rewards for this tier</div>
+                  <TierRewards
+                    rewards={selectedTier.rewards}
+                    isFreeMembership={membershipType === 'Free'}
+                    isTierCompleted={previewRankPoints >= selectedTier.thresholdRp}
+                  />
+                </div>
+
+                {nextTier && (
+                  <div className="pt-2 border-t border-zinc-800/60">
+                    <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Next reward</div>
+                    <div className="text-[11px] font-heading font-bold text-foreground mt-1">{getTierPrimaryLabel(nextTier)}</div>
+                    <div className="text-[9px] text-zinc-500 font-heading">XP Needed: {nextTier.thresholdRp.toLocaleString()} XP</div>
+                    <div className="mt-2">
+                      <TierRewards
+                        rewards={nextTier.rewards}
+                        isFreeMembership={membershipType === 'Free'}
+                        isTierCompleted={false}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="text-[9px] text-zinc-500 font-heading italic">
             Your pass uses the existing activation token entitlement (`rank_xp_pass`) and will remain compatible with prior purchases.

@@ -186,7 +186,7 @@ export default function MyInventory() {
     travel: { name: 'Travel', icon: Zap, desc: 'Lower airport cost & 2% car travel time reduction, 1h per token (2h)' },
     properties: { name: 'Properties', icon: Building2, desc: '3× property income, 1h per token (stack up to 3h)' },
     jailbust_bonus: { name: 'Jailbust bonus', icon: Target, desc: '+10% jail bust success, less chance of jail on fail, 1h (6h)' },
-    rank_xp_pass: { name: 'Game Pass', icon: Package, desc: 'Activate in Armoury/My Inventory to start 24h Game Pass bonuses. Expires in 1 month if unused.' },
+    rank_xp_pass: { name: 'Game Pass', icon: Package, desc: 'Activate in Armoury/My Inventory to claim one-time Game Pass rewards. Expires in 1 month if unused.' },
   };
 
   return (

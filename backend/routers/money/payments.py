@@ -111,7 +111,7 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
             "Game Pass",
             (
                 "Your Game Pass token is ready. "
-                "Use it in the Armoury/My Inventory to start the 24-hour bonuses."
+                "Use it in the Armoury/My Inventory to claim your one-time rewards."
             ),
             "rank_xp_pass_token_entitled",
             category="system",

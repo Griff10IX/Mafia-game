@@ -13,7 +13,7 @@ from fastapi import Depends, HTTPException, Request, Body
 from pydantic import BaseModel
 from bson.objectid import ObjectId
 
-from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids
+from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids, send_notification
 from routers.game.store import _store_cost_inc
 from routers.minigames.minigame_leaderboard import log_minigame_play
 import middleware.security as _security_mod
@@ -94,6 +94,55 @@ RANK_XP_PASS_REWARD_TIERS = (
     (18_000, {"travel_tokens": 1}),
     (20_000, {"properties_tokens": 1}),
 )
+
+# Used for consistent reward ordering in both UI and inbox notifications.
+RANK_XP_PASS_REWARD_KEY_ORDER = [
+    "money",
+    "bullets",
+    "xp_crimes_tokens",
+    "xp_gta_tokens",
+    "points",
+    "respect_points",
+    "melt_tokens",
+    "jailbust_tokens",
+    "travel_tokens",
+    "properties_tokens",
+]
+
+RANK_XP_PASS_REWARD_KEY_LABELS = {
+    "money": "Cash",
+    "bullets": "Bullets",
+    "xp_crimes_tokens": "Crimes XP Token",
+    "xp_gta_tokens": "GTA XP Token",
+    "points": "Points",
+    "respect_points": "Respect",
+    "melt_tokens": "Melt Token",
+    "jailbust_tokens": "Jail Immunity",
+    "travel_tokens": "Travel Token",
+    "properties_tokens": "Property Token",
+}
+
+
+def _rank_xp_pass_next_reward_from_snapshot(tier_snapshot: int) -> Optional[dict]:
+    """Return the next reward (single item category) after a given tier snapshot."""
+    try:
+        snap = int(tier_snapshot or 0)
+    except Exception:
+        snap = 0
+
+    next_tier = next((threshold, rewards) for threshold, rewards in RANK_XP_PASS_REWARD_TIERS if snap < threshold)
+    if not next_tier:
+        return None
+
+    _, next_rewards = next_tier
+    next_key = next((k for k in RANK_XP_PASS_REWARD_KEY_ORDER if (next_rewards.get(k) or 0) > 0), None)
+    if not next_key:
+        return None
+
+    return {
+        "key": next_key,
+        "amount": int(next_rewards.get(next_key) or 0),
+    }
 
 
 def _rank_xp_pass_one_time_reward_increments(tier_snapshot: int) -> dict:
@@ -1785,7 +1834,11 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
             {"id": current_user["id"], count_field: {"$gte": n}},
             {
                 "$inc": {count_field: -n},
-                "$set": {until_field: new_until_iso},
+                **(
+                    {"$unset": {until_field: ""}}
+                    if req.token_type == "rank_xp_pass"
+                    else {"$set": {until_field: new_until_iso}}
+                ),
                 # Activation consumes the token(s); token expiry only matters for unactivated tokens.
                 **({"$unset": {expiry_field: ""}} if expiry_field else {}),
             },
@@ -1796,7 +1849,7 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         tokens = _tokens_from_user({
             **current_user,
             count_field: new_count,
-            until_field: new_until_iso,
+            until_field: None if req.token_type == "rank_xp_pass" else new_until_iso,
             **({"%s" % expiry_field: None} if expiry_field else {}),
         })
 
@@ -1804,9 +1857,32 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         if req.token_type == "rank_xp_pass":
             tier_snapshot = current_user.get("rank_xp_pass_pending_tier_snapshot") or current_user.get("rank_xp_pass_tier_snapshot") or 0
             pass_rewards_inc = await _grant_rank_xp_pass_one_time_rewards(db, current_user["id"], tier_snapshot)
+            if pass_rewards_inc:
+                next_reward = _rank_xp_pass_next_reward_from_snapshot(tier_snapshot)
+                for reward_key in RANK_XP_PASS_REWARD_KEY_ORDER:
+                    amount = pass_rewards_inc.get(reward_key) or 0
+                    if amount <= 0:
+                        continue
+                    reward_label = RANK_XP_PASS_REWARD_KEY_LABELS.get(reward_key, reward_key)
+                    if next_reward:
+                        next_label = RANK_XP_PASS_REWARD_KEY_LABELS.get(next_reward["key"], next_reward["key"])
+                        next_amt = int(next_reward.get("amount") or 0)
+                        next_text = f"{next_amt:,} {next_label}"
+                    else:
+                        next_text = "Max tier reached"
+                    await send_notification(
+                        current_user["id"],
+                        "Game Pass reward",
+                        f"You received {amount:,} {reward_label}. Next reward: {next_text}.",
+                        "game_pass_reward",
+                        category="system",
+                        reward_key=reward_key,
+                        next_reward_key=(next_reward or {}).get("key"),
+                        tier_snapshot=int(tier_snapshot or 0),
+                    )
         return {
             "message": (
-                f"Game Pass activated. Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
+                "Game Pass activated. Rewards granted."
                 if req.token_type == "rank_xp_pass"
                 else f"Used {n} token(s). Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
             ),
@@ -1827,7 +1903,11 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         {"id": current_user["id"], count_field: {"$gte": 1}},
         {
             "$inc": {count_field: -1},
-            "$set": {until_field: new_until_iso},
+            **(
+                {"$unset": {until_field: ""}}
+                if req.token_type == "rank_xp_pass"
+                else {"$set": {until_field: new_until_iso}}
+            ),
             **({"$unset": {expiry_field: ""}} if expiry_field else {}),
         },
     )
@@ -1836,7 +1916,7 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
     tokens = _tokens_from_user({
         **current_user,
         count_field: count - 1,
-        until_field: new_until_iso,
+        until_field: None if req.token_type == "rank_xp_pass" else new_until_iso,
         **({"%s" % expiry_field: None} if expiry_field else {}),
     })
 
@@ -1844,9 +1924,32 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
     if req.token_type == "rank_xp_pass":
         tier_snapshot = current_user.get("rank_xp_pass_pending_tier_snapshot") or current_user.get("rank_xp_pass_tier_snapshot") or 0
         pass_rewards_inc = await _grant_rank_xp_pass_one_time_rewards(db, current_user["id"], tier_snapshot)
+        if pass_rewards_inc:
+            next_reward = _rank_xp_pass_next_reward_from_snapshot(tier_snapshot)
+            for reward_key in RANK_XP_PASS_REWARD_KEY_ORDER:
+                amount = pass_rewards_inc.get(reward_key) or 0
+                if amount <= 0:
+                    continue
+                reward_label = RANK_XP_PASS_REWARD_KEY_LABELS.get(reward_key, reward_key)
+                if next_reward:
+                    next_label = RANK_XP_PASS_REWARD_KEY_LABELS.get(next_reward["key"], next_reward["key"])
+                    next_amt = int(next_reward.get("amount") or 0)
+                    next_text = f"{next_amt:,} {next_label}"
+                else:
+                    next_text = "Max tier reached"
+                await send_notification(
+                    current_user["id"],
+                    "Game Pass reward",
+                    f"You received {amount:,} {reward_label}. Next reward: {next_text}.",
+                    "game_pass_reward",
+                    category="system",
+                    reward_key=reward_key,
+                    next_reward_key=(next_reward or {}).get("key"),
+                    tier_snapshot=int(tier_snapshot or 0),
+                )
     return {
         "message": (
-            f"Game Pass activated. Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
+            "Game Pass activated. Rewards granted."
             if req.token_type == "rank_xp_pass"
             else f"Token used. Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
         ),

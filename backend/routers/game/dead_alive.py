@@ -142,10 +142,12 @@ def register(router):
         # - Unactivated token entitlement (rank_xp_pass_tokens + rank_xp_pass_token_expires_at + rank_xp_pass_pending_tier_snapshot)
         pass_updates = {}
         pass_active = bool(pass_bonus_until_dt and pass_bonus_until_dt > now)
+        pass_rewards_granted = bool(dead_user.get("rank_xp_pass_rewards_granted", False))
         pass_pending = bool(pass_token_expires_dt and pass_token_expires_dt > now)
 
-        if pass_active:
-            pass_updates["rank_xp_pass_bonus_until"] = pass_bonus_until_dt.isoformat()
+        if pass_active or pass_rewards_granted:
+            # Rewards claimed must survive even when the 24h bonus window is disabled/absent.
+            pass_updates["rank_xp_pass_bonus_until"] = pass_bonus_until_dt.isoformat() if pass_active else None
             pass_updates["rank_xp_pass_tier_snapshot"] = dead_user.get("rank_xp_pass_tier_snapshot")
         else:
             pass_updates["rank_xp_pass_bonus_until"] = None
@@ -159,7 +161,7 @@ def register(router):
             pass_updates["rank_xp_pass_pending_tier_snapshot"] = None
 
         # Preserve idempotency/reward-grant state for whichever token (pending) might be activated later.
-        pass_updates["rank_xp_pass_rewards_granted"] = bool(dead_user.get("rank_xp_pass_rewards_granted", False))
+        pass_updates["rank_xp_pass_rewards_granted"] = pass_rewards_granted
 
         if pass_updates:
             await db.users.update_one({"id": current_user["id"]}, {"$set": pass_updates})

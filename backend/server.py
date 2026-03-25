@@ -190,39 +190,12 @@ def founding_member_income_mult(user: Optional[dict]) -> float:
 
 def rank_xp_pass_multiplier(user: Optional[dict]) -> float:
     """
-    Rank-XP Pass (24h): multiplier applied while `rank_xp_pass_bonus_until` is active.
-    Tier is derived from `rank_xp_pass_tier_snapshot` (rank_points at purchase time).
+    Rank-XP Pass multiplier.
+
+    Current rules: the Game Pass no longer grants a temporary 24h multiplier window.
+    Rewards are delivered as one-time tier rewards at activation, so gameplay multiplier is always 1.0.
     """
-    if not user:
-        return 1.0
-    until_raw = user.get("rank_xp_pass_bonus_until")
-    if not until_raw:
-        return 1.0
-    try:
-        until = datetime.fromisoformat(str(until_raw).replace("Z", "+00:00"))
-        if until.tzinfo is None:
-            until = until.replace(tzinfo=timezone.utc)
-    except Exception:
-        return 1.0
-    if datetime.now(timezone.utc) >= until:
-        return 1.0
-
-    snap = 0
-    try:
-        snap = int(user.get("rank_xp_pass_tier_snapshot") or 0)
-    except Exception:
-        snap = 0
-
-    # Conservative tiered multipliers (tune later).
-    if snap >= 20_000:
-        return 1.20
-    if snap >= 16_000:
-        return 1.15
-    if snap >= 12_000:
-        return 1.12
-    if snap >= 8_000:
-        return 1.10
-    return 1.07
+    return 1.0
 
 
 # Wealth ranks: based on cash on hand (ordered by min_money ascending)

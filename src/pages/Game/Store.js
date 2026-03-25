@@ -689,7 +689,7 @@ export default function Store() {
             </div>
             <div className="p-3 space-y-2">
               <p className="text-[10px] text-zinc-400 font-heading">
-                Manage your 24h bonus token on the dedicated page (purchase and status).
+                Manage your Game Pass reward token on the dedicated page (purchase and status).
               </p>
               <Link
                 to="/game-pass"
