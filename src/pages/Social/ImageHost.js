@@ -19,9 +19,10 @@ const MAX_EDGE_OPTIONS = [
   { value: '1920', label: 'Max 1920px' },
 ];
 
-// Upload-size limit in the hosting layer is usually ~10MB (or lower).
-// We use a conservative client target (multipart overhead + encoding can push us over).
-const CLIENT_MAX_UPLOAD_BYTES = 6.5 * 1024 * 1024; // ~6.5MB
+// Upload-size limit in the hosting layer is usually ~10MB (or lower),
+// but HTTP 413 here indicates the real limit is tighter than we assumed.
+// Use a more conservative client target to ensure the multipart body fits.
+const CLIENT_MAX_UPLOAD_BYTES = 2.5 * 1024 * 1024; // ~2.5MB
 
 // Backend gallery resize max edge is 640px; we mirror it for safe uploads.
 const SERVER_MAX_EDGE = 640;
@@ -92,9 +93,15 @@ export default function ImageHost() {
       const originalFile = f;
       let uploadFile = originalFile;
 
-      // If the file is too large for the request body limit, resize on the client first.
-      // This prevents HTTP 413 before the backend can apply its own resizing/validation.
-      if (originalFile.size > CLIENT_MAX_UPLOAD_BYTES) {
+      const chosenMaxEdge = maxEdge ? Number(maxEdge) : SERVER_MAX_EDGE;
+
+      // If user selected a max edge (e.g. 400px), we always resize/compress so the payload
+      // fits the actual upload limit. This avoids "resize didn't trigger, still 413" issues.
+      const shouldClientResize =
+        ['image/jpeg', 'image/png', 'image/webp'].includes(originalFile.type) &&
+        (originalFile.size > CLIENT_MAX_UPLOAD_BYTES || (chosenMaxEdge && Number.isFinite(chosenMaxEdge)));
+
+      if (shouldClientResize) {
         // Only raster images can be resized safely in-browser.
         const isSupportedMime = ['image/jpeg', 'image/png', 'image/webp'].includes(originalFile.type);
         if (!isSupportedMime) {
@@ -120,10 +127,10 @@ export default function ImageHost() {
 
         const width = img.width || 1;
         const height = img.height || 1;
-        const baseScale = Math.min(1, SERVER_MAX_EDGE / Math.max(width, height));
+        const baseScale = Math.min(1, chosenMaxEdge / Math.max(width, height));
 
         // Try a couple of downscale steps + JPEG quality reductions until it fits.
-        const qualitySteps = [0.85, 0.75, 0.65, 0.55, 0.45, 0.35];
+        const qualitySteps = [0.85, 0.7, 0.55, 0.4, 0.3, 0.2];
         const scaleSteps = [1, 0.85, 0.7, 0.55];
 
         let finalBlob = null;
