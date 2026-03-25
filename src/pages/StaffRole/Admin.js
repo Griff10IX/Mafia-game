@@ -236,7 +236,7 @@ function ActionRow({ icon: Icon, label, description, children, color = 'text-pri
           {description && <div className="text-[10px] text-mutedForeground truncate">{description}</div>}
         </div>
       </div>
-      <div className="flex items-center gap-2 ml-6 sm:ml-0 shrink-0">
+      <div className="flex flex-wrap items-center gap-2 ml-6 sm:ml-0 min-w-0 w-full sm:w-auto sm:flex-1 sm:justify-end">
         {children}
       </div>
     </div>
@@ -1604,7 +1604,7 @@ export default function Admin() {
 
   const handlePointsUserProvenance = async () => {
     const uid = (pointsProvUserId || '').trim();
-    if (!uid) { toast.error('Enter user id'); return; }
+    if (!uid) { toast.error('Enter username'); return; }
     setPointsProvUserLoading(true);
     try {
       const res = await api.get(`/admin/points/provenance/user/${encodeURIComponent(uid)}`);
@@ -4256,14 +4256,18 @@ export default function Admin() {
           {!collapsed.donationsProvenance && (
             <div className="p-2 space-y-1">
               <ActionRow icon={Layers} label="Points Provenance / Chargeback" description="Trace purchased points by payment session and execute best-effort clawback.">
-                <Input value={pointsProvSessionId} onChange={(e) => setPointsProvSessionId(e.target.value)} placeholder="payment session id (cs_...)" className="flex-1 min-w-[180px] text-[11px]" />
-                <BtnSecondary onClick={handlePointsPreview} disabled={pointsProvPreviewLoading}>{pointsProvPreviewLoading ? '...' : 'Preview'}</BtnSecondary>
-                <BtnSecondary onClick={handlePointsPaymentProvenance} disabled={pointsProvPaymentLoading}>{pointsProvPaymentLoading ? '...' : 'Payment Tree'}</BtnSecondary>
-                <BtnDanger onClick={handlePointsExecuteChargeback} disabled={pointsProvExecuteLoading}>{pointsProvExecuteLoading ? '...' : 'Execute'}</BtnDanger>
+                <div className="flex flex-wrap items-center gap-2 w-full min-w-0 sm:min-w-[min(100%,320px)] sm:flex-1 sm:justify-end">
+                  <Input value={pointsProvSessionId} onChange={(e) => setPointsProvSessionId(e.target.value)} placeholder="payment session id (cs_...)" className="flex-1 min-w-[200px] text-[11px]" />
+                  <BtnSecondary onClick={handlePointsPreview} disabled={pointsProvPreviewLoading}>{pointsProvPreviewLoading ? '...' : 'Preview'}</BtnSecondary>
+                  <BtnSecondary onClick={handlePointsPaymentProvenance} disabled={pointsProvPaymentLoading}>{pointsProvPaymentLoading ? '...' : 'Payment Tree'}</BtnSecondary>
+                  <BtnDanger onClick={handlePointsExecuteChargeback} disabled={pointsProvExecuteLoading}>{pointsProvExecuteLoading ? '...' : 'Execute'}</BtnDanger>
+                </div>
               </ActionRow>
               <ActionRow icon={Users} label="User Points Lots" description="Inspect one user's point lots and recent ledger events.">
-                <Input value={pointsProvUserId} onChange={(e) => setPointsProvUserId(e.target.value)} placeholder="user id" className="flex-1 min-w-[140px] text-[11px]" />
-                <BtnSecondary onClick={handlePointsUserProvenance} disabled={pointsProvUserLoading}>{pointsProvUserLoading ? '...' : 'Load'}</BtnSecondary>
+                <div className="flex flex-wrap items-center gap-2 w-full min-w-0 sm:min-w-[min(100%,240px)] sm:flex-1 sm:justify-end">
+                  <Input value={pointsProvUserId} onChange={(e) => setPointsProvUserId(e.target.value)} placeholder="username" className="flex-1 min-w-[160px] text-[11px]" />
+                  <BtnSecondary onClick={handlePointsUserProvenance} disabled={pointsProvUserLoading}>{pointsProvUserLoading ? '...' : 'Load'}</BtnSecondary>
+                </div>
               </ActionRow>
               {(pointsProvPreview || pointsProvPaymentData || pointsProvUserData) && (
                 <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-2 pl-6">
@@ -4289,7 +4293,7 @@ export default function Admin() {
                   {pointsProvUserData && (
                     <div>
                       <div className="font-bold text-primary">User Provenance</div>
-                      <div className="mt-1"><span className="text-mutedForeground">User:</span> {pointsProvUserData.user?.username || '?'} ({pointsProvUserData.user?.id || pointsProvUserId})</div>
+                      <div className="mt-1"><span className="text-mutedForeground">User:</span> {pointsProvUserData.user?.username || '?'} ({pointsProvUserData.user?.id || '—'})</div>
                       <div><span className="text-mutedForeground">Balance:</span> {pointsProvUserData.user?.points ?? 0} | <span className="text-mutedForeground">Lots:</span> {Array.isArray(pointsProvUserData.lots) ? pointsProvUserData.lots.length : 0} | <span className="text-mutedForeground">Ledger:</span> {Array.isArray(pointsProvUserData.ledger) ? pointsProvUserData.ledger.length : 0}</div>
                     </div>
                   )}
@@ -4370,8 +4374,8 @@ export default function Admin() {
                         return (
                           <tr key={row.session_id || idx} className="border-b border-zinc-700/30">
                             <td className="py-1 pr-1 text-mutedForeground" title={row.created_at}>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
-                            <td className="py-1 pr-1 font-mono text-[8px] max-w-[170px] truncate" title={sessionId}>{sessionId}</td>
-                            <td className="py-1 pr-1 font-mono text-[8px] max-w-[170px] truncate" title={lotId}>{lotId}</td>
+                            <td className="py-1 pr-1 font-mono text-[8px] align-top break-all whitespace-normal min-w-[12rem] max-w-[28rem]" title={sessionId}>{sessionId}</td>
+                            <td className="py-1 pr-1 font-mono text-[8px] align-top break-all whitespace-normal min-w-[12rem] max-w-[28rem]" title={lotId}>{lotId}</td>
                             <td className="py-1 pr-1">{row.username ?? row.user_id ?? '—'}</td>
                             <td className="py-1 pr-1 capitalize">{row.package_id ?? '—'}</td>
                             <td className="py-1 pr-1 font-mono">{Number(added).toLocaleString()}</td>

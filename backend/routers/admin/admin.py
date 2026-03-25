@@ -353,13 +353,20 @@ def register(router):
         )
         return {"message": f"Added {points} points to {target_username}"}
 
-    @router.get("/admin/points/provenance/user/{user_id}")
-    async def admin_points_provenance_user(user_id: str, current_user: dict = Depends(get_current_user)):
+    @router.get("/admin/points/provenance/user/{user_id_or_username}")
+    async def admin_points_provenance_user(user_id_or_username: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        u = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "username": 1, "points": 1})
+        raw = (user_id_or_username or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="User id or username required")
+        u = await db.users.find_one({"id": raw}, {"_id": 0, "id": 1, "username": 1, "points": 1})
+        if not u:
+            username_pattern = _username_pattern(raw)
+            u = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "points": 1})
         if not u:
             raise HTTPException(status_code=404, detail="User not found")
+        user_id = u["id"]
         await ensure_user_legacy_seed_lot(db, user_id, int(u.get("points") or 0))
         lots = await db.point_lots.find(
             {"owner_user_id": user_id},
